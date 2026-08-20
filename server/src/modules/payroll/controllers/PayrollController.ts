@@ -83,23 +83,6 @@ export class PayrollController {
     res.json({ success: true, data: settings });
   }
 
-  // PAYROLL ENDPOINTS
-  async generatePayroll(req: Request, res: Response) {
-    const { payrollCycleId, runType, companyId, locationId, departmentId, employeeIds } = req.body;
-    const run = await this.payrollService.generatePayroll(
-      req.ctx,
-      parseInt(payrollCycleId),
-      runType || 'regular',
-      {
-        companyId: companyId ? parseInt(companyId) : undefined,
-        locationId: locationId ? parseInt(locationId) : undefined,
-        departmentId: departmentId ? parseInt(departmentId) : undefined,
-        employeeIds: Array.isArray(employeeIds) ? employeeIds.map((id: any) => parseInt(id)) : undefined
-      }
-    );
-    res.json({ success: true, data: run });
-  }
-
   async getReconciliation(req: Request, res: Response) {
     try {
       const data = await this.payrollService.getReconciliation(req.ctx, parseInt(req.params.id));
@@ -109,12 +92,44 @@ export class PayrollController {
     }
   }
 
-  async getCycle(req: Request, res: Response) {
+  async generatePayroll(req: Request, res: Response) {
     try {
-      const data = await this.payrollService.getCycle(req.ctx, req.params.id);
-      res.json({ success: true, data });
+      const { payrollCycleId, runType, companyId, locationId, departmentId, employeeIds, month } = req.body;
+      const db = getKnex();
+
+      let targetCycleId: number;
+      if (payrollCycleId && !isNaN(Number(payrollCycleId))) {
+        targetCycleId = Number(payrollCycleId);
+      } else {
+        const targetComp = companyId || req.ctx?.companyId;
+        let cycleQuery = db('payroll_cycles').whereNull('deleted_at');
+        if (targetComp) {
+          cycleQuery = cycleQuery.where(b => {
+            b.where('company_id', Number(targetComp)).orWhereNull('company_id');
+          });
+        }
+        if (req.ctx?.organizationId) {
+          cycleQuery = cycleQuery.where(b => {
+            b.where('organization_id', req.ctx.organizationId).orWhereNull('organization_id');
+          });
+        }
+        const firstCycle = await cycleQuery.orderBy('company_id', 'desc').first().catch(() => null);
+        if (!firstCycle) {
+          return res.status(400).json({ success: false, message: 'No active payroll cycle found for this company/organization.' });
+        }
+        targetCycleId = Number(firstCycle.id);
+      }
+
+      const run = await this.payrollService.generatePayroll(
+        req.ctx,
+        targetCycleId,
+        runType || 'regular',
+        { companyId, locationId, departmentId, employeeIds }
+      );
+      res.status(201).json({ success: true, data: run });
     } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error getting cycle' });
+      console.error('generatePayroll error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error generating payroll run' });
     }
   }
 
@@ -152,7 +167,7 @@ export class PayrollController {
     const { id } = req.params;
     const run = await this.payrollService.getPayrollStatus(req.ctx, parseInt(id));
     res.json({ success: true, data: run });
-  }
+  }                                                                                                             
 
   async getProcessRegister(req: Request, res: Response) {
     const db = getKnex();
@@ -190,9 +205,7 @@ export class PayrollController {
       const activeStatus = status || employeeStatus;
       const activeEmpType = req.query.employment_type || employmentType;
 
-      if (companyId) empQuery = empQuery.where(b => {
-        b.where('e.company_id', Number(companyId)).orWhere('e.current_company_id', Number(companyId));
-      });
+      if (companyId) empQuery = empQuery.where('e.company_id', Number(companyId));
       if (departmentId) empQuery = empQuery.where('e.current_department_id', Number(departmentId));
       if (locationId) empQuery = empQuery.where('e.current_location_id', Number(locationId));
       if (employeeId) empQuery = empQuery.where('e.id', Number(employeeId));
@@ -200,14 +213,10 @@ export class PayrollController {
       if (activeStatus) empQuery = empQuery.where('e.status', String(activeStatus));
       if (activeEmpType) empQuery = empQuery.where('e.employment_type', String(activeEmpType));
       if (gradeId) {
-        empQuery = empQuery.where(b => {
-          b.where('e.current_grade_id', Number(gradeId)).orWhere('e.grade_id', Number(gradeId));
-        });
+        empQuery = empQuery.where('e.current_grade_id', Number(gradeId));
       }
       if (designationId) {
-        empQuery = empQuery.where(b => {
-          b.where('e.current_designation_id', Number(designationId)).orWhere('e.designation_id', Number(designationId));
-        });
+        empQuery = empQuery.where('e.current_designation_id', Number(designationId));
       }
       if (slabId) {
         const slabEmpRows = await db('salary_structures')
@@ -303,8 +312,46 @@ export class PayrollController {
         // ₹0 on this register regardless of what was actually configured or
         // computed. positiveNum() treats a genuine zero as "use the
         // fallback" instead of "here is a truthy non-zero value."
+
+        // Parse custom_components JSON — this is the component-level breakdown
+        // saved by the UI (Basic, HRA, Special Allowance, PF, etc.) and should
+        // be the PRIMARY source of salary figures for the payroll run.
+        let customComps: Record<string, number> = {};
+        try {
+          const rawCC = struct?.customComponents ?? struct?.custom_components;
+          if (rawCC) {
+            customComps = typeof rawCC === 'string' ? JSON.parse(rawCC) : rawCC;
+          }
+        } catch { customComps = {}; }
+
+        // Helper: sum custom_components values for keys whose name matches a keyword
+        const ccSum = (...keywords: string[]) => {
+          let total = 0;
+          for (const [k, v] of Object.entries(customComps)) {
+            const kl = String(k).toLowerCase();
+            if (keywords.some(kw => kl.includes(kw))) total += Number(v) || 0;
+          }
+          return total;
+        };
+
+        const ccBasic = ccSum('basic');
+        const ccHra = ccSum('hra', 'house rent');
+        const ccSpecial = ccSum('special', 'standard allowance', 'standard_allowance');
+        const ccMeal = ccSum('meal');
+        const ccComm = ccSum('communication');
+        const ccEdu = ccSum('education', 'edu');
+        const ccLta = ccSum('lta', 'leave travel');
+        const ccPf = ccSum('pf', 'provident');
+        const ccPt = ccSum('pt', 'professional tax');
+        const ccEsic = ccSum('esic', 'esi');
+
         let grossMonthly = positiveNum(struct?.grossMonthly ?? struct?.gross_monthly, 0);
+        // If custom_components has a total, compute gross from its earning components
+        const ccGross = ccBasic + ccHra + ccSpecial + ccMeal + ccComm + ccEdu + ccLta;
+        if (ccGross > 0) grossMonthly = ccGross;
+
         let basicMonthly = positiveNum(struct?.basicMonthly ?? struct?.basic_monthly ?? struct?.basicSalary ?? struct?.basic_salary, 0);
+        if (ccBasic > 0) basicMonthly = ccBasic;
 
         if (!grossMonthly && (emp.gross_salary || emp.grossSalary || emp.gross || emp.annual_ctc || emp.annualCtc)) {
           grossMonthly = Number(emp.gross_salary || emp.grossSalary || emp.gross || (emp.annual_ctc || emp.annualCtc ? Math.round(Number(emp.annual_ctc || emp.annualCtc) / 12) : 0));
@@ -314,12 +361,13 @@ export class PayrollController {
           basicMonthly = Number(emp.basic_salary || emp.basicSalary || emp.basic || Math.round(grossMonthly * 0.50));
         }
 
-        const hraMonthly = positiveNum(struct?.hraMonthly ?? struct?.hra_monthly, Math.round(basicMonthly * 0.40));
-        const stdAllow = positiveNum(struct?.specialAllowanceMonthly ?? struct?.special_allowance_monthly ?? struct?.standard_allowance, Math.max(0, grossMonthly - basicMonthly - hraMonthly));
-        const mealAllow = positiveNum(struct?.mealAllowance ?? struct?.meal_allowance, 0);
-        const commAllow = positiveNum(struct?.communicationAllowance ?? struct?.communication_allowance, 0);
-        const eduAllow = positiveNum(struct?.childrenEducationAllowance ?? struct?.children_education_allowance, 0);
-        const ltaVal = Number(struct?.lta || 0);
+        const hraMonthly = ccHra > 0 ? ccHra : positiveNum(struct?.hraMonthly ?? struct?.hra_monthly, Math.round(basicMonthly * 0.40));
+        const stdAllow = ccSpecial > 0 ? ccSpecial : positiveNum(struct?.specialAllowanceMonthly ?? struct?.special_allowance_monthly ?? struct?.standard_allowance, Math.max(0, grossMonthly - basicMonthly - hraMonthly));
+        const mealAllow = ccMeal > 0 ? ccMeal : positiveNum(struct?.mealAllowance ?? struct?.meal_allowance, 0);
+        const commAllow = ccComm > 0 ? ccComm : positiveNum(struct?.communicationAllowance ?? struct?.communication_allowance, 0);
+        const eduAllow = ccEdu > 0 ? ccEdu : positiveNum(struct?.childrenEducationAllowance ?? struct?.children_education_allowance, 0);
+
+        const ltaVal = ccLta > 0 ? ccLta : Number(struct?.lta || 0);
 
         // Fetch real attendance & LOP summary for the employee and month
         let totalDays = 30;
@@ -384,9 +432,9 @@ export class PayrollController {
         const ltaEarned = Math.round(ltaVal * ratio);
         const grossEarned = Math.round(grossMonthly * ratio);
 
-        const pfDeduction = positiveNum(struct?.pfDeduction ?? struct?.pf_deduction, basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0);
-        const ptDeduction = positiveNum(struct?.ptDeduction ?? struct?.pt_deduction, grossEarned > 15000 ? 200 : 0);
-        const esicDeduction = positiveNum(struct?.esiDeduction ?? struct?.esi_deduction ?? struct?.esic, grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0);
+        const pfDeduction = ccPf > 0 ? Math.round(ccPf * ratio) : positiveNum(struct?.pfDeduction ?? struct?.pf_deduction, basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0);
+        const ptDeduction = ccPt > 0 ? Math.round(ccPt * ratio) : positiveNum(struct?.ptDeduction ?? struct?.pt_deduction, grossEarned > 15000 ? 200 : 0);
+        const esicDeduction = ccEsic > 0 ? Math.round(ccEsic * ratio) : positiveNum(struct?.esiDeduction ?? struct?.esi_deduction ?? struct?.esic, grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0);
         const esicEmployer = positiveNum(struct?.esicEmployer ?? struct?.esic_employer, esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0);
         const tdsDeduction = positiveNum(struct?.tdsDeduction ?? struct?.tds_deduction ?? struct?.tds, 0);
 
@@ -409,7 +457,9 @@ export class PayrollController {
 
         let totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
         let netSalary = Math.max(0, grossEarned - totalDeduction);
-        let ctc = positiveNum(struct?.annualCtc ?? struct?.annual_ctc, grossMonthly * 12);
+        // CTC = (gross + employer PF + ESIC employer) * 12
+        const pfEmployerMonthly = Math.min(1800, Math.round(basicMonthly * 0.12));
+        let ctc = positiveNum(struct?.annualCtc ?? struct?.annual_ctc, (grossMonthly + pfEmployerMonthly + (esicDeduction > 0 ? Math.round(grossMonthly * 0.0325) : 0)) * 12);
 
         // Resolve slab_name from payroll_slabs or structure_name
         let slabName = struct?.structure_name || 'Standard Pay Slab';
@@ -621,8 +671,12 @@ export class PayrollController {
   }
 
   async listPayrolls(req: Request, res: Response) {
-    const { cycleId } = req.query;
-    const runs = await this.payrollService.getPayrollRuns(req.ctx, cycleId ? parseInt(cycleId as string) : undefined);
+    const { cycleId, month } = req.query;
+    const runs = await this.payrollService.getPayrollRuns(
+      req.ctx,
+      cycleId ? parseInt(cycleId as string) : undefined,
+      month ? String(month) : undefined
+    );
     res.json({ success: true, data: runs });
   }
 
@@ -706,9 +760,9 @@ export class PayrollController {
       .catch(() => []);
     const roleCodes = userRoles.map((r: any) => r.code);
     const isAdminOrHR = roleCodes.includes('organization_admin') ||
-                        roleCodes.includes('super_admin') ||
-                        roleCodes.includes('hr_manager') ||
-                        roleCodes.includes('finance_manager');
+      roleCodes.includes('super_admin') ||
+      roleCodes.includes('hr_manager') ||
+      roleCodes.includes('finance_manager');
 
     let query = db('payslips as p')
       .leftJoin('employees as e', 'p.employee_id', 'e.id')
@@ -1091,6 +1145,187 @@ export class PayrollController {
     res.json({ success: true, data: entries });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SALARY STRUCTURES DYNAMIC CRUD (/payroll/salary-structure)
+  // ─────────────────────────────────────────────────────────────────────────────
+  async listStructures(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const employeeId = req.query.employee_id || req.query.employeeId;
+
+      let query = db('salary_structures')
+        .leftJoin('payroll_slabs', 'salary_structures.slab_id', 'payroll_slabs.id')
+        .select(
+          'salary_structures.*',
+          'payroll_slabs.name as slab_name',
+          'payroll_slabs.selected_component_ids as slab_component_ids'
+        )
+        .where('salary_structures.organization_id', orgId)
+        .whereNull('salary_structures.deleted_at')
+        .orderBy('salary_structures.id', 'desc');
+
+      if (employeeId) {
+        query = query.where('salary_structures.employee_id', employeeId);
+      }
+
+      const rows = await query;
+
+      const mapped = rows.map((r: any) => {
+        const s = withSnakeAliases(r) || r;
+        let customComponents = [];
+        try {
+          const rawCC = s.custom_components || s.customComponents;
+          customComponents = typeof rawCC === 'string'
+            ? JSON.parse(rawCC)
+            : (rawCC || []);
+        } catch { }
+
+        const slabName = s.slab_name || s.slabName || s.structure_name || s.structureName || 'Standard Pay Slab';
+        const annualCtcVal = Number(s.annual_ctc ?? s.annualCtc ?? 0);
+        const grossVal = Number(s.gross_monthly ?? s.grossMonthly ?? s.gross ?? 0);
+        const netVal = Number(s.net_take_home ?? s.netTakeHome ?? s.net_salary_monthly ?? s.netSalary ?? 0);
+
+        return {
+          ...s,
+          id: String(s.id),
+          employeeId: s.employee_id ? String(s.employee_id) : (s.employeeId ? String(s.employeeId) : undefined),
+          structureName: s.structure_name || s.structureName || slabName,
+          slab: slabName,
+          slabName: slabName,
+          slabId: s.slab_id !== undefined && s.slab_id !== null ? String(s.slab_id) : (s.slabId !== undefined && s.slabId !== null ? String(s.slabId) : undefined),
+          cycleId: s.cycle_id !== undefined && s.cycle_id !== null ? String(s.cycle_id) : (s.cycleId !== undefined && s.cycleId !== null ? String(s.cycleId) : undefined),
+          annualCtc: annualCtcVal,
+          annual_ctc: annualCtcVal,
+          ctc: annualCtcVal,
+          grossMonthly: grossVal,
+          gross_monthly: grossVal,
+          gross: grossVal,
+          basicMonthly: Number(s.basic_monthly ?? s.basicMonthly ?? 0),
+          basic: Number(s.basic_monthly ?? s.basicMonthly ?? 0),
+          hraMonthly: Number(s.hra_monthly ?? s.hraMonthly ?? 0),
+          hra: Number(s.hra_monthly ?? s.hraMonthly ?? 0),
+          specialAllowanceMonthly: Number(s.special_allowance_monthly ?? s.specialAllowanceMonthly ?? 0),
+          pfDeduction: Number(s.pf_deduction ?? s.pfDeduction ?? 0),
+          esiDeduction: Number(s.esi_deduction ?? s.esiDeduction ?? 0),
+          tdsDeduction: Number(s.tds_deduction ?? s.tdsDeduction ?? 0),
+          netTakeHome: netVal,
+          net_take_home: netVal,
+          netSalary: netVal,
+          salaryInput: annualCtcVal,
+          salary_input: annualCtcVal,
+          customComponents,
+          custom_components: customComponents,
+          effectiveFrom: s.effective_from || s.effectiveFrom || new Date().toISOString().slice(0, 10),
+          status: s.status === 'inactive' ? 'Deleted' : 'Active'
+        };
+      });
+
+      res.json({ success: true, data: mapped });
+    } catch (e: any) {
+      console.error('listStructures error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error listing salary structures' });
+    }
+  }
+
+  async getStructure(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const { id } = req.params;
+
+      const row = await db('salary_structures')
+        .leftJoin('payroll_slabs', 'salary_structures.slab_id', 'payroll_slabs.id')
+        .select(
+          'salary_structures.*',
+          'payroll_slabs.name as slab_name',
+          'payroll_slabs.selected_component_ids as slab_component_ids'
+        )
+        .where('salary_structures.id', id)
+        .where('salary_structures.organization_id', orgId)
+        .whereNull('salary_structures.deleted_at')
+        .first();
+
+      if (!row) {
+        return res.status(404).json({ success: false, message: 'Salary structure not found' });
+      }
+
+      const s = withSnakeAliases(row) || row;
+      let customComponents = [];
+      try {
+        const rawCC = s.custom_components || s.customComponents;
+        customComponents = typeof rawCC === 'string'
+          ? JSON.parse(rawCC)
+          : (rawCC || []);
+      } catch { }
+
+      const slabName = s.slab_name || s.slabName || s.structure_name || s.structureName || 'Standard Pay Slab';
+      const annualCtcVal = Number(s.annual_ctc ?? s.annualCtc ?? 0);
+      const grossVal = Number(s.gross_monthly ?? s.grossMonthly ?? s.gross ?? 0);
+      const netVal = Number(s.net_take_home ?? s.netTakeHome ?? s.net_salary_monthly ?? s.netSalary ?? 0);
+
+      res.json({
+        success: true,
+        data: {
+          ...s,
+          id: String(s.id),
+          employeeId: s.employee_id ? String(s.employee_id) : (s.employeeId ? String(s.employeeId) : undefined),
+          structureName: s.structure_name || s.structureName || slabName,
+          slab: slabName,
+          slabName: slabName,
+          slabId: s.slab_id !== undefined && s.slab_id !== null ? String(s.slab_id) : (s.slabId !== undefined && s.slabId !== null ? String(s.slabId) : undefined),
+          cycleId: s.cycle_id !== undefined && s.cycle_id !== null ? String(s.cycle_id) : (s.cycleId !== undefined && s.cycleId !== null ? String(s.cycleId) : undefined),
+          annualCtc: annualCtcVal,
+          annual_ctc: annualCtcVal,
+          ctc: annualCtcVal,
+          grossMonthly: grossVal,
+          gross_monthly: grossVal,
+          gross: grossVal,
+          basicMonthly: Number(s.basic_monthly ?? s.basicMonthly ?? 0),
+          basic: Number(s.basic_monthly ?? s.basicMonthly ?? 0),
+          hraMonthly: Number(s.hra_monthly ?? s.hraMonthly ?? 0),
+          hra: Number(s.hra_monthly ?? s.hraMonthly ?? 0),
+          specialAllowanceMonthly: Number(s.special_allowance_monthly ?? s.specialAllowanceMonthly ?? 0),
+          pfDeduction: Number(s.pf_deduction ?? s.pfDeduction ?? 0),
+          esiDeduction: Number(s.esi_deduction ?? s.esiDeduction ?? 0),
+          tdsDeduction: Number(s.tds_deduction ?? s.tdsDeduction ?? 0),
+          netTakeHome: netVal,
+          net_take_home: netVal,
+          netSalary: netVal,
+          salaryInput: annualCtcVal,
+          salary_input: annualCtcVal,
+          customComponents,
+          custom_components: customComponents,
+          effectiveFrom: s.effective_from || s.effectiveFrom || new Date().toISOString().slice(0, 10),
+          status: s.status === 'inactive' ? 'Deleted' : 'Active'
+        }
+      });
+    } catch (e: any) {
+      console.error('getStructure error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error getting salary structure' });
+    }
+  }
+
+  async deleteStructure(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const { id } = req.params;
+
+      await db('salary_structures')
+        .where({ id, organization_id: orgId })
+        .update({ deleted_at: new Date(), status: 'inactive' });
+
+      res.json({ success: true, message: 'Salary structure deleted successfully' });
+    } catch (e: any) {
+      console.error('deleteStructure error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error deleting salary structure' });
+    }
+  }
+
   async createStructure(req: Request, res: Response) {
     const db = getKnex();
 
@@ -1140,15 +1375,15 @@ export class PayrollController {
     // yet assigned to anyone) still falls back to a name+org lookup.
     const existing = employeeId
       ? await db('salary_structures')
-          .where({ employee_id: employeeId, organization_id: orgId })
-          .whereNull('deleted_at')
-          .first()
-          .catch(() => null)
+        .where({ employee_id: employeeId, organization_id: orgId })
+        .whereNull('deleted_at')
+        .first()
+        .catch(() => null)
       : await db('salary_structures')
-          .where({ structure_name: sName, organization_id: orgId })
-          .whereNull('deleted_at')
-          .first()
-          .catch(() => null);
+        .where({ structure_name: sName, organization_id: orgId })
+        .whereNull('deleted_at')
+        .first()
+        .catch(() => null);
 
     if (existing) {
       await db('salary_structures').where('id', existing.id).update({
@@ -1644,145 +1879,6 @@ export class PayrollController {
     res.json({ success: true, data: { employeeId: empId, employeeName: empName, startDate, endDate, days } });
   }
 
-  async listStructures(req: Request, res: Response) {
-    const db = getKnex();
-    const { employee_id } = req.query;
-    // 🔧 FIX: salary_structure_components (aliased "c") is a structure↔component
-    // link table only (structure_id, component_id) — it has no employee_id,
-    // annual_ctc, basic_monthly, etc. Every one of those columns already lives
-    // directly on salary_structures, so the MAX(c.*) fallbacks below referenced
-    // nonexistent columns and made this whole query throw on every call —
-    // silently swallowed by the .catch(), so the endpoint always returned [].
-    let query = db('salary_structures as s')
-      .leftJoin('employee_salary_structures as ess', function () {
-        this.on('s.id', '=', 'ess.salary_structure_id').andOn('ess.is_current', '=', db.raw('1'));
-      })
-      .leftJoin('employees as e', 'ess.employee_id', 'e.id')
-      .leftJoin('payroll_cycles as pc', 's.cycle_id', 'pc.id')
-      .leftJoin('payroll_slabs as ps', 's.slab_id', 'ps.id')
-      .whereNull('s.deleted_at');
-
-    if (employee_id) {
-      query = query.where(function () {
-        this.where('s.employee_id', employee_id)
-          .orWhere('ess.employee_id', employee_id);
-      });
-    }
-
-    let structures = await query
-      .groupBy('s.id')
-      .select(
-        's.id',
-        's.uuid',
-        's.organization_id',
-        's.structure_name',
-        's.structure_code',
-        's.description',
-        's.cycle_id',
-        's.slab_id',
-        's.status',
-        's.effective_from',
-        's.created_by',
-        's.updated_by',
-        's.created_at',
-        's.updated_at',
-        's.custom_components',
-        's.employee_id',
-        's.annual_ctc',
-        's.basic_monthly',
-        's.hra_monthly',
-        's.special_allowance_monthly',
-        's.gross_monthly',
-        's.pf_deduction',
-        's.esi_deduction',
-        's.tds_deduction',
-        's.net_take_home',
-        db.raw('COALESCE(s.grade_code, s.structure_code) as grade_code'),
-        db.raw('MAX(pc.cycle_name) as cycle_name'),
-        db.raw('MAX(ps.name) as slab_name'),
-        db.raw('MAX(e.first_name) as assigned_first_name'),
-        db.raw('MAX(e.last_name) as assigned_last_name'),
-        db.raw('MAX(e.employee_code) as assigned_employee_code')
-      )
-      .orderBy('s.id', 'desc')
-      .catch((err) => {
-        console.error('Error listing structures:', err);
-        return [];
-      });
-
-    res.json({ success: true, data: structures });
-  }
-
-  async getStructure(req: Request, res: Response) {
-    const db = getKnex();
-    const orgId = req.ctx.organizationId;
-    const { id } = req.params;
-    const structure = await db('salary_structures as s')
-      .leftJoin('salary_structure_components as c', 's.id', 'c.structure_id')
-      .where({ 's.id': id, 's.organization_id': orgId })
-      .select(
-        's.id',
-        's.uuid',
-        's.organization_id',
-        's.structure_name',
-        's.structure_code',
-        's.description',
-        's.status',
-        's.effective_from',
-        's.created_by',
-        's.updated_by',
-        's.created_at',
-        's.updated_at',
-        'c.employee_id',
-        'c.annual_ctc',
-        'c.basic_monthly',
-        'c.hra_monthly',
-        'c.special_allowance_monthly',
-        'c.gross_monthly',
-        'c.pf_deduction',
-        'c.esi_deduction',
-        'c.tds_deduction',
-        'c.net_take_home',
-        'c.grade_code'
-      )
-      .first();
-
-    if (!structure) {
-      return res.status(404).json({ success: false, message: 'Structure not found' });
-    }
-    res.json({ success: true, data: structure });
-  }
-
-  async deleteStructure(req: Request, res: Response) {
-    const db = getKnex();
-    const { id } = req.params;
-
-    try {
-      // 1. Hard delete linked breakdown components
-      await db('salary_structure_components')
-        .where('structure_id', id)
-        .del()
-        .catch(() => { });
-
-      // 2. Hard delete linked employee assignments
-      await db('employee_salary_structures')
-        .where('salary_structure_id', id)
-        .del()
-        .catch(() => { });
-
-      // 3. Hard delete master structure row
-      await db('salary_structures')
-        .where('id', id)
-        .del();
-    } catch (err) {
-      try {
-        await db('salary_structures').where('id', id).update({ deleted_at: new Date() });
-      } catch (e) { }
-    }
-
-    res.json({ success: true, message: 'Salary structure deleted successfully from database' });
-  }
-
   async assignStructureToEmployee(req: Request, res: Response) {
     const db = getKnex();
     const { employeeId, structureId, structureName } = req.body;
@@ -1922,81 +2018,35 @@ export class PayrollController {
 
   async listEmployeeMappings(req: Request, res: Response) {
     const db = getKnex();
-    const orgId = req.ctx.organizationId;
+    const orgId = req.ctx?.organizationId;
 
-    let mappings = await db('employee_salary_structures as ess')
-      .leftJoin('employees as e', 'ess.employee_id', 'e.id')
-      .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+    const mappings = await db('salary_structures as ss')
+      .join('employees as e', 'ss.employee_id', 'e.id')
+      .leftJoin('payroll_slabs as ps', 'ss.slab_id', 'ps.id')
       .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
       .where(builder => {
-        if (orgId) builder.where('ess.organization_id', orgId);
+        if (orgId) builder.where('ss.organization_id', orgId);
       })
-      .where('ess.is_current', true)
-      .whereNull('ess.deleted_at')
-      .groupBy('ess.id', 'e.id', 'ss.id')
+      .whereNull('ss.deleted_at')
+      .whereNull('e.deleted_at')
+      .groupBy('ss.id', 'e.id', 'ps.id')
       .select(
-        'ess.id as mappingId',
+        'ss.id as mappingId',
         'e.id as empId',
         'e.first_name',
         'e.last_name',
         'e.employee_code',
         'ss.id as structureId',
-        db.raw('COALESCE(ess.effective_from, ss.effective_from) as effectiveFrom'),
-        db.raw('COALESCE(ss.structure_name, "Standard Structure") as structureName'),
+        'ss.slab_id as slabId',
+        'ss.effective_from as effectiveFrom',
+        db.raw('COALESCE(ps.name, ss.structure_name, "Standard Monthly Slab") as structureName'),
+        db.raw('COALESCE(ps.name, ss.structure_name, "Standard Monthly Slab") as slabName'),
         db.raw('COALESCE(ss.gross_monthly, MAX(ssc.gross_monthly), 0) as grossMonthly'),
         db.raw('COALESCE(ss.annual_ctc, MAX(ssc.annual_ctc), 0) as annualCtc'),
         db.raw('COALESCE(ss.net_take_home, MAX(ssc.net_take_home), 0) as netTakeHome')
       )
-      .orderBy('ess.id', 'desc')
+      .orderBy('e.id', 'asc')
       .catch(() => []);
-
-    if (!mappings || mappings.length === 0) {
-      mappings = await db('employee_salary_structures as ess')
-        .leftJoin('employees as e', 'ess.employee_id', 'e.id')
-        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
-        .where('ess.is_current', true)
-        .whereNull('ess.deleted_at')
-        .groupBy('ess.id', 'e.id', 'ss.id')
-        .select(
-          'ess.id as mappingId',
-          'e.id as empId',
-          'e.first_name',
-          'e.last_name',
-          'e.employee_code',
-          'ss.id as structureId',
-          db.raw('COALESCE(ess.effective_from, ss.effective_from) as effectiveFrom'),
-          db.raw('COALESCE(ss.structure_name, "Standard Structure") as structureName'),
-          db.raw('COALESCE(ss.gross_monthly, MAX(ssc.gross_monthly), 0) as grossMonthly'),
-          db.raw('COALESCE(ss.annual_ctc, MAX(ssc.annual_ctc), 0) as annualCtc'),
-          db.raw('COALESCE(ss.net_take_home, MAX(ssc.net_take_home), 0) as netTakeHome')
-        )
-        .orderBy('ess.id', 'desc')
-        .catch(() => []);
-    }
-
-    // Secondary Fallback: If still no mappings, check salary_structures with employee_id directly
-    if (!mappings || mappings.length === 0) {
-      mappings = await db('salary_structures as ss')
-        .join('employees as e', 'ss.employee_id', 'e.id')
-        .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
-        .whereNull('ss.deleted_at')
-        .groupBy('ss.id', 'e.id')
-        .select(
-          'ss.id as mappingId',
-          'e.id as empId',
-          'e.first_name',
-          'e.last_name',
-          'e.employee_code',
-          'ss.id as structureId',
-          'ss.structure_name as structureName',
-          db.raw('COALESCE(MAX(ssc.gross_monthly), ss.gross_monthly, 0) as grossMonthly'),
-          db.raw('COALESCE(MAX(ssc.annual_ctc), ss.annual_ctc, 0) as annualCtc'),
-          db.raw('COALESCE(MAX(ssc.net_take_home), ss.net_take_home, 0) as netTakeHome')
-        )
-        .orderBy('ss.id', 'desc')
-        .catch(() => []);
-    }
 
     res.json({ success: true, data: mappings });
   }
@@ -2187,10 +2237,10 @@ export class PayrollController {
     // created a duplicate instead of updating it.
     const existing = id
       ? await db('payroll_loan_types')
-          .where('organization_id', req.ctx.organizationId)
-          .where(q => q.where('id', id).orWhere('uuid', id))
-          .first()
-          .catch(() => null)
+        .where('organization_id', req.ctx.organizationId)
+        .where(q => q.where('id', id).orWhere('uuid', id))
+        .first()
+        .catch(() => null)
       : null;
 
     if (existing) {
@@ -2952,31 +3002,87 @@ export class PayrollController {
   async listCycles(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId;
-      let query = db('payroll_cycles').whereNull('deleted_at');
-      if (orgId) {
-        query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhereNull('organization_id');
-        });
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      // companyId from query param overrides ctx (for explicit filter), then fall back to ctx (from X-Company-Id header)
+      const companyId = req.query.companyId || req.query.company_id || req.ctx?.companyId;
+
+      let query = db('payroll_cycles as pc')
+        .leftJoin('company as comp', 'pc.company_id', 'comp.company_id')
+        .whereNull('pc.deleted_at')
+        .where('pc.organization_id', orgId)
+        .select('pc.*', 'comp.name as company_name', 'comp.code as company_code');
+
+      if (companyId && companyId !== 'all' && companyId !== '0') {
+        // Strict filter — only show cycles explicitly assigned to this company.
+        // Do NOT fall back to orWhereNull — that would leak other companies' cycles.
+        query = query.where('pc.company_id', Number(companyId));
       }
-      const cycles = await query.orderBy('id', 'asc');
+
+      const cycles = await query.orderBy('pc.id', 'asc');
       const formattedCycles = (cycles || []).map((c: any) => {
-        const title = c.cycleName || c.cycle_name || c.name || 'Standard Monthly Cycle';
+        const title = c.cycle_name || c.cycleName || c.name || 'Standard Monthly Cycle';
         return {
           ...c,
           id: String(c.id),
           name: title,
           cycle_name: title,
           cycleName: title,
-          startDate: c.startDate ?? c.start_date ?? 1,
-          cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 25,
-          disbursementDate: c.disbursementDate ?? c.disbursement_date ?? 28,
+          companyId: c.company_id ? String(c.company_id) : null,
+          company_id: c.company_id ? Number(c.company_id) : null,
+          companyName: c.company_name || 'All Companies',
+          company_name: c.company_name || 'All Companies',
+          startDate: c.start_date ?? c.startDate ?? 1,
+          cutoffDay: c.cutoff_day ?? c.cutoffDay ?? 25,
+          disbursementDate: c.disbursement_date_str ?? c.disbursementDate ?? c.disbursement_date ?? 28,
           frequency: c.frequency || 'Monthly',
-          isDailyWages: Boolean(c.isDailyWages ?? c.is_daily_wages),
-          isActive: c.isActive !== false && c.is_active !== 0
+          isDailyWages: Boolean(c.is_daily_wages ?? c.isDailyWages),
+          isActive: (c.is_active ?? c.isActive) !== 0 && (c.is_active ?? c.isActive) !== false
         };
       });
       res.json({ success: true, data: formattedCycles });
+    } catch (err: any) {
+      console.error('listCycles error:', err);
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async getCycle(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const { id } = req.params;
+      const c = await db('payroll_cycles as pc')
+        .leftJoin('company as comp', 'pc.company_id', 'comp.company_id')
+        .where('pc.id', id)
+        .whereNull('pc.deleted_at')
+        .select('pc.*', 'comp.name as company_name', 'comp.code as company_code')
+        .first();
+
+      if (!c) {
+        return res.status(404).json({ success: false, message: 'Payroll cycle not found' });
+      }
+
+      const title = c.cycle_name || c.name || 'Standard Monthly Cycle';
+      res.json({
+        success: true,
+        data: {
+          ...c,
+          id: String(c.id),
+          name: title,
+          cycle_name: title,
+          cycleName: title,
+          companyId: c.company_id ? String(c.company_id) : null,
+          company_id: c.company_id ? Number(c.company_id) : null,
+          companyName: c.company_name || 'All Companies',
+          company_name: c.company_name || 'All Companies',
+          startDate: c.start_date ?? 1,
+          cutoffDay: c.cutoff_day ?? 25,
+          disbursementDate: c.disbursement_date_str ?? 28,
+          frequency: c.frequency || 'Monthly',
+          isDailyWages: Boolean(c.is_daily_wages),
+          isActive: c.is_active !== 0 && c.is_active !== false
+        }
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -2985,58 +3091,61 @@ export class PayrollController {
   async createCycle(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
-      const cycleName = req.body.cycle_name || req.body.name || 'Monthly Pay Cycle';
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const cycleName = (req.body.cycle_name || req.body.name || 'Monthly Pay Cycle').trim();
       const cycleCode = req.body.cycle_code || req.body.cycleCode || `CYC-${Date.now().toString().slice(-6)}`;
+
+      const targetCompanyId = req.body.companyId || req.body.company_id || req.ctx?.companyId;
+      const numericCompanyId = (targetCompanyId && !isNaN(Number(targetCompanyId)) && Number(targetCompanyId) > 0)
+        ? Number(targetCompanyId)
+        : null;
 
       // ── Derive the correct year & month ────────────────────────────────────
       const now = new Date();
-      let year  = now.getFullYear();
+      let year = now.getFullYear();
       let month = now.getMonth();
 
       const rawMonth = req.body.payroll_month || req.body.month;
       if (rawMonth && typeof rawMonth === 'string' && rawMonth.length === 7) {
         const [y, m] = rawMonth.split('-').map(Number);
         if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
-          year  = y;
+          year = y;
           month = m - 1;
         }
       }
 
-      const rawFrequency  = req.body.frequency || req.body.cycle_type || 'Monthly';
-      const rawType       = rawFrequency.toLowerCase().replace(/[^a-z]/g, '');
-      // ✅ bimonthly is now a valid type (was previously falling back to 'monthly')
-      const validTypes    = ['monthly', 'biweekly', 'weekly', 'fortnightly', 'semimonthly', 'bimonthly'];
-      const cycleType     = validTypes.includes(rawType) ? rawType : 'monthly';
+      const rawFrequency = req.body.frequency || req.body.cycle_type || 'Monthly';
+      const rawType = rawFrequency.toLowerCase().replace(/[^a-z]/g, '');
+      const validTypes = ['monthly', 'biweekly', 'weekly', 'fortnightly', 'semimonthly', 'bimonthly'];
+      const cycleType = validTypes.includes(rawType) ? rawType : 'monthly';
 
-      const cutoffDay       = Number(req.body.cutoffDay     || req.body.cutoff_day     || 25);
+      const cutoffDay = Number(req.body.cutoffDay || req.body.cutoff_day || 25);
       const disbursementDay = Number(req.body.disbursementDate || req.body.disbursement_date || req.body.payoutDay || 28);
-      const startDate       = Number(req.body.startDate     || req.body.start_date     || 1);
-      const startDayName    = req.body.startDay || req.body.start_day || 'Monday'; // for weekly/bi-weekly
+      const startDate = Number(req.body.startDate || req.body.start_date || 1);
+      const startDayName = req.body.startDay || req.body.start_day || 'Monday';
 
       // ── Compute correct start/end/cutoff/credit dates per frequency ────────
       let cycleStartDate: string;
-      let cycleEndDate:   string;
-      let cutoffDate:     string;
-      let creditDate:     string;
+      let cycleEndDate: string;
+      let cutoffDate: string;
+      let creditDate: string;
 
       if (rawType === 'semimonthly') {
-        // ── Semi-Monthly: Two cycles per month ─────────────────────────────
         if (startDate <= 15) {
           cycleStartDate = new Date(year, month, startDate).toISOString().split('T')[0];
-          cycleEndDate   = new Date(year, month, 15).toISOString().split('T')[0];
-          cutoffDate     = new Date(year, month, Math.min(cutoffDay, 15)).toISOString().split('T')[0];
-          creditDate     = new Date(year, month, Math.min(disbursementDay, 15)).toISOString().split('T')[0];
+          cycleEndDate = new Date(year, month, 15).toISOString().split('T')[0];
+          cutoffDate = new Date(year, month, Math.min(cutoffDay, 15)).toISOString().split('T')[0];
+          creditDate = new Date(year, month, Math.min(disbursementDay, 15)).toISOString().split('T')[0];
         } else {
           cycleStartDate = new Date(year, month, 16).toISOString().split('T')[0];
-          cycleEndDate   = new Date(year, month + 1, 0).toISOString().split('T')[0]; // last day of month
-          cutoffDate     = new Date(year, month, Math.max(cutoffDay, 16)).toISOString().split('T')[0];
-          creditDate     = new Date(year, month, Math.max(disbursementDay, 16)).toISOString().split('T')[0];
+          cycleEndDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+          cutoffDate = new Date(year, month, Math.max(cutoffDay, 16)).toISOString().split('T')[0];
+          creditDate = new Date(year, month, Math.max(disbursementDay, 16)).toISOString().split('T')[0];
         }
 
       } else if (rawType === 'weekly') {
-        // ── Weekly: 7-day window anchored to startDayName ──────────────────
-        const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const targetDay = Math.max(dayNames.indexOf(startDayName), 0);
         let diff = now.getDay() - targetDay;
         if (diff < 0) diff += 7;
@@ -3045,15 +3154,14 @@ export class PayrollController {
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
         cycleStartDate = weekStart.toISOString().split('T')[0];
-        cycleEndDate   = weekEnd.toISOString().split('T')[0];
+        cycleEndDate = weekEnd.toISOString().split('T')[0];
         const cutoffWk = new Date(weekEnd);
         cutoffWk.setDate(weekEnd.getDate() - 1);
         cutoffDate = cutoffWk.toISOString().split('T')[0];
         creditDate = weekEnd.toISOString().split('T')[0];
 
       } else if (rawType === 'biweekly' || rawType === 'fortnightly') {
-        // ── Bi-Weekly: 14-day window anchored to startDayName ──────────────
-        const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const targetDay = Math.max(dayNames.indexOf(startDayName), 0);
         let diff = now.getDay() - targetDay;
         if (diff < 0) diff += 7;
@@ -3063,41 +3171,40 @@ export class PayrollController {
         const biEnd = new Date(biStart);
         biEnd.setDate(biStart.getDate() + 13);
         cycleStartDate = biStart.toISOString().split('T')[0];
-        cycleEndDate   = biEnd.toISOString().split('T')[0];
+        cycleEndDate = biEnd.toISOString().split('T')[0];
         const cutoffBi = new Date(biEnd);
         cutoffBi.setDate(biEnd.getDate() - 1);
         cutoffDate = cutoffBi.toISOString().split('T')[0];
         creditDate = biEnd.toISOString().split('T')[0];
 
       } else if (rawType === 'bimonthly') {
-        // ── Bi-Monthly: spans current month + next month ────────────────────
         cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
-        cycleEndDate   = new Date(year, month + 2, 0).toISOString().split('T')[0];
-        cutoffDate     = new Date(year, month + 1, cutoffDay).toISOString().split('T')[0];
-        creditDate     = new Date(year, month + 1, disbursementDay).toISOString().split('T')[0];
+        cycleEndDate = new Date(year, month + 2, 0).toISOString().split('T')[0];
+        cutoffDate = new Date(year, month + 1, cutoffDay).toISOString().split('T')[0];
+        creditDate = new Date(year, month + 1, disbursementDay).toISOString().split('T')[0];
 
       } else {
-        // ── Monthly (default) ───────────────────────────────────────────────
         cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
-        cycleEndDate   = new Date(year, month + 1, 0).toISOString().split('T')[0];
-        cutoffDate     = new Date(year, month, cutoffDay).toISOString().split('T')[0];
-        creditDate     = new Date(year, month, disbursementDay).toISOString().split('T')[0];
+        cycleEndDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        cutoffDate = new Date(year, month, cutoffDay).toISOString().split('T')[0];
+        creditDate = new Date(year, month, disbursementDay).toISOString().split('T')[0];
       }
 
       const cycleData = {
         uuid: uuidv4(),
         organization_id: orgId,
+        company_id: numericCompanyId,
         cycle_name: cycleName,
         cycle_code: cycleCode,
         cycle_type: cycleType,
-        frequency:  rawFrequency,
-        cycle_start_date:   req.body.cycle_start_date   || cycleStartDate,
-        cycle_end_date:     req.body.cycle_end_date     || cycleEndDate,
-        payroll_run_date:   req.body.payroll_run_date   || cutoffDate,
+        frequency: rawFrequency,
+        cycle_start_date: req.body.cycle_start_date || cycleStartDate,
+        cycle_end_date: req.body.cycle_end_date || cycleEndDate,
+        payroll_run_date: req.body.payroll_run_date || cutoffDate,
         salary_credit_date: req.body.salary_credit_date || creditDate,
-        start_date:  startDate,
-        start_day:   startDayName,
-        cutoff_day:  cutoffDay,
+        start_date: startDate,
+        start_day: startDayName,
+        cutoff_day: cutoffDay,
         disbursement_date_str: String(disbursementDay),
         is_daily_wages: Boolean(req.body.isDailyWages || req.body.is_daily_wages),
         daily_wages_include_paid_holidays: Boolean(
@@ -3106,12 +3213,12 @@ export class PayrollController {
         daily_wages_include_week_off: Boolean(
           req.body.dailyWagesIncludeWeekOff || req.body.daily_wages_include_week_off
         ),
-        month_offset:    req.body.monthOffset    || req.body.month_offset    || 'Current',
-        total_days_calc: req.body.totalDaysCalc  || req.body.total_days_calc || '30',
-        cap_amount:      Number(req.body.capAmount || req.body.cap_amount    || 1000000),
-        tolerance_enabled: Boolean(req.body.toleranceEnabled  || req.body.tolerance_enabled),
-        tolerance_minutes: Number(req.body.toleranceMinutes   || req.body.tolerance_minutes || 15),
-        is_active:        req.body.isActive ?? req.body.is_active ?? true,
+        month_offset: req.body.monthOffset || req.body.month_offset || 'Current',
+        total_days_calc: req.body.totalDaysCalc || req.body.total_days_calc || '30',
+        cap_amount: Number(req.body.capAmount || req.body.cap_amount || 1000000),
+        tolerance_enabled: Boolean(req.body.toleranceEnabled || req.body.tolerance_enabled),
+        tolerance_minutes: Number(req.body.toleranceMinutes || req.body.tolerance_minutes || 15),
+        is_active: req.body.isActive ?? req.body.is_active ?? true,
         is_current_cycle: req.body.is_current_cycle ?? true,
         status: (req.body.isActive ?? req.body.is_active ?? true) ? 'open' : 'closed',
         created_by: req.ctx?.userId || 10,
@@ -3119,8 +3226,23 @@ export class PayrollController {
       };
 
       const [id] = await db('payroll_cycles').insert(cycleData);
-      res.status(201).json({ success: true, data: { id, name: cycleName, ...cycleData } });
+      const inserted = await db('payroll_cycles as pc')
+        .leftJoin('company as comp', 'pc.company_id', 'comp.company_id')
+        .where('pc.id', id)
+        .select('pc.*', 'comp.name as company_name')
+        .first();
+
+      res.status(201).json({
+        success: true,
+        data: {
+          ...inserted,
+          id: String(id),
+          name: cycleName,
+          companyName: inserted?.company_name || 'All Companies'
+        }
+      });
     } catch (err: any) {
+      console.error('createCycle error:', err);
       res.status(400).json({ success: false, message: err.message });
     }
   }
@@ -3131,18 +3253,17 @@ export class PayrollController {
       const { id } = req.params;
       const b = req.body;
       const payload: any = { updated_at: new Date() };
-      if (b.cycle_name || b.name) payload.cycle_name = b.cycle_name || b.name;
+
+      if (b.cycle_name || b.name) payload.cycle_name = (b.cycle_name || b.name).trim();
       if (b.frequency) payload.frequency = b.frequency;
-      if (b.startDate || b.start_date) payload.start_date = b.startDate || b.start_date;
+      if (b.startDate || b.start_date) payload.start_date = Number(b.startDate || b.start_date);
       if (b.startDay || b.start_day) payload.start_day = b.startDay || b.start_day;
-      if (b.cutoffDay || b.cutoff_day) payload.cutoff_day = b.cutoffDay || b.cutoff_day;
+      if (b.cutoffDay || b.cutoff_day) payload.cutoff_day = Number(b.cutoffDay || b.cutoff_day);
       if (b.disbursementDate || b.disbursement_date) payload.disbursement_date_str = String(b.disbursementDate || b.disbursement_date);
-      // These fields used to only be checked in camelCase (or not checked at
-      // all), but the real save (PayrollSettingsPage.tsx's handleSaveCycle)
-      // sends everything in snake_case — Cap Amount, the daily-wages
-      // toggles, Month Offset, and the tolerance settings all silently
-      // failed to persist on every edit, even though createCycle already
-      // handled both cases correctly.
+      if (b.companyId !== undefined || b.company_id !== undefined) {
+        const cId = b.companyId || b.company_id;
+        payload.company_id = (cId && !isNaN(Number(cId)) && Number(cId) > 0) ? Number(cId) : null;
+      }
       if (b.isDailyWages !== undefined || b.is_daily_wages !== undefined) payload.is_daily_wages = Boolean(b.isDailyWages ?? b.is_daily_wages);
       if (b.dailyWagesIncludePaidHolidays !== undefined || b.daily_wages_include_paid_holidays !== undefined) payload.daily_wages_include_paid_holidays = Boolean(b.dailyWagesIncludePaidHolidays ?? b.daily_wages_include_paid_holidays);
       if (b.dailyWagesIncludeWeekOff !== undefined || b.daily_wages_include_week_off !== undefined) payload.daily_wages_include_week_off = Boolean(b.dailyWagesIncludeWeekOff ?? b.daily_wages_include_week_off);
@@ -3153,20 +3274,38 @@ export class PayrollController {
       if (b.isActive !== undefined || b.is_active !== undefined) payload.is_active = b.isActive ?? b.is_active;
 
       await db('payroll_cycles').where('id', id).update(payload);
-      res.json({ success: true, data: { id, ...payload } });
+
+      const updated = await db('payroll_cycles as pc')
+        .leftJoin('company as comp', 'pc.company_id', 'comp.company_id')
+        .where('pc.id', id)
+        .select('pc.*', 'comp.name as company_name')
+        .first();
+
+      res.json({
+        success: true,
+        data: {
+          ...updated,
+          id: String(id),
+          name: updated?.cycle_name,
+          companyName: updated?.company_name || 'All Companies'
+        }
+      });
     } catch (err: any) {
+      console.error('updateCycle error:', err);
       res.status(400).json({ success: false, message: err.message });
     }
   }
+
 
   async deleteCycle(req: Request, res: Response) {
     try {
       const db = getKnex();
       const { id } = req.params;
-      await db('payroll_cycles').where('id', id).update({ deleted_at: new Date() });
-      res.json({ success: true, message: 'Pay cycle deleted' });
+      await db('payroll_cycles').where('id', id).update({ deleted_at: new Date(), is_active: 0 });
+      res.json({ success: true, message: 'Pay cycle deleted successfully' });
     } catch (err: any) {
-      res.status(400).json({ success: false, message: err.message });
+      console.error('deleteCycle error:', err);
+      res.status(500).json({ success: false, message: err.message });
     }
   }
 
@@ -3254,7 +3393,7 @@ export class PayrollController {
 
   async listComponentDefinitions(req: Request, res: Response) {
     try {
-      const db  = getKnex();
+      const db = getKnex();
       const orgId = req.ctx?.organizationId;
 
       // ── Primary source: payroll_components (has group_id, formula, amount) ─
@@ -3277,25 +3416,25 @@ export class PayrollController {
 
       // ── Normalise pay_component_definitions rows to match payroll_components shape ─
       const pcdNormalized = pcdRows.map((p: any) => ({
-        id:                   `pcd_${p.id}`,
-        uuid:                 p.uuid,
-        organization_id:      p.organization_id,
-        group_id:             null,          // pcd has no group_id; UI handles orphan comps
-        name:                 p.component_name,
-        component_type:       p.component_type,  // EARNING | DEDUCTION | STATUTORY etc.
-        calc_type:            p.calculation_type, // FIXED_AMOUNT | FORMULA_BASED etc.
-        amount:               p.percentage_value || 0,
-        formula:              p.formula_expression || '',
-        boundary_type:        'Choose',
-        min_amount:           p.min_value || 0,
-        max_amount:           p.max_value || 0,
-        is_taxable:           p.is_taxable,
-        is_statutory:         p.component_type === 'STATUTORY' ? 1 : 0,
-        based_on_attendance:  p.is_prorated_by_attendance,
-        non_cashable:         0,
-        is_active:            1,
-        effective_from_date:  p.effective_from,
-        effective_to_date:    p.effective_to,
+        id: `pcd_${p.id}`,
+        uuid: p.uuid,
+        organization_id: p.organization_id,
+        group_id: null,          // pcd has no group_id; UI handles orphan comps
+        name: p.component_name,
+        component_type: p.component_type,  // EARNING | DEDUCTION | STATUTORY etc.
+        calc_type: p.calculation_type, // FIXED_AMOUNT | FORMULA_BASED etc.
+        amount: p.percentage_value || 0,
+        formula: p.formula_expression || '',
+        boundary_type: 'Choose',
+        min_amount: p.min_value || 0,
+        max_amount: p.max_value || 0,
+        is_taxable: p.is_taxable,
+        is_statutory: p.component_type === 'STATUTORY' ? 1 : 0,
+        based_on_attendance: p.is_prorated_by_attendance,
+        non_cashable: 0,
+        is_active: 1,
+        effective_from_date: p.effective_from,
+        effective_to_date: p.effective_to,
       }));
 
       // ── Merge: keep pcRows first (they have group_id), add pcd rows not already present ─
@@ -3407,77 +3546,277 @@ export class PayrollController {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PAYROLL SLABS DYNAMIC CRUD (payroll_slabs)
+  // ─────────────────────────────────────────────────────────────────────────────
   async listSlabs(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId;
-      let query = db('payroll_slabs').whereNull('deleted_at');
-      if (orgId) {
-        query = query.where(builder => {
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const companyId = req.ctx?.companyId;
+
+      let query = db('payroll_slabs')
+        .whereNull('deleted_at')
+        .where(builder => {
           builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
+
+      if (companyId) {
+        query = query.where(builder => {
+          builder.where('company_id', companyId).orWhereNull('company_id');
+        });
       }
-      const slabs = await query;
-      res.json({ success: true, data: slabs });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+
+      const rows = await query.orderBy('id', 'desc');
+
+      const mapped = rows.map((r: any) => {
+        let departments: string[] = [];
+        try { departments = typeof r.departments === 'string' ? JSON.parse(r.departments) : (r.departments || []); } catch { }
+        let grades: string[] = [];
+        try { grades = typeof r.grades === 'string' ? JSON.parse(r.grades) : (r.grades || []); } catch { }
+        let locations: string[] = [];
+        try { locations = typeof r.locations === 'string' ? JSON.parse(r.locations) : (r.locations || []); } catch { }
+        let selectedComponentIds: any[] = [];
+        try {
+          const rawComps = r.selected_component_ids ?? r.selectedComponentIds;
+          selectedComponentIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
+        } catch { }
+
+        const minCtc = Number(r.min_ctc ?? r.minCtc ?? 0);
+        const maxCtc = Number(r.max_ctc ?? r.maxCtc ?? 10000000);
+        const cycleIdStr = r.cycle_id ? String(r.cycle_id) : (r.cycleId ? String(r.cycleId) : '');
+        const slabName = r.name || r.slab_name || r.slabName || 'Payroll Slab';
+
+        return {
+          ...r,
+          id: String(r.id),
+          name: slabName,
+          slabName,
+          slab_name: slabName,
+          departments,
+          grades,
+          locations,
+          selectedComponentIds,
+          selected_component_ids: selectedComponentIds,
+          minCtc,
+          min_ctc: minCtc,
+          maxCtc,
+          max_ctc: maxCtc,
+          cycleId: cycleIdStr,
+          cycle_id: cycleIdStr ? Number(cycleIdStr) : null,
+          employmentType: r.employment_type || r.employmentType || 'Regular',
+          employment_type: r.employment_type || r.employmentType || 'Regular',
+          pfRatePct: Number(r.pf_rate_pct ?? r.pfRatePct ?? 12.00),
+          pf_rate_pct: Number(r.pf_rate_pct ?? r.pfRatePct ?? 12.00),
+          isActive: (r.is_active ?? r.isActive) !== 0 && (r.is_active ?? r.isActive) !== false,
+          is_active: (r.is_active ?? r.isActive) !== 0 && (r.is_active ?? r.isActive) !== false ? 1 : 0,
+          isFromDb: true
+        };
+      });
+
+      res.json({ success: true, data: mapped });
+    } catch (e: any) {
+      console.error('listSlabs error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error listing slabs' });
+    }
+  }
+
+  async getSlab(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const { id } = req.params;
+      const r = await db('payroll_slabs')
+        .where('id', id)
+        .whereNull('deleted_at')
+        .first();
+
+      if (!r) {
+        return res.status(404).json({ success: false, message: 'Slab not found' });
+      }
+
+      let departments = [];
+      try { departments = typeof r.departments === 'string' ? JSON.parse(r.departments) : (r.departments || []); } catch { }
+      let grades = [];
+      try { grades = typeof r.grades === 'string' ? JSON.parse(r.grades) : (r.grades || []); } catch { }
+      let locations = [];
+      try { locations = typeof r.locations === 'string' ? JSON.parse(r.locations) : (r.locations || []); } catch { }
+      let selectedComponentIds = [];
+      try {
+        const rawComps = r.selected_component_ids ?? r.selectedComponentIds;
+        selectedComponentIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
+      } catch { }
+
+      const minCtc = Number(r.min_ctc ?? r.minCtc ?? 0);
+      const maxCtc = Number(r.max_ctc ?? r.maxCtc ?? 10000000);
+      const slabName = r.name || r.slab_name || r.slabName || 'Payroll Slab';
+      const cycleIdStr = r.cycle_id ? String(r.cycle_id) : (r.cycleId ? String(r.cycleId) : '');
+
+      res.json({
+        success: true,
+        data: {
+          ...r,
+          id: String(r.id),
+          name: slabName,
+          slabName,
+          slab_name: slabName,
+          departments,
+          grades,
+          locations,
+          selectedComponentIds,
+          selected_component_ids: selectedComponentIds,
+          minCtc,
+          min_ctc: minCtc,
+          maxCtc,
+          max_ctc: maxCtc,
+          cycleId: cycleIdStr,
+          cycle_id: cycleIdStr ? Number(cycleIdStr) : null,
+          employmentType: r.employment_type || r.employmentType || 'Regular',
+          employment_type: r.employment_type || r.employmentType || 'Regular',
+          pfRatePct: Number(r.pf_rate_pct ?? r.pfRatePct ?? 12.00),
+          pf_rate_pct: Number(r.pf_rate_pct ?? r.pfRatePct ?? 12.00),
+          isActive: (r.is_active ?? r.isActive) !== 0 && (r.is_active ?? r.isActive) !== false,
+          is_active: (r.is_active ?? r.isActive) !== 0 && (r.is_active ?? r.isActive) !== false ? 1 : 0,
+          isFromDb: true
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, message: e.message || 'Error getting slab' });
     }
   }
 
   async createSlab(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const cycleIdVal = req.body.cycleId || req.body.cycle_id;
-      const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
-      const orgId = req.ctx?.organizationId || 1;
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
+      const body = req.body || {};
+      const slabName = (body.name || body.slab_name || body.slabName || 'New Pay Slab').trim();
 
-      const slabData = {
+      const cycleIdVal = body.cycleId || body.cycle_id;
+      const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
+      const compIds = body.selectedComponentIds ?? body.selected_component_ids ?? [];
+
+      const payload: any = {
         uuid: uuidv4(),
         organization_id: orgId,
-        name: req.body.name || 'New Payroll Slab',
-        departments: JSON.stringify(req.body.departments || ['All Departments']),
-        grades: JSON.stringify(req.body.grades || ['All Pay Grades']),
-        locations: JSON.stringify(req.body.locations || ['All Locations']),
-        min_ctc: req.body.minCtc || req.body.min_ctc || 0,
-        max_ctc: req.body.maxCtc || req.body.max_ctc || 10000000,
-        selected_component_ids: JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids || []),
+        company_id: req.ctx?.companyId || null,
+        name: slabName,
+        departments: typeof body.departments === 'string' ? body.departments : JSON.stringify(body.departments || ['All Departments']),
+        grades: typeof body.grades === 'string' ? body.grades : JSON.stringify(body.grades || ['All Pay Grades']),
+        locations: typeof body.locations === 'string' ? body.locations : JSON.stringify(body.locations || ['All Locations']),
+        min_ctc: Number(body.minCtc ?? body.min_ctc ?? 0),
+        max_ctc: Number(body.maxCtc ?? body.max_ctc ?? 10000000),
+        selected_component_ids: typeof compIds === 'string' ? compIds : JSON.stringify(compIds),
         cycle_id: numericCycleId,
-        employment_type: req.body.employmentType || req.body.employment_type || 'Regular',
-        is_active: req.body.isActive ?? req.body.is_active ?? true,
+        employment_type: body.employmentType || body.employment_type || 'Regular',
+        pf_rate_pct: Number(body.pfRatePct ?? body.pf_rate_pct ?? 12.00),
+        is_active: (body.isActive ?? body.is_active) !== false ? 1 : 0,
         created_by: req.ctx?.userId || 1,
-        updated_by: req.ctx?.userId || 1
+        updated_by: req.ctx?.userId || 1,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
-      const [id] = await db('payroll_slabs').insert(slabData);
-      res.status(201).json({ success: true, data: { id, ...slabData } });
-    } catch (err: any) {
-      res.status(400).json({ success: false, message: err.message });
+
+      const [insertedId] = await db('payroll_slabs').insert(payload);
+      const newRow = await db('payroll_slabs').where('id', insertedId).first();
+
+      res.status(201).json({
+        success: true,
+        data: {
+          ...newRow,
+          id: String(insertedId),
+          name: slabName,
+          slabName,
+          minCtc: payload.min_ctc,
+          maxCtc: payload.max_ctc,
+          isFromDb: true
+        }
+      });
+    } catch (e: any) {
+      console.error('createSlab error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error creating slab' });
     }
   }
 
   async updateSlab(req: Request, res: Response) {
     try {
       const db = getKnex();
+      const firstOrg = await db('organizations').first().catch(() => null);
+      const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
       const { id } = req.params;
-      const payload: any = { updated_at: new Date() };
-      if (req.body.name) payload.name = req.body.name;
-      if (req.body.departments) payload.departments = JSON.stringify(req.body.departments);
-      if (req.body.grades) payload.grades = JSON.stringify(req.body.grades);
-      if (req.body.locations) payload.locations = JSON.stringify(req.body.locations);
-      if (req.body.minCtc !== undefined || req.body.min_ctc !== undefined) payload.min_ctc = req.body.minCtc ?? req.body.min_ctc;
-      if (req.body.maxCtc !== undefined || req.body.max_ctc !== undefined) payload.max_ctc = req.body.maxCtc ?? req.body.max_ctc;
-      if (req.body.selectedComponentIds || req.body.selected_component_ids) {
-        payload.selected_component_ids = JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids);
-      }
-      if (req.body.cycleId || req.body.cycle_id) {
-        const cVal = req.body.cycleId || req.body.cycle_id;
-        payload.cycle_id = (!isNaN(Number(cVal))) ? Number(cVal) : null;
-      }
-      if (req.body.isActive !== undefined || req.body.is_active !== undefined) payload.is_active = req.body.isActive ?? req.body.is_active;
+      const body = req.body || {};
+      const slabName = body.name || body.slab_name || body.slabName;
 
-      await db('payroll_slabs').where('id', id).update(payload);
-      res.json({ success: true, data: { id, ...payload } });
-    } catch (err: any) {
-      res.status(400).json({ success: false, message: err.message });
+      const payload: any = {
+        updated_at: new Date(),
+        updated_by: req.ctx?.userId || 1,
+      };
+
+      if (slabName) {
+        payload.name = slabName.trim();
+      }
+      if (body.departments !== undefined) {
+        payload.departments = typeof body.departments === 'string' ? body.departments : JSON.stringify(body.departments);
+      }
+      if (body.grades !== undefined) {
+        payload.grades = typeof body.grades === 'string' ? body.grades : JSON.stringify(body.grades);
+      }
+      if (body.locations !== undefined) {
+        payload.locations = typeof body.locations === 'string' ? body.locations : JSON.stringify(body.locations);
+      }
+      if (body.minCtc !== undefined || body.min_ctc !== undefined) {
+        payload.min_ctc = Number(body.minCtc ?? body.min_ctc);
+      }
+      if (body.maxCtc !== undefined || body.max_ctc !== undefined) {
+        payload.max_ctc = Number(body.maxCtc ?? body.max_ctc);
+      }
+      if (body.selectedComponentIds !== undefined || body.selected_component_ids !== undefined) {
+        const cIds = body.selectedComponentIds ?? body.selected_component_ids;
+        payload.selected_component_ids = typeof cIds === 'string' ? cIds : JSON.stringify(cIds);
+      }
+      if (body.cycleId !== undefined || body.cycle_id !== undefined) {
+        const cId = body.cycleId ?? body.cycle_id;
+        payload.cycle_id = (cId && !isNaN(Number(cId))) ? Number(cId) : null;
+      }
+      if (body.employmentType !== undefined || body.employment_type !== undefined) {
+        payload.employment_type = body.employmentType ?? body.employment_type;
+      }
+      if (body.pfRatePct !== undefined || body.pf_rate_pct !== undefined) {
+        payload.pf_rate_pct = Number(body.pfRatePct ?? body.pf_rate_pct);
+      }
+      if (body.isActive !== undefined || body.is_active !== undefined) {
+        payload.is_active = (body.isActive ?? body.is_active) ? 1 : 0;
+      }
+
+      await db('payroll_slabs')
+        .where('id', id)
+        .update(payload);
+
+      // Synchronize associated structures if name changed
+      if (slabName) {
+        await db('salary_structures')
+          .where('slab_id', id)
+          .update({ structure_name: slabName.trim(), updated_at: new Date() })
+          .catch(() => { });
+      }
+
+      const updatedRow = await db('payroll_slabs').where('id', id).first();
+      res.json({
+        success: true,
+        data: {
+          ...updatedRow,
+          id: String(id),
+          name: updatedRow?.name || slabName,
+          slabName: updatedRow?.name || slabName,
+          isFromDb: true
+        }
+      });
+    } catch (e: any) {
+      console.error('updateSlab error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error updating slab' });
     }
   }
 
@@ -3485,10 +3824,22 @@ export class PayrollController {
     try {
       const db = getKnex();
       const { id } = req.params;
-      await db('payroll_slabs').where('id', id).update({ deleted_at: new Date() });
-      res.json({ success: true, message: 'Payroll slab deleted' });
-    } catch (err: any) {
-      res.status(400).json({ success: false, message: err.message });
+
+      // 1. Soft-delete the slab
+      await db('payroll_slabs')
+        .where('id', id)
+        .update({ deleted_at: new Date(), is_active: 0 });
+
+      // 2. Disassociate from salary_structures so orphan slab references don't break lookups
+      await db('salary_structures')
+        .where('slab_id', id)
+        .update({ slab_id: null, updated_at: new Date() })
+        .catch(() => { });
+
+      res.json({ success: true, message: 'Payroll slab deleted successfully' });
+    } catch (e: any) {
+      console.error('deleteSlab error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error deleting slab' });
     }
   }
 
@@ -3537,7 +3888,7 @@ export class PayrollController {
 
         const employeeId = empRow.id;
         const slabRow = await db('payroll_slabs').where('id', slabId).first();
-        const effectiveFromVal = new Date().toISOString().slice(0, 10);
+        const effectiveFromVal = item.effectiveFrom || item.effective_from || new Date().toISOString().slice(0, 10);
         const grossMonthly = annualCtc > 0 ? Math.round(annualCtc / 12) : 0;
         const basicMonthly = Math.round(grossMonthly * 0.5);
         const hraMonthly = Math.round(basicMonthly * 0.4);
@@ -3550,6 +3901,7 @@ export class PayrollController {
 
         const structurePayload = {
           slab_id: slabId,
+          structure_name: slabRow?.name || 'Assigned Slab',
           annual_ctc: annualCtc,
           gross_monthly: grossMonthly,
           basic_monthly: basicMonthly,
@@ -3610,6 +3962,10 @@ export class PayrollController {
   async getPayrollRunDetails(req: Request, res: Response) {
     const db = getKnex();
     const runId = parseInt(req.params.id);
+    if (Number.isNaN(runId)) {
+      res.status(404).json({ success: false, message: 'Payroll run not found' });
+      return;
+    }
     const run = await db('payroll_runs').where({ id: runId, organization_id: req.ctx.organizationId }).first();
     if (!run) {
       res.status(404).json({ success: false, message: 'Payroll run not found' });

@@ -61,7 +61,7 @@ export default function ExpensePage() {
             }
           }
           const rawStatus = String(item.status || 'pending').toLowerCase();
-          const status = rawStatus === 'approved' ? 'Approved' : rawStatus === 'rejected' ? 'Rejected' : 'Pending';
+          const status: 'Approved' | 'Rejected' | 'Pending' = rawStatus === 'approved' ? 'Approved' : rawStatus === 'rejected' ? 'Rejected' : 'Pending';
 
           return {
             id: item.id || Date.now(),

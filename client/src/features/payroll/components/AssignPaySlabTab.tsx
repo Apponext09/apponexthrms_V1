@@ -194,9 +194,10 @@ export const AssignPaySlabTab: React.FC = () => {
   // ─── 2-Option Modal Recalculation Helpers ────────────────────────────────────
   const recalculateFromSalaryInput = (inputVal: number) => {
     if (isNaN(inputVal) || inputVal <= 0) return;
-    const b = Math.round(inputVal * 0.5);
+    const monthlyVal = inputVal > 0 && inputVal < 50000 ? inputVal : Math.round(inputVal / 12);
+    const b = Math.round(monthlyVal * 0.5);
     const h = Math.round(b * 0.4);
-    const l = Math.max(0, inputVal - (b + h));
+    const l = Math.max(0, monthlyVal - (b + h));
 
     setBasic(String(b));
     setHra(String(h));
@@ -707,14 +708,14 @@ export const AssignPaySlabTab: React.FC = () => {
 
             {/* CTC / Salary Input & Dates Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-sky-50/70 p-4 rounded-lg border border-sky-200">
-              {/* Monthly Gross / CTC Input */}
+              {/* Annual CTC Input */}
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">Monthly Gross / CTC Input :</label>
+                <label className="text-xs font-bold text-slate-800 block mb-1">Annual CTC Input :</label>
                 <input
                   type="number"
                   value={salaryInput}
                   onChange={e => handleSalaryInputChange(e.target.value)}
-                  placeholder="Enter Monthly Gross Salary / CTC"
+                  placeholder="Enter Annual CTC (e.g. 480000)"
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
                 />
                 <p className="text-[10px] text-sky-800 italic mt-1 mb-0">
@@ -881,7 +882,7 @@ export const AssignPaySlabTab: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Annual CTC</span>
-                <span className="text-base font-black text-amber-400">₹{(ctcCalculated * 12).toLocaleString('en-IN')}</span>
+                <span className="text-base font-black text-amber-400">₹{((salaryInput && Number(salaryInput) > 0) ? (Number(salaryInput) < 50000 ? Number(salaryInput) * 12 : Number(salaryInput)) : ctcCalculated * 12).toLocaleString('en-IN')}</span>
               </div>
             </div>
 

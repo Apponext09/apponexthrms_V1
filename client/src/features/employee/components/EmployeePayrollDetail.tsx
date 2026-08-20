@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,11 +17,14 @@ import {
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { formatPayrollDate } from '@/lib/utils';
 import type { Employee } from '@/types';
 
 interface PayStructureRecord {
   id: string;
   slab: string;
+  slabId?: string;
+  cycleId?: string;
   effectiveFrom: string;
   arrearPayMonth?: string;
   status: 'Active' | 'Deleted';
@@ -75,6 +78,62 @@ interface ComponentGroup {
   isEditable: boolean;
   components: ComponentDef[];
 }
+
+const mapStructureRecord = (s: any, activeSlabNameFallback: string): PayStructureRecord => {
+  let customComps = {};
+  try {
+    customComps = typeof s.customComponents === 'string'
+      ? JSON.parse(s.customComponents)
+      : (typeof s.custom_components === 'string'
+        ? JSON.parse(s.custom_components)
+        : (s.customComponents || s.custom_components || {}));
+  } catch {}
+  
+  const savedInput = Number(s.salaryInput || s.salary_input || 0);
+  const rawCtc = Number(s.ctc || s.annual_ctc || s.annualCtc || 0);
+  const rawGross = Number(s.gross || s.gross_monthly || s.grossMonthly || 0);
+  const rawNet = Number(s.netSalary || s.net_salary_monthly || s.net_take_home || s.netTakeHome || 0);
+
+  const ctcVal = rawCtc > 0 ? rawCtc : (rawGross > 0 ? rawGross * 12 : (savedInput > 0 ? (savedInput < 50000 ? savedInput * 12 : savedInput) : 0));
+  const grossVal = rawGross > 0 ? rawGross : (ctcVal > 0 ? Math.round(ctcVal / 12) : (savedInput > 0 ? (savedInput < 50000 ? savedInput : Math.round(savedInput / 12)) : 0));
+  const netVal = rawNet > 0 ? rawNet : grossVal;
+
+  const displaySalaryInput = savedInput > 0
+    ? (savedInput < 50000 ? savedInput * 12 : savedInput)
+    : (ctcVal > 0 ? ctcVal : (grossVal > 0 ? grossVal * 12 : 480000));
+
+  return {
+    id: String(s.id),
+    slab: s.slab || s.slabName || s.slab_name || s.structureName || s.structure_name || activeSlabNameFallback || 'Monthly',
+    slabId: s.slabId !== undefined ? String(s.slabId) : (s.slab_id !== undefined ? String(s.slab_id) : undefined),
+    cycleId: s.cycleId !== undefined ? String(s.cycleId) : (s.cycle_id !== undefined ? String(s.cycle_id) : undefined),
+    effectiveFrom: s.effectiveFrom || s.effective_from || new Date().toISOString().split('T')[0],
+    arrearPayMonth: s.arrearPayMonth || s.arrear_pay_month || s.effective_from || '',
+    status: s.status === 'Deleted' || s.is_active === false || s.isActive === false ? 'Deleted' : 'Active',
+    addedBy: s.addedBy || s.added_by || 'hradmin',
+    addedOn: s.addedOn || s.added_on || new Date().toISOString().replace('T', ' ').substring(0, 19),
+    updateBy: s.updateBy || s.updated_by || '',
+    updateOn: s.updateOn || s.updated_on || '',
+    calcMode: s.calcMode || s.calculation_mode || 'salary_input',
+    salaryInput: displaySalaryInput,
+    basic: Number(s.basic || s.basic_monthly || (grossVal * 0.5)),
+    hra: Number(s.hra || s.hra_monthly || (grossVal * 0.2)),
+    standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
+    mealAllowance: Number(s.mealAllowance || s.meal_allowance_monthly || 0),
+    communicationAllowance: Number(s.communicationAllowance || s.communication_allowance_monthly || 0),
+    childrenEduAllowance: Number(s.childrenEduAllowance || s.children_edu_allowance_monthly || 0),
+    lta: Number(s.lta || s.lta_monthly || 0),
+    esic: Number(s.esic || s.esic_deduction || 0),
+    pt: Number(s.pt || s.pt_deduction || (grossVal > 15000 ? 200 : 0)),
+    pf: Number(s.pf || s.pf_deduction || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
+    pfEmployer: Number(s.pfEmployer || s.pf_employer || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
+    gross: grossVal,
+    totalDeduction: Number(s.totalDeduction || s.total_deductions_monthly || 0),
+    netSalary: netVal,
+    ctc: ctcVal,
+    customComponents: customComps
+  };
+};
 
 interface EmployeePayrollDetailProps {
   employee: Employee;
@@ -164,108 +223,99 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     });
 
     // Load the full slab catalog for reference (component picker, PF rate lookup, etc.)
-    const fetchSlabCatalog = async () => {
+    // AND fetch employee salary structures in a single coordinated flow so that the
+    // slab name resolved from the structure row is always available when records are mapped.
+    const loadPayrollData = async () => {
       try {
-        const res: any = await apiClient.get('/payroll/slabs');
-        setAllSlabs(res.data?.data || res.data || []);
-      } catch (err) {}
-    };
-    fetchSlabCatalog();
+        // Parallel: fetch slab catalog and employee structures at the same time
+        const [slabsRes, structRes] = await Promise.all([
+          apiClient.get('/payroll/slabs').catch(() => ({ data: { data: [] } })),
+          apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
+        ]);
 
-    // 2. Fetch Employee Salary Structure Records — this is also where we learn
-    // which slab (if any) the employee is actually on. listStructures already
-    // resolves s.slab_id / slab_name via a join, so use that directly instead
-    // of guessing from a department/grade text match or defaulting to
-    // whichever slab happens to be first in the list — employees.salary_slab_id
-    // never existed as a real column, so it was never a reliable source here.
-    apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).then((res: any) => {
-      const data = res.data?.data || res.data || [];
+        const slabsData: any[] = slabsRes.data?.data || slabsRes.data || [];
+        setAllSlabs(slabsData);
 
-      const currentStructure = data.find((s: any) => s.slabId || s.slab_id);
-      if (currentStructure) {
-        const sId = currentStructure.slabId || currentStructure.slab_id;
-        const sName = currentStructure.slabName || currentStructure.slab_name;
-        setActiveSlabId(String(sId));
-        setActiveSlabName(sName || 'Assigned Slab');
-        setActiveCycleId((currentStructure.cycleId || currentStructure.cycle_id) ? String(currentStructure.cycleId || currentStructure.cycle_id) : '');
+        const data: any[] = structRes.data?.data || structRes.data || [];
 
-        apiClient.get('/payroll/slabs').then((slabsRes: any) => {
-          const slabsData = slabsRes.data?.data || slabsRes.data || [];
-          const fullSlab = slabsData.find((s: any) => String(s.id) === String(sId));
-          if (fullSlab) {
-            // /payroll/slabs is camelCased by the global response hook
-            // (selectedComponentIds / pfRatePct) — the snake_case reads here
-            // always missed, so slabComponentIds was permanently empty and
-            // every slab silently showed "No components assigned" regardless
-            // of what was actually configured.
-            const rawPfRate = fullSlab.pfRatePct ?? fullSlab.pf_rate_pct;
+        // -- Resolve active slab from the structure row (the JOIN already returned slab_name / slabName) --
+        const currentStructure = data.find((s: any) => s.slabId || s.slab_id);
+        let resolvedSlabName = 'Not Assigned';
+        let resolvedSlabId = '';
+        let resolvedCycleId = '';
+
+        if (currentStructure) {
+          resolvedSlabId = String(currentStructure.slabId || currentStructure.slab_id || '');
+          // Prefer the slab_name joined from payroll_slabs (already camelCased to slabName by Knex).
+          // Also check the slab catalog as a fallback.
+          const joinedSlabName = currentStructure.slabName || currentStructure.slab_name;
+          const catalogSlab = slabsData.find((s: any) => String(s.id) === resolvedSlabId);
+          resolvedSlabName = joinedSlabName || catalogSlab?.name || 'Assigned Slab';
+          resolvedCycleId = String(currentStructure.cycleId || currentStructure.cycle_id || '');
+
+          setActiveSlabId(resolvedSlabId);
+          setActiveSlabName(resolvedSlabName);
+          setActiveCycleId(resolvedCycleId);
+
+          // Pull PF rate and component IDs from the catalog slab
+          if (catalogSlab) {
+            const rawPfRate = catalogSlab.pfRatePct ?? catalogSlab.pf_rate_pct;
             setSlabPfRate(Number(rawPfRate ?? 12));
-            const rawComponentIds = fullSlab.selectedComponentIds ?? fullSlab.selected_component_ids;
-            let comps = [];
+            const rawComponentIds = catalogSlab.selectedComponentIds ?? catalogSlab.selected_component_ids;
+            let comps: any[] = [];
             try {
-              comps = typeof rawComponentIds === 'string'
-                ? JSON.parse(rawComponentIds)
-                : (rawComponentIds || []);
+              comps = typeof rawComponentIds === 'string' ? JSON.parse(rawComponentIds) : (rawComponentIds || []);
             } catch {}
             setSlabComponentIds(comps.map(String));
           }
-        }).catch(() => {});
-      } else {
-        // No structure with a real slab_id yet — leave the "assigned slab"
-        // state empty rather than silently defaulting to an arbitrary one.
-        setActiveSlabId('');
-        setActiveSlabName('Not Assigned');
-      }
+        } else {
+          setActiveSlabId('');
+          setActiveSlabName('Not Assigned');
+        }
 
-      if (Array.isArray(data) && data.length > 0) {
-        const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
-          let customComps = {};
-          try {
-            customComps = typeof s.custom_components === 'string' ? JSON.parse(s.custom_components) : (s.custom_components || {});
-          } catch {}
-          
-          return {
-            id: String(s.id),
-            slab: s.slab || s.slab_name || activeSlabName || 'Monthly',
-            effectiveFrom: s.effectiveFrom || s.effective_from || new Date().toISOString().split('T')[0],
-            arrearPayMonth: s.arrearPayMonth || s.arrear_pay_month || s.effective_from || '',
-            status: s.status === 'Deleted' || s.is_active === false ? 'Deleted' : 'Active',
-            addedBy: s.addedBy || s.added_by || 'hradmin',
-            addedOn: s.addedOn || s.added_on || new Date().toISOString().replace('T', ' ').substring(0, 19),
-            updateBy: s.updateBy || s.updated_by || '',
-            updateOn: s.updateOn || s.updated_on || '',
-            calcMode: s.calcMode || s.calculation_mode || 'salary_input',
-            salaryInput: Number(s.salaryInput || s.salary_input || s.gross_monthly || 60000),
-            basic: Number(s.basic || s.basic_monthly || 0),
-            hra: Number(s.hra || s.hra_monthly || 0),
-            standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
-            mealAllowance: Number(s.mealAllowance || s.meal_allowance_monthly || 0),
-            communicationAllowance: Number(s.communicationAllowance || s.communication_allowance_monthly || 0),
-            childrenEduAllowance: Number(s.childrenEduAllowance || s.children_edu_allowance_monthly || 0),
-            lta: Number(s.lta || s.lta_monthly || 0),
-            esic: Number(s.esic || s.esic_deduction || 0),
-            pt: Number(s.pt || s.pt_deduction || 0),
-            pf: Number(s.pf || s.pf_deduction || 0),
-            pfEmployer: Number(s.pfEmployer || s.pf_employer || 0),
-            gross: Number(s.gross || s.gross_monthly || 0),
-            totalDeduction: Number(s.totalDeduction || s.total_deductions_monthly || 0),
-            netSalary: Number(s.netSalary || s.net_salary_monthly || 0),
-            ctc: Number(s.ctc || s.annual_ctc || 0),
-            customComponents: customComps
-          };
-        });
-        // Deduplicate records to prevent repeat rows
-        const uniqueMap = new Map<string, PayStructureRecord>();
-        mappedRecords.forEach(r => {
-          const key = `${r.effectiveFrom}_${r.slab}`;
-          if (!uniqueMap.has(key)) {
-            uniqueMap.set(key, r);
-          }
-        });
-        setPayStructures(Array.from(uniqueMap.values()));
+        // -- Map structure records using the LOCALLY resolved slab name (not stale React state) --
+        if (Array.isArray(data) && data.length > 0) {
+          const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
+            // Each row already has slabName from the JOIN — use it directly per-row
+            const perRowSlabName = s.slabName || s.slab_name;
+            const perRowSlabId = s.slabId || s.slab_id;
+            const catalogSlabForRow = perRowSlabId
+              ? slabsData.find((sl: any) => String(sl.id) === String(perRowSlabId))
+              : null;
+            const fallbackName = perRowSlabName || catalogSlabForRow?.name || resolvedSlabName;
+            return mapStructureRecord(s, fallbackName);
+          });
+          // Deduplicate records to prevent repeat rows
+          const uniqueMap = new Map<string, PayStructureRecord>();
+          mappedRecords.forEach(r => {
+            const key = `${r.effectiveFrom}_${r.id}`;
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, r);
+            }
+          });
+          setPayStructures(Array.from(uniqueMap.values()));
+        }
+      } catch (err) {
+        console.error('Error loading payroll data:', err);
       }
-    }).catch(() => {});
+    };
+
+    loadPayrollData();
   }, [employee]);
+
+  // Strict matching helper: ONLY show components explicitly assigned to the selected slab
+  const isComponentInSlab = useCallback((comp: { id: string; name: string }, slabCompIds: string[]) => {
+    if (!slabCompIds || slabCompIds.length === 0) return true;
+    const cId = String(comp.id).trim().toLowerCase();
+    const cName = String(comp.name || '').trim().toLowerCase();
+    const cSlug = cName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+    return slabCompIds.some(raw => {
+      const s = String(raw).trim().toLowerCase();
+      const sSlug = s.replace(/[^a-zA-Z0-9]/g, '_');
+      return s === cId || s === cName || sSlug === cSlug;
+    });
+  }, []);
 
   // Extract active slab's components grouped by category
   const activeEarnings = useMemo(() => {
@@ -273,100 +323,218 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category === 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => slabComponentIds.includes(c.id))
+        components: g.components.filter(c => isComponentInSlab(c, slabComponentIds))
       }))
       .filter(g => g.components.length > 0);
-  }, [allGroups, slabComponentIds]);
+  }, [allGroups, slabComponentIds, isComponentInSlab]);
 
   const activeDeductions = useMemo(() => {
     return allGroups
       .filter(g => g.category !== 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => slabComponentIds.includes(c.id))
+        components: g.components.filter(c => isComponentInSlab(c, slabComponentIds))
       }))
       .filter(g => g.components.length > 0);
-  }, [allGroups, slabComponentIds]);
+  }, [allGroups, slabComponentIds, isComponentInSlab]);
 
-  // Recalculate dynamic values based on CTC input
-  const recalculateFromCTC = (ctcStr: string) => {
-    const ctcVal = Number(ctcStr) || 0;
-    
-    // Very simple evaluator context
-    const context: any = {
-      CTC: ctcVal,
-      GROSS: ctcVal, // Rough fallback initially
-      BASIC: 0
-    };
-    
-    const newValues: Record<string, number> = { ...dynamicValues };
-    
-    // Pass 1: Try to evaluate everything
-    const evaluateFormula = (formula: string) => {
-      try {
-        let parsed = formula.replace(/gross/gi, String(context.GROSS))
-                            .replace(/ctc/gi, String(context.CTC))
-                            .replace(/basic/gi, String(context.BASIC));
-        return Number(Function('"use strict";return (' + parsed + ')')());
-      } catch(e) {
+  // Robust Formula Evaluator supporting %, (N*CTC)/100, N*0.4, and JS expressions referencing any present components
+  const evaluateComponentFormula = (formula: string, context: Record<string, number>) => {
+    if (!formula || typeof formula !== 'string') return 0;
+    const f = formula.trim();
+
+    // Pattern A: "50%" or "50% of CTC" or "50% of BASIC"
+    const pctMatch = f.match(/^(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?([a-zA-Z_0-9]+)?$/i);
+    if (pctMatch) {
+      const pct = parseFloat(pctMatch[1]) / 100;
+      const baseKey = (pctMatch[2] || '').toUpperCase();
+      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
+      return Math.round(base * pct);
+    }
+
+    // Pattern B: "(50 * CTC) / 100" or "(40 * BASIC) / 100"
+    const div100Match = f.match(/^\(?(\d+(?:\.\d+)?)\s*\*\s*([a-zA-Z_0-9]+)\)?\s*\/\s*100$/i);
+    if (div100Match) {
+      const pct = parseFloat(div100Match[1]) / 100;
+      const baseKey = div100Match[2].toUpperCase();
+      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
+      return Math.round(base * pct);
+    }
+
+    // Pattern C: "BASIC * 0.40" or "CTC * 0.50"
+    const multMatch = f.match(/^([a-zA-Z_0-9]+)\s*\*\s*(0?\.\d+)$/i) || f.match(/^(0?\.\d+)\s*\*\s*([a-zA-Z_0-9]+)$/i);
+    if (multMatch) {
+      const factor = parseFloat(multMatch[1]) || parseFloat(multMatch[2]);
+      const baseKey = (isNaN(parseFloat(multMatch[1])) ? multMatch[1] : multMatch[2]).toUpperCase();
+      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
+      return Math.round(base * factor);
+    }
+
+    // Pattern D: Complex / Dynamic arithmetic expressions e.g. "GROSS - BASIC - HRA" or "(CTC * 0.5) + 2000"
+    try {
+      let expr = f;
+      // Sort keys longest first so "ANNUAL_CTC" is replaced before "CTC"
+      const keys = Object.keys(context).sort((a, b) => b.length - a.length);
+      for (const k of keys) {
+        const regex = new RegExp(`\\b${k}\\b`, 'gi');
+        expr = expr.replace(regex, String(context[k] || 0));
+      }
+      // Sanitize: allow only numbers, operators, parentheses, decimal points, spaces
+      if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
         return 0;
       }
-    };
-
-    // Calculate Basic First (Special Case logic if Basic exists)
-    let foundBasicId = null;
-    let foundHraId = null;
-    let foundPfId = null;
-    let foundPtId = null;
-
-    activeEarnings.forEach(g => {
-      g.components.forEach(c => {
-        if (c.name.toLowerCase().includes('basic')) foundBasicId = c.id;
-        if (c.name.toLowerCase().includes('hra')) foundHraId = c.id;
-        
-        if (c.type === 'Derived' && c.formula) {
-          newValues[c.id] = Math.round(evaluateFormula(c.formula));
-        } else if (c.type === 'Value' && !newValues[c.id]) {
-          newValues[c.id] = c.amount || 0;
-        }
-      });
-    });
-
-    if (foundBasicId && newValues[foundBasicId]) {
-      context.BASIC = newValues[foundBasicId];
-    } else {
-      context.BASIC = Math.round(ctcVal * 0.5); // Fallback standard basic
+      return Math.round(Number(Function('"use strict";return (' + expr + ')')()) || 0);
+    } catch {
+      return 0;
     }
+  };
+
+  // Recalculate dynamic values based on CTC input
+  const recalculateFromCTC = (ctcStr: string, currentSlabCompIds: string[] = slabComponentIds) => {
+    const rawVal = Number(ctcStr) || 0;
+    const annualCTC = rawVal > 0 && rawVal < 50000 ? rawVal * 12 : rawVal;
+    const monthlyGross = Math.round(annualCTC / 12);
     
-    // Re-evaluate with BASIC known
-    activeEarnings.forEach(g => {
+    const context: Record<string, number> = {
+      CTC: monthlyGross,
+      MONTHLY_CTC: monthlyGross,
+      ANNUAL_CTC: annualCTC,
+      GROSS: monthlyGross,
+      MONTHLY_GROSS: monthlyGross,
+      BASIC: Math.round(monthlyGross * 0.50),
+      HRA: Math.round(monthlyGross * 0.20),
+      PF_RATE: slabPfRate || 12,
+    };
+    
+    const newValues: Record<string, number> = {};
+
+    const targetEarnings = allGroups
+      .filter(g => g.category === 'Earning')
+      .map(g => ({
+        ...g,
+        components: g.components.filter(c => isComponentInSlab(c, currentSlabCompIds))
+      }))
+      .filter(g => g.components.length > 0);
+
+    const targetDeductions = allGroups
+      .filter(g => g.category !== 'Earning')
+      .map(g => ({
+        ...g,
+        components: g.components.filter(c => isComponentInSlab(c, currentSlabCompIds))
+      }))
+      .filter(g => g.components.length > 0);
+    
+    let foundBasicId: string | null = null;
+    let foundHraId: string | null = null;
+    let foundPfId: string | null = null;
+    let foundPtId: string | null = null;
+    let foundSpecialId: string | null = null;
+
+    // First Pass: Resolve Basic
+    targetEarnings.forEach(g => {
       g.components.forEach(c => {
-        if (c.type === 'Derived' && c.formula) {
-          newValues[c.id] = Math.round(evaluateFormula(c.formula));
+        const lowerName = c.name.toLowerCase();
+        if (lowerName.includes('basic') && !lowerName.includes('earned')) {
+          foundBasicId = c.id;
+          if (c.type === 'Derived' && c.formula) {
+            newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
+          } else {
+            newValues[c.id] = Math.round(monthlyGross * 0.50);
+          }
+          context.BASIC = newValues[c.id] || context.BASIC;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
         }
       });
     });
 
-    activeDeductions.forEach(g => {
+    if (!foundBasicId) {
+      context.BASIC = Math.round(monthlyGross * 0.50);
+    }
+
+    // Second Pass: Resolve HRA & Other Earnings
+    let allocatedEarnings = (foundBasicId && newValues[foundBasicId]) ? newValues[foundBasicId] : 0;
+    let fallbackEarningId: string | null = null;
+
+    targetEarnings.forEach(g => {
       g.components.forEach(c => {
-        if (c.name.toLowerCase().includes('pf')) foundPfId = c.id;
-        if (c.name.toLowerCase().includes('pt') || c.name.toLowerCase().includes('professional tax')) foundPtId = c.id;
-        if (c.type === 'Derived' && c.formula) {
-          newValues[c.id] = Math.round(evaluateFormula(c.formula));
-        } else if (c.type === 'Value' && !newValues[c.id]) {
+        if (c.id === foundBasicId) return;
+        if (!fallbackEarningId) fallbackEarningId = c.id;
+
+        const lowerName = c.name.toLowerCase();
+        if (lowerName.includes('hra') || lowerName.includes('house rent')) {
+          foundHraId = c.id;
+          if (c.type === 'Derived' && c.formula) {
+            newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
+          } else {
+            newValues[c.id] = Math.round(context.BASIC * 0.40);
+          }
+          context.HRA = newValues[c.id] || context.HRA;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
+          allocatedEarnings += (newValues[c.id] || 0);
+        } else if (lowerName.includes('special') || lowerName.includes('standard')) {
+          foundSpecialId = c.id;
+        } else if (c.type === 'Derived' && c.formula) {
+          newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
+          allocatedEarnings += (newValues[c.id] || 0);
+        } else if (c.type === 'Value' && c.amount > 0) {
+          newValues[c.id] = c.amount;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
+          allocatedEarnings += (newValues[c.id] || 0);
+        }
+      });
+    });
+
+    // Allocate remainder to Special/Standard Allowance OR first available earning component
+    const targetRemainderId = foundSpecialId || fallbackEarningId;
+    if (targetRemainderId) {
+      const alreadyAllocated = allocatedEarnings - (newValues[targetRemainderId] || 0);
+      const remainder = Math.max(0, monthlyGross - alreadyAllocated);
+      newValues[targetRemainderId] = remainder;
+      context.SPECIAL_ALLOWANCE = remainder;
+      context.STANDARD_ALLOWANCE = remainder;
+    }
+
+    // Third Pass: Deductions (PF, PT, ESIC, TDS)
+    targetDeductions.forEach(g => {
+      g.components.forEach(c => {
+        const lowerName = c.name.toLowerCase();
+        if (lowerName.includes('pf') || lowerName.includes('provident')) {
+          foundPfId = c.id;
+          const pfWage = Math.min(context.BASIC, 15000);
+          newValues[c.id] = Math.round(pfWage * (slabPfRate / 100 || 0.12));
+          context.PF = newValues[c.id];
+        } else if (lowerName.includes('pt') || lowerName.includes('professional tax')) {
+          foundPtId = c.id;
+          newValues[c.id] = monthlyGross > 15000 ? 200 : 0;
+          context.PT = newValues[c.id];
+        } else if (lowerName.includes('esi') || lowerName.includes('esic')) {
+          newValues[c.id] = monthlyGross <= 21000 ? Math.ceil(monthlyGross * 0.0075) : 0;
+          context.ESIC = newValues[c.id];
+        } else if (lowerName.includes('tds') || lowerName.includes('tax')) {
+          newValues[c.id] = 0;
+          context.TDS = 0;
+        } else if (c.type === 'Derived' && c.formula) {
+          newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
+        } else if (c.type === 'Value') {
           newValues[c.id] = c.amount || 0;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
         }
       });
     });
 
     // Update mapped legacy states for backend saving
-    if (foundBasicId) setBasic(String(newValues[foundBasicId] || 0));
-    if (foundHraId) setHra(String(newValues[foundHraId] || 0));
+    setBasic(foundBasicId ? String(newValues[foundBasicId] || 0) : '0');
+    setHra(foundHraId ? String(newValues[foundHraId] || 0) : '0');
     if (foundPfId) {
-       setPf(String(newValues[foundPfId] || 0));
-       setPfEmployer(String(newValues[foundPfId] || 0)); // Assume same for now
+      setPf(String(newValues[foundPfId] || 0));
+      setPfEmployer(String(newValues[foundPfId] || 0));
+    } else {
+      setPf('0');
+      setPfEmployer('0');
     }
-    if (foundPtId) setPt(String(newValues[foundPtId] || 0));
+    setPt(foundPtId ? String(newValues[foundPtId] || 0) : '0');
 
     setDynamicValues(newValues);
   };
@@ -390,13 +558,32 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   }, 0);
 
   const netSalaryCalculated = Math.max(0, grossCalculated - totalDeductionCalculated);
-  const ctcCalculated = grossCalculated + Number(pfEmployer || 0); // Adding Employer PF to CTC
+  const monthlyCtcCalculated = grossCalculated + Number(pfEmployer || 0);
+  const annualCtcCalculated = (salaryInput && Number(salaryInput) > 0)
+    ? Math.round(Number(salaryInput) < 50000 ? Number(salaryInput) * 12 : Number(salaryInput))
+    : Math.round(monthlyCtcCalculated * 12);
+  const ctcCalculated = annualCtcCalculated;
 
   // Modal Open Handlers
   const handleOpenAddModal = () => {
     setEditingRecord(null);
-    setSalaryInput('60000'); // Default Gross/CTC
-    recalculateFromCTC('60000');
+    const chosenSlab = allSlabs.find(s => String(s.id) === String(activeSlabId)) || allSlabs[0];
+    let compIds: string[] = [];
+    if (chosenSlab) {
+      setActiveSlabId(String(chosenSlab.id));
+      setActiveSlabName(chosenSlab.name || chosenSlab.slab_name || 'Monthly');
+      setActiveCycleId((chosenSlab.cycleId || chosenSlab.cycle_id) ? String(chosenSlab.cycleId || chosenSlab.cycle_id) : '');
+      const rawPf = chosenSlab.pfRatePct ?? chosenSlab.pf_rate_pct;
+      setSlabPfRate(Number(rawPf ?? 12));
+      const rawComps = chosenSlab.selectedComponentIds ?? chosenSlab.selected_component_ids;
+      try {
+        compIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
+      } catch {}
+      compIds = compIds.map(String);
+      setSlabComponentIds(compIds);
+    }
+    setSalaryInput('40000'); // Default Monthly Gross/CTC
+    recalculateFromCTC('40000', compIds);
     const today = new Date().toISOString().split('T')[0];
     setEffectiveFrom(today);
     setArrearPayMonth(today);
@@ -405,14 +592,29 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   const handleOpenEditModal = (rec: PayStructureRecord) => {
     setEditingRecord(rec);
-    setSalaryInput(String(rec.salaryInput || rec.gross || rec.ctc || 60000));
+    const matchedSlab = allSlabs.find(s => (s.name || s.slab_name) === rec.slab || String(s.id) === String((rec as any).slabId || (rec as any).slab_id)) || allSlabs[0];
+    let compIds: string[] = [];
+    if (matchedSlab) {
+      setActiveSlabId(String(matchedSlab.id));
+      setActiveSlabName(matchedSlab.name || matchedSlab.slab_name || rec.slab);
+      setActiveCycleId((matchedSlab.cycleId || matchedSlab.cycle_id) ? String(matchedSlab.cycleId || matchedSlab.cycle_id) : '');
+      const rawPf = matchedSlab.pfRatePct ?? matchedSlab.pf_rate_pct;
+      setSlabPfRate(Number(rawPf ?? 12));
+      const rawComps = matchedSlab.selectedComponentIds ?? matchedSlab.selected_component_ids;
+      try {
+        compIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
+      } catch {}
+      compIds = compIds.map(String);
+      setSlabComponentIds(compIds);
+    }
+    const inputVal = rec.salaryInput || rec.ctc || (rec.gross ? rec.gross * 12 : 480000);
+    setSalaryInput(String(inputVal));
     setEffectiveFrom(rec.effectiveFrom);
     setArrearPayMonth(rec.arrearPayMonth || rec.effectiveFrom);
-    if (rec.customComponents) {
+    if (rec.customComponents && Object.keys(rec.customComponents).length > 0) {
       setDynamicValues(rec.customComponents);
-    } else {
-      recalculateFromCTC(String(rec.salaryInput || rec.gross || rec.ctc || 60000));
     }
+    recalculateFromCTC(String(inputVal), compIds);
     setModalOpen(true);
   };
 
@@ -434,41 +636,53 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   const handleSave = async () => {
     const todayStr = new Date().toISOString().split('T')[0];
+    const inputNum = Number(salaryInput) || 0;
+    const annualCtcVal = inputNum > 0 ? (inputNum < 50000 ? inputNum * 12 : inputNum) : 480000;
+    const monthlyGrossVal = Math.round(annualCtcVal / 12);
+
+    const finalGross = grossCalculated > 0 ? grossCalculated : monthlyGrossVal;
+    const finalCtc = annualCtcCalculated > 0 ? annualCtcCalculated : annualCtcVal;
+    const finalNet = netSalaryCalculated > 0 ? netSalaryCalculated : finalGross;
     
     // Construct payload with legacy fields (for DB columns) AND custom_components (for dynamic UI)
     const payload = {
       employee_id: employee.id,
+      employeeId: employee.id,
       slab: activeSlabName || 'Monthly',
       slab_id: activeSlabId || null,
+      slabId: activeSlabId || null,
       cycle_id: activeCycleId || null,
+      cycleId: activeCycleId || null,
       pf_rate_pct: slabPfRate || 12,
       effective_from: effectiveFrom || todayStr,
+      effectiveFrom: effectiveFrom || todayStr,
       arrear_pay_month: arrearPayMonth || effectiveFrom || todayStr,
-      calculation_mode: 'component_based', // Hardcoded as requested
-      salary_input: Number(salaryInput) || 0,
+      calculation_mode: 'component_based',
+      salary_input: annualCtcVal,
+      salaryInput: annualCtcVal,
       
       // Fallback schema mapping
-      basic_monthly: Number(basic) || 0,
-      hra_monthly: Number(hra) || 0,
-      pf_deduction: Number(pf) || 0,
-      pt_deduction: Number(pt) || 0,
-      esic_deduction: Number(esic) || 0,
-      pf_employer: Number(pfEmployer) || 0,
+      basic_monthly: Number(basic) > 0 ? Number(basic) : Math.round(finalGross * 0.5),
+      hra_monthly: Number(hra) > 0 ? Number(hra) : Math.round(finalGross * 0.2),
+      pf_deduction: Number(pf) > 0 ? Number(pf) : 0,
+      pt_deduction: Number(pt) > 0 ? Number(pt) : 0,
+      esic_deduction: Number(esic) > 0 ? Number(esic) : 0,
+      pf_employer: Number(pfEmployer) > 0 ? Number(pfEmployer) : 0,
       
-      gross_monthly: grossCalculated,
+      gross_monthly: finalGross,
+      grossMonthly: finalGross,
       total_deductions_monthly: totalDeductionCalculated,
-      net_salary_monthly: netSalaryCalculated,
-      annual_ctc: ctcCalculated,
+      net_salary_monthly: finalNet,
+      net_take_home: finalNet,
+      netTakeHome: finalNet,
+      annual_ctc: finalCtc,
+      annualCtc: finalCtc,
       
       // Full Dynamic Payload mapped as JSON
       customComponents: JSON.stringify(dynamicValues)
     };
 
     try {
-      // Both calls used to swallow their own failures (.catch(() => {})),
-      // then show a success toast unconditionally regardless of whether the
-      // save actually happened — editing an employee's slab from their
-      // profile could silently fail while telling the admin it worked.
       if (editingRecord) {
         await apiClient.put(`/payroll/salary-structure/${editingRecord.id}`, payload);
         showToast.success('Pay structure updated successfully');
@@ -480,11 +694,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       const res = await apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`);
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data)) {
-        setPayStructures(data.map((s: any) => ({
-          ...s,
-          id: String(s.id),
-          customComponents: s.custom_components ? JSON.parse(s.custom_components) : {}
-        })));
+        const mapped = data.map((s: any) => mapStructureRecord(s, activeSlabName));
+        const uniqueMap = new Map<string, PayStructureRecord>();
+        mapped.forEach(r => {
+          const key = `${r.effectiveFrom}_${r.id}`;
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, r);
+          }
+        });
+        setPayStructures(Array.from(uniqueMap.values()));
       }
     } catch (err: any) {
       console.error('Error saving pay structure:', err);
@@ -529,41 +747,56 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
               <thead>
                 <tr style={{ background: '#fafafa', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>
                   <th style={{ padding: '10px 12px', width: 90 }}>Action</th>
-                  <th style={{ padding: '10px 12px' }}>Slab</th>
+                  <th style={{ padding: '10px 12px' }}>Slab Template</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Annual CTC (₹)</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Monthly Gross (₹)</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Net Take-Home (₹)</th>
                   <th style={{ padding: '10px 12px' }}>Effective From</th>
                   <th style={{ padding: '10px 12px' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {payStructures.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No structure records found.</td></tr>
+                  <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No structure records found.</td></tr>
                 )}
-                {payStructures.map(rec => (
-                  <tr key={rec.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button onClick={() => handleViewModal(rec)} title="View Breakdown" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e88e5' }}>
-                          <FileText className="w-3.5 h-3.5" />
-                        </button>
-                        {canEditPayroll && (
-                          <>
-                            <button onClick={() => handleOpenEditModal(rec)} title="Edit Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981' }}>
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDelete(rec)} title="Delete Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 12px', color: '#334155', fontWeight: 600 }}>{rec.slab}</td>
-                    <td style={{ padding: '10px 12px', color: '#334155' }}>{rec.effectiveFrom}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      {rec.status === 'Active' ? <span style={{ color: '#22c55e', background: '#dcfce7', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700 }}>Active</span> : <span style={{ color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700 }}>Deleted</span>}
-                    </td>
-                  </tr>
-                ))}
+                {payStructures.map(rec => {
+                  const ctcDisplay = rec.ctc || (rec.gross * 12);
+                  return (
+                    <tr key={rec.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button onClick={() => handleViewModal(rec)} title="View Breakdown" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e88e5' }}>
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                          {canEditPayroll && (
+                            <>
+                              <button onClick={() => handleOpenEditModal(rec)} title="Edit Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981' }}>
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDelete(rec)} title="Delete Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#334155', fontWeight: 600 }}>{rec.slab}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>
+                        ₹{ctcDisplay.toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#334155' }}>
+                        ₹{rec.gross.toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#0284c7' }}>
+                        ₹{rec.netSalary.toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#334155', fontWeight: 600 }}>{formatPayrollDate(rec.effectiveFrom)}</td>
+                      <td style={{ padding: '10px 12px' }}>
+                        {rec.status === 'Active' ? <span style={{ color: '#22c55e', background: '#dcfce7', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700 }}>Active</span> : <span style={{ color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700 }}>Deleted</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -593,8 +826,6 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   const val = e.target.value;
                   const chosen = allSlabs.find(s => String(s.id) === String(val));
                   if (chosen) {
-                    // Same camelCase mismatch as the initial load above —
-                    // /payroll/slabs returns cycleId/pfRatePct/selectedComponentIds.
                     const cycleIdVal = chosen.cycleId ?? chosen.cycle_id;
                     const pfRateVal = chosen.pfRatePct ?? chosen.pf_rate_pct;
                     const componentIdsVal = chosen.selectedComponentIds ?? chosen.selected_component_ids;
@@ -602,13 +833,13 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                     setActiveSlabName(chosen.name || chosen.slab_name || 'Monthly');
                     setActiveCycleId(cycleIdVal ? String(cycleIdVal) : '');
                     setSlabPfRate(Number(pfRateVal ?? 12));
-                    let comps = [];
+                    let parsedCompIds: string[] = [];
                     try {
-                      comps = typeof componentIdsVal === 'string'
-                        ? JSON.parse(componentIdsVal)
-                        : (componentIdsVal || []);
+                      parsedCompIds = typeof componentIdsVal === 'string' ? JSON.parse(componentIdsVal) : (componentIdsVal || []);
                     } catch {}
-                    setSlabComponentIds(comps.map(String));
+                    const nextCompIds = parsedCompIds.map(String);
+                    setSlabComponentIds(nextCompIds);
+                    recalculateFromCTC(salaryInput, nextCompIds);
                   }
                 }}
                 style={{
@@ -635,13 +866,13 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'flex-start', background: '#f8fafc', padding: 14, borderRadius: 6, border: '1px solid #e2e8f0' }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Monthly Gross / CTC Input :</label>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Annual CTC Input :</label>
                 <input
                   type="number"
                   value={salaryInput}
                   onChange={(e) => handleSalaryInputChange(e.target.value)}
                   readOnly={!canEditPayroll}
-                  placeholder="Enter Gross Monthly Salary / CTC"
+                  placeholder="Enter Annual CTC (e.g. 480000)"
                   style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, fontWeight: 700, background: !canEditPayroll ? '#f1f5f9' : '#ffffff' }}
                 />
                 <p style={{ fontSize: 10, color: '#0369a1', fontStyle: 'italic', marginTop: 3, marginBottom: 0 }}>
@@ -743,8 +974,12 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                 {/* COMPUTED SUMMARY */}
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Total Gross Salary</span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#22c55e' }}>₹{grossCalculated.toLocaleString('en-IN')}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>Annual CTC</span>
+                    <span style={{ fontSize: 14, fontWeight: 900, color: '#059669' }}>₹{annualCtcCalculated.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Total Monthly Gross</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#334155' }}>₹{grossCalculated.toLocaleString('en-IN')}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Total Deductions</span>
@@ -752,7 +987,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   </div>
                   <div style={{ borderTop: '1px dashed #cbd5e1', margin: '10px 0' }} />
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Net Take Home</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Net Take Home (Monthly)</span>
                     <span style={{ fontSize: 15, fontWeight: 800, color: '#1e88e5' }}>₹{netSalaryCalculated.toLocaleString('en-IN')}</span>
                   </div>
                 </div>

@@ -1,6 +1,4 @@
 import type { Request, Response } from 'express';
-import * as path from 'path';
-import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { LeaveService } from '../services/LeaveService';
 import { LeaveBalanceService } from '../services/LeaveBalanceService';
@@ -1456,18 +1454,6 @@ export class LeaveController {
   async getEncashmentSettings(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-
-      try {
-        const migrationsDir = path.resolve(process.cwd(), '../database/migrations');
-        if (fs.existsSync(migrationsDir)) {
-          await db.migrate.latest({
-            directory: migrationsDir,
-            loadExtensions: ['.ts']
-          });
-        }
-      } catch (migErr) {
-        console.error('Programmatic migration for leave_encashment_settings failed:', migErr);
-      }
 
       await this.ensureLeaveEncashmentSchema(db);
 

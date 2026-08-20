@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 // The Process Payroll register screen is advertised as "Directly Editable —
 // Auto-recalculates & saves" and both saveProcessRegisterOverride (write)

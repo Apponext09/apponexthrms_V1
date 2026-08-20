@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 // payroll_components has drifted badly from the migration that supposedly
 // creates it (20260807_create_enterprise_payroll_tables.ts): that migration
@@ -32,56 +32,40 @@ export async function up(knex: Knex): Promise<void> {
   await rename('effective_from', 'effective_from_date');
   await rename('effective_to', 'effective_to_date');
 
-  await knex.schema.alterTable('payroll_components', async (table) => {
-    if (!(await knex.schema.hasColumn('payroll_components', 'amount'))) {
-      table.decimal('amount', 14, 2).defaultTo(0.00);
+  const columnsToAdd: [string, (table: Knex.AlterTableBuilder) => void][] = [
+    ['amount', (table) => table.decimal('amount', 14, 2).defaultTo(0.00)],
+    ['formula', (table) => table.text('formula').nullable()],
+    ['min_amount', (table) => table.decimal('min_amount', 14, 2).defaultTo(0.00)],
+    ['max_amount', (table) => table.decimal('max_amount', 14, 2).defaultTo(0.00)],
+    ['effective_from_date', (table) => table.date('effective_from_date').nullable()],
+    ['effective_to_date', (table) => table.date('effective_to_date').nullable()],
+    ['condition_on', (table) => table.string('condition_on', 50).nullable()],
+    ['condition_operator', (table) => table.string('condition_operator', 50).nullable()],
+    ['condition_value1', (table) => table.string('condition_value1', 100).nullable()],
+    ['condition_value2', (table) => table.string('condition_value2', 100).nullable()],
+    ['months', (table) => table.json('months').nullable()],
+    ['gender_filter', (table) => table.string('gender_filter', 20).defaultTo('All')],
+    ['grades', (table) => table.json('grades').nullable()],
+    ['departments', (table) => table.json('departments').nullable()],
+    ['locations', (table) => table.json('locations').nullable()],
+    ['employees', (table) => table.json('employees').nullable()],
+  ];
+
+  const missing: typeof columnsToAdd = [];
+  for (const entry of columnsToAdd) {
+    const [column] = entry;
+    if (!(await knex.schema.hasColumn('payroll_components', column))) {
+      missing.push(entry);
     }
-    if (!(await knex.schema.hasColumn('payroll_components', 'formula'))) {
-      table.text('formula').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'min_amount'))) {
-      table.decimal('min_amount', 14, 2).defaultTo(0.00);
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'max_amount'))) {
-      table.decimal('max_amount', 14, 2).defaultTo(0.00);
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'effective_from_date'))) {
-      table.date('effective_from_date').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'effective_to_date'))) {
-      table.date('effective_to_date').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'condition_on'))) {
-      table.string('condition_on', 50).nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'condition_operator'))) {
-      table.string('condition_operator', 50).nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'condition_value1'))) {
-      table.string('condition_value1', 100).nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'condition_value2'))) {
-      table.string('condition_value2', 100).nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'months'))) {
-      table.json('months').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'gender_filter'))) {
-      table.string('gender_filter', 20).defaultTo('All');
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'grades'))) {
-      table.json('grades').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'departments'))) {
-      table.json('departments').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'locations'))) {
-      table.json('locations').nullable();
-    }
-    if (!(await knex.schema.hasColumn('payroll_components', 'employees'))) {
-      table.json('employees').nullable();
-    }
-  });
+  }
+
+  if (missing.length > 0) {
+    await knex.schema.alterTable('payroll_components', (table) => {
+      for (const [, addColumn] of missing) {
+        addColumn(table);
+      }
+    });
+  }
 }
 
 export async function down(knex: Knex): Promise<void> {

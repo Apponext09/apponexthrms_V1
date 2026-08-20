@@ -173,6 +173,7 @@ function getFeatureLeaves(nodes?: ModuleNode[], currentCategory?: string): Featu
 }
 
 /**
+ * Main Scoped Module Management Page with Master-Detail Split Screen Layout
  * Module Card Component
  */
 interface ModuleCardProps {

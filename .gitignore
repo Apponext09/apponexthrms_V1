@@ -89,3 +89,6 @@ m y e n v /
  t e m p _ * . t s x  
 *.mp4
 *.webm
+
+# Vite transient config-load artifacts
+*.timestamp-*.mjs

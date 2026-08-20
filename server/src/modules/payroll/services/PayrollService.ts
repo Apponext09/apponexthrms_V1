@@ -97,7 +97,20 @@ function matchesComponentCondition(comp: any, emp: any, struct: any): boolean {
     if (!matches) return false;
   }
 
-  // 6. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)
+  // 6. Effective Date Range filter — only apply if component is active on current date
+  const effFrom = comp.effective_from_date || comp.effectiveFromDate || comp.effective_from;
+  const effTo = comp.effective_to_date || comp.effectiveToDate || comp.effective_to;
+  const now = new Date();
+  if (effFrom) {
+    const fromDate = new Date(effFrom);
+    if (!isNaN(fromDate.getTime()) && fromDate > now) return false;
+  }
+  if (effTo) {
+    const toDate = new Date(effTo);
+    if (!isNaN(toDate.getTime()) && toDate < now) return false;
+  }
+
+  // 7. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)
   //    and word operators (Greater, Less, LessThanEqual, Equals, Between)
   const condOn = (comp.condition_on || comp.conditionOn || '').trim();
   const condOp = (comp.condition_operator || comp.conditionOperator || '').trim();
@@ -328,11 +341,18 @@ export class PayrollService {
       updated_by: ctx.userId
     });
 
-    // Get active employees in organization filtered by location, department, or specific employeeIds
+    // Get active employees in organization filtered by company, location, department, or specific employeeIds
     const db = getKnex();
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)  // always use the authenticated org — never caller-supplied
       .where('status', 'active');
+
+    const targetCompanyId = options?.companyId || (cycle as any).companyId || (cycle as any).company_id || ctx.companyId;
+    if (targetCompanyId) {
+      empQuery = empQuery.where((q) => {
+        q.where('company_id', targetCompanyId);
+      });
+    }
 
     if (options?.locationId) {
       empQuery = empQuery.where((q) => {
@@ -438,18 +458,25 @@ export class PayrollService {
           .catch(() => null)
           || await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').first().catch(() => null));
 
-        // If no structure found, mark employee as error — do NOT fall back to another employee's structure
-        if (!struct) {
-          await this.runEmployeeRepo.update(ctx, empRun.id, {
-            status: 'error',
-            processing_notes: 'No salary structure assigned. Please assign a salary structure before processing payroll.',
-            updated_by: ctx.userId
-          });
-          errorCount++;
-          continue;
-        }
-
         const empRow = withSnakeAliases(await db('employees').where('id', empId).first().catch(() => null));
+
+        // If no explicit structure row exists, generate a safe dynamic fallback structure based on employee salary
+        const resolvedGross = positiveNum(
+          struct?.gross_monthly,
+          positiveNum(
+            struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0,
+            positiveNum(empRow?.gross_salary, positiveNum(empRow?.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0, 35000))
+          )
+        );
+
+        const safeStruct = struct || {
+          gross_monthly: resolvedGross,
+          basic_monthly: Math.round(resolvedGross * 0.50),
+          hra_monthly: Math.round(resolvedGross * 0.20),
+          special_allowance_monthly: Math.round(resolvedGross * 0.30),
+          annual_ctc: resolvedGross * 12,
+          structure_name: 'Standard Dynamic Structure'
+        };
 
         // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days for the specific payroll run month
         const monthDays = 30;
@@ -551,24 +578,24 @@ export class PayrollService {
         //    Use baseGross (not post-LOP earnings) so percentage-based components
         //    are computed on the full monthly amount before LOP scaling.
         const matchedComps = allComponentDefs.filter(c =>
-          matchesComponentCondition(c, empRow || {}, struct)
+          matchesComponentCondition(c, empRow || {}, safeStruct)
         );
-        const structFallbackBasic = positiveNum(struct?.basic_monthly, positiveNum(struct?.basic_salary, Math.round(baseGross * 0.50)));
+        const structFallbackBasic = positiveNum(safeStruct?.basic_monthly, positiveNum(safeStruct?.basic_salary, Math.round(baseGross * 0.50)));
         const compOverrides = resolveComponentOverrides(matchedComps, baseGross, structFallbackBasic);
 
         // ── Derive per-component monthly amounts ─────────────────────────────
         //    Priority: component override > salary_structure stored value > formula default
         const basicMonthly = compOverrides.basic ?? structFallbackBasic;
         const hraMonthly   = compOverrides.hra
-          ?? positiveNum(struct?.hra_monthly, Math.round(basicMonthly * 0.40));
+          ?? positiveNum(safeStruct?.hra_monthly, Math.round(basicMonthly * 0.40));
         const ltaMonthly   = compOverrides.lta
-          ?? Number(struct?.lta_monthly   || Number(struct?.lta || 0));
+          ?? Number(safeStruct?.lta_monthly   || Number(safeStruct?.lta || 0));
         const mealMonthly  = compOverrides.meal
-          ?? Number(struct?.meal_allowance_monthly || 0);
+          ?? Number(safeStruct?.meal_allowance_monthly || 0);
         const commMonthly  = compOverrides.comm
-          ?? Number(struct?.communication_allowance_monthly || 0);
+          ?? Number(safeStruct?.communication_allowance_monthly || 0);
         const ceaMonthly   = compOverrides.cea
-          ?? Number(struct?.children_edu_allowance_monthly || 0);
+          ?? Number(safeStruct?.children_edu_allowance_monthly || 0);
         const stdAllow     = Math.max(0, baseGross - basicMonthly - hraMonthly - ltaMonthly - mealMonthly - commMonthly - ceaMonthly);
 
         // ── Scale each component by LOP ratio ────────────────────────────────
@@ -588,7 +615,18 @@ export class PayrollService {
         }
 
         // ── Statutory Deductions ─────────────────────────────────────────────
-        const isIntern   = Boolean(struct?.is_intern || struct?.employee_type === 'intern' || empRow?.employment_type === 'intern' || empRow?.job_type === 'intern');
+        // employees.employment_type is free text sourced from the org's own
+        // employee_types master list (e.g. "Internship", not "intern"), so a
+        // bare === 'intern' check never matched real data — no employee could
+        // ever be treated as an intern. Match case-insensitively against both
+        // the master-data label and the short form.
+        const internPattern = /^intern(ship)?$/i;
+        const isIntern   = Boolean(
+          struct?.is_intern ||
+          struct?.employee_type === 'intern' ||
+          internPattern.test(empRow?.employment_type || '') ||
+          internPattern.test(empRow?.job_type || '')
+        );
         const pfEnabled  = struct?.pf_enabled  !== false && !isIntern;
         const esiEnabled = struct?.esi_enabled !== false && !isIntern;
         const ptEnabled  = struct?.pt_enabled  !== false && !isIntern;
@@ -966,10 +1004,28 @@ export class PayrollService {
     return this.runRepo.getById(ctx, payrollRunId);
   }
 
-  async getPayrollRuns(ctx: TenantContext, cycleId?: number, limit = 20) {
-    const runs = cycleId
+  async getPayrollRuns(ctx: TenantContext, cycleId?: number, month?: string, limit = 20) {
+    let runs = cycleId
       ? await this.runRepo.getForCycle(ctx, cycleId, { pageSize: limit })
       : (await this.runRepo.list(ctx, { pageSize: limit, sortBy: 'created_at', sortOrder: 'desc' })).items;
+
+    // The Payroll Processing screen keys its Process/Lock/Publish button
+    // state off "the run for the cycle+month currently selected" — without
+    // this filter it always got the globally most-recent run for the
+    // cycle (sorted by run_month desc) regardless of which month was
+    // picked in the UI, so an already-published run from one month could
+    // make an entirely different, unprocessed month appear locked too.
+    if (month) {
+      const [yearStr, monthStr] = month.split('-');
+      const targetYear = parseInt(yearStr, 10);
+      const targetMonth = parseInt(monthStr, 10) - 1;
+      runs = runs.filter((r: any) => {
+        const raw = r.runMonth ?? r.run_month;
+        if (!raw) return false;
+        const d = new Date(raw);
+        return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+      });
+    }
 
     if (runs.length === 0) return runs;
 

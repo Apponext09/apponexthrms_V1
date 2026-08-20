@@ -27,7 +27,7 @@ export const OfferManagementPage: React.FC = () => {
 
   const { data: appsResponse } = useApplications({ pageSize: 100 });
   const { data: departments } = useDepartments();
-  const { data: designations } = useDesignations();
+  const { designations } = useDesignations();
 
   const createOfferMutation = useCreateOffer();
 
@@ -46,7 +46,7 @@ export const OfferManagementPage: React.FC = () => {
 
   const designationList = Array.isArray(designations) 
     ? designations 
-    : (Array.isArray(designations?.items) ? designations.items : (Array.isArray(designations?.data) ? designations.data : []));
+    : (Array.isArray((designations as any)?.items) ? (designations as any).items : (Array.isArray((designations as any)?.data) ? (designations as any).data : []));
 
   // KPI calculations (computed over the full offers list)
   const allOffers = Array.isArray(offersList) ? offersList : [];

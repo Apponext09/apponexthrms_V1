@@ -1,6 +1,4 @@
 import { Router } from 'express';
-import * as path from 'path';
-import * as fs from 'fs';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
@@ -1753,25 +1751,13 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
   const ctx = req.ctx!;
   const db = getKnex();
 
-  // Run migrations programmatically to ensure new columns are added
+  // Safely drop the foreign key constraint to support both locations and attendance_locations tables
   try {
-    const migrationsDir = path.resolve(process.cwd(), '../database/migrations');
-    if (fs.existsSync(migrationsDir)) {
-      await db.migrate.latest({
-        directory: migrationsDir,
-        loadExtensions: ['.ts']
-      });
-    }
-    // Safely drop the foreign key constraint to support both locations and attendance_locations tables
-    try {
-      await db.schema.alterTable('org_leave_settings', (table) => {
-        table.dropForeign(['location_id']);
-      });
-    } catch (fkErr) {
-      // Ignore if constraint already dropped or doesn't exist
-    }
-  } catch (migErr) {
-    console.error('Programmatic migration failed:', migErr);
+    await db.schema.alterTable('org_leave_settings', (table) => {
+      table.dropForeign(['location_id']);
+    });
+  } catch (fkErr) {
+    // Ignore if constraint already dropped or doesn't exist
   }
 
   try {
@@ -3201,27 +3187,6 @@ router.post('/merge-codes/:id/restore', asyncHandler((req, res) => mergeCodeCtrl
         if (!hasEmailNotification) table.text('email_notification').nullable();
         if (!hasIsActive) table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
       }).catch(() => {});
-
-      // Drop all unused columns from previous schema
-      const unusedColumns = [
-        'template_code', 'template_description', 'category', 'channels',
-        'subject_line', 'body_text', 'body_html', 'sms_text',
-        'whatsapp_template_name', 'variables', 'version_number',
-        'is_published', 'status'
-      ];
-
-      for (const col of unusedColumns) {
-        const hasCol = await db.schema.hasColumn('notification_templates', col);
-        if (hasCol) {
-          await db.schema.alterTable('notification_templates', (table) => {
-            table.dropColumn(col);
-          }).catch((err) => {
-            console.log(`[Settings] Note: Could not drop column ${col}:`, err.message);
-          });
-        }
-      }
-
-      console.log('[Settings] ✅ notification_templates schema cleaned & unused columns dropped');
     }
   } catch (err) {
     console.error('[Settings] ❌ Failed to create/migrate notification_templates table:', err);

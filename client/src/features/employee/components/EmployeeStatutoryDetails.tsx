@@ -35,7 +35,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
     pfNumber: '',
     esicNumber: '',
     userBand: '',
-    payrollSlab: 'Junior / Software Engineer Salary Slab',
+    payrollSlab: '',
     employeeShare: '',
     employerShare: '',
     backgroundVerification: '',
@@ -51,9 +51,11 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
     }).catch(() => {});
   }, []);
 
-  // Load from employee prop
+  // Load from employee prop and fetch active salary structure for accurate mapped slab
   useEffect(() => {
     const e = employee as any;
+    const initialSlab = e?.salarySlabName || e?.salary_slab_name || e?.payroll_slab_name || e?.payrollSlab || e?.payroll_slab || e?.slab_name || '';
+
     setFormData({
       bankName: e?.bank_name || e?.bankName || '',
       accountNumber: e?.account_no || e?.bank_account_number || e?.accountNumber || '',
@@ -65,13 +67,26 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
       pfNumber: e?.pf_no || e?.pf_number || e?.pfNumber || '',
       esicNumber: e?.esic_no || e?.esic_number || e?.esicNumber || '',
       userBand: e?.user_band || e?.userBand || '',
-      payrollSlab: e?.payroll_slab_name || e?.slab_name || e?.payrollSlab || 'Junior / Software Engineer Salary Slab',
+      payrollSlab: initialSlab,
       employeeShare: e?.employee_share || e?.employeeShare || '',
       employerShare: e?.employer_share || e?.employerShare || '',
       backgroundVerification: e?.background_verification || e?.backgroundVerification || 'Verified',
       eligibleForEps: e?.eligible_for_eps || e?.eligibleForEps || 'N',
       panStatus: e?.pan_status || e?.panStatus || 'VERIFIED',
     });
+
+    if (employee?.id) {
+      apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).then((res: any) => {
+        const structs = res.data?.data || res.data || [];
+        const active = structs.find((s: any) => s.slabName || s.slab_name || s.slabId || s.slab_id);
+        if (active) {
+          const sName = active.slabName || active.slab_name || active.structureName || active.structure_name;
+          if (sName) {
+            setFormData(prev => ({ ...prev, payrollSlab: sName }));
+          }
+        }
+      }).catch(() => {});
+    }
   }, [employee]);
 
   const handleChange = (field: string, value: string) =>
@@ -79,9 +94,17 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
 
   const handleRefresh = () => {
     if (!employee?.id) return;
-    apiClient.get(`/employees/${employee.id}`).then((res: any) => {
-      const d = res.data?.data || res.data;
+    Promise.all([
+      apiClient.get(`/employees/${employee.id}`),
+      apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
+    ]).then(([empRes, structRes]: any) => {
+      const d = empRes.data?.data || empRes.data;
       if (!d) return;
+
+      const structs = structRes.data?.data || structRes.data || [];
+      const active = structs.find((s: any) => s.slabName || s.slab_name || s.slabId || s.slab_id);
+      const sName = active?.slabName || active?.slab_name || d.salarySlabName || d.salary_slab_name || d.payrollSlab || '';
+
       setFormData(prev => ({
         ...prev,
         bankName: d.bank_name || d.bankName || prev.bankName,
@@ -92,6 +115,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         pfNumber: d.pf_no || d.pf_number || d.pfNumber || prev.pfNumber,
         uanNumber: d.uan_no || d.uan_number || d.uanNumber || prev.uanNumber,
         esicNumber: d.esic_no || d.esic_number || d.esicNumber || prev.esicNumber,
+        payrollSlab: sName || prev.payrollSlab,
       }));
       showToast.success('Refreshed statutory details');
     }).catch(() => {});
@@ -111,6 +135,20 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         uan_no: formData.uanNumber,
         esic_no: formData.esicNumber,
       });
+
+      // If a pay slab was selected in edit mode, synchronize it with the employee's salary structure
+      if (formData.payrollSlab && paySlabs.length > 0) {
+        const matchedSlab = paySlabs.find((s: any) => s.name === formData.payrollSlab || String(s.id) === formData.payrollSlab);
+        if (matchedSlab) {
+          await apiClient.post('/payroll/structures/assign', {
+            employeeId: employee.id,
+            slabId: matchedSlab.id,
+            structureName: matchedSlab.name,
+            effectiveFrom: new Date().toISOString().slice(0, 10),
+          }).catch(() => {});
+        }
+      }
+
       showToast.success('Statutory & Banking Details saved successfully!');
       setIsEditing(false);
       // Consume the approved edit permission so employee can't edit again without another approval
@@ -294,22 +332,17 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
                   onChange={e => handleChange('payrollSlab', e.target.value)}
                   className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background focus:ring-2 focus:ring-primary text-foreground font-medium"
                 >
-                  {paySlabs.length > 0 ? (
-                    paySlabs.map((s: any) => (
-                      <option key={s.id} value={s.name}>{s.name} (₹{s.min_ctc} - ₹{s.max_ctc})</option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="Junior / Software Engineer Salary Slab">Junior / Software Engineer Salary Slab</option>
-                      <option value="Senior Lead & Manager Salary Slab">Senior Lead & Manager Salary Slab</option>
-                      <option value="Executive Leadership Salary Slab">Executive Leadership Salary Slab</option>
-                    </>
-                  )}
+                  <option value="">-- Select Pay Slab --</option>
+                  {paySlabs.map((s: any) => (
+                    <option key={s.id} value={s.name || s.slab_name}>
+                      {s.name || s.slab_name} {s.min_ctc ? `(₹${s.min_ctc} - ₹${s.max_ctc})` : ''}
+                    </option>
+                  ))}
                 </select>
               ) : (
                 <div className="h-9 px-3 border border-border rounded-lg bg-muted/20 flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400">
-                  <span>{formData.payrollSlab || 'Standard Pay Slab'}</span>
-                  <span className="text-[10px] font-normal text-muted-foreground">Mapped</span>
+                  <span>{formData.payrollSlab || 'Not Assigned'}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">{formData.payrollSlab ? 'Mapped' : 'Unassigned'}</span>
                 </div>
               )}
             </div>

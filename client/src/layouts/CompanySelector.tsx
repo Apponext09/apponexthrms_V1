@@ -215,7 +215,7 @@ export function CompanySelector() {
 
                   return (
                     <button
-                      key={company.id || company.uuid || company.name}
+                      key={company.id || (company as any).uuid || company.name}
                       type="button"
                       disabled={isCurrentActive}
                       onClick={() => handleSelectSubCompany(company)}

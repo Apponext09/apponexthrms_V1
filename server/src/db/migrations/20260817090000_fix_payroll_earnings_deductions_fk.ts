@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 // payroll_earnings/payroll_deductions.component_id was a NOT NULL FK pointing
 // at `salary_components` — a table that has zero rows in every organization

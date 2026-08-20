@@ -602,7 +602,7 @@ export default function LeavePage() {
     if (code === 'LOP') return false; // Keep main quota cards clean (exclude LOP 0-day quota)
     
     // Filter out leave types that do not match the employee's gender
-    const leaveGender = (b.gender_applicable || b.genderApplicable || 'all').toLowerCase();
+    const leaveGender = ((b as any).gender_applicable || (b as any).genderApplicable || 'all').toLowerCase();
     if (leaveGender !== 'all') {
       const empGender = (employee?.gender || '').toLowerCase();
       if (empGender && empGender !== leaveGender) {

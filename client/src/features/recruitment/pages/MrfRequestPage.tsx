@@ -536,7 +536,7 @@ export const MrfRequestPage: React.FC = () => {
 
     let targetInterviewerId = scheduleInterviewerId;
     if (!targetInterviewerId && employeesList.length > 0) {
-      targetInterviewerId = String(employeesList[0].id);
+      targetInterviewerId = String((employeesList[0] as any)?.id || '');
     }
     if (!targetInterviewerId) {
       toast.error('Please select an Assigned Interviewer');
@@ -4943,7 +4943,7 @@ export const MrfRequestPage: React.FC = () => {
                 className="w-full h-8 px-2 border border-slate-300 rounded bg-white text-xs text-slate-800"
               >
                 <option value="">Select Interviewer...</option>
-                {getDepartmentManagers(viewingMrf?.department || viewingMrf?.departmentName || viewingMrf?.departmentId).map((emp: any) => (
+                {getDepartmentManagers((viewingMrf as any)?.department || (viewingMrf as any)?.departmentName || (viewingMrf as any)?.departmentId).map((emp: any) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name} ({emp.designation || emp.departmentName || emp.department || 'Manager'})
                   </option>
