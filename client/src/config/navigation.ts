@@ -149,7 +149,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'MapPin',
         minRoles: ['organization_admin', 'hr_manager'],
       },
+      {
+        name: 'Location Access Mapping',
+        href: '/attendance/employee-locations',
+        icon: 'UserCheck',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
       { name: 'Break Logs', href: '/attendance/break-logs', icon: 'Coffee' },
+      {
+        name: 'CEO Face Punch',
+        href: '/attendance/face-punch',
+        icon: 'ScanFace',
+        minRoles: ['organization_admin'],
+      },
     ],
   },
 
@@ -328,6 +340,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     items: [
       { name: 'Attendance Report', href: '/analytics/attendance', icon: 'BarChart3' },
       { name: 'Timelog Report', href: '/analytics/timelog', icon: 'FileText' },
+      {
+        name: 'CEO Attendance Report',
+        href: '/analytics/ceo-attendance',
+        icon: 'UserCheck',
+        minRoles: ['organization_admin'],
+      },
     ],
   },
 

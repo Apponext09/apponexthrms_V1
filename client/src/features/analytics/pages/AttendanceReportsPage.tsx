@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Filter } from 'lucide-react';
+import { AlertTriangle, ListFilter } from 'lucide-react';
 import { AttendanceReportFilter } from '../components/AttendanceReportFilter';
 import { AttendanceReportTable } from '../components/AttendanceReportTable';
 import { AttendanceVisualization } from '../components/AttendanceVisualization';
@@ -14,8 +14,7 @@ import {
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 
-  // Initial Filter State is null so that no data is fetched or displayed on page load.
-  // Data is only fetched after the user clicks "Apply Filter".
+  // No filters applied yet — the report only loads once the admin/HR clicks Apply Filter.
   const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams | null>(null);
 
   const { data: fetchedRows, isLoading: isSubmitting, isError } = useAttendanceReportQuery(currentFilters);
@@ -52,34 +51,32 @@ export function AttendanceReportsPage() {
         />
 
         {/* Content Area */}
-        {!currentFilters ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center bg-card border border-border/80 rounded-xl shadow-2xs space-y-3 my-4">
-            <div className="p-3 bg-primary/10 rounded-full text-primary">
-              <Filter className="w-8 h-8" />
+        <div className="space-y-6 animate-in fade-in-50 duration-300">
+          {isError && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Could not load attendance report data. Please check your connection and try again.
             </div>
-            <h3 className="text-base font-bold text-foreground">No Filter Applied</h3>
-            <p className="text-xs text-muted-foreground max-w-md">
-              Please select your company and filter criteria above, then click <strong className="text-foreground">Apply Filter</strong> to generate the attendance report.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6 animate-in fade-in-50 duration-300">
-            {isError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                Could not load attendance report data. Please check your connection and try again.
+          )}
+          {!currentFilters ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center bg-card border border-border/80 rounded-xl shadow-2xs space-y-3">
+              <div className="p-3 bg-primary/10 rounded-full text-primary">
+                <ListFilter className="w-8 h-8" />
               </div>
-            )}
-            {currentFilters?.isTabularView ? (
-              <AttendanceReportTable
-                data={reportRows}
-                onOpenTimeline={(row) => setSelectedTimelineRow(row)}
-              />
-            ) : (
-              <AttendanceVisualization data={reportRows} />
-            )}
-          </div>
-        )}
+              <h3 className="text-base font-bold text-foreground">No Filter Applied</h3>
+              <p className="text-xs text-muted-foreground max-w-md">
+                Select your company and filter criteria above, then click <strong className="text-foreground">Apply Filter</strong> to generate the attendance report.
+              </p>
+            </div>
+          ) : currentFilters.isTabularView ? (
+            <AttendanceReportTable
+              data={reportRows}
+              onOpenTimeline={(row) => setSelectedTimelineRow(row)}
+            />
+          ) : (
+            <AttendanceVisualization data={reportRows} />
+          )}
+        </div>
       </div>
 
       {/* Employee Timeline Punch Detail Modal */}

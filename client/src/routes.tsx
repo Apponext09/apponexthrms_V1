@@ -20,7 +20,6 @@ import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifec
 import { MyLifecyclePage } from './features/employee/pages/MyLifecyclePage';
 
 // Attendance Pages
-import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
 import { AttendancePoliciesPage } from './features/attendance/pages/AttendancePoliciesPage';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
@@ -109,6 +108,8 @@ import { MyAssetsPage } from './features/asset/pages/MyAssetsPage';
 import { AnalyticsDashboard } from './features/analytics/pages/AnalyticsDashboard';
 import { AttendanceReportsPage } from './features/analytics/pages/AttendanceReportsPage';
 import { TimelogReportPage } from './features/analytics/pages/TimelogReportPage';
+import { CeoAttendanceReportPage } from './features/analytics/pages/CeoAttendanceReportPage';
+import CeoFacePunchPage from './features/attendance/pages/CeoFacePunchPage';
 
 // Performance Pages
 import { PerformanceDashboard } from './features/performance/pages/PerformanceDashboard';
@@ -482,9 +483,9 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
-        <Route path="/attendance/my-attendance" element={<MyAttendance />} />
         <Route path="/attendance/locations" element={<LocationManagementPage />} />
         <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/attendance/location-mapping" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
         <Route path="/attendance/reports" element={<BreakLogsPage />} />
@@ -496,6 +497,8 @@ export function AppRoutes() {
         <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
+        {/* CEO Face Punch Terminal */}
+        <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />
@@ -602,6 +605,7 @@ export function AppRoutes() {
         <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
+        <Route path="/analytics/ceo-attendance" element={<CeoAttendanceReportPage />} />
 
         {/* Employee Lifecycle */}
         <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />

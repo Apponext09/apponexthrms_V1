@@ -809,8 +809,8 @@ export default function FaceAttendancePage() {
               Face Recognition is currently disabled by Organization Admin. Attendance verification is set to <strong>{attendanceMode === 'gps' ? 'GPS Punch' : 'Wi-Fi IP Network'}</strong> mode.
             </span>
           </div>
-          <Button size="sm" variant="outline" className="h-7 text-xs font-bold shrink-0 border-amber-500/40 hover:bg-amber-500/20" onClick={() => navigate('/attendance/my-attendance')}>
-            Go to GPS Attendance
+          <Button size="sm" variant="outline" className="h-7 text-xs font-bold shrink-0 border-amber-500/40 hover:bg-amber-500/20" onClick={() => navigate('/employee/dashboard')}>
+            Go to Portal Dashboard
           </Button>
         </div>
       )}

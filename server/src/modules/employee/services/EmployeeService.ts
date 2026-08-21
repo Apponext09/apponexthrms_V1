@@ -905,9 +905,44 @@ export class EmployeeService {
   /**
    * Get employee by ID
    */
-  async getEmployee(ctx: TenantContext, employeeId: number): Promise<Employee> {
+  async getEmployee(ctx: TenantContext, employeeId: number | string): Promise<Employee> {
     await this.ensureEmployeeColumns();
-    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    const db = getKnex();
+    const strVal = String(employeeId || '').trim();
+    const numericId = parseInt(strVal, 10);
+    let employee: Employee | null = null;
+
+    if (!isNaN(numericId) && numericId > 0) {
+      employee = await this.employeeRepo.getById(ctx, numericId).catch(() => null);
+      if (!employee) {
+        // Fallback 1: Check if numericId is a user ID in users table
+        const user = await db('users').where({ id: numericId }).first().catch(() => null);
+        if (user && user.employee_id) {
+          employee = await this.employeeRepo.getById(ctx, user.employee_id).catch(() => null);
+        }
+        if (!employee && user && user.email) {
+          employee = await this.employeeRepo.getByEmail(ctx, user.email).catch(() => null);
+        }
+      }
+    }
+
+    // Fallback 2: Lookup by email, employeeCode, or UUID string
+    if (!employee && strVal) {
+      if (strVal.includes('@')) {
+        employee = await this.employeeRepo.getByEmail(ctx, strVal).catch(() => null);
+      } else {
+        employee = await this.employeeRepo.getByCode(ctx, strVal).catch(() => null);
+        if (!employee) {
+          employee = (await db('employees')
+            .where({ organization_id: ctx.organizationId })
+            .whereNull('deleted_at')
+            .where('uuid', strVal)
+            .first()
+            .catch(() => null)) as Employee | null;
+        }
+      }
+    }
+
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }

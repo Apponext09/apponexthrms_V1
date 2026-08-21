@@ -59,6 +59,7 @@ export const CEO_MODULES: ModuleNode[] = [
       { id: 'ceo_attendance_dashboard', name: 'Attendance Dashboard', defaultEnabled: true },
       { id: 'ceo_live_tracking', name: 'Live Tracking', defaultEnabled: true },
       { id: 'ceo_location_management', name: 'Location Management', defaultEnabled: true },
+      { id: 'ceo_location_mapping', name: 'Location Access Mapping', defaultEnabled: true },
       { id: 'ceo_break_logs', name: 'Break Logs', defaultEnabled: true },
     ],
   },

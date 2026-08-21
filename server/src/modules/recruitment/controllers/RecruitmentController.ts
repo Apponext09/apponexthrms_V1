@@ -231,10 +231,10 @@ export class RecruitmentController {
 
   listApplications = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { 
-      page = 1, 
-      pageSize = 20, 
-      sortBy = 'created_at', 
+    const {
+      page = 1,
+      pageSize = 20,
+      sortBy = 'created_at',
       sortOrder = 'desc',
       companyId,
       locationId,
@@ -362,7 +362,7 @@ export class RecruitmentController {
     const db = getKnex();
 
     const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
-    
+
     let loggedInEmployee = null;
     const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
     if (empIdFromUser) {
@@ -431,7 +431,7 @@ export class RecruitmentController {
     const items = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .where(function() {
+      .where(function () {
         this.where('interviews.organization_id', ctx.organizationId).orWhereNull('interviews.organization_id');
       })
       .select([
@@ -442,7 +442,7 @@ export class RecruitmentController {
       ])
       .orderBy('interviews.scheduled_date', 'asc');
 
-    const panelRows = await db('interview_panel').where(function() {
+    const panelRows = await db('interview_panel').where(function () {
       this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
     }).catch(() => []);
 
@@ -526,7 +526,7 @@ export class RecruitmentController {
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
-        
+
         if (typeof idOrName === 'object') {
           const objName = buildName(idOrName);
           if (objName && !resolvedNamesList.includes(objName)) {
@@ -570,8 +570,8 @@ export class RecruitmentController {
       }
 
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel') 
-        ? finalString 
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel')
+        ? finalString
         : (userFullName || 'Assigned Interviewer');
     });
 
@@ -655,7 +655,7 @@ export class RecruitmentController {
     const db = getKnex();
 
     const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
-    
+
     let loggedInEmployee = null;
     const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
     if (empIdFromUser) {
@@ -726,7 +726,7 @@ export class RecruitmentController {
     let items = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .where(function() {
+      .where(function () {
         this.where('interviews.organization_id', ctx.organizationId).orWhereNull('interviews.organization_id');
       })
       .whereRaw("DATE(interviews.scheduled_date) = ?", [todayStr])
@@ -738,7 +738,7 @@ export class RecruitmentController {
       ])
       .orderBy('interviews.scheduled_date', 'asc');
 
-    const panelRows = await db('interview_panel').where(function() {
+    const panelRows = await db('interview_panel').where(function () {
       this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
     }).catch(() => []);
 
@@ -822,7 +822,7 @@ export class RecruitmentController {
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
-        
+
         if (typeof idOrName === 'object') {
           const objName = buildName(idOrName);
           if (objName && !resolvedNamesList.includes(objName)) {
@@ -866,8 +866,8 @@ export class RecruitmentController {
       }
 
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel') 
-        ? finalString 
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel')
+        ? finalString
         : (userFullName || 'Assigned Interviewer');
     });
 
@@ -1232,7 +1232,7 @@ export class RecruitmentController {
     // Check if feedback already exists for this interview & interviewer
     const existingFeedback = await db('interview_feedback')
       .where('interview_id', interviewId)
-      .andWhere(function() {
+      .andWhere(function () {
         this.where('interviewer_id', ctx.userId)
           .orWhere('interviewer_id', ctx.employeeId || 0);
       })

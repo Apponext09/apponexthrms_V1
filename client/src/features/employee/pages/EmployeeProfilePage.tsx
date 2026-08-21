@@ -10,8 +10,6 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
 import { useProfileEditPermission } from '../hooks/useProfileEditPermission';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/config/api';
 import { EmployeeDetailsCombined } from '../components/EmployeeDetailsCombined';
 import { EmployeePayrollDetail } from '../components/EmployeePayrollDetail';
 import { EmployeeCheckInSetting } from '../components/EmployeeCheckInSetting';
@@ -249,53 +247,66 @@ export function EmployeeProfilePage() {
           <TabsList className={'grid w-full h-auto p-0 bg-transparent gap-1 ' + (isEmployeePortal ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-7' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-6')}>
             <TabsTrigger
               value="details"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
             >
-              Employee Details
+              <User className="w-3.5 h-3.5" />
+              Details
             </TabsTrigger>
+
             <TabsTrigger
               value="payroll"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
             >
-              Payroll Detail
+              <Briefcase className="w-3.5 h-3.5" />
+              Payroll
             </TabsTrigger>
-            <TabsTrigger
-              value="checkin_setting"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Check In Out Setting
-            </TabsTrigger>
-            <TabsTrigger
-              value="roles"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Roles
-            </TabsTrigger>
-            <TabsTrigger
-              value="statutory"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Statutory Details
-            </TabsTrigger>
+
             <TabsTrigger
               value="documents"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
             >
+              <Layers className="w-3.5 h-3.5" />
               Documents
             </TabsTrigger>
+
+            <TabsTrigger
+              value="statutory"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+            >
+              <LockIcon className="w-3.5 h-3.5" />
+              Statutory
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="checkin"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              Check-In Mode
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="roles"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              Roles
+            </TabsTrigger>
+
             {isEmployeePortal && (
               <TabsTrigger
-                value="my_requests"
-                className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md gap-1"
+                value="requests"
+                className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
               >
-                <FileEdit className="w-3 h-3" />
-                My Requests
+                <FileEdit className="w-3.5 h-3.5" />
+                Requests
               </TabsTrigger>
             )}
           </TabsList>
         </div>
 
-        <TabsContent value="details" className="mt-0">
+        {/* Tab Contents */}
+        <TabsContent value="details" className="mt-0 space-y-4">
           <EmployeeDetailsCombined
             employee={employee}
             isEditingBasicInfo={isEditingBasicInfo}
@@ -309,19 +320,15 @@ export function EmployeeProfilePage() {
           />
         </TabsContent>
 
-        <TabsContent value="payroll" className="mt-0">
+        <TabsContent value="payroll" className="mt-0 space-y-4">
           <EmployeePayrollDetail employee={employee} />
         </TabsContent>
 
-        <TabsContent value="checkin_setting" className="mt-0">
-          <EmployeeCheckInSetting employee={employee} readOnly={isEmployeePortal} />
+        <TabsContent value="documents" className="mt-0 space-y-4">
+          <EmployeeDocuments employeeId={employee.id as number} readOnly={isEmployeePortal} />
         </TabsContent>
 
-        <TabsContent value="roles" className="mt-0">
-          <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} readOnly={isEmployeePortal} />
-        </TabsContent>
-
-        <TabsContent value="statutory" className="mt-0">
+        <TabsContent value="statutory" className="mt-0 space-y-4">
           <EmployeeStatutoryDetails
             employee={employee}
             onUpdate={() => refetch()}
@@ -330,13 +337,16 @@ export function EmployeeProfilePage() {
           />
         </TabsContent>
 
-        <TabsContent value="documents" className="mt-0">
-          <EmployeeDocuments employeeId={employee.id as number} readOnly={isEmployeePortal} />
+        <TabsContent value="checkin" className="mt-0 space-y-4">
+          <EmployeeCheckInSetting employee={employee} readOnly={isEmployeePortal} />
         </TabsContent>
 
-        {/* ── My Requests tab (employee portal only) ── */}
+        <TabsContent value="roles" className="mt-0 space-y-4">
+          <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} readOnly={isEmployeePortal} />
+        </TabsContent>
+
         {isEmployeePortal && (
-          <TabsContent value="my_requests" className="mt-0">
+          <TabsContent value="requests" className="mt-0 space-y-4">
             <MyProfileRequestsView employeeId={employee.id as number} />
           </TabsContent>
         )}

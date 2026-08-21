@@ -129,7 +129,7 @@ export function TimelogReportView() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setQueryParams({ fromDate, toDate, employees: selectedEmployees, locations: selectedLocations, departments: selectedDepartments, reportingOfficers: selectedReportingOfficers, status });
+    setQueryParams({ fromDate, toDate, companies: selectedCompanies, employees: selectedEmployees, locations: selectedLocations, departments: selectedDepartments, reportingOfficers: selectedReportingOfficers, status });
     setHasSubmitted(true);
   };
 
@@ -367,11 +367,130 @@ export function TimelogReportView() {
       </Dialog>
 
       <div className="space-y-6 animate-in fade-in-50 duration-200">
+        {/* Timelog Report Filter Form matching screenshot */}
+        <div className="bg-card border border-border/80 rounded-xl shadow-soft-md p-4 space-y-4">
+          <div className="border-b border-border/60 pb-2">
+            <h2 className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-1.5">
+              <span>Timelog Report</span>
+            </h2>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Top Row: 5 MultiSelect Dropdowns */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {renderMultiSelectDropdown('Company', selectedCompanies, setSelectedCompanies, optionsData?.companies || [])}
+              {renderMultiSelectDropdown('Location', selectedLocations, setSelectedLocations, optionsData?.locations || [])}
+              {renderMultiSelectDropdown('Department', selectedDepartments, setSelectedDepartments, optionsData?.departments || [])}
+              {renderMultiSelectDropdown('Reporting Officer', selectedReportingOfficers, setSelectedReportingOfficers, optionsData?.reportingOfficers || [])}
+              {renderMultiSelectDropdown('Employee', selectedEmployees, setSelectedEmployees, optionsData?.employees || [])}
+            </div>
+
+            {/* Second Row: Dates, Status, Last Day, Checkbox */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
+                  <span>From Date</span>
+                  <span className="text-rose-500 font-bold">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  required
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300 dark:border-slate-700 font-semibold"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
+                  <span>To Date</span>
+                  <span className="text-rose-500 font-bold">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  required
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300 dark:border-slate-700 font-semibold"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Status</Label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs font-semibold focus:outline-none text-slate-800 dark:text-slate-200"
+                >
+                  <option value="choose">choose</option>
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                  <option value="both">both</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Last Day Of Week</Label>
+                <select
+                  value={lastDayOfWeek}
+                  onChange={(e) => setLastDayOfWeek(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs font-semibold focus:outline-none text-slate-800 dark:text-slate-200"
+                >
+                  <option value="Sunday">Sunday</option>
+                  <option value="Saturday">Saturday</option>
+                  <option value="Friday">Friday</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2 h-9 pb-1.5">
+                <Checkbox
+                  id="viewStatusTableFilter"
+                  checked={viewStatusTable}
+                  onCheckedChange={(c) => setViewStatusTable(!!c)}
+                />
+                <label
+                  htmlFor="viewStatusTableFilter"
+                  className="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap"
+                >
+                  Select to view status table
+                </label>
+              </div>
+            </div>
+
+            {/* Third Row: Action Buttons */}
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                type="submit"
+                className="bg-[#3085d6] hover:bg-[#256bb0] text-white font-semibold text-xs px-4 h-8 rounded-md shadow-2xs transition-colors"
+              >
+                Submit
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleReset}
+                className="font-semibold text-xs px-4 h-8 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 transition-colors"
+              >
+                Reset
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => setIsInfoOpen(true)}
+                className="bg-[#00c0ef] hover:bg-[#009ec5] text-white font-semibold text-xs px-4 h-8 rounded-md shadow-2xs transition-colors"
+              >
+                Info
+              </Button>
+            </div>
+          </form>
+        </div>
+
         <div className="bg-card border border-border/80 rounded-xl shadow-soft-md overflow-hidden">
           <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-900/50 border-b border-border flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <h3 className="text-sm font-extrabold text-foreground tracking-tight whitespace-nowrap">
-                Timelog Report
+                Timelog Report Data
               </h3>
               <Button
                 type="button"

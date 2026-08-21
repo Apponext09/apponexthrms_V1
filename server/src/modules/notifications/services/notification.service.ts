@@ -48,6 +48,9 @@ export class NotificationService {
       scheduledAt?: Date;
     }
   ): Promise<Notification> {
+    if (!input?.eventCode) {
+      throw new ValidationError(`Event code is required for notification`);
+    }
     // Get event
     const event = await this.eventRepo.getByCode(ctx, input.eventCode);
     if (!event || !event.is_enabled) {
