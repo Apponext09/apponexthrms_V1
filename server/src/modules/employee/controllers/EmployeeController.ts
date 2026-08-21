@@ -66,9 +66,20 @@ export class EmployeeController {
     });
 
 
+    const db = getKnex();
+    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
+    const emp = result.employee;
+    const fullName = `${emp.first_name || (emp as any).firstName || ''} ${emp.last_name || (emp as any).lastName || ''}`.trim();
+
     res.status(201).json({
       success: true,
-      data: result.employee,
+      status: emp.status || 'active',
+      data: {
+        employeeName: fullName,
+        employeeEmail: emp.email,
+        organizationName: org?.name || '',
+        status: emp.status || 'active',
+      },
       generatedPassword: result.generatedPassword,
     });
   });
@@ -80,7 +91,7 @@ export class EmployeeController {
     const ctx = req.ctx!;
     const { id } = req.params;
 
-    const employee = await this.service.getEmployee(ctx, parseInt(id, 10));
+    const employee = await this.service.getEmployee(ctx, id);
 
     res.json({
       success: true,
@@ -98,19 +109,36 @@ export class EmployeeController {
     let employeeId: number | null = null;
     const user = await db('users')
       .where('id', ctx.userId)
-      .where('organization_id', ctx.organizationId)
       .first();
 
     if (user?.employee_id) {
-      employeeId = user.employee_id;
-    } else if (user?.email) {
+      const emp = await db('employees')
+        .where('id', user.employee_id)
+        .whereNull('deleted_at')
+        .first();
+      if (emp) {
+        employeeId = user.employee_id;
+      }
+    }
+
+    if (!employeeId && user?.email) {
       const empByEmail = await db('employees')
-        .where('email', user.email)
-        .where('organization_id', ctx.organizationId)
+        .whereRaw('LOWER(email) = ?', [user.email.toLowerCase()])
+        .whereNull('deleted_at')
         .first();
       if (empByEmail) {
         employeeId = empByEmail.id;
         await db('users').where('id', user.id).update({ employee_id: empByEmail.id });
+      }
+    }
+
+    if (!employeeId) {
+      const firstEmp = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .first();
+      if (firstEmp) {
+        employeeId = firstEmp.id;
       }
     }
 
@@ -169,9 +197,18 @@ export class EmployeeController {
       await db('users').where('id', user.id).update(userUpdates);
     }
 
+    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
+    const fullName = `${updated.first_name || (updated as any).firstName || ''} ${updated.last_name || (updated as any).lastName || ''}`.trim();
+
     res.json({
       success: true,
-      data: updated,
+      status: updated.status || 'active',
+      data: {
+        employeeName: fullName,
+        employeeEmail: updated.email,
+        organizationName: org?.name || '',
+        status: updated.status || 'active',
+      },
     });
   });
 
@@ -238,9 +275,13 @@ export class EmployeeController {
     const validated = validate(req.body, employeeUpdateSchema);
 
     const employee = await this.service.updateEmployee(ctx, parseInt(id, 10), validated as any);
+    const db = getKnex();
+    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
+    const fullName = `${employee.first_name || (employee as any).firstName || ''} ${employee.last_name || (employee as any).lastName || ''}`.trim();
 
     res.json({
       success: true,
+      status: employee.status || 'active',
       data: employee,
     });
   });
@@ -590,6 +631,137 @@ export class EmployeeController {
       employeeId: id,
     });
   });
+
+  /**
+   * POST /employees/profile-update-requests
+   */
+  createProfileUpdateRequest = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { employeeId, requestType, targetArea, requestedChanges, reason } = req.body;
+    const result = await this.service.createProfileUpdateRequest(ctx, {
+      employeeId: employeeId ? Number(employeeId) : undefined,
+      requestType,
+      targetArea,
+      requestedChanges,
+      reason,
+    });
+    res.status(201).json({ success: true, data: result });
+  });
+
+  /**
+   * GET /employees/profile-update-requests
+   */
+  getProfileUpdateRequests = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const companyId = req.query.companyId ? Number(req.query.companyId) : undefined;
+    const result = await this.service.getProfileUpdateRequests(ctx, companyId);
+    res.json({ success: true, data: result });
+  });
+
+  /**
+   * PATCH /employees/profile-update-requests/:id/status
+   */
+  updateProfileUpdateRequestStatus = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { status, rejectionReason } = req.body;
+    const result = await this.service.updateProfileUpdateRequestStatus(ctx, Number(id), status, rejectionReason);
+    res.json({ success: true, data: result });
+  });
+
+  /**
+   * GET /employees/my-edit-permission
+   * Returns whether an employee has an approved (and unused) profile update request within 24h
+   */
+  getMyEditPermission = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const db = getKnex();
+    const user = req.user as any;
+    const targetEmpId = req.query.employeeId ? Number(req.query.employeeId) : null;
+
+    // Resolve employee id from query or user
+    let empId: number | null = targetEmpId || user?.employeeId || null;
+    if (!empId && user?.id) {
+      const u = await db('users').where('id', user.id).first();
+      empId = u?.employee_id || null;
+      if (!empId && u?.email) {
+        const emp = await db('employees').whereRaw('LOWER(email) = ?', [u.email.toLowerCase()]).first();
+        empId = emp?.id || null;
+      }
+    }
+
+    if (!empId) {
+      return res.json({ success: true, data: { editUnlocked: false, approvedRequestId: null } });
+    }
+
+    // Unlocks for 1 day (24 hours = 86,400,000 ms) from approved_at
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const approved = await db('employee_profile_update_requests')
+      .where('employee_id', empId)
+      .where('status', 'approved')
+      .where(function () {
+        this.whereNull('approved_at').orWhere('approved_at', '>=', oneDayAgo);
+      })
+      .whereNull('deleted_at')
+      .orderBy('id', 'desc')
+      .first();
+
+    return res.json({
+      success: true,
+      data: {
+        editUnlocked: !!approved,
+        approvedRequestId: approved?.id || null,
+        approvedAt: approved?.approved_at || null,
+        unlockedSection: approved?.profile_section || null,
+      },
+    });
+  });
+
+  /**
+   * POST /employees/consume-edit-permission/:requestId
+   * Marks an approved profile update request as 'completed' (used) after edit is saved
+   */
+  consumeEditPermission = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const db = getKnex();
+    const { requestId } = req.params;
+
+    await db('employee_profile_update_requests')
+      .where('id', Number(requestId))
+      .update({
+        status: 'completed',
+        updated_at: new Date(),
+        updated_by: ctx.userId || 1,
+      });
+
+    return res.json({ success: true, message: 'Edit permission consumed.' });
+  });
+
+  /**
+   * GET /employees/my-profile-requests
+   * Returns all profile update requests submitted by the logged-in employee
+   */
+  getMyProfileRequests = asyncHandler(async (req: Request, res: Response) => {
+    const db = getKnex();
+    const user = req.user as any;
+
+    let empId: number | null = user?.employeeId || null;
+    if (!empId && user?.id) {
+      const u = await db('users').where('id', user.id).first();
+      empId = u?.employee_id || null;
+      if (!empId && u?.email) {
+        const emp = await db('employees').whereRaw('LOWER(email) = ?', [u.email.toLowerCase()]).first();
+        empId = emp?.id || null;
+      }
+    }
+
+    if (!empId) return res.json({ success: true, data: [] });
+
+    const result = await this.service.getMyProfileUpdateRequests(empId);
+    return res.json({ success: true, data: result });
+  });
 }
 
 export const employeeController = new EmployeeController();
+

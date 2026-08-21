@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useJobs, useCreateJob, useUpdateJob, useDeleteJob, usePublishJob } from '../hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,13 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
-  ChevronLeft, ChevronRight, Settings, Briefcase, Eye, CheckCircle, AlertTriangle, Link2, Palette
+  ChevronLeft, ChevronRight, Settings, Briefcase, Eye, CheckCircle, AlertTriangle, Link2, Palette, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
+import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
 
 const stripHtml = (html: string | null | undefined) => {
   if (!html) return '';
@@ -40,6 +41,7 @@ export const JobManagement: React.FC = () => {
   const [editingJob, setEditingJob] = useState<any>(null);
   const [jobToDelete, setJobToDelete] = useState<any>(null);
   const [viewingJob, setViewingJob] = useState<any>(null);
+  const [selectedJobForAi, setSelectedJobForAi] = useState<string | number | undefined>(undefined);
 
   const { data: jobsResponse, isLoading, refetch } = useJobs();
   const createJob = useCreateJob();
@@ -112,6 +114,31 @@ export const JobManagement: React.FC = () => {
     const applyUrl = `${window.location.origin}/liberation/103/${reqId}/aHc9PQ`;
     navigator.clipboard.writeText(applyUrl);
     toast.success(`Career Page apply form link for "${job.jobTitle || job.job_title}" copied to clipboard!`);
+  };
+
+  const handleDuplicateJob = async (job: any) => {
+    try {
+      const cloneData = {
+        mrfRequestId: job.mrfRequestId || job.mrf_request_id || undefined,
+        jobCode: `${job.jobCode || job.job_code || 'JOB'}-COPY-${Date.now().toString().slice(-4)}`,
+        jobTitle: `${job.jobTitle || job.job_title} (Copy)`,
+        jobDescription: job.jobDescription || job.job_description || '',
+        jobType: job.jobType || job.job_type || 'full_time',
+        experienceLevel: job.experienceLevel || job.experience_level || 'mid',
+        minExperienceYears: job.minExperienceYears || job.min_experience_years || 0,
+        maxExperienceYears: job.maxExperienceYears || job.max_experience_years || 5,
+        currency: job.currency || 'INR',
+        employmentType: job.employmentType || job.employment_type || 'onsite',
+        noOfPositions: job.noOfPositions || job.no_of_positions || 1,
+      };
+
+      await createJob.mutateAsync(cloneData);
+      toast.success(`Job duplicated as "${cloneData.jobTitle}"`);
+      refetch();
+    } catch (err) {
+      console.error('Failed to duplicate job', err);
+      toast.error('Failed to duplicate job');
+    }
   };
 
   const handleDeleteJob = async () => {
@@ -232,19 +259,22 @@ export const JobManagement: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex flex-col relative w-full">
-        {/* Search Bar */}
-        <div className="absolute right-4 top-2 z-20 w-64">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search jobs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm h-9 text-sm rounded-full"
-            />
+      <div className="relative">
+        
+        {/* Search Input */}
+        {activeTab !== 'ai_suggestions' && (
+          <div className="absolute right-4 top-2 z-20 w-64">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Search jobs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm h-9 text-sm rounded-full"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Tabs Row */}
         <div className="flex items-center gap-1 mb-[-1px]">
@@ -272,247 +302,247 @@ export const JobManagement: React.FC = () => {
 
         {/* Result Card Wrapper */}
         <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-          
-          {/* Result Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${activeTab === 'active' ? 'bg-blue-500' : 'bg-slate-400'}`}></span> Result
-            </h3>
-            <Button
-              onClick={handleExport}
-              variant="outline"
-              size="sm"
-              className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
-            >
-              <Download className="w-4 h-4" /> Export
-            </Button>
-          </div>
-
-          {/* Show Entries & Quick Text */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
-            <div className="font-medium">
-              Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
+            
+            {/* Result Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${activeTab === 'active' ? 'bg-blue-500' : 'bg-slate-400'}`}></span> Result
+              </h3>
+              <Button
+                onClick={handleExport}
+                variant="outline"
+                size="sm"
+                className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
               >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span>entries</span>
+                <Download className="w-4 h-4" /> Export
+              </Button>
             </div>
-          </div>
 
-          {/* Table Container */}
-          <div className="overflow-x-auto border border-slate-200 rounded-lg w-full">
-            <table className="w-full text-sm text-left border-collapse min-w-[900px]">
-              <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-bold">
-                <tr>
-                  <th className="p-3.5">Action</th>
-                  <th className="p-3.5">Job Code</th>
-                  <th className="p-3.5">Job Title</th>
-                  <th className="p-3.5 text-center">Status</th>
-                  
-                  {/* Dynamically configured columns */}
-                  {visibleColumns.map((colKey) => {
-                    const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === colKey);
-                    return (
-                      <th key={colKey} className="p-3.5">
-                        {col?.label || colKey}
-                      </th>
-                    );
-                  })}
+            {/* Show Entries & Quick Text */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
+              <div className="font-medium">
+                Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries
+              </div>
+              <div className="flex items-center gap-2">
+                <span>Show</span>
+                <select
+                  value={entriesPerPage}
+                  onChange={(e) => {
+                    setEntriesPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>entries</span>
+              </div>
+            </div>
 
-                  <th className="p-3.5 text-center">Positions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-600">
-                {isLoading ? (
+            {/* Table Container */}
+            <div className="overflow-x-auto border border-slate-200 rounded-lg w-full">
+              <table className="w-full text-sm text-left border-collapse min-w-[900px]">
+                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-bold">
                   <tr>
-                    <td colSpan={5 + visibleColumns.length} className="p-8 text-center">
-                      <div className="flex items-center justify-center gap-2 text-slate-500">
-                        <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin"></div>
-                        Loading jobs...
-                      </div>
-                    </td>
+                    <th className="p-3.5">Action</th>
+                    <th className="p-3.5">Job Code</th>
+                    <th className="p-3.5">Job Title</th>
+                    <th className="p-3.5 text-center">Status</th>
+                    
+                    {/* Dynamically configured columns */}
+                    {visibleColumns.map((colKey) => {
+                      const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === colKey);
+                      return (
+                        <th key={colKey} className="p-3.5">
+                          {col?.label || colKey}
+                        </th>
+                      );
+                    })}
+
+                    <th className="p-3.5 text-center">Positions</th>
                   </tr>
-                ) : paginatedData.length === 0 ? (
-                  <tr>
-                    <td colSpan={5 + visibleColumns.length} className="p-8 text-center text-slate-400 italic">
-                      No Jobs found matching the criteria
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedData.map((item: any) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setViewingJob(item)}
-                            className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
-                            title="View Job Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setEditingJob(item)}
-                            className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
-                            title="Edit Job"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleCopyCareerLink(item)}
-                            className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                            title="Copy Career Page Apply Link"
-                          >
-                            <Link2 className="w-4 h-4 text-indigo-600" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setJobToDelete(item)}
-                            className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            title="Delete Job"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-600">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={5 + visibleColumns.length} className="p-8 text-center">
+                        <div className="flex items-center justify-center gap-2 text-slate-500">
+                          <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin"></div>
+                          Loading jobs...
                         </div>
-                      </td>
-                      <td className="p-3.5 font-semibold text-slate-700">{item.jobCode || item.job_code}</td>
-                      <td className="p-3.5">
-                        <div className="font-medium text-slate-800">{item.jobTitle || item.job_title}</div>
-                        <div className="text-xs text-slate-500 mt-1">
-                          {stripHtml(item.jobDescription || item.job_description).substring(0, 60)}... 
-                          <button onClick={() => setViewingJob(item)} className="text-blue-600 font-semibold hover:underline ml-1">
-                            Read more
-                          </button>
-                        </div>
-                      </td>
-                      <td className="p-3.5 text-center relative">
-                        {/* Status Button / Popover trigger */}
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveStatusPopoverId(prev => prev === item.id ? null : item.id);
-                          }}
-                          className={cn(
-                            "inline-flex items-center justify-center p-1.5 rounded-full shadow-sm cursor-pointer transition-transform hover:scale-105",
-                            item.status === 'published' ? 'bg-green-100 text-green-600' :
-                            item.status === 'draft' ? 'bg-amber-100 text-amber-600' :
-                            'bg-slate-100 text-slate-500'
-                          )}
-                          title="Change Status"
-                        >
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        </div>
-
-                        {/* Status Popover */}
-                        {activeStatusPopoverId === item.id && (
-                          <div 
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute left-[70%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none animate-in fade-in zoom-in-95 duration-150"
-                          >
-                            <h4 className="text-xs font-bold text-slate-800 uppercase border-b border-slate-100 pb-2 mb-3">Job Status</h4>
-                            <div className="space-y-2 text-xs">
-                              <div className="flex justify-between">
-                                <span className="text-slate-500">Current Status:</span>
-                                <span className="font-semibold uppercase tracking-wider">{item.status}</span>
-                              </div>
-                            </div>
-                            
-                            {item.status === 'draft' && (
-                              <div className="mt-3 flex items-center gap-2 pt-2 border-t border-slate-100">
-                                <button
-                                  onClick={() => handlePublish(item.id)}
-                                  className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
-                                >
-                                  Publish Job
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Dynamic Columns */}
-                      {visibleColumns.map(colKey => (
-                        <td key={colKey} className="p-3.5">
-                          {item[colKey] || item[colKey.replace(/([A-Z])/g, '_$1').toLowerCase()] || '-'}
-                        </td>
-                      ))}
-
-                      <td className="p-3.5 text-center font-bold text-slate-700">
-                        {item.noOfPositions || item.no_of_positions}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : paginatedData.length === 0 ? (
+                    <tr>
+                      <td colSpan={5 + visibleColumns.length} className="p-8 text-center text-slate-400 italic">
+                        No Jobs found matching the criteria
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedData.map((item: any) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
+                        <td className="p-3.5">
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setViewingJob(item)}
+                              className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                              title="View Job Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setEditingJob(item)}
+                              className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                              title="Edit Job"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleCopyCareerLink(item)}
+                              className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              title="Copy Career Page Apply Link"
+                            >
+                              <Link2 className="w-4 h-4 text-indigo-600" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setJobToDelete(item)}
+                              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                              title="Delete Job"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="p-3.5 font-semibold text-slate-700">{item.jobCode || item.job_code}</td>
+                        <td className="p-3.5">
+                          <div className="font-medium text-slate-800">{item.jobTitle || item.job_title}</div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {stripHtml(item.jobDescription || item.job_description).substring(0, 60)}... 
+                            <button onClick={() => setViewingJob(item)} className="text-blue-600 font-semibold hover:underline ml-1">
+                              Read more
+                            </button>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-center relative">
+                          {/* Status Button / Popover trigger */}
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveStatusPopoverId(prev => prev === item.id ? null : item.id);
+                            }}
+                            className={cn(
+                              "inline-flex items-center justify-center p-1.5 rounded-full shadow-sm cursor-pointer transition-transform hover:scale-105",
+                              item.status === 'published' ? 'bg-green-100 text-green-600' :
+                              item.status === 'draft' ? 'bg-amber-100 text-amber-600' :
+                              'bg-slate-100 text-slate-500'
+                            )}
+                            title="Change Status"
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          </div>
 
-          {/* Pagination Controls */}
-          {filteredData.length > 0 && (
-            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 text-sm">
-              <div className="text-slate-500 font-medium">
-                Page {currentPage} of {totalPages}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Prev
-                </Button>
-                <div className="flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <Button
-                      key={i + 1}
-                      variant={currentPage === i + 1 ? "default" : "outline"}
-                      onClick={() => setCurrentPage(i + 1)}
-                      className={`h-8 w-8 p-0 ${
-                        currentPage === i + 1 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
-                          : 'text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {i + 1}
-                    </Button>
-                  )).slice(
-                    Math.max(0, currentPage - 3), 
-                    Math.min(totalPages, currentPage + 2)
+                          {/* Status Popover */}
+                          {activeStatusPopoverId === item.id && (
+                            <div 
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute left-[70%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none animate-in fade-in zoom-in-95 duration-150"
+                            >
+                              <h4 className="text-xs font-bold text-slate-800 uppercase border-b border-slate-100 pb-2 mb-3">Job Status</h4>
+                              <div className="space-y-2 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">Current Status:</span>
+                                  <span className="font-semibold uppercase tracking-wider">{item.status}</span>
+                                </div>
+                              </div>
+                              
+                              {item.status === 'draft' && (
+                                <div className="mt-3 flex items-center gap-2 pt-2 border-t border-slate-100">
+                                  <button
+                                    onClick={() => handlePublish(item.id)}
+                                    className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
+                                  >
+                                    Publish Job
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Dynamic Columns */}
+                        {visibleColumns.map(colKey => (
+                          <td key={colKey} className="p-3.5">
+                            {item[colKey] || item[colKey.replace(/([A-Z])/g, '_$1').toLowerCase()] || '-'}
+                          </td>
+                        ))}
+
+                        <td className="p-3.5 text-center font-bold text-slate-700">
+                          {item.noOfPositions || item.no_of_positions}
+                        </td>
+                      </tr>
+                    ))
                   )}
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
-              </div>
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+
+            {/* Pagination Controls */}
+            {filteredData.length > 0 && (
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 text-sm">
+                <div className="text-slate-500 font-medium">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                  </Button>
+                  <div className="flex gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => (
+                      <Button
+                        key={i + 1}
+                        variant={currentPage === i + 1 ? "default" : "outline"}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className={`h-8 w-8 p-0 ${
+                          currentPage === i + 1 
+                            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
+                            : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {i + 1}
+                      </Button>
+                    )).slice(
+                      Math.max(0, currentPage - 3), 
+                      Math.min(totalPages, currentPage + 2)
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
       </div>
 
       {/* Create / Edit Modal */}
@@ -538,9 +568,22 @@ export const JobManagement: React.FC = () => {
               Are you sure you want to delete job "{jobToDelete?.jobTitle || jobToDelete?.job_title}" ({jobToDelete?.jobCode || jobToDelete?.job_code})? This action will remove the opening from active recruitment.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex justify-end gap-2 pt-3">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setJobToDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteJob}>Delete Job</Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => {
+                deleteJob.mutate(jobToDelete.id, {
+                  onSuccess: () => {
+                    toast.success('Job Deleted Successfully');
+                    setJobToDelete(null);
+                    refetch();
+                  }
+                });
+              }}
+            >
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -613,12 +656,54 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     employmentType: initialData?.employmentType || initialData?.employment_type || 'onsite',
     noOfPositions: initialData?.noOfPositions || initialData?.no_of_positions || 1,
     expiryDate: initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '',
+    departmentId: initialData?.departmentId || initialData?.department_id || undefined,
   });
+
+  // AI Screening Settings State
+  const [aiSettings, setAiSettings] = useState({
+    aiScreeningEnabled: true,
+    atsEnabled: true,
+    atsThreshold: 85,
+    jdMatchEnabled: true,
+    jdMatchThreshold: 80,
+    shortlistingMode: 'ATS_AND_JD' as 'ATS_ONLY' | 'JD_MATCH_ONLY' | 'ATS_AND_JD' | 'WEIGHTED_SCORE' | 'AI_RECOMMENDED',
+    atsWeight: 40,
+    jdMatchWeight: 60,
+    autoShortlistEnabled: false,
+    suggestionLimit: 50,
+    mandatorySkills: '',
+  });
+
+  // Load existing AI Settings if editing
+  useEffect(() => {
+    if (initialData?.id) {
+      apiClient.get(`/recruitment/jobs/${initialData.id}/ai-settings`)
+        .then(res => {
+          if (res.data?.success && res.data.data) {
+            const s = res.data.data;
+            setAiSettings({
+              aiScreeningEnabled: s.aiScreeningEnabled ?? true,
+              atsEnabled: s.atsEnabled ?? true,
+              atsThreshold: s.atsThreshold ?? 85,
+              jdMatchEnabled: s.jdMatchEnabled ?? true,
+              jdMatchThreshold: s.jdMatchThreshold ?? 80,
+              shortlistingMode: s.shortlistingMode || 'ATS_AND_JD',
+              atsWeight: s.atsWeight ?? 40,
+              jdMatchWeight: s.jdMatchWeight ?? 60,
+              autoShortlistEnabled: s.autoShortlistEnabled ?? false,
+              suggestionLimit: s.suggestionLimit ?? 50,
+              mandatorySkills: Array.isArray(s.mandatorySkills) ? s.mandatorySkills.join(', ') : (s.mandatorySkills || ''),
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [initialData]);
 
   const { data: mrfResponse } = useQuery({
     queryKey: ['mrf-requests'],
     queryFn: async () => {
-      const res = await apiClient.get('/recruitment/mrf');
+      const res = await apiClient.get('/recruitment/mrf', { params: { pageSize: 100 } });
       return res.data;
     }
   });
@@ -642,12 +727,22 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     }
     const mrf = mrfRequests.find((m: any) => m.id === mrfId);
     if (mrf) {
+      let mappedJobType = 'full_time';
+      const rawType = (mrf.employment_type || mrf.employmentType || '').toLowerCase();
+      if (rawType.includes('part')) mappedJobType = 'part_time';
+      else if (rawType.includes('contract')) mappedJobType = 'contract';
+      else if (rawType.includes('intern')) mappedJobType = 'internship';
+      else if (rawType.includes('full')) mappedJobType = 'full_time';
+
       setFormData(prev => ({
         ...prev,
         mrfRequestId: mrf.id,
         jobTitle: mrf.position_title || mrf.positionTitle || prev.jobTitle,
         jobDescription: mrf.job_description || mrf.jobDescription || prev.jobDescription,
-        noOfPositions: mrf.number_of_positions || mrf.numberOfPositions || prev.noOfPositions,
+        noOfPositions: Number(mrf.number_of_positions || mrf.numberOfPositions) || prev.noOfPositions || 1,
+        departmentId: mrf.department_id || mrf.departmentId ? Number(mrf.department_id || mrf.departmentId) : prev.departmentId,
+        jobType: mappedJobType,
+        employmentType: prev.employmentType || 'onsite',
         expiryDate: mrf.expiry_date || mrf.expiryDate || mrf.target_closure_date || mrf.targetClosureDate || prev.expiryDate,
       }));
     }
@@ -655,13 +750,13 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full flex flex-col max-h-[92vh] overflow-hidden">
         
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div>
             <h2 className="text-lg font-bold text-slate-800">{initialData ? 'Edit Job Opening' : 'Create New Job'}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{initialData ? 'Update opening requirements and terms.' : 'Fill in the details below to create a new job opening.'}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{initialData ? 'Update opening requirements and AI screening rules.' : 'Fill in the details and configure AI ATS screening rules.'}</p>
           </div>
           <div className="h-10 w-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
             <Briefcase className="w-5 h-5" />
@@ -672,24 +767,34 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
         <div className="p-6 overflow-y-auto custom-scrollbar">
           <form id="create-job-form" onSubmit={(e) => {
             e.preventDefault();
-            onSubmit(formData);
+            onSubmit({
+              ...formData,
+              aiSettings,
+            });
           }} className="space-y-5">
 
             <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg space-y-2">
-              <label className="text-xs font-bold text-blue-800 uppercase tracking-wider block">Link to Approved MRF</label>
+              <label className="text-xs font-bold text-blue-800 uppercase tracking-wider block">Link to MRF Requisition</label>
               <select
                 value={formData.mrfRequestId || ''}
                 onChange={(e) => handleMrfSelect(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg bg-white border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
+                className="w-full px-3 py-2 border rounded-lg bg-white border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm font-medium text-slate-700"
               >
                 <option value="">-- No MRF (Direct Job) --</option>
-                {mrfRequests.filter((m: any) => m.stage === 'Approved').map((mrf: any) => (
-                  <option key={mrf.id} value={mrf.id}>
-                    {mrf.mr_number || mrf.mrNumber} - {mrf.position_title || mrf.positionTitle}
-                  </option>
-                ))}
+                {mrfRequests
+                  .filter((m: any) => m.status !== 'Closed' && m.stage !== 'Rejected')
+                  .map((mrf: any) => {
+                    const mrNum = mrf.mr_number || mrf.mrNumber || `MR-${mrf.id}`;
+                    const title = mrf.position_title || mrf.positionTitle || 'Position';
+                    const stage = mrf.stage || 'Pending Approval';
+                    return (
+                      <option key={mrf.id} value={mrf.id}>
+                        {mrNum} - {title} ({stage})
+                      </option>
+                    );
+                  })}
               </select>
-              <p className="text-[10px] text-blue-600">Selecting an MRF will auto-fill job details based on manager requests.</p>
+              <p className="text-[10px] text-blue-600">Selecting an MRF will auto-fill job details based on manager requests. Pending MRFs will be automatically approved upon job creation.</p>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -708,7 +813,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                 <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Job Title <span className="text-red-500">*</span></label>
                 <Input
                   name="jobTitle"
-                  placeholder="e.g. Software Engineer"
+                  placeholder="e.g. Senior Node.js Developer"
                   value={formData.jobTitle}
                   onChange={handleChange}
                   className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
@@ -832,6 +937,8 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                 />
               </div>
             </div>
+
+
 
           </form>
         </div>

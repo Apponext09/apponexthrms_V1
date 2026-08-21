@@ -336,6 +336,9 @@ export const GratuityConfiguration: React.FC = () => {
               <p className="text-[10px] text-muted-foreground">
                 Standard Indian Statutory Formula: <code className="text-primary font-bold">(15 * [Basic] * [Tenure]) / 26</code>
               </p>
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                Note: settlements always use this statutory formula. Editing the text above is saved for reference but does not change the calculation — only the eligibility and rounding rules below affect the actual payout.
+              </p>
             </div>
           </div>
 

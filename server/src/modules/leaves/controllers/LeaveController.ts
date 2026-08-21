@@ -1,11 +1,8 @@
 import type { Request, Response } from 'express';
-import * as path from 'path';
-import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { LeaveService } from '../services/LeaveService';
 import { LeaveBalanceService } from '../services/LeaveBalanceService';
 import { LeaveApprovalService } from '../services/LeaveApprovalService';
-
 import { AIService } from '../services/AIService';
 import { LeaveExpiryJobService } from '../services/LeaveExpiryJobService';
 import { LeaveAccrualService } from '../services/LeaveAccrualService';
@@ -20,7 +17,6 @@ export class LeaveController {
   private leaveService: LeaveService;
   private balanceService: LeaveBalanceService;
   private approvalService: LeaveApprovalService;
-
   private aiService: AIService;
   private assignmentRepo: LeavePolicyAssignmentRepository;
   private applicationRepo: LeaveApplicationRepository;
@@ -29,7 +25,6 @@ export class LeaveController {
     this.leaveService = new LeaveService();
     this.balanceService = new LeaveBalanceService();
     this.approvalService = new LeaveApprovalService();
-
     this.aiService = new AIService();
     this.assignmentRepo = new LeavePolicyAssignmentRepository();
     this.applicationRepo = new LeaveApplicationRepository();
@@ -107,11 +102,12 @@ export class LeaveController {
 
       // Dynamic Notification Template Rendering for Manager
       try {
-        let emp = await (this.applicationRepo as any).db('employees').where('id', empId).first();
-        if (!emp && ctx.email) {
-          emp = await (this.applicationRepo as any).db('employees').whereRaw('LOWER(email) = ?', [ctx.email.toLowerCase()]).first();
-        }
         const userRec = await (this.applicationRepo as any).db('users').where('id', ctx.userId).first();
+        let emp = await (this.applicationRepo as any).db('employees').where('id', empId).first();
+        const userEmail = userRec?.email || req.userEmail;
+        if (!emp && userEmail) {
+          emp = await (this.applicationRepo as any).db('employees').whereRaw('LOWER(email) = ?', [userEmail.toLowerCase()]).first();
+        }
         
         const empName = (emp?.first_name || userRec?.first_name)
           ? `${emp?.first_name || userRec?.first_name} ${emp?.last_name || userRec?.last_name || ''}`.trim()
@@ -930,20 +926,35 @@ export class LeaveController {
   async getPolicyMappings(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-      const mappings = await db('leave_policy_mappings as lpm')
+      const hasRoleIdCol = await db.schema.hasColumn('leave_policy_mappings', 'role_id');
+      
+      let query = db('leave_policy_mappings as lpm')
         .join('leave_policies as lp', 'lpm.leave_policy_id', 'lp.id')
-        .leftJoin('roles as r', 'lpm.role_id', 'r.id')
         .leftJoin('departments as d', 'lpm.department_id', 'd.id')
         .leftJoin('designations as dg', 'lpm.designation_id', 'dg.id')
         .where('lpm.organization_id', ctx.organizationId)
-        .whereNull('lpm.deleted_at')
-        .select(
+        .whereNull('lpm.deleted_at');
+
+      if (hasRoleIdCol) {
+        query = query
+          .leftJoin('roles as r', 'lpm.role_id', 'r.id')
+          .select(
+            'lpm.*',
+            'lp.name as policy_name',
+            'r.name as role_name',
+            'd.name as department_name',
+            'dg.name as designation_name'
+          );
+      } else {
+        query = query.select(
           'lpm.*',
           'lp.name as policy_name',
-          'r.name as role_name',
           'd.name as department_name',
           'dg.name as designation_name'
         );
+      }
+
+      const mappings = await query;
       res.json({ success: true, data: mappings });
     } catch (error) {
       this.handleError(error, res);
@@ -1464,18 +1475,6 @@ export class LeaveController {
   async getEncashmentSettings(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-
-      try {
-        const migrationsDir = path.resolve(process.cwd(), '../database/migrations');
-        if (fs.existsSync(migrationsDir)) {
-          await db.migrate.latest({
-            directory: migrationsDir,
-            loadExtensions: ['.ts']
-          });
-        }
-      } catch (migErr) {
-        console.error('Programmatic migration for leave_encashment_settings failed:', migErr);
-      }
 
       await this.ensureLeaveEncashmentSchema(db);
 
@@ -2046,258 +2045,6 @@ export class LeaveController {
       });
 
       res.json({ success: true, message: 'Request marked as Paid and leave balance adjusted successfully.' });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  async approveLeave(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const { applicationId } = req.params;
-      const { comment } = req.body;
-      const appId = parseInt(applicationId, 10);
-
-      try {
-        await this.approvalService.approveLeave(ctx, appId, ctx.userId, comment);
-      } catch (e) {
-        await (this.applicationRepo as any).db('leave_applications')
-          .where('id', appId)
-          .update({
-            status: 'approved',
-            updated_at: new Date()
-          });
-      }
-
-      await (this.applicationRepo as any).db('leave_applications')
-        .where('id', appId)
-        .update({
-          status: 'approved',
-          updated_at: new Date()
-        });
-
-      // Send in-app notification to employee using Master Template
-      try {
-        const app = await (this.applicationRepo as any).db('leave_applications').where('id', appId).first();
-        if (app && app.employee_id) {
-          const emp = await (this.applicationRepo as any).db('employees').where('id', app.employee_id).first();
-          if (emp) {
-            const empUser = await (this.applicationRepo as any).db('users').whereRaw('LOWER(email) = ?', [emp.email.toLowerCase()]).first();
-            if (empUser) {
-              const empName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || 'Employee';
-              const empCode = emp.employee_code || `EMP${emp.id}`;
-              const lt = app.leave_type_id ? await (this.applicationRepo as any).db('leave_types').where('id', app.leave_type_id).first() : null;
-              const leaveTypeName = lt?.name || 'Leave';
-              const startDate = app.start_date ? new Date(app.start_date).toISOString().slice(0, 10) : '';
-              const endDate = app.end_date ? new Date(app.end_date).toISOString().slice(0, 10) : '';
-              const approverUser = await (this.applicationRepo as any).db('users').where('id', ctx.userId).first();
-              const approverName = approverUser ? `${approverUser.first_name || ''} ${approverUser.last_name || ''}`.trim() || approverUser.email : 'Manager';
-
-              const tmpl = await (this.applicationRepo as any).db('notification_templates')
-                .where('organization_id', ctx.organizationId)
-                .where(function(this: any) {
-                  this.where('id', 10).orWhere('template_code', 'LEAVE_APPROVED').orWhere('template_name', 'Leave Request Approved');
-                })
-                .first().catch(() => null);
-
-              let subject = tmpl?.subject || `Your {{leave_type}} Application Has Been Approved! ✅`;
-              let body = tmpl?.email_notification || `Hi {{employee_name}},\n\nGood news! Your {{leave_type}} application from {{start_date}} to {{end_date}} has been APPROVED by {{manager_name}}.\n\n• Status: APPROVED ✅\n• Leave Type: {{leave_type}}\n• Dates: {{start_date}} to {{end_date}}\n\nRegards,\nApponext HR Team`;
-
-              const replacements: Record<string, string> = {
-                employee_name: empName,
-                employee_code: empCode,
-                manager_name: approverName,
-                leave_type: leaveTypeName,
-                start_date: startDate,
-                end_date: endDate,
-                company_name: 'Apponext'
-              };
-
-              for (const [key, val] of Object.entries(replacements)) {
-                const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-                subject = subject.replace(regex, val);
-                body = body.replace(regex, val);
-              }
-
-              await (this.applicationRepo as any).db('notifications').insert({
-                uuid: uuidv4(),
-                organization_id: ctx.organizationId,
-                event_code: 'LEAVE_APPROVED',
-                template_id: tmpl?.id || 10,
-                recipient_id: empUser.id,
-                channels: JSON.stringify(['inapp', 'email']),
-                subject_line: subject,
-                body_text: body,
-                variables: JSON.stringify(replacements),
-                status: 'sent',
-                priority: 'normal',
-                created_by: ctx.userId,
-                updated_by: ctx.userId,
-                created_at: new Date(),
-                updated_at: new Date()
-              }).catch(() => {});
-            }
-          }
-        }
-      } catch (e) {}
-
-      res.json({ success: true, message: 'Leave application approved successfully' });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  async rejectLeave(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const { applicationId } = req.params;
-      const { reason } = req.body;
-      const appId = parseInt(applicationId, 10);
-
-      await (this.applicationRepo as any).db('leave_applications')
-        .where('id', appId)
-        .update({
-          status: 'rejected',
-          rejection_reason: reason || 'Rejected by approver',
-          updated_at: new Date()
-        });
-
-      // Send in-app notification to employee using Master Template
-      try {
-        const app = await (this.applicationRepo as any).db('leave_applications').where('id', appId).first();
-        if (app && app.employee_id) {
-          const emp = await (this.applicationRepo as any).db('employees').where('id', app.employee_id).first();
-          if (emp) {
-            const empUser = await (this.applicationRepo as any).db('users').whereRaw('LOWER(email) = ?', [emp.email.toLowerCase()]).first();
-            if (empUser) {
-              const empName = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || 'Employee';
-              const empCode = emp.employee_code || `EMP${emp.id}`;
-              const lt = app.leave_type_id ? await (this.applicationRepo as any).db('leave_types').where('id', app.leave_type_id).first() : null;
-              const leaveTypeName = lt?.name || 'Leave';
-              const startDate = app.start_date ? new Date(app.start_date).toISOString().slice(0, 10) : '';
-              const endDate = app.end_date ? new Date(app.end_date).toISOString().slice(0, 10) : '';
-              const rejectorUser = await (this.applicationRepo as any).db('users').where('id', ctx.userId).first();
-              const managerName = rejectorUser ? `${rejectorUser.first_name || ''} ${rejectorUser.last_name || ''}`.trim() || rejectorUser.email : 'Manager';
-
-              const tmpl = await (this.applicationRepo as any).db('notification_templates')
-                .where('organization_id', ctx.organizationId)
-                .where(function(this: any) {
-                  this.where('id', 11).orWhere('template_code', 'LEAVE_REJECTED').orWhere('template_name', 'Leave Request Rejected');
-                })
-                .first().catch(() => null);
-
-              let subject = tmpl?.subject || `Update on Your {{leave_type}} Request`;
-              let body = tmpl?.email_notification || `Hi {{employee_name}},\n\nYour {{leave_type}} application for {{start_date}} to {{end_date}} could not be approved at this time.\n\n• Status: REJECTED\n• Reason: {{rejection_reason}}\n\nPlease contact your manager {{manager_name}} if you have questions.`;
-
-              const replacements: Record<string, string> = {
-                employee_name: empName,
-                employee_code: empCode,
-                manager_name: managerName,
-                leave_type: leaveTypeName,
-                start_date: startDate,
-                end_date: endDate,
-                rejection_reason: reason || 'Not specified',
-                company_name: 'Apponext'
-              };
-
-              for (const [key, val] of Object.entries(replacements)) {
-                const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-                subject = subject.replace(regex, val);
-                body = body.replace(regex, val);
-              }
-
-              await (this.applicationRepo as any).db('notifications').insert({
-                uuid: uuidv4(),
-                organization_id: ctx.organizationId,
-                event_code: 'LEAVE_REJECTED',
-                template_id: tmpl?.id || 11,
-                recipient_id: empUser.id,
-                channels: JSON.stringify(['inapp', 'email']),
-                subject_line: subject,
-                body_text: body,
-                variables: JSON.stringify(replacements),
-                status: 'sent',
-                priority: 'normal',
-                created_by: ctx.userId,
-                updated_by: ctx.userId,
-                created_at: new Date(),
-                updated_at: new Date()
-              }).catch(() => {});
-            }
-          }
-        }
-      } catch (e) {}
-
-      res.json({ success: true, message: 'Leave application rejected successfully' });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  async getPendingApprovals(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const items = await (this.applicationRepo as any).db('leave_applications as la')
-        .leftJoin('employees as e', 'la.employee_id', 'e.id')
-        .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
-        .select(
-          'la.*',
-          'e.first_name',
-          'e.last_name',
-          'e.email',
-          'lt.leave_name',
-          'lt.leave_code'
-        )
-        .where('la.organization_id', ctx.organizationId)
-        .whereIn('la.status', ['submitted', 'pending_manager', 'pending_hr', 'pending'])
-        .orderBy('la.created_at', 'desc');
-
-      res.json({ success: true, data: items });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  async getProcessedApprovals(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const items = await (this.applicationRepo as any).db('leave_applications as la')
-        .leftJoin('employees as e', 'la.employee_id', 'e.id')
-        .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
-        .select(
-          'la.*',
-          'e.first_name',
-          'e.last_name',
-          'e.email',
-          'lt.leave_name',
-          'lt.leave_code'
-        )
-        .where('la.organization_id', ctx.organizationId)
-        .whereIn('la.status', ['approved', 'rejected', 'cancelled'])
-        .orderBy('la.updated_at', 'desc');
-
-      res.json({ success: true, data: items });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  async hrOverride(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const { applicationId } = req.params;
-      const { action } = req.body;
-      const appId = parseInt(applicationId, 10);
-      const targetStatus = action === 'reject' ? 'rejected' : 'approved';
-
-      await (this.applicationRepo as any).db('leave_applications')
-        .where('id', appId)
-        .update({
-          status: targetStatus,
-          updated_at: new Date()
-        });
-
-      res.json({ success: true, message: `Leave application status updated to ${targetStatus}` });
     } catch (error) {
       this.handleError(error, res);
     }

@@ -18,13 +18,15 @@ export class PayrollDeductionsRepository extends BaseRepository<PayrollDeduction
   }
 
   async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<any[]> {
+    // component_id references payroll_components (not the empty, dead
+    // salary_components table) and is nullable — rows carry their own
+    // component_name text label as a fallback when there's no catalog match.
     return this.query(ctx)
-      .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
+      .leftJoin('payroll_components', 'payroll_deductions.component_id', 'payroll_components.id')
       .where({ 'payroll_deductions.payroll_run_employee_id': payrollRunEmployeeId })
       .select(
         'payroll_deductions.*',
-        'salary_components.component_name',
-        'salary_components.component_code'
+        this.db.raw('COALESCE(payroll_deductions.component_name, payroll_components.name) as component_name')
       )
       .orderBy('payroll_deductions.created_at', 'asc');
   }

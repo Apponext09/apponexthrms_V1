@@ -5,37 +5,83 @@ export interface Employee {
   id: number;
   uuid: string;
   organization_id: number;
+  organizationId?: number;
+  company_id?: number | null;
+  companyId?: number | null;
   employee_code: string;
+  employeeCode?: string;
   status: 'candidate' | 'onboarding' | 'probation' | 'active' | 'notice' | 'exit' | 'alumni';
   first_name: string;
+  firstName?: string;
   middle_name: string | null;
+  middleName?: string | null;
   last_name: string;
+  lastName?: string;
   email: string;
   phone: string | null;
   mobile: string | null;
   date_of_birth: string | null;
+  dateOfBirth?: string | null;
   gender: 'male' | 'female' | 'other' | null;
   blood_group: string | null;
+  bloodGroup?: string | null;
   nationality: string | null;
   aadhar_number: string | null;
+  aadharNumber?: string | null;
   pan_number: string | null;
+  panNumber?: string | null;
   passport_number: string | null;
+  passportNumber?: string | null;
   current_designation_id: number | null;
+  currentDesignationId?: number | null;
   current_department_id: number | null;
+  currentDepartmentId?: number | null;
   current_branch_id: number | null;
+  currentBranchId?: number | null;
   current_location_id: number | null;
+  currentLocationId?: number | null;
   reporting_manager_id: number | null;
+  reportingManagerId?: number | null;
   cost_center_id: number | null;
+  costCenterId?: number | null;
   employment_type: 'full_time' | 'part_time' | 'contract' | 'internship';
+  employmentType?: 'full_time' | 'part_time' | 'contract' | 'internship';
   date_of_joining: string;
+  dateOfJoining?: string;
   date_of_confirmation: string | null;
+  dateOfConfirmation?: string | null;
   probation_end_date: string | null;
+  probationEndDate?: string | null;
   created_by: number;
+  createdBy?: number;
   updated_by: number;
+  updatedBy?: number;
   created_at: string;
+  createdAt?: string;
   updated_at: string;
+  updatedAt?: string;
   deleted_at: string | null;
+  deletedAt?: string | null;
   department?: string | null;
+  departmentName?: string | null;
+  department_name?: string | null;
+  designation?: string | null;
+  designationName?: string | null;
+  designation_name?: string | null;
+  jobTitle?: string | null;
+  location?: string | null;
+  locationName?: string | null;
+  location_name?: string | null;
+  branchName?: string | null;
+  company?: string | null;
+  companyName?: string | null;
+  company_name?: string | null;
+  reportingManager?: string | null;
+  reportingManagerEmail?: string | null;
+  reporting_manager_name?: string | null;
+  accessRole?: string | null;
+  hrManager?: string | null;
+  hrManagerEmail?: string | null;
   custom_id_card?: string | null;
 }
 
@@ -50,6 +96,16 @@ export class EmployeeRepository extends BaseRepository<Employee> {
    */
   async getByCode(ctx: TenantContext, code: string): Promise<Employee | null> {
     return this.query(ctx).where('employee_code', code).first() as Promise<Employee | null>;
+  }
+
+  /**
+   * Get employee by email within organization
+   */
+  async getByEmail(ctx: TenantContext, email: string): Promise<Employee | null> {
+    if (!email) return null;
+    return this.query(ctx)
+      .whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()])
+      .first() as Promise<Employee | null>;
   }
 
   /**
@@ -168,14 +224,61 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         (employee as any).reporting_manager_name = `${fName} ${lName}`.trim();
       }
     }
-    if (!(employee as any).reportingManager) {
-      (employee as any).reportingManager = 'Narendra Gaikwad (Senior Manager)';
-      (employee as any).reportingManagerEmail = 'gaikwadnarendra316@gmail.com';
-    }
-    (employee as any).hrManager = 'John Doe (HR Manager)';
-    (employee as any).hrManagerEmail = 'john.doe@example.com';
+
+    // Attach assigned salary structure and pay slab
+    try {
+      const struct = await this.db('salary_structures as ss')
+        .leftJoin('payroll_slabs as ps', 'ss.slab_id', 'ps.id')
+        .where('ss.employee_id', employee.id)
+        .whereNull('ss.deleted_at')
+        .orderBy('ss.id', 'desc')
+        .select('ss.slab_id', 'ps.name as slab_name', 'ss.gross_monthly', 'ss.annual_ctc')
+        .first();
+
+      if (struct) {
+        const sId = struct.slab_id || (struct as any).slabId;
+        const sName = struct.slab_name || (struct as any).slabName;
+        (employee as any).salarySlabId = sId;
+        (employee as any).salary_slab_id = sId;
+        (employee as any).salarySlabName = sName;
+        (employee as any).salary_slab_name = sName;
+        (employee as any).payrollSlab = sName;
+        (employee as any).payroll_slab = sName;
+        (employee as any).payroll_slab_name = sName;
+      }
+    } catch {}
 
     return employee;
+  }
+
+  /**
+   * Sensitive statutory/financial identifiers that must never appear in a
+   * list/directory response — this endpoint is reachable by any
+   * authenticated org member (e.g. the Assign Shift employee picker), not
+   * just HR/admin roles, and super.list() otherwise returns every column on
+   * the employees table with no projection. A single-employee fetch
+   * (getById / getWithDetails) is intentionally left untouched since that
+   * path is used by employees viewing/editing their own profile and by HR
+   * screens that legitimately need this data.
+   */
+  private static readonly LIST_VIEW_SENSITIVE_FIELDS = [
+    'aadhar_number', 'aadharNumber',
+    'pan_number', 'panNumber', 'pan',
+    'passport_number', 'passportNumber',
+    'bank_name', 'bankName',
+    'account_no', 'accountNo',
+    'ifsc_code', 'ifscCode',
+    'uan_no', 'uanNo',
+    'esic_no', 'esicNo',
+    'pf_no', 'pfNo',
+  ];
+
+  private stripSensitiveListFields(items: any[]): void {
+    for (const item of items) {
+      for (const field of EmployeeRepository.LIST_VIEW_SENSITIVE_FIELDS) {
+        delete item[field];
+      }
+    }
   }
 
   override async list(
@@ -183,7 +286,21 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     options: ListQueryOptions = {},
     includeDeleted?: any
   ): Promise<any> {
-    const result = await super.list(ctx, options, includeDeleted);
+    let effectiveCtx = { ...ctx };
+    if (!effectiveCtx.companyId) {
+      const parentComp = await this.db('company')
+        .where('organization_id', ctx.organizationId)
+        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
+        .whereNull('deleted_at')
+        .first();
+      if (parentComp) {
+        effectiveCtx.companyId = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
+      }
+    }
+
+    const result = await super.list(effectiveCtx, options, includeDeleted);
+
+
     
     if (!result.items || result.items.length === 0) {
       return result;
@@ -271,12 +388,23 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     // Map Organization / Company names
+    const compRows = await this.db('company')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .select('company_id', 'name');
+    const compMap = new Map<number, string>();
+    for (const c of compRows) {
+      compMap.set(Number((c as any).companyId || (c as any).company_id || (c as any).id), c.name);
+    }
+
     const orgRow = await this.db('organizations').where('id', ctx.organizationId).first('name');
-    const orgName = orgRow?.name || 'Main Company';
+    const defaultOrgName = orgRow?.name || 'Main Company';
     for (const item of result.items) {
-      (item as any).company = orgName;
-      (item as any).companyName = orgName;
-      (item as any).company_name = orgName;
+      const cId = Number(item.companyId || item.company_id);
+      const cName = compMap.get(cId) || defaultOrgName;
+      (item as any).company = cName;
+      (item as any).companyName = cName;
+      (item as any).company_name = cName;
     }
 
     // Map Manager names
@@ -295,6 +423,9 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     const employeeIds = result.items.map((item: any) => item.id);
+    const userMap = new Map<number, number>();
+    const roleMap = new Map<number, string>();
+
     if (employeeIds.length > 0) {
       const users = await this.db('users')
         .where('organization_id', ctx.organizationId)
@@ -302,7 +433,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .select('id', 'employee_id');
 
       if (users.length > 0) {
-        const userMap = new Map<number, number>();
         for (const u of users) {
           userMap.set(Number((u as any).employeeId || u.employee_id), Number(u.id));
         }
@@ -321,7 +451,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           team_lead: 2,
           employee: 1,
         };
-        const roleMap = new Map<number, string>();
         for (const ur of userRoles) {
           const uId = Number((ur as any).userId || ur.user_id);
           const currentRole = roleMap.get(uId);
@@ -331,23 +460,23 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             roleMap.set(uId, ur.code);
           }
         }
-
-        for (const item of result.items) {
-          const userId = userMap.get(Number(item.id));
-          if (userId) {
-            (item as any).accessRole = roleMap.get(userId) || 'employee';
-          } else {
-            (item as any).accessRole = 'employee';
-          }
-
-          const mId = item.reportingManagerId || item.reporting_manager_id;
-          const mInfo = mId ? mgrMap.get(Number(mId)) : null;
-          (item as any).reportingManager = mInfo ? mInfo.name : 'Narendra Gaikwad (Senior Manager)';
-          (item as any).reportingManagerEmail = mInfo ? mInfo.email : 'gaikwadnarendra316@gmail.com';
-          (item as any).hrManager = 'John Doe (HR Manager)';
-        }
       }
     }
+
+    for (const item of result.items) {
+      const userId = userMap.get(Number(item.id));
+      (item as any).accessRole = userId ? (roleMap.get(userId) || 'employee') : 'employee';
+
+      const mId = item.reportingManagerId || item.reporting_manager_id;
+      const mInfo = mId ? mgrMap.get(Number(mId)) : null;
+      if (mInfo) {
+        (item as any).reportingManager = mInfo.name;
+        (item as any).reportingManagerEmail = mInfo.email;
+        (item as any).reporting_manager_name = mInfo.name;
+      }
+    }
+
+    this.stripSensitiveListFields(result.items);
 
     return result;
   }

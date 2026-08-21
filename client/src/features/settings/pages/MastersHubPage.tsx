@@ -56,6 +56,7 @@ import { NotificationMergeCodeMasterForm } from '../components/NotificationMerge
 import { OfferTemplateMasterForm } from '../components/OfferTemplateMasterForm';
 import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
 import { EventMasterForm } from '../components/EventMasterForm';
+import { HolidayMasterForm } from '../components/HolidayMasterForm';
 
 import { OTRulePage } from '../components/ot-rules/OTRulePage';
 
@@ -137,10 +138,6 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
     { id: 'g1', code: 'GRD-L1', name: 'Grade L1 - Associate / Junior', description: 'Entry level workforce band', status: 'Active', createdAt: '2026-01-01' },
     { id: 'g2', code: 'GRD-L2', name: 'Grade L2 - Senior Specialist', description: 'Mid to senior individual contributor band', status: 'Active', createdAt: '2026-01-01' },
     { id: 'g3', code: 'GRD-L3', name: 'Grade L3 - Management & Lead', description: 'Team leads and department managers band', status: 'Active', createdAt: '2026-01-01' },
-  ],
-  holiday: [
-    { id: 'h1', code: 'HOL-NEWYEAR', name: 'New Year Day', description: 'National Holiday (Jan 01)', status: 'Active', createdAt: '2026-01-01' },
-    { id: 'h2', code: 'HOL-IND', name: 'Independence Day', description: 'Gazetted National Holiday (Aug 15)', status: 'Active', createdAt: '2026-01-01' },
   ],
   'employee-status': [
     { id: 'es1', code: 'ST-ACT', name: 'Active', description: 'Employee currently employed and active', status: 'Active', createdAt: '2026-01-01' },
@@ -405,6 +402,8 @@ export function MastersHubPage() {
         />
       ) : selectedMasterId === 'employee-status' ? (
         <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'holiday' ? (
+        <HolidayMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
         <GeneralShiftMasterForm
           onCancel={() => handleSelectMaster('company')}

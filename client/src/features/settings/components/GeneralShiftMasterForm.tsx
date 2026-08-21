@@ -264,6 +264,16 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
       return;
     }
 
+    if (!isFlexible && startTime && endTime && startTime === endTime) {
+      setSubmitError('Shift end time must be different from the start time.');
+      return;
+    }
+
+    // A shift ending before it starts is only valid as a deliberate
+    // overnight shift — the server now rejects end<start unless this is
+    // sent explicitly (see ShiftService.validateShiftFields).
+    const computedIsNightShift = !isFlexible && !!startTime && !!endTime && endTime < startTime;
+
     setSubmitting(true);
     try {
       let finalShiftName = shiftName.trim();
@@ -321,6 +331,8 @@ export function GeneralShiftMasterForm({ onCancel, onSave }: GeneralShiftMasterF
         start_time: !isFlexible && startTime ? `${startTime}:00` : null,
         endTime: !isFlexible && endTime ? `${endTime}:00` : null,
         end_time: !isFlexible && endTime ? `${endTime}:00` : null,
+        isNightShift: computedIsNightShift,
+        is_night_shift: computedIsNightShift,
         checkInTime: startTime,
         totalTime,
         logBreakTime,

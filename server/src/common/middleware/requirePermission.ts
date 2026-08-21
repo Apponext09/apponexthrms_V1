@@ -37,12 +37,8 @@ async function permissionCheckAsync(
     return;
   }
 
-  const userRole = String(
-    (req.user as any)?.role || (req.user as any)?.role_code || (req.user as any)?.roleCode || ''
-  ).toLowerCase();
-
-  // Superadmins, Admins & HR Managers bypass permission check for system configuration
-  if (['superadmin', 'admin', 'org_admin', 'organization_admin', 'hr_admin', 'hr_manager'].includes(userRole)) {
+  const roles = req.user?.roles || (req.ctx as any)?.roles || [];
+  if (roles.includes('organization_admin') || roles.includes('super_admin') || roles.includes('admin') || roles.includes('hr_admin')) {
     next();
     return;
   }

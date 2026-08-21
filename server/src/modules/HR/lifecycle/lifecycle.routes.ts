@@ -9,6 +9,7 @@ router.use(authenticate, resolveTenant);
 
 router.get('/employees', lifecycleController.getEmployeeLifecycleSummaries);
 router.get('/employees/:id', lifecycleController.getEmployeeLifecycleDetails);
+router.get('/managers', lifecycleController.getManagers);
 router.post('/transfers', lifecycleController.transferEmployee);
 router.post('/onboarding/:employeeId', lifecycleController.saveOnboardingDetails);
 router.post('/offboarding/:employeeId', lifecycleController.saveOffboardingDetails);

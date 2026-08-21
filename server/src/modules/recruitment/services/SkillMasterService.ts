@@ -1,0 +1,295 @@
+import type { TenantContext } from '../../../db/types';
+import { getKnex } from '../../../db/knex';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface SkillMatchResult {
+  matched: string[];
+  missing: string[];
+  matchPercentage: number;
+}
+
+const DEFAULT_SKILL_MASTER: Record<string, { category: string; aliases: string[] }> = {
+  'JavaScript': {
+    category: 'Frontend / Fullstack',
+    aliases: ['js', 'ecmascript', 'es6', 'es2015', 'es2020', 'vanilla js', 'javascript']
+  },
+  'TypeScript': {
+    category: 'Programming Languages',
+    aliases: ['ts', 'typescript']
+  },
+  'Node.js': {
+    category: 'Backend',
+    aliases: ['nodejs', 'node', 'node.js', 'express', 'express.js', 'expressjs', 'nestjs', 'nest.js']
+  },
+  'React': {
+    category: 'Frontend',
+    aliases: ['react', 'reactjs', 'react.js', 'nextjs', 'next.js', 'redux']
+  },
+  'Vue.js': {
+    category: 'Frontend',
+    aliases: ['vue', 'vuejs', 'vue.js', 'nuxt', 'nuxtjs']
+  },
+  'Angular': {
+    category: 'Frontend',
+    aliases: ['angular', 'angularjs', 'angular.js', 'angular 2+']
+  },
+  'Python': {
+    category: 'Programming Languages',
+    aliases: ['python', 'python3', 'py', 'django', 'flask', 'fastapi']
+  },
+  'Java': {
+    category: 'Programming Languages',
+    aliases: ['java', 'spring', 'spring boot', 'j2ee', 'hibernate']
+  },
+  'C# / .NET': {
+    category: 'Programming Languages',
+    aliases: ['c#', '.net', 'asp.net', 'dotnet', 'dotnet core', 'csharp']
+  },
+  'PHP': {
+    category: 'Backend',
+    aliases: ['php', 'laravel', 'symfony', 'codeigniter', 'wordpress']
+  },
+  'PostgreSQL': {
+    category: 'Database',
+    aliases: ['postgres', 'postgresql', 'psql', 'postgresql db', 'postgres db']
+  },
+  'MySQL': {
+    category: 'Database',
+    aliases: ['mysql', 'mariadb', 'my sql', 'mysql db']
+  },
+  'MongoDB': {
+    category: 'Database',
+    aliases: ['mongo', 'mongodb', 'mongoose', 'nosql']
+  },
+  'Redis': {
+    category: 'Database / Caching',
+    aliases: ['redis', 'redis cache', 'in-memory db']
+  },
+  'REST API': {
+    category: 'Architecture',
+    aliases: ['rest', 'restful', 'rest api', 'rest apis', 'restful api', 'web services']
+  },
+  'GraphQL': {
+    category: 'Architecture',
+    aliases: ['graphql', 'apollo', 'relay']
+  },
+  'Docker': {
+    category: 'DevOps / Cloud',
+    aliases: ['docker', 'docker container', 'containerization', 'dockerfile', 'docker-compose']
+  },
+  'Kubernetes': {
+    category: 'DevOps / Cloud',
+    aliases: ['k8s', 'kubernetes', 'helm']
+  },
+  'AWS': {
+    category: 'Cloud',
+    aliases: ['amazon web services', 'aws', 'aws cloud', 'ec2', 's3', 'lambda', 'cloudformation']
+  },
+  'Azure': {
+    category: 'Cloud',
+    aliases: ['azure', 'microsoft azure', 'azure devops', 'azure cloud']
+  },
+  'Git': {
+    category: 'Tools',
+    aliases: ['git', 'github', 'gitlab', 'bitbucket', 'version control']
+  },
+  'CI/CD': {
+    category: 'DevOps',
+    aliases: ['ci/cd', 'github actions', 'jenkins', 'gitlab ci', 'continuous integration']
+  },
+  'HTML / CSS': {
+    category: 'Frontend',
+    aliases: ['html', 'html5', 'css', 'css3', 'sass', 'scss', 'tailwind', 'tailwindcss', 'bootstrap']
+  },
+  'SQL': {
+    category: 'Database',
+    aliases: ['sql', 'structured query language', 'rdbms', 'relational database']
+  },
+  'HR Management': {
+    category: 'HR / Operations',
+    aliases: ['human resources', 'hrms', 'talent acquisition', 'payroll', 'recruitment', 'onboarding', 'hr operations']
+  },
+  'Sales & Marketing': {
+    category: 'Sales / Marketing',
+    aliases: ['b2b sales', 'lead generation', 'crm', 'digital marketing', 'seo', 'inbound marketing', 'sales']
+  },
+  'Accounting & Finance': {
+    category: 'Finance',
+    aliases: ['tally', 'quickbooks', 'gst', 'taxation', 'financial auditing', 'ledger', 'accounting', 'balance sheet']
+  }
+};
+
+export class SkillMasterService {
+  private cache: Map<string, string> = new Map(); // alias lower-case -> canonical name
+
+  constructor() {
+    this.populateStaticCache();
+  }
+
+  private populateStaticCache() {
+    for (const [canonical, data] of Object.entries(DEFAULT_SKILL_MASTER)) {
+      this.cache.set(canonical.toLowerCase(), canonical);
+      for (const alias of data.aliases) {
+        this.cache.set(alias.toLowerCase().trim(), canonical);
+      }
+    }
+  }
+
+  /**
+   * Seed default skills and aliases into database for an organization if empty
+   */
+  async ensureSkillsSeeded(ctx: TenantContext): Promise<void> {
+    try {
+      const db = getKnex();
+      const existing = await db('skills').where('organization_id', ctx.organizationId).first();
+      if (!existing) {
+        for (const [name, data] of Object.entries(DEFAULT_SKILL_MASTER)) {
+          const [skillId] = await db('skills').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            name,
+            category: data.category,
+          });
+
+          const aliasRows = data.aliases.map((alias) => ({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            skill_id: skillId,
+            alias,
+          }));
+
+          if (aliasRows.length > 0) {
+            await db('skill_aliases').insert(aliasRows);
+          }
+        }
+      }
+    } catch (err) {
+      // Non-blocking fallback to in-memory static cache
+      console.warn('[SkillMasterService] DB seed notice:', (err as any)?.message);
+    }
+  }
+
+  /**
+   * Normalize any skill text / alias to its canonical skill name
+   */
+  normalizeSkill(skill: string): string {
+    if (!skill) return '';
+    const clean = skill.trim().toLowerCase();
+    
+    // Exact match in cache
+    if (this.cache.has(clean)) {
+      return this.cache.get(clean)!;
+    }
+
+    // Substring / word boundary check
+    for (const [alias, canonical] of this.cache.entries()) {
+      if (clean === alias || clean.includes(alias) || alias.includes(clean)) {
+        if (alias.length >= 3 || clean.length >= 3) {
+          return canonical;
+        }
+      }
+    }
+
+    // Capitalize first letters as fallback
+    return skill.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
+  /**
+   * Normalize an array of skills, de-duplicating canonical matches
+   */
+  normalizeSkillList(skills: string[] | string | null | undefined): string[] {
+    if (!skills) return [];
+    const list = Array.isArray(skills) 
+      ? skills 
+      : String(skills).split(/[,|\n\r]+/).map(s => s.trim()).filter(Boolean);
+
+    const canonicalSet = new Set<string>();
+    for (const s of list) {
+      if (s) {
+        canonicalSet.add(this.normalizeSkill(s));
+      }
+    }
+    return Array.from(canonicalSet);
+  }
+
+  /**
+   * Compare required skills with candidate skills using canonical aliases
+   */
+  matchSkills(requiredSkills: string[], candidateSkills: string[]): SkillMatchResult {
+    const normRequired = this.normalizeSkillList(requiredSkills);
+    const normCandidate = this.normalizeSkillList(candidateSkills);
+
+    if (normRequired.length === 0) {
+      return {
+        matched: normCandidate,
+        missing: [],
+        matchPercentage: 100,
+      };
+    }
+
+    const candidateSet = new Set(normCandidate.map(s => s.toLowerCase()));
+    const matched: string[] = [];
+    const missing: string[] = [];
+
+    for (const req of normRequired) {
+      const reqLower = req.toLowerCase();
+      let isMatched = candidateSet.has(reqLower);
+
+      if (!isMatched) {
+        // Check partial string containment
+        for (const cand of normCandidate) {
+          const candLower = cand.toLowerCase();
+          if (candLower.includes(reqLower) || reqLower.includes(candLower)) {
+            isMatched = true;
+            break;
+          }
+        }
+      }
+
+      if (isMatched) {
+        matched.push(req);
+      } else {
+        missing.push(req);
+      }
+    }
+
+    const matchPercentage = Math.round((matched.length / normRequired.length) * 100);
+
+    return {
+      matched,
+      missing,
+      matchPercentage: Math.min(100, Math.max(0, matchPercentage)),
+    };
+  }
+
+  /**
+   * List all skills and their aliases
+   */
+  async listSkills(ctx: TenantContext): Promise<any[]> {
+    const db = getKnex();
+    await this.ensureSkillsSeeded(ctx);
+
+    const skills = await db('skills')
+      .where('organization_id', ctx.organizationId)
+      .orWhereNull('organization_id')
+      .orderBy('name', 'asc');
+
+    const aliases = await db('skill_aliases')
+      .where('organization_id', ctx.organizationId)
+      .orWhereNull('organization_id');
+
+    const aliasMap = new Map<number, string[]>();
+    for (const a of aliases) {
+      const list = aliasMap.get(a.skill_id) || [];
+      list.push(a.alias);
+      aliasMap.set(a.skill_id, list);
+    }
+
+    return skills.map((s) => ({
+      ...s,
+      aliases: aliasMap.get(s.id) || [],
+    }));
+  }
+}
+
+export const skillMasterService = new SkillMasterService();

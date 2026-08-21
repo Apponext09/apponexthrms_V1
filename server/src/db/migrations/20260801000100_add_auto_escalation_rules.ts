@@ -12,11 +12,10 @@ export async function up(knex: Knex): Promise<void> {
     }
   }
 
-  // 2. Modify status enum in leave_applications to include 'escalated'
+  // 2. Modify status column to VARCHAR(50) to support all statuses without truncation
   await knex.raw(`
     ALTER TABLE leave_applications 
-    MODIFY COLUMN status ENUM('draft', 'submitted', 'pending_manager', 'pending_hr', 'pending', 'approved', 'rejected', 'cancelled', 'withdrawn', 'pending_hr_override', 'escalated') 
-    DEFAULT 'draft'
+    MODIFY COLUMN status VARCHAR(50) DEFAULT 'draft'
   `);
 }
 

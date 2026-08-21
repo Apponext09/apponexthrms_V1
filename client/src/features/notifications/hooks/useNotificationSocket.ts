@@ -12,12 +12,17 @@ export const useNotificationSocket = () => {
       return socketInstance;
     }
 
-    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || 'http://127.0.0.1:5000';
+    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
     socketInstance = io(`${socketUrl}/notifications`, {
+      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: 3,
+    });
+
+    socketInstance.on('connect_error', () => {
+      // Gracefully silence socket connection errors when socket server is unattached
     });
 
     // Listen for new notifications

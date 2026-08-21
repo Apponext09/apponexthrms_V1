@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 /**
  * Migration: Add source_candidate_id and source_application_id to employees table

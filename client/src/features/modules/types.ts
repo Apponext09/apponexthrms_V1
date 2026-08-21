@@ -1,3 +1,4 @@
+import { CEO_MODULES } from './ceo_modules/ceo';
 import { HR_MODULES } from './hr_modules/hr';
 import { MANAGER_MODULES } from './manager_modules/manager';
 import { TL_MODULES } from './tl_modules/tl';
@@ -13,7 +14,7 @@ export interface ModuleNode {
   children?: ModuleNode[];
 }
 
-export type RoleType = 'hr' | 'manager' | 'tl' | 'emp';
+export type RoleType = 'ceo' | 'hr' | 'manager' | 'tl' | 'emp';
 
 export interface RoleModulesMap {
   [nodeId: string]: boolean;
@@ -22,6 +23,7 @@ export interface RoleModulesMap {
 export type ModulesStateMap = Record<RoleType, RoleModulesMap>;
 
 export const ROLE_MODULES: Record<RoleType, ModuleNode[]> = {
+  ceo: CEO_MODULES,
   hr: HR_MODULES,
   manager: MANAGER_MODULES,
   tl: TL_MODULES,
@@ -29,6 +31,12 @@ export const ROLE_MODULES: Record<RoleType, ModuleNode[]> = {
 };
 
 export const ROLE_LABELS: Record<RoleType, { title: string; subtitle: string; iconName: string; color: string }> = {
+  ceo: {
+    title: 'CEO / Admin',
+    subtitle: 'Executive Oversight, Strategic KPIs, Org Governance & System Masters',
+    iconName: 'ShieldCheck',
+    color: 'bg-amber-600 text-white',
+  },
   hr: {
     title: 'HR',
     subtitle: 'Human Resources, Recruitment, Payroll & Compliance',
@@ -74,6 +82,7 @@ export function getDefaultStateForRole(role: RoleType): RoleModulesMap {
 
 export function getDefaultModulesState(): ModulesStateMap {
   return {
+    ceo: getDefaultStateForRole('ceo'),
     hr: getDefaultStateForRole('hr'),
     manager: getDefaultStateForRole('manager'),
     tl: getDefaultStateForRole('tl'),
@@ -87,6 +96,7 @@ export function loadModulesState(): ModulesStateMap {
     if (!raw) return getDefaultModulesState();
     const parsed = JSON.parse(raw);
     return {
+      ceo: { ...getDefaultStateForRole('ceo'), ...(parsed.ceo || {}) },
       hr: { ...getDefaultStateForRole('hr'), ...(parsed.hr || {}) },
       manager: { ...getDefaultStateForRole('manager'), ...(parsed.manager || {}) },
       tl: { ...getDefaultStateForRole('tl'), ...(parsed.tl || {}) },

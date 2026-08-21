@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Filter } from 'lucide-react';
 import { AttendanceReportFilter } from '../components/AttendanceReportFilter';
 import { AttendanceReportTable } from '../components/AttendanceReportTable';
 import { AttendanceVisualization } from '../components/AttendanceVisualization';
@@ -11,39 +11,41 @@ import {
   useAttendanceReportQuery,
 } from '../hooks/useAttendanceReports';
 
+const getTodayStr = () => new Date().toISOString().split('T')[0];
+const get14DaysAgoStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  return d.toISOString().split('T')[0];
+};
+
+const defaultFilters: AttendanceReportFilterParams = {
+  companies: [],
+  locations: [],
+  departments: [],
+  reportingOfficers: [],
+  employees: [],
+  status: 'active',
+  fromDate: get14DaysAgoStr(),
+  toDate: getTodayStr(),
+  isTabularView: true,
+  workType: 'choose',
+  statusFilters: {
+    present: true,
+    leave: true,
+    absent: true,
+    expected: true,
+    lateMark: false,
+    shortWorkingHour: false,
+    breakLog: true,
+    halfDay: true,
+  },
+};
+
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 
-  const getTodayStr = () => new Date().toISOString().split('T')[0];
-  const get14DaysAgoStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 14);
-    return d.toISOString().split('T')[0];
-  };
-
-  // Initial Filter State (Auto-fetches database attendance records on load)
-  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>({
-    companies: [],
-    locations: [],
-    departments: [],
-    reportingOfficers: [],
-    employees: [],
-    status: 'active',
-    fromDate: get14DaysAgoStr(),
-    toDate: getTodayStr(),
-    isTabularView: true,
-    workType: 'choose',
-    statusFilters: {
-      present: true,
-      leave: true,
-      absent: true,
-      expected: true,
-      lateMark: false,
-      shortWorkingHour: false,
-      breakLog: true,
-      halfDay: true,
-    },
-  });
+  // Initialize with defaultFilters so data is fetched and displayed directly on page load.
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>(defaultFilters);
 
   const { data: fetchedRows, isLoading: isSubmitting, isError } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
@@ -65,7 +67,7 @@ export function AttendanceReportsPage() {
               Attendance Reports
             </h1>
             <p className="text-xs text-muted-foreground mt-1">
-              Live attendance time log report fetched directly from database attendance records.
+              Select company and filter criteria to generate database attendance records.
             </p>
           </div>
         </div>
@@ -86,7 +88,7 @@ export function AttendanceReportsPage() {
               Could not load attendance report data. Please check your connection and try again.
             </div>
           )}
-          {currentFilters?.isTabularView ? (
+          {currentFilters.isTabularView ? (
             <AttendanceReportTable
               data={reportRows}
               onOpenTimeline={(row) => setSelectedTimelineRow(row)}

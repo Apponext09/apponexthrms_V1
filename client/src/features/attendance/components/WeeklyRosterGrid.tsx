@@ -260,8 +260,8 @@ export function WeeklyRosterGrid({
     const empName = `${fName} ${lName}`.trim() || 'Employee';
     const shiftName = shift.shiftName || shift.shift_name || 'Roster Shift';
 
-    try {
-      await assignShift({
+    const submit = (confirmReassignment: boolean) =>
+      assignShift({
         employeeId: emp.id,
         employeeIds: [emp.id],
         shiftId: shift.id,
@@ -269,11 +269,31 @@ export function WeeklyRosterGrid({
         assignmentStartDate: dateStr,
         effectiveUntil: dateStr,
         isCurrent: true,
+        confirmReassignment,
       });
+
+    try {
+      await submit(false);
       showToast.success('Shift Assigned', `Assigned ${empName} to ${shiftName} for ${dateStr}`);
       onRefreshAssignments();
     } catch (err: any) {
-      showToast.error('Assignment Failed', err?.response?.data?.message || err?.message || 'Failed to assign shift');
+      const conflicts = err?.response?.data?.error?.details?.conflicts;
+      if (err?.response?.status === 409 && Array.isArray(conflicts) && conflicts.length > 0) {
+        const proceed = window.confirm(
+          `${empName} already has an active shift assignment that overlaps ${dateStr}. Assigning ${shiftName} will end it.\n\nProceed anyway?`
+        );
+        if (proceed) {
+          try {
+            await submit(true);
+            showToast.success('Shift Assigned', `Assigned ${empName} to ${shiftName} for ${dateStr}`);
+            onRefreshAssignments();
+          } catch (err2: any) {
+            showToast.error('Assignment Failed', err2?.response?.data?.message || err2?.message || 'Failed to assign shift');
+          }
+        }
+      } else {
+        showToast.error('Assignment Failed', err?.response?.data?.message || err?.message || 'Failed to assign shift');
+      }
     } finally {
       setSaving(false);
       setAssigningCell(null);

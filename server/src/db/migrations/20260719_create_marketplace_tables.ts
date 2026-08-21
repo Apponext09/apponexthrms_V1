@@ -18,7 +18,7 @@ export async function up(knex: Knex): Promise<void> {
     table.integer('trial_days').defaultTo(14);
     table.boolean('trial_enabled').defaultTo(true);
 
-    table.longText('features'); // JSON array
+    table.text('features'); // JSON array
     table.integer('max_users_allowed');
     table.integer('max_api_calls');
 
@@ -66,7 +66,7 @@ export async function up(knex: Knex): Promise<void> {
     table.integer('users_added').defaultTo(0);
     table.integer('users_limit');
 
-    table.longText('enabled_features'); // JSON object
+    table.text('enabled_features'); // JSON object
 
     table.boolean('auto_renew').defaultTo(true);
     table.string('payment_method_id', 100);
@@ -167,7 +167,7 @@ export async function up(knex: Knex): Promise<void> {
 
     table.enum('trial_status', ['active', 'converted', 'expired', 'cancelled']).defaultTo('active');
 
-    table.longText('features_enabled'); // JSON array
+    table.text('features_enabled'); // JSON array
 
     table.string('conversion_decision', 50);
     table.string('conversion_reason', 500);

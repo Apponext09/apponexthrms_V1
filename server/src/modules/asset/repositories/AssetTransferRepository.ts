@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, PaginatedList } from '../../../db/types';
 import type { AssetTransfer, AssetListQueryOptions } from '../asset.types';
 
@@ -39,22 +39,22 @@ export class AssetTransferRepository extends BaseRepository<AssetTransfer> {
 
   async create(ctx: TenantContext, data: Partial<AssetTransfer> & { requestedBy: number }): Promise<AssetTransfer> {
     const { v4: uuidv4 } = await import('uuid');
-    const [id] = await this.query(ctx).insert({
+    const [id] = await this.query(ctx).insert({ 
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       ...data,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<AssetTransfer>;
   }
 
   async update(ctx: TenantContext, id: number, data: Partial<AssetTransfer>): Promise<AssetTransfer> {
-    await this.query(ctx).where('id', id).update({
+    await this.query(ctx).where('id', id).update({ 
       ...data,
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<AssetTransfer>;
   }

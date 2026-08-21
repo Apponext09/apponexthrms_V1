@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { AiAnalysisModal } from '../components/AiAnalysisModal';
+import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
 
 const INITIAL_FILTERS = {
   trackerId: '',
@@ -244,6 +247,7 @@ export const ResumeBankPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const mapped = res.data.data.map((item: any) => ({
             id: item.id,
+            candidateId: item.candidateId || item.candidate_id || item.id,
             trackerId: item.trackerId || item.tracker_id || '-',
             name: item.candidateName || item.candidate_name || (item.firstName || item.first_name ? `${item.firstName || item.first_name || ''} ${item.lastName || item.last_name || ''}`.trim() : (item.name || '-')),
             dob: item.candidateDob || item.candidate_dob || '-',
@@ -260,8 +264,9 @@ export const ResumeBankPage: React.FC = () => {
             jobId: item.jobId || item.job_id || null,
             jobTitle: item.jobTitle || item.job_title || null,
             jobCode: item.jobCode || item.job_code || null,
+            atsScore: item.atsScore ?? item.ats_score ?? null,
+            jdMatchScore: item.jdMatchScore ?? item.jd_match_score ?? null,
             status: item.status || '-',
-            atsScore: item.ats_score !== undefined ? item.ats_score : item.atsScore,
             resumeUrl: item.resumeFileUrl || item.resume_file_url || item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
           }));
           setResumesData(mapped);
@@ -298,6 +303,10 @@ export const ResumeBankPage: React.FC = () => {
             total: item.totalRecords || item.total_records || 0,
             success: item.successCount || item.success_count || 0,
             failed: item.failedCount || item.failed_count || 0,
+            targetJobId: item.targetJobId || item.target_job_id || null,
+            atsPassedCount: item.atsPassedCount ?? item.ats_passed_count ?? 0,
+            jdMatchPassedCount: item.jdMatchPassedCount ?? item.jd_match_passed_count ?? 0,
+            aiShortlistedCount: item.aiShortlistedCount ?? item.ai_shortlisted_count ?? 0,
             status: item.status || '-'
           }));
           setLogsData(mappedLogs);
@@ -355,7 +364,9 @@ export const ResumeBankPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to run ATS scoring', err);
-        toast.error(err.response?.data?.error || 'Failed to run ATS scoring scan');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to run ATS scoring scan';
+        toast.error(msg);
       })
       .finally(() => setIsLoadingAts(false));
   };
@@ -547,37 +558,47 @@ export const ResumeBankPage: React.FC = () => {
 
   const handleBulkUpload = () => {
     if (!selectedExcelFile) {
-      toast.error('Please select an Excel or CSV file to upload.');
+      toast.error('Please select an Excel or CSV file (.xlsx, .xls, .csv) to upload.');
       return;
     }
 
+    setIsUploadingFiles(true);
     const formDataObj = new FormData();
     formDataObj.append('file', selectedExcelFile);
+    if (bulkJobId) {
+      formDataObj.append('jobId', bulkJobId);
+    }
 
     apiClient.post('/recruitment/resume-bank/bulk-upload', formDataObj, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
       .then(res => {
         if (res.data?.success) {
-          toast.success('Upload processing started successfully!');
+          toast.success(res.data?.message || 'Excel candidate data processed successfully!');
           setSelectedExcelFile(null);
           setActiveTab('logs');
           fetchLogs();
+          fetchResumes();
         } else {
           toast.error(res.data?.message || 'Failed to process bulk upload');
         }
       })
       .catch(err => {
         console.error('Failed to upload candidates', err);
-        toast.error('Failed to process bulk upload');
+        const errObj = err?.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err?.response?.data?.message || 'Failed to process bulk upload';
+        toast.error(msg);
+      })
+      .finally(() => {
+        setIsUploadingFiles(false);
       });
   };
 
   const handleExportResumes = () => {
-    const headers = ['Name', 'Date of Birth', 'Gender', 'Email ID', 'Contact Number', 'Qualification', 'Current Company', 'Total Experience'];
+    const headers = ['Name', 'Date of Birth', 'Gender', 'Email ID', 'Contact Number', 'Qualification', 'Current Company', 'Total Experience', 'ATS Score', 'JD Match Score'];
     const csvContent = [
       headers.join(','),
-      ...filteredData.map(c => `"${c.name}","${c.dob}","${c.gender}","${c.email}","${c.contact}","${c.qualification}","${c.company}","${c.experience}"`)
+      ...filteredData.map(c => `"${c.name}","${c.dob}","${c.gender}","${c.email}","${c.contact}","${c.qualification}","${c.company}","${c.experience}","${c.atsScore || '-'}","${c.jdMatchScore || '-'}"`)
     ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -589,10 +610,10 @@ export const ResumeBankPage: React.FC = () => {
   };
 
   const handleExportLogs = () => {
-    const headers = ['Upload Date', 'Uploaded By', 'File Name', 'Total Records', 'Success', 'Failed', 'Status'];
+    const headers = ['Upload Date', 'Uploaded By', 'File Name', 'Total Records', 'Success', 'Failed', 'ATS Passed', 'JD Match Passed', 'AI Shortlisted', 'Status'];
     const csvContent = [
       headers.join(','),
-      ...logsData.map(c => `"${c.date}","${c.uploadedBy}","${c.fileName}","${c.total}","${c.success}","${c.failed}","${c.status}"`)
+      ...logsData.map(c => `"${c.date}","${c.uploadedBy}","${c.fileName}","${c.total}","${c.success}","${c.failed}","${c.atsPassedCount || 0}","${c.jdMatchPassedCount || 0}","${c.aiShortlistedCount || 0}","${c.status}"`)
     ].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -701,7 +722,7 @@ export const ResumeBankPage: React.FC = () => {
                 <div className="space-y-1.5 lg:col-span-2">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Search</label>
                   <Input 
-                    placeholder="Search By Name or Contact Number or Email ID..."
+                    placeholder="Candidate Name / Email / Skills..."
                     value={filters.search} 
                     onChange={(e) => handleFilterChange('search', e.target.value)} 
                     className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl"
@@ -1346,8 +1367,12 @@ export const ResumeBankPage: React.FC = () => {
                       onChange={(e) => setSelectedExcelFile(e.target.files?.[0] || null)}
                     />
 
-                    <Button onClick={handleBulkUpload} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs rounded-xl font-bold flex gap-2 shadow-xs">
-                      <Upload className="w-4 h-4" /> Upload Excel Sheet
+                    <Button 
+                      onClick={handleBulkUpload} 
+                      disabled={isUploadingFiles || !selectedExcelFile}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs rounded-xl font-bold flex gap-2 shadow-xs disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" /> {isUploadingFiles ? 'Uploading Sheet...' : 'Upload Excel Sheet'}
                     </Button>
                   </div>
 
@@ -1421,17 +1446,19 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="bg-background">
-                <Table className="min-w-[1000px]">
+              <div className="bg-background overflow-x-auto">
+                <Table className="min-w-[1100px]">
                   <TableHeader className="bg-muted">
                     <TableRow className="border-border">
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Upload Date</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Uploaded By</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">File Name</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Total Records</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Success Count</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Failed Count</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-center">Total</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-center">ATS Passed</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-center">JD Passed</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-center">AI Shortlisted</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Status</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-right pr-4">AI Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1441,17 +1468,41 @@ export const ResumeBankPage: React.FC = () => {
                           <TableCell className="text-xs py-2 whitespace-nowrap">{log.date}</TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap">{log.uploadedBy}</TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap text-muted-foreground">{log.fileName}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap">{log.total}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-green-600 font-medium">{log.success}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-red-500 font-medium">{log.failed}</TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap text-center font-mono font-semibold">{log.total}</TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap text-center font-mono font-bold text-indigo-600">
+                            {log.atsPassedCount ?? 0}
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap text-center font-mono font-bold text-indigo-600">
+                            {log.jdMatchPassedCount ?? 0}
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap text-center font-mono font-bold text-emerald-600">
+                            {log.aiShortlistedCount ?? 0}
+                          </TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap">
-                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{log.status}</span>
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-[11px] font-medium">{log.status}</span>
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap text-right pr-4">
+                            {log.targetJobId ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setAtsJobId(String(log.targetJobId));
+                                  setActiveTab('ats');
+                                }}
+                                className="h-7 px-2.5 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-medium"
+                              >
+                                <Sparkles className="w-3 h-3 mr-1" /> View AI Suggestions
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-[10px] italic">General Pool</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
+                        <TableCell colSpan={9} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
                           No data available in table
                         </TableCell>
                       </TableRow>

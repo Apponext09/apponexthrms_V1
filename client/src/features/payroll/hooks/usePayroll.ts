@@ -88,7 +88,6 @@ export const usePayroll = () => {
       apiClient.post('/payroll', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     }
   });
 
@@ -97,7 +96,6 @@ export const usePayroll = () => {
       apiClient.post(`/payroll/${payrollRunId}/process`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     }
   });
 
@@ -106,7 +104,6 @@ export const usePayroll = () => {
       apiClient.post(`/payroll/${payrollRunId}/lock`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     }
   });
 
@@ -115,7 +112,6 @@ export const usePayroll = () => {
       apiClient.post(`/payroll/${payrollRunId}/unlock`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     }
   });
 
@@ -124,7 +120,6 @@ export const usePayroll = () => {
       apiClient.post(`/payroll/${payrollRunId}/approve`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     }
   });
 
@@ -133,7 +128,6 @@ export const usePayroll = () => {
       apiClient.post(`/payroll/${payrollRunId}/publish`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payrolls'] });
-      queryClient.invalidateQueries({ queryKey: ['payroll'] });
     }
   });
 

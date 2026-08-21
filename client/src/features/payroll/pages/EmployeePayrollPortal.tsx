@@ -17,6 +17,9 @@ import { PayslipViewer } from './PayslipViewer';
 import { EmployeeLoanRequest } from '../components/EmployeeLoanRequest';
 import { MySettlementPage } from './MySettlementPage';
 
+import { apiClient } from '@/config/api';
+import { showToast } from '@/components/ui/toast';
+
 export const EmployeePayrollPortal: React.FC = () => {
   const [searchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');
@@ -28,45 +31,77 @@ export const EmployeePayrollPortal: React.FC = () => {
     }
   }, [urlTab]);
 
-  const [claims, setClaims] = useState([
-    { id: 1, type: 'Travel & Conveyance', date: '2026-07-20', amount: 4500, status: 'pending', desc: 'Client visit travel expenses' },
-    { id: 2, type: 'Medical Claim', date: '2026-07-10', amount: 3200, status: 'approved', desc: 'Health checkup consultation' }
-  ]);
+  const [claims, setClaims] = useState<any[]>([]);
+  const [claimsLoading, setClaimsLoading] = useState(false);
   const [newClaim, setNewClaim] = useState({ type: 'Travel & Conveyance', amount: '', desc: '' });
+  const [submitting, setSubmitting] = useState(false);
   const [submittedMsg, setSubmittedMsg] = useState(false);
 
-  const handleSubmitClaim = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClaim.amount) return;
-    setClaims([
-      { id: Date.now(), type: newClaim.type, date: new Date().toISOString().slice(0, 10), amount: parseFloat(newClaim.amount), status: 'pending', desc: newClaim.desc },
-      ...claims
-    ]);
-    setNewClaim({ type: 'Travel & Conveyance', amount: '', desc: '' });
-    setSubmittedMsg(true);
-    setTimeout(() => setSubmittedMsg(false), 4000);
+  // Load claims from DB on mount
+  const fetchClaims = () => {
+    setClaimsLoading(true);
+    apiClient.get('/payroll/reimbursements').then((res: any) => {
+      const list = res?.data?.data || res?.data || [];
+      setClaims(Array.isArray(list) ? list.map((c: any) => ({
+        id: c.id || c.uuid,
+        type: c.claim_type || c.type || 'Expense Claim',
+        date: c.claim_date || c.date || c.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+        amount: Number(c.amount || 0),
+        status: (c.status || 'pending').toLowerCase(),
+        desc: c.description || c.desc || '',
+      })) : []);
+    }).catch(() => setClaims([])).finally(() => setClaimsLoading(false));
   };
 
+  useEffect(() => { fetchClaims(); }, []);
+
+  const handleSubmitClaim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClaim.amount) return;
+    setSubmitting(true);
+    try {
+      await apiClient.post('/payroll/reimbursements', {
+        claim_type: newClaim.type,
+        amount: parseFloat(newClaim.amount),
+        description: newClaim.desc,
+        claim_date: new Date().toISOString().slice(0, 10),
+      });
+      setNewClaim({ type: 'Travel & Conveyance', amount: '', desc: '' });
+      setSubmittedMsg(true);
+      setTimeout(() => setSubmittedMsg(false), 4000);
+      showToast.success('Claim Submitted ✅', 'Your reimbursement claim has been saved.');
+      fetchClaims(); // Refresh from DB
+    } catch (err: any) {
+      showToast.error('Submit Failed', err?.response?.data?.message || err?.message || 'Could not submit claim');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+
   return (
-    <div className="space-y-4 pb-12">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+    <div className="space-y-6 pb-12">
+      {/* Top Glassmorphic Hero Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card/90 backdrop-blur-md border border-border/70 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-md shrink-0">
             <Building className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-black text-foreground tracking-tight">Employee Self-Service Financial Portal</h1>
-            <p className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-foreground tracking-tight">Employee Self-Service Financial Portal</h1>
+              <Badge className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200 text-[10px] font-bold">My Financials</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
               View monthly payslips, request salary advances/loans, and claim expense reimbursements
             </p>
           </div>
         </div>
       </div>
 
-      {/* Minimal Tab Navigation Bar */}
-      <div className="bg-card border border-border/80 rounded-xl shadow-2xs overflow-hidden">
-        <div className="flex border-b border-border/60 overflow-x-auto">
+      {/* Modern Pill Tab Navigation Bar */}
+      <div className="bg-card/80 backdrop-blur-md border border-border/70 p-1.5 rounded-2xl shadow-2xs">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {[
             { key: 'payslips', label: 'My Payslips', icon: FileText },
             { key: 'loans', label: 'Advances & Loans', icon: CreditCard },
@@ -76,17 +111,18 @@ export const EmployeePayrollPortal: React.FC = () => {
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
-              className={`flex items-center gap-1.5 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === key
-                  ? 'border-primary text-primary bg-primary/5'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 ${activeTab === key ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Icon className="w-3.5 h-3.5" />
               {label}
             </button>
           ))}
         </div>
+      </div>
 
         {/* Content area */}
         <div className="p-4">
@@ -157,8 +193,8 @@ export const EmployeePayrollPortal: React.FC = () => {
                         />
                       </div>
 
-                      <Button type="submit" className="w-full h-8 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1.5">
-                        <Send className="w-3.5 h-3.5" /> Submit Claim
+                      <Button type="submit" disabled={submitting} className="w-full h-8 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1.5">
+                        <Send className="w-3.5 h-3.5" /> {submitting ? 'Submitting...' : 'Submit Claim'}
                       </Button>
                     </form>
                   </CardContent>
@@ -185,7 +221,12 @@ export const EmployeePayrollPortal: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/60">
-                          {claims.map((c) => (
+                          {claimsLoading ? (
+                            <tr><td colSpan={5} className="px-4 py-6 text-center text-xs text-muted-foreground">Loading your claims from database...</td></tr>
+                          ) : claims.length === 0 ? (
+                            <tr><td colSpan={5} className="px-4 py-6 text-center text-xs text-muted-foreground">No claims submitted yet. Submit your first claim using the form.</td></tr>
+                          ) : (
+                          claims.map((c) => (
                             <tr key={c.id} className="hover:bg-muted/20 transition-colors">
                               <td className="px-4 py-3 font-semibold text-xs text-foreground">{c.type}</td>
                               <td className="px-4 py-3 text-xs text-muted-foreground">{c.date}</td>
@@ -199,7 +240,8 @@ export const EmployeePayrollPortal: React.FC = () => {
                                 )}
                               </td>
                             </tr>
-                          ))}
+                          ))
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -209,7 +251,6 @@ export const EmployeePayrollPortal: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 };

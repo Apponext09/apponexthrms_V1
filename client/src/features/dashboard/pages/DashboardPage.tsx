@@ -5,10 +5,11 @@ import { OrgAdminDashboard } from './role-dashboards/OrgAdminDashboard';
 
 /**
  * Dashboard dispatcher — redirects each role to their dedicated portal on first load.
- * Org Admin stays on this page and sees the full admin dashboard.
+ * CEO (organization_admin) and HR (hr_admin/hr) both stay on this page and see the full admin dashboard.
+ * Support (hr_manager) gets redirected to /hr/dashboard.
  */
 export function DashboardPage() {
-  const { hasRole } = useRbac();
+  const { hasRole, roles } = useRbac();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,16 +17,22 @@ export function DashboardPage() {
       navigate('/superadmin/dashboard', { replace: true });
       return;
     }
-    // Redirect HR Manager to HR portal
-    if (hasRole('hr_manager')) {
+    // Support persona — redirect to the /hr/* portal
+    if (roles.includes('support')) {
       navigate('/hr/dashboard', { replace: true });
       return;
     }
-    // Organization Admin stays on this page
-    if (hasRole('organization_admin')) {
+    // CEO (organization_admin, ceo) and HR (hr_manager/hr_admin/hr) all stay on this page
+    if (
+      hasRole('organization_admin') ||
+      roles.includes('ceo') ||
+      hasRole('hr_manager') ||
+      roles.includes('hr_admin') ||
+      roles.includes('hr')
+    ) {
       return;
     }
-    if (hasRole('department_head')) {
+    if (hasRole('department_head') || hasRole('manager' as any)) {
       navigate('/manager/dashboard', { replace: true });
       return;
     }
@@ -36,6 +43,7 @@ export function DashboardPage() {
     navigate('/employee/dashboard', { replace: true });
   }, []);
 
-  // Only Org Admin and Super Admin see this page
+  // CEO and HR both see the full Admin dashboard
   return <OrgAdminDashboard />;
 }
+

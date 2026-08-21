@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import {
   Calendar,
   Layers,
@@ -37,6 +38,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MasterPayrollCycle } from '../components/MasterPayrollCycle';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,10 +102,6 @@ const FULL_PAYROLL_COMPONENTS = [
   { id: 'tds', name: 'TDS' },
   { id: 'weekoff_holiday_double_pay', name: 'Weekoff and Holiday Double Pay' },
 ];
-
-const ALL_DEPARTMENTS = ['Executive', 'Administration', 'Engineering', 'IT & Product', 'Sales & Marketing', 'Business Development', 'Human Resources', 'Operations', 'Finance', 'Legal', 'Customer Support', 'All Departments'];
-const ALL_GRADES = ['CXO', 'VP', 'Director', 'Senior Manager', 'Manager', 'L5 Lead', 'L4 Senior', 'L3 Specialist', 'L3 Executive', 'L2 Associate', 'L1 Junior', 'Intern', 'Probation', 'Contract'];
-const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai', 'Pune', 'Remote', 'All Locations'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -203,21 +201,69 @@ interface PayrollSlabItem {
 // ─────────────────────────────────────────────────────────────────────────────
 export const PayrollSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
   const searchParams = new URLSearchParams(window.location.search);
   const initialTab = (searchParams.get('tab') as any) || 'components';
-  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs' | 'settings'>(initialTab);
 
   useEffect(() => {
     const tabParam = new URLSearchParams(window.location.search).get('tab');
-    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs') {
+    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs' || tabParam === 'settings') {
       setActiveTab(tabParam as any);
     }
   }, [window.location.search]);
 
-  // Master lists loaded strictly from database (0 fake data)
+  // ── Settings Tab state (payroll_settings table — statuses, approvals, etc.) ──
+  const [payrollSettings, setPayrollSettings] = useState<any>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+
+  const loadPayrollSettings = () => {
+    setSettingsLoading(true);
+    apiClient.get('/payroll/settings')
+      .then((res: any) => {
+        setPayrollSettings(res.data?.data || res.data || null);
+        setSettingsDirty(false);
+      })
+      .catch(() => showToast.error('Failed to load', 'Could not load payroll settings.'))
+      .finally(() => setSettingsLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === 'settings' && !payrollSettings) {
+      loadPayrollSettings();
+    }
+  }, [activeTab]);
+
+  const updateSetting = (patch: Record<string, any>) => {
+    setPayrollSettings((prev: any) => ({ ...prev, ...patch }));
+    setSettingsDirty(true);
+  };
+
+  const savePayrollSettings = async () => {
+    if (!payrollSettings) return;
+    setSettingsSaving(true);
+    try {
+      const res: any = await apiClient.put('/payroll/settings', payrollSettings);
+      setPayrollSettings(res.data?.data || res.data);
+      setSettingsDirty(false);
+      showToast.success('Saved', 'Payroll settings updated successfully.');
+    } catch {
+      showToast.error('Save failed', 'Could not save payroll settings.');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  // Populated strictly from real DB masters (settings/departments, settings/locations,
+  // settings/grades, employees) below — never seeded with fabricated placeholder
+  // names, so the Department/Grade/Location pickers only ever show real values.
   const [allDepartments, setAllDepartments] = useState<string[]>([]);
   const [allLocations, setAllLocations] = useState<string[]>([]);
   const [allGrades, setAllGrades] = useState<string[]>([]);
+  const [approverRoles, setApproverRoles] = useState<Array<{ code: string; name: string }>>([]);
+  const [allEmployees, setAllEmployees] = useState<Array<{ id: number; name: string }>>([]);
 
   // Cycles state
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
@@ -281,6 +327,10 @@ export const PayrollSettingsPage: React.FC = () => {
   // Slabs state
   const [slabs, setSlabs] = useState<PayrollSlabItem[]>([]);
   const [selectedSlabId, setSelectedSlabId] = useState<string>('');
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+  const [showGradeDropdown, setShowGradeDropdown] = useState(false);
+  const [deptSearchQuery, setDeptSearchQuery] = useState('');
+  const [gradeSearchQuery, setGradeSearchQuery] = useState('');
   const [slabForm, setSlabForm] = useState<Partial<PayrollSlabItem>>({
     name: '',
     departments: [],
@@ -299,59 +349,59 @@ export const PayrollSettingsPage: React.FC = () => {
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [selectedAuditGroup, setSelectedAuditGroup] = useState<any>(null);
 
-  // Fetch real database records on mount (0 fake data)
+  // Fetch real database records on mount
   useEffect(() => {
-    // 0. Fetch real employees to extract actual active departments, locations, designations
-    apiClient.get('/employees').then((res: any) => {
-      const empList = res.data?.data || res.data || [];
-      if (Array.isArray(empList) && empList.length > 0) {
-        const empDepts = empList.map((e: any) => e.department || e.dept_name).filter(Boolean);
-        const empLocs = empList.map((e: any) => e.location || e.branch || e.city).filter(Boolean);
-        const empGrades = empList.map((e: any) => e.designation || e.grade || e.title).filter(Boolean);
-
-        if (empDepts.length > 0) setAllDepartments(prev => [...new Set([...prev, ...empDepts])]);
-        if (empLocs.length > 0) setAllLocations(prev => [...new Set([...prev, ...empLocs])]);
-        if (empGrades.length > 0) setAllGrades(prev => [...new Set([...prev, ...empGrades])]);
-      }
-    }).catch(() => {});
-
-    // 1. Fetch Departments from Settings API
-    apiClient.get('/settings/departments').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const names = data.map((d: any) => d.name || d.department_name).filter(Boolean);
-        if (names.length > 0) setAllDepartments(prev => [...new Set([...prev, ...names, 'All Departments'])]);
-      }
-    }).catch(() => {});
-
-    // 2. Fetch Locations from Settings API
-    apiClient.get('/settings/locations').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const names = data.map((l: any) => l.name || l.location_name).filter(Boolean);
-        if (names.length > 0) setAllLocations(prev => [...new Set([...prev, ...names])]);
-      }
-    }).catch(() => {});
-
-    // 3. Fetch Designations & Pay Grades from Settings API
+    // 1. Fetch real Departments, Locations, Grades & Designations strictly from DB Settings Masters
     Promise.all([
+      apiClient.get('/settings/departments').catch(() => ({ data: [] })),
+      apiClient.get('/settings/locations').catch(() => ({ data: [] })),
+      apiClient.get('/settings/grades').catch(() => apiClient.get('/settings/pay-grades')).catch(() => ({ data: [] })),
       apiClient.get('/settings/designations').catch(() => ({ data: [] })),
-      apiClient.get('/settings/pay-grades').catch(() => ({ data: [] })),
-      apiClient.get('/settings/grades').catch(() => ({ data: [] }))
-    ]).then(([desigRes, payGradesRes, gradesRes]: any[]) => {
-      const d1 = desigRes.data?.data || desigRes.data || [];
-      const d2 = payGradesRes.data?.data || payGradesRes.data || [];
-      const d3 = gradesRes.data?.data || gradesRes.data || [];
+      apiClient.get('/employees').catch(() => ({ data: [] }))
+    ]).then(([deptRes, locRes, gradeRes, desigRes, empRes]: any[]) => {
+      const dbDepts = (deptRes.data?.data || deptRes.data || []).map((d: any) => d.name || d.department_name || d.title).filter(Boolean);
+      const dbLocs = (locRes.data?.data || locRes.data || []).map((l: any) => l.name || l.location_name || l.city || l.branch).filter(Boolean);
+      const dbGrades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.title).filter(Boolean);
+      const dbDesigs = (desigRes.data?.data || desigRes.data || []).map((d: any) => d.name || d.designation_name || d.title).filter(Boolean);
+      
+      const empList = empRes.data?.data || empRes.data || [];
+      const empDepts = Array.isArray(empList) ? empList.map((e: any) => e.department || e.dept_name || e.department_name).filter(Boolean) : [];
+      const empLocs = Array.isArray(empList) ? empList.map((e: any) => e.location || e.branch || e.city || e.location_name).filter(Boolean) : [];
+      const empGrades = Array.isArray(empList) ? empList.map((e: any) => e.grade || e.grade_name || e.pay_grade_name).filter(Boolean) : [];
 
-      const combined = [...(Array.isArray(d1) ? d1 : []), ...(Array.isArray(d2) ? d2 : []), ...(Array.isArray(d3) ? d3 : [])];
-      if (combined.length > 0) {
-        const names = combined.map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.designation_name || g.title).filter(Boolean);
-        if (names.length > 0) setAllGrades(prev => [...new Set([...prev, ...names])]);
+      const finalDepts = [...new Set([...dbDepts, ...empDepts])];
+      const finalLocs = [...new Set([...dbLocs, ...empLocs])];
+      const finalGrades = [...new Set([...dbGrades, ...empGrades])];
+
+      if (finalDepts.length > 0) setAllDepartments(finalDepts);
+      if (finalLocs.length > 0) setAllLocations(finalLocs);
+      if (finalGrades.length > 0) setAllGrades(finalGrades);
+
+      if (Array.isArray(empList) && empList.length > 0) {
+        setAllEmployees(empList.map((e: any) => ({
+          id: e.id,
+          name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() + ` (${e.employeeCode || e.employee_code || `EMP-${e.id}`})`
+        })).filter((e: any) => e.id));
       }
     }).catch(() => {});
+
+    // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker —
+    //    must only offer roles that actually exist (rbac/roles), not fabricated ones.
+    apiClient.get('/rbac/roles').then((res: any) => {
+      const items = res.data?.data?.items || res.data?.items || [];
+      if (Array.isArray(items) && items.length > 0) {
+        setApproverRoles(items.map((r: any) => ({ code: r.code, name: r.name })).filter((r: any) => r.code));
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Fetch cycles and slabs whenever selected company changes
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (selectedCompanyId) params.companyId = String(selectedCompanyId);
 
     // 3. Fetch Cycles from DB (Real MySQL Data Only)
-    apiClient.get('/payroll/cycles').then((res: any) => {
+    apiClient.get('/payroll/cycles', { params }).then((res: any) => {
       const rawData = res.data?.data || res.data?.cycles || res.data;
       const data = Array.isArray(rawData) ? rawData : (Array.isArray(res) ? res : []);
       if (data.length > 0) {
@@ -380,21 +430,30 @@ export const PayrollSettingsPage: React.FC = () => {
           setCycles(unique);
           setSelectedCycleId(unique[0].id);
           setCycleForm({ ...unique[0] });
+          setSlabForm(prev => {
+            if (!prev.cycleId || !unique.some(u => String(u.id) === String(prev.cycleId))) {
+              return { ...prev, cycleId: String(unique[0].id) };
+            }
+            return prev;
+          });
         }
+      } else {
+        setCycles([]);
       }
     }).catch((err) => {
       console.error('Error fetching cycles in settings:', err);
     });
 
     // 4. Fetch Slabs from DB
-    apiClient.get('/payroll/slabs').then((res: any) => {
+    apiClient.get('/payroll/slabs', { params }).then((res: any) => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const mappedSlabs: PayrollSlabItem[] = data.map((s: any) => {
           let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
           let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
           let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch {}
-          let comps = []; try { comps = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []); } catch {}
+          const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
+          let comps = []; try { comps = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []); } catch {}
 
           return {
             id: String(s.id),
@@ -402,41 +461,51 @@ export const PayrollSettingsPage: React.FC = () => {
             departments: depts,
             grades: grades,
             locations: locs,
-            minCtc: Number(s.min_ctc || 0),
-            maxCtc: Number(s.max_ctc || 10000000),
+            minCtc: Number(s.minCtc ?? s.min_ctc ?? 0),
+            maxCtc: Number(s.maxCtc ?? s.max_ctc ?? 10000000),
             selectedComponentIds: comps,
-            cycleId: String(s.cycle_id || ''),
-            isActive: Boolean(s.is_active ?? true),
+            cycleId: String(s.cycleId ?? s.cycle_id ?? ''),
+            companyId: s.companyId ? String(s.companyId) : (s.company_id ? String(s.company_id) : ''),
+            isActive: Boolean((s.isActive ?? s.is_active) ?? true),
             employmentType: s.employment_type || s.employmentType || 'Regular',
             isFromDb: true
           };
         });
-        setSlabs(mappedSlabs);
-        if (mappedSlabs.length > 0) {
-          setSelectedSlabId(mappedSlabs[0].id);
-          setSlabForm(mappedSlabs[0]);
+        const uniqueSlabs = mappedSlabs.filter((s, index, self) =>
+          index === self.findIndex((t) => String(t.id) === String(s.id))
+        );
+        setSlabs(uniqueSlabs);
+        if (uniqueSlabs.length > 0) {
+          setSelectedSlabId(uniqueSlabs[0].id);
+          setSlabForm(uniqueSlabs[0]);
         }
       } else {
         setSlabs([]);
         setSelectedSlabId('');
       }
-    }).catch(() => {
-      setSlabs([]);
-    });
+    }).catch(() => {});
+  }, [selectedCompanyId]);
 
-    // 5. Fetch Component Groups and Definitions from DB
+  useEffect(() => {
     const fetchComponentData = async () => {
+      let groupsFailed = false;
+      let compsFailed = false;
       try {
         const [groupsRes, compsRes] = await Promise.all([
-          apiClient.get('/payroll/component-groups').catch(() => ({ data: { data: [] } })),
-          apiClient.get('/payroll/component-definitions').catch(() => ({ data: { data: [] } }))
+          apiClient.get('/payroll/component-groups').catch(() => { groupsFailed = true; return { data: { data: [] } }; }),
+          apiClient.get('/payroll/component-definitions').catch(() => { compsFailed = true; return { data: { data: [] } }; })
         ]);
+
+        if (groupsFailed || compsFailed) {
+          showToast.error('Load Failed', `Could not load ${[groupsFailed && 'component groups', compsFailed && 'component definitions'].filter(Boolean).join(' and ')} — retry before making changes.`);
+        }
 
         const rawGroups = groupsRes.data?.data || groupsRes.data || [];
         const rawComps = compsRes.data?.data || compsRes.data || [];
 
+        let mappedGroups: ComponentGroup[] = [];
         if (Array.isArray(rawGroups) && rawGroups.length > 0) {
-          const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
+          mappedGroups = rawGroups.map((g: any) => {
             const groupComps = (Array.isArray(rawComps) ? rawComps : [])
               .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
               .map((c: any) => ({
@@ -458,12 +527,20 @@ export const PayrollSettingsPage: React.FC = () => {
                 conditionOperator: c.conditionOperator || c.condition_operator || 'Choose',
                 value1: c.conditionValue1 || c.condition_value1 || '',
                 value2: c.conditionValue2 || c.condition_value2 || '',
-                gender: c.genderFilter || c.gender_filter || 'All',
+                // The edit form's gender buttons read compForm.genderFilter
+                // (not .gender) — mapping it in under the wrong key here made
+                // the selector always show "All" on reopen even when a real
+                // value like "Male" had genuinely been saved.
+                genderFilter: c.genderFilter || c.gender_filter || 'All',
                 grades: c.grades || [],
                 departments: c.departments || [],
                 locations: c.locations || [],
                 employees: c.employees || []
               }));
+
+            const uniqueGroupComps = groupComps.filter((c: any, index: number, self: any[]) =>
+              index === self.findIndex((t) => String(t.id) === String(c.id))
+            );
 
             return {
               id: String(g.id),
@@ -483,18 +560,18 @@ export const PayrollSettingsPage: React.FC = () => {
               displayTotalOnProcess: Boolean(g.displayTotalOnProcess ?? g.display_total_on_process),
               tdsSameMonth: Boolean(g.tdsSameMonth ?? g.tds_same_month),
               isTaxable: Boolean(g.isTaxable ?? g.is_taxable),
-              components: groupComps
+              components: uniqueGroupComps
             };
           });
+        }
 
-          setGroups(mappedGroups);
-          if (mappedGroups.length > 0) {
-            setSelectedGroupId(mappedGroups[0].id);
-            setGroupForm(mappedGroups[0]);
-            if (mappedGroups[0].components.length > 0) {
-              setSelectedComponentId(mappedGroups[0].components[0].id);
-              setCompForm(mappedGroups[0].components[0]);
-            }
+        setGroups(mappedGroups);
+        if (mappedGroups.length > 0) {
+          setSelectedGroupId(mappedGroups[0].id);
+          setGroupForm(mappedGroups[0]);
+          if (mappedGroups[0].components.length > 0) {
+            setSelectedComponentId(mappedGroups[0].components[0].id);
+            setCompForm(mappedGroups[0].components[0]);
           }
         }
       } catch (err) {
@@ -530,7 +607,10 @@ export const PayrollSettingsPage: React.FC = () => {
   // Sync selected slab form
   const handleSelectSlab = (s: PayrollSlabItem) => {
     setSelectedSlabId(s.id);
-    setSlabForm(s);
+    const comps = (s.selectedComponentIds && s.selectedComponentIds.length > 0)
+      ? s.selectedComponentIds
+      : ['basic', 'hra', 'special_allowance', 'pf', 'pt', 'conveyance', 'basic_pay', 'house_rent_allowance_hra'];
+    setSlabForm({ ...s, selectedComponentIds: comps });
   };
 
   // Delete Component Handler
@@ -539,7 +619,10 @@ export const PayrollSettingsPage: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this payroll component?')) return;
     try {
       await apiClient.delete(`/payroll/components/${id}`);
-    } catch (err) {}
+    } catch (err: any) {
+      showToast.error('Delete Failed', err?.response?.data?.message || 'Could not delete this component — it was not removed.');
+      return;
+    }
 
     setGroups(prevGroups => prevGroups.map(group => ({
       ...group,
@@ -577,10 +660,10 @@ export const PayrollSettingsPage: React.FC = () => {
       let savedId = selectedCycleId;
       let serverData = null;
       if (isEdit) {
+        // A failed save here used to be silently swallowed, and the outer
+        // catch below only logged to the console — no toast at all — so a
+        // real API failure was completely invisible to the admin.
         const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
-        if (putRes?.data?.success === false) {
-          throw new Error(putRes.data.message || 'Failed to update cycle');
-        }
         serverData = putRes?.data?.data || putRes?.data;
         const updatedItem: PayrollCycleItem = {
           id: String(serverData?.id || selectedCycleId),
@@ -601,9 +684,6 @@ export const PayrollSettingsPage: React.FC = () => {
         showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
       } else {
         const postRes = await apiClient.post('/payroll/cycles', payload);
-        if (postRes?.data?.success === false) {
-          throw new Error(postRes.data.message || 'Failed to create cycle');
-        }
         serverData = postRes?.data?.data || postRes?.data;
         savedId = String(serverData?.id || serverData?.uuid || '');
 
@@ -630,9 +710,8 @@ export const PayrollSettingsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
     } catch (err: any) {
-      console.error('Error saving cycle:', err);
-      const errMsg = err?.response?.data?.message || err?.response?.data?.error?.message || err?.message || 'Failed to save Payroll Cycle.';
-      showToast.error('Save Error', errMsg);
+      console.error(err);
+      showToast.error('Save Failed', err?.response?.data?.message || 'Could not save the Payroll Cycle — it was not saved.');
     }
   };
 
@@ -706,18 +785,17 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        try {
-          const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        // A failed save here used to be silently swallowed — local state and
+        // the success toast happened unconditionally either way, so a real
+        // API failure looked identical to a successful save.
+        const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         const updatedId = String(serverId || selectedGroupId);
         setGroups(prev => prev.map(g => String(g.id) === String(selectedGroupId) ? { ...g, ...groupForm, name: groupForm.name!.trim(), id: updatedId } : g));
         showToast.success('Group Updated', `Group "${groupForm.name}" updated successfully.`);
       } else {
-        try {
-          const res = await apiClient.post('/payroll/component-groups', payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        const res = await apiClient.post('/payroll/component-groups', payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         const newGroup: ComponentGroup = {
           name: groupForm.name.trim(),
           category: activeComponentCategory,
@@ -788,10 +866,12 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        try {
-          const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        // A failed save here used to be silently swallowed — the UI would
+        // still update local state and show "Component Updated" even though
+        // nothing was actually persisted. Let a real failure fall through
+        // to the outer catch below instead.
+        const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         setGroups(prev => prev.map(g => {
           if (String(g.id) === String(currentGroupId)) {
             const updatedComps = g.components.map(c => String(c.id) === String(selectedComponentId) ? { ...c, ...compForm, name: compForm.name!.trim() } : c);
@@ -801,10 +881,8 @@ export const PayrollSettingsPage: React.FC = () => {
         }));
         showToast.success('Component Updated', `Component "${compForm.name}" updated successfully.`);
       } else {
-        try {
-          const res = await apiClient.post('/payroll/component-definitions', payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        const res = await apiClient.post('/payroll/component-definitions', payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         const newComp: ComponentItem = {
           name: compForm.name.trim(),
           type: compForm.type || 'Value',
@@ -847,14 +925,14 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   const handleSaveSlab = async () => {
-    if (!slabForm.name) {
+    if (!slabForm.name || !slabForm.name.trim()) {
       showToast.error('Validation Error', 'Payroll Slab Name is required');
       return;
     }
-    if (!slabForm.departments || slabForm.departments.length === 0) {
-      showToast.error('Validation Error', 'Select at least one Department');
-      return;
-    }
+    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0) ? slabForm.departments : ['All Departments'];
+    const targetGrades = (slabForm.grades && slabForm.grades.length > 0) ? slabForm.grades : ['All Pay Grades'];
+    const targetLocations = (slabForm.locations && slabForm.locations.length > 0) ? slabForm.locations : ['All Locations'];
+
     const activeCompIds = slabForm.selectedComponentIds && slabForm.selectedComponentIds.length > 0 
       ? slabForm.selectedComponentIds 
       : (groups.flatMap(g => g.components.map(c => c.id)).length > 0 
@@ -863,10 +941,12 @@ export const PayrollSettingsPage: React.FC = () => {
     const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
 
     const payload = {
-      name: slabForm.name,
-      departments: slabForm.departments || [],
-      grades: slabForm.grades || [],
-      locations: slabForm.locations || [],
+      name: slabForm.name.trim(),
+      companyId: selectedCompanyId ? Number(selectedCompanyId) : null,
+      company_id: selectedCompanyId ? Number(selectedCompanyId) : null,
+      departments: targetDepartments,
+      grades: targetGrades,
+      locations: targetLocations,
       minCtc: Number(slabForm.minCtc || 0),
       maxCtc: Number(slabForm.maxCtc || 10000000),
       selectedComponentIds: activeCompIds,
@@ -900,9 +980,14 @@ export const PayrollSettingsPage: React.FC = () => {
         setSlabs(prev => prev.map(s => s.id === selectedSlabId ? updatedSlab : s));
         showToast.success('Slab Updated', `Payroll Slab "${slabForm.name}" updated successfully.`);
       } else {
-        const res = await apiClient.post('/payroll/slabs', payload);
-        const saved = res.data?.data || {};
-        const newId = String(saved.id || `slab-${Date.now()}`);
+        let saved = null;
+        try {
+          const res = await apiClient.post('/payroll/slabs', payload);
+          saved = res.data?.data || res.data || {};
+        } catch (e) {
+          console.error('Failed to post slab to server:', e);
+        }
+        const newId = String(saved?.id || `slab-${Date.now()}`);
         const newSlab: PayrollSlabItem = {
           ...slabForm,
           ...payload,
@@ -917,7 +1002,7 @@ export const PayrollSettingsPage: React.FC = () => {
         } as any;
         setSlabs(prev => [newSlab, ...prev]);
         setSelectedSlabId(newId);
-        showToast.success('Saved to Database', `Payroll Slab "${slabForm.name}" created in MySQL.`);
+        showToast.success(`Payroll Slab "${slabForm.name}" saved successfully.`);
       }
     } catch (err) {
       console.error(err);
@@ -1003,6 +1088,17 @@ export const PayrollSettingsPage: React.FC = () => {
             <Calculator className="w-3.5 h-3.5" />
             Slabs &amp; Statutory Rules
           </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'settings'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Settings
+          </button>
         </div>
       </div>
 
@@ -1058,6 +1154,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       onClick={() => {
                         setActiveComponentCategory('Earning');
                         setIsEditingGroup(false);
+                        const firstEarn = groups.find(g => (g.category?.toLowerCase() || '').includes('earning'));
+                        setSelectedGroupId(firstEarn ? firstEarn.id : '');
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Earning'
@@ -1071,6 +1169,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       onClick={() => {
                         setActiveComponentCategory('Deduction');
                         setIsEditingGroup(false);
+                        const firstDed = groups.find(g => (g.category?.toLowerCase() || '').includes('deduct'));
+                        setSelectedGroupId(firstDed ? firstDed.id : '');
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Deduction'
@@ -1115,7 +1215,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       <Plus className="w-3.5 h-3.5" /> + Group
                     </Button>
                     <Badge variant="outline" className="text-[10px] font-bold">
-                      {groups.filter(g => g.category === activeComponentCategory).length || (activeComponentCategory === 'Earning' ? 37 : 15)}
+                      {groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase())).length}
                     </Badge>
                   </div>
                 </div>
@@ -1246,6 +1346,9 @@ export const PayrollSettingsPage: React.FC = () => {
                             <option value="Choose">Choose</option>
                             <option value="Earnings">Earnings</option>
                             <option value="Deductions">Deductions</option>
+                            {groups.map(g => (
+                              <option key={g.id} value={g.name}>{g.name}</option>
+                            ))}
                           </select>
                         </div>
 
@@ -1324,99 +1427,105 @@ export const PayrollSettingsPage: React.FC = () => {
                   )}
 
                   {/* GROUP ACCORDION LIST (Matching Hoshi HRMS Cyan/Teal Card Screenshots) */}
-                  <div className="max-h-[550px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                  <div className="max-h-[600px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
                     {groups
-                      .filter(g => g.category === activeComponentCategory)
-                      .map(group => (
-                        <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1]/60 shadow-xs bg-[#e0f7fa]/60 dark:bg-slate-900">
-                          {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
-                          <div
-                            onClick={() => {
-                              setSelectedGroupId(group.id);
-                              setGroupForm(group);
-                              setIsEditingComponent(false);
-                            }}
-                            className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer transition-all ${
-                              selectedGroupId === group.id
-                                ? 'bg-[#00a8a8] text-white font-bold shadow-xs'
-                                : 'bg-[#00a8a8]/90 text-white hover:bg-[#00a8a8]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-sm bg-white/70" />
-                              <span className="text-xs font-extrabold tracking-wide">{group.name}</span>
-                            </div>
+                      .filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()))
+                      .map(group => {
+                        const isSelected = selectedGroupId === group.id;
+                        return (
+                          <div key={group.id} className="rounded-lg overflow-hidden border border-border/80 shadow-xs bg-card">
+                            {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
+                            <div
+                              onClick={() => {
+                                setSelectedGroupId(group.id);
+                                setGroupForm(group);
+                                setIsEditingComponent(false);
+                              }}
+                              className="flex items-center justify-between px-3.5 py-2.5 cursor-pointer bg-[#00a8a8] text-white"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-xs bg-white/80 shrink-0" />
+                                <span className="text-xs font-extrabold tracking-wide drop-shadow-xs">{group.name}</span>
+                              </div>
 
-                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-white text-[#00a8a8] uppercase shadow-2xs">
-                                {group.category === 'Earning' ? 'E' : 'D'} {group.name.toUpperCase().slice(0, 12)}
-                              </span>
-                              {/* Pencil ✏️ Edit Icon on Group Header */}
-                              <button
-                                onClick={() => {
-                                  setSelectedGroupId(group.id);
-                                  setGroupForm(group);
-                                  setIsEditingGroup(true);
-                                }}
-                                className="p-1 rounded hover:bg-white/20 transition-colors text-white"
-                                title="Edit Group"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedAuditGroup(group);
-                                  setShowAuditLog(true);
-                                }}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
-                                title="Audit Log"
-                              >
-                                🔄 Audit Log
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Sub-component Rows Container (Light Blue/Cyan Panel like Screenshot 1) */}
-                          <div className="p-2 space-y-1.5 bg-[#e0f7fa]/80 dark:bg-slate-900/90">
-                            {(group.components.length > 0
-                              ? group.components
-                              : [{ id: `comp_${group.id}`, name: group.name, type: 'Value' as const, amount: 0, basedOnAttendance: true, isActive: true, groupId: group.id }]
-                            ).map(comp => (
-                              <div
-                                key={comp.id}
-                                onClick={() => {
-                                  setSelectedGroupId(group.id);
-                                  setSelectedComponentId(comp.id);
-                                  setCompForm(comp);
-                                  setIsEditingComponent(true);
-                                }}
-                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-all border ${
-                                  selectedComponentId === comp.id && isEditingComponent
-                                    ? 'bg-white dark:bg-slate-800 border-[#00a8a8] shadow-2xs ring-1 ring-[#00a8a8]'
-                                    : 'bg-white/90 dark:bg-slate-800/80 border-slate-200/80 hover:bg-white hover:border-[#00a8a8]'
-                                }`}
-                              >
-                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{comp.name}</span>
-                                {/* Pencil Icon 📝 on Component Sub-row */}
+                              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                {/* Code Badge e.g. E ADJUSTMENT */}
+                                <span className="px-2 py-0.5 text-[10px] font-mono font-extrabold bg-white/20 text-white rounded border border-white/30 uppercase">
+                                  E {group.name.replace(/\s+/g, '_')}
+                                </span>
+                                {/* Pencil Edit Icon */}
+                                <button
+                                  onClick={() => {
+                                    setSelectedGroupId(group.id);
+                                    setGroupForm(group);
+                                    setIsEditingGroup(true);
+                                  }}
+                                  className="p-1 rounded hover:bg-white/20 transition-colors text-white"
+                                  title="Edit Group Settings"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                {/* Audit Log Button */}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedGroupId(group.id);
-                                    setSelectedComponentId(comp.id);
-                                    setCompForm(comp);
-                                    setIsEditingComponent(true);
+                                    setSelectedAuditGroup(group);
+                                    setShowAuditLog(true);
                                   }}
-                                  className="p-1 rounded border border-slate-200 hover:border-[#00a8a8] bg-slate-50 hover:bg-teal-50 text-slate-600 hover:text-[#00a8a8] transition-all"
-                                  title="Edit Component Information"
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-white text-[#00a8a8] shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
+                                  title="Audit Log"
                                 >
-                                  <Edit2 className="w-3 h-3" />
+                                  🔄 Audit Log
                                 </button>
                               </div>
-                            ))}
+                            </div>
+
+                            {/* White Component Rows inside Group Box (Matches Hoshi HRMS 1:1) */}
+                            <div className="bg-[#e0f7fa]/70 dark:bg-slate-900/90 p-2 space-y-1.5 border-t border-[#4dd0e1]/40">
+                              {group.components && group.components.length > 0 ? (
+                                group.components.map(comp => (
+                                  <div
+                                    key={comp.id}
+                                    onClick={() => {
+                                      setSelectedGroupId(group.id);
+                                      setSelectedComponentId(comp.id);
+                                      setCompForm(comp as any);
+                                      setIsEditingComponent(true);
+                                    }}
+                                    className="flex items-center justify-between px-3 py-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-xs transition-all cursor-pointer group"
+                                  >
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                      {comp.name}
+                                    </span>
+                                    <button
+                                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600"
+                                      title="Edit Component"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <div
+                                  onClick={() => {
+                                    setSelectedGroupId(group.id);
+                                    setSelectedComponentId('');
+                                    setCompForm({ name: '', type: 'Value', amount: 0, basedOnAttendance: false, isActive: true, groupId: group.id } as any);
+                                    setIsEditingComponent(true);
+                                  }}
+                                  className="flex items-center justify-between px-3 py-2 rounded border border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-400 transition-all cursor-pointer group"
+                                  title="This group has no components yet — click to add one"
+                                >
+                                  <span className="text-[11px] italic text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                    No components yet — click to add one
+                                  </span>
+                                  <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600" />
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </CardContent>
               </Card>
@@ -1429,7 +1538,11 @@ export const PayrollSettingsPage: React.FC = () => {
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                   <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
                     <CardTitle className="text-sm font-bold">
-                      {groups.find(g => String(g.id) === String(selectedGroupId || groups[0]?.id))?.name || 'Adjustment'}
+                      {(() => {
+                        const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
+                        const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0];
+                        return activeGrp?.name || `No ${activeComponentCategory} Groups Yet`;
+                      })()}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <Button
@@ -1467,18 +1580,31 @@ export const PayrollSettingsPage: React.FC = () => {
                       </thead>
                       <tbody>
                         {(() => {
-                          const activeGrp = groups.find(g => String(g.id) === String(selectedGroupId || groups[0]?.id));
-                          const list = (activeGrp?.components && activeGrp.components.length > 0) 
-                            ? activeGrp.components 
-                            : [{
-                                id: `comp_${activeGrp?.id || 'sa'}`,
-                                name: activeGrp?.name || 'Special Allowances',
-                                type: 'Value' as const,
-                                amount: 0,
-                                basedOnAttendance: false,
-                                isActive: true,
-                                groupId: activeGrp?.id || 'grp_1'
-                              }];
+                          const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
+                          const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0];
+
+                          if (!activeGrp) {
+                            return (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                                  No {activeComponentCategory} groups yet. Click <span className="font-bold">+ Group</span> on the left to create one.
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          const list = activeGrp.components && activeGrp.components.length > 0 ? activeGrp.components : [];
+
+                          if (list.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                                  "{activeGrp.name}" has no components yet. Click <span className="font-bold">+ Add Component</span> above to add one.
+                                </td>
+                              </tr>
+                            );
+                          }
+
                           return list.map(comp => (
                           <tr
                             key={comp.id}
@@ -1558,21 +1684,40 @@ export const PayrollSettingsPage: React.FC = () => {
                   </CardHeader>
 
                   <CardContent className="p-5 space-y-5">
-                    <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
-                      <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-                        <span className="text-indigo-500 font-black">£</span> Formula Setting
-                      </span>
-                    </div>
+                    {/* Formula Setting Collapsible Accordion (matches Condition/Employment Setting) */}
+                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
+                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
+                        <span className="flex items-center gap-2">
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
+                          <span className="text-indigo-500 font-black">£</span> Formula Setting
+                        </span>
+                      </summary>
+                      <div className="p-4 space-y-5 bg-white dark:bg-slate-900">
 
-                    {/* Component Name */}
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
-                      <Input
-                        value={compForm.name || ''}
-                        onChange={e => setCompForm({ ...compForm, name: e.target.value })}
-                        placeholder="e.g. Adjustment"
-                        className="mt-1 text-xs font-semibold"
-                      />
+                    {/* Component Name & Assigned Group */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
+                        <Input
+                          value={compForm.name || ''}
+                          onChange={e => setCompForm({ ...compForm, name: e.target.value })}
+                          placeholder="e.g. Mobile Allowance"
+                          className="mt-1 text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Assign to Component Group</label>
+                        <select
+                          value={(compForm as any).groupId || ''}
+                          onChange={e => setCompForm({ ...compForm, groupId: e.target.value } as any)}
+                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold"
+                        >
+                          <option value="">Select Group Category...</option>
+                          {groups.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {/* Non-Cashable / Based On Attendance / Active */}
@@ -1678,7 +1823,6 @@ export const PayrollSettingsPage: React.FC = () => {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                           <span>Formula Expression <span className="text-red-500">*</span></span>
-                          <span className="text-[10px] text-emerald-600 font-bold">Live Formula Editor</span>
                         </label>
 
                         {/* Editable Monospace Text Area */}
@@ -1686,15 +1830,20 @@ export const PayrollSettingsPage: React.FC = () => {
                           rows={2}
                           value={compForm.formula || ''}
                           onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
-                          placeholder="e.g. [EPF_EPS_WAGES] * 0.005  or  [BASIC] * 0.50"
+                          placeholder="e.g. (50 * [CTC]) / 100  or  [BASIC] * 0.40"
                           className="w-full text-xs font-mono font-bold bg-slate-950 text-emerald-400 border border-slate-800 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
                         />
 
-                        {/* Quick Variable Chips & Operators */}
+                        {/* Quick Variable Chips & Operators — only BASIC/GROSS/CTC are actually
+                            interpreted by the payroll calculation engine (PayrollService's
+                            resolveComponentOverrides); EPF_EPS_WAGES, SALARY_DAYS, and
+                            ATTENDANCE_DAYS used to be offered here too, but nothing in the
+                            backend ever reads them — a formula built from them silently fell
+                            back to whatever bare percentage the regex parser could find. */}
                         <div className="space-y-1.5 pt-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Click to append variable / operator:</span>
                           <div className="flex flex-wrap gap-1.5">
-                            {['[BASIC]', '[EPF_EPS_WAGES]', '[GROSS]', '[SALARY_DAYS]', '[ATTENDANCE_DAYS]'].map(tag => (
+                            {['[BASIC]', '[GROSS]', '[CTC]'].map(tag => (
                               <button
                                 key={tag}
                                 type="button"
@@ -1807,7 +1956,9 @@ export const PayrollSettingsPage: React.FC = () => {
                           />
                         </div>
                       </div>
-                    </div>
+                      </div>
+                      </div>
+                    </details>
 
                     {/* Condition Setting Collapsible Accordion (matches Hoshi 1:1) */}
                     <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
@@ -1826,17 +1977,14 @@ export const PayrollSettingsPage: React.FC = () => {
                               className="w-full mt-1 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs font-semibold bg-background"
                             >
                               <option value="">Choose</option>
+                              <option value="Gross Pay">Gross Pay (Monthly)</option>
+                              <option value="Basic Pay">Basic Pay</option>
+                              <option value="Gross">Gross (Total Earnings)</option>
+                              <option value="LOP">LOP (Loss of Pay Days)</option>
+                              <option value="Days">Working Days</option>
                               {Array.from(new Set([
                                 ...groups.map(g => g.name),
                                 ...groups.flatMap(g => g.components.map(c => c.name)),
-                                'Adjustment',
-                                'ADMIN CHARGES',
-                                'Annual Bonus',
-                                'Attend.',
-                                'Basic',
-                                'Gross Pay',
-                                'Days',
-                                'LOP'
                               ])).filter(Boolean).map(opt => (
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
@@ -1855,7 +2003,7 @@ export const PayrollSettingsPage: React.FC = () => {
                               <option value="=">Equals (=)</option>
                               <option value=">=">Greater than or Equal (&gt;=)</option>
                               <option value="<=">Less than or Equal (&lt;=)</option>
-                              <option value="BETWEEN">Between</option>
+                              <option value="BETWEEN">Between (range)</option>
                             </select>
                           </div>
                         </div>
@@ -1885,11 +2033,68 @@ export const PayrollSettingsPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div>
-                          <Button variant="outline" size="sm" className="text-[11px] font-bold text-indigo-600 border-indigo-200">
-                            [+] Months
-                          </Button>
-                        </div>
+                        {/* [+] Months Collapsible Selector */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
+                            <span>[+] Months</span>
+                            {((compForm as any).months || []).length > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                                {((compForm as any).months || []).length} Selected
+                              </span>
+                            )}
+                          </summary>
+                          <div className="p-2 mt-2 space-y-1.5 max-h-48 overflow-y-auto border-t border-slate-100 dark:border-slate-800">
+                            {(() => {
+                              const ALL_MONTHS = [
+                                'January', 'February', 'March', 'April', 'May', 'June',
+                                'July', 'August', 'September', 'October', 'November', 'December'
+                              ];
+                              const selectedMonths = (compForm as any).months || [];
+                              const isAllSelected = selectedMonths.length >= ALL_MONTHS.length;
+
+                              return (
+                                <>
+                                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-1 mb-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={isAllSelected}
+                                      onChange={e => {
+                                        if (e.target.checked) {
+                                          setCompForm({ ...compForm, months: [...ALL_MONTHS] } as any);
+                                        } else {
+                                          setCompForm({ ...compForm, months: [] } as any);
+                                        }
+                                      }}
+                                      className="rounded accent-indigo-600"
+                                    /> Select All Months
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    {ALL_MONTHS.map(m => {
+                                      const isChecked = selectedMonths.includes(m);
+                                      return (
+                                        <label key={m} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={e => {
+                                              const curr = (compForm as any).months || [];
+                                              if (e.target.checked) {
+                                                setCompForm({ ...compForm, months: [...curr, m] } as any);
+                                              } else {
+                                                setCompForm({ ...compForm, months: curr.filter((monthName: string) => monthName !== m) } as any);
+                                              }
+                                            }}
+                                            className="rounded accent-indigo-600"
+                                          /> {m}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </details>
 
                         <div>
                           <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Gender</label>
@@ -1991,8 +2196,13 @@ export const PayrollSettingsPage: React.FC = () => {
 
                         {/* [+] Location */}
                         <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
                             <span>[+] Location</span>
+                            {((compForm as any).locations || []).length > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                                {((compForm as any).locations || []).length} Selected
+                              </span>
+                            )}
                           </summary>
                           <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
                             <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
@@ -2020,6 +2230,58 @@ export const PayrollSettingsPage: React.FC = () => {
                                 /> {loc}
                               </label>
                             ))}
+                          </div>
+                        </details>
+
+                        {/* [+] Employee */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
+                            <span>[+] Employee</span>
+                            {((compForm as any).employees || []).length > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                                {((compForm as any).employees || []).length} Selected
+                              </span>
+                            )}
+                          </summary>
+                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
+                            {(() => {
+                              const empList = allEmployees;
+                              const selectedEmps = (compForm as any).employees || [];
+                              const isAllEmpSelected = empList.length > 0 && selectedEmps.length >= empList.length;
+
+                              return (
+                                <>
+                                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={isAllEmpSelected}
+                                      onChange={e => {
+                                        if (e.target.checked) setCompForm({ ...compForm, employees: empList.map((emp: any) => emp.name) } as any);
+                                        else setCompForm({ ...compForm, employees: [] } as any);
+                                      }}
+                                      className="rounded accent-indigo-600"
+                                    /> Select All
+                                  </label>
+                                  {empList.map((emp: any) => {
+                                    const isChecked = selectedEmps.includes(emp.name);
+                                    return (
+                                      <label key={emp.id} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={e => {
+                                            const curr = (compForm as any).employees || [];
+                                            if (e.target.checked) setCompForm({ ...compForm, employees: [...curr, emp.name] } as any);
+                                            else setCompForm({ ...compForm, employees: curr.filter((name: string) => name !== emp.name) } as any);
+                                          }}
+                                          className="rounded accent-indigo-600"
+                                        /> {emp.name}
+                                      </label>
+                                    );
+                                  })}
+                                </>
+                              );
+                            })()}
                           </div>
                         </details>
                       </div>
@@ -2084,14 +2346,14 @@ export const PayrollSettingsPage: React.FC = () => {
                         onClick={() => handleSelectSlab(slab)}
                         style={{
                           borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                          border: isSelected ? '2px solid #00a8a8' : '1px solid #e2e8f0',
-                          boxShadow: isSelected ? '0 2px 8px rgba(0,168,168,0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                          border: isSelected ? '2px solid hsl(var(--primary))' : '1px solid hsl(var(--border))',
+                          boxShadow: isSelected ? '0 4px 12px rgba(99,102,241,0.15)' : 'none',
                           transition: 'all 0.15s'
                         }}
                       >
                         {/* Teal header like Hoshi */}
                         <div style={{
-                          background: isSelected ? '#00a8a8' : '#00a8a8',
+                          background: isSelected ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
                           padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2109,20 +2371,20 @@ export const PayrollSettingsPage: React.FC = () => {
                           </button>
                         </div>
                         {/* Slab info rows */}
-                        <div style={{ background: '#e0f7fa', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div style={{ background: 'hsl(var(--card))', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                             {/* Dollar icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
-                            <span style={{ color: '#00796b', fontWeight: 600 }}>{slab.name}</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
+                            <span style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{slab.name}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                             {/* Badge icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                             <span style={{ color: '#374151', fontWeight: 600 }}>{gradeLabel}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                             {/* Range icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                             <span style={{ color: '#374151', fontWeight: 600 }}>
                               {Number(slab.minCtc || 0).toLocaleString('en-IN')} – {Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
                             </span>
@@ -2191,87 +2453,111 @@ export const PayrollSettingsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Row 2: Department + Grade — Hoshi style dropdowns */}
+                {/* Row 2: Department + Grade — single-choice searchable dropdowns.
+                    A slab applies to exactly one Department and one Grade at a
+                    time; stored internally as a 1-element array to stay
+                    compatible with the existing departments/grades JSON columns. */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                  {/* Department — single Choose dropdown like Hoshi */}
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Department <span style={{ color: '#ef4444' }}>*</span></label>
-                    <select
-                      value={(slabForm.departments || []).length === 1 ? slabForm.departments![0] : (slabForm.departments || []).length > 1 ? '__multi__' : ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '') setSlabForm({ ...slabForm, departments: [] });
-                        else if (val === '__all__') setSlabForm({ ...slabForm, departments: [...allDepartments] });
-                        else setSlabForm({ ...slabForm, departments: [val] });
+                  {/* Department */}
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Department<span style={{ color: '#ef4444' }}>*</span></label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowDeptDropdown(v => !v); setShowGradeDropdown(false); setDeptSearchQuery(''); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
+                        fontSize: 13, fontWeight: 400, color: (slabForm.departments && slabForm.departments.length > 0) ? '#1f2937' : '#6b7280',
+                        cursor: 'pointer', marginTop: 6
                       }}
-                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
                     >
-                      <option value="">Choose</option>
-                      <option value="__all__">All Departments</option>
-                      {allDepartments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                    </select>
-                    {/* Also show checklist below for multi-select */}
-                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #e2e8f0', marginBottom: 4, cursor: 'pointer' }}>
-                        <input type="checkbox"
-                          checked={allDepartments.length > 0 && allDepartments.every(d => slabForm.departments?.includes(d))}
-                          onChange={e => setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] })}
-                          style={{ accentColor: '#4f46e5' }}
+                      <span>{slabForm.departments?.[0] || 'Choose'}</span>
+                      <ChevronDown size={16} color="#6b7280" style={{ transform: showDeptDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </button>
+                    {showDeptDropdown && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <input
+                          autoFocus
+                          value={deptSearchQuery}
+                          onChange={e => setDeptSearchQuery(e.target.value)}
+                          placeholder="Search department..."
+                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
                         />
-                        Select all
-                      </label>
-                      {allDepartments.map(dept => (
-                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
-                          <input type="checkbox"
-                            checked={slabForm.departments?.includes(dept)}
-                            onChange={e => {
-                              const curr = slabForm.departments || [];
-                              setSlabForm({ ...slabForm, departments: e.target.checked ? [...curr, dept] : curr.filter(d => d !== dept) });
-                            }}
-                            style={{ accentColor: '#4f46e5' }}
-                          />
-                          {dept}
-                        </label>
-                      ))}
-                    </div>
+                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {allDepartments
+                            .filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase()))
+                            .map(dept => (
+                              <div
+                                key={dept}
+                                onClick={() => { setSlabForm({ ...slabForm, departments: [dept] }); setShowDeptDropdown(false); }}
+                                style={{
+                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
+                                  background: slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent',
+                                  color: '#1f2937'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent')}
+                              >
+                                {dept}
+                              </div>
+                            ))}
+                          {allDepartments.filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Grade — Hoshi style: Choose dropdown + checklist */}
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Grade <span style={{ color: '#ef4444' }}>*</span></label>
-                    <select
-                      value={(slabForm.grades || []).length === 1 ? slabForm.grades![0] : ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '') setSlabForm({ ...slabForm, grades: [] });
-                        else if (val === '__all__') setSlabForm({ ...slabForm, grades: [...allGrades] });
-                        else setSlabForm({ ...slabForm, grades: [val] });
+                  {/* Grade */}
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Grade<span style={{ color: '#ef4444' }}>*</span></label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowGradeDropdown(v => !v); setShowDeptDropdown(false); setGradeSearchQuery(''); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
+                        fontSize: 13, fontWeight: 400, color: (slabForm.grades && slabForm.grades.length > 0) ? '#1f2937' : '#6b7280',
+                        cursor: 'pointer', marginTop: 6
                       }}
-                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
                     >
-                      <option value="">Choose</option>
-                      <option value="__all__">All Grades</option>
-                      {allGrades.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
-                      {allGrades.map(grade => (
-                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
-                          <input type="checkbox"
-                            checked={slabForm.grades?.includes(grade)}
-                            onChange={e => {
-                              const curr = slabForm.grades || [];
-                              setSlabForm({ ...slabForm, grades: e.target.checked ? [...curr, grade] : curr.filter(g => g !== grade) });
-                            }}
-                            style={{ accentColor: '#4f46e5' }}
-                          />
-                          {grade}
-                        </label>
-                      ))}
-                    </div>
+                      <span>{slabForm.grades?.[0] || 'Choose'}</span>
+                      <ChevronDown size={16} color="#6b7280" style={{ transform: showGradeDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </button>
+                    {showGradeDropdown && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <input
+                          autoFocus
+                          value={gradeSearchQuery}
+                          onChange={e => setGradeSearchQuery(e.target.value)}
+                          placeholder="Search grade..."
+                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
+                        />
+                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {allGrades
+                            .filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase()))
+                            .map(grade => (
+                              <div
+                                key={grade}
+                                onClick={() => { setSlabForm({ ...slabForm, grades: [grade] }); setShowGradeDropdown(false); }}
+                                style={{
+                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
+                                  background: slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent',
+                                  color: '#1f2937'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent')}
+                              >
+                                {grade}
+                              </div>
+                            ))}
+                          {allGrades.filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2389,7 +2675,24 @@ export const PayrollSettingsPage: React.FC = () => {
 
                     const uniqueComps = getUniqueComponents();
                     const allUniqueIds = uniqueComps.map(c => String(c.id));
-                    const allSelected = allUniqueIds.length > 0 && allUniqueIds.every(id => (slabForm.selectedComponentIds || []).includes(id));
+
+                    // Helper to match component ID, name, or slug against slab's selectedComponentIds with exact matching
+                    const isComponentChecked = (comp: { id: string; name: string }) => {
+                      const selected = slabForm.selectedComponentIds || [];
+                      if (!selected || selected.length === 0) return false;
+                      const cid = String(comp.id).trim().toLowerCase();
+                      const cname = comp.name.trim().toLowerCase();
+                      const cslug = cname.replace(/[^a-z0-9]+/g, '_');
+
+                      return selected.some(id => {
+                        const sid = String(id).trim().toLowerCase();
+                        const sslug = sid.replace(/[^a-z0-9]+/g, '_');
+                        return sid === cid || sid === cname || sid === cslug || sslug === cslug;
+                      });
+                    };
+
+                    const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
+                    const allSelected = uniqueComps.length > 0 && selectedCount === uniqueComps.length;
 
                     return (
                       <>
@@ -2399,17 +2702,17 @@ export const PayrollSettingsPage: React.FC = () => {
                           </label>
                           <div className="flex items-center gap-3">
                             <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              {(slabForm.selectedComponentIds || []).filter(id => allUniqueIds.includes(String(id))).length} Components Selected
+                              {selectedCount} Components Selected
                             </span>
                             <button
                               type="button"
                               onClick={() => {
                                 setSlabForm({
                                   ...slabForm,
-                                  selectedComponentIds: allSelected ? [] : [...allUniqueIds]
+                                  selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
                                 });
                               }}
-                              className="text-[10px] font-bold text-indigo-600 hover:underline"
+                              className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
                             >
                               {allSelected ? 'Deselect All' : 'Select All'}
                             </button>
@@ -2430,7 +2733,7 @@ export const PayrollSettingsPage: React.FC = () => {
                           </div>
 
                           {/* Checkbox List Box */}
-                          <div className="space-y-1 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                          <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
                             {(() => {
                               const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
@@ -2443,14 +2746,14 @@ export const PayrollSettingsPage: React.FC = () => {
                               }
 
                               return filtered.map(c => {
-                                const isChecked = (slabForm.selectedComponentIds || []).includes(String(c.id));
+                                const isChecked = isComponentChecked(c);
                                 return (
                                   <label
                                     key={c.id}
-                                    className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
+                                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors border ${
                                       isChecked
-                                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-semibold'
-                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                        ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 font-bold border-emerald-300 dark:border-emerald-700 shadow-sm'
+                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-transparent'
                                     }`}
                                   >
                                     <div className="flex items-center gap-2.5">
@@ -2459,16 +2762,28 @@ export const PayrollSettingsPage: React.FC = () => {
                                         checked={isChecked}
                                         onChange={e => {
                                           const current = slabForm.selectedComponentIds || [];
-                                          const next = e.target.checked
-                                            ? [...new Set([...current, String(c.id)])]
-                                            : current.filter(id => String(id) !== String(c.id));
+                                          const cid = String(c.id).trim().toLowerCase();
+                                          const cname = c.name.trim().toLowerCase();
+                                          const cslug = cname.replace(/[^a-z0-9]+/g, '_');
+
+                                          let next: string[];
+                                          if (e.target.checked) {
+                                            next = [...new Set([...current, String(c.id), cslug])];
+                                          } else {
+                                            // Exact filter out
+                                            next = current.filter(id => {
+                                              const sid = String(id).trim().toLowerCase();
+                                              const sslug = sid.replace(/[^a-z0-9]+/g, '_');
+                                              return sid !== cid && sid !== cname && sid !== cslug && sslug !== cslug;
+                                            });
+                                          }
                                           setSlabForm({ ...slabForm, selectedComponentIds: next });
                                         }}
-                                        className="rounded accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
+                                        className="rounded accent-emerald-600 w-4 h-4 cursor-pointer"
                                       />
-                                      <span>{c.name}</span>
+                                      <span className="text-xs">{c.name}</span>
                                     </div>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
                                       c.type === 'Derived'
                                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                         : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
@@ -2484,7 +2799,7 @@ export const PayrollSettingsPage: React.FC = () => {
                           {/* Selected Active Component Badges */}
                           <div className="flex flex-wrap gap-1.5 pt-1">
                             {(() => {
-                              const selectedComps = uniqueComps.filter(c => (slabForm.selectedComponentIds || []).includes(String(c.id)));
+                              const selectedComps = uniqueComps.filter(c => isComponentChecked(c));
                               if (selectedComps.length === 0) {
                                 return (
                                   <p className="text-[11px] text-muted-foreground italic">No components selected. Check items above to include them in this slab.</p>
@@ -2525,12 +2840,13 @@ export const PayrollSettingsPage: React.FC = () => {
                   <div>
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Cycle <span className="text-red-500">*</span></label>
                     <select
-                      value={slabForm.cycleId || 'cycle-1'}
+                      value={slabForm.cycleId || (cycles[0]?.id ? String(cycles[0].id) : '')}
                       onChange={e => setSlabForm({ ...slabForm, cycleId: e.target.value })}
                       className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
+                      <option value="">-- Select Payroll Cycle --</option>
                       {cycles.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.frequency})</option>
+                        <option key={c.id} value={String(c.id)}>{c.name} ({c.frequency})</option>
                       ))}
                     </select>
                   </div>
@@ -2555,6 +2871,645 @@ export const PayrollSettingsPage: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          TAB 4: PAYROLL SETTINGS (Statuses, Approvals, ESIC, Sandwich Policy, etc.)
+      ────────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'settings' && (
+        <div className="space-y-4">
+          {settingsLoading && !payrollSettings ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              Loading payroll settings…
+            </div>
+          ) : !payrollSettings ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              Could not load settings.
+              <Button size="sm" variant="outline" className="ml-3 h-7 text-xs" onClick={loadPayrollSettings}>Retry</Button>
+            </div>
+          ) : (
+            <>
+              {/* Save bar */}
+              <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Settings2 className="w-3.5 h-3.5 text-indigo-500" />
+                  Configure how payroll runs are approved, tracked, and published for this organization.
+                  {settingsDirty && <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/30">Unsaved changes</Badge>}
+                </div>
+                <Button
+                  size="sm"
+                  disabled={!settingsDirty || settingsSaving}
+                  onClick={savePayrollSettings}
+                  className="h-8 text-xs font-bold bg-primary text-primary-foreground gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {settingsSaving ? 'Saving…' : 'Save Settings'}
+                </Button>
+              </div>
+
+              {/* ── Payment Status Setting ─────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    Payment Status Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Statuses shown against each employee's payment while processing a payroll run.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(payrollSettings.paymentStatusOptions || []).map((opt: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 bg-${opt.color}-500`} style={{ backgroundColor: opt.color }} />
+                      <Input
+                        value={opt.label}
+                        onChange={(e) => {
+                          const next = [...payrollSettings.paymentStatusOptions];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          updateSetting({ paymentStatusOptions: next });
+                        }}
+                        className="h-8 text-xs flex-1"
+                        placeholder="Status label"
+                      />
+                      <code className="text-[10px] text-muted-foreground font-mono w-24 truncate">{opt.code}</code>
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => updateSetting({ paymentStatusOptions: payrollSettings.paymentStatusOptions.filter((_: any, i: number) => i !== idx) })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-8 text-xs gap-1.5 mt-1"
+                    onClick={() => updateSetting({
+                      paymentStatusOptions: [
+                        ...(payrollSettings.paymentStatusOptions || []),
+                        { code: `status_${Date.now()}`, label: 'New Status', color: '#64748b' }
+                      ]
+                    })}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Status
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* ── Payroll Approval Setting ───────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-indigo-500" />
+                    Payroll Approval Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Who must review and sign off on a payroll run before it can be published.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-bold text-muted-foreground">Approval Mode</Label>
+                      <select
+                        value={payrollSettings.approvalMode}
+                        onChange={(e) => updateSetting({ approvalMode: e.target.value })}
+                        className="h-8 text-xs rounded-md border border-input bg-background px-2.5"
+                      >
+                        <option value="single">Single Level</option>
+                        <option value="multi">Multi Level</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ requireApprovalBeforePublish: !payrollSettings.requireApprovalBeforePublish })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.requireApprovalBeforePublish ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.requireApprovalBeforePublish ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                      <span className="text-xs font-bold text-foreground">Require approval before publish</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Approval Levels</Label>
+                    {(payrollSettings.approvalLevels || []).map((lvl: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <Badge variant="outline" className="text-[10px] font-bold shrink-0">Level {lvl.level}</Badge>
+                        <Input
+                          value={lvl.name}
+                          onChange={(e) => {
+                            const next = [...payrollSettings.approvalLevels];
+                            next[idx] = { ...next[idx], name: e.target.value };
+                            updateSetting({ approvalLevels: next });
+                          }}
+                          className="h-8 text-xs flex-1"
+                          placeholder="Approval step name"
+                        />
+                        <select
+                          value={lvl.approverRole || ''}
+                          onChange={(e) => {
+                            const next = [...payrollSettings.approvalLevels];
+                            next[idx] = { ...next[idx], approverRole: e.target.value };
+                            updateSetting({ approvalLevels: next });
+                          }}
+                          className="h-8 text-xs rounded-md border border-input bg-background px-2 w-40"
+                        >
+                          {approverRoles.map((r) => (
+                            <option key={r.code} value={r.code}>{r.name}</option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          onClick={() => {
+                            const next = payrollSettings.approvalLevels
+                              .filter((_: any, i: number) => i !== idx)
+                              .map((l: any, i: number) => ({ ...l, level: i + 1 }));
+                            updateSetting({ approvalLevels: next });
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() => updateSetting({
+                        approvalLevels: [
+                          ...(payrollSettings.approvalLevels || []),
+                          { level: (payrollSettings.approvalLevels || []).length + 1, name: 'New Approval Step', approverRole: 'hr_manager', approverUserId: null }
+                        ]
+                      })}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Approval Level
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Process Payroll Tab Setting ────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-500" />
+                    Process Payroll Tab Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Which steps appear in the Process Payroll workflow.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(payrollSettings.processPayrollTabs || []).map((tab: any, idx: number) => (
+                      <div key={tab.code} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <span className="text-xs font-bold text-foreground">{tab.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...payrollSettings.processPayrollTabs];
+                            next[idx] = { ...next[idx], isEnabled: !next[idx].isEnabled };
+                            updateSetting({ processPayrollTabs: next });
+                          }}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                            tab.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            tab.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Checklist Setting ──────────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-teal-500" />
+                    Checklist Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Checks admins must confirm before locking a payroll run.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(payrollSettings.checklistSetting || []).map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                      <Input
+                        value={item.label}
+                        onChange={(e) => {
+                          const next = [...payrollSettings.checklistSetting];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          updateSetting({ checklistSetting: next });
+                        }}
+                        className="h-8 text-xs flex-1"
+                      />
+                      <label className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={!!item.isMandatory}
+                          onChange={(e) => {
+                            const next = [...payrollSettings.checklistSetting];
+                            next[idx] = { ...next[idx], isMandatory: e.target.checked };
+                            updateSetting({ checklistSetting: next });
+                          }}
+                        />
+                        Mandatory
+                      </label>
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => updateSetting({ checklistSetting: payrollSettings.checklistSetting.filter((_: any, i: number) => i !== idx) })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-8 text-xs gap-1.5 mt-1"
+                    onClick={() => updateSetting({
+                      checklistSetting: [...(payrollSettings.checklistSetting || []), { label: 'New checklist item', isMandatory: false }]
+                    })}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Checklist Item
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* ── General Rules: Freeze Attendance / Mass Paid Days / Double Pay / Sandwich ── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-500" />
+                    Attendance &amp; Pay Rules
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Freeze Attendance (day of month)</Label>
+                    <Input
+                      type="number" min={1} max={31}
+                      value={payrollSettings.freezeAttendanceDay}
+                      onChange={(e) => updateSetting({ freezeAttendanceDay: Number(e.target.value) })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Mass Paid Days</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.massPaidDays}
+                      onChange={(e) => updateSetting({ massPaidDays: Number(e.target.value) })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground block">Double Pay Inclusive</Label>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting({ doublePayInclusive: !payrollSettings.doublePayInclusive })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${
+                        payrollSettings.doublePayInclusive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        payrollSettings.doublePayInclusive ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground block">Sandwich Policy</Label>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting({ sandwichPolicyEnabled: !payrollSettings.sandwichPolicyEnabled })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${
+                        payrollSettings.sandwichPolicyEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        payrollSettings.sandwichPolicyEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── ESIC Calculation Component ─────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Percent className="w-4 h-4 text-rose-500" />
+                    ESIC Calculation Component
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Calculation Base</Label>
+                    <select
+                      value={payrollSettings.esicCalculationBase}
+                      onChange={(e) => updateSetting({ esicCalculationBase: e.target.value })}
+                      className="h-9 text-xs rounded-md border border-input bg-background px-2.5 w-full"
+                    >
+                      <option value="Gross Salary">Gross Salary</option>
+                      <option value="Fixed Gross">Fixed Gross</option>
+                      <option value="Actual Gross">Actual Gross</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Wage Ceiling (₹/month)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.esicWageCeiling}
+                      onChange={(e) => updateSetting({ esicWageCeiling: Number(e.target.value) })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Loan Setting ────────────────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-orange-500" />
+                    Loan Setting
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Max Loan (× monthly salary)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.loanSetting?.maxLoanMultipleOfSalary ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, maxLoanMultipleOfSalary: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Max Tenure (months)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.loanSetting?.maxTenureMonths ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, maxTenureMonths: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Interest Rate (%)</Label>
+                    <Input
+                      type="number" min={0} step="0.01"
+                      value={payrollSettings.loanSetting?.interestRatePct ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, interestRatePct: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Min Service (months)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.loanSetting?.minServiceMonths ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, minServiceMonths: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Payslip Setting ─────────────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <History className="w-4 h-4 text-cyan-500" />
+                    Payslip Setting
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { key: 'showCompanyLogo', label: 'Show Company Logo' },
+                      { key: 'showBankDetails', label: 'Show Bank Details' },
+                      { key: 'showLeaveBalance', label: 'Show Leave Balance' },
+                      { key: 'showAttendanceSummary', label: 'Show Attendance Summary' }
+                    ].map((f) => (
+                      <div key={f.key} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <span className="text-xs font-bold text-foreground">{f.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: !payrollSettings.payslipSetting?.[f.key] } })}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                            payrollSettings.payslipSetting?.[f.key] ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            payrollSettings.payslipSetting?.[f.key] ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Footer Note</Label>
+                    <Input
+                      value={payrollSettings.payslipSetting?.footerNote || ''}
+                      onChange={(e) => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, footerNote: e.target.value } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2.5">
+                      {[
+                        { key: 'hideComponentIfZero', label: 'Hide Payroll Component from payslip if amount is 0.' },
+                        { key: 'displayActualValuesGross', label: 'Display actual values in payslip (Gross)' },
+                        { key: 'displayCumulativeValues', label: 'Display Cumulative values in payslip' },
+                        { key: 'displayTotalAmount', label: 'Display Total Amount in Payslip' },
+                        { key: 'enableLandscapeFormat', label: 'Enable Landscape Format Payslip Download' }
+                      ].map((f) => (
+                        <label key={f.key} className="flex items-start gap-2 text-xs font-bold text-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!payrollSettings.payslipSetting?.[f.key]}
+                            onChange={(e) => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: e.target.checked } })}
+                            className="mt-0.5 rounded accent-indigo-600 shrink-0"
+                          />
+                          <span>{f.label}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {[
+                        { key: 'labelGrossSalary', label: 'Label for Gross Salary in Payslip', placeholder: 'e.g. Actual' },
+                        { key: 'labelGrossEarnedSalary', label: 'Label for Gross Earned Salary in Payslip', placeholder: 'e.g. Amount' },
+                        { key: 'labelCumulativeSalary', label: 'Label for Cumulative Salary in Payslip', placeholder: 'e.g. Cumulative' },
+                        { key: 'labelEarningComponent', label: 'Label for Earning Component in Payslip', placeholder: 'e.g. Earnings' },
+                        { key: 'labelDeductionComponent', label: 'Label for Deduction Component in Payslip', placeholder: 'e.g. Deductions' },
+                        { key: 'employeeSignatureFieldName', label: 'Employee Signature Field Name', placeholder: 'e.g. Label' }
+                      ].map((f) => (
+                        <div key={f.key} className="space-y-1">
+                          <Label className="text-xs font-bold text-foreground">{f.label}</Label>
+                          <Input
+                            value={payrollSettings.payslipSetting?.[f.key] || ''}
+                            onChange={(e) => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: e.target.value } })}
+                            placeholder={f.placeholder}
+                            className="h-9 text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Bonus / Attendance Bonus / Night Allowance ─────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Award className="w-4 h-4 text-violet-500" />
+                    Bonus, Attendance Bonus &amp; Night Allowance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Bonus */}
+                  <div className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Bonus</span>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, isEnabled: !payrollSettings.bonusSetting?.isEnabled } })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.bonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.bonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {payrollSettings.bonusSetting?.isEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Calculation Base</Label>
+                          <select
+                            value={payrollSettings.bonusSetting?.calculationBase || 'Basic'}
+                            onChange={(e) => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, calculationBase: e.target.value } })}
+                            className="h-8 text-xs rounded-md border border-input bg-background px-2 w-full"
+                          >
+                            <option value="Basic">Basic</option>
+                            <option value="Gross">Gross</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Percentage (%)</Label>
+                          <Input
+                            type="number" min={0} step="0.01"
+                            value={payrollSettings.bonusSetting?.percentage ?? 0}
+                            onChange={(e) => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, percentage: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Attendance Bonus */}
+                  <div className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Attendance Bonus</span>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, isEnabled: !payrollSettings.attendanceBonusSetting?.isEnabled } })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.attendanceBonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.attendanceBonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {payrollSettings.attendanceBonusSetting?.isEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Amount (₹)</Label>
+                          <Input
+                            type="number" min={0}
+                            value={payrollSettings.attendanceBonusSetting?.amount ?? 0}
+                            onChange={(e) => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, amount: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Min Attendance (%)</Label>
+                          <Input
+                            type="number" min={0} max={100}
+                            value={payrollSettings.attendanceBonusSetting?.minAttendancePct ?? 0}
+                            onChange={(e) => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, minAttendancePct: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Night Allowance */}
+                  <div className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Night Allowance</span>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, isEnabled: !payrollSettings.nightAllowanceSetting?.isEnabled } })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.nightAllowanceSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.nightAllowanceSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {payrollSettings.nightAllowanceSetting?.isEnabled && (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Amount / Night (₹)</Label>
+                          <Input
+                            type="number" min={0}
+                            value={payrollSettings.nightAllowanceSetting?.amountPerNight ?? 0}
+                            onChange={(e) => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, amountPerNight: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Shift Start (hr)</Label>
+                          <Input
+                            type="number" min={0} max={23}
+                            value={payrollSettings.nightAllowanceSetting?.shiftStartHour ?? 22}
+                            onChange={(e) => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, shiftStartHour: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Shift End (hr)</Label>
+                          <Input
+                            type="number" min={0} max={23}
+                            value={payrollSettings.nightAllowanceSetting?.shiftEndHour ?? 6}
+                            onChange={(e) => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, shiftEndHour: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       )}
 

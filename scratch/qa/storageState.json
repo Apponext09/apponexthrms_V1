@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5173",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NiIsIm9pZCI6IjE0Iiwic2lkIjoiNDU2NDQ3ZjAtODc0ZC00MWNhLWJlMjgtNGEwMGYwYzkxYmRlIiwiaWF0IjoxNzg2OTQ5NTc2LCJleHAiOjE3ODcwMzU5NzZ9.n462J1hhOWVFVKcaP6Ei4PojtlvyOKca5BVXamDcEWvFu9PA5ex09z7OW9mCEXZS-1Qn5Y8q8JqphI0HYEV65S-67oYAiiV8B5-mbDn4o9s6AEBuuTEZj19NETCx3oF4BI4Bxts-YPTZNLN_j_4FJcovIxee9xJ1-vDdQ5jLvkxCcI1BBlddqgTLummWYp7Mk4vXow2XyZed7UV84-rKoSXlmaKsS48x68KPUv-DHu-FPB6BshS0As-pS3XL7Ch_oxL6H3-PmhP7RZ8N6S-OyaWMvG4wqLP0BQit98ji3OyYO1vIN70YrOHiYT_aVkVVnkkYtAAW3IBv3f2JoPALBg"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NiIsIm9pZCI6IjE0Iiwic2lkIjoiNDU2NDQ3ZjAtODc0ZC00MWNhLWJlMjgtNGEwMGYwYzkxYmRlIiwiaWF0IjoxNzg2OTQ5NTc2LCJleHAiOjE3ODc1NTQzNzZ9.gX5KTrR0-KMY1PngyvngCNGXUt-Fs0dLAPANVHSvii1EJcdFqPTiD_z2agkS25jaNWQTHmc-FTTERUtIM9EpVK_1bQlUnqChnlNOj40N9CiTBN9c8qXacreVlZYRUUpdCv2IPrw5VBXN6sJIx1SK774D26tnF8BEcuTdm8nwGmNBgiIJzHMEmbKvQcB-gX5DoM9jSeqBdrvAFOzcCL2jW9hyy8B9mLpBkf8T-R3jsnJ3mFRCV0LUnvb1IGZSj0GTB7viJ5MTkKbf2hzdASWSUXo1ecJNZXRH-nBqFV99t3T8jUb3f0Gd9szPuDAaWh-mKvk3cPnsx_VJCAftXLSaCQ"
+        },
+        {
+          "name": "hrms_attendance_break_state",
+          "value": "{\"state\":{\"isOnBreak\":false,\"breakStartTime\":null,\"isCheckedIn\":false,\"checkInTime\":null},\"version\":0}"
+        },
+        {
+          "name": "auth-storage",
+          "value": "{\"state\":{\"user\":{\"id\":46,\"email\":\"shakya@gmail.com\",\"firstName\":\"shakya\",\"lastName\":\"User\",\"organizationId\":14,\"organizationName\":\"sonex1\",\"organizationCode\":\"ORG-969\",\"organizationLocation\":\"Karad\",\"roles\":[\"organization_admin\"],\"permissions\":[\"advance:approve\",\"advance:create\",\"advance:view\",\"loan:approve\",\"loan:create\",\"loan:view\",\"payroll:approve\",\"payroll:generate\",\"payroll:lock\",\"payroll:process\",\"payroll:publish\",\"payroll:unlock\",\"payroll:view\",\"payslip:lock\",\"payslip:send\",\"payslip:view\",\"recruitment.application.read\",\"recruitment.application.write\",\"recruitment.assessment.read\",\"recruitment.assessment.write\",\"recruitment.candidate.read\",\"recruitment.candidate.write\",\"recruitment.interview.read\",\"recruitment.interview.write\",\"recruitment.job.read\",\"recruitment.job.write\",\"recruitment.mrf.read\",\"recruitment.mrf.write\",\"recruitment.offer.read\",\"recruitment.offer.write\",\"recruitment.read\",\"revision:approve\",\"revision:request\",\"revision:submit\",\"revision:view\",\"settlement:approve\",\"settlement:calculate\",\"settlement:create\",\"settlement:process\",\"settlement:submit\",\"settlement:view\",\"structure:assign\",\"structure:create\",\"structure:edit\",\"structure:view\",\"tax:declare\",\"tax:view\"],\"employeeId\":46,\"avatarUrl\":\"\",\"departmentName\":\"Finance\",\"deptName\":\"\",\"designation\":\"Organization Administrator\",\"companyId\":null,\"companyName\":null,\"phone\":\"+918767008849\",\"bio\":\"\"},\"isAuthenticated\":true},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

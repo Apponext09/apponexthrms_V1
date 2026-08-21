@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   const hasTable = await knex.schema.hasTable('employee_face_encodings');
   if (!hasTable) {
     await knex.schema.createTable('employee_face_encodings', (table) => {
-      table.string('id', 36).primary();
+      table.string('id', 36).primary().defaultTo(knex.raw('(UUID())'));
       table.string('tenant_id', 36).notNullable().index();
       table.string('employee_id', 36).notNullable().unique().index();
       table.text('employee_name').nullable();

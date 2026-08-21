@@ -149,23 +149,24 @@ export class OfferService {
       updated_by: ctx.userId,
     } as any);
 
-    // Get application to find candidate
-    const appId = (offer as any).applicationId || (offer as any).application_id;
-    const application = await this.applicationRepo.getById(ctx, appId);
-    if (application) {
-      try {
-        await this.notificationService.sendNotification(ctx, {
-          userId: application.candidate_id, // In reality, we'd need to join with candidates table
-          type: 'offer_sent',
-          title: 'Job Offer Received',
-          message: `You have received an offer for ${offer.position_title}. Offer expires on ${offer.offer_expiry_date}`,
-          metadata: {
-            offerId: offerId,
-            applicationId: appId,
-          },
-        } as any);
-      } catch (error) {
-        console.error('Failed to send offer notification:', error);
+    const targetAppId = offer.applicationId || (offer as any).application_id;
+    if (targetAppId) {
+      const application = await this.applicationRepo.getById(ctx, targetAppId);
+      if (application) {
+        try {
+          await this.notificationService.sendNotification(ctx, {
+            userId: (application as any).candidateId || (application as any).candidate_id,
+            type: 'offer_sent',
+            title: 'Job Offer Received',
+            message: `You have received an offer for ${offer.positionTitle || (offer as any).position_title}. Offer expires on ${offer.offerExpiryDate || (offer as any).offer_expiry_date}`,
+            metadata: {
+              offerId: offerId,
+              applicationId: targetAppId,
+            },
+          } as any);
+        } catch (error) {
+          console.error('Failed to send offer notification:', error);
+        }
       }
     }
 

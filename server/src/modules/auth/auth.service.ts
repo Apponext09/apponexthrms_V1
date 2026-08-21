@@ -3,7 +3,7 @@ import { hash, verify as verifyHash } from 'argon2';
 import { getKnex } from '../../db/knex';
 import { generateAccessToken, generateRefreshToken, decodeToken } from '../../common/lib/jwt';
 import { hashSha256, constantTimeCompare } from '../../common/lib/encryption';
-import { logger } from '@/common/lib/logger';
+import { logger } from '../../common/lib/logger';
 import { sendMail } from '../../common/lib/mail';
 import {
   UnauthorizedError,
@@ -198,22 +198,12 @@ export class AuthService {
           uuid: userUuid,
           organizationId: orgId,
           email: input.email,
+          firstName: input.firstName,
+          lastName: input.lastName,
           status: 'active',
-          emailVerifiedAt: null,
-          mobileVerifiedAt: null,
-          mfaEnabled: false,
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-          lastLoginAt: null,
-          lastPasswordChangedAt: null,
-          mustChangePassword: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          deletedAt: null,
           employeeId: null,
           mobile: null,
-          mobileCountryCode: null,
-        },
+        } as any,
         organization: {
           id: orgId,
           uuid: orgUuid,
@@ -279,22 +269,14 @@ export class AuthService {
         });
 
         return {
-          user: {
-            id: user?.id || superAdminRow.id,
-            email: superAdminRow.email,
-            firstName: superAdminRow.first_name || 'Super',
-            lastName: superAdminRow.last_name || 'Admin',
-            organizationId: orgId,
-          } as any,
-          organization: {
-            id: orgId,
-            name: orgName,
-            slug: orgSlug,
-          },
-          roles: ['super_admin'],
-          permissions: ['*'],
           accessToken,
           refreshToken,
+          user: {
+            email: superAdminRow.email,
+            orgName,
+            roles: ['super_admin'],
+          } as any,
+          roles: ['super_admin'],
         };
       }
     }
@@ -355,6 +337,45 @@ export class AuthService {
           user = { id: newUserId };
         }
 
+        // Ensure organization_admin role is assigned in user_roles for this user and organization
+        let adminRole = await this.db('roles')
+          .where('code', 'organization_admin')
+          .where(function () {
+            this.where('organization_id', orgAdminRow.id).orWhereNull('organization_id').orWhere('is_platform_role', true);
+          })
+          .first();
+
+        if (!adminRole) {
+          const roleUuid = uuidv4();
+          const [roleId] = await this.db('roles').insert({
+            uuid: roleUuid,
+            organization_id: orgAdminRow.id,
+            name: 'Organization Admin',
+            code: 'organization_admin',
+            description: 'Full administrative access for organization',
+            is_system: true,
+            is_platform_role: false,
+            is_default: false,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          adminRole = { id: roleId };
+        }
+
+        const userRoleExists = await this.db('user_roles')
+          .where({ organization_id: orgAdminRow.id, user_id: user.id, role_id: adminRole.id })
+          .first();
+
+        if (!userRoleExists) {
+          await this.db('user_roles').insert({
+            organization_id: orgAdminRow.id,
+            user_id: user.id,
+            role_id: adminRole.id,
+            assigned_by: user.id,
+            assigned_at: new Date(),
+          });
+        }
+
         const sessionUuid = uuidv4();
         const accessToken = generateAccessToken({
           sub: String(user.id),
@@ -372,36 +393,14 @@ export class AuthService {
         const lastName = orgAdminRow.last_name || (orgAdminRow.owner_name ? orgAdminRow.owner_name.split(' ').slice(1).join(' ') : 'User');
 
         return {
-          user: {
-            id: user.id,
-            email: orgAdminRow.email,
-            firstName,
-            lastName,
-            phone: orgAdminRow.phone || '',
-            avatarUrl: orgAdminRow.avatar_url || '',
-            bio: orgAdminRow.bio || '',
-            designation: orgAdminRow.designation || 'Organization Administrator',
-            organizationId: orgAdminRow.id,
-            organizationName: orgAdminRow.name,
-            organizationCode: orgAdminRow.code,
-            organizationLocation: orgAdminRow.location || orgAdminRow.address_line1,
-          } as any,
-          organization: {
-            id: orgAdminRow.id,
-            name: orgAdminRow.name,
-            slug: orgAdminRow.slug,
-            code: orgAdminRow.code || '',
-            ownerName: orgAdminRow.owner_name || `${firstName} ${lastName}`,
-            location: orgAdminRow.location || orgAdminRow.address_line1,
-            email: orgAdminRow.email,
-            phone: orgAdminRow.phone,
-            website: orgAdminRow.website_url || orgAdminRow.website,
-            subscriptionTier: orgAdminRow.subscription_tier || orgAdminRow.plan_tier || 'Enterprise Suite',
-          } as any,
-          roles: ['organization_admin'],
-          permissions: ['*'],
           accessToken,
           refreshToken,
+          user: {
+            email: orgAdminRow.email,
+            orgName: orgAdminRow.name,
+            roles: ['organization_admin'],
+          } as any,
+          roles: ['organization_admin'],
         };
       }
     }
@@ -474,24 +473,14 @@ export class AuthService {
         logger.info(`[AUTH] Company admin login success — company_id=${cidStr} email=${cleanEmail}`);
 
         return {
-          user: {
-            id: compId,
-            email: compLoginEmail,
-            firstName,
-            lastName,
-            organizationId: compOrgId,
-            companyId: compId,
-            companyName: companyRow.name,
-          } as any,
-          organization: {
-            id: org?.id || compOrgId,
-            name: org?.name || companyRow.name,
-            slug: org?.slug || companyRow.code || 'company',
-          },
-          roles: ['company_admin', 'organization_admin'],
-          permissions: ['*'],
           accessToken,
           refreshToken,
+          user: {
+            email: compLoginEmail,
+            orgName: org?.name || companyRow.name,
+            roles: ['company_admin', 'organization_admin'],
+          } as any,
+          roles: ['company_admin', 'organization_admin'],
         };
       }
     }
@@ -630,66 +619,34 @@ export class AuthService {
     let roles = userWithPerms?.roles || [];
     let permissions = userWithPerms?.permissions || [];
 
-    // Fallback role resolution if no roles assigned in user_roles table
-    if (roles.length === 0 && org) {
-      const emailLower = user.email.toLowerCase();
-      if (emailLower.includes('employee') || emailLower.includes('emp')) {
-        roles = ['employee'];
-      } else if (emailLower.includes('manager') || emailLower.includes('mgr')) {
-        roles = ['manager'];
-      } else {
-        roles = ['organization_admin'];
-      }
-
-      try {
-        let adminRole = await this.db('roles')
-          .where({ organization_id: org.id, code: 'organization_admin' })
-          .first();
-
-        if (!adminRole) {
-          const [roleId] = await this.db('roles').insert({
-            uuid: uuidv4(),
-            organization_id: org.id,
-            name: 'Organization Admin',
-            code: 'organization_admin',
-            description: 'Full administrative access for organization',
-            is_system: true,
-            is_platform_role: false,
-            is_default: false,
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
-          adminRole = { id: roleId };
-        }
-
-        const userRoleExists = await this.db('user_roles')
-          .where({ user_id: user.id, role_id: adminRole.id })
-          .first();
-
-        if (!userRoleExists) {
-          await this.db('user_roles').insert({
-            organization_id: org.id,
-            user_id: user.id,
-            role_id: adminRole.id,
-            assigned_by: user.id,
-            assigned_at: new Date(),
-          });
-        }
-      } catch (err) {
-        logger.error('Error auto-assigning organization_admin role during login:', err);
-      }
+    // A user with zero role assignments is a provisioning gap, not something
+    // login() should silently "fix" by granting a role — least of all
+    // organization_admin. A brand-new organization's first user is already
+    // correctly assigned organization_admin inside register() above, in a
+    // transaction; any other account reaching this point with no roles
+    // (e.g. one whose assignment was revoked, or never completed) must log
+    // in with no permissions until an admin explicitly assigns one.
+    if (roles.length === 0) {
+      logger.warn('User has no role assignments — logging in with no permissions', {
+        userId: user.id,
+        organizationId: user.organizationId,
+      });
     }
 
     return {
       accessToken,
       refreshToken,
-      user,
-      organization: {
-        id: org.id,
-        name: org.name,
-        slug: org.slug,
-      },
-      permissions,
+      user: {
+        id: user.id,
+        uuid: user.uuid,
+        organizationId: user.organizationId,
+        employeeId: user.employeeId || (user as any).employee_id || null,
+        email: user.email,
+        firstName: user.firstName || (user as any).first_name || '',
+        lastName: user.lastName || (user as any).last_name || '',
+        orgName: org?.name || '',
+        roles,
+      } as any,
       roles,
     };
   }
@@ -810,15 +767,69 @@ export class AuthService {
       throw new NotFoundError('User/Organization not found');
     }
 
-    let permissions = ['*'];
-    let roles = ['organization_admin'];
+    // Deny by default: only a successful lookup that actually returns roles/
+    // permissions should grant any access. Previously this defaulted to
+    // wildcard admin ('*' / organization_admin) and stayed there whenever
+    // the lookup failed OR legitimately returned an empty list (e.g. a user
+    // with zero role assignments) — silently handing out full admin access.
+    let permissions: string[] = [];
+    let roles: string[] = [];
 
     if (rawUser && rawUser.id) {
       try {
         const userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
-        if (userWithPerms?.roles?.length) roles = userWithPerms.roles;
-        if (userWithPerms?.permissions?.length) permissions = userWithPerms.permissions;
-      } catch (err) { }
+        roles = userWithPerms?.roles || [];
+        permissions = userWithPerms?.permissions || [];
+      } catch (err) {
+        logger.error('getMe: failed to resolve user roles/permissions - defaulting to no access', {
+          userId: rawUser.id,
+          organizationId: ctx.organizationId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Auto-heal missing role assignment for organization admin / owner
+    if (roles.length === 0 && org && rawUser) {
+      const isOrgEmailMatch = rawUser.email && org.email && rawUser.email.trim().toLowerCase() === org.email.trim().toLowerCase();
+      const isOrgAdminDesignation = rawUser.designation === 'Organization Administrator';
+      if (isOrgEmailMatch || isOrgAdminDesignation) {
+        roles = ['organization_admin'];
+        // Auto-heal DB user_roles mapping asynchronously
+        try {
+          let adminRole = await this.db('roles')
+            .where('code', 'organization_admin')
+            .where(function () {
+              this.where('organization_id', org.id).orWhereNull('organization_id').orWhere('is_platform_role', true);
+            })
+            .first();
+          if (!adminRole) {
+            const roleUuid = uuidv4();
+            const [roleId] = await this.db('roles').insert({
+              uuid: roleUuid,
+              organization_id: org.id,
+              name: 'Organization Admin',
+              code: 'organization_admin',
+              description: 'Full administrative access for organization',
+              is_system: true,
+              is_platform_role: false,
+              is_default: false,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            adminRole = { id: roleId };
+          }
+          await this.db('user_roles').insert({
+            organization_id: org.id,
+            user_id: rawUser.id,
+            role_id: adminRole.id,
+            assigned_by: rawUser.id,
+            assigned_at: new Date(),
+          }).catch(() => {});
+        } catch (e) {
+          // ignore auto-heal error
+        }
+      }
     }
 
     let emp: any = null;
@@ -828,6 +839,41 @@ export class AuthService {
     }
     if (!emp && rawUser?.email) {
       emp = await this.db('employees').whereRaw('LOWER(email) = ?', [rawUser.email.toLowerCase()]).first().catch(() => null);
+    }
+    if (!emp && (rawUser?.first_name || rawUser?.firstName)) {
+      const fName = rawUser?.first_name || rawUser?.firstName;
+      emp = await this.db('employees').whereRaw('LOWER(first_name) = ?', [fName.toLowerCase()]).first().catch(() => null);
+    }
+
+    // Auto-provision an employee profile if the logged in user doesn't have an employees table record yet
+    if (!emp && rawUser && rawUser.id) {
+      try {
+        const empEmail = (rawUser.email || org?.email || '').trim().toLowerCase();
+        if (empEmail) {
+          const fName = rawUser.first_name || (org?.owner_name ? org.owner_name.split(' ')[0] : 'Admin');
+          const lName = rawUser.last_name || (org?.owner_name ? org.owner_name.split(' ').slice(1).join(' ') : 'User');
+          const orgId = org?.id || ctx.organizationId;
+          const empUuid = uuidv4();
+          const empCode = `EMP-ADM-${rawUser.id}`;
+
+          const [insertedEmpId] = await this.db('employees').insert({
+            uuid: empUuid,
+            organization_id: orgId,
+            employee_code: empCode,
+            first_name: fName,
+            last_name: lName,
+            email: empEmail,
+            status: 'active',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+
+          emp = { id: insertedEmpId, first_name: fName, last_name: lName, email: empEmail };
+          await this.db('users').where('id', rawUser.id).update({ employee_id: insertedEmpId }).catch(() => {});
+        }
+      } catch (e) {
+        // ignore auto-provisioning error
+      }
     }
 
     let departmentName = '';
@@ -840,7 +886,7 @@ export class AuthService {
     const firstName = emp?.first_name || emp?.firstName || rawUser?.first_name || rawUser?.firstName || org?.first_name || (org?.owner_name ? org.owner_name.split(' ')[0] : 'User');
     const lastName = emp?.last_name || emp?.lastName || rawUser?.last_name || rawUser?.lastName || org?.last_name || (org?.owner_name ? org.owner_name.split(' ').slice(1).join(' ') : '');
     const designation = emp?.designation_name || emp?.designation || rawUser?.designation || org?.designation || '';
-    const resolvedEmpId = emp?.id || empId || rawUser?.id;
+    const resolvedEmpId = emp?.id || empId || null;
 
     return {
       user: {

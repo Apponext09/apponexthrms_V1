@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +10,18 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployees, useUpdateEmployee } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
+import { ProfileEditRequestModal } from './ProfileEditRequestModal';
+import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import type { Employee } from '@/types';
 
 interface EmployeeBasicInfoProps {
   employee: Employee;
   isEditing?: boolean;
   onEditToggle?: (editing: boolean) => void;
+  /** When true, employee has an approved request and can edit */
+  editUnlocked?: boolean;
+  /** The approved request ID to consume after saving */
+  approvedRequestId?: number | null;
 }
 
 function formatValue(value: unknown): string {
@@ -80,7 +87,13 @@ export function EmployeeBasicInfo({
   employee,
   isEditing: externalIsEditing,
   onEditToggle,
+  editUnlocked = true,
+  approvedRequestId,
 }: EmployeeBasicInfoProps) {
+  const location = useLocation();
+  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const { consumePermission } = useConsumeEditPermission();
   const { user } = useAuthStore();
   const isAdmin = Boolean(
     user?.roles?.includes('hr_manager') ||
@@ -169,6 +182,10 @@ export function EmployeeBasicInfo({
       }
 
       await updateEmployee(payload);
+      // Consume the approved edit permission so employee can't edit again without another approval
+      if (isEmployeePortal && approvedRequestId) {
+        await consumePermission(approvedRequestId);
+      }
       showToast.success('Employee basic information saved');
       // Clear password fields after save
       setForm((prev: any) => ({ ...prev, password: '', confirmPassword: '' }));
@@ -211,10 +228,34 @@ export function EmployeeBasicInfo({
           <CardDescription className="text-xs">Employee personal and employment details</CardDescription>
         </div>
         {!isEditing ? (
-          <Button variant="outline" size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3" onClick={() => setIsEditing(true)}>
-            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
-            Edit
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className={isEmployeePortal && !editUnlocked
+                ? "h-7 text-xs font-bold gap-1.5 px-3 bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+                : "h-7 text-xs font-bold gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"}
+              onClick={() => {
+                if (isEmployeePortal && !editUnlocked) {
+                  setIsRequestModalOpen(true);
+                } else {
+                  setIsEditing(true);
+                }
+              }}
+            >
+              {isEmployeePortal && !editUnlocked
+                ? <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                : <Edit className="w-3.5 h-3.5" />}
+              {isEmployeePortal && !editUnlocked ? 'Request Edit' : 'Edit Basic Info'}
+            </Button>
+            {isEmployeePortal && (
+              <ProfileEditRequestModal
+                open={isRequestModalOpen}
+                onOpenChange={setIsRequestModalOpen}
+                employee={employee}
+              />
+            )}
+          </>
         ) : (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3" onClick={handleCancel} disabled={isSaving}>

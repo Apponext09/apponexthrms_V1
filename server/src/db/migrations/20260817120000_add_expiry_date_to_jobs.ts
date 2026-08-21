@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   const hasExpiryDate = await knex.schema.hasColumn('jobs', 'expiry_date');

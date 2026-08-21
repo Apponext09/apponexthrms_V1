@@ -15,11 +15,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { AttendanceReportFilter } from '@/features/analytics/components/AttendanceReportFilter';
-import { AttendanceReportTable } from '@/features/analytics/components/AttendanceReportTable';
 import { TimelogReportView } from '@/features/analytics/components/TimelogReportView';
 import { AttendanceVisualization } from '@/features/analytics/components/AttendanceVisualization';
-import { EmployeeTimelineModal } from '@/features/analytics/components/EmployeeTimelineModal';
 import { AttendancePoliciesManager } from '@/features/attendance/components/AttendancePoliciesManager';
 import {
   AttendanceReportFilterParams,
@@ -42,9 +39,7 @@ export const AttendanceDashboard: React.FC = () => {
     return d.toISOString().split('T')[0];
   };
 
-  const [activeTab, setActiveTab] = useState<'detailed' | 'calendar' | 'analytics'>('detailed');
-
-  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>({
+  const defaultFilters: AttendanceReportFilterParams = {
     companies: [],
     locations: [],
     departments: [],
@@ -65,19 +60,35 @@ export const AttendanceDashboard: React.FC = () => {
       breakLog: true,
       halfDay: true,
     },
-  });
+  };
+
+  const [activeTab, setActiveTab] = useState<'calendar' | 'analytics'>('calendar');
+
+  // Initialize with defaultFilters so report data is fetched and displayed directly on page load.
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>(defaultFilters);
 
   const { data: fetchedRows, isLoading, isError, refetch } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
 
-  const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
+
 
   // Stat summary calculations
   const totalRecords = reportRows.length;
-  const presentCount = reportRows.filter((r) => r.dayStatus === 'Full Day').length;
-  const halfDayCount = reportRows.filter((r) => r.dayStatus === 'Half Day').length;
-  const lateCount = reportRows.filter((r) => r.isLate === 'Yes').length;
-  const absentCount = reportRows.filter((r) => r.dayStatus === 'Absent' || r.dayStatus === 'Leave').length;
+  const presentCount = reportRows.filter((r) => {
+    const st = (r.dayStatus || '').toLowerCase();
+    const isPresentStatus = st.includes('full') || st.includes('present') || st === 'p';
+    const hasPunched = Boolean(r.checkInTime || (r.actualTiming && r.actualTiming !== '-- - --'));
+    return isPresentStatus || hasPunched;
+  }).length;
+  const halfDayCount = reportRows.filter((r) => {
+    const st = (r.dayStatus || '').toLowerCase();
+    return st.includes('half') || st === 'hd';
+  }).length;
+  const lateCount = reportRows.filter((r) => (r.isLate || '').toLowerCase() === 'yes').length;
+  const absentCount = reportRows.filter((r) => {
+    const st = (r.dayStatus || '').toLowerCase();
+    return st.includes('absent') || st.includes('leave') || st === 'a' || st === 'lwp';
+  }).length;
 
   const handleOpenPoliciesPage = () => {
     const cleanRole = (roleInfo.roleTitle || '').toLowerCase();
@@ -182,9 +193,8 @@ export const AttendanceDashboard: React.FC = () => {
       {/* Main View Mode Selector Tabs */}
       <div className="flex border-b border-border/60 overflow-x-auto">
         {[
-          { key: 'detailed', label: '1. Detailed View & Timelines', icon: TableIcon },
-          { key: 'calendar', label: '2. Calendar View (Monthly Matrix)', icon: CalendarIcon },
-          { key: 'analytics', label: '3. Attendance Analytics', icon: BarChart3 },
+          { key: 'calendar', label: '1. Calendar View (Monthly Matrix)', icon: CalendarIcon },
+          { key: 'analytics', label: '2. Attendance Analytics', icon: BarChart3 },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -201,13 +211,7 @@ export const AttendanceDashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Filter Control Section */}
-      {activeTab !== 'calendar' && (
-        <AttendanceReportFilter
-          onFilterSubmit={(filters) => setCurrentFilters(filters)}
-          isSubmitting={isLoading}
-        />
-      )}
+
 
       {/* Dynamic Content Views */}
       <div className="space-y-4 animate-in fade-in-50 duration-200">
@@ -217,28 +221,16 @@ export const AttendanceDashboard: React.FC = () => {
             Could not load attendance report data. Please check your connection and try again.
           </div>
         )}
-        {activeTab === 'detailed' && (
-          <AttendanceReportTable
-            data={reportRows}
-            onOpenTimeline={(row) => setSelectedTimelineRow(row)}
-          />
-        )}
+        <>
+          {activeTab === 'calendar' && (
+            <TimelogReportView />
+          )}
 
-        {activeTab === 'calendar' && (
-          <TimelogReportView />
-        )}
-
-        {activeTab === 'analytics' && (
-          <AttendanceVisualization data={reportRows} />
-        )}
+          {activeTab === 'analytics' && (
+            <AttendanceVisualization data={reportRows} />
+          )}
+        </>
       </div>
-
-      {/* Daily Punch Timeline Modal */}
-      <EmployeeTimelineModal
-        row={selectedTimelineRow}
-        isOpen={!!selectedTimelineRow}
-        onClose={() => setSelectedTimelineRow(null)}
-      />
     </div>
   );
 };

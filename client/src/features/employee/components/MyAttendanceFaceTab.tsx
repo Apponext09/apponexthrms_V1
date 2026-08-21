@@ -195,6 +195,13 @@ export function MyAttendanceFaceTab({
     };
   }, []);
 
+  useEffect(() => {
+    if (isCameraActive && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraActive, stream]);
+
   const startCamera = async () => {
     try {
       setCameraError(null);

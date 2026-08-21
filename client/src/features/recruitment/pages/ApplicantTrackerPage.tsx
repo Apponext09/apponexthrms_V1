@@ -6,10 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star, Video, Clock, ExternalLink, RefreshCw } from 'lucide-react';
+import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star, Video, Clock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
+import { AiAnalysisModal } from '../components/AiAnalysisModal';
 
 const CANDIDATE_STAGES = ['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected', 'withdrawn'];
 const MARITAL_STATUS_OPTIONS = ['Unmarried', 'Married'];
@@ -125,6 +127,10 @@ export const ApplicantTrackerPage: React.FC = () => {
   const [showRoundsDrawer, setShowRoundsDrawer] = useState(false);
   const [activeCandidateForDrawer, setActiveCandidateForDrawer] = useState<any>(null);
   const [loadingRoundsSummary, setLoadingRoundsSummary] = useState(false);
+
+  // AI Modal State
+  const [selectedCandidateForAiModal, setSelectedCandidateForAiModal] = useState<any | null>(null);
+  const [isAiAnalysisModalOpen, setIsAiAnalysisModalOpen] = useState(false);
 
   const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
   const [offerPosition, setOfferPosition] = useState('');
@@ -548,6 +554,8 @@ export const ApplicantTrackerPage: React.FC = () => {
 
         const mapped = rawList.map((item: any) => ({
           id: item.id,
+          candidateId: item.candidateId || item.candidate_id || item.candidate?.id || item.id,
+          jobId: item.jobId || item.job_id || item.job?.id || null,
           name: item.candidateName || item.candidate_name || item.name || 'N/A',
           email: item.candidateEmail || item.candidate_email || item.email || 'N/A',
           contact: item.candidatePhone || item.candidate_phone || item.phone || item.contact || '-',
@@ -558,7 +566,9 @@ export const ApplicantTrackerPage: React.FC = () => {
           source: item.candidateSource || item.candidate_source || item.appliedFromSource || item.applied_from_source || '-',
           maritalStatus: item.maritalStatus || item.marital_status || item.candidate_marital_status || '-',
           gender: item.gender || item.candidate_gender || '-',
-          qualification: item.qualification || item.highest_qualification || item.candidate_qualification || '-'
+          qualification: item.qualification || item.highest_qualification || item.candidate_qualification || '-',
+          atsScore: item.atsScore ?? item.ats_score ?? item.candidate?.ats_score ?? null,
+          jdMatchScore: item.jdMatchScore ?? item.jd_match_score ?? item.candidate?.jd_match_score ?? null
         }));
         setData(mapped);
         setFilteredData(mapped);
@@ -825,25 +835,27 @@ export const ApplicantTrackerPage: React.FC = () => {
           </div>
           
           <div className="w-full overflow-x-auto border border-border rounded-md bg-card shadow-2xs">
-            <Table className="w-full min-w-[1100px] border-collapse">
+            <Table className="w-full min-w-[1250px] border-collapse">
               <TableHeader className="bg-slate-50 border-b border-border">
                 <TableRow className="border-border">
                   <TableHead className="text-xs font-bold h-9 text-foreground w-[160px] min-w-[160px]">Name</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[220px] min-w-[220px]">Email Id</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[200px] min-w-[200px]">Email Id</TableHead>
+                  <TableHead className="text-center text-xs font-bold h-9 text-foreground w-[85px] min-w-[85px]">ATS Score</TableHead>
+                  <TableHead className="text-center text-xs font-bold h-9 text-foreground w-[85px] min-w-[85px]">JD Match</TableHead>
                   <TableHead className="text-xs font-bold h-9 text-foreground w-[110px] min-w-[110px]">Marital Status</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Qualification</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Skills</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[90px] min-w-[90px]">Gender</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Contact Number</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Stage Select</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Qualification</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Skills</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[80px] min-w-[80px]">Gender</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Contact Number</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Stage Select</TableHead>
                   <TableHead className="text-xs font-bold h-9 text-foreground w-[100px] min-w-[100px]">Action</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[110px] min-w-[110px]">Status</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[100px] min-w-[100px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-32 text-center text-xs text-slate-500 bg-background border-b-0">
+                    <TableCell colSpan={12} className="h-32 text-center text-xs text-slate-500 bg-background border-b-0">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
                         <span>Loading applicant pipeline records...</span>
@@ -854,23 +866,56 @@ export const ApplicantTrackerPage: React.FC = () => {
                   paginatedData.map((candidate) => (
                     <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-slate-50/80 transition-colors">
                       <TableCell className="text-xs py-2 font-semibold text-slate-900 w-[160px] min-w-[160px] truncate">{candidate.name}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-600 w-[220px] min-w-[220px] truncate" title={candidate.email}>{candidate.email}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-600 w-[200px] min-w-[200px] truncate" title={candidate.email}>{candidate.email}</TableCell>
+
+                      {/* ATS Score Column */}
+                      <TableCell className="text-xs py-2 text-center w-[85px] min-w-[85px]">
+                        {candidate.atsScore !== null && candidate.atsScore !== undefined ? (
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold border inline-block",
+                            candidate.atsScore >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            candidate.atsScore >= 70 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                            "bg-rose-50 text-rose-700 border-rose-200"
+                          )}>
+                            {candidate.atsScore}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px] font-mono">-</span>
+                        )}
+                      </TableCell>
+
+                      {/* JD Match Column */}
+                      <TableCell className="text-xs py-2 text-center w-[85px] min-w-[85px]">
+                        {candidate.jdMatchScore !== null && candidate.jdMatchScore !== undefined ? (
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold border inline-block",
+                            candidate.jdMatchScore >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            candidate.jdMatchScore >= 65 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                            "bg-rose-50 text-rose-700 border-rose-200"
+                          )}>
+                            {candidate.jdMatchScore}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px] font-mono">-</span>
+                        )}
+                      </TableCell>
+
                       <TableCell className="text-xs py-2 text-slate-700 w-[110px] min-w-[110px]">
                         {candidate.maritalStatus && candidate.maritalStatus !== '-' ? candidate.maritalStatus : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
                       </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">
+                      <TableCell className="text-xs py-2 text-slate-700 w-[120px] min-w-[120px]">
                         {candidate.qualification && candidate.qualification !== '-' ? candidate.qualification : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
                       </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px] truncate" title={candidate.skills}>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[120px] min-w-[120px] truncate" title={candidate.skills}>
                         {candidate.skills && candidate.skills !== '-' ? candidate.skills : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
                       </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[90px] min-w-[90px]">
+                      <TableCell className="text-xs py-2 text-slate-700 w-[80px] min-w-[80px]">
                         {candidate.gender && candidate.gender !== '-' ? candidate.gender : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
                       </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">
+                      <TableCell className="text-xs py-2 text-slate-700 w-[120px] min-w-[120px]">
                         {candidate.contact && candidate.contact !== '-' ? candidate.contact : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
                       </TableCell>
-                      <TableCell className="text-xs py-1.5 w-[130px] min-w-[130px]">
+                      <TableCell className="text-xs py-1.5 w-[120px] min-w-[120px]">
                         {/* Styled Pipeline Stage Select */}
                         <div className="relative inline-block w-full">
                           {(() => {
@@ -916,42 +961,42 @@ export const ApplicantTrackerPage: React.FC = () => {
                       </TableCell>
                       <TableCell className="text-xs py-1.5 w-[100px] min-w-[100px]">
                         {/* Sleek Combined Actions Menu */}
-                        {(() => {
-                          const statusKey = (candidate.status || '').toLowerCase().trim();
-                          const isOfferStage = ['offered', 'offer'].includes(statusKey);
-                          const isHiredStage = statusKey === 'hired';
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[11px] font-semibold px-2.5 bg-white border-slate-300 hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1 cursor-pointer"
+                            >
+                              Actions <ChevronDown className="w-3 h-3 text-slate-400" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-52 p-1 text-xs space-y-0.5 shadow-md border-border bg-popover text-popover-foreground">
+                             {/* AI Analysis Modal Trigger */}
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setSelectedCandidateForAiModal(candidate);
+                                 setIsAiAnalysisModalOpen(true);
+                               }}
+                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-indigo-50 font-medium text-indigo-700 cursor-pointer"
+                             >
+                               <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> View AI ATS Analysis
+                             </button>
 
-                          if (isHiredStage) {
-                            return (
-                              <span className="inline-flex items-center text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-sm">
-                                <CheckCircle className="w-3 h-3 mr-1 text-green-600" /> Onboarded
-                              </span>
-                            );
-                          }
+                             <div className="my-1 border-t border-border" />
 
-                          return (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-[11px] font-semibold px-2.5 bg-white border-slate-300 hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1 cursor-pointer"
-                                >
-                                  Actions <ChevronDown className="w-3 h-3 text-slate-400" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent align="end" className="w-48 p-1 text-xs space-y-0.5 shadow-md border-border bg-popover text-popover-foreground">
-                                 <button
-                                   type="button"
-                                   onClick={() => {
-                                     setSelectedAppId(candidate.id);
-                                     setSelectedAssessmentId('');
-                                     setShowAssignDialog(true);
-                                   }}
-                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
-                                 >
-                                   <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
-                                 </button>
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setSelectedAppId(candidate.id);
+                                 setSelectedAssessmentId('');
+                                 setShowAssignDialog(true);
+                               }}
+                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                             >
+                               <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
+                             </button>
 
                                   <button
                                     type="button"
@@ -979,64 +1024,60 @@ export const ApplicantTrackerPage: React.FC = () => {
                                     <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
                                   </button>
 
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAppId(candidate.id);
+                                setOfferPosition(candidate.positionTitle || '');
+                                setOfferCtc('');
+                                setOfferBaseSalary('');
+                                setOfferStartDate('');
+                                setOfferExpiryDate('');
+                                setShowOfferDialog(true);
+                              }}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                            </button>
+
+                            {['offered', 'offer'].includes((candidate.status || '').toLowerCase()) && (
+                              <button
+                                type="button"
+                                onClick={() => handleOnboardCandidate(candidate.id)}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-green-50 font-medium text-green-700 cursor-pointer"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Hire & Onboard
+                              </button>
+                            )}
+
+                            {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
+                              <>
+                                <div className="my-1 border-t border-border" />
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setSelectedAppId(candidate.id);
-                                    setOfferPosition(candidate.positionTitle || '');
-                                    setOfferCtc('');
-                                    setOfferBaseSalary('');
-                                    setOfferStartDate('');
-                                    setOfferExpiryDate('');
-                                    setShowOfferDialog(true);
+                                    setRejectingCandidateInfo(candidate);
+                                    setRejectionReason('');
+                                    setShowRejectDialog(true);
                                   }}
-                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-medium text-red-600 cursor-pointer"
                                 >
-                                  <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                                  <UserX className="w-3.5 h-3.5 text-red-500" /> Reject Candidate
                                 </button>
-
-                                {isOfferStage && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOnboardCandidate(candidate.id)}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-green-50 font-medium text-green-700 cursor-pointer"
-                                  >
-                                    <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Hire & Onboard
-                                  </button>
-                                )}
-
-                                {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
-                                  <>
-                                    <div className="my-1 border-t border-border" />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setRejectingCandidateInfo(candidate);
-                                        setRejectionReason('');
-                                        setShowRejectDialog(true);
-                                      }}
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-semibold text-red-600 cursor-pointer"
-                                    >
-                                      <UserX className="w-3.5 h-3.5 text-red-600" /> Reject Candidate
-                                    </button>
-                                  </>
-                                )}
-                              </PopoverContent>
-                            </Popover>
-                          );
-                        })()}
+                              </>
+                            )}
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
-                      <TableCell className="text-xs py-2 w-[110px] min-w-[110px]">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          candidate.status?.toLowerCase() === 'hired'
+                      <TableCell className="text-xs py-2 w-[100px] min-w-[100px]">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          ['hired', 'approved'].includes((candidate.status || '').toLowerCase())
                             ? 'bg-green-100 text-green-800 border border-green-300' 
-                            : candidate.status?.toLowerCase() === 'offer' || candidate.status?.toLowerCase() === 'offered'
+                            : ['offered', 'offer'].includes((candidate.status || '').toLowerCase())
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : candidate.status?.toLowerCase() === 'interview' || candidate.status?.toLowerCase() === 'technical'
+                            : (candidate.status || '').toLowerCase() === 'interview'
                             ? 'bg-purple-100 text-purple-800 border border-purple-300'
-                            : candidate.status?.toLowerCase() === 'assessment' || candidate.status?.toLowerCase() === 'test_assigned'
-                            ? 'bg-teal-100 text-teal-800 border border-teal-300'
-                            : candidate.status?.toLowerCase() === 'rejected' || candidate.status?.toLowerCase() === 'withdrawn'
+                            : ['rejected', 'withdrawn'].includes((candidate.status || '').toLowerCase())
                             ? 'bg-red-100 text-red-800 border border-red-300' 
                             : 'bg-blue-100 text-blue-800 border border-blue-300'
                         }`}>
@@ -1919,6 +1960,22 @@ export const ApplicantTrackerPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* AI ATS & Match Analysis Modal */}
+      {selectedCandidateForAiModal && (
+        <AiAnalysisModal
+          isOpen={isAiAnalysisModalOpen}
+          onClose={() => {
+            setIsAiAnalysisModalOpen(false);
+            setSelectedCandidateForAiModal(null);
+          }}
+          candidateId={selectedCandidateForAiModal.candidateId || selectedCandidateForAiModal.id}
+          jobId={selectedCandidateForAiModal.jobId}
+          candidateName={selectedCandidateForAiModal.name}
+          jobTitle={selectedCandidateForAiModal.positionTitle}
+          onShortlistSuccess={fetchApplications}
+        />
+      )}
     </div>
   );
 };

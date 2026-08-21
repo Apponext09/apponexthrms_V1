@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5173",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0OCIsIm9pZCI6IjE0Iiwic2lkIjoiYTc1NjhjMjMtMjA2Ny00YmJmLTgzYjItMjQ0ZWZkMzVlNWM4IiwiaWF0IjoxNzg2OTU0NDk5LCJleHAiOjE3ODcwNDA4OTl9.aMM2kmaqBp4OnnrS8CTCeXlI3yHawmhhN-ZbBqfL4g5l6O6lx9q_ZpepH52oY1mApQSR059DxYJOeVgjxJdfU18xdKVakJzs-19apwgZjAFxfsKtzUoyVsIRHuUwGwWFHiJauwGJjXEPXZCG542-CEDf1t19rALNPqLQGmBxLqGlQkcudl-qiw9cpIAejKcLCqackRNUdIGUmFazIIwRT6CrRWcKcrRJCgv9NNEfVtZUWHseGT1_9QHV-56Lq-xkJDm_vMqjxb7uqTgf-lRGrkqZvTfJh17pGsc0AtB6jlV0pko-t9V2A0-Qi1p5ttI8tzpdWTJAV98_bTeu2Nv4WA"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0OCIsIm9pZCI6IjE0Iiwic2lkIjoiYTc1NjhjMjMtMjA2Ny00YmJmLTgzYjItMjQ0ZWZkMzVlNWM4IiwiaWF0IjoxNzg2OTU0NDk5LCJleHAiOjE3ODc1NTkyOTl9.tjloX1C84bC-LbAsjB34RJZOHtSNbnWzMMciGatmJKkIvAuwf6HLDfnzMYpH73wcMLTeB3Y-SU8KhXmjn4T10l3UD-6A1FROy_LhM1eGiZGqEcQZBEMTafqhYaYG3y4ecoLSeCBHjJRcldEyj4loZVhaXT-89rZx3kHLJ34NmxpomJGKiax9E0kTvTOiMGXxBo6Zvuz6-Y7D_V33CHjd02gpMOzn9OXcygdWd09CgMLfbdtG4hkQSy3aJzRfX6tytqlQaqc81q_2_mZOjOd-IfFslL-Dw2CakGPn80mI9TCjLH8qoHXuPQBtHJE1kmOQ8yJ-K4ULkmYEjBHpa20Z9g"
+        },
+        {
+          "name": "hrms_attendance_break_state",
+          "value": "{\"state\":{\"isOnBreak\":false,\"breakStartTime\":null,\"isCheckedIn\":false,\"checkInTime\":null},\"version\":0}"
+        },
+        {
+          "name": "auth-storage",
+          "value": "{\"state\":{\"user\":{\"id\":48,\"email\":\"emp2@gmail.com\",\"firstName\":\"priya\",\"lastName\":\"mishra\",\"organizationId\":14,\"organizationName\":\"sonex1\",\"organizationCode\":\"ORG-969\",\"organizationLocation\":\"Karad\",\"roles\":[\"employee\",\"department_head\"],\"permissions\":[\"payslip:view\",\"loan:view\",\"tax:view\",\"tax:declare\",\"advance:view\",\"advance:create\",\"recruitment.mrf.read\",\"recruitment.mrf.write\",\"recruitment.job.read\",\"recruitment.job.write\",\"recruitment.candidate.read\",\"recruitment.candidate.write\",\"recruitment.application.read\",\"recruitment.application.write\",\"recruitment.interview.read\",\"recruitment.interview.write\",\"recruitment.assessment.read\",\"recruitment.assessment.write\",\"recruitment.offer.read\",\"recruitment.offer.write\",\"recruitment.read\"],\"employeeId\":52,\"departmentName\":\"account\",\"deptName\":\"\",\"designation\":\"\",\"companyId\":null,\"companyName\":null,\"phone\":\"+918767008849\",\"avatarUrl\":\"\",\"bio\":\"\"},\"isAuthenticated\":true},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

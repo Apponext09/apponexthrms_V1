@@ -62,7 +62,7 @@ export function TeamLeadDashboardPage() {
     { label: 'Face Attendance', desc: 'Scan team attendance', icon: Scan, href: '/team-lead/face-attendance', accent: 'primary' },
     { label: 'My Team Members', desc: 'View direct reports', icon: Users, href: '/team-lead/members', accent: 'primary' },
     { label: 'Leave Approvals', desc: 'Review leave requests', icon: CheckCircle2, href: '/leaves/approvals', accent: 'amber' },
-    { label: 'My Attendance', desc: 'View personal logs', icon: CalendarCheck, href: '/attendance/my-attendance', accent: 'blue' },
+    { label: 'My Attendance', desc: 'View personal logs', icon: CalendarCheck, href: '/employee/face-attendance', accent: 'blue' },
     { label: 'Team Goals', desc: 'Track performance OKRs', icon: Target, href: '/performance/goals', accent: 'indigo' },
     { label: 'Performance Reviews', desc: 'Conduct member evaluations', icon: Award, href: '/performance/reviews', accent: 'rose' },
     { label: 'My Approvals', desc: 'Pending decision inbox', icon: FileCheck, href: '/approvals', accent: 'teal' },

@@ -94,7 +94,9 @@ export const CareersPortalPage: React.FC = () => {
       });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error || 'Failed to submit application');
+      const errObj = err.response?.data?.error;
+      const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to submit application';
+      toast.error(msg);
     }
   });
 

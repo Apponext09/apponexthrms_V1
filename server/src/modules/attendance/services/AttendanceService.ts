@@ -129,7 +129,7 @@ const computeShiftEntryStatus = (
       const raw = (shift as any).roster_pattern || (shift as any).rosterPattern;
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       rosterRules = parsed?.globalAttendanceRules || null;
-    } catch {}
+    } catch { }
   }
 
   const rawHalfDayTime = (shift as any).half_day_start_time || (shift as any).halfDayStartTime || rosterRules?.halfDayStartTime || rosterRules?.half_day_start_time;
@@ -245,7 +245,7 @@ export class AttendanceService {
       // shiftId was provided directly — fetch its details so we can compute grace period
       try {
         resolvedShift = await this.shiftService.getShiftById(ctx, assignedShiftId);
-      } catch {}
+      } catch { }
     }
 
     let geofenceMatched: boolean | null = null;
@@ -295,8 +295,8 @@ export class AttendanceService {
     const entryNotes = entryResult.entryStatus === 'late'
       ? `Late Entry (+${entryResult.lateMinutes} mins)`
       : entryResult.entryStatus === 'half_day'
-      ? `Half Day (arrived after ${entryResult.halfDayDeadlineLabel})`
-      : null;
+        ? `Half Day (arrived after ${entryResult.halfDayDeadlineLabel})`
+        : null;
 
     const cleanMethod = (() => {
       const m = String(input.method || 'web').toLowerCase();
@@ -379,9 +379,9 @@ export class AttendanceService {
 
               // Check location eligibility (match either branch ID or location ID)
               const ruleLocations = safeParseJsonArr(rule.locations);
-              if (ruleLocations.length > 0 && 
-                  !ruleLocations.includes(Number(employee.current_location_id)) && 
-                  !ruleLocations.includes(Number(employee.current_branch_id))) {
+              if (ruleLocations.length > 0 &&
+                !ruleLocations.includes(Number(employee.current_location_id)) &&
+                !ruleLocations.includes(Number(employee.current_branch_id))) {
                 continue;
               }
 
@@ -427,7 +427,7 @@ export class AttendanceService {
                     // Find LWP or first available leave type for deduction
                     const lwpType = await db('leave_types')
                       .where('organization_id', ctx.organizationId)
-                      .where(function(this: any) {
+                      .where(function (this: any) {
                         this.whereRaw("LOWER(leave_name) = 'lwp'")
                           .orWhereRaw("LOWER(leave_code) = 'lwp'")
                           .orWhereRaw("LOWER(leave_name) = 'loss of pay'")
@@ -1080,15 +1080,15 @@ export class AttendanceService {
       `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
     const shiftInfo = resolvedShift ? {
-      shiftName:           resolvedShift.shift_name || resolvedShift.shiftName || null,
-      startTime:           resolvedShift.start_time || resolvedShift.startTime || null,
-      endTime:             resolvedShift.end_time   || resolvedShift.endTime   || null,
-      gracePeriodMinutes:  Number(resolvedShift.grace_period_minutes ?? resolvedShift.gracePeriodMinutes ?? 0),
-      durationHours:       Number(resolvedShift.duration_hours ?? resolvedShift.durationHours ?? 8.5),
-      graceDeadline:       liveEntry.graceDeadlineLabel,
-      halfDayDeadline:     liveEntry.halfDayDeadlineLabel,
-      currentEntryStatus:  liveEntry.entryStatus,   // 'on_time' | 'late' | 'half_day' | 'no_shift'
-      lateMinutesNow:      liveEntry.lateMinutes,
+      shiftName: resolvedShift.shift_name || resolvedShift.shiftName || null,
+      startTime: resolvedShift.start_time || resolvedShift.startTime || null,
+      endTime: resolvedShift.end_time || resolvedShift.endTime || null,
+      gracePeriodMinutes: Number(resolvedShift.grace_period_minutes ?? resolvedShift.gracePeriodMinutes ?? 0),
+      durationHours: Number(resolvedShift.duration_hours ?? resolvedShift.durationHours ?? 8.5),
+      graceDeadline: liveEntry.graceDeadlineLabel,
+      halfDayDeadline: liveEntry.halfDayDeadlineLabel,
+      currentEntryStatus: liveEntry.entryStatus,   // 'on_time' | 'late' | 'half_day' | 'no_shift'
+      lateMinutesNow: liveEntry.lateMinutes,
     } : null;
 
     return {
@@ -1115,21 +1115,19 @@ export class AttendanceService {
   }
 
   /**
-   * Get filter options for reports from database
+   * Get filter options for reports from database.
+   * When companyId is provided, cascades departments, employees, locations and
+   * reporting officers to that company scope only.
+   * Companies list always returns all companies for the org (used for the top-level picker).
    */
-  async getReportFilterOptions(ctx: TenantContext) {
+  async getReportFilterOptions(ctx: TenantContext, companyId?: number | null) {
     try {
       const { db } = await import('../../../db/knex');
-      const [settingsLocations, branches, attendanceLocations, departments, employees, companyRows, currentOrg] = await Promise.all([
-        db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        // Companies (parent + sub-companies) come from the `company` table — the same source
-        // used by the top-right Workspace Context Switcher and by employees.company_id.
-        // Previously this queried `organizations` (always exactly one row per tenant), so the
-        // dropdown never matched the real parent/child company hierarchy or employees.company_id.
+      console.log('[FilterOptions] companyId received:', companyId, '| organizationId:', ctx.organizationId);
+
+      // ── 1. Companies ─────────────────────────────────────────────────────────
+      // Always load all companies for the org so the company dropdown is always populated.
+      const [companyRows, currentOrg] = await Promise.all([
         db('company')
           .where(function () {
             this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
@@ -1142,86 +1140,85 @@ export class AttendanceService {
       ]);
 
       const companies = companyRows.length > 0
-        ? companyRows.map((c: any) => ({ id: String(c.company_id), name: c.name }))
+        ? companyRows.map((c: any) => ({ id: String(c.companyId ?? c.company_id), name: c.name }))
         : [{ id: String(ctx.organizationId), name: currentOrg?.name || 'Primary Organization' }];
 
-      // Filter locations belonging strictly to this organization including currentOrg.location
-      const seenLocNames = new Set<string>();
-      const formattedLocations: { id: string; name: string }[] = [];
-
-      if (currentOrg && currentOrg.location) {
-        seenLocNames.add(currentOrg.location);
-        formattedLocations.push({
-          id: `org_loc_${currentOrg.id}`,
-          name: currentOrg.location,
+      // ── 2. Locations ─────────────────────────────────────────────────────────
+      let locationQuery = db('locations')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .where('status', 'active');
+      if (companyId) {
+        locationQuery = locationQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
         });
       }
+      const locationRows = await locationQuery.select('id', 'name').orderBy('name', 'asc').catch(() => []);
+      const formattedLocations = locationRows.map((l: any) => ({
+        id: String(l.id),
+        name: l.name,
+      }));
 
-      const allRawLocs = [...settingsLocations, ...branches, ...attendanceLocations];
-      for (const item of allRawLocs) {
-        const name = item.name || item.locationName || item.location_name;
-        if (name && !seenLocNames.has(name)) {
-          seenLocNames.add(name);
-          formattedLocations.push({ id: String(item.id), name });
-        }
+      // ── 3. Departments ───────────────────────────────────────────────────────
+      let departmentQuery = db('departments')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+      if (companyId) {
+        departmentQuery = departmentQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        });
       }
-
-      const formattedDepartments = (departments || []).map((d: any) => ({
+      const departmentRows = await departmentQuery.select('id', 'name').orderBy('name', 'asc').catch(() => []);
+      const formattedDepartments = departmentRows.map((d: any) => ({
         id: String(d.id),
         name: d.name || `Department ${d.id}`,
       }));
 
-      // Gather IDs of employees who have direct reports assigned to them strictly within this org
-      const managerIdsSet = new Set(
-        employees.map((e: any) => e.reportingManagerId || e.reporting_manager_id).filter(Boolean)
-      );
+      // ── 4. Reporting Officers ─────────────────────────────────────────────────
+      let assignedManagerQuery = db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .whereNotNull('reporting_manager_id');
+      if (companyId) {
+        assignedManagerQuery = assignedManagerQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        });
+      }
+      const assignedManagerIdRows = await assignedManagerQuery.distinct('reporting_manager_id').select('reporting_manager_id').catch(() => []);
+      const assignedManagerIds = assignedManagerIdRows
+        .map((r: any) => Number(r.reportingManagerId ?? r.reporting_manager_id))
+        .filter(Boolean);
 
-      // Join user_roles to find users with leadership roles strictly within this org
-      const userRoleRows = await db('user_roles')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .join('users', 'user_roles.user_id', 'users.id')
-        .where('user_roles.organization_id', ctx.organizationId)
-        .whereIn('roles.code', ['department_head', 'hr_manager', 'team_lead'])
-        .select('users.employee_id', 'users.employeeId', 'roles.code')
-        .catch(() => []);
+      let formattedReportingOfficers: { id: string; name: string }[] = [];
+      if (assignedManagerIds.length > 0) {
+        const managerRows = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .whereIn('id', assignedManagerIds)
+          .select('id', 'first_name', 'last_name', 'employee_code')
+          .orderBy('first_name', 'asc')
+          .catch(() => []);
 
-      const leaderEmpIdsSet = new Set<number>();
-      const leaderRoleMap = new Map<number, string>();
-      for (const ur of userRoleRows) {
-        const empId = Number(ur.employeeId || ur.employee_id);
-        if (empId) {
-          leaderEmpIdsSet.add(empId);
-          leaderRoleMap.set(empId, ur.code);
-        }
+        formattedReportingOfficers = managerRows.map((e: any) => ({
+          id: String(e.id),
+          name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Officer ${e.id}`,
+        }));
       }
 
-      managerIdsSet.forEach((id) => leaderEmpIdsSet.add(Number(id)));
-
-      // 1. Reporting Officers: ONLY HR, Manager (department_head), Team Lead
-      const formattedReportingOfficers = (employees || [])
-        .filter((e: any) => {
-          const empId = Number(e.id);
-          const isLeaderRole = ['department_head', 'hr_manager', 'team_lead'].includes(e.accessRole || e.access_role);
-          return isLeaderRole || leaderEmpIdsSet.has(empId);
-        })
-        .map((e: any) => {
-          const name = `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Officer ${e.id}`;
-          const roleCode = leaderRoleMap.get(Number(e.id)) || e.accessRole || e.access_role || '';
-          let roleTag = 'Manager';
-          if (roleCode === 'hr_manager') roleTag = 'HR';
-          else if (roleCode === 'team_lead') roleTag = 'Team Lead';
-          else if (roleCode === 'department_head') roleTag = 'Dept Manager';
-          return {
-            id: String(e.id),
-            name: `${name} (${roleTag})`,
-          };
+      // ── 5. Employees ─────────────────────────────────────────────────────────
+      let employeeQuery = db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+      if (companyId) {
+        employeeQuery = employeeQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
         });
-
-      // 2. Employees: ALL employees in organization
-      const formattedEmployees = (employees || []).map((e: any) => ({
+      }
+      const employeeRows = await employeeQuery.select('id', 'first_name', 'last_name', 'employee_code').orderBy('first_name', 'asc').catch(() => []);
+      const formattedEmployees = employeeRows.map((e: any) => ({
         id: String(e.id),
-        name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Employee ${e.id}`,
-        code: e.employeeCode || e.employee_code || '',
+        name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Employee ${e.id}`,
+        code: e.employeeCode ?? e.employee_code ?? '',
       }));
 
       return {
@@ -1255,6 +1252,10 @@ export class AttendanceService {
       workType,
     } = params || {};
 
+    const sf = typeof statusFilters === 'string'
+      ? (() => { try { return JSON.parse(statusFilters); } catch { return {}; } })()
+      : (statusFilters || {});
+
     const rawEmp = params?.employees ?? params?.['employees[]'] ?? params?.employeeId ?? params?.employee_id;
     const rawLoc = params?.locations ?? params?.['locations[]'] ?? params?.locationId ?? params?.location_id;
     const rawDept = params?.departments ?? params?.['departments[]'] ?? params?.departmentId ?? params?.department_id;
@@ -1287,7 +1288,6 @@ export class AttendanceService {
     const targetEmpIds = parseIds(rawEmp);
     const targetEmpStrings = parseStrings(rawEmp);
     const targetDeptIds = parseIds(rawDept);
-    const targetLocIds = parseIds(rawLoc);
     const targetRoIds = parseIds(rawRo);
     const targetCompanyIds = parseIds(rawCompany);
 
@@ -1296,12 +1296,14 @@ export class AttendanceService {
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
-    if (ctx.companyId) {
-      empQuery = empQuery.where('company_id', ctx.companyId);
-    }
-
     if (targetCompanyIds.length > 0) {
-      empQuery = empQuery.whereIn('company_id', targetCompanyIds);
+      empQuery = empQuery.where(function () {
+        this.whereIn('company_id', targetCompanyIds).orWhereNull('company_id');
+      });
+    } else if (ctx.companyId) {
+      empQuery = empQuery.where(function () {
+        this.where('company_id', ctx.companyId).orWhereNull('company_id');
+      });
     }
 
     if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {
@@ -1324,11 +1326,6 @@ export class AttendanceService {
     }
     if (targetRoIds.length > 0) {
       empQuery = empQuery.whereIn('reporting_manager_id', targetRoIds);
-    }
-    if (targetLocIds.length > 0) {
-      empQuery = empQuery.where((builder) => {
-        builder.whereIn('current_branch_id', targetLocIds).orWhereIn('current_location_id', targetLocIds);
-      });
     }
 
     const employeeList = await empQuery.catch(() => []);
@@ -1495,8 +1492,6 @@ export class AttendanceService {
     const rows: any[] = [];
     let rowIdCounter = 1;
 
-    const sf = typeof statusFilters === 'string' ? JSON.parse(statusFilters) : (statusFilters || {});
-
     const [locationsGen, locationsAtt, geofencesList, branchesList] = await Promise.all([
       db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
       db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
@@ -1546,14 +1541,14 @@ export class AttendanceService {
           dayStatus = rawStatus === 'present'
             ? 'Full Day'
             : rawStatus === 'half_day'
-            ? 'Half Day'
-            : rawStatus === 'absent'
-            ? 'Absent'
-            : rawStatus === 'on_leave'
-            ? 'Leave'
-            : rawStatus === 'weekly_off'
-            ? 'Week Off'
-            : 'Full Day';
+              ? 'Half Day'
+              : rawStatus === 'absent'
+                ? 'Absent'
+                : rawStatus === 'on_leave'
+                  ? 'Leave'
+                  : rawStatus === 'weekly_off'
+                    ? 'Week Off'
+                    : 'Full Day';
 
           isLate = (dbRec.is_late || dbRec.isLate) ? 'Yes' : 'No';
           lateMins = (dbRec.is_late || dbRec.isLate) ? '00:15' : '00:00';
@@ -1660,14 +1655,15 @@ export class AttendanceService {
         const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
         const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
 
-        if (sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
-        if (sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
-        if (sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
-        if (sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
-        if (sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
-        if (sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
-        if (sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
-        if (sf.breakLog !== undefined && isFalse(sf.breakLog) && totalBreakHours !== '00:00') continue;
+        if (sf && sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
+        if (sf && sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
+        if (sf && sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
+        if (sf && sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
+        if (sf && sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
+
+        if (sf && sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
+        if (sf && sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && (shortHours === '00:00' || dayStatus === 'Full Day')) continue;
+        if (sf && sf.breakLog !== undefined && isTrue(sf.breakLog) && (totalBreakHours === '--' || totalBreakHours === '00:00')) continue;
 
         if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
         if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
@@ -1794,19 +1790,28 @@ export class AttendanceService {
       return arr.map((x: any) => String(x).trim()).filter(Boolean);
     };
 
+    const rawCompany = params?.companies ?? params?.['companies[]'] ?? params?.companyId ?? params?.company_id;
+
     const targetEmpIds = parseIds(rawEmp);
     const targetEmpStrings = parseStrings(rawEmp);
     const targetDeptIds = parseIds(rawDept);
     const targetLocIds = parseIds(rawLoc);
     const targetRoIds = parseIds(rawRo);
+    const targetCompanyIds = parseIds(rawCompany);
 
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
-    if (ctx.companyId) {
-      empQuery = empQuery.where('company_id', ctx.companyId);
+    if (targetCompanyIds.length > 0) {
+      empQuery = empQuery.where(function () {
+        this.whereIn('company_id', targetCompanyIds).orWhereNull('company_id');
+      });
+    } else if (ctx.companyId) {
+      empQuery = empQuery.where(function () {
+        this.where('company_id', ctx.companyId).orWhereNull('company_id');
+      });
     }
 
     if (filterStatus && filterStatus !== 'choose' && filterStatus !== 'both') {

@@ -3,6 +3,7 @@ import { ResumeBankRepository } from '../repositories/ResumeBankRepository';
 import { ResumeUploadLogRepository } from '../repositories/ResumeUploadLogRepository';
 import { CandidateRepository } from '../repositories/CandidateRepository';
 import type { CreateResumeBankEntryInput } from '../types/mrf';
+import AdmZip from 'adm-zip';
 
 export class ResumeBankService {
   private resumeRepo: ResumeBankRepository;
@@ -13,6 +14,40 @@ export class ResumeBankService {
     this.resumeRepo = new ResumeBankRepository();
     this.uploadLogRepo = new ResumeUploadLogRepository();
     this.candidateRepo = new CandidateRepository();
+  }
+
+  private saveBase64Resume(dataUrl: string | null | undefined, prefix: string): string | null {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    if (!dataUrl.startsWith('data:')) return dataUrl.length > 500 ? dataUrl.slice(0, 500) : dataUrl;
+
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads/resumes');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const matches = dataUrl.match(/^data:([a-zA-Z0-9-]+\/[a-zA-Z0-9-+.]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) return dataUrl.slice(0, 500);
+
+      const mimeType = matches[1];
+      let ext = 'pdf';
+      if (mimeType.includes('wordprocessingml.document')) ext = 'docx';
+      else if (mimeType.includes('msword')) ext = 'doc';
+      else if (mimeType.includes('jpeg')) ext = 'jpg';
+      else if (mimeType.includes('png')) ext = 'png';
+
+      const buffer = Buffer.from(matches[2], 'base64');
+      const filename = `${prefix.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+      const filePath = path.join(uploadsDir, filename);
+
+      fs.writeFileSync(filePath, buffer);
+      return `/uploads/resumes/${filename}`;
+    } catch (err) {
+      console.error(`Failed to save base64 resume (${prefix}):`, err);
+      return null;
+    }
   }
 
   /**
@@ -481,8 +516,8 @@ export class ResumeBankService {
         const combined = [...(resumeResult.items || [])];
         const existingEmails = new Set(combined.map((c: any) => (c.candidate_email || c.email || '').toLowerCase()).filter(Boolean));
 
-        for (const app of appRows) {
-          const emailKey = (app.candidate_email || '').toLowerCase();
+        for (const app of (appRows as any[])) {
+          const emailKey = ((app as any).candidate_email || '').toLowerCase();
           if (!emailKey || !existingEmails.has(emailKey)) {
             combined.push(app);
             if (emailKey) existingEmails.add(emailKey);
@@ -513,44 +548,70 @@ export class ResumeBankService {
   async createUploadLog(
     ctx: TenantContext,
     fileName: string,
-    totalRecords: number
+    totalRecords: number,
+    targetJobId?: number | null
   ) {
     const realOrgId = await this.resolveOrgId(ctx);
     const resolvedCtx: TenantContext = { ...ctx, organizationId: realOrgId };
-    return this.uploadLogRepo.create(resolvedCtx, {
-      uploaded_by: ctx.userId,
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const hasJobIdCol = await db.schema.hasColumn('resume_upload_logs', 'target_job_id').catch(() => false);
+
+    const data: any = {
+      uploaded_by: ctx.userId || 1,
       file_name: fileName,
       total_records: totalRecords,
       success_count: 0,
       failed_count: 0,
       status: 'Processing',
-    } as any);
+    };
+
+    if (hasJobIdCol && targetJobId) {
+      data.target_job_id = targetJobId;
+    }
+
+    return this.uploadLogRepo.create(resolvedCtx, data);
   }
 
   /**
-   * Update upload log after processing
+   * Update upload log after processing with AI screening metrics
    */
   async updateUploadLog(
     ctx: TenantContext,
     logId: number,
     successCount: number,
     failedCount: number,
-    errorLog?: any
+    errorLog?: any,
+    aiStats?: { atsPassedCount?: number; jdMatchPassedCount?: number; aiShortlistedCount?: number }
   ) {
     const realOrgId = await this.resolveOrgId(ctx);
     const resolvedCtx: TenantContext = { ...ctx, organizationId: realOrgId };
     const totalProcessed = successCount + failedCount;
-    return this.uploadLogRepo.update(resolvedCtx, logId, {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const hasAtsCol = await db.schema.hasColumn('resume_upload_logs', 'ats_passed_count').catch(() => false);
+
+    const updateData: any = {
       total_records: totalProcessed > 0 ? totalProcessed : 1,
       success_count: successCount,
       failed_count: failedCount,
       status: failedCount > 0 && successCount === 0 ? 'Failed' : 'Completed',
       error_log_json: errorLog ? JSON.stringify(errorLog) : null,
-    } as any);
+    };
+
+    if (hasAtsCol && aiStats) {
+      updateData.ats_passed_count = aiStats.atsPassedCount || 0;
+      updateData.jd_match_passed_count = aiStats.jdMatchPassedCount || 0;
+      updateData.ai_shortlisted_count = aiStats.aiShortlistedCount || 0;
+    }
+
+    return this.uploadLogRepo.update(resolvedCtx, logId, updateData);
   }
 
   /**
-   * Get upload logs
+   * Get upload logs with target job information
    */
   async getUploadLogs(ctx: TenantContext, options?: ListQueryOptions) {
     const realOrgId = await this.resolveOrgId(ctx);
@@ -642,8 +703,6 @@ export class ResumeBankService {
       const ext = file.originalname.split('.').pop()?.toLowerCase();
       if (ext === 'zip' || ext === 'rar') {
         try {
-          const AdmZipModule = await import('adm-zip');
-          const AdmZip = AdmZipModule.default || AdmZipModule;
           const zip = new AdmZip(file.buffer);
           const zipEntries = zip.getEntries();
           

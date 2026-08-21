@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 /**
  * Migration: Add job_id and mrf_request_id to resume_bank table

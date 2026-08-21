@@ -73,12 +73,36 @@ const HR_NAV = [
           { name: 'Payroll Master Settings', href: '/hr/payroll/settings', icon: Sliders },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
-          { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'SETTLEMENT MANAGEMENT',
+    items: [
+      { name: 'Exit Settlements (FnF)', href: '/hr/settlements', icon: UserX },
+      { name: 'Gratuity Policy', href: '/hr/gratuity', icon: Award },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Type Settings', href: '/payroll/loan-types', icon: Sliders },
+      { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Expense Claims', href: '/expense-claims', icon: Receipt },
+    ],
+  },
+  {
+    label: 'TRAVEL MANAGEMENT',
+    items: [
+      { name: 'Travel Requests', href: '/travel-requests', icon: Compass },
     ],
   },
   {
@@ -181,7 +205,7 @@ function SidebarNavContent({
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
-      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Portal" />
+      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Panel" />
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
@@ -452,7 +476,7 @@ export function HRLayout() {
 
           <div className="flex items-center gap-2">
             <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">HR Portal</span>
+            <span className="text-sm font-bold text-foreground hidden sm:block">HR Panel</span>
             <span className={cn(
               'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
               C.badge

@@ -133,7 +133,7 @@ async function testPayrollFullFlow() {
 
     // Auto Upsert Payslip
     const payslipNum = `PS-202608-${rEmp.employee_id}`;
-    const existingSlip = await knex('payslips').where({ employee_id: rEmp.employee_id, payslip_month: '2026-08' }).first();
+    const existingSlip = await knex('payslips').where({ employee_id: rEmp.employee_id, payslip_month: '2026-08-01' }).first();
     if (existingSlip) {
       await knex('payslips').where('id', existingSlip.id).update({
         gross_salary: gross,
@@ -148,7 +148,7 @@ async function testPayrollFullFlow() {
         organization_id: orgId,
         employee_id: rEmp.employee_id,
         payroll_run_id: runId,
-        payslip_month: '2026-08',
+        payslip_month: '2026-08-01',
         payslip_number: payslipNum,
         ctc: gross * 12,
         basic_salary: Math.round(gross * 0.5),
@@ -167,13 +167,13 @@ async function testPayrollFullFlow() {
     processedCount++;
   }
 
-  // 5. Update Run Status to Processed -> Approved -> Published
+  // 5. Update Run Status to Locked -> Approved -> Published
   await knex('payroll_runs').where('id', runId).update({
-    status: 'processed',
+    status: 'locked',
     processed_employees: processedCount,
     updated_at: new Date()
   });
-  console.log('\n✅ 5. Payroll Processing Completed -> Status: processed');
+  console.log('\n✅ 5. Payroll Processing Completed -> Status: locked');
 
   await knex('payroll_runs').where('id', runId).update({
     status: 'approved',

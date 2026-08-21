@@ -75,6 +75,25 @@ export class InterviewRepository extends BaseRepository<Interview> {
   }
 
   /**
+   * Get interviews for an interviewer
+   */
+  async getByInterviewer(
+    ctx: TenantContext,
+    interviewerId: number,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<Interview[]> {
+    let q = this.query(ctx).where('interviewer_id', interviewerId);
+    if (startDate) {
+      q = q.where('interview_date', '>=', startDate);
+    }
+    if (endDate) {
+      q = q.where('interview_date', '<=', endDate);
+    }
+    return q.orderBy('interview_date', 'asc');
+  }
+
+  /**
    * Count total interviews
    */
   async countForOrganization(ctx: TenantContext): Promise<number> {

@@ -28,7 +28,7 @@ const searchData: SearchResult[] = [
 
   // Attendance
   { id: '7', title: 'Attendance Dashboard', description: 'View attendance metrics', category: 'attendance', icon: <Clock className="h-4 w-4" />, href: '/attendance' },
-  { id: '8', title: 'My Attendance', description: 'Check-in and out', category: 'attendance', icon: <Clock className="h-4 w-4" />, href: '/attendance/my-attendance' },
+  { id: '8', title: 'My Attendance', description: 'Check-in and out', category: 'attendance', icon: <Clock className="h-4 w-4" />, href: '/employee/face-attendance' },
 
   // Recruitment
   { id: '10', title: 'MRF Request', description: 'Manpower Requisition Form', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/mrf-request' },

@@ -44,7 +44,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to fetch offer letter details', err);
-        setError(err.response?.data?.error || 'Failed to fetch offer letter details. Please check the link.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to fetch offer letter details. Please check the link.';
+        setError(msg);
       })
       .finally(() => setIsLoading(false));
   }, [uuid]);

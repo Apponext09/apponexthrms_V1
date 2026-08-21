@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getKnex } from '../../../db/knex';
 import { JobRepository, type Job } from '../repositories/JobRepository';
 import { JobSkillRepository, type JobSkill } from '../repositories/SupportingRepository';
 import { JobLocationRepository, type JobLocation } from '../repositories/SupportingRepository';
@@ -68,21 +69,17 @@ export class JobService {
       if (!mrf) {
         throw new ValidationError(`Linked MRF Request with ID ${input.mrfRequestId} not found`);
       }
+      if (mrf.stage === 'Rejected') {
+        throw new ValidationError('Cannot create a job posting for a REJECTED MRF Request');
+      }
       if (mrf.stage !== 'Approved') {
-        throw new ValidationError('A job posting can only be created for an APPROVED MRF Request');
+        await this.mrfRepo.update(ctx, mrf.id, {
+          stage: 'Approved',
+          approved_by: ctx.userId,
+          approved_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updated_by: ctx.userId,
+        } as any);
       }
-    }
-
-    try {
-      const knex = getKnex();
-      const hasExpiry = await knex.schema.hasColumn('jobs', 'expiry_date');
-      if (!hasExpiry) {
-        await knex.schema.table('jobs', (table) => {
-          table.date('expiry_date').nullable();
-        });
-      }
-    } catch (err) {
-      console.warn('Auto-column add expiry_date to jobs skipped or failed:', err);
     }
 
     const job = await this.jobRepo.create(ctx, {
@@ -160,7 +157,8 @@ export class JobService {
     }
 
     const titleToCheck = input.job_title || (input as any).jobTitle;
-    if (titleToCheck && titleToCheck.toLowerCase().trim() !== job.job_title.toLowerCase().trim()) {
+    const currentJobTitle = job.job_title || (job as any).jobTitle || '';
+    if (titleToCheck && titleToCheck.toLowerCase().trim() !== currentJobTitle.toLowerCase().trim()) {
       const existingTitle = await this.jobRepo.query(ctx)
         .whereRaw('LOWER(job_title) = ?', [titleToCheck.toLowerCase().trim()])
         .whereNot('id', jobId)

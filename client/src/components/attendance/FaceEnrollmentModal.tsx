@@ -34,6 +34,13 @@ export const FaceEnrollmentModal: React.FC<FaceEnrollmentModalProps> = ({
     };
   }, [isOpen, capturedImage]);
 
+  useEffect(() => {
+    if (isOpen && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isOpen, stream]);
+
   const startCamera = async () => {
     try {
       setCameraError(null);

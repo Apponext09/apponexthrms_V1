@@ -14,18 +14,32 @@ import {
 } from '../utils/payslipRequestQueue';
 import { useAuthStore } from '@/features/auth/store/authStore';
 
-// ── Month options ─────────────────────────────────────────────────────────────
-const MONTHS = [
-  { value: '2026-07', label: 'July 2026' },
-  { value: '2026-06', label: 'June 2026' },
-  { value: '2026-05', label: 'May 2026' },
-  { value: '2026-04', label: 'April 2026' },
-  { value: '2026-03', label: 'March 2026' },
-  { value: '2026-02', label: 'February 2026' },
-  { value: '2026-01', label: 'January 2026' },
-];
+// ── Month options — rolling window ending at the actual current month ───────
+const getRecentMonths = (count = 12) => {
+  const now = new Date();
+  const months: { value: string; label: string }[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    months.push({ value, label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) });
+  }
+  return months;
+};
 
-const MONTHS_MAP: Record<string, string> = Object.fromEntries(MONTHS.map(m => [m.value, m.label]));
+const currentMonthValue = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const MONTHS = getRecentMonths(12);
+
+const MONTHS_MAP: Record<string, string> = new Proxy({}, {
+  get: (_t, prop: string) => {
+    const [y, m] = (prop || '').split('-').map(Number);
+    if (!y || !m) return prop;
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  },
+}) as Record<string, string>;
 
 // ── Dummy salary data per employee ID for PDF generation ─────────────────────
 const SALARY_DATA: Record<number, { basic: number; name: string; code: string }> = {
@@ -111,7 +125,7 @@ interface RequesterPanelProps {
 }
 
 export const PayslipRequesterPanel: React.FC<RequesterPanelProps> = ({ employeeName, employeeId, role }) => {
-  const [month, setMonth] = useState('2026-07');
+  const [month, setMonth] = useState(currentMonthValue());
   const [reason, setReason] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [myRequests, setMyRequests] = useState<PayslipRequest[]>(() =>

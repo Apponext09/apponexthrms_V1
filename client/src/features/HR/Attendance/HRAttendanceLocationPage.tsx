@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   MapPin,
@@ -38,6 +39,10 @@ import apiClient from '@/lib/api';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export const HRAttendanceLocationPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isHrPath = location.pathname.startsWith('/hr');
+  const geofencesRoute = isHrPath ? '/hr/attendance' : '/attendance/locations';
   const { selectedCompanyId } = useCompanyStore();
   const [employees, setEmployees] = useState<EmployeeLocationAccess[]>([]);
   const [adminLocations, setAdminLocations] = useState<AdminLocation[]>([]);
@@ -246,7 +251,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
                 Employee Attendance Locations
               </h1>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px] px-2 py-0.5">
-                HR Portal
+                {isHrPath ? 'HR Portal' : 'Admin Portal'}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -287,6 +292,30 @@ export const HRAttendanceLocationPage: React.FC = () => {
             </Button>
           )}
         </div>
+      </div>
+
+      {/* Navigation Tabs Bar */}
+      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+        {!isHrPath && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/attendance/locations')}
+            className="h-8 text-xs font-bold gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+          >
+            <MapPin className="w-3.5 h-3.5 text-primary" />
+            Geofence Boundaries
+          </Button>
+        )}
+
+        <Button
+          variant="default"
+          size="sm"
+          className="h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-2xs"
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          Employee Location Mapping
+        </Button>
       </div>
 
       {/* Quick KPI Stat Cards */}

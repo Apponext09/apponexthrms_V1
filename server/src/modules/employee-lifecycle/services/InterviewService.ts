@@ -113,7 +113,6 @@ export class InterviewService {
     const ctx: TenantContext = {
       organizationId,
       userId: 0,
-      tenantId: `org_${organizationId}`,
     };
 
     return this.repo.getByApplicant(ctx, applicantId, limit, offset);
@@ -130,7 +129,6 @@ export class InterviewService {
     const ctx: TenantContext = {
       organizationId,
       userId: 0,
-      tenantId: `org_${organizationId}`,
     };
 
     return this.repo.getAll(ctx, limit, offset);
@@ -148,7 +146,6 @@ export class InterviewService {
     const ctx: TenantContext = {
       organizationId,
       userId,
-      tenantId: `org_${organizationId}`,
     };
 
     await this.getInterviewById(interviewId, organizationId);
@@ -176,7 +173,6 @@ export class InterviewService {
     const ctx: TenantContext = {
       organizationId,
       userId,
-      tenantId: `org_${organizationId}`,
     };
 
     await this.getInterviewById(interviewId, organizationId);
@@ -203,7 +199,6 @@ export class InterviewService {
     const ctx: TenantContext = {
       organizationId,
       userId,
-      tenantId: `org_${organizationId}`,
     };
 
     await this.getInterviewById(interviewId, organizationId);
@@ -229,7 +224,6 @@ export class InterviewService {
     const ctx: TenantContext = {
       organizationId,
       userId,
-      tenantId: `org_${organizationId}`,
     };
 
     await this.getInterviewById(interviewId, organizationId);
@@ -244,6 +238,23 @@ export class InterviewService {
     } catch (error) {
       console.error('Audit logging failed:', error);
     }
+  }
+
+  /**
+   * Get schedule for an interviewer
+   */
+  async getInterviewerSchedule(
+    interviewerId: number,
+    organizationId: number,
+    startDate?: Date,
+    endDate?: Date
+  ): Promise<any[]> {
+    const ctx: TenantContext = {
+      organizationId,
+      userId: 0,
+    };
+
+    return this.repo.getByInterviewer(ctx, interviewerId, startDate, endDate);
   }
 
   /**

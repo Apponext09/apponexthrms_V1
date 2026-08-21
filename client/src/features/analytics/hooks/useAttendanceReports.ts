@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
-import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface AttendanceReportFilterParams {
   companies: string[];
@@ -106,19 +105,23 @@ export interface MobileTrackingRecord {
   batteryLevel: string;
 }
 
-// Hook to get metadata options for filters from backend DB
-export function useReportFilterOptions() {
-  const { selectedCompanyId } = useCompanyStore();
+// Hook to get metadata options for filters from backend DB.
+// Accepts an optional companyId — when provided, the backend cascades
+// departments / employees / reporting officers to that company scope.
+// React Query re-fetches automatically whenever companyId changes.
+export function useReportFilterOptions(companyId?: string | null) {
   return useQuery({
-    queryKey: ['reportFilterOptions', selectedCompanyId],
+    queryKey: ['reportFilterOptions', companyId ?? null],
     queryFn: async () => {
-      const res = await apiClient.get('/attendance/reports/options');
+      const params: Record<string, any> = {};
+      if (companyId) params.companyId = companyId;
+      const res = await apiClient.get('/attendance/reports/options', { params });
       if (res.data?.success && res.data?.data) {
         return res.data.data;
       }
       throw new Error('Failed to load report filter options');
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 min — shorter because results are company-scoped
   });
 }
 
@@ -144,6 +147,7 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
 export function useTimelogMatrixQuery(params: {
   fromDate: string;
   toDate: string;
+  companies?: string[];
   employees?: string[];
   locations?: string[];
   departments?: string[];
@@ -160,6 +164,7 @@ export function useTimelogMatrixQuery(params: {
         if (params.fromDate) qp.append('fromDate', params.fromDate);
         if (params.toDate) qp.append('toDate', params.toDate);
         if (params.status && params.status !== 'choose') qp.append('status', params.status);
+        (params.companies || []).forEach((v) => v && qp.append('companies[]', v));
         (params.employees || []).forEach((v) => v && qp.append('employees[]', v));
         (params.locations || []).forEach((v) => v && qp.append('locations[]', v));
         (params.departments || []).forEach((v) => v && qp.append('departments[]', v));

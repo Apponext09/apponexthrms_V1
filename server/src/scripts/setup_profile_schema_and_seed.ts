@@ -20,24 +20,6 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       logger.error('Error diagnosing database tables:', err.message);
     }
 
-    // Run migrations programmatically
-    try {
-      const path = await import('path');
-      const migrationDir = path.resolve(process.cwd(), '../database/migrations');
-      logger.info(`Running Knex migrations programmatically from: ${migrationDir}`);
-      const [batchNo, log] = await db.migrate.latest({
-        directory: migrationDir,
-        loadExtensions: ['.ts', '.js'],
-      });
-      if (log.length > 0) {
-        logger.info(`Batch ${batchNo} run: ${log.join(', ')}`);
-      } else {
-        logger.info('No new migrations to run.');
-      }
-    } catch (migError: any) {
-      logger.error('Error running programmatic migrations:', migError.message);
-    }
-
     // ──────── MASTER RECRUITMENT & PORTAL SCHEMA ALIGNMENT ────────
     try {
       // 1. candidates table repair
@@ -243,6 +225,88 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       logger.error('Error seeding recruitment permissions:', permSeedError.message);
     }
 
+    // Seeding performance module permissions if they don't exist
+    // (performance.routes.ts gates every endpoint with requirePermission, but no
+    // permissions were ever seeded for this module, so it 403'd for every role.)
+    try {
+      const performancePermissions = [
+        { code: 'performance.goal_read', module: 'performance', resource: 'goal', action: 'read', description: 'Read Goals' },
+        { code: 'performance.goal_write', module: 'performance', resource: 'goal', action: 'write', description: 'Create and Manage Goals' },
+        { code: 'performance.okr_read', module: 'performance', resource: 'okr', action: 'read', description: 'Read OKRs' },
+        { code: 'performance.okr_write', module: 'performance', resource: 'okr', action: 'write', description: 'Create and Manage OKRs' },
+        { code: 'performance.review_cycle_write', module: 'performance', resource: 'review_cycle', action: 'write', description: 'Create and Manage Review Cycles' },
+        { code: 'performance.review_cycle_manage', module: 'performance', resource: 'review_cycle', action: 'manage', description: 'Manage Review Cycle Lifecycle' },
+        { code: 'performance.review_read', module: 'performance', resource: 'review', action: 'read', description: 'Read Performance Reviews' },
+        { code: 'performance.review_write', module: 'performance', resource: 'review', action: 'write', description: 'Create and Manage Performance Reviews' },
+        { code: 'performance.review_submit', module: 'performance', resource: 'review', action: 'submit', description: 'Submit Performance Reviews' },
+        { code: 'performance.review_approve', module: 'performance', resource: 'review', action: 'approve', description: 'Approve Performance Reviews' },
+        { code: 'performance.feedback_read', module: 'performance', resource: 'feedback', action: 'read', description: 'Read Feedback' },
+        { code: 'performance.feedback_write', module: 'performance', resource: 'feedback', action: 'write', description: 'Create and Manage Feedback' },
+        { code: 'performance.feedback_360', module: 'performance', resource: 'feedback', action: '360', description: '360-Degree Feedback' },
+        { code: 'performance.competency_read', module: 'performance', resource: 'competency', action: 'read', description: 'Read Competency Frameworks' },
+        { code: 'performance.competency_write', module: 'performance', resource: 'competency', action: 'write', description: 'Create and Manage Competency Frameworks' },
+        { code: 'performance.appraisal_read', module: 'performance', resource: 'appraisal', action: 'read', description: 'Read Appraisals' },
+        { code: 'performance.appraisal_write', module: 'performance', resource: 'appraisal', action: 'write', description: 'Create and Manage Appraisals' },
+        { code: 'performance.appraisal_approve', module: 'performance', resource: 'appraisal', action: 'approve', description: 'Approve Appraisals' },
+        { code: 'performance.pip_read', module: 'performance', resource: 'pip', action: 'read', description: 'Read Performance Improvement Plans' },
+        { code: 'performance.pip_write', module: 'performance', resource: 'pip', action: 'write', description: 'Create and Manage Performance Improvement Plans' },
+        { code: 'performance.pip_review', module: 'performance', resource: 'pip', action: 'review', description: 'Review Performance Improvement Plans' },
+        { code: 'performance.succession_read', module: 'performance', resource: 'succession', action: 'read', description: 'Read Succession Plans' },
+        { code: 'performance.succession_write', module: 'performance', resource: 'succession', action: 'write', description: 'Create and Manage Succession Plans' },
+        { code: 'performance.talent_matrix_read', module: 'performance', resource: 'talent_matrix', action: 'read', description: 'Read Talent Matrix' },
+        { code: 'performance.recognition_read', module: 'performance', resource: 'recognition', action: 'read', description: 'Read Recognitions' },
+        { code: 'performance.recognition_write', module: 'performance', resource: 'recognition', action: 'write', description: 'Create and Manage Recognitions' },
+        { code: 'performance.reward_read', module: 'performance', resource: 'reward', action: 'read', description: 'Read Reward Points' },
+        { code: 'performance.reward_redeem', module: 'performance', resource: 'reward', action: 'redeem', description: 'Redeem Reward Points' },
+        { code: 'performance.analytics_read', module: 'performance', resource: 'analytics', action: 'read', description: 'Read Performance Analytics' },
+      ];
+
+      for (const perm of performancePermissions) {
+        const existing = await db('permissions').where('code', perm.code).first();
+        if (!existing) {
+          logger.info(`Seeding permission: ${perm.code}`);
+          await db('permissions').insert({
+            code: perm.code,
+            module: perm.module,
+            resource: perm.resource,
+            action: perm.action,
+            description: perm.description,
+            is_system: true,
+          });
+        }
+      }
+
+      const performanceTargetRoles = ['super_admin', 'organization_admin', 'hr_admin', 'hr_manager', 'manager', 'department_head', 'team_lead'];
+
+      const allPerformancePermissions = await db('permissions')
+        .whereIn('code', performancePermissions.map(p => p.code))
+        .select('id', 'code');
+
+      const allPerformanceRoles = await db('roles')
+        .whereIn('code', performanceTargetRoles)
+        .select('id', 'code', 'organization_id');
+
+      for (const role of allPerformanceRoles) {
+        for (const perm of allPerformancePermissions) {
+          const mappingExists = await db('role_permissions')
+            .where({ role_id: role.id, permission_id: perm.id })
+            .first();
+
+          if (!mappingExists) {
+            logger.info(`Assigning permission ${perm.code} to Role ${role.code} (Role ID ${role.id})`);
+            await db('role_permissions').insert({
+              role_id: role.id,
+              permission_id: perm.id,
+            });
+          }
+        }
+      }
+
+      logger.info('Performance permissions seeding and role mapping completed successfully!');
+    } catch (permSeedError: any) {
+      logger.error('Error seeding performance permissions:', permSeedError.message);
+    }
+
     // Seed default assessments for all organizations
     try {
       const orgs = await db('organizations').select('id');
@@ -354,9 +418,9 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
         if (!empCount || Number((empCount as any).count) === 0) {
           logger.info(`Seeding employees for Org ID ${orgId}...`);
           await db('employees').insert([
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-001', first_name: 'Sakshi', last_name: 'Shukla', email: 'sakshi@apponext.com', status: 'active' },
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-002', first_name: 'Rahul', last_name: 'Sharma', email: 'rahul@apponext.com', status: 'active' },
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-003', first_name: 'Siddharth', last_name: 'Mehta', email: 'siddharth@apponext.com', status: 'active' },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-001', first_name: 'Sakshi', last_name: 'Shukla', email: 'sakshi@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-002', first_name: 'Rahul', last_name: 'Sharma', email: 'rahul@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-003', first_name: 'Siddharth', last_name: 'Mehta', email: 'siddharth@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
           ]);
         }
       }

@@ -180,11 +180,14 @@ Thank you for your service!
       {/* Overview Banner for Assigned Salary Structure */}
       <div className="bg-card border border-border/80 p-5 rounded-2xl shadow-xs space-y-3">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge className="bg-primary/10 text-primary font-black border-primary/20 text-xs px-2.5 py-1 uppercase">
               Assigned Structure
             </Badge>
-            <h3 className="text-base font-extrabold text-foreground">
+            <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 font-extrabold text-xs px-2.5 py-1">
+              Slab: {assignedStructure?.slabName || assignedStructure?.slab || 'Standard Pay Slab'}
+            </Badge>
+            <h3 className="text-base font-extrabold text-foreground ml-1">
               {assignedStructure?.structureName || 'Standard Assigned Salary Structure'}
             </h3>
           </div>

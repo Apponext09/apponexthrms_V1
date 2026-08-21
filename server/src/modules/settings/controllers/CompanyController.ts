@@ -58,6 +58,10 @@ export class CompanyController {
       });
     }
 
+    const hasIsParent = await db.schema.hasColumn('company', 'is_parent').catch(() => false);
+    if (hasIsParent) {
+      query = query.orderBy('is_parent', 'desc');
+    }
     const companies = await query.orderBy('company_id', 'asc');
 
     // Never expose password_hash in list responses
@@ -166,6 +170,46 @@ export class CompanyController {
     }
 
     const [insertedId] = await db('company').insert(payload);
+
+    // Auto-create default company-wise payroll cycle
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
+      const cycleEndDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      const cutoffDate = new Date(year, month, 25).toISOString().split('T')[0];
+      const creditDate = new Date(year, month, 28).toISOString().split('T')[0];
+      const cycleCode = `CYC-${(code || `COM${insertedId}`).replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
+
+      await db('payroll_cycles').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        company_id: insertedId,
+        cycle_name: `Monthly Pay Cycle (${body.name || 'Company'})`,
+        cycle_code: cycleCode,
+        cycle_type: 'monthly',
+        frequency: 'Monthly',
+        cycle_start_date: cycleStartDate,
+        cycle_end_date: cycleEndDate,
+        payroll_run_date: cutoffDate,
+        salary_credit_date: creditDate,
+        start_date: 1,
+        cutoff_day: 25,
+        disbursement_date_str: '28',
+        month_offset: 'Current',
+        total_days_calc: '30',
+        cap_amount: 1000000.00,
+        tolerance_enabled: 1,
+        tolerance_minutes: 15,
+        is_active: 1,
+        status: 'open',
+        created_by: ctx.userId || 10,
+        updated_by: ctx.userId || 10,
+      });
+    } catch (cycleErr) {
+      console.warn('Could not auto-create default payroll cycle for company:', cycleErr);
+    }
 
     const createdCompanyRaw = await db('company').where({ company_id: insertedId }).first();
     const { password_hash: _ph2, ...createdCompany } = (createdCompanyRaw || {}) as any;
