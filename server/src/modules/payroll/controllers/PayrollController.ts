@@ -205,7 +205,11 @@ export class PayrollController {
       const activeStatus = status || employeeStatus;
       const activeEmpType = req.query.employment_type || employmentType;
 
-      if (companyId) empQuery = empQuery.where('e.company_id', Number(companyId));
+      if (companyId && String(companyId).toUpperCase() !== 'ALL') {
+        empQuery = empQuery.where(b => {
+          b.where('e.company_id', Number(companyId)).orWhereNull('e.company_id');
+        });
+      }
       if (departmentId) empQuery = empQuery.where('e.current_department_id', Number(departmentId));
       if (locationId) empQuery = empQuery.where('e.current_location_id', Number(locationId));
       if (employeeId) empQuery = empQuery.where('e.id', Number(employeeId));
@@ -244,9 +248,9 @@ export class PayrollController {
         'e.current_location_id',
         'd.name as department_name',
         'l.name as location_name',
-        'ec.bank_name',
-        'ec.account_number',
-        'ec.ifsc_code',
+        db.raw("COALESCE(NULLIF(TRIM(e.bank_name), ''), NULLIF(TRIM(ec.bank_name), '')) as bank_name"),
+        db.raw("COALESCE(NULLIF(TRIM(e.account_no), ''), NULLIF(TRIM(ec.account_number), '')) as account_number"),
+        db.raw("COALESCE(NULLIF(TRIM(e.ifsc_code), ''), NULLIF(TRIM(ec.ifsc_code), '')) as ifsc_code"),
         db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager")
       );
 
@@ -461,13 +465,37 @@ export class PayrollController {
         const pfEmployerMonthly = Math.min(1800, Math.round(basicMonthly * 0.12));
         let ctc = positiveNum(struct?.annualCtc ?? struct?.annual_ctc, (grossMonthly + pfEmployerMonthly + (esicDeduction > 0 ? Math.round(grossMonthly * 0.0325) : 0)) * 12);
 
-        // Resolve slab_name from payroll_slabs or structure_name
-        let slabName = struct?.structure_name || 'Standard Pay Slab';
-        if (struct?.slab_id) {
-          const slabRow = await db('payroll_slabs').where('id', struct.slab_id).first().catch(() => null);
-          if (slabRow?.name) {
-            slabName = slabRow.name;
+        // Resolve slab_name from payroll_slabs, salary_structures, or employee profile
+        let slabName = '';
+        const slabIdToTry = struct?.slab_id || struct?.slabId || emp?.salary_slab_id || emp?.salarySlabId;
+        if (slabIdToTry) {
+          const slabRow = await db('payroll_slabs').where('id', Number(slabIdToTry)).first().catch(() => null);
+          if (slabRow?.name || slabRow?.slab_name) {
+            slabName = slabRow.name || slabRow.slab_name;
           }
+        }
+        if (!slabName && (struct?.slab_name || struct?.slabName || struct?.payroll_slab_name || struct?.payrollSlabName)) {
+          slabName = struct?.slab_name || struct?.slabName || struct?.payroll_slab_name || struct?.payrollSlabName;
+        }
+        if (!slabName && (emp?.salary_slab_name || emp?.salarySlabName || emp?.payroll_slab || emp?.payrollSlab)) {
+          slabName = emp?.salary_slab_name || emp?.salarySlabName || emp?.payroll_slab || emp?.payrollSlab;
+        }
+        if (!slabName && struct?.structure_name && !struct.structure_name.startsWith('Structure - Employee')) {
+          slabName = struct.structure_name;
+        }
+        if (!slabName) {
+          const matchedSlab = await db('payroll_slabs')
+            .where('organization_id', empOrgId)
+            .whereNull('deleted_at')
+            .orderBy('id', 'asc')
+            .first()
+            .catch(() => null);
+          if (matchedSlab?.name) {
+            slabName = matchedSlab.name;
+          }
+        }
+        if (!slabName) {
+          slabName = 'Standard Pay Slab';
         }
 
         // Check for saved custom register override for this employee & month
@@ -491,11 +519,16 @@ export class PayrollController {
           last_name: emp.lastName || emp.last_name || '',
           department_name: emp.departmentName || emp.department_name || 'General',
           reporting_manager: (emp.reportingManager || emp.reporting_manager || '').trim() || 'Organization Admin',
-          designation: emp.jobTitle || emp.job_title || emp.departmentName || emp.department_name || 'Employee',
+          designation: emp.jobTitle || emp.job_title || emp.designation || emp.designation_name || 'Employee',
           slab_name: slabName,
-          bank_name: emp.bankName || emp.bank_name || 'N/A',
-          account_number: emp.accountNumber || emp.account_number || 'N/A',
-          ifsc_code: emp.ifscCode || emp.ifsc_code || 'N/A',
+          bank_name: (emp.bankName || emp.bank_name || '').trim() || null,
+          bankName: (emp.bankName || emp.bank_name || '').trim() || null,
+          account_no: (emp.accountNo || emp.account_no || emp.accountNumber || emp.account_number || '').trim() || null,
+          accountNo: (emp.accountNo || emp.account_no || emp.accountNumber || emp.account_number || '').trim() || null,
+          account_number: (emp.accountNo || emp.account_no || emp.accountNumber || emp.account_number || '').trim() || null,
+          accountNumber: (emp.accountNo || emp.account_no || emp.accountNumber || emp.account_number || '').trim() || null,
+          ifsc_code: (emp.ifscCode || emp.ifsc_code || '').trim() || null,
+          ifscCode: (emp.ifscCode || emp.ifsc_code || '').trim() || null,
           salary_days: override ? Number(override.salary_days) : totalDays,
           paid_days: override ? Number(override.paid_days) : paidDays,
           unpaid_days: override ? Number(override.unpaid_days) : unpaidDays,
@@ -1365,6 +1398,13 @@ export class PayrollController {
     const firstUser = await db('users').orderBy('id', 'asc').first().catch(() => null);
     const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? 47);
 
+    // Resolve company_id from employee, request body, or tenant context
+    const emp = employeeId ? await db('employees').where('id', employeeId).first().catch(() => null) : null;
+    const resolvedCompanyId = req.body.companyId || req.body.company_id || emp?.company_id || req.ctx?.companyId || null;
+    const numericCompanyId = (resolvedCompanyId && !isNaN(Number(resolvedCompanyId)) && Number(resolvedCompanyId) > 0)
+      ? Number(resolvedCompanyId)
+      : null;
+
     // Find this employee's own existing structure to update, if any. This
     // MUST be scoped by employee_id (and org) — it previously matched on
     // structure_name alone, which defaults to the same literal string
@@ -1388,6 +1428,7 @@ export class PayrollController {
     if (existing) {
       await db('salary_structures').where('id', existing.id).update({
         organization_id: orgId,
+        company_id: numericCompanyId !== null ? numericCompanyId : existing.company_id,
         structure_name: sName,
         structure_code: sCode,
         grade_code: sCode,
@@ -1481,6 +1522,7 @@ export class PayrollController {
       const [id] = await db('salary_structures').insert({
         uuid: uuidv4(),
         organization_id: orgId,
+        company_id: numericCompanyId,
         employee_id: employeeId || null,
         structure_name: sName,
         structure_code: sCode,
@@ -1508,6 +1550,7 @@ export class PayrollController {
         const [id] = await db('salary_structures').insert({
           uuid: uuidv4(),
           organization_id: orgId,
+          company_id: numericCompanyId,
           structure_name: sName,
           structure_code: sCode,
           annual_ctc: annualCtc !== undefined ? annualCtc : 0,
@@ -3014,12 +3057,17 @@ export class PayrollController {
         .select('pc.*', 'comp.name as company_name', 'comp.code as company_code');
 
       if (companyId && companyId !== 'all' && companyId !== '0') {
-        // Strict filter — only show cycles explicitly assigned to this company.
-        // Do NOT fall back to orWhereNull — that would leak other companies' cycles.
-        query = query.where('pc.company_id', Number(companyId));
+        const isStrict = req.query.strict === 'true';
+        if (isStrict) {
+          query = query.where('pc.company_id', Number(companyId));
+        } else {
+          query = query.where(function () {
+            this.where('pc.company_id', Number(companyId)).orWhereNull('pc.company_id');
+          });
+        }
       }
 
-      const cycles = await query.orderBy('pc.id', 'asc');
+      const cycles = await query.orderByRaw('CASE WHEN pc.company_id IS NOT NULL THEN 0 ELSE 1 END').orderBy('pc.id', 'asc');
       const formattedCycles = (cycles || []).map((c: any) => {
         const title = c.cycle_name || c.cycleName || c.name || 'Standard Monthly Cycle';
         return {
@@ -3554,7 +3602,7 @@ export class PayrollController {
       const db = getKnex();
       const firstOrg = await db('organizations').first().catch(() => null);
       const orgId = req.ctx?.organizationId ? Number(req.ctx.organizationId) : (firstOrg?.id || 8);
-      const companyId = req.ctx?.companyId;
+      const companyId = req.query.companyId || req.query.company_id || req.ctx?.companyId;
 
       let query = db('payroll_slabs')
         .whereNull('deleted_at')
@@ -3562,9 +3610,9 @@ export class PayrollController {
           builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
 
-      if (companyId) {
+      if (companyId && companyId !== 'all' && companyId !== '0') {
         query = query.where(builder => {
-          builder.where('company_id', companyId).orWhereNull('company_id');
+          builder.where('company_id', Number(companyId)).orWhereNull('company_id');
         });
       }
 
@@ -3699,10 +3747,15 @@ export class PayrollController {
       const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
       const compIds = body.selectedComponentIds ?? body.selected_component_ids ?? [];
 
+      const rawCompanyId = body.companyId || body.company_id || req.ctx?.companyId;
+      const numericCompanyId = (rawCompanyId && !isNaN(Number(rawCompanyId)) && Number(rawCompanyId) > 0)
+        ? Number(rawCompanyId)
+        : null;
+
       const payload: any = {
         uuid: uuidv4(),
         organization_id: orgId,
-        company_id: req.ctx?.companyId || null,
+        company_id: numericCompanyId,
         name: slabName,
         departments: typeof body.departments === 'string' ? body.departments : JSON.stringify(body.departments || ['All Departments']),
         grades: typeof body.grades === 'string' ? body.grades : JSON.stringify(body.grades || ['All Pay Grades']),
@@ -3730,6 +3783,8 @@ export class PayrollController {
           id: String(insertedId),
           name: slabName,
           slabName,
+          companyId: numericCompanyId ? String(numericCompanyId) : null,
+          company_id: numericCompanyId,
           minCtc: payload.min_ctc,
           maxCtc: payload.max_ctc,
           isFromDb: true
@@ -3754,6 +3809,11 @@ export class PayrollController {
         updated_at: new Date(),
         updated_by: req.ctx?.userId || 1,
       };
+
+      if (body.companyId !== undefined || body.company_id !== undefined) {
+        const rawComp = body.companyId ?? body.company_id;
+        payload.company_id = (rawComp && !isNaN(Number(rawComp)) && Number(rawComp) > 0) ? Number(rawComp) : null;
+      }
 
       if (slabName) {
         payload.name = slabName.trim();
@@ -3900,7 +3960,9 @@ export class PayrollController {
           .first();
 
         const structurePayload = {
+          company_id: empRow.company_id || slabRow?.company_id || null,
           slab_id: slabId,
+          cycle_id: slabRow?.cycle_id || null,
           structure_name: slabRow?.name || 'Assigned Slab',
           annual_ctc: annualCtc,
           gross_monthly: grossMonthly,
@@ -3917,6 +3979,7 @@ export class PayrollController {
           const [insertedId] = await db('salary_structures').insert({
             uuid: uuidv4(),
             organization_id: orgId,
+            company_id: empRow.company_id || slabRow?.company_id || null,
             employee_id: employeeId,
             structure_name: slabRow?.name || 'Assigned Slab',
             structure_code: sCode,

@@ -460,6 +460,18 @@ export class EmployeeService {
           { name: 'aadhar_number', type: 'string', length: 50 },
           { name: 'pan_number', type: 'string', length: 50 },
           { name: 'passport_number', type: 'string', length: 50 },
+          { name: 'bank_name', type: 'string', length: 100 },
+          { name: 'account_no', type: 'string', length: 50 },
+          { name: 'ifsc_code', type: 'string', length: 50 },
+          { name: 'company_bank', type: 'string', length: 100 },
+          { name: 'branch_name', type: 'string', length: 100 },
+          { name: 'pf_no', type: 'string', length: 50 },
+          { name: 'uan_no', type: 'string', length: 50 },
+          { name: 'esic_no', type: 'string', length: 50 },
+          { name: 'pan_status', type: 'string', length: 50 },
+          { name: 'user_band', type: 'string', length: 50 },
+          { name: 'eligible_for_eps', type: 'string', length: 10 },
+          { name: 'background_verification', type: 'string', length: 50 },
         ];
         for (const col of columnsToEnsure) {
           const hasCol = await db.schema.hasColumn('employees', col.name);
@@ -669,6 +681,19 @@ export class EmployeeService {
     // aadhaar variants
     if (input.aadhaar_number !== undefined) payload.aadhar_number = input.aadhaar_number;
     if (input.aadhaarNumber !== undefined) payload.aadhar_number = input.aadhaarNumber;
+    if (input.aadhar_number !== undefined) payload.aadhar_number = input.aadhar_number;
+    if (input.aadharNumber !== undefined) payload.aadhar_number = input.aadharNumber;
+    if (input.uidaiNumber !== undefined) payload.aadhar_number = input.uidaiNumber;
+    if (input.company_bank !== undefined) payload.company_bank = input.company_bank;
+    if (input.companyBank !== undefined) payload.company_bank = input.companyBank;
+    if (input.pan_status !== undefined) payload.pan_status = input.pan_status;
+    if (input.panStatus !== undefined) payload.pan_status = input.panStatus;
+    if (input.user_band !== undefined) payload.user_band = input.user_band;
+    if (input.userBand !== undefined) payload.user_band = input.userBand;
+    if (input.eligible_for_eps !== undefined) payload.eligible_for_eps = input.eligible_for_eps;
+    if (input.eligibleForEps !== undefined) payload.eligible_for_eps = input.eligibleForEps;
+    if (input.background_verification !== undefined) payload.background_verification = input.background_verification;
+    if (input.backgroundVerification !== undefined) payload.background_verification = input.backgroundVerification;
 
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
@@ -676,8 +701,8 @@ export class EmployeeService {
       'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
-      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'branch_name', 'account_type', 'upi_id',
-      'pf_no', 'uan_no', 'esic_no'  // ← statutory compliance fields
+      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'company_bank', 'branch_name', 'account_type', 'upi_id',
+      'pf_no', 'uan_no', 'esic_no', 'pan_status', 'user_band', 'eligible_for_eps', 'background_verification'
     ]);
 
     // Copy any direct snake_case properties if passed and valid in employees table
@@ -946,6 +971,7 @@ export class EmployeeService {
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }
+
     return employee;
   }
 

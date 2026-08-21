@@ -204,6 +204,10 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
         const groupComps = rawComps
           .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
+          .filter((c: any) => {
+            const cType = (c.componentType || c.component_type || c.type || '').toString().toLowerCase();
+            return cType !== 'module';
+          })
           .map((c: any) => ({
             id: String(c.id),
             name: c.name || 'Component',
@@ -218,7 +222,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           isEditable: Boolean(g.isEditable ?? g.is_editable),
           components: groupComps
         };
-      });
+      }).filter((g: ComponentGroup) => g.components.length > 0);
       setAllGroups(mappedGroups);
     });
 
@@ -227,9 +231,11 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     // slab name resolved from the structure row is always available when records are mapped.
     const loadPayrollData = async () => {
       try {
-        // Parallel: fetch slab catalog and employee structures at the same time
+        // Parallel: fetch slab catalog (scoped to employee company) and employee structures
+        const empCompanyId = (employee as any).companyId || (employee as any).company_id;
+        const slabsParams = empCompanyId ? { companyId: String(empCompanyId) } : undefined;
         const [slabsRes, structRes] = await Promise.all([
-          apiClient.get('/payroll/slabs').catch(() => ({ data: { data: [] } })),
+          apiClient.get('/payroll/slabs', { params: slabsParams }).catch(() => ({ data: { data: [] } })),
           apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
         ]);
 
@@ -317,13 +323,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     });
   }, []);
 
-  // Extract active slab's components grouped by category
+  // Extract active slab's components grouped by category (excluding Module type)
   const activeEarnings = useMemo(() => {
     return allGroups
       .filter(g => g.category === 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, slabComponentIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, slabComponentIds))
       }))
       .filter(g => g.components.length > 0);
   }, [allGroups, slabComponentIds, isComponentInSlab]);
@@ -333,7 +341,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category !== 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, slabComponentIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, slabComponentIds))
       }))
       .filter(g => g.components.length > 0);
   }, [allGroups, slabComponentIds, isComponentInSlab]);
@@ -412,7 +422,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category === 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, currentSlabCompIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, currentSlabCompIds))
       }))
       .filter(g => g.components.length > 0);
 
@@ -420,7 +432,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category !== 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, currentSlabCompIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, currentSlabCompIds))
       }))
       .filter(g => g.components.length > 0);
     
@@ -645,9 +659,12 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     const finalNet = netSalaryCalculated > 0 ? netSalaryCalculated : finalGross;
     
     // Construct payload with legacy fields (for DB columns) AND custom_components (for dynamic UI)
+    const empCompanyId = (employee as any).companyId || (employee as any).company_id || null;
     const payload = {
       employee_id: employee.id,
       employeeId: employee.id,
+      company_id: empCompanyId,
+      companyId: empCompanyId,
       slab: activeSlabName || 'Monthly',
       slab_id: activeSlabId || null,
       slabId: activeSlabId || null,

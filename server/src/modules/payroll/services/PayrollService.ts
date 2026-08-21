@@ -1076,9 +1076,9 @@ export class PayrollService {
       .select(
         'employees.first_name',
         'employees.last_name',
-        'employee_compensation.bank_name',
-        'employee_compensation.account_number',
-        'employee_compensation.ifsc_code',
+        db.raw('COALESCE(employees.bank_name, employee_compensation.bank_name) as bank_name'),
+        db.raw('COALESCE(employees.account_no, employee_compensation.account_number) as account_number'),
+        db.raw('COALESCE(employees.ifsc_code, employee_compensation.ifsc_code) as ifsc_code'),
         'payroll_run_employees.net_salary'
       );
 
@@ -1111,8 +1111,8 @@ export class PayrollService {
       .select(
         'employees.first_name',
         'employees.last_name',
-        'employee_compensation.uan_number',
-        'employee_compensation.esic_number',
+        db.raw('COALESCE(employees.uan_no, employee_compensation.uan_number) as uan_number'),
+        db.raw('COALESCE(employees.esic_no, employee_compensation.esic_number) as esic_number'),
         'payroll_earnings.actual_value as basic_salary',
         'payroll_run_employees.total_earnings as gross_salary'
       );

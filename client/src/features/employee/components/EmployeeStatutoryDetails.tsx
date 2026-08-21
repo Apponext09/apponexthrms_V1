@@ -3,9 +3,79 @@ import { useLocation } from 'react-router-dom';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import type { Employee } from '@/types';
-import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck, Lock } from 'lucide-react';
+import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck, Lock, Eye, EyeOff } from 'lucide-react';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
+
+// Helper functions to mask sensitive statutory & banking fields
+function maskAccountNumber(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.length <= 4) return clean;
+  const visible = clean.slice(-4);
+  const maskedCount = Math.max(clean.length - 4, 4);
+  return '•'.repeat(maskedCount) + visible;
+}
+
+function maskIFSC(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.length <= 4) return clean;
+  const visible = clean.slice(-4);
+  const maskedCount = Math.max(clean.length - 4, 4);
+  return '•'.repeat(maskedCount) + visible;
+}
+
+function maskPAN(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.length <= 4) return clean;
+  const visible = clean.slice(-4);
+  const maskedCount = Math.max(clean.length - 4, 4);
+  return '•'.repeat(maskedCount) + visible;
+}
+
+function maskAadhaar(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.length <= 3) return clean;
+  const visible = clean.slice(-3);
+  const maskedCount = Math.max(clean.length - 3, 4);
+  return '•'.repeat(maskedCount) + visible;
+}
+
+function maskPF(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length >= 2) {
+      const prefix = `${parts[0]}/${parts[1]}`;
+      const maskedSuffix = parts.slice(2).map(p => '•'.repeat(Math.max(p.length, 3))).join('/');
+      return `${prefix}/${maskedSuffix}`;
+    }
+  }
+  if (clean.length <= 6) return clean;
+  return clean.slice(0, 6) + '/' + '•'.repeat(clean.length - 6);
+}
+
+function maskESIC(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.length <= 3) return clean;
+  const visible = clean.slice(-3);
+  const maskedCount = Math.max(clean.length - 3, 4);
+  return '•'.repeat(maskedCount) + visible;
+}
+
+function maskUAN(val: string): string {
+  if (!val) return '';
+  const clean = val.trim();
+  if (clean.length <= 3) return clean;
+  const visible = clean.slice(-3);
+  const maskedCount = Math.max(clean.length - 3, 4);
+  return '•'.repeat(maskedCount) + visible;
+}
 
 interface EmployeeStatutoryDetailsProps {
   employee: Employee;
@@ -22,6 +92,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showSensitive, setShowSensitive] = useState(false);
   const [paySlabs, setPaySlabs] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
@@ -57,33 +128,55 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
     const initialSlab = e?.salarySlabName || e?.salary_slab_name || e?.payroll_slab_name || e?.payrollSlab || e?.payroll_slab || e?.slab_name || '';
 
     setFormData({
-      bankName: e?.bank_name || e?.bankName || '',
-      accountNumber: e?.account_no || e?.bank_account_number || e?.accountNumber || '',
-      ifscCode: e?.ifsc_code || e?.ifscCode || '',
-      companyBank: e?.company_bank || e?.companyBank || '',
-      uidaiNumber: e?.aadhar_number || e?.aadhaar_number || e?.uidaiNumber || '',
-      panNumber: e?.pan_number || e?.panNumber || '',
-      uanNumber: e?.uan_no || e?.uan_number || e?.uanNumber || '',
-      pfNumber: e?.pf_no || e?.pf_number || e?.pfNumber || '',
-      esicNumber: e?.esic_no || e?.esic_number || e?.esicNumber || '',
-      userBand: e?.user_band || e?.userBand || '',
+      bankName: e?.bankName || e?.bank_name || '',
+      accountNumber: e?.accountNo || e?.account_no || e?.account_number || e?.bank_account_number || e?.accountNumber || '',
+      ifscCode: e?.ifscCode || e?.ifsc_code || '',
+      companyBank: e?.companyBank || e?.company_bank || '',
+      uidaiNumber: e?.aadharNumber || e?.aadhaarNumber || e?.aadhar_number || e?.aadhaar_number || e?.uidaiNumber || '',
+      panNumber: e?.panNumber || e?.pan_number || e?.pan || '',
+      uanNumber: e?.uanNo || e?.uan_no || e?.uan_number || e?.uanNumber || '',
+      pfNumber: e?.pfNo || e?.pf_no || e?.pf_number || e?.pfNumber || '',
+      esicNumber: e?.esicNo || e?.esic_no || e?.esic_number || e?.esicNumber || '',
+      userBand: e?.userBand || e?.user_band || '',
       payrollSlab: initialSlab,
-      employeeShare: e?.employee_share || e?.employeeShare || '',
-      employerShare: e?.employer_share || e?.employerShare || '',
-      backgroundVerification: e?.background_verification || e?.backgroundVerification || 'Verified',
-      eligibleForEps: e?.eligible_for_eps || e?.eligibleForEps || 'N',
-      panStatus: e?.pan_status || e?.panStatus || 'VERIFIED',
+      employeeShare: e?.employeeShare || e?.employee_share || '',
+      employerShare: e?.employerShare || e?.employer_share || '',
+      backgroundVerification: e?.backgroundVerification || e?.background_verification || 'Verified',
+      eligibleForEps: e?.eligibleForEps || e?.eligible_for_eps || 'N',
+      panStatus: e?.panStatus || e?.pan_status || 'VERIFIED',
     });
 
     if (employee?.id) {
-      apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).then((res: any) => {
-        const structs = res.data?.data || res.data || [];
+      Promise.all([
+        apiClient.get(`/employees/${employee.id}`).catch(() => null),
+        apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
+      ]).then(([empRes, structRes]: any) => {
+        const d = empRes?.data?.data || empRes?.data;
+        const structs = structRes?.data?.data || structRes?.data || [];
         const active = structs.find((s: any) => s.slabName || s.slab_name || s.slabId || s.slab_id);
-        if (active) {
-          const sName = active.slabName || active.slab_name || active.structureName || active.structure_name;
-          if (sName) {
-            setFormData(prev => ({ ...prev, payrollSlab: sName }));
-          }
+        const sName = active?.slabName || active?.slab_name || active?.structureName || active?.structure_name || (d ? (d.salarySlabName || d.salary_slab_name || d.payrollSlab) : '');
+
+        if (d) {
+          setFormData({
+            bankName: d.bankName || d.bank_name || '',
+            accountNumber: d.accountNo || d.account_no || d.account_number || d.bank_account_number || d.accountNumber || '',
+            ifscCode: d.ifscCode || d.ifsc_code || '',
+            companyBank: d.companyBank || d.company_bank || '',
+            uidaiNumber: d.aadharNumber || d.aadhaarNumber || d.aadhar_number || d.aadhaar_number || d.uidaiNumber || '',
+            panNumber: d.panNumber || d.pan_number || d.pan || '',
+            uanNumber: d.uanNo || d.uan_no || d.uan_number || d.uanNumber || '',
+            pfNumber: d.pfNo || d.pf_no || d.pf_number || d.pfNumber || '',
+            esicNumber: d.esicNo || d.esic_no || d.esic_number || d.esicNumber || '',
+            userBand: d.userBand || d.user_band || '',
+            payrollSlab: sName || initialSlab,
+            employeeShare: d.employeeShare || d.employee_share || '',
+            employerShare: d.employerShare || d.employer_share || '',
+            backgroundVerification: d.backgroundVerification || d.background_verification || 'Verified',
+            eligibleForEps: d.eligibleForEps || d.eligible_for_eps || 'N',
+            panStatus: d.panStatus || d.pan_status || 'VERIFIED',
+          });
+        } else if (sName) {
+          setFormData(prev => ({ ...prev, payrollSlab: sName }));
         }
       }).catch(() => {});
     }
@@ -107,14 +200,19 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
 
       setFormData(prev => ({
         ...prev,
-        bankName: d.bank_name || d.bankName || prev.bankName,
-        accountNumber: d.account_no || d.bank_account_number || prev.accountNumber,
-        ifscCode: d.ifsc_code || d.ifscCode || prev.ifscCode,
-        panNumber: d.pan_number || d.panNumber || prev.panNumber,
-        uidaiNumber: d.aadhar_number || d.aadhaar_number || d.uidaiNumber || prev.uidaiNumber,
-        pfNumber: d.pf_no || d.pf_number || d.pfNumber || prev.pfNumber,
-        uanNumber: d.uan_no || d.uan_number || d.uanNumber || prev.uanNumber,
-        esicNumber: d.esic_no || d.esic_number || d.esicNumber || prev.esicNumber,
+        bankName: d.bankName || d.bank_name || prev.bankName,
+        accountNumber: d.accountNo || d.account_no || d.bank_account_number || prev.accountNumber,
+        ifscCode: d.ifscCode || d.ifsc_code || prev.ifscCode,
+        companyBank: d.companyBank || d.company_bank || prev.companyBank,
+        panNumber: d.panNumber || d.pan_number || prev.panNumber,
+        uidaiNumber: d.aadharNumber || d.aadhaarNumber || d.aadhar_number || d.aadhaar_number || prev.uidaiNumber,
+        pfNumber: d.pfNo || d.pf_no || d.pf_number || prev.pfNumber,
+        uanNumber: d.uanNo || d.uan_no || d.uan_number || prev.uanNumber,
+        esicNumber: d.esicNo || d.esic_no || d.esic_number || prev.esicNumber,
+        userBand: d.userBand || d.user_band || prev.userBand,
+        eligibleForEps: d.eligibleForEps || d.eligible_for_eps || prev.eligibleForEps,
+        backgroundVerification: d.backgroundVerification || d.background_verification || prev.backgroundVerification,
+        panStatus: d.panStatus || d.pan_status || prev.panStatus,
         payrollSlab: sName || prev.payrollSlab,
       }));
       showToast.success('Refreshed statutory details');
@@ -124,17 +222,56 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
   const handleSave = async () => {
     setLoading(true);
     try {
-      await apiClient.put(`/employees/${employee.id}`, {
+      const res = await apiClient.put(`/employees/${employee.id}`, {
+        bankName: formData.bankName,
         bank_name: formData.bankName,
+        accountNumber: formData.accountNumber,
         account_no: formData.accountNumber,
+        ifscCode: formData.ifscCode,
         ifsc_code: formData.ifscCode,
+        companyBank: formData.companyBank,
         company_bank: formData.companyBank,
+        panNumber: formData.panNumber,
         pan_number: formData.panNumber,
+        aadharNumber: formData.uidaiNumber,
         aadhar_number: formData.uidaiNumber,
+        pfNumber: formData.pfNumber,
         pf_no: formData.pfNumber,
+        uanNumber: formData.uanNumber,
         uan_no: formData.uanNumber,
+        esicNumber: formData.esicNumber,
         esic_no: formData.esicNumber,
+        userBand: formData.userBand,
+        user_band: formData.userBand,
+        panStatus: formData.panStatus,
+        pan_status: formData.panStatus,
+        eligibleForEps: formData.eligibleForEps,
+        eligible_for_eps: formData.eligibleForEps,
+        backgroundVerification: formData.backgroundVerification,
+        background_verification: formData.backgroundVerification,
       });
+
+      const updatedEmp = res.data?.data || res.data;
+      if (updatedEmp) {
+        setFormData({
+          bankName: updatedEmp.bankName || updatedEmp.bank_name || formData.bankName,
+          accountNumber: updatedEmp.accountNo || updatedEmp.account_no || updatedEmp.account_number || updatedEmp.accountNumber || formData.accountNumber,
+          ifscCode: updatedEmp.ifscCode || updatedEmp.ifsc_code || formData.ifscCode,
+          companyBank: updatedEmp.companyBank || updatedEmp.company_bank || formData.companyBank,
+          uidaiNumber: updatedEmp.aadharNumber || updatedEmp.aadhaarNumber || updatedEmp.aadhar_number || updatedEmp.aadhaar_number || updatedEmp.uidaiNumber || formData.uidaiNumber,
+          panNumber: updatedEmp.panNumber || updatedEmp.pan_number || formData.panNumber,
+          uanNumber: updatedEmp.uanNo || updatedEmp.uan_no || updatedEmp.uan_number || updatedEmp.uanNumber || formData.uanNumber,
+          pfNumber: updatedEmp.pfNo || updatedEmp.pf_no || updatedEmp.pf_number || updatedEmp.pfNumber || formData.pfNumber,
+          esicNumber: updatedEmp.esicNo || updatedEmp.esic_no || updatedEmp.esic_number || updatedEmp.esicNumber || formData.esicNumber,
+          userBand: updatedEmp.userBand || updatedEmp.user_band || formData.userBand,
+          payrollSlab: formData.payrollSlab,
+          employeeShare: updatedEmp.employeeShare || updatedEmp.employee_share || formData.employeeShare,
+          employerShare: updatedEmp.employerShare || updatedEmp.employer_share || formData.employerShare,
+          backgroundVerification: updatedEmp.backgroundVerification || updatedEmp.background_verification || formData.backgroundVerification,
+          eligibleForEps: updatedEmp.eligibleForEps || updatedEmp.eligible_for_eps || formData.eligibleForEps,
+          panStatus: updatedEmp.panStatus || updatedEmp.pan_status || formData.panStatus,
+        });
+      }
 
       // If a pay slab was selected in edit mode, synchronize it with the employee's salary structure
       if (formData.payrollSlab && paySlabs.length > 0) {
@@ -156,9 +293,8 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         await consumePermission(approvedRequestId);
       }
       onUpdate?.();
-    } catch {
-      showToast.success('Statutory Details updated!');
-      setIsEditing(false);
+    } catch (err: any) {
+      showToast.error(err?.response?.data?.message || 'Failed to save statutory details');
     } finally {
       setLoading(false);
     }
@@ -184,6 +320,15 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSensitive(prev => !prev)}
+            className="h-8 px-3 text-xs font-semibold rounded-lg border border-border bg-background hover:bg-muted text-foreground flex items-center gap-1.5 transition-colors"
+            title={showSensitive ? "Mask sensitive details" : "Reveal full details"}
+          >
+            {showSensitive ? <EyeOff className="w-3.5 h-3.5 text-muted-foreground" /> : <Eye className="w-3.5 h-3.5 text-primary" />}
+            {showSensitive ? 'Mask Details' : 'Reveal Details'}
+          </button>
+
           <button
             onClick={handleRefresh}
             className="h-8 px-3 text-xs font-semibold rounded-lg border border-border bg-background hover:bg-muted text-foreground flex items-center gap-1.5 transition-colors"
@@ -244,6 +389,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="Account Number"
               value={formData.accountNumber}
+              displayValue={showSensitive ? formData.accountNumber : maskAccountNumber(formData.accountNumber)}
               placeholder="e.g. 50100234567890"
               isEditing={isEditing}
               onChange={v => handleChange('accountNumber', v)}
@@ -251,6 +397,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="IFSC Code"
               value={formData.ifscCode}
+              displayValue={showSensitive ? formData.ifscCode : maskIFSC(formData.ifscCode)}
               placeholder="e.g. HDFC0001234"
               isEditing={isEditing}
               onChange={v => handleChange('ifscCode', v)}
@@ -274,6 +421,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="PAN Card Number"
               value={formData.panNumber}
+              displayValue={showSensitive ? formData.panNumber : maskPAN(formData.panNumber)}
               placeholder="e.g. ABCDE1234F"
               isEditing={isEditing}
               onChange={v => handleChange('panNumber', v)}
@@ -281,6 +429,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="Aadhaar / UIDAI Number"
               value={formData.uidaiNumber}
+              displayValue={showSensitive ? formData.uidaiNumber : maskAadhaar(formData.uidaiNumber)}
               placeholder="e.g. 1234-5678-9012"
               isEditing={isEditing}
               onChange={v => handleChange('uidaiNumber', v)}
@@ -288,6 +437,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="PF (Provident Fund) Number"
               value={formData.pfNumber}
+              displayValue={showSensitive ? formData.pfNumber : maskPF(formData.pfNumber)}
               placeholder="e.g. MH/BAN/0012345/000/0000123"
               isEditing={isEditing}
               onChange={v => handleChange('pfNumber', v)}
@@ -295,6 +445,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="UAN (Universal Account Number)"
               value={formData.uanNumber}
+              displayValue={showSensitive ? formData.uanNumber : maskUAN(formData.uanNumber)}
               placeholder="e.g. 100987654321"
               isEditing={isEditing}
               onChange={v => handleChange('uanNumber', v)}
@@ -302,6 +453,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             <FieldItem
               label="ESIC Number"
               value={formData.esicNumber}
+              displayValue={showSensitive ? formData.esicNumber : maskESIC(formData.esicNumber)}
               placeholder="e.g. 31000123450000101"
               isEditing={isEditing}
               onChange={v => handleChange('esicNumber', v)}
@@ -417,16 +569,19 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
 function FieldItem({
   label,
   value,
+  displayValue,
   placeholder,
   isEditing,
   onChange,
 }: {
   label: string;
   value: string;
+  displayValue?: string;
   placeholder: string;
   isEditing: boolean;
   onChange: (v: string) => void;
 }) {
+  const showVal = displayValue !== undefined ? displayValue : value;
   return (
     <div>
       <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
@@ -440,8 +595,8 @@ function FieldItem({
         />
       ) : (
         <div className="h-9 px-3 border border-border rounded-lg bg-muted/20 flex items-center text-xs font-medium">
-          {value ? (
-            <span className="text-foreground">{value}</span>
+          {showVal ? (
+            <span className="text-foreground font-mono text-[12px]">{showVal}</span>
           ) : (
             <span className="text-muted-foreground/60 italic text-[11px]">Not specified</span>
           )}
@@ -450,4 +605,5 @@ function FieldItem({
     </div>
   );
 }
+
 

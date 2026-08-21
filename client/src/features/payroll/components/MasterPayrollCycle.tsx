@@ -37,6 +37,7 @@ export interface PayrollCycleItem {
 
 interface CompanyItem {
   id: string | number;
+  company_id?: string | number;
   name: string;
   company_code?: string;
   code?: string;
@@ -69,7 +70,20 @@ export const MasterPayrollCycle: React.FC = () => {
       const res = await apiClient.get('/settings/companies');
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data)) {
-        setCompanies(data);
+        const mapped = data.map((c: any) => {
+          const rawId = c.company_id ?? c.companyId ?? c.id;
+          const cid = rawId !== undefined && rawId !== null ? String(rawId) : '';
+          const numId = rawId !== undefined && rawId !== null ? Number(rawId) : 0;
+          return {
+            ...c,
+            id: cid,
+            company_id: numId,
+            companyId: numId,
+            code: c.code || c.company_code || '',
+            name: c.name || c.company_name || 'Company'
+          };
+        }).filter((c: any) => c.company_id > 0);
+        setCompanies(mapped);
       }
     } catch (err) {
       console.warn('Could not fetch companies:', err);
@@ -92,14 +106,19 @@ export const MasterPayrollCycle: React.FC = () => {
       if (Array.isArray(data)) {
         const dbMapped: PayrollCycleItem[] = data.map((c: any) => {
           const cycleName = c.cycle_name || c.cycleName || c.name || (c.frequency ? `${c.frequency}` : 'Monthly');
+          const rawCompId = c.company_id ?? c.companyId ?? null;
+          const compIdStr = rawCompId !== null && rawCompId !== undefined && String(rawCompId) !== 'null' && String(rawCompId) !== '0' ? String(rawCompId) : null;
+          const matchedComp = companies.find(comp => String(comp.id || comp.company_id) === compIdStr);
+          const compName = c.company_name || c.companyName || matchedComp?.name || (compIdStr ? `Company #${compIdStr}` : 'All Companies');
+
           return {
             id: String(c.id || c.uuid),
             name: cycleName,
             cycle_name: cycleName,
-            companyId: c.company_id || c.companyId ? String(c.company_id || c.companyId) : null,
-            company_id: c.company_id || c.companyId ? Number(c.company_id || c.companyId) : null,
-            companyName: c.company_name || c.companyName || 'All Companies',
-            company_name: c.company_name || c.companyName || 'All Companies',
+            companyId: compIdStr,
+            company_id: compIdStr ? Number(compIdStr) : null,
+            companyName: compName,
+            company_name: compName,
             isDailyWages: Boolean(c.is_daily_wages ?? c.isDailyWages),
             dailyWagesIncludePaidHolidays: Boolean(c.daily_wages_include_paid_holidays ?? c.dailyWagesIncludePaidHolidays),
             dailyWagesIncludeWeekOff: Boolean(c.daily_wages_include_week_off ?? c.dailyWagesIncludeWeekOff),
@@ -382,11 +401,14 @@ export const MasterPayrollCycle: React.FC = () => {
                   className="w-full h-7 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 rounded-md px-2 bg-background text-foreground focus:outline-none"
                 >
                   <option value="all">🏢 All Companies (All Cycles)</option>
-                  {companies.map(comp => (
-                    <option key={comp.id} value={String(comp.id)}>
-                      {comp.name} {comp.company_code || comp.code ? `(${comp.company_code || comp.code})` : ''}
-                    </option>
-                  ))}
+                  {companies.map(comp => {
+                    const cid = String(comp.company_id || comp.id);
+                    return (
+                      <option key={cid} value={cid}>
+                        {comp.name} {comp.company_code || comp.code ? `(${comp.company_code || comp.code})` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             )}
@@ -521,11 +543,14 @@ export const MasterPayrollCycle: React.FC = () => {
                     className="w-full h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
                   >
                     <option value="">🏢 All Companies (Organization Default)</option>
-                    {companies.map(comp => (
-                      <option key={comp.id} value={String(comp.id)}>
-                        {comp.name} {comp.company_code || comp.code ? `(${comp.company_code || comp.code})` : ''}
-                      </option>
-                    ))}
+                    {companies.map(comp => {
+                      const cid = String(comp.company_id || comp.id);
+                      return (
+                        <option key={cid} value={cid}>
+                          {comp.name} {comp.company_code || comp.code ? `(${comp.company_code || comp.code})` : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                   <p className="text-[10px] text-muted-foreground mt-1">
                     Assign this payroll cycle specifically to a company, or make it organization-wide.

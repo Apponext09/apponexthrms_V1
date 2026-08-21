@@ -110,7 +110,7 @@ export const AssignPaySlabTab: React.FC = () => {
           name: full || e.name || e.fullName || e.full_name || e.email || `EMP #${e.id}`,
           code: e.employeeCode || e.employee_code || `EMP-${e.id}`,
           department: e.departmentName || e.department_name || e.department || e.dept || '',
-          grade: e.designationName || e.designation_name || e.designation || e.grade || e.jobTitle || e.job_title || '',
+          grade: e.gradeName || e.grade_name || e.grade || e.pay_grade || e.pay_grade_name || e.designationName || e.designation_name || e.designation || e.jobTitle || e.job_title || '',
           location: e.locationName || e.location_name || e.location || e.workLocation || e.work_location || e.city || '',
           branch: e.company_name || e.companyName || e.company || e.branchName || e.branch_name || e.branch || e.entity || '',
           companyId: e.company_id || e.companyId || null,
@@ -340,6 +340,8 @@ export const AssignPaySlabTab: React.FC = () => {
       await Promise.all(listToSave.map(async emp => {
         const payload = {
           employee_id: emp.id,
+          company_id: emp.companyId || null,
+          companyId: emp.companyId || null,
           slab_id: modalSlabId ? Number(modalSlabId) : emp.slabId,
           effective_from: modalEffectiveFrom,
           arrear_pay_month: arrearPayMonth,
@@ -694,7 +696,10 @@ export const AssignPaySlabTab: React.FC = () => {
                   className="w-full border border-sky-300 rounded px-2 py-1 text-xs font-bold bg-white text-sky-950 focus:outline-none"
                 >
                   <option value="">-- Select Slab --</option>
-                  {slabs.map((s: any) => (
+                  {(targetEmp?.companyId
+                    ? slabs.filter((s: any) => !(s.companyId ?? s.company_id) || String(s.companyId ?? s.company_id) === String(targetEmp.companyId))
+                    : slabs
+                  ).map((s: any) => (
                     <option key={s.id} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
                   ))}
                 </select>
