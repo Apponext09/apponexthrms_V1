@@ -325,8 +325,51 @@ export class PayslipService {
       ];
     }
 
+    const db = getKnex();
+    let employee: any = null;
+    if (employeeIdVal) {
+      employee = await db('employees as e')
+        .leftJoin('designations as des', 'des.id', 'e.current_designation_id')
+        .leftJoin('departments as dep', 'dep.id', 'e.current_department_id')
+        .where('e.id', employeeIdVal)
+        .select(
+          'e.*',
+          'des.name as designation_name',
+          'dep.name as department_name'
+        )
+        .first()
+        .catch(() => null);
+
+      if (employee) {
+        const fn = employee.first_name || '';
+        const ln = employee.last_name || '';
+        const fullName = fn ? `${fn} ${ln}`.trim() : (employee.name || `Employee #${employee.id}`);
+        employee.name = fullName;
+        employee.fullName = fullName;
+        employee.full_name = fullName;
+        employee.firstName = fn;
+        employee.lastName = ln;
+        employee.code = employee.employee_code || employee.code || `EMP-${employee.id}`;
+        employee.employeeCode = employee.code;
+        employee.designation = employee.designation_name || employee.job_title || employee.designation || 'Software Engineer';
+        employee.designationName = employee.designation;
+        employee.department = employee.department_name || employee.department || 'Operations';
+        employee.departmentName = employee.department;
+        employee.dateOfJoining = employee.date_of_joining || employee.doj || '';
+        employee.doj = employee.date_of_joining || employee.doj || '';
+        employee.panNumber = employee.pan_number || employee.pan || '';
+        employee.pan = employee.pan_number || employee.pan || '';
+        employee.pfNo = employee.pf_no || employee.pfNumber || '';
+        employee.uanNo = employee.uan_no || employee.uan || '';
+        employee.esicNo = employee.esic_no || employee.esic || '';
+        employee.bankName = employee.bank_name || employee.bankName || 'HDFC BANK';
+        employee.accountNo = employee.account_no || employee.accountNo || '';
+      }
+    }
+
     return {
       payslip,
+      employee,
       earnings,
       deductions
     };

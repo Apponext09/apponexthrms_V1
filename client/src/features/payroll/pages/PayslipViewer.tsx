@@ -15,6 +15,7 @@ import { PayslipRequesterPanel, PayslipAdminApprovalPanel } from '../components/
 import apiClient from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
 import { formatPayrollDate } from '@/lib/utils';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 const numberToWords = (amount: number): string => {
   const num = Math.round(Math.max(0, amount));
@@ -79,52 +80,61 @@ interface PayslipSetting {
 }
 
 interface PayslipDocData {
-  name: string; code: string; designation: string;
-  pfNo: string; uanNo: string; esicNo: string; pan: string;
-  period: string; doj: string; accNo: string; bankName: string;
-  paidDays: number | string; unpaidDays: number | string; paidLeave: number | string;
+  name: string;
+  code: string;
+  designation: string;
+  department?: string;
+  pfNo: string;
+  uanNo: string;
+  esicNo: string;
+  pan: string;
+  period: string;
+  doj: string;
+  accNo: string;
+  bankName: string;
+  paidDays: number | string;
+  unpaidDays: number | string;
+  paidLeave: number | string;
   leaveBalance?: number | string;
-  basic: number; hra: number; cea: number; comm: number; lta: number; meal: number; std: number;
-  adj: number; inc: number;
-  pf: number; esic: number; pt: number;
+  basic: number;
+  hra: number;
+  cea: number;
+  comm: number;
+  lta: number;
+  meal: number;
+  std: number;
+  adj: number;
+  inc: number;
+  bonus?: number;
+  pf: number;
+  esic: number;
+  pt: number;
+  tds?: number;
   grossActual?: number;
   cumulativeGross?: number;
-  companyLogoUrl?: string;
+  companyName?: string;
+  companyAddress?: string;
+  companyLogoUrl?: string | null;
+  websiteUrl?: string;
+  payslipNumber?: string;
+  grossSalary: number;
+  totalDeductions: number;
+  netSalary: number;
 }
-
 /**
- * Shared payslip template that dynamically applies all configured Payslip Settings
+ * Shared payslip template that dynamically renders the official salary payslip document
  */
-function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting): string {
+function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: boolean = false): string {
   const totalEarnings = d.basic + d.hra + d.cea + d.comm + d.lta + d.meal + d.std;
   const grossEarned = totalEarnings;
-  const totalGross = grossEarned + d.adj + d.inc;
-  const totalDeductions = d.pf + d.esic + d.pt;
+  const totalGross = grossEarned + (d.adj || 0) + (d.inc || 0) + (d.bonus || 0);
+  const totalDeductions = d.pf + d.esic + d.pt + (d.tds || 0);
   const netPay = Math.max(0, totalGross - totalDeductions);
   const words = numberToWords(netPay);
-  const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 0 });
-
-  // Custom labels from settings
-  const labelGrossSalary = (s?.labelGrossSalary || '').trim() || 'Gross Earnings';
-  const labelGrossEarned = (s?.labelGrossEarnedSalary || '').trim() || 'Gross Total Earnings';
-  const labelCumulative = (s?.labelCumulativeSalary || '').trim() || 'Cumulative Salary';
-  const labelEarnings = (s?.labelEarningComponent || '').trim() || 'Earnings & Allowances';
-  const labelDeductions = (s?.labelDeductionComponent || '').trim() || 'Statutory & Other Deductions';
-  const labelSignature = (s?.employeeSignatureFieldName || '').trim() || 'Authorized Signatory';
-  const footerNote = s?.footerNote || 'This is a system-generated payslip. Computerized signature verified.';
-
-  const hideZero = Boolean(s?.hideComponentIfZero);
-  const showBank = s?.showBankDetails !== false;
-  const showAttendance = s?.showAttendanceSummary !== false;
-  const showLeave = Boolean(s?.showLeaveBalance);
-  const showLogo = s?.showCompanyLogo !== false;
-  const isLandscape = Boolean(s?.enableLandscapeFormat);
-  const showActualGross = Boolean(s?.displayActualValuesGross);
-  const showCumulative = Boolean(s?.displayCumulativeValues);
-  const showTotalAmount = Boolean(s?.displayTotalAmount);
-
-  // Cumulative YTD estimate
-  const cumulativeVal = d.cumulativeGross || (totalGross * 5);
+  const fmt = (n: number) => (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const compName = d.companyName || 'Apponext';
+  const compAddr = d.companyAddress || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708';
+  const compWeb = d.websiteUrl || 'www.apponexthrms.com';
 
   return `
     <!DOCTYPE html>
@@ -135,555 +145,338 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting): string {
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @page {
-          size: ${isLandscape ? 'landscape' : 'portrait'};
-          margin: 10mm;
+          size: A4 portrait;
+          margin: 10mm 12mm;
         }
         body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          background: #f8fafc;
-          color: #0f172a;
-          padding: 20px;
-          font-size: 12px;
-          line-height: 1.4;
+          font-family: Arial, Helvetica, sans-serif;
+          background: #ffffff;
+          color: #000000;
+          padding: 15px;
+          font-size: 11px;
+          line-height: 1.35;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
-        .payslip-wrapper {
-          max-width: ${isLandscape ? '1020px' : '840px'};
+        @media print {
+          body {
+            background: #ffffff;
+            padding: 0;
+          }
+          .payslip-container {
+            border: 1.5px solid #000000 !important;
+            box-shadow: none !important;
+            margin: 0 auto !important;
+            width: 100% !important;
+          }
+        }
+        .payslip-container {
+          width: 100%;
+          max-width: 740px;
           margin: 0 auto;
           background: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-          overflow: hidden;
+          border: 1.5px solid #000000;
         }
-        /* Top Brand Header */
-        .header {
-          padding: 18px 24px;
-          border-bottom: 1px solid #e2e8f0;
-          display: flex;
-          justify-content: space-between;
+        .header-logo {
+          padding: 12px 20px 8px;
+          text-align: center;
+          border-bottom: 1px solid #000000;
+        }
+        .logo-brand {
+          display: inline-flex;
           align-items: center;
-          background: #ffffff;
-        }
-        .brand-title {
-          font-size: 20px;
-          font-weight: 800;
-          color: #0f172a;
-          letter-spacing: -0.5px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .brand-title span { color: #0284c7; font-weight: 700; font-size: 11px; text-transform: uppercase; background: #e0f2fe; padding: 2px 8px; border-radius: 6px; margin-left: 6px; }
-        .payslip-badge {
-          text-align: right;
-        }
-        .payslip-badge h2 {
-          font-size: 13px;
-          font-weight: 800;
-          color: #1e293b;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .payslip-badge p {
-          font-size: 11px;
-          color: #64748b;
-          font-weight: 600;
-        }
-
-        /* Employee Metadata Grid */
-        .meta-grid {
-          display: grid;
-          grid-template-columns: repeat(${isLandscape ? '5' : '4'}, 1fr);
-          gap: 12px;
-          padding: 16px 24px;
-          background: #f8fafc;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        .meta-item {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .meta-label {
-          font-size: 10px;
-          font-weight: 700;
-          color: #64748b;
-          text-transform: uppercase;
-          letter-spacing: 0.3px;
-        }
-        .meta-val {
-          font-size: 12px;
-          font-weight: 700;
-          color: #1e293b;
-        }
-
-        /* Top Metric Cards */
-        .kpi-row {
-          display: grid;
-          grid-template-columns: repeat(${showActualGross || showCumulative ? (showCumulative && showActualGross ? '5' : '4') : '3'}, 1fr);
-          gap: 14px;
-          padding: 18px 24px 14px;
-        }
-        .kpi-card {
-          border-radius: 10px;
-          padding: 12px 16px;
-          border: 1px solid #e2e8f0;
-          background: #ffffff;
-        }
-        .kpi-card.gross {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-        }
-        .kpi-card.deductions {
-          background: #fff1f2;
-          border: 1px solid #fecdd3;
-        }
-        .kpi-card.net {
-          background: #f0fdf4;
-          border: 1px solid #bbf7d0;
-        }
-        .kpi-card.cumulative {
-          background: #faf5ff;
-          border: 1px solid #e9d5ff;
-        }
-        .kpi-title {
-          font-size: 10px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 4px;
-        }
-        .kpi-card.gross .kpi-title { color: #64748b; }
-        .kpi-card.deductions .kpi-title { color: #e11d48; }
-        .kpi-card.net .kpi-title { color: #16a34a; }
-        .kpi-card.cumulative .kpi-title { color: #7e22ce; }
-
-        .kpi-amount {
-          font-size: 20px;
-          font-weight: 800;
-          letter-spacing: -0.5px;
-        }
-        .kpi-card.gross .kpi-amount { color: #0f172a; }
-        .kpi-card.deductions .kpi-amount { color: #e11d48; }
-        .kpi-card.net .kpi-amount { color: #16a34a; }
-        .kpi-card.cumulative .kpi-amount { color: #7e22ce; }
-
-        /* Side-by-Side Breakdown Panels */
-        .breakdown-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-          padding: 0 24px 18px;
-        }
-        .panel {
-          border: 1px solid #e2e8f0;
-          border-radius: 10px;
-          background: #ffffff;
-          overflow: hidden;
-        }
-        .panel-header {
-          padding: 12px 16px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          border-bottom: 1px solid #f1f5f9;
-        }
-        .panel-header h3 {
-          font-size: 12px;
-          font-weight: 800;
-          color: #0f172a;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .panel-badge {
-          font-size: 11px;
-          font-weight: 700;
-          padding: 2px 8px;
-          border-radius: 12px;
-        }
-        .panel-badge.green {
-          background: #dcfce7;
-          color: #15803d;
-        }
-        .panel-badge.rose {
-          background: #ffe4e6;
-          color: #be123c;
-        }
-
-        .panel-list {
-          padding: 8px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .item-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 7px 12px;
-          border-radius: 6px;
-          font-size: 11.5px;
-        }
-        .item-row:nth-child(odd) {
-          background: #f8fafc;
-        }
-        .item-row .label {
-          color: #334155;
-          font-weight: 600;
-        }
-        .item-row .val-green {
-          color: #059669;
-          font-weight: 700;
-          font-family: monospace;
-          font-size: 12px;
-        }
-        .item-row .val-rose {
-          color: #e11d48;
-          font-weight: 700;
-          font-family: monospace;
-          font-size: 12px;
-        }
-
-        .total-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 10px 12px;
-          margin-top: 4px;
-          border-top: 1px solid #e2e8f0;
-          font-weight: 800;
-          font-size: 12px;
-        }
-        .total-row .label { color: #0f172a; }
-        .total-row .val-green { color: #059669; font-size: 13px; font-family: monospace; }
-        .total-row .val-rose { color: #e11d48; font-size: 13px; font-family: monospace; }
-
-        /* Monthly Take-Home Pay Banner */
-        .takehome-banner {
-          margin: 0 24px 18px;
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          border-radius: 10px;
-          padding: 14px 20px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .banner-left h4 {
-          font-size: 11px;
-          font-weight: 800;
-          color: #1d4ed8;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .banner-left p {
-          font-size: 10.5px;
-          color: #64748b;
-          margin-top: 2px;
-        }
-        .banner-words {
-          font-size: 10px;
-          color: #1e40af;
-          font-weight: 700;
-          margin-top: 3px;
-          text-transform: uppercase;
-        }
-        .banner-right {
-          display: flex;
-          align-items: center;
+          justify-content: center;
           gap: 8px;
         }
-        .banner-check {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #3b82f6;
+        .logo-icon-box {
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          background: #2563eb;
           color: #ffffff;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 11px;
           font-weight: 800;
+          font-size: 16px;
         }
-        .banner-amount {
+        .logo-text {
           font-size: 22px;
-          font-weight: 900;
-          color: #1e3a8a;
+          font-weight: 800;
+          color: #0f172a;
           letter-spacing: -0.5px;
+          font-family: Arial, sans-serif;
         }
-
-        /* Footer */
-        .footer {
-          padding: 14px 24px;
-          background: #f8fafc;
-          border-top: 1px solid #e2e8f0;
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          font-size: 10px;
-          color: #64748b;
+        .grid-table {
+          width: 100%;
+          border-collapse: collapse;
+          border-bottom: 1px solid #000000;
         }
-        .sign-box {
-          text-align: center;
-          padding-top: 24px;
-          border-top: 1px dashed #94a3b8;
-          width: 170px;
+        .grid-table td {
+          border: 1px solid #000000;
+          padding: 3.5px 8px;
+          font-size: 11px;
+          vertical-align: middle;
+          color: #000000;
+        }
+        .financials-table {
+          width: 100%;
+          border-collapse: collapse;
+          border-bottom: 1px solid #000000;
+          font-size: 11px;
+        }
+        .financials-table th {
+          border: 1px solid #000000;
+          padding: 4px 8px;
           font-weight: 700;
-          color: #334155;
+          font-size: 11px;
+          color: #000000;
         }
-
-        @media print {
-          body { background: #fff; padding: 0; }
-          .payslip-wrapper { border: none; box-shadow: none; max-width: 100%; }
+        .financials-table td {
+          border-left: 1px solid #000000;
+          border-right: 1px solid #000000;
+          border-top: none;
+          border-bottom: none;
+          padding: 2.5px 8px;
+          font-size: 11px;
+          color: #000000;
+          vertical-align: top;
+        }
+        .financials-table tr.subtotal-row td {
+          border-top: 1px solid #000000;
+          border-bottom: 1px solid #000000;
+          font-weight: 700;
+          padding: 3.5px 8px;
+        }
+        .financials-table tr.total-row td {
+          border-top: 1px solid #000000;
+          border-bottom: 1px solid #000000;
+          font-weight: 700;
+          padding: 3.5px 8px;
+        }
+        .financials-table tr.net-row td {
+          border-top: 1px solid #000000;
+          font-weight: 700;
+          padding: 3.5px 8px;
+        }
+        .text-right {
+          text-align: right;
+        }
+        .rupees-box {
+          border-bottom: 1px solid #000000;
+          padding: 5px 8px;
+          font-size: 11px;
+          font-weight: 700;
+          color: #000000;
+        }
+        .disclaimer-box {
+          padding: 6px 8px;
+          border-bottom: 1px solid #000000;
+          font-size: 10px;
+          line-height: 1.4;
+          color: #000000;
+        }
+        .disclaimer-title {
+          font-size: 10px;
+          margin-bottom: 3px;
+        }
+        .disclaimer-address {
+          text-align: center;
+          font-size: 10px;
+          color: #000000;
+          font-weight: 500;
+        }
+        .bottom-footer {
+          padding: 6px 12px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 10px;
+          color: #000000;
+        }
+        .footer-left {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .footer-brand {
+          font-weight: 800;
+          font-size: 12px;
+          color: #0f172a;
+        }
+        .footer-sub {
+          font-size: 9px;
+          color: #334155;
+          margin-left: 2px;
         }
       </style>
     </head>
     <body>
-      <div class="payslip-wrapper">
+      <div class="payslip-container">
         <!-- Header -->
-        <div class="header">
-          <div>
-            ${showLogo ? `
-              <div class="brand-title">
-                ${d.companyLogoUrl ? `<img src="${d.companyLogoUrl}" alt="Company Logo" style="max-height: 38px; max-width: 160px; object-fit: contain;" />` : `Apponext <span>HRMS Enterprise</span>`}
-              </div>
-              <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
-                Trial Company • Mindspace, Suite No.3, Bldg. 03, Airoli, Navi Mumbai, Maharashtra
-              </div>
-            ` : `
-              <div class="brand-title" style="font-size: 18px;">
-                Salary Statement &amp; Payslip
-              </div>
-            `}
-          </div>
-          <div class="payslip-badge">
-            <h2>Salary Payslip</h2>
-            <p>Pay Period: ${d.period}</p>
+        <div class="header-logo">
+          ${d.companyLogoUrl ? `
+            <img src="${d.companyLogoUrl}" alt="${compName}" style="max-height: 38px; max-width: 220px; object-fit: contain;" />
+          ` : `
+            <div class="logo-brand">
+              <span class="logo-icon-box">${compName.charAt(0).toUpperCase()}</span>
+              <span class="logo-text">${compName}</span>
+            </div>
+          `}
+        </div>
+
+        <!-- Employee Details Table -->
+        <table class="grid-table">
+          <tr>
+            <td style="width: 34%;"><strong>Name :</strong> ${d.name}</td>
+            <td style="width: 33%;"><strong>Emp Code :</strong> ${d.code}</td>
+            <td style="width: 33%;"><strong>Designation :</strong> ${d.designation}</td>
+          </tr>
+          <tr>
+            <td><strong>PF No. :</strong> ${d.pfNo || ''}</td>
+            <td><strong>UAN No. :</strong> ${d.uanNo || ''}</td>
+            <td><strong>ESIC No. :</strong> ${d.esicNo || ''}</td>
+          </tr>
+          <tr>
+            <td><strong>PAN :</strong> ${d.pan || ''}</td>
+            <td><strong>Period :</strong> ${d.period}</td>
+            <td><strong>Date of Joining :</strong> ${d.doj || ''}</td>
+          </tr>
+          <tr>
+            <td><strong>Account No. :</strong> ${d.accNo || ''}</td>
+            <td colspan="2"><strong>Employee Bank :</strong> ${d.bankName || 'HDFC BANK'}</td>
+          </tr>
+          <tr>
+            <td><strong>Paid Days :</strong> ${d.paidDays}</td>
+            <td><strong>Unpaid Days :</strong> ${d.unpaidDays}</td>
+            <td><strong>Paid Leave :</strong> ${d.paidLeave || ''}</td>
+          </tr>
+        </table>
+
+        <!-- Earnings & Deductions Table -->
+        <table class="financials-table">
+          <thead>
+            <tr>
+              <th style="text-align: left; width: 38%;">Earnings</th>
+              <th class="text-right" style="width: 14%;">Amount</th>
+              <th style="text-align: left; width: 34%;">Deductions</th>
+              <th class="text-right" style="width: 14%;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Basic Earned</td>
+              <td class="text-right">${fmt(d.basic)}</td>
+              <td>PF</td>
+              <td class="text-right">${fmt(d.pf)}</td>
+            </tr>
+            <tr>
+              <td>HRA Earned</td>
+              <td class="text-right">${fmt(d.hra)}</td>
+              <td>ESIC</td>
+              <td class="text-right">${fmt(d.esic)}</td>
+            </tr>
+            <tr>
+              <td>Children Education Allowance Earned</td>
+              <td class="text-right">${fmt(d.cea)}</td>
+              <td>PT</td>
+              <td class="text-right">${fmt(d.pt)}</td>
+            </tr>
+            <tr>
+              <td>Communication Allowance Earned</td>
+              <td class="text-right">${fmt(d.comm)}</td>
+              <td>${(d.tds && d.tds > 0) ? 'TDS' : ''}</td>
+              <td class="text-right">${(d.tds && d.tds > 0) ? fmt(d.tds) : ''}</td>
+            </tr>
+            <tr>
+              <td>LTA Earned</td>
+              <td class="text-right">${fmt(d.lta)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr>
+              <td>Meal Allowance Earned</td>
+              <td class="text-right">${fmt(d.meal)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr>
+              <td>Standard Allowance Earned</td>
+              <td class="text-right">${fmt(d.std)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr class="subtotal-row">
+              <td>Total Earnings :</td>
+              <td class="text-right">${fmt(totalEarnings)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr>
+              <td>Gross Earned</td>
+              <td class="text-right">${fmt(grossEarned)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr>
+              <td>Adjustment</td>
+              <td class="text-right">${fmt(d.adj || 0)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr>
+              <td>Incentives</td>
+              <td class="text-right">${fmt((d.inc || 0) + (d.bonus || 0))}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+            <tr class="total-row">
+              <td>Total Gross :</td>
+              <td class="text-right">${fmt(totalGross)}</td>
+              <td>Total Deductions :</td>
+              <td class="text-right">${fmt(totalDeductions)}</td>
+            </tr>
+            <tr class="net-row">
+              <td>Net Pay :</td>
+              <td class="text-right">${fmt(netPay)}</td>
+              <td></td>
+              <td class="text-right"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Rupees in Words -->
+        <div class="rupees-box">
+          RUPEES : ${words}
+        </div>
+
+        <!-- Disclaimer & Company Info -->
+        <div class="disclaimer-box">
+          <div class="disclaimer-title">* Document validity subject to Company's Stamp and Signature</div>
+          <div class="disclaimer-address">
+            ${compAddr}
           </div>
         </div>
 
-        <!-- Employee Info Grid -->
-        <div class="meta-grid">
-          <div class="meta-item">
-            <span class="meta-label">Employee Name</span>
-            <span class="meta-val">${d.name}</span>
+        <!-- Bottom Footer -->
+        <div class="bottom-footer">
+          <div class="footer-left">
+            <span class="footer-brand">${compName}</span>
+            <span class="footer-sub">Human Resource Management System</span>
           </div>
-          <div class="meta-item">
-            <span class="meta-label">Employee Code</span>
-            <span class="meta-val">${d.code}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Designation</span>
-            <span class="meta-val">${d.designation}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Date of Joining</span>
-            <span class="meta-val">${d.doj || '—'}</span>
-          </div>
-
-          ${showBank ? `
-            <div class="meta-item">
-              <span class="meta-label">Bank Name</span>
-              <span class="meta-val">${d.bankName || 'HDFC Bank'}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Bank Account No</span>
-              <span class="meta-val">${d.accNo || '—'}</span>
-            </div>
-          ` : ''}
-
-          <div class="meta-item">
-            <span class="meta-label">PAN / UAN</span>
-            <span class="meta-val">${d.pan || '—'} / ${d.uanNo || '—'}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">PF / ESIC No</span>
-            <span class="meta-val">${d.pfNo || '—'} / ${d.esicNo || '—'}</span>
-          </div>
-
-          ${showAttendance ? `
-            <div class="meta-item">
-              <span class="meta-label">Payable Days</span>
-              <span class="meta-val">${d.paidDays} Days</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Unpaid / LOP Days</span>
-              <span class="meta-val">${d.unpaidDays} Days</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Paid Leaves</span>
-              <span class="meta-val">${d.paidLeave} Days</span>
-            </div>
-          ` : ''}
-
-          ${showLeave ? `
-            <div class="meta-item">
-              <span class="meta-label">Leave Balance</span>
-              <span class="meta-val" style="color: #0284c7;">${d.leaveBalance || '12.0'} Available</span>
-            </div>
-          ` : ''}
-
-          <div class="meta-item">
-            <span class="meta-label">Payment Mode</span>
-            <span class="meta-val">Bank Transfer</span>
-          </div>
-        </div>
-
-        <!-- Metric Cards -->
-        <div class="kpi-row">
-          ${showActualGross ? `
-            <div class="kpi-card gross">
-              <div class="kpi-title">Actual Gross (Monthly)</div>
-              <div class="kpi-amount">₹${fmt(d.grossActual || totalGross)}</div>
-            </div>
-          ` : ''}
-
-          <div class="kpi-card gross">
-            <div class="kpi-title">${labelGrossSalary}</div>
-            <div class="kpi-amount">₹${fmt(totalGross)}</div>
-          </div>
-
-          ${showCumulative ? `
-            <div class="kpi-card cumulative">
-              <div class="kpi-title">${labelCumulative}</div>
-              <div class="kpi-amount">₹${fmt(cumulativeVal)}</div>
-            </div>
-          ` : ''}
-
-          <div class="kpi-card deductions">
-            <div class="kpi-title">${labelDeductions}</div>
-            <div class="kpi-amount">₹${fmt(totalDeductions)}</div>
-          </div>
-          <div class="kpi-card net">
-            <div class="kpi-title">Net Take-Home Pay</div>
-            <div class="kpi-amount">₹${fmt(netPay)}</div>
-          </div>
-        </div>
-
-        <!-- Side-by-Side Earnings & Deductions Panels -->
-        <div class="breakdown-row">
-          <!-- Earnings -->
-          <div class="panel">
-            <div class="panel-header">
-              <h3>💵 ${labelEarnings}</h3>
-              <span class="panel-badge green">₹${fmt(totalGross)}</span>
-            </div>
-            <div class="panel-list">
-              ${(!hideZero || d.basic > 0) ? `
-                <div class="item-row">
-                  <span class="label">Basic Salary</span>
-                  <span class="val-green">₹${fmt(d.basic)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.hra > 0) ? `
-                <div class="item-row">
-                  <span class="label">House Rent Allowance (HRA)</span>
-                  <span class="val-green">₹${fmt(d.hra)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.std > 0) ? `
-                <div class="item-row">
-                  <span class="label">Special Allowance</span>
-                  <span class="val-green">₹${fmt(d.std)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.cea > 0) ? `
-                <div class="item-row">
-                  <span class="label">Children Education Allowance</span>
-                  <span class="val-green">₹${fmt(d.cea)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.comm > 0) ? `
-                <div class="item-row">
-                  <span class="label">Communication Allowance</span>
-                  <span class="val-green">₹${fmt(d.comm)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.lta > 0) ? `
-                <div class="item-row">
-                  <span class="label">Leave Travel Allowance (LTA)</span>
-                  <span class="val-green">₹${fmt(d.lta)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.meal > 0) ? `
-                <div class="item-row">
-                  <span class="label">Meal Allowance</span>
-                  <span class="val-green">₹${fmt(d.meal)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.adj > 0) ? `
-                <div class="item-row">
-                  <span class="label">Adjustments</span>
-                  <span class="val-green">₹${fmt(d.adj)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.inc > 0) ? `
-                <div class="item-row">
-                  <span class="label">Incentives / Bonus</span>
-                  <span class="val-green">₹${fmt(d.inc)}</span>
-                </div>` : ''}
-
-              <div class="total-row">
-                <span class="label">${labelGrossEarned}</span>
-                <span class="val-green">₹${fmt(totalGross)}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Deductions -->
-          <div class="panel">
-            <div class="panel-header">
-              <h3>🛡️ ${labelDeductions}</h3>
-              <span class="panel-badge rose">−₹${fmt(totalDeductions)}</span>
-            </div>
-            <div class="panel-list">
-              ${(!hideZero || d.pf > 0) ? `
-                <div class="item-row">
-                  <span class="label">PF Employee (12%)</span>
-                  <span class="val-rose">−₹${fmt(d.pf)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.pt > 0) ? `
-                <div class="item-row">
-                  <span class="label">Professional Tax (PT)</span>
-                  <span class="val-rose">−₹${fmt(d.pt)}</span>
-                </div>` : ''}
-              ${(!hideZero || d.esic > 0) ? `
-                <div class="item-row">
-                  <span class="label">ESIC Deduction</span>
-                  <span class="val-rose">−₹${fmt(d.esic)}</span>
-                </div>` : ''}
-
-              <div class="total-row">
-                <span class="label">Total Deductions</span>
-                <span class="val-rose">−₹${fmt(totalDeductions)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Monthly Take-Home Pay Banner -->
-        <div class="takehome-banner">
-          <div class="banner-left">
-            <h4>${showTotalAmount ? 'Total Net Take-Home Pay' : 'Monthly Take–Home Pay'}</h4>
-            <p>Calculated after statutory deductions &amp; active component inclusions</p>
-            <div class="banner-words">RUPEES: ${words}</div>
-          </div>
-          <div class="banner-right">
-            <span class="banner-check">✓</span>
-            <span class="banner-amount">₹${fmt(netPay)}</span>
-          </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-          <div>
-            * ${footerNote}<br/>
-            Contact HR: hr@apponexthrms.com • www.apponexthrms.com
-          </div>
-          <div class="sign-box">
-            ${labelSignature}
+          <div class="footer-right">
+            Log on to <strong>${compWeb}</strong>
           </div>
         </div>
       </div>
 
+      ${autoPrint ? `
       <script>
         window.onload = function() {
           setTimeout(() => { window.print(); }, 250);
         };
       </script>
+      ` : ''}
     </body>
     </html>
   `;
@@ -697,6 +490,19 @@ export const PayslipViewer: React.FC = () => {
   ) ?? false;
 
   const { payslips, isLoading, getPayslipDetails, refetch } = usePayslip();
+  const { selectedCompanyName, selectedCompanyId } = useCompanyStore();
+  const [activeCompanyInfo, setActiveCompanyInfo] = useState<{
+    name: string;
+    address: string;
+    logo?: string | null;
+    website?: string;
+  }>({
+    name: selectedCompanyName || 'Apponext',
+    address: 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708',
+    logo: null,
+    website: 'www.apponexthrms.com'
+  });
+  const [selectedPayslipDoc, setSelectedPayslipDoc] = useState<PayslipDocData | null>(null);
   const [details, setDetails] = useState<any>(null);
   const [employeeOptions, setEmployeeOptions] = useState<any[]>([]);
   const [dbDepartments, setDbDepartments] = useState<string[]>([]);
@@ -880,29 +686,30 @@ export const PayslipViewer: React.FC = () => {
     const targetEmpId = selectedEmpId || (employeeOptions[0] ? String(employeeOptions[0].id) : '1');
     const empObj = employeeOptions.find(e => String(e.id) === targetEmpId) || employeeOptions[0] || {};
 
-    const basicVal = Number(empObj.basic_earned ?? empObj.basic ?? 0);
-    const hraVal = Number(empObj.hra_earned ?? empObj.hra ?? (basicVal > 0 ? Math.round(basicVal * 0.40) : 0));
-    const stdVal = Number(empObj.standard_allowance_earned ?? empObj.standard_allowance ?? 0);
-    const mealVal = Number(empObj.meal_allowance_earned ?? empObj.meal_allowance ?? 0);
-    const commVal = Number(empObj.communication_allowance_earned ?? empObj.communication_allowance ?? 0);
-    const eduVal = Number(empObj.children_education_allowance_earned ?? empObj.children_education_allowance ?? 0);
-    const ltaVal = Number(empObj.lta_earned ?? empObj.lta ?? 0);
+    const grossSalary = Number(empObj.gross ?? 50000);
+    const basicVal = Number(empObj.basic_earned ?? empObj.basic ?? (grossSalary > 0 ? Math.round(grossSalary * 0.50) : 25000));
+    const hraVal = Number(empObj.hra_earned ?? empObj.hra ?? (grossSalary > 0 ? Math.round(grossSalary * 0.161) : 8050));
+    const eduVal = Number(empObj.children_education_allowance_earned ?? empObj.children_education_allowance ?? (grossSalary > 0 ? Math.round(grossSalary * 0.007) : 350));
+    const commVal = Number(empObj.communication_allowance_earned ?? empObj.communication_allowance ?? (grossSalary > 0 ? Math.round(grossSalary * 0.0358) : 1790));
+    const ltaVal = Number(empObj.lta_earned ?? empObj.lta ?? (grossSalary > 0 ? Math.round(grossSalary * 0.0358) : 1790));
+    const mealVal = Number(empObj.meal_allowance_earned ?? empObj.meal_allowance ?? (grossSalary > 0 ? Math.round(grossSalary * 0.007) : 350));
+    const stdVal = Number(empObj.standard_allowance_earned ?? empObj.standard_allowance ?? (grossSalary > 0 ? Math.max(0, grossSalary - (basicVal + hraVal + eduVal + commVal + ltaVal + mealVal)) : 12670));
 
-    const pfVal = Number(empObj.pf ?? 0);
+    const pfVal = Number(empObj.pf ?? Math.min(1800, Math.round(basicVal * 0.12)));
     const esiVal = Number(empObj.esi ?? empObj.esic ?? 0);
-    const ptVal = Number(empObj.pt ?? (empObj.gross > 0 ? 200 : 0));
+    const ptVal = Number(empObj.pt ?? (grossSalary > 15000 ? 200 : 0));
 
     setEditFormData({
       empId: targetEmpId,
-      empName: empObj.name || 'Employee',
-      empCode: empObj.code || `EMP-${targetEmpId}`,
-      designation: empObj.designation || empObj.job_title || 'Employee',
+      empName: empObj.name || (empObj.first_name ? `${empObj.first_name} ${empObj.last_name || ''}`.trim() : 'Employee'),
+      empCode: empObj.employee_code || empObj.code || `EMP-${targetEmpId}`,
+      designation: empObj.designation || empObj.job_title || empObj.designation_name || 'Software Engineer',
       pfNo: empObj.pf_no || '',
       uanNo: empObj.uan_no || '',
       esicNo: empObj.esic_no || '',
-      pan: empObj.pan || '',
+      pan: empObj.pan || empObj.pan_number || '',
       period: MONTHS_LABEL[selectedMonth] || selectedMonth,
-      doj: empObj.date_of_joining ? String(empObj.date_of_joining).slice(0, 10) : '01 Jan 2024',
+      doj: empObj.date_of_joining ? formatPayrollDate(empObj.date_of_joining) : '',
       accNo: empObj.account_no || '',
       bankName: empObj.bank_name || 'HDFC BANK',
       paidDays: Number(empObj.paid_days ?? 30),
@@ -934,39 +741,39 @@ export const PayslipViewer: React.FC = () => {
     const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empId);
 
     const displayName = card.empName || card.employee_name || (matchedProfile ? `${matchedProfile.firstName || matchedProfile.first_name || ''} ${matchedProfile.lastName || matchedProfile.last_name || ''}`.trim() : '') || `Employee #${empId}`;
-    const displayCode = card.empCode || card.employee_code || matchedProfile?.employee_code || matchedProfile?.code || `EMP-${empId}`;
-    const displayDesig = card.designation || matchedProfile?.designation || matchedProfile?.job_title || 'Employee';
+    const displayCode = matchedProfile?.employee_code || card.empCode || card.employee_code || matchedProfile?.code || `EMP-${empId}`;
+    const displayDesig = matchedProfile?.designation || matchedProfile?.job_title || card.designation || 'Software Engineer';
 
     setEditFormData({
       empId,
       empName: displayName,
       empCode: displayCode,
       designation: displayDesig,
-      pfNo: card.pfNo || matchedProfile?.pf_no || '',
-      uanNo: card.uanNo || matchedProfile?.uan_no || '',
-      esicNo: card.esicNo || matchedProfile?.esic_no || '',
-      pan: card.pan || matchedProfile?.pan || '',
+      pfNo: card.pfNo || card.pf_no || matchedProfile?.pf_no || '',
+      uanNo: card.uanNo || card.uan_no || matchedProfile?.uan_no || '',
+      esicNo: card.esicNo || card.esic_no || matchedProfile?.esic_no || '',
+      pan: card.pan || card.pan_number || matchedProfile?.pan || '',
       period: card.period || (MONTHS_LABEL[selectedMonth] || selectedMonth),
-      doj: card.doj || (matchedProfile?.date_of_joining ? String(matchedProfile.date_of_joining).slice(0, 10) : ''),
-      accNo: card.accNo || matchedProfile?.account_no || '',
-      bankName: card.bankName || matchedProfile?.bank_name || '',
+      doj: card.doj || (matchedProfile?.date_of_joining ? formatPayrollDate(matchedProfile.date_of_joining) : ''),
+      accNo: card.accNo || card.account_no || matchedProfile?.account_no || '',
+      bankName: card.bankName || card.bank_name || matchedProfile?.bank_name || 'HDFC BANK',
       paidDays: card.paidDays !== undefined ? card.paidDays : 30,
       unpaidDays: card.unpaidDays !== undefined ? card.unpaidDays : 0,
       paidLeave: card.paidLeave !== undefined ? card.paidLeave : 0,
-      basic: Number(card.basic || 0),
-      hra: Number(card.hra || 0),
+      basic: Number(card.basic || 25000),
+      hra: Number(card.hra || 8050),
       special: Number(card.special || 0),
-      childrenEducation: Number(card.childrenEducation || 0),
-      communication: Number(card.communication || 0),
-      lta: Number(card.lta || 0),
-      meal: Number(card.meal || 0),
-      standardAllowance: Number(card.standardAllowance || 0),
+      childrenEducation: Number(card.childrenEducation || card.children_education_allowance || 350),
+      communication: Number(card.communication || card.communication_allowance || 1790),
+      lta: Number(card.lta || card.lta_allowance || 1790),
+      meal: Number(card.meal || card.meal_allowance || 350),
+      standardAllowance: Number(card.standardAllowance || card.standard_allowance || 12670),
       adjustment: Number(card.adjustment || 0),
       incentives: Number(card.incentives || 0),
       bonus: Number(card.bonus || 0),
-      pf: Number(card.pf || 0),
-      esi: Number(card.esi || 0),
-      pt: Number(card.pt || 0),
+      pf: Number(card.pf || 1800),
+      esi: Number(card.esi || card.esic || 0),
+      pt: Number(card.pt || 200),
       tds: Number(card.tds || 0),
       absentDays: Number(card.absentDays || 0),
       month: card.month || card.payslip_month || `${selectedMonth}-01`
@@ -974,64 +781,214 @@ export const PayslipViewer: React.FC = () => {
     setShowEditModal(true);
   };
 
-  const handleDownloadPDF = (data: any) => {
-    const bon = Number(data.bonus ?? editFormData.bonus ?? 0);
-    const spe = Number(data.special ?? editFormData.special ?? 0);
-    const esi = Number(data.esi ?? data.esic ?? editFormData.esi ?? 0);
-    const tds = Number(data.tds ?? editFormData.tds ?? 0);
+  const buildPayslipDocFromData = (data: any, matchedProfile?: any, defaultMonth: string = '2026-08'): PayslipDocData => {
+    const empId = String(data.employee_id || data.employeeId || data.id || matchedProfile?.id || '');
+    
+    // Robust name resolver that never lets 'Employee #' override a real name
+    const resolveValidName = (obj?: any) => {
+      if (!obj) return '';
+      const fn = (obj.firstName || obj.first_name || '').trim();
+      const ln = (obj.lastName || obj.last_name || '').trim();
+      if (fn || ln) return `${fn} ${ln}`.trim();
+      const full = (obj.fullName || obj.full_name || obj.employeeName || obj.employee_name || obj.empName || obj.name || '').trim();
+      if (full && !full.startsWith('Employee #')) return full;
+      return '';
+    };
 
-    const grossVal = Number(
-      data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? ((editFormData.basic || 0) + (editFormData.hra || 0) + (editFormData.special || 0))
-    );
-    let basicVal = Number(
-      data.basic_earned ?? data.basic_salary ?? data.basicSalary ?? data.basic ?? editFormData.basic ?? 0
-    );
+    const resolvedName = resolveValidName(matchedProfile) || resolveValidName(data);
+    const empName = resolvedName || `Employee #${empId}`;
+
+    // Robust employee code resolver that never lets placeholder 'EMP-' override a real code
+    const resolveValidCode = (obj?: any) => {
+      if (!obj) return '';
+      const c = (obj.employeeCode || obj.employee_code || obj.empCode || obj.code || '').trim();
+      if (c && !c.startsWith('EMP-')) return c;
+      return '';
+    };
+
+    const resolvedCode = resolveValidCode(matchedProfile) || resolveValidCode(data);
+    const empCode = resolvedCode || `EMP-${empId}`;
+    
+    // Designation resolution
+    const designation = 
+      matchedProfile?.designationName || 
+      matchedProfile?.designation_name || 
+      matchedProfile?.jobTitle || 
+      matchedProfile?.job_title || 
+      matchedProfile?.designation || 
+      data.designationName || 
+      data.designation_name || 
+      data.jobTitle || 
+      data.job_title || 
+      data.designation || 
+      'Product Manager';
+    
+    // Department resolution
+    const department = 
+      matchedProfile?.departmentName || 
+      matchedProfile?.department_name || 
+      matchedProfile?.department || 
+      data.departmentName || 
+      data.department_name || 
+      data.department || 
+      'Cloud';
+    
+    // Bank name resolution
+    const bankName = 
+      matchedProfile?.bankName || 
+      matchedProfile?.bank_name || 
+      matchedProfile?.salaryBankName || 
+      matchedProfile?.salary_bank_name || 
+      data.bankName || 
+      data.bank_name || 
+      'KOTAK MAHINDRA BANK';
+    
+    // Account number resolution
+    const accNo = 
+      matchedProfile?.accountNo || 
+      matchedProfile?.account_no || 
+      matchedProfile?.bankAccountNo || 
+      matchedProfile?.bank_account_no || 
+      data.accountNo || 
+      data.account_no || 
+      '';
+    
+    // UAN number resolution
+    const uanNo = 
+      matchedProfile?.uanNo || 
+      matchedProfile?.uan_no || 
+      matchedProfile?.uan || 
+      data.uanNo || 
+      data.uan_no || 
+      data.uan || 
+      '';
+    
+    // ESIC number resolution
+    const esicNo = 
+      matchedProfile?.esicNo || 
+      matchedProfile?.esic_no || 
+      matchedProfile?.esic || 
+      matchedProfile?.esiNo || 
+      data.esicNo || 
+      data.esic_no || 
+      data.esic || 
+      '';
+    
+    // PAN resolution
+    const pan = 
+      matchedProfile?.panNumber || 
+      matchedProfile?.pan_number || 
+      matchedProfile?.pan || 
+      data.panNumber || 
+      data.pan_number || 
+      data.pan || 
+      '';
+    
+    // PF number resolution
+    const pfNo = 
+      matchedProfile?.pfNo || 
+      matchedProfile?.pf_no || 
+      matchedProfile?.pfNumber || 
+      matchedProfile?.pf_number || 
+      data.pfNo || 
+      data.pf_no || 
+      data.pfNumber || 
+      data.pf_number || 
+      '';
+    
+    // Date of Joining resolution (handles dateOfJoining, date_of_joining, doj, joiningDate)
+    const rawDoj = 
+      matchedProfile?.dateOfJoining || 
+      matchedProfile?.date_of_joining || 
+      matchedProfile?.doj || 
+      matchedProfile?.joiningDate || 
+      matchedProfile?.joining_date || 
+      data.dateOfJoining || 
+      data.date_of_joining || 
+      data.doj || 
+      data.joiningDate || 
+      data.joining_date;
+      
+    const doj = rawDoj ? formatPayrollDate(rawDoj) : '';
+    
+    const rawPeriod = data.period || (data.month ? formatMonthLabel(data.month) : (data.payslip_month ? formatMonthLabel(data.payslip_month) : formatMonthLabel(defaultMonth)));
+    const period = rawPeriod || 'July 2026';
+    const payslipNumber = data.payslip_number || data.payslipNumber || `PS-${(data.month || defaultMonth).toString().slice(0, 7).replace('-', '')}-${empId || '01'}`;
+
+    const paidDays = data.paid_days ?? data.paidDays ?? data.working_days ?? data.payable_days ?? data.payableDays ?? matchedProfile?.paid_days ?? matchedProfile?.working_days ?? 30;
+    const unpaidDays = data.unpaid_days ?? data.unpaidDays ?? data.unpaid_leave_days ?? data.lop_days ?? data.lopDays ?? matchedProfile?.unpaid_days ?? matchedProfile?.unpaid_leave_days ?? 0;
+    const paidLeave = data.paid_leave ?? data.paidLeave ?? data.paid_leave_days ?? matchedProfile?.paid_leave ?? matchedProfile?.paid_leave_days ?? 0;
+
+    const grossVal = Number(data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? matchedProfile?.gross ?? 50000);
+    let basicVal = Number(data.basic_salary ?? data.basicSalary ?? data.basic ?? data.basic_earned ?? matchedProfile?.basic ?? 0);
     if (!basicVal && grossVal > 0) basicVal = Math.round(grossVal * 0.50);
 
-    let hraVal = Number(data.hra_earned ?? data.hra ?? editFormData.hra ?? 0);
-    if (!hraVal && basicVal > 0) hraVal = Math.round(basicVal * 0.40);
+    let hraVal = Number(data.hra ?? data.hra_earned ?? matchedProfile?.hra ?? 0);
+    if (!hraVal && basicVal > 0) hraVal = Math.round(grossVal * 0.161);
 
-    const ceaVal = Number(data.children_education_allowance_earned ?? editFormData.childrenEducation ?? 0);
-    const commVal = Number(data.communication_allowance_earned ?? editFormData.communication ?? 0);
-    const ltaVal = Number(data.lta_earned ?? editFormData.lta ?? 0);
-    const mealVal = Number(data.meal_allowance_earned ?? editFormData.meal ?? 0);
+    let ceaVal = Number(data.children_education_allowance ?? data.children_education_allowance_earned ?? data.childrenEducation ?? matchedProfile?.childrenEducation ?? 0);
+    if (!ceaVal && grossVal > 0) ceaVal = Math.round(grossVal * 0.007);
 
-    let stdVal = Number(
-      data.standard_allowance_earned ??
-      data.special_earned ??
-      data.special_allowance ??
-      editFormData.standardAllowance ??
-      editFormData.special ??
-      0
-    ) + bon + spe;
+    let commVal = Number(data.communication_allowance ?? data.communication_allowance_earned ?? data.communication ?? matchedProfile?.communication ?? 0);
+    if (!commVal && grossVal > 0) commVal = Math.round(grossVal * 0.0358);
+
+    let ltaVal = Number(data.lta_allowance ?? data.lta_earned ?? data.lta ?? matchedProfile?.lta ?? 0);
+    if (!ltaVal && grossVal > 0) ltaVal = Math.round(grossVal * 0.0358);
+
+    let mealVal = Number(data.meal_allowance ?? data.meal_allowance_earned ?? data.meal ?? matchedProfile?.meal ?? 0);
+    if (!mealVal && grossVal > 0) mealVal = Math.round(grossVal * 0.007);
+
+    let stdVal = Number(data.standard_allowance ?? data.standard_allowance_earned ?? data.standardAllowance ?? data.special ?? matchedProfile?.special ?? 0);
     if (!stdVal && grossVal > 0) {
       stdVal = Math.max(0, grossVal - (basicVal + hraVal + ceaVal + commVal + ltaVal + mealVal));
     }
 
-    let pfVal = Number(data.pf ?? data.pf_deduction ?? editFormData.pf ?? 0);
+    const adjVal = Number(data.adjustment ?? data.adj ?? 0);
+    const incVal = Number(data.incentives ?? data.inc ?? 0);
+    const bonusVal = Number(data.bonus ?? 0);
+
+    let pfVal = Number(data.pf ?? data.pf_deduction ?? matchedProfile?.pf ?? 0);
     if (!pfVal && basicVal > 0) pfVal = Math.min(1800, Math.round(basicVal * 0.12));
 
-    let ptVal = Number(data.pt ?? data.pt_deduction ?? editFormData.pt ?? 0);
-    if (!ptVal && grossVal > 0) ptVal = grossVal > 15000 ? 200 : (grossVal > 0 ? 150 : 0);
-
-    let esicVal = esi;
+    let esicVal = Number(data.esic ?? data.esi ?? data.esi_deduction ?? matchedProfile?.esi ?? 0);
     if (!esicVal && grossVal > 0 && grossVal <= 21000) esicVal = Math.round(grossVal * 0.0075);
 
-    const docData: PayslipDocData = {
-      name: data.employee_name || data.empName || data.name || editFormData.empName || 'Employee',
-      code: data.employee_code || data.empCode || data.code || editFormData.empCode || '',
-      designation: data.designation || editFormData.designation || 'Staff Member',
-      pfNo: data.pf_no || data.pfNo || data.pf_number || editFormData.pfNo || '—',
-      uanNo: data.uan_no || data.uanNo || data.uan || editFormData.uanNo || '—',
-      esicNo: data.esic_no || data.esicNo || data.esic || editFormData.esicNo || '—',
-      pan: data.pan || data.pan_number || editFormData.pan || '—',
-      period: data.period || (data.month ? formatMonthLabel(data.month) : (MONTHS_LABEL[selectedMonth] || selectedMonth)),
-      doj: formatPayrollDate(data.date_of_joining || data.doj || editFormData.doj),
-      accNo: data.account_no || data.accountNo || editFormData.accNo || '—',
-      bankName: data.bank_name || data.bankName || editFormData.bankName || 'HDFC Bank',
-      paidDays: data.paid_days !== undefined ? data.paid_days : (editFormData.paidDays ?? 30),
-      unpaidDays: data.unpaid_days !== undefined ? data.unpaid_days : (editFormData.unpaidDays ?? 0),
-      paidLeave: data.paid_leave !== undefined ? data.paid_leave : (editFormData.paidLeave ?? 0),
+    let ptVal = Number(data.pt ?? data.pt_deduction ?? matchedProfile?.pt ?? 0);
+    if (!ptVal && grossVal > 0) ptVal = grossVal > 15000 ? 200 : (grossVal > 7500 ? 175 : 0);
+
+    const tdsVal = Number(data.tds ?? data.tds_deduction ?? matchedProfile?.tds ?? 0);
+
+    const computedTotalEarnings = (basicVal + hraVal + ceaVal + commVal + ltaVal + mealVal + stdVal);
+    const computedTotalGross = computedTotalEarnings + adjVal + incVal + bonusVal;
+    const computedTotalDeductions = (pfVal + ptVal + esicVal + tdsVal) || Number(data.total_deductions ?? data.totalDeductions ?? 0);
+    const computedNetSalary = Math.max(0, computedTotalGross - computedTotalDeductions);
+
+    const compName = data.companyName || data.company_name || matchedProfile?.companyName || matchedProfile?.company_name || matchedProfile?.company || activeCompanyInfo.name || selectedCompanyName || 'Apponext';
+    const compAddress = data.companyAddress || data.company_address || activeCompanyInfo.address || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708';
+    const compLogo = data.companyLogoUrl || data.company_logo || activeCompanyInfo.logo || null;
+    const webUrl = data.websiteUrl || activeCompanyInfo.website || 'www.apponexthrms.com';
+
+    return {
+      name: empName,
+      code: empCode,
+      designation,
+      department,
+      bankName,
+      accNo,
+      uanNo,
+      esicNo,
+      pan,
+      pfNo,
+      doj,
+      period,
+      payslipNumber,
+      companyName: compName,
+      companyAddress: compAddress,
+      companyLogoUrl: compLogo,
+      websiteUrl: webUrl,
+      paidDays,
+      unpaidDays,
+      paidLeave,
       basic: basicVal,
       hra: hraVal,
       cea: ceaVal,
@@ -1039,20 +996,28 @@ export const PayslipViewer: React.FC = () => {
       lta: ltaVal,
       meal: mealVal,
       std: stdVal,
-      adj: Number(data.adjustment ?? editFormData.adjustment ?? 0),
-      inc: Number(data.incentives ?? editFormData.incentives ?? 0),
+      adj: adjVal,
+      inc: incVal,
+      bonus: bonusVal,
       pf: pfVal,
       esic: esicVal,
-      pt: ptVal + tds
+      pt: ptVal,
+      tds: tdsVal,
+      grossSalary: computedTotalGross,
+      totalDeductions: computedTotalDeductions,
+      netSalary: computedNetSalary
     };
+  };
 
+  const handlePrintPayslip = (docData: PayslipDocData) => {
     try {
-      const htmlDoc = buildPayslipHtmlDoc(docData, payslipSetting);
-      const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      const printWin = window.open(blobUrl, '_blank', 'width=950,height=950');
-      if (!printWin) {
-        // Fallback for pop-up blocked: use hidden iframe
+      const htmlDoc = buildPayslipHtmlDoc(docData, payslipSetting, true);
+      const printWin = window.open('', '_blank', 'width=950,height=950');
+      if (printWin) {
+        printWin.document.open();
+        printWin.document.write(htmlDoc);
+        printWin.document.close();
+      } else {
         const iframe = document.createElement('iframe');
         iframe.style.position = 'fixed';
         iframe.style.right = '0';
@@ -1060,16 +1025,44 @@ export const PayslipViewer: React.FC = () => {
         iframe.style.width = '0';
         iframe.style.height = '0';
         iframe.style.border = '0';
-        iframe.src = blobUrl;
         document.body.appendChild(iframe);
+        iframe.contentDocument?.open();
+        iframe.contentDocument?.write(htmlDoc);
+        iframe.contentDocument?.close();
         setTimeout(() => {
           try { iframe.contentWindow?.print(); } catch {}
           setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 60000);
         }, 300);
       }
     } catch (e) {
-      console.error('Error opening payslip PDF:', e);
+      console.error('Error opening print window:', e);
     }
+  };
+
+  const handleDownloadPayslipPDF = (docData: PayslipDocData) => {
+    try {
+      const htmlDoc = buildPayslipHtmlDoc(docData, payslipSetting, false);
+      const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const fileName = `Payslip_${(docData.code || docData.name || 'EMP').replace(/[^a-zA-Z0-9_-]/g, '_')}_${(docData.period || 'Month').replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      showToast.success('Payslip Downloaded', `Saved ${fileName}. You can also click Print to print or save directly as PDF.`);
+    } catch (e) {
+      console.error('Error downloading payslip:', e);
+    }
+  };
+
+  const handleViewPayslipDoc = (cardOrData: any) => {
+    const empId = String(cardOrData.employee_id || cardOrData.employeeId || cardOrData.id || '');
+    const matchedProfile = employeeOptions.find(e => String(e.id) === empId);
+    const doc = buildPayslipDocFromData(cardOrData, matchedProfile, cardOrData.month || selectedMonth);
+    setSelectedPayslipDoc(doc);
   };
 
   const handleSaveCustomPayslip = () => {
@@ -1136,7 +1129,7 @@ export const PayslipViewer: React.FC = () => {
   useEffect(() => {
     // 1. Fetch live organization employees, salary structures, mappings, and payslip settings
     Promise.all([
-      apiClient.get('/employees').catch(() => ({ data: [] })),
+      apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: [] })),
       apiClient.get('/payroll/structures').catch(() => ({ data: [] })),
       apiClient.get('/payroll/structures/mappings').catch(() => ({ data: [] })),
       apiClient.get('/payroll/settings').catch(() => ({ data: null }))
@@ -1236,25 +1229,55 @@ export const PayslipViewer: React.FC = () => {
           if ((!gross || gross === 0) && (e.ctc || e.annual_ctc)) {
             gross = Math.round(Number(e.ctc || e.annual_ctc) / 12);
             basic = Math.round(gross * 0.50);
-            net = Math.round(gross * 0.90);
           }
-
           const isAssigned = hasSalaryStructure || (gross !== null && gross > 0);
+          const fn = (e.firstName || e.first_name || '').trim();
+          const ln = (e.lastName || e.last_name || '').trim();
+          const fullFromParts = (fn || ln) ? `${fn} ${ln}`.trim() : '';
+          const rawFull = (e.fullName || e.full_name || e.name || '').trim();
+          const validFull = (rawFull && !rawFull.startsWith('Employee #')) ? rawFull : '';
+          const normalizedName = fullFromParts || validFull || e.email || `Employee #${e.id}`;
+
+          const rawCode = (e.employeeCode || e.employee_code || e.code || '').trim();
+          const validCode = (rawCode && !rawCode.startsWith('EMP-')) ? rawCode : '';
+          const normalizedCode = validCode || rawCode || `EMP-${e.id}`;
+          const normalizedDoj = e.dateOfJoining || e.date_of_joining || e.doj || e.joiningDate || e.joining_date || '';
 
           return {
             ...e,
             id: e.id,
-            name: e.name || e.full_name || e.fullName || `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || e.email || `Employee #${e.id}`,
-            code: e.employee_code || e.code || `EMP-${e.id}`,
-            department: e.department_name || e.department?.name || (typeof e.department === 'string' ? e.department : '') || 'General',
-            designation: e.designation || e.job_title || e.designation_name || 'Staff Member',
-            bank_name: e.bank_name || e.bankName || e.salary_bank_name || 'HDFC Bank',
-            account_no: e.account_no || e.accountNo || e.bank_account_no || '—',
-            uan_no: e.uan_no || e.uanNo || e.uan || '—',
-            esic_no: e.esic_no || e.esicNo || e.esic || '—',
-            pan: e.pan || e.pan_number || e.panNumber || '—',
-            pf_no: e.pf_no || e.pf_number || e.pfNo || '—',
-            date_of_joining: e.date_of_joining || e.doj || e.joining_date || '',
+            name: normalizedName,
+            fullName: normalizedName,
+            full_name: normalizedName,
+            firstName: e.firstName || e.first_name,
+            lastName: e.lastName || e.last_name,
+            code: normalizedCode,
+            employeeCode: normalizedCode,
+            employee_code: normalizedCode,
+            department: e.departmentName || e.department_name || e.department?.name || (typeof e.department === 'string' ? e.department : '') || 'General',
+            departmentName: e.departmentName || e.department_name || e.department?.name || (typeof e.department === 'string' ? e.department : '') || 'General',
+            department_name: e.departmentName || e.department_name || e.department?.name || (typeof e.department === 'string' ? e.department : '') || 'General',
+            designation: e.designationName || e.designation_name || e.jobTitle || e.job_title || e.designation || 'Software Engineer',
+            designationName: e.designationName || e.designation_name || e.jobTitle || e.job_title || e.designation || 'Software Engineer',
+            designation_name: e.designationName || e.designation_name || e.jobTitle || e.job_title || e.designation || 'Software Engineer',
+            jobTitle: e.jobTitle || e.job_title || e.designation || 'Software Engineer',
+            job_title: e.jobTitle || e.job_title || e.designation || 'Software Engineer',
+            bank_name: e.bankName || e.bank_name || e.salaryBankName || e.salary_bank_name || 'HDFC BANK',
+            bankName: e.bankName || e.bank_name || e.salaryBankName || e.salary_bank_name || 'HDFC BANK',
+            account_no: e.accountNo || e.account_no || e.bankAccountNo || e.bank_account_no || '',
+            accountNo: e.accountNo || e.account_no || e.bankAccountNo || e.bank_account_no || '',
+            uan_no: e.uanNo || e.uan_no || e.uan || '',
+            uanNo: e.uanNo || e.uan_no || e.uan || '',
+            esic_no: e.esicNo || e.esic_no || e.esic || '',
+            esicNo: e.esicNo || e.esic_no || e.esic || '',
+            pan: e.pan || e.panNumber || e.pan_number || '',
+            pan_number: e.pan || e.panNumber || e.pan_number || '',
+            panNumber: e.pan || e.panNumber || e.pan_number || '',
+            pf_no: e.pfNo || e.pf_no || e.pfNumber || e.pf_number || '',
+            pfNo: e.pf_no || e.pf_number || e.pfNo || '',
+            dateOfJoining: normalizedDoj,
+            date_of_joining: normalizedDoj,
+            doj: normalizedDoj,
             basic: basic || 0,
             gross: gross || 0,
             net: net || (gross ? Math.max(0, gross - (pf + esi + tds)) : 0),
@@ -1282,7 +1305,45 @@ export const PayslipViewer: React.FC = () => {
         setDbDepartments(names);
       }
     }).catch(() => { });
-  }, [user, orgKey]);
+
+    // 3. Fetch company branding and location details
+    apiClient.get('/company').then((res: any) => {
+      const comps = res.data?.data || res.data || [];
+      if (Array.isArray(comps) && comps.length > 0) {
+        const matchedComp = (selectedCompanyId ? comps.find((c: any) => c.company_id === selectedCompanyId || c.companyId === selectedCompanyId) : null) ||
+          comps.find((c: any) => c.is_parent || c.isParent) ||
+          comps[0];
+        if (matchedComp) {
+          const addrParts = [
+            matchedComp.address_line_1 || matchedComp.addressLine1,
+            matchedComp.address_line_2 || matchedComp.addressLine2,
+            matchedComp.city,
+            matchedComp.state,
+            matchedComp.zip_code || matchedComp.zipCode
+          ].filter(Boolean);
+          setActiveCompanyInfo({
+            name: matchedComp.name || selectedCompanyName || 'Apponext',
+            address: addrParts.length > 0 ? addrParts.join(', ') : 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708',
+            logo: matchedComp.logo || null,
+            website: matchedComp.email ? `www.${matchedComp.email.split('@')[1] || 'apponexthrms.com'}` : 'www.apponexthrms.com'
+          });
+        }
+      }
+    }).catch(() => {
+      apiClient.get('/settings/company-profile').then((res: any) => {
+        const prof = res.data?.data || res.data;
+        if (prof) {
+          const addrParts = [prof.address || prof.address_line_1, prof.city, prof.state, prof.zip_code].filter(Boolean);
+          setActiveCompanyInfo({
+            name: prof.name || selectedCompanyName || 'Apponext',
+            address: addrParts.length > 0 ? addrParts.join(', ') : 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708',
+            logo: prof.logo || null,
+            website: prof.website || 'www.apponexthrms.com'
+          });
+        }
+      }).catch(() => {});
+    });
+  }, [user, orgKey, selectedCompanyId, selectedCompanyName]);
 
   // Compute final unique real departments dynamically
   const uniqueDepartments = Array.from(
@@ -1300,8 +1361,17 @@ export const PayslipViewer: React.FC = () => {
   ).sort();
 
   const handleViewPayslip = async (payslipId: number) => {
-    const payslipDetails = await getPayslipDetails(payslipId);
-    setDetails(payslipDetails);
+    try {
+      const payslipDetails = await getPayslipDetails(payslipId);
+      if (payslipDetails) {
+        const p = payslipDetails.payslip || payslipDetails;
+        const serverEmp = payslipDetails.employee || {};
+        const matchedProfile = employeeOptions.find(e => String(e.id) === String(p.employee_id || p.employeeId));
+        const fullEmp = { ...matchedProfile, ...serverEmp };
+        const doc = buildPayslipDocFromData({ ...fullEmp, ...p }, fullEmp, p.payslip_month || p.month || selectedMonth);
+        setSelectedPayslipDoc(doc);
+      }
+    } catch { }
   };
 
   const handleGenerateMyPayslip = () => {
@@ -1333,40 +1403,59 @@ export const PayslipViewer: React.FC = () => {
       });
       const result = res.data?.data;
       const payslip = result?.payslip || {};
-      const earnings = (result?.earnings || []).map((e: any) => ({
-        name: e.formulaUsed || e.formula_used || 'Earning',
-        amount: Number(e.actualValue ?? e.actual_value ?? 0)
-      })).filter((e: any) => e.amount !== 0);
-      const deductions = (result?.deductions || []).map((d: any) => ({
-        name: d.componentName || d.component_name || 'Deduction',
-        amount: Number(d.actualValue ?? d.actual_value ?? 0)
-      })).filter((d: any) => d.amount !== 0);
+      const serverEmp = result?.employee || {};
+      const fullEmp = { ...emp, ...serverEmp };
 
-      const grossVal = Number(payslip.grossSalary ?? payslip.gross_salary ?? emp.gross ?? 0);
+      const grossVal = Number(payslip.grossSalary ?? payslip.gross_salary ?? fullEmp.gross ?? 50000);
       const totalDed = Number(payslip.totalDeductions ?? payslip.total_deductions ?? 0);
-      const netVal = Number(payslip.netSalary ?? payslip.net_salary ?? emp.net ?? 0);
-      const basicVal = Number(payslip.basicSalary ?? payslip.basic_salary ?? emp.basic ?? 0);
-      const psNumber = payslip.payslipNumber ?? payslip.payslip_number ?? `PS-${selectedMonth.replace('-', '')}-${emp.id}`;
+      const netVal = Number(payslip.netSalary ?? payslip.net_salary ?? fullEmp.net ?? 0);
+      const basicVal = Number(payslip.basicSalary ?? payslip.basic_salary ?? fullEmp.basic ?? (grossVal * 0.5));
+      const psNumber = payslip.payslipNumber ?? payslip.payslip_number ?? `PS-${selectedMonth.replace('-', '')}-${fullEmp.id}`;
       const psMonth = payslip.payslipMonth ?? payslip.payslip_month ?? `${selectedMonth}-01`;
 
+      const docData = buildPayslipDocFromData(
+        {
+          ...fullEmp,
+          ...payslip,
+          basic_salary: basicVal,
+          gross_salary: grossVal,
+          total_deductions: totalDed,
+          net_salary: netVal,
+          month: psMonth,
+          payslip_number: psNumber
+        },
+        fullEmp,
+        selectedMonth
+      );
+
       const newCard = {
-        id: payslip.id || Number(emp.id) * 1000 + Date.now(),
-        employee_id: emp.id,
-        payslip_number: psNumber,
+        id: payslip.id || Number(fullEmp.id) * 1000 + Date.now(),
+        employee_id: fullEmp.id,
+        payslip_number: docData.payslipNumber,
         month: psMonth,
-        empName: emp.name,
-        empCode: emp.code,
-        designation: emp.designation,
-        basic: basicVal,
-        gross: grossVal,
-        deductions: totalDed,
-        net: netVal,
-        ctc: payslip.ctc || (grossVal * 12)
+        empName: docData.name,
+        empCode: docData.code,
+        designation: docData.designation,
+        bankName: docData.bankName,
+        accNo: docData.accNo,
+        pan: docData.pan,
+        pfNo: docData.pfNo,
+        uanNo: docData.uanNo,
+        esicNo: docData.esicNo,
+        doj: docData.doj,
+        paidDays: docData.paidDays,
+        unpaidDays: docData.unpaidDays,
+        paidLeave: docData.paidLeave,
+        basic: docData.basic,
+        gross: docData.grossSalary,
+        deductions: docData.totalDeductions,
+        net: docData.netSalary,
+        ctc: payslip.ctc || (docData.grossSalary * 12)
       };
 
       setGeneratedList(prev => {
         const filtered = prev.filter(
-          item => !(String(item.employee_id || item.employeeId) === String(emp.id) && String(item.month || item.payslip_month).slice(0, 7) === selectedMonth)
+          item => !(String(item.employee_id || item.employeeId) === String(fullEmp.id) && String(item.month || item.payslip_month).slice(0, 7) === selectedMonth)
         );
         const updated = [newCard, ...filtered];
         try {
@@ -1375,29 +1464,9 @@ export const PayslipViewer: React.FC = () => {
         return updated;
       });
 
-      handleDownloadPDF({
-        employee_id: emp.id,
-        employee_name: emp.name,
-        employee_code: emp.code,
-        designation: emp.designation,
-        bank_name: emp.bank_name || emp.bankName,
-        account_no: emp.account_no || emp.accountNo,
-        uan_no: emp.uan_no || emp.uanNo,
-        esic_no: emp.esic_no || emp.esicNo,
-        pan: emp.pan,
-        pf_no: emp.pf_no,
-        date_of_joining: emp.date_of_joining || emp.doj,
-        payslip_number: psNumber,
-        payslip_month: psMonth,
-        month: psMonth,
-        gross_salary: grossVal,
-        total_deductions: totalDed,
-        net_salary: netVal,
-        basic_salary: basicVal
-      });
-
-      setDetails(result);
-      showToast.success('Payslip Ready 🎉', `Generated official Payslip for ${emp.name}.`);
+      // Directly display official Salary Payslip on screen (no unexpected automatic print popup)
+      setSelectedPayslipDoc(docData);
+      showToast.success('Payslip Ready 🎉', `Generated official Payslip for ${docData.name}.`);
       refetch();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Could not generate payslip';
@@ -1814,266 +1883,385 @@ export const PayslipViewer: React.FC = () => {
                                 </td>
                               )}
 
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleDownloadPDF({
-                                      id: empIdStr,
-                                      employee_id: empIdStr,
-                                      employee_name: displayName,
-                                      employee_code: displayCode,
-                                      designation: matchedProfile?.designation || matchedProfile?.job_title,
-                                      bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
-                                      account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
-                                      uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
-                                      esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
-                                      pan: matchedProfile?.pan,
-                                      pf_no: matchedProfile?.pf_no,
-                                      payslip_number: psRef,
-                                      payslip_month: sample.month,
-                                      gross_salary: cardGross,
-                                      net_salary: cardNet,
-                                      basic_salary: cardBasic
-                                    })}
-                                    className="h-7 px-2 text-[10px] font-bold"
-                                    title="View / Print PDF Statement"
-                                  >
-                                    <Eye className="w-3 h-3 mr-1" /> View
-                                  </Button>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleViewPayslipDoc(sample)}
+                                      className="h-7 px-2 text-[10px] font-bold"
+                                      title="View Official Payslip on Screen"
+                                    >
+                                      <Eye className="w-3 h-3 mr-1" /> View
+                                    </Button>
 
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleDownloadPDF({
-                                      id: empIdStr,
-                                      employee_id: empIdStr,
-                                      employee_name: displayName,
-                                      employee_code: displayCode,
-                                      designation: matchedProfile?.designation || matchedProfile?.job_title,
-                                      bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
-                                      account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
-                                      uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
-                                      esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
-                                      pan: matchedProfile?.pan,
-                                      pf_no: matchedProfile?.pf_no,
-                                      payslip_number: psRef,
-                                      payslip_month: sample.month,
-                                      gross_salary: cardGross,
-                                      net_salary: cardNet,
-                                      basic_salary: cardBasic
-                                    })}
-                                    className="h-7 px-2 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
-                                    title="Download PDF Payslip"
-                                  >
-                                    <Download className="w-3 h-3 mr-1" /> PDF
-                                  </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleViewPayslipDoc(sample)}
+                                      className="h-7 px-2 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+                                      title="View & Download PDF Payslip"
+                                    >
+                                      <Download className="w-3 h-3 mr-1" /> PDF
+                                    </Button>
 
-                                  {isAdmin && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleOpenCardEdit(sample)}
-                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                                        title="Edit figures"
-                                      >
-                                        <Edit3 className="w-3.5 h-3.5" />
-                                      </Button>
+                                    {isAdmin && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => handleOpenCardEdit(sample)}
+                                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                          title="Edit figures"
+                                        >
+                                          <Edit3 className="w-3.5 h-3.5" />
+                                        </Button>
 
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => handleDeleteCard(sample)}
-                                        className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                                        title="Delete statement"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          }
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => handleDeleteCard(sample)}
+                                          className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                          title="Delete statement"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            }
 
-          return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {finalCards.map((sample: any) => {
-                const empNameStr = sample.empName || sample.employee_name || '';
-                const empCodeStr = sample.empCode || sample.employee_code || '';
-                const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
-                const itemMonth = String(sample.month || sample.payslip_month || selectedMonth);
-                const itemKey = String(sample.id);
-                const comboKey = `${empIdStr}_${itemMonth}`;
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {finalCards.map((sample: any) => {
+                  const empNameStr = sample.empName || sample.employee_name || '';
+                  const empCodeStr = sample.empCode || sample.employee_code || '';
+                  const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
+                  const itemMonth = String(sample.month || sample.payslip_month || selectedMonth);
+                  const itemKey = String(sample.id);
+                  const comboKey = `${empIdStr}_${itemMonth}`;
 
-                const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
+                  const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
 
-                const handleToggleVisibility = () => {
-                  togglePayslipVisibility(itemKey);
-                  togglePayslipVisibility(comboKey);
-                };
+                  const handleToggleVisibility = () => {
+                    togglePayslipVisibility(itemKey);
+                    togglePayslipVisibility(comboKey);
+                  };
 
-                const matchedProfile = employeeOptions.find((e: any) =>
-                  String(e.id) === empIdStr
-                );
+                  const matchedProfile = employeeOptions.find((e: any) =>
+                    String(e.id) === empIdStr
+                  );
 
-                const isEdited = sample.isCustomEdited === true;
-                const cardGross = isEdited ? Number(sample.gross || sample.gross_salary || 0) : Number(matchedProfile?.gross || sample.gross_salary || sample.grossSalary || sample.gross || 0);
-                const cardBasic = isEdited ? Number(sample.basic || sample.basic_salary || 0) : Number(matchedProfile?.basic || sample.basic_salary || sample.basicSalary || sample.basic || Math.round(cardGross * 0.50));
-                const cardNet = isEdited ? Number(sample.net || sample.net_salary || 0) : Number(matchedProfile?.net || sample.net_salary || sample.netSalary || sample.netTakeHome || sample.net || Math.round(cardGross * 0.90));
-                const cardDeductions = isEdited ? Number(sample.deductions || sample.total_deductions || 0) : Number((matchedProfile?.gross && matchedProfile?.net) ? (cardGross - matchedProfile.net) : (sample.total_deductions ?? sample.totalDeductions ?? (cardGross - cardNet)));
-                const displayName = matchedProfile?.name || empNameStr || 'Employee';
-                const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
+                  const isEdited = sample.isCustomEdited === true;
+                  const cardGross = isEdited ? Number(sample.gross || sample.gross_salary || 0) : Number(matchedProfile?.gross || sample.gross_salary || sample.grossSalary || sample.gross || 0);
+                  const cardBasic = isEdited ? Number(sample.basic || sample.basic_salary || 0) : Number(matchedProfile?.basic || sample.basic_salary || sample.basicSalary || sample.basic || Math.round(cardGross * 0.50));
+                  const cardNet = isEdited ? Number(sample.net || sample.net_salary || 0) : Number(matchedProfile?.net || sample.net_salary || sample.netSalary || sample.netTakeHome || sample.net || Math.round(cardGross * 0.90));
+                  const cardDeductions = isEdited ? Number(sample.deductions || sample.total_deductions || 0) : Number((matchedProfile?.gross && matchedProfile?.net) ? (cardGross - matchedProfile.net) : (sample.total_deductions ?? sample.totalDeductions ?? (cardGross - cardNet)));
+                  const displayName = matchedProfile?.name || empNameStr || 'Employee';
+                  const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
 
-                return (
-                  <div key={sample.id} className="space-y-1.5 border rounded-xl p-2 bg-card border-border/80 shadow-2xs">
-                    {isAdmin && (
-                      <div className="flex items-center justify-between px-2.5 py-1.5 bg-muted/30 rounded-lg border border-border/60">
-                        <label htmlFor={`chk-${sample.id}`} className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-bold text-foreground">
-                          <input
-                            id={`chk-${sample.id}`}
-                            type="checkbox"
-                            checked={!isHidden}
-                            onChange={handleToggleVisibility}
-                            className="w-3.5 h-3.5 rounded text-primary accent-primary cursor-pointer"
-                          />
-                          <span>Show to User</span>
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <Badge className={!isHidden ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] px-1.5" : "bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] px-1.5"}>
-                            {!isHidden ? "Visible" : "Hidden"}
-                          </Badge>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleOpenCardEdit(sample)}
-                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                            title="Edit payslip figures"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </Button>
+                  return (
+                    <div key={sample.id} className="space-y-1.5 border rounded-xl p-2 bg-card border-border/80 shadow-2xs">
+                      {isAdmin && (
+                        <div className="flex items-center justify-between px-2.5 py-1.5 bg-muted/30 rounded-lg border border-border/60">
+                          <label htmlFor={`chk-${sample.id}`} className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-bold text-foreground">
+                            <input
+                              id={`chk-${sample.id}`}
+                              type="checkbox"
+                              checked={!isHidden}
+                              onChange={handleToggleVisibility}
+                              className="w-3.5 h-3.5 rounded text-primary accent-primary cursor-pointer"
+                            />
+                            <span>Show to User</span>
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <Badge className={!isHidden ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] px-1.5" : "bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] px-1.5"}>
+                              {!isHidden ? "Visible" : "Hidden"}
+                            </Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleOpenCardEdit(sample)}
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                              title="Edit payslip figures"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteCard(sample)}
+                              className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                              title="Delete card"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDeleteCard(sample)}
-                            className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            className="h-6 w-6 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
                             title="Delete card"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
+                      )}
+                      <PayslipSummary
+                        isAdmin={isAdmin}
+                        payslipNumber={sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`}
+                        month={new Date(sample.month || sample.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        empName={displayName}
+                        empCode={displayCode}
+                        basicSalary={cardBasic}
+                        grossSalary={cardGross}
+                        totalDeductions={cardDeductions}
+                        netSalary={cardNet}
+                        onView={() => handleViewPayslipDoc(sample)}
+                        onDownload={() => handleViewPayslipDoc(sample)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
 
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteCard(sample)}
-                          className="h-6 w-6 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
-                          title="Delete card"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+        {/* Official Salary Payslip On-Screen Viewer Modal */}
+        {selectedPayslipDoc && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in">
+            <div className="relative w-full max-w-4xl bg-card border border-border/80 rounded-2xl shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col">
+              {/* Top Modal Action Toolbar */}
+              <div className="bg-card border-b border-border/60 py-3 px-5 flex flex-wrap items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-foreground flex items-center gap-2">
+                      Official Salary Payslip
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
+                        {selectedPayslipDoc.payslipNumber || 'Issued'}
+                      </Badge>
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedPayslipDoc.name} ({selectedPayslipDoc.code}) • {selectedPayslipDoc.period}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePrintPayslip(selectedPayslipDoc)}
+                    className="h-8 text-xs font-bold gap-1.5 border-border hover:bg-muted text-foreground cursor-pointer"
+                    title="Print payslip document"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-primary" />
+                    Print
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownloadPayslipPDF(selectedPayslipDoc)}
+                    className="h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer"
+                    title="Download payslip"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedPayslipDoc(null)}
+                    className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    ✕ Close
+                  </Button>
+                </div>
+              </div>
+
+              {/* Scrollable Document Paper */}
+              <div className="p-4 sm:p-6 overflow-y-auto bg-muted/30 flex justify-center">
+                <div className="w-full max-w-[740px] bg-white text-black border-[1.5px] border-black shadow-lg font-sans text-xs">
+                  {/* Top Header */}
+                  <div className="p-3.5 pb-2 text-center border-b border-black">
+                    {selectedPayslipDoc.companyLogoUrl ? (
+                      <img src={selectedPayslipDoc.companyLogoUrl} alt={selectedPayslipDoc.companyName || 'Company'} className="max-h-10 max-w-[200px] object-contain mx-auto" />
+                    ) : (
+                      <div className="inline-flex items-center justify-center gap-2">
+                        <div className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
+                          {(selectedPayslipDoc.companyName || 'A').charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{selectedPayslipDoc.companyName || 'Apponext'}</span>
                       </div>
                     )}
-                    <PayslipSummary
-                      isAdmin={isAdmin}
-                      payslipNumber={sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`}
-                      month={new Date(sample.month || sample.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      empName={displayName}
-                      empCode={displayCode}
-                      basicSalary={cardBasic}
-                      grossSalary={cardGross}
-                      totalDeductions={cardDeductions}
-                      netSalary={cardNet}
-                      onView={() => handleDownloadPDF({
-                        id: empIdStr,
-                        employee_id: empIdStr,
-                        employee_name: displayName,
-                        employee_code: displayCode,
-                        designation: matchedProfile?.designation || matchedProfile?.job_title,
-                        bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
-                        account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
-                        uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
-                        esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
-                        pan: matchedProfile?.pan,
-                        pf_no: matchedProfile?.pf_no,
-                        payslip_number: sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`,
-                        payslip_month: sample.month,
-                        gross_salary: cardGross,
-                        net_salary: cardNet,
-                        basic_salary: cardBasic
-                      })}
-                      onDownload={() => handleDownloadPDF({
-                        id: empIdStr,
-                        employee_id: empIdStr,
-                        employee_name: displayName,
-                        employee_code: displayCode,
-                        designation: matchedProfile?.designation || matchedProfile?.job_title,
-                        bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
-                        account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
-                        uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
-                        esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
-                        pan: matchedProfile?.pan,
-                        pf_no: matchedProfile?.pf_no,
-                        payslip_number: sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`,
-                        payslip_month: sample.month,
-                        gross_salary: cardGross,
-                        net_salary: cardNet,
-                        basic_salary: cardBasic
-                      })}
-                    />
                   </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
 
-      {/* Payslip Detailed Breakup (from payslips list click) */}
-      {details && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <Card className="w-full max-w-3xl border border-border/80 bg-card shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between py-3 px-6">
-              <div>
-                <CardTitle className="text-base font-bold text-foreground">
-                  📄 Official Statement: {details.payslip.payslip_number}
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Full earnings &amp; statutory deductions breakdown
-                </CardDescription>
+                  {/* Employee Metadata Grid Table */}
+                  <table className="w-full border-collapse border-b border-black text-[11px] leading-tight">
+                    <tbody>
+                      <tr>
+                        <td className="border border-black p-1.5 w-[34%]"><strong>Name :</strong> {selectedPayslipDoc.name}</td>
+                        <td className="border border-black p-1.5 w-[33%]"><strong>Emp Code :</strong> {selectedPayslipDoc.code}</td>
+                        <td className="border border-black p-1.5 w-[33%]"><strong>Designation :</strong> {selectedPayslipDoc.designation}</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-black p-1.5"><strong>PF No. :</strong> {selectedPayslipDoc.pfNo || ''}</td>
+                        <td className="border border-black p-1.5"><strong>UAN No. :</strong> {selectedPayslipDoc.uanNo || ''}</td>
+                        <td className="border border-black p-1.5"><strong>ESIC No. :</strong> {selectedPayslipDoc.esicNo || ''}</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-black p-1.5"><strong>PAN :</strong> {selectedPayslipDoc.pan || ''}</td>
+                        <td className="border border-black p-1.5"><strong>Period :</strong> {selectedPayslipDoc.period}</td>
+                        <td className="border border-black p-1.5"><strong>Date of Joining :</strong> {selectedPayslipDoc.doj || ''}</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-black p-1.5"><strong>Account No. :</strong> {selectedPayslipDoc.accNo || ''}</td>
+                        <td colSpan={2} className="border border-black p-1.5"><strong>Employee Bank :</strong> {selectedPayslipDoc.bankName || 'HDFC BANK'}</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-black p-1.5"><strong>Paid Days :</strong> {selectedPayslipDoc.paidDays}</td>
+                        <td className="border border-black p-1.5"><strong>Unpaid Days :</strong> {selectedPayslipDoc.unpaidDays}</td>
+                        <td className="border border-black p-1.5"><strong>Paid Leave :</strong> {selectedPayslipDoc.paidLeave || ''}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Earnings & Deductions Table */}
+                  <table className="w-full border-collapse border-b border-black text-[11px] leading-tight">
+                    <thead>
+                      <tr>
+                        <th className="border border-black p-1.5 text-left font-bold w-[38%]">Earnings</th>
+                        <th className="border border-black p-1.5 text-right font-bold w-[14%]">Amount</th>
+                        <th className="border border-black p-1.5 text-left font-bold w-[34%]">Deductions</th>
+                        <th className="border border-black p-1.5 text-right font-bold w-[14%]">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Basic Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.basic) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5">PF</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.pf) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">HRA Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.hra) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5">ESIC</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.esic) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Children Education Allowance Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.cea) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5">PT</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.pt) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Communication Allowance Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.comm) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5">{(selectedPayslipDoc.tds && selectedPayslipDoc.tds > 0) ? 'TDS' : ''}</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(selectedPayslipDoc.tds && selectedPayslipDoc.tds > 0) ? (Number(selectedPayslipDoc.tds) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">LTA Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.lta) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5"></td>
+                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Meal Allowance Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.meal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5"></td>
+                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Standard Allowance Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.std) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5"></td>
+                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
+                      </tr>
+                      <tr className="border-y border-black font-bold">
+                        <td className="border-x border-black px-2 py-1">Total Earnings :</td>
+                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.basic + selectedPayslipDoc.hra + selectedPayslipDoc.cea + selectedPayslipDoc.comm + selectedPayslipDoc.lta + selectedPayslipDoc.meal + selectedPayslipDoc.std) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-1"></td>
+                        <td className="border-x border-black px-2 py-1 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Gross Earned</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.basic + selectedPayslipDoc.hra + selectedPayslipDoc.cea + selectedPayslipDoc.comm + selectedPayslipDoc.lta + selectedPayslipDoc.meal + selectedPayslipDoc.std) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5"></td>
+                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Adjustment</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.adj || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5"></td>
+                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
+                      </tr>
+                      <tr>
+                        <td className="border-x border-black px-2 py-0.5">Incentives</td>
+                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number((selectedPayslipDoc.inc || 0) + (selectedPayslipDoc.bonus || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-0.5"></td>
+                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
+                      </tr>
+                      <tr className="border-y border-black font-bold">
+                        <td className="border-x border-black px-2 py-1">Total Gross :</td>
+                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.grossSalary) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-1">Total Deductions :</td>
+                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.totalDeductions) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                      <tr className="border-t border-black font-bold">
+                        <td className="border-x border-black px-2 py-1">Net Pay :</td>
+                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.netSalary) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="border-x border-black px-2 py-1"></td>
+                        <td className="border-x border-black px-2 py-1 text-right"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Rupees in Words */}
+                  <div className="border-b border-black p-1.5 font-bold text-[11px]">
+                    RUPEES : {numberToWords(selectedPayslipDoc.netSalary)}
+                  </div>
+
+                  {/* Disclaimer & Address */}
+                  <div className="border-b border-black p-2 text-[10px] space-y-1 text-slate-800">
+                    <div>* Document validity subject to Company's Stamp and Signature</div>
+                    <div className="text-center text-slate-800 font-medium">
+                      {selectedPayslipDoc.companyAddress || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708'}
+                    </div>
+                  </div>
+
+                  {/* Bottom Footer */}
+                  <div className="p-2 px-3 flex justify-between items-center text-[10px] text-slate-900">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-extrabold text-xs text-slate-900">{selectedPayslipDoc.companyName || 'Apponext'}</span>
+                      <span className="text-[9px] text-slate-600 ml-0.5">Human Resource Management System</span>
+                    </div>
+                    <div>
+                      Log on to <strong>{selectedPayslipDoc.websiteUrl || 'www.apponexthrms.com'}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="h-8 text-xs font-bold gap-1.5">
-                  <Printer className="w-3.5 h-3.5" />
-                  Print / Save PDF
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDetails(null)} className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground">
-                  ✕ Close
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6 overflow-y-auto">
-              <EarningsDeductionsBreakdown
-                isAdmin={isAdmin}
-                earnings={details.earnings}
-                deductions={details.deductions}
-                totalEarnings={Number(details.payslip.gross_salary)}
-                totalDeductions={Number(details.payslip.total_deductions)}
-                netSalary={Number(details.payslip.net_salary)}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            </div>
+          </div>
+        )}
 
       {/* Custom Edit & Generate Payslip Modal */}
       {showEditModal && (
@@ -2380,7 +2568,8 @@ export const PayslipViewer: React.FC = () => {
                         const totDed = Number(editFormData.pf || 0) + Number(editFormData.esi || 0) + Number(editFormData.pt || 0);
                         const net = Math.max(0, totGross - totDed);
 
-                        handleDownloadPDF({
+                        const doc = buildPayslipDocFromData({
+                          ...editFormData,
                           employee_name: editFormData.empName,
                           employee_code: editFormData.empCode,
                           designation: editFormData.designation,
@@ -2395,25 +2584,27 @@ export const PayslipViewer: React.FC = () => {
                           paid_days: editFormData.paidDays,
                           unpaid_days: editFormData.unpaidDays,
                           paid_leave: editFormData.paidLeave,
-                          basic_earned: basic,
-                          hra_earned: hra,
-                          children_education_allowance_earned: edu,
-                          communication_allowance_earned: comm,
-                          lta_earned: lta,
-                          meal_allowance_earned: meal,
-                          standard_allowance_earned: std,
-                          gross_earned: totGross,
-                          pf: editFormData.pf,
-                          esic: editFormData.esi,
-                          pt: editFormData.pt,
+                          basic_salary: basic,
+                          hra: hra,
+                          children_education_allowance: edu,
+                          communication_allowance: comm,
+                          lta_allowance: lta,
+                          meal_allowance: meal,
+                          standard_allowance: std,
+                          gross_salary: totGross,
+                          pf_deduction: editFormData.pf,
+                          esi_deduction: editFormData.esi,
+                          pt_deduction: editFormData.pt,
                           total_deductions: totDed,
                           net_salary: net,
-                        });
+                        }, null, editFormData.month);
+
+                        setSelectedPayslipDoc(doc);
                       }}
-                      className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs"
+                      className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs cursor-pointer"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      Save &amp; Print Custom Payslip
+                      Save &amp; Preview Payslip
                     </Button>
                   </div>
                 </div>
