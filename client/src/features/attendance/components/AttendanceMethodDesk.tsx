@@ -147,6 +147,13 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     };
   }, [method]);
 
+  useEffect(() => {
+    if (method === 'biometric' && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [method, stream]);
+
   const startCamera = async () => {
     try {
       setCameraError(null);
