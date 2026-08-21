@@ -40,7 +40,7 @@ import { LeaveEncashmentPage } from './features/leaves/pages/LeaveEncashmentPage
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 
 import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
-import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
+import { BurnoutRiskDashboard } from './features/hr/pages/BurnoutRiskDashboard';
 import { EmployeeRequestsPage } from './features/HR/requests/EmployeeRequestsPage';
 
 // Payroll Pages

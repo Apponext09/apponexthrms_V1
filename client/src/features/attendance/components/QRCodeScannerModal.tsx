@@ -71,6 +71,13 @@ export const QRCodeScannerModal: React.FC<QRCodeScannerModalProps> = ({ isOpen, 
     };
   }, [isOpen, activeTab]);
 
+  useEffect(() => {
+    if (isOpen && cameraActive && mediaStreamRef.current && videoRef.current) {
+      videoRef.current.srcObject = mediaStreamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isOpen, cameraActive]);
+
   const handleSimulateScan = () => {
     const mockEmployeePayload = {
       empId: 'EMP-10293',
