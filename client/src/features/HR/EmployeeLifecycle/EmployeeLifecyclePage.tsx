@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,8 @@ import {
   UserMinus,
   Search,
   Filter,
+  SlidersHorizontal,
+  X,
   RefreshCw,
   Building2,
   Briefcase,
@@ -55,8 +57,10 @@ export default function EmployeeLifecyclePage() {
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [desigFilter, setDesigFilter] = useState('all');
-  const [locationFilter, setLocationFilter] = useState('all');
   const [empTypeFilter, setEmpTypeFilter] = useState('all');
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+
+  const hasInitializedCompanyRef = useRef(false);
 
   // Top-Level Main View Tab State
   const [mainViewTab, setMainViewTab] = useState<'directory' | 'onboarding' | 'transfers' | 'offboarding'>('directory');
@@ -220,21 +224,10 @@ export default function EmployeeLifecyclePage() {
           isParent: Boolean(c.isParent ?? c.is_parent)
         }));
         setCompanies(mappedComps);
-
-        // Default initial filter to selected company or parent company
-        if (selectedCompanyId) {
-          setCompanyFilter(String(selectedCompanyId));
-        } else {
-          const parentComp = mappedComps.find((c: any) => c.isParent);
-          if (parentComp) {
-            setCompanyFilter(String(parentComp.id));
-          }
-        }
       }
 
       // Fetch Managers for Interviewer & Reporting dropdowns
-      const activeCompId = companyFilter !== 'all' ? companyFilter : (selectedCompanyId || undefined);
-      const mgrList = await lifecycleApi.getManagers(activeCompId).catch(() => []);
+      const mgrList = await lifecycleApi.getManagers().catch(() => []);
       if (Array.isArray(mgrList) && mgrList.length > 0) {
         setManagers(mgrList);
       }
@@ -243,25 +236,21 @@ export default function EmployeeLifecyclePage() {
     }
   };
 
-  // Sync active company context when workspace switcher changes company
+  // Set initial company filter once on mount if selectedCompanyId exists
   useEffect(() => {
-    if (selectedCompanyId) {
+    if (!hasInitializedCompanyRef.current && selectedCompanyId) {
       setCompanyFilter(String(selectedCompanyId));
-    } else if (companies.length > 0) {
-      const parentComp = companies.find((c: any) => c.isParent);
-      if (parentComp) {
-        setCompanyFilter(String(parentComp.id));
-      }
+      hasInitializedCompanyRef.current = true;
     }
-  }, [selectedCompanyId, companies]);
+  }, [selectedCompanyId]);
 
   useEffect(() => {
     fetchLifecycleData();
-  }, [search, stageFilter, deptFilter, companyFilter]);
+  }, [search, stageFilter, deptFilter, desigFilter, empTypeFilter, companyFilter]);
 
   useEffect(() => {
     fetchMetadataOptions();
-  }, [companyFilter, selectedCompanyId]);
+  }, []);
 
   // Fetch Single Employee Detailed Lifecycle
   const handleOpenDetails = async (empId: number, tab: string = 'overview') => {
@@ -417,10 +406,25 @@ export default function EmployeeLifecyclePage() {
 
   const filteredEmployees = employees.filter((emp: any) => {
     if (desigFilter !== 'all' && String(emp.designationName || emp.designationId || '') !== desigFilter) return false;
-    if (locationFilter !== 'all' && String(emp.locationName || emp.locationId || '') !== locationFilter) return false;
     if (empTypeFilter !== 'all' && emp.employmentType !== empTypeFilter) return false;
     return true;
   });
+
+  const activeFiltersCount = [
+    companyFilter !== 'all',
+    stageFilter !== 'all',
+    deptFilter !== 'all',
+    desigFilter !== 'all',
+    empTypeFilter !== 'all',
+  ].filter(Boolean).length;
+
+  const resetFilters = () => {
+    setCompanyFilter('all');
+    setStageFilter('all');
+    setDeptFilter('all');
+    setDesigFilter('all');
+    setEmpTypeFilter('all');
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -597,114 +601,257 @@ export default function EmployeeLifecyclePage() {
           </TabsList>
         </div>
 
-        {/* FILTER & SEARCH BAR (Common across all tabs) */}
-        {(filters.searchBar || filters.companyFilter || filters.stageFilter || filters.departmentFilter || filters.designationFilter || filters.locationFilter || filters.employmentTypeFilter) && (
-          <Card className="border rounded-2xl shadow-sm bg-card p-4">
-            <div className="flex flex-col md:flex-row items-center gap-3">
+        {/* FILTER & SEARCH CONTROL BAR */}
+        <Card className="border rounded-2xl shadow-xs bg-card p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3">
               {filters.searchBar && (
-                <div className="relative flex-1 w-full">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search employee by name, code, email, designation..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 h-10 rounded-xl text-xs font-semibold bg-background"
+                    className="pl-9 pr-8 h-10 rounded-xl text-xs font-semibold bg-background border-border"
                   />
+                  {search && (
+                    <button
+                      onClick={() => setSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
 
-              <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+              <Button
+                variant={activeFiltersCount > 0 ? "default" : "outline"}
+                onClick={() => setIsFilterDrawerOpen(true)}
+                className={`gap-2 h-10 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeFiltersCount > 0
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md'
+                    : 'bg-background hover:bg-muted text-foreground border-border'
+                }`}
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span>Filter</span>
+                {activeFiltersCount > 0 && (
+                  <span className="px-1.5 py-0.5 text-[10px] font-black rounded-full bg-white text-indigo-600">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </Button>
+            </div>
+
+            {/* Active Filter Chips */}
+            {activeFiltersCount > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/60">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Active Filters:</span>
+                {companyFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20">
+                    Company: {companies.find(c => String(c.id) === companyFilter)?.name || companyFilter}
+                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setCompanyFilter('all')} />
+                  </Badge>
+                )}
+                {stageFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20">
+                    Stage: {stageFilter}
+                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setStageFilter('all')} />
+                  </Badge>
+                )}
+                {deptFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+                    Department: {departments.find(d => String(d.id) === deptFilter)?.name || deptFilter}
+                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setDeptFilter('all')} />
+                  </Badge>
+                )}
+                {desigFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20">
+                    Designation: {desigFilter}
+                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setDesigFilter('all')} />
+                  </Badge>
+                )}
+                {empTypeFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1.5 py-1 px-2.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20">
+                    Type: {empTypeFilter}
+                    <X className="w-3 h-3 cursor-pointer hover:opacity-80" onClick={() => setEmpTypeFilter('all')} />
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="h-6 px-2 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer"
+                >
+                  Reset All
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* RIGHT SLIDE-OVER FILTER PANEL DRAWER */}
+        {isFilterDrawerOpen && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
+              onClick={() => setIsFilterDrawerOpen(false)}
+            />
+
+            {/* Drawer Container */}
+            <div className="relative w-full max-w-md bg-card border-l border-border shadow-2xl h-full flex flex-col z-10 animate-in slide-in-from-right duration-300">
+              {/* Header */}
+              <div className="p-5 border-b border-border flex items-center justify-between bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                    <SlidersHorizontal className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-foreground">Filter Directory</h3>
+                    <p className="text-xs text-muted-foreground">Refine employee directory view</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsFilterDrawerOpen(false)}
+                  className="rounded-xl h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
                 {/* Company Filter */}
                 {filters.companyFilter && (
-                  <select
-                    value={companyFilter}
-                    onChange={(e) => setCompanyFilter(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
-                  >
-                    <option value="all">All Companies</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-indigo-500" />
+                      Company / Organization
+                    </label>
+                    <select
+                      value={companyFilter}
+                      onChange={(e) => setCompanyFilter(e.target.value)}
+                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    >
+                      <option value="all">All Companies (Parent &amp; Sub-Companies)</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
 
                 {/* Stage Filter */}
                 {filters.stageFilter && (
-                  <select
-                    value={stageFilter}
-                    onChange={(e) => setStageFilter(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
-                  >
-                    <option value="all">All Stages</option>
-                    <option value="active">Active Workforce</option>
-                    <option value="onboarding">Onboarding</option>
-                    <option value="probation">Probation</option>
-                    <option value="notice">Notice Period</option>
-                    <option value="exit">Offboarded / Exit</option>
-                  </select>
+                  <div className="space-y-2">
+                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
+                      <UserCheck className="w-4 h-4 text-sky-500" />
+                      Lifecycle Stage
+                    </label>
+                    <select
+                      value={stageFilter}
+                      onChange={(e) => setStageFilter(e.target.value)}
+                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    >
+                      <option value="all">All Stages</option>
+                      <option value="active">Active Workforce</option>
+                      <option value="onboarding">Onboarding</option>
+                      <option value="probation">Probation</option>
+                      <option value="notice">Notice Period</option>
+                      <option value="exit">Offboarded / Exit</option>
+                    </select>
+                  </div>
                 )}
 
                 {/* Department Filter */}
                 {filters.departmentFilter && (
-                  <select
-                    value={deptFilter}
-                    onChange={(e) => setDeptFilter(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
-                  >
-                    <option value="all">All Departments</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
+                      <Users className="w-4 h-4 text-emerald-500" />
+                      Department
+                    </label>
+                    <select
+                      value={deptFilter}
+                      onChange={(e) => setDeptFilter(e.target.value)}
+                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    >
+                      <option value="all">All Departments</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
 
                 {/* Designation Filter */}
                 {filters.designationFilter && (
-                  <select
-                    value={desigFilter}
-                    onChange={(e) => setDesigFilter(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
-                  >
-                    <option value="all">All Designations</option>
-                    {designations.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
-                )}
-
-                {/* Location Filter */}
-                {filters.locationFilter && (
-                  <select
-                    value={locationFilter}
-                    onChange={(e) => setLocationFilter(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
-                  >
-                    <option value="all">All Locations</option>
-                    {locations.map((l) => (
-                      <option key={l.id} value={l.name}>{l.name}</option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
+                      <Briefcase className="w-4 h-4 text-purple-500" />
+                      Designation / Role
+                    </label>
+                    <select
+                      value={desigFilter}
+                      onChange={(e) => setDesigFilter(e.target.value)}
+                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    >
+                      <option value="all">All Designations</option>
+                      {designations.map((d) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
 
                 {/* Employment Type Filter */}
                 {filters.employmentTypeFilter && (
-                  <select
-                    value={empTypeFilter}
-                    onChange={(e) => setEmpTypeFilter(e.target.value)}
-                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="full_time">Full Time</option>
-                    <option value="part_time">Part Time</option>
-                    <option value="contract">Contract</option>
-                    <option value="internship">Internship</option>
-                  </select>
+                  <div className="space-y-2">
+                    <label className="text-xs font-extrabold text-foreground flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-500" />
+                      Employment Type
+                    </label>
+                    <select
+                      value={empTypeFilter}
+                      onChange={(e) => setEmpTypeFilter(e.target.value)}
+                      className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="full_time">Full Time</option>
+                      <option value="part_time">Part Time</option>
+                      <option value="contract">Contract</option>
+                      <option value="internship">Internship</option>
+                    </select>
+                  </div>
                 )}
               </div>
+
+              {/* Footer */}
+              <div className="p-4 border-t border-border bg-muted/20 flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Reset Filters
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setIsFilterDrawerOpen(false)}
+                  className="rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-5 cursor-pointer"
+                >
+                  Apply Filters
+                </Button>
+              </div>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* ─── TAB 1: EMPLOYEE DIRECTORY ─── */}
