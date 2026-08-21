@@ -57,7 +57,7 @@ export function EmployeeDataTable({
     dateOfJoining: true,
     actions: true,
     actionViewProfile: true,
-    actionEdit: true,
+    actionEdit: false,
     actionDelete: true,
   };
 
@@ -292,21 +292,6 @@ export function EmployeeDataTable({
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-
-                      {cols.actionEdit && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Edit Employee"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/employees/${employee.id}/edit`);
-                          }}
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
 

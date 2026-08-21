@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Key,
 } from 'lucide-react';
+import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,7 @@ export default function ProfilePage() {
 
   const [activeTab, setActiveTab] = useState<'personal' | 'job' | 'emergency' | 'security'>('personal');
   const [avatar, setAvatar] = useState<string | null>(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Success Modal Popup State
@@ -217,7 +219,7 @@ export default function ProfilePage() {
   }, [employeeId]);
 
   const handleAvatarClick = () => {
-    fileInputRef.current?.click();
+    setIsPhotoModalOpen(true);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -969,6 +971,18 @@ export default function ProfilePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── LIVE CAMERA PHOTO CAPTURE MODAL ────────────────────────────── */}
+      {employee && (
+        <ProfilePhotoUploadModal
+          open={isPhotoModalOpen}
+          onOpenChange={setIsPhotoModalOpen}
+          employee={employee as any}
+          onSuccess={() => {
+            refetch();
+          }}
+        />
+      )}
     </div>
   );
 }

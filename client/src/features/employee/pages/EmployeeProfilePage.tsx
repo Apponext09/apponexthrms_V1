@@ -45,13 +45,21 @@ export function EmployeeProfilePage() {
   const [activeTab, setActiveTab] = useState('details');
   const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
-  // Check if current route is in the Employee Portal (/employee/*) vs Admin/HR (/hr/*, /employees/*)
-  const isEmployeePortal = location.pathname.startsWith('/employee');
+  // Check user roles to determine if user is Admin/HR
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user as any)?.role || (user as any)?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
+
+  // Employee portal edit lock applies ONLY to non-admin employees accessing /employee/*
+  const isEmployeePortal = location.pathname.startsWith('/employee') && !isAdminOrHR;
 
   // Only fetch edit permission when in employee portal
   const { editUnlocked, approvedRequestId, unlockedSection } = useProfileEditPermission(resolvedEmpId);
 
-  // Universal approval unlock: when an edit request is approved (editUnlocked is true), unlock all sections for editing
+  // Universal approval unlock: when an edit request is approved (editUnlocked is true) or for Admin/HR, unlock all sections for editing
   const isPhotoUnlocked = !isEmployeePortal || editUnlocked;
   const isBasicUnlocked = !isEmployeePortal || editUnlocked;
   const isPersonalUnlocked = !isEmployeePortal || editUnlocked;
@@ -149,8 +157,8 @@ export function EmployeeProfilePage() {
                   onClick={handleEditProfileClick}
                   className="h-7 text-xs font-semibold gap-1.5 px-3 bg-card hover:bg-muted"
                 >
-                  <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                  Edit Profile
+                  {/* <Edit2 className="w-3.5 h-3.5 text-muted-foreground" /> */}
+                  {/* Edit Profile */}
                 </Button>
               </div>
             )}

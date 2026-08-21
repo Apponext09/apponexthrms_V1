@@ -19,7 +19,7 @@ const get14DaysAgoStr = () => {
 };
 
 const defaultFilters: AttendanceReportFilterParams = {
-  companies: [],
+  companies: ['all'],
   locations: [],
   departments: [],
   reportingOfficers: [],
@@ -36,7 +36,7 @@ const defaultFilters: AttendanceReportFilterParams = {
     expected: true,
     lateMark: false,
     shortWorkingHour: false,
-    breakLog: true,
+    breakLog: false,
     halfDay: true,
   },
 };

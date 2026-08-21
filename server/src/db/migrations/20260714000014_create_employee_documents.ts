@@ -20,7 +20,7 @@ export async function up(knex: Knex): Promise<void> {
     table.date('issue_date').nullable();
     table.date('expiry_date').nullable();
     table.string('issued_by', 100).nullable();
-    table.string('file_url', 500).notNullable();
+    table.text('file_url', 'longtext').notNullable();
     table.integer('file_size').nullable();
     table.string('file_type', 50).nullable();
     table.enum('verification_status', ['pending', 'verified', 'rejected', 'expired']).defaultTo('pending');

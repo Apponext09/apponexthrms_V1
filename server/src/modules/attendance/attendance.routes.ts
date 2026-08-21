@@ -41,6 +41,7 @@ router.get('/break-logs', controller.getBreakLogs);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 
 // Biometric Face Recognition routes
+router.get('/ceo-punches', controller.getCeoPunches);
 router.post(
   '/biometric/enroll',
   requirePermission('employee.profile.update'),

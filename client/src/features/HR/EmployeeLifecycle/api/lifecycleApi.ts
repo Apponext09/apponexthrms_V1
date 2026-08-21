@@ -24,12 +24,19 @@ export interface EmployeeLifecycleSummary {
   currentLocationId?: number | null;
   locationName: string;
   transfersCount: number;
+  lastTransferDate?: string | null;
+  transferReason?: string | null;
+  transferType?: string | null;
   onboarding: {
     interviewerName: string;
     onboardedByName: string;
     interviewDate?: string | null;
+    interviewRating?: string | null;
     probationEndDate?: string | null;
     orientationCompleted: boolean;
+    documentsVerified?: boolean;
+    welcomeKitIssued?: boolean;
+    notes?: string;
   };
   offboarding: {
     exitType?: string | null;

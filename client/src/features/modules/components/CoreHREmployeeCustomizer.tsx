@@ -396,7 +396,6 @@ export function CoreHREmployeeCustomizer() {
                 { key: 'dateOfJoining', label: 'Joining Date' },
                 { key: 'actions', label: 'Actions Column' },
                 { key: 'actionViewProfile', label: 'Action: View Profile' },
-                { key: 'actionEdit', label: 'Action: Edit Employee' },
                 { key: 'actionDelete', label: 'Action: Delete Employee' },
               ] as const).map(({ key, label }) => {
                 const isChecked = config.tableColumns[key];

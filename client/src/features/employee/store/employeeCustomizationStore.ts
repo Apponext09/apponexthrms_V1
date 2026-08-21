@@ -171,7 +171,7 @@ const DEFAULT_CONFIG: EmployeeCustomizationConfig = {
     dateOfJoining: true,
     actions: true,
     actionViewProfile: true,
-    actionEdit: true,
+    actionEdit: false,
     actionDelete: true,
   },
 };

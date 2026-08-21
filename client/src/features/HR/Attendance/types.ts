@@ -10,11 +10,15 @@ export interface AdminLocation {
   type: 'head_office' | 'branch_office' | 'client_site' | 'remote_zone';
   isActive: boolean;
   ipAddress?: string;
+  companyId?: string | number;
+  company_id?: string | number;
 }
 
 export interface EmployeeLocationAccess {
   id: string;
   employeeId: string;
+  companyId?: string | number;
+  company_id?: string | number;
   employeeCode: string;
   firstName: string;
   lastName: string;

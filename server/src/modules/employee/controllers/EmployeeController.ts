@@ -494,6 +494,30 @@ export class EmployeeController {
   });
 
   /**
+   * Accept document verification & privacy policy for employee
+   */
+  acceptDocumentPolicy = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const empId = parseInt(id, 10);
+    const db = getKnex();
+
+    await db('employees')
+      .where('id', empId)
+      .where('organization_id', ctx.organizationId)
+      .update({
+        document_policy_accepted: true,
+        document_policy_accepted_at: new Date(),
+      });
+
+    res.json({
+      success: true,
+      message: 'Document policy accepted successfully',
+      data: { documentPolicyAccepted: true },
+    });
+  });
+
+  /**
    * Get employee asset allocations
    */
   getEmployeeAssets = asyncHandler(async (req: Request, res: Response) => {
