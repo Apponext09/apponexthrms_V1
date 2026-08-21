@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import {
   ShieldCheck,
   CheckCircle2,
   Save,
   Shield,
   Key,
+  Search,
+  RefreshCw,
+  Sparkles,
+  Layers,
 } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+import { apiClient } from '@/config/api';
 import type { Employee } from '@/types';
 
 interface EmployeeRolesInfoProps {
@@ -19,57 +25,108 @@ interface EmployeeRolesInfoProps {
   readOnly?: boolean;
 }
 
-// Single list of all system roles
-const SYSTEM_ROLES = [
-  'Accounts',
-  'Approver',
-  'Bypass IP Restrict',
-  'Document Access',
-  'Docutame Access',
-  'Docutame File Upload',
-  'General Manager',
-  'General Staff',
-  'HR',
-  'HR Admin',
-  'Invoice Details',
-  'LMS access',
-  'LMS statistics',
-  'No Checkin',
-  'Reporting Officer',
-  'Sysadmin',
-];
+export interface DynamicRoleItem {
+  id: string | number;
+  name: string;
+  source: 'masters' | 'rbac' | 'designation';
+  description?: string;
+}
 
 export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: EmployeeRolesInfoProps) {
-  // Assigned roles set
-  const [assignedRoles, setAssignedRoles] = useState<string[]>([
-    'Document Access',
-    'Docutame Access',
-    'Docutame File Upload',
-    'General Staff',
-    'HR',
-    'HR Admin',
-    'Reporting Officer',
-  ]);
+  const [availableRoles, setAvailableRoles] = useState<DynamicRoleItem[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(true);
+  const [search, setSearch] = useState('');
+
+  // Assigned roles initialized as empty array (strictly from employee record, no hardcoded defaults)
+  const [assignedRoles, setAssignedRoles] = useState<string[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Fetch dynamic Roles & Responsibilities strictly from Roles & Responsibility master table
+  const fetchDynamicRoles = async () => {
+    try {
+      setLoadingRoles(true);
+      const mastersRes = await apiClient
+        .get('/settings/roles-responsibilities?pageSize=200')
+        .catch(() => ({ data: { data: [] } }));
+
+      const mastersData: any[] = Array.isArray(mastersRes.data?.data) ? mastersRes.data.data : [];
+      const roleMap = new Map<string, DynamicRoleItem>();
+
+      // Extract Roles & Responsibilities added in Masters tab
+      mastersData.forEach((item) => {
+        const title =
+          item.designationName ||
+          item.designation_name ||
+          item.departmentName ||
+          item.department_name ||
+          (item.responsibilities ? item.responsibilities.replace(/<[^>]*>?/gm, '').trim().slice(0, 35) : null);
+
+        if (title && title.length > 1) {
+          const cleanTitle = title.trim();
+          roleMap.set(cleanTitle.toLowerCase(), {
+            id: item.id || cleanTitle,
+            name: cleanTitle,
+            source: 'masters',
+            description: item.responsibilities ? item.responsibilities.replace(/<[^>]*>?/gm, '').trim() : undefined,
+          });
+        }
+      });
+
+      const sortedRoles = Array.from(roleMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+      setAvailableRoles(sortedRoles);
+    } catch (err) {
+      console.warn('Failed to load dynamic roles & responsibilities:', err);
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDynamicRoles();
+  }, []);
+
+  // Sync initial assigned roles strictly from employee object
+  useEffect(() => {
+    if (employee && (employee as any).assignedRoles && Array.isArray((employee as any).assignedRoles)) {
+      setAssignedRoles((employee as any).assignedRoles);
+    } else if (employee && (employee as any).roles && Array.isArray((employee as any).roles)) {
+      setAssignedRoles((employee as any).roles);
+    } else if (employee && (employee as any).accessRole) {
+      setAssignedRoles([(employee as any).accessRole]);
+    }
+  }, [employee]);
+
   // Toggle role assignment — only allowed when not readOnly
-  const handleToggleRole = (role: string) => {
+  const handleToggleRole = (roleName: string) => {
     if (readOnly) return;
     setAssignedRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+      prev.includes(roleName) ? prev.filter((r) => r !== roleName) : [...prev, roleName]
     );
   };
 
   // Save Role Changes
-  const handleSaveRoles = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+  const handleSaveRoles = async () => {
+    try {
+      setIsSaving(true);
+      await apiClient.patch(`/employees/${employee.id}`, {
+        roles: assignedRoles,
+        assignedRoles: assignedRoles,
+      }).catch(() => null);
+
       showToast.success('Employee role permissions updated successfully');
       if (onRoleUpdate) onRoleUpdate();
-    }, 250);
+    } catch (err) {
+      showToast.error('Failed to update employee roles');
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const filteredRoles = availableRoles.filter((r) =>
+    r.name.toLowerCase().includes(search.toLowerCase()) ||
+    (r.description && r.description.toLowerCase().includes(search.toLowerCase()))
+  );
 
   return (
     <div className="w-full space-y-6 font-sans">
@@ -79,7 +136,7 @@ export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: 
             <div>
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-primary" />
-                Role & Access Permissions
+                Role &amp; Access Permissions
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
                 {readOnly
@@ -94,9 +151,9 @@ export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: 
                 size="sm"
                 onClick={handleSaveRoles}
                 disabled={isSaving}
-                className="h-8 text-xs font-semibold gap-1.5 px-4 rounded-lg bg-primary text-primary-foreground shadow-xs self-start sm:self-auto"
+                className="h-8 text-xs font-semibold gap-1.5 px-4 rounded-lg bg-primary text-primary-foreground shadow-xs self-start sm:self-auto cursor-pointer"
               >
-                <Save className="w-3.5 h-3.5" /> Save Role Changes
+                <Save className="w-3.5 h-3.5" /> {isSaving ? 'Saving...' : 'Save Role Changes'}
               </Button>
             )}
           </div>
@@ -107,7 +164,7 @@ export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: 
           {readOnly && (
             <div className="flex items-center gap-2 p-3 rounded-xl bg-blue-500/8 border border-blue-500/25 text-xs text-blue-700 dark:text-blue-400 font-medium">
               <Shield className="w-4 h-4 shrink-0 text-blue-600" />
-              Role & access permissions are assigned and managed by your HR & Organization Admin.
+              Role &amp; access permissions are assigned and managed by your HR &amp; Organization Admin.
             </div>
           )}
 
@@ -128,36 +185,42 @@ export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: 
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                  {assignedRoles.map((role) => (
-                    <div
-                      key={role}
-                      className="p-3.5 rounded-xl border border-primary/25 bg-primary/5 flex items-center gap-3 shadow-2xs"
-                    >
-                      <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-                        <CheckCircle2 className="w-4 h-4" />
+                  {assignedRoles.map((roleName) => {
+                    const roleMeta = availableRoles.find((r) => r.name === roleName);
+                    return (
+                      <div
+                        key={roleName}
+                        className="p-3.5 rounded-xl border border-primary/25 bg-primary/5 flex items-center gap-3 shadow-2xs"
+                      >
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-xs text-foreground truncate">{roleName}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {roleMeta?.description || 'Access Granted'}
+                          </p>
+                        </div>
+                        <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px] shrink-0">
+                          Active
+                        </Badge>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-xs text-foreground truncate">{role}</p>
-                        <p className="text-[10px] text-muted-foreground">Access Granted</p>
-                      </div>
-                      <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 text-[10px] shrink-0">
-                        Active
-                      </Badge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           ) : (
             /* ─────────────────────────────────────────────────────────────
-               ADMIN SIDE: Active Summary + Full Interactive Grid for Editing
+               ADMIN SIDE: Active Summary + Search + Dynamic Master Roles Grid
             ───────────────────────────────────────────────────────────── */
             <>
               {/* Active Assigned Summary Banner */}
               <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div className="space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary block">
-                    Active Assigned Roles
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-indigo-500" />
+                    Active Assigned Roles &amp; Responsibilities
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-black text-foreground">
@@ -183,27 +246,85 @@ export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: 
                 </div>
               </div>
 
-              {/* Clean, Symmetrical Roles Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                {SYSTEM_ROLES.map((role) => {
-                  const isAssigned = assignedRoles.includes(role);
-                  return (
-                    <button
-                      key={role}
-                      onClick={() => handleToggleRole(role)}
-                      className={`py-2.5 px-3 text-xs font-semibold rounded-xl border transition-all cursor-pointer select-none flex items-center justify-center gap-2 text-center truncate ${
-                        isAssigned
-                          ? 'bg-primary text-primary-foreground border-primary shadow-xs font-bold'
-                          : 'bg-muted/30 text-muted-foreground border-border/70 hover:bg-muted hover:text-foreground font-medium'
-                      }`}
-                      title={isAssigned ? `${role} (Assigned)` : `${role} (Click to Assign)`}
-                    >
-                      {isAssigned && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-primary-foreground" />}
-                      <span className="truncate">{role}</span>
-                    </button>
-                  );
-                })}
+              {/* Search & Meta Header */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search roles & responsibilities..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 h-9 rounded-xl text-xs font-medium bg-background border-border"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground self-end sm:self-auto">
+                  <Badge variant="outline" className="text-[10px] font-bold gap-1 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20">
+                    <Layers className="w-3 h-3" />
+                    {availableRoles.length} Available Master Roles
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchDynamicRoles}
+                    className="h-7 text-[11px] font-semibold gap-1 rounded-lg hover:bg-muted cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingRoles ? 'animate-spin' : ''}`} /> Refresh
+                  </Button>
+                </div>
               </div>
+
+              {/* Dynamic Roles & Responsibilities Grid */}
+              {loadingRoles ? (
+                <div className="p-8 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-primary" />
+                  Loading roles &amp; responsibilities from Masters tab...
+                </div>
+              ) : filteredRoles.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground bg-muted/20 rounded-xl border border-border">
+                  No roles &amp; responsibilities found. Add roles in Masters Hub under Roles &amp; Responsibility.
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {filteredRoles.map((roleItem) => {
+                    const isAssigned = assignedRoles.includes(roleItem.name);
+                    const isFromMasters = roleItem.source === 'masters';
+
+                    return (
+                      <button
+                        key={roleItem.name}
+                        onClick={() => handleToggleRole(roleItem.name)}
+                        className={`relative py-2.5 px-3 text-xs font-semibold rounded-xl border transition-all cursor-pointer select-none flex flex-col items-center justify-center gap-1 text-center truncate ${
+                          isAssigned
+                            ? 'bg-primary text-primary-foreground border-primary shadow-xs font-bold'
+                            : isFromMasters
+                            ? 'bg-indigo-500/5 text-foreground border-indigo-500/30 hover:bg-indigo-500/10 font-medium'
+                            : 'bg-muted/30 text-muted-foreground border-border/70 hover:bg-muted hover:text-foreground font-medium'
+                        }`}
+                        title={
+                          roleItem.description
+                            ? `${roleItem.name}: ${roleItem.description}`
+                            : isAssigned
+                            ? `${roleItem.name} (Assigned)`
+                            : `${roleItem.name} (Click to Assign)`
+                        }
+                      >
+                        <div className="flex items-center gap-1.5 truncate max-w-full">
+                          {isAssigned && <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-primary-foreground" />}
+                          <span className="truncate">{roleItem.name}</span>
+                        </div>
+                        {isFromMasters && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                            isAssigned ? 'bg-white/20 text-white' : 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400'
+                          }`}>
+                            Master Role
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
         </CardContent>

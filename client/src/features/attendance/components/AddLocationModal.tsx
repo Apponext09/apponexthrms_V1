@@ -10,9 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MapPin, Wifi, Compass, Loader2, Plus, Save } from 'lucide-react';
+import { MapPin, Wifi, Compass, Loader2, Plus, Save, Globe } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { useLocationManagement, GeofenceLocation } from '../hooks/useLocationManagement';
+import { MapCoordinateExtractorModal } from './MapCoordinateExtractorModal';
 
 interface AddLocationModalProps {
   open: boolean;
@@ -37,6 +38,7 @@ export function AddLocationModal({
 
   const [isFetchingGps, setIsFetchingGps] = useState(false);
   const [isFetchingIp, setIsFetchingIp] = useState(false);
+  const [isExtractorOpen, setIsExtractorOpen] = useState(false);
 
   // Sync editing location data when modal opens
   React.useEffect(() => {
@@ -137,85 +139,99 @@ export function AddLocationModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md border border-border/80 shadow-lg rounded-xl bg-card">
-        <DialogHeader className="pb-3 border-b border-border/50">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary">
-              <MapPin className="w-4 h-4" />
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md border border-border/80 shadow-lg rounded-xl bg-card">
+          <DialogHeader className="pb-3 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <DialogTitle className="text-sm font-bold">
+                  {editingLocation ? 'Edit Attendance Location' : 'Add Attendance Location'}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Set GPS coordinates, radius, and WiFi IP for punch boundary verification.
+                </DialogDescription>
+              </div>
             </div>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4 pt-2 text-xs">
+            {/* Location Name */}
             <div>
-              <DialogTitle className="text-sm font-bold">
-                {editingLocation ? 'Edit Attendance Location' : 'Add Attendance Location'}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Set GPS coordinates, radius, and WiFi IP for punch boundary verification.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2 text-xs">
-          {/* Location Name */}
-          <div>
-            <Label htmlFor="geofenceName" className="text-xs font-semibold text-foreground">
-              Location Name <span className="text-rose-500">*</span>
-            </Label>
-            <Input
-              id="geofenceName"
-              placeholder="e.g. Headquarters Office, Ahilyanagar Branch"
-              className="mt-1 h-9 text-xs"
-              value={geofenceName}
-              onChange={(e) => setGeofenceName(e.target.value)}
-            />
-          </div>
-
-          {/* GPS Coordinates with Auto-Fetch */}
-          <div className="space-y-2 p-3 rounded-lg border border-border/60 bg-muted/20">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-primary" /> GPS Coordinates
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7 text-[11px] font-semibold gap-1 px-2.5 bg-card hover:bg-muted"
-                onClick={handleFetchGps}
-                disabled={isFetchingGps}
-              >
-                {isFetchingGps ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3 text-primary" />}
-                Auto-Fetch GPS Location
-              </Button>
+              <Label htmlFor="geofenceName" className="text-xs font-semibold text-foreground">
+                Location Name <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="geofenceName"
+                placeholder="e.g. Headquarters Office, Ahilyanagar Branch"
+                className="mt-1 h-9 text-xs"
+                value={geofenceName}
+                onChange={(e) => setGeofenceName(e.target.value)}
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              <div>
-                <Label htmlFor="latitude" className="text-[11px] font-medium text-muted-foreground">
-                  Latitude <span className="text-rose-500">*</span>
-                </Label>
-                <Input
-                  id="latitude"
-                  placeholder="e.g. 19.094833"
-                  className="mt-1 h-9 text-xs font-mono"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                />
+            {/* GPS Coordinates with Auto-Fetch */}
+            <div className="space-y-2 p-3 rounded-lg border border-border/60 bg-muted/20">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5 text-primary" /> GPS Coordinates
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px] font-bold gap-1 px-2 bg-card hover:bg-muted text-primary border-primary/30"
+                    onClick={() => setIsExtractorOpen(true)}
+                  >
+                    <Globe className="w-3 h-3 text-primary" />
+                    Maps Link / Address
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px] font-bold gap-1 px-2 bg-card hover:bg-muted"
+                    onClick={handleFetchGps}
+                    disabled={isFetchingGps}
+                  >
+                    {isFetchingGps ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3 text-primary" />}
+                    GPS Auto
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="longitude" className="text-[11px] font-medium text-muted-foreground">
-                  Longitude <span className="text-rose-500">*</span>
-                </Label>
-                <Input
-                  id="longitude"
-                  placeholder="e.g. 74.748011"
-                  className="mt-1 h-9 text-xs font-mono"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                />
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <Label htmlFor="latitude" className="text-[11px] font-medium text-muted-foreground">
+                    Latitude <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="latitude"
+                    placeholder="e.g. 19.094833"
+                    className="mt-1 h-9 text-xs font-mono"
+                    value={latitude}
+                    onChange={(e) => setLatitude(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="longitude" className="text-[11px] font-medium text-muted-foreground">
+                    Longitude <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="longitude"
+                    placeholder="e.g. 74.748011"
+                    className="mt-1 h-9 text-xs font-mono"
+                    value={longitude}
+                    onChange={(e) => setLongitude(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
           {/* WiFi IP Address with Auto-Fetch */}
           <div>
@@ -313,5 +329,18 @@ export function AddLocationModal({
         </form>
       </DialogContent>
     </Dialog>
+
+    <MapCoordinateExtractorModal
+      open={isExtractorOpen}
+      onOpenChange={setIsExtractorOpen}
+      onSelectCoordinates={(coords) => {
+        setLatitude(coords.latitude);
+        setLongitude(coords.longitude);
+        if (coords.locationName && !geofenceName) {
+          setGeofenceName(coords.locationName);
+        }
+      }}
+    />
+  </>
   );
 }

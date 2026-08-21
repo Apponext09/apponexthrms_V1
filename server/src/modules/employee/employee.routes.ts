@@ -91,6 +91,7 @@ router.put('/:id/professional-info', controller.upsertProfessionalInfo);
 router.get('/my-documents', controller.getMyDocuments);
 router.get('/:id/documents', controller.getDocuments);
 router.post('/:id/documents', controller.uploadDocument);
+router.post('/:id/accept-document-policy', controller.acceptDocumentPolicy);
 router.post('/documents/:documentId/verify', controller.verifyDocument);
 router.delete('/documents/:documentId', controller.deleteDocument);
 

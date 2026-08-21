@@ -83,6 +83,10 @@ export interface Employee {
   hrManager?: string | null;
   hrManagerEmail?: string | null;
   custom_id_card?: string | null;
+  document_policy_accepted?: boolean;
+  documentPolicyAccepted?: boolean;
+  document_policy_accepted_at?: string | null;
+  documentPolicyAcceptedAt?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {

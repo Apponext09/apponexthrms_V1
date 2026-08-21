@@ -1120,10 +1120,12 @@ export class AttendanceService {
    * reporting officers to that company scope only.
    * Companies list always returns all companies for the org (used for the top-level picker).
    */
-  async getReportFilterOptions(ctx: TenantContext, companyId?: number | null) {
+  async getReportFilterOptions(ctx: TenantContext, companyId?: string | number | null) {
     try {
       const { db } = await import('../../../db/knex');
       console.log('[FilterOptions] companyId received:', companyId, '| organizationId:', ctx.organizationId);
+
+      const isValidCompanyId = companyId != null && String(companyId) !== 'all' && String(companyId) !== 'undefined';
 
       // ── 1. Companies ─────────────────────────────────────────────────────────
       // Always load all companies for the org so the company dropdown is always populated.
@@ -1148,7 +1150,7 @@ export class AttendanceService {
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
         .where('status', 'active');
-      if (companyId) {
+      if (isValidCompanyId) {
         locationQuery = locationQuery.where(function () {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
@@ -1163,7 +1165,7 @@ export class AttendanceService {
       let departmentQuery = db('departments')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at');
-      if (companyId) {
+      if (isValidCompanyId) {
         departmentQuery = departmentQuery.where(function () {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
@@ -1179,7 +1181,7 @@ export class AttendanceService {
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
         .whereNotNull('reporting_manager_id');
-      if (companyId) {
+      if (isValidCompanyId) {
         assignedManagerQuery = assignedManagerQuery.where(function () {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
@@ -1209,7 +1211,7 @@ export class AttendanceService {
       let employeeQuery = db('employees')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at');
-      if (companyId) {
+      if (isValidCompanyId) {
         employeeQuery = employeeQuery.where(function () {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
@@ -1262,6 +1264,8 @@ export class AttendanceService {
     const rawRo = params?.reportingOfficers ?? params?.['reportingOfficers[]'] ?? params?.reportingOfficerId ?? params?.reporting_officer_id;
     const rawCompany = params?.companies ?? params?.['companies[]'] ?? params?.companyId ?? params?.company_id;
 
+    const isAllCompanies = String(rawCompany).includes('all') || rawCompany === 'all' || !rawCompany || (Array.isArray(rawCompany) && rawCompany.length === 0);
+
     const { db } = await import('../../../db/knex');
 
     const parseIds = (val: any): number[] => {
@@ -1289,7 +1293,7 @@ export class AttendanceService {
     const targetEmpStrings = parseStrings(rawEmp);
     const targetDeptIds = parseIds(rawDept);
     const targetRoIds = parseIds(rawRo);
-    const targetCompanyIds = parseIds(rawCompany);
+    const targetCompanyIds = isAllCompanies ? [] : parseIds(rawCompany);
 
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
@@ -1300,14 +1304,12 @@ export class AttendanceService {
       empQuery = empQuery.where(function () {
         this.whereIn('company_id', targetCompanyIds).orWhereNull('company_id');
       });
-    } else if (ctx.companyId) {
-      empQuery = empQuery.where(function () {
-        this.where('company_id', ctx.companyId).orWhereNull('company_id');
-      });
     }
 
-    if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {
-      if (['active', 'inactive', 'onboarding', 'terminated'].includes(filterStatus)) {
+    if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose' && filterStatus !== 'all') {
+      if (filterStatus === 'active') {
+        empQuery = empQuery.whereIn('status', ['active', 'onboarding', 'probation', 'notice']);
+      } else if (['inactive', 'terminated', 'exit', 'alumni'].includes(filterStatus)) {
         empQuery = empQuery.where('status', filterStatus);
       }
     }
@@ -1663,7 +1665,6 @@ export class AttendanceService {
 
         if (sf && sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
         if (sf && sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && (shortHours === '00:00' || dayStatus === 'Full Day')) continue;
-        if (sf && sf.breakLog !== undefined && isTrue(sf.breakLog) && (totalBreakHours === '--' || totalBreakHours === '00:00')) continue;
 
         if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
         if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
@@ -2118,9 +2119,104 @@ export class AttendanceService {
         lwp,
         pl,
         plv,
-        wo,
         totalHoliday,
         payableDays,
+      };
+    });
+  }
+
+  /**
+   * Dedicated CEO / Executive Admin attendance punches query.
+   * Returns ONLY real database check-in records for the Organization Admin / CEO.
+   */
+  async getCeoPunches(ctx: TenantContext): Promise<any[]> {
+    const db = getKnex();
+
+    // 1. Find Organization Admin user account & linked employee record
+    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
+
+    let adminUser = await db('users')
+      .leftJoin('user_roles', 'users.id', 'user_roles.user_id')
+      .leftJoin('roles', 'user_roles.role_id', 'roles.id')
+      .where('users.organization_id', ctx.organizationId)
+      .where(function () {
+        this.where('roles.code', 'organization_admin')
+          .orWhere('users.id', ctx.userId)
+          .orWhereRaw('LOWER(users.email) = ?', [org?.email?.toLowerCase() || '']);
+      })
+      .select('users.*')
+      .first()
+      .catch(() => null);
+
+    if (!adminUser) {
+      adminUser = await db('users')
+        .where('organization_id', ctx.organizationId)
+        .first()
+        .catch(() => null);
+    }
+
+    const adminUserId = adminUser ? Number(adminUser.id) : ctx.userId;
+    const adminEmpId = adminUser?.employee_id ? Number(adminUser.employee_id) : null;
+
+    let adminEmp: any = null;
+    if (adminEmpId) {
+      adminEmp = await db('employees').where('id', adminEmpId).first().catch(() => null);
+    }
+    if (!adminEmp && adminUser?.email) {
+      adminEmp = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereRaw('LOWER(email) = ?', [adminUser.email.toLowerCase()])
+        .first()
+        .catch(() => null);
+    }
+
+    const ceoName = [adminUser?.first_name || adminEmp?.first_name, adminUser?.last_name || adminEmp?.last_name]
+      .filter(Boolean)
+      .join(' ') || org?.owner_name || 'Organization Admin';
+    const ceoCode = adminEmp?.employee_code || adminEmp?.employeeCode || `ADM-${adminUserId}`;
+
+    // 2. Query attendance_records by created_by = adminUserId OR employee_id = adminEmpId
+    const dbRecords = await db('attendance_records')
+      .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
+      .where('attendance_records.organization_id', ctx.organizationId)
+      .whereNotNull('attendance_records.check_in_time')
+      .where(function () {
+        this.where('attendance_records.created_by', adminUserId);
+        if (adminEmpId) {
+          this.orWhere('attendance_records.employee_id', adminEmpId);
+        }
+      })
+      .select(
+        'attendance_records.*',
+        'in_loc.location_name as check_in_location_name'
+      )
+      .orderBy('attendance_records.check_in_time', 'desc')
+      .catch(() => []);
+
+    return dbRecords.map((r: any) => {
+      const rawIn = r.check_in_time || r.checkInTime || r.created_at;
+      let formattedIn = '--:--';
+      if (rawIn) {
+        const d = new Date(rawIn);
+        if (!isNaN(d.getTime())) {
+          formattedIn = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        } else {
+          formattedIn = String(rawIn).slice(11, 16);
+        }
+      }
+
+      const rawDate = r.check_in_date || r.checkInDate || (rawIn ? String(rawIn).split('T')[0] : getLocalYYYYMMDD());
+
+      return {
+        id: String(r.id),
+        date: rawDate,
+        employeeId: String(r.employee_id || adminEmpId || adminUserId),
+        employeeName: ceoName,
+        employeeCode: ceoCode,
+        checkInTime: formattedIn,
+        checkInLocation: r.check_in_location_name || r.notes || 'Executive Boundary / Headquarters',
+        checkInMethod: r.check_in_method || 'biometric',
+        status: 'Checked In',
       };
     });
   }

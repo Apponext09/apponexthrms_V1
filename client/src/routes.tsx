@@ -287,7 +287,6 @@ export function AppRoutes() {
         <Route path="/hr/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
-        <Route path="/hr/departments" element={<DepartmentsPage />} />
         <Route path="/hr/employees/onboarding" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/org-structure" element={<OrgStructurePage />} />
 
@@ -367,7 +366,6 @@ export function AppRoutes() {
           <Route index element={<Navigate to="company-profile" replace />} />
           <Route path="company-profile" element={<CompanyProfilePage />} />
           <Route path="branches" element={<BranchesPage />} />
-          <Route path="departments" element={<DepartmentsPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="branding" element={<BrandingPage />} />
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
@@ -483,7 +481,7 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
-        <Route path="/attendance/locations" element={<LocationManagementPage />} />
+        <Route path="/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/location-mapping" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
@@ -617,9 +615,6 @@ export function AppRoutes() {
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
         <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
         <Route path="/settings/branches" element={<BranchesPage />} />
-        <Route path="/settings/departments" element={<DepartmentsPage />} />
-        <Route path="/settings/designations" element={<DesignationsPage />} />
-        <Route path="/designations" element={<DesignationsPage />} />
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
@@ -640,8 +635,6 @@ export function AppRoutes() {
           <Route path="general" element={<GeneralSettingsPage />} />
           <Route path="company-profile" element={<CompanyProfilePage />} />
           <Route path="branches" element={<BranchesPage />} />
-          <Route path="departments" element={<DepartmentsPage />} />
-          <Route path="designations" element={<DesignationsPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="branding" element={<BrandingPage />} />
           <Route path="leave-policies" element={<LeavePoliciesPage />} />

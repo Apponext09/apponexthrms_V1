@@ -526,12 +526,7 @@ export function TimelogReportView() {
 
             <div className="flex flex-wrap items-center gap-4">
               {/* Checkbox status toggle */}
-              <div className="flex items-center space-x-2">
-                <Checkbox id="viewStatusTable" checked={viewStatusTable} onCheckedChange={c => setViewStatusTable(!!c)} />
-                <label htmlFor="viewStatusTable" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap">
-                  View Status Table
-                </label>
-              </div>
+              
 
               <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 space-x-1.5 shadow-2xs">
                 <Download className="w-3.5 h-3.5 text-primary" /><span>Export Excel</span>
