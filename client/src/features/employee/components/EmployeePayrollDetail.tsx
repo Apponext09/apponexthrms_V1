@@ -186,7 +186,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   const recalculateFromSalaryInput = (inputVal: number) => {
     if (isNaN(inputVal) || inputVal <= 0) return;
     const b = Math.round(inputVal * 0.5);
-    const h = Math.round(b * 0.4);
+    const h = Math.round(b * 0.5);
     const sa = 0;
     const ma = 0;
     const ca = 0;
@@ -210,7 +210,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   // Option 2: Basic Recalculation (Basic -> HRA & Deductions) — uses slab's PF rate
   const recalculateFromBasicInput = (basicVal: number) => {
     if (isNaN(basicVal) || basicVal <= 0) return;
-    const h = Math.round(basicVal * 0.4);
+    const h = Math.round(basicVal * 0.5);
     setHra(String(h));
 
     // Statutory PF: slab.pf_rate_pct% capped at ₹1800
@@ -916,7 +916,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>PF Employer:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.pfEmployer.toLocaleString()}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid #fecdd3', fontWeight: 700, color: '#dc2626' }}><span>Total Deductions:</span> <span>₹{viewRecord.totalDeduction.toLocaleString()}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#16a34a' }}><span>Net Take-Home:</span> <span>₹{viewRecord.netSalary.toLocaleString()}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#0284c7' }}><span>Annual CTC:</span> <span>₹{viewRecord.ctc.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#0284c7' }}><span>Monthly CTC:</span> <span>₹{viewRecord.ctc.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#4f46e5', paddingTop: 4, borderTop: '1px dashed #fecdd3' }}><span>Annual CTC:</span> <span>₹{(viewRecord.ctc * 12).toLocaleString()}</span></div>
                 </div>
               </div>
             </div>

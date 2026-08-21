@@ -12,6 +12,8 @@ import {
   ChevronRight, ChevronLeft, Building2, Calculator, 
   CheckCircle2, FileText, AlertCircle, RefreshCw
 } from 'lucide-react';
+import { PRESEEDED_OFFER_TEMPLATES, OfferTemplateRecord } from '../../settings/components/OfferTemplateMasterForm';
+import { apiClient } from '@/config/api';
 
 interface GenerateOfferModalProps {
   open: boolean;
@@ -33,6 +35,10 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   designationList,
 }) => {
   const [step, setStep] = useState(1);
+
+  // Offer Template Master State
+  const [offerTemplates, setOfferTemplates] = useState<OfferTemplateRecord[]>(PRESEEDED_OFFER_TEMPLATES);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('tpl_std_corp');
 
   // Form State
   const [selectedAppId, setSelectedAppId] = useState('');
@@ -69,6 +75,73 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   const [relocationAllowance, setRelocationAllowance] = useState('0');
   const [customClause, setCustomClause] = useState('');
 
+  // Active Offer Template Lookup
+  const activeTemplate = React.useMemo(() => {
+    return offerTemplates.find(t => String(t.id) === String(selectedTemplateId)) || offerTemplates[0] || PRESEEDED_OFFER_TEMPLATES[0];
+  }, [offerTemplates, selectedTemplateId]);
+
+  // Handle template selection change
+  const handleTemplateChange = (tplId: string) => {
+    setSelectedTemplateId(tplId);
+    const tpl = offerTemplates.find(t => String(t.id) === String(tplId));
+    if (tpl) {
+      setBgvMandatory(tpl.bgv_mandatory !== false);
+      setNdaMandatory(tpl.nda_mandatory !== false);
+      setNonCompete(tpl.non_compete !== false);
+      setRelievingLetter(tpl.relieving_letter !== false);
+      if (tpl.custom_clause) {
+        setCustomClause(tpl.custom_clause);
+      }
+    }
+  };
+
+  const [internalDepartments, setInternalDepartments] = useState<any[]>([]);
+  const [internalDesignations, setInternalDesignations] = useState<any[]>([]);
+
+  const activeDeptList = (departmentList && departmentList.length > 0) ? departmentList : internalDepartments;
+  const activeDesgList = (designationList && designationList.length > 0) ? designationList : internalDesignations;
+
+  // Substitute dynamic candidate placeholders into template text candidate-wise
+  const compileTemplateText = (rawText: string) => {
+    if (!rawText) return '';
+    const candName = selectedApp ? (selectedApp.candidateName || selectedApp.candidate_name || 'Candidate') : 'Candidate';
+    const candEmail = selectedApp ? (selectedApp.candidateEmail || selectedApp.candidate_email || 'candidate@email.com') : 'candidate@email.com';
+    const deptName = activeDeptList.find((d: any) => d.id.toString() === departmentId)?.name || 'General';
+    const desgName = activeDesgList.find((d: any) => d.id.toString() === designationId)?.name || 'Staff';
+    const formattedCTC = salaryBreakdown.ctc > 0 ? salaryBreakdown.ctc.toLocaleString() : parseFloat(annualCTC || '0').toLocaleString();
+    const formattedBase = salaryBreakdown.basic > 0 ? salaryBreakdown.basic.toLocaleString() : '0';
+
+    const vars: Record<string, string> = {
+      candidate_name: candName,
+      candidate_email: candEmail,
+      candidate_phone: selectedApp?.candidatePhone || selectedApp?.candidate_phone || 'N/A',
+      position_title: positionTitle || 'Software Developer',
+      department_name: deptName,
+      designation_name: desgName,
+      grade_band: gradeBand || 'L2',
+      work_model: workModel || 'hybrid',
+      office_location: officeLocation || 'Bengaluru HQ',
+      reporting_manager: reportingManager || 'VP Engineering',
+      cost_to_company: formattedCTC,
+      base_salary: formattedBase,
+      currency: currency || 'INR',
+      joining_bonus: parseFloat(joiningBonus || '0') > 0 ? parseFloat(joiningBonus).toLocaleString() : '0',
+      offer_start_date: offerStartDate ? new Date(offerStartDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Joining Date',
+      offer_expiry_date: offerExpiryDate ? new Date(offerExpiryDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Expiry Date',
+      probation_period: probationPeriod || '3 months',
+      notice_period: noticePeriod || '90 days',
+      company_name: activeTemplate?.company_name || 'Apponext Technologies Pvt. Ltd.',
+      offer_code: 'AN/OFFER/2026/DRAFT',
+    };
+
+    let result = rawText;
+    for (const [k, v] of Object.entries(vars)) {
+      const regex = new RegExp(`\\{\\{\\s*${k}\\s*\\}\\}`, 'gi');
+      result = result.replace(regex, v);
+    }
+    return result;
+  };
+
   // Compensation calculations (triggered on annualCTC, baseSalaryRatio, performanceBonusPct, hasPerformanceBonus changes)
   const [salaryBreakdown, setSalaryBreakdown] = useState<any>({
     ctc: 0,
@@ -102,10 +175,39 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
     }
   }, [selectedAppId, applicationList]);
 
-  // Set default dates on open
+  // Set default dates on open & fetch offer templates, departments, designations
   useEffect(() => {
     if (open) {
       setStep(1);
+      // Fetch custom offer letter templates from API
+      apiClient.get('/settings/offer-templates')
+        .then(res => {
+          if (res.data?.success && Array.isArray(res.data.data)) {
+            const combined = [...res.data.data];
+            for (const def of PRESEEDED_OFFER_TEMPLATES) {
+              if (!combined.some((c: any) => String(c.template_code).toUpperCase() === String(def.template_code).toUpperCase())) {
+                combined.push(def);
+              }
+            }
+            setOfferTemplates(combined);
+          }
+        })
+        .catch(() => {});
+
+      if (!departmentList || departmentList.length === 0) {
+        apiClient.get('/settings/departments').then(res => {
+          const items = res.data?.data?.items || res.data?.data || res.data?.items || (Array.isArray(res.data) ? res.data : []);
+          setInternalDepartments(items);
+        }).catch(() => {});
+      }
+
+      if (!designationList || designationList.length === 0) {
+        apiClient.get('/settings/designations').then(res => {
+          const items = res.data?.data?.items || res.data?.data || res.data?.items || (Array.isArray(res.data) ? res.data : []);
+          setInternalDesignations(items);
+        }).catch(() => {});
+      }
+
       // Default joining date: 30 days from today
       const joinDate = new Date();
       joinDate.setDate(joinDate.getDate() + 30);
@@ -116,7 +218,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       expiry.setDate(expiry.getDate() + 7);
       setOfferExpiryDate(expiry.toISOString().substring(0, 10));
     }
-  }, [open]);
+  }, [open, departmentList, designationList]);
 
   // Calculate salary components based on standard formula
   useEffect(() => {
@@ -228,8 +330,14 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       currency,
       offerStartDate,
       offerExpiryDate,
-      // Metadata (these are handled in custom preview display or stored if schema expands, base remains fully compatible)
+      // Metadata (handled in preview display & public offer view)
       meta: {
+        templateId: selectedTemplateId,
+        templateName: activeTemplate?.template_name || 'Standard Offer Letter',
+        companyName: activeTemplate?.company_name || 'Apponext Technologies Pvt. Ltd.',
+        companyAddress: activeTemplate?.company_address || 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103',
+        compiledSubject: compileTemplateText(activeTemplate?.subject || 'Subject: Letter of Offer & Employment Agreement'),
+        compiledBody: compileTemplateText(activeTemplate?.body_content || ''),
         gradeBand,
         employmentType,
         workModel,
@@ -327,6 +435,25 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
                     </Select>
                   </div>
 
+                  <div>
+                    <Label htmlFor="templateSelect" className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Offer Letter Master Format *</span>
+                      <span className="text-[10px] text-indigo-600 font-bold">Company Template</span>
+                    </Label>
+                    <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
+                      <SelectTrigger className="bg-indigo-50/50 mt-1 border-indigo-200 font-semibold text-slate-900">
+                        <SelectValue placeholder="Select offer format template..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {offerTemplates.map((tpl: any) => (
+                          <SelectItem key={tpl.id} value={tpl.id.toString()}>
+                            {tpl.template_name || tpl.template_code || 'Standard Offer Letter'} ({tpl.template_code || tpl.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   {selectedApp && (
                     <div className="bg-slate-50 border border-slate-150 rounded-lg p-4 space-y-2 mt-3 animate-fadeIn text-xs">
                       <div className="flex justify-between">
@@ -374,7 +501,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
                           <SelectValue placeholder="Department" />
                         </SelectTrigger>
                         <SelectContent>
-                          {departmentList.map((d: any) => (
+                          {activeDeptList.map((d: any) => (
                             <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -387,7 +514,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
                           <SelectValue placeholder="Designation" />
                         </SelectTrigger>
                         <SelectContent>
-                          {designationList.map((d: any) => (
+                          {activeDesgList.map((d: any) => (
                             <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -906,8 +1033,8 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
                 {/* Letterhead Header decoration */}
                 <div className="border-b-2 border-indigo-950 pb-4 mb-6 flex justify-between items-end font-sans">
                   <div>
-                    <h2 className="text-lg font-black tracking-tight text-indigo-950">APPONEXT TECHNOLOGIES PVT. LTD.</h2>
-                    <p className="text-[9px] text-slate-500 tracking-wider">Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103</p>
+                    <h2 className="text-lg font-black tracking-tight text-indigo-950 uppercase">{activeTemplate?.company_name || 'APPONEXT TECHNOLOGIES PVT. LTD.'}</h2>
+                    <p className="text-[9px] text-slate-500 tracking-wider">{activeTemplate?.company_address || 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103'}</p>
                   </div>
                   <div className="text-right text-[10px] text-slate-400">
                     <p className="font-bold text-indigo-900">CONFIDENTIAL</p>
@@ -928,19 +1055,13 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
                     <p className="font-sans text-slate-500">{selectedApp?.candidateEmail || selectedApp?.candidate_email || '[Candidate Email]'}</p>
                   </div>
 
-                  <p className="font-bold text-center text-sm tracking-wide text-slate-900 my-4 font-sans underline">Subject: Letter of Offer & Employment Agreement</p>
-
-                  <p>Dear <span className="font-bold">{selectedApp?.candidateName || selectedApp?.candidate_name || 'Candidate'}</span>,</p>
-
-                  <p>
-                    We are pleased to offer you employment with Apponext Technologies Pvt. Ltd. (the "Company") in the capacity of <strong>{positionTitle}</strong>. 
-                    You will be positioned in corporate grade <strong>{gradeBand}</strong> at our <strong>{officeLocation}</strong> office, reporting directly to your supervisor under a <strong>{workModel}</strong> work engagement layout.
+                  <p className="font-bold text-center text-sm tracking-wide text-slate-900 my-4 font-sans underline">
+                    {compileTemplateText(activeTemplate?.subject || 'Subject: Letter of Offer & Employment Agreement')}
                   </p>
 
-                  <p>
-                    Your target date of joining is set as <strong>{offerStartDate ? new Date(offerStartDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '[Start Date]'}</strong>, subject to successful completion of all background checking protocols. 
-                    Your Annualized Cost to Company (CTC) compensation package is structured at <strong>{getCurrencySymbol()}{parseFloat(annualCTC).toLocaleString()}</strong>. Detailed split calculations are detailed in Annexure A.
-                  </p>
+                  <div className="whitespace-pre-line text-slate-800 space-y-3 font-serif">
+                    {compileTemplateText(activeTemplate?.body_content || '')}
+                  </div>
 
                   {/* Salary Annexure Table */}
                   <div className="border border-slate-200 rounded-lg overflow-hidden my-4 font-sans">

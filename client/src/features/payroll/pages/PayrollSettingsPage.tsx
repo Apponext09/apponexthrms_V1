@@ -577,10 +577,11 @@ export const PayrollSettingsPage: React.FC = () => {
       let savedId = selectedCycleId;
       let serverData = null;
       if (isEdit) {
-        try {
-          const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
-          serverData = putRes?.data?.data || putRes?.data;
-        } catch (e) {}
+        const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
+        if (putRes?.data?.success === false) {
+          throw new Error(putRes.data.message || 'Failed to update cycle');
+        }
+        serverData = putRes?.data?.data || putRes?.data;
         const updatedItem: PayrollCycleItem = {
           id: String(serverData?.id || selectedCycleId),
           name: serverData?.cycle_name || serverData?.name || targetName,
@@ -599,11 +600,12 @@ export const PayrollSettingsPage: React.FC = () => {
         setCycleForm(updatedItem);
         showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
       } else {
-        try {
-          const postRes = await apiClient.post('/payroll/cycles', payload);
-          serverData = postRes?.data?.data || postRes?.data;
-          savedId = String(serverData?.id || serverData?.uuid || '');
-        } catch (e) {}
+        const postRes = await apiClient.post('/payroll/cycles', payload);
+        if (postRes?.data?.success === false) {
+          throw new Error(postRes.data.message || 'Failed to create cycle');
+        }
+        serverData = postRes?.data?.data || postRes?.data;
+        savedId = String(serverData?.id || serverData?.uuid || '');
 
         const newItem: PayrollCycleItem = {
           id: savedId || `cycle_${Date.now()}`,
@@ -627,8 +629,10 @@ export const PayrollSettingsPage: React.FC = () => {
 
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Error saving cycle:', err);
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error?.message || err?.message || 'Failed to save Payroll Cycle.';
+      showToast.error('Save Error', errMsg);
     }
   };
 

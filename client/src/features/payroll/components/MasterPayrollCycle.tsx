@@ -133,12 +133,17 @@ export const MasterPayrollCycle: React.FC = () => {
       let savedId = selectedCycleId;
       if (isEdit) {
         const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
+        if (putRes?.data?.success === false) {
+          throw new Error(putRes.data.message || 'Failed to update cycle');
+        }
         const serverData = putRes?.data?.data || putRes?.data;
         const updatedItem: PayrollCycleItem = {
           id: String(serverData?.id || selectedCycleId),
-          name: serverData?.cycle_name || cycleForm.name || 'Monthly',
-          cycle_name: serverData?.cycle_name || cycleForm.name || 'Monthly',
+          name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
+          cycle_name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
           isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
+          dailyWagesIncludePaidHolidays: Boolean(serverData?.daily_wages_include_paid_holidays ?? cycleForm.dailyWagesIncludePaidHolidays),
+          dailyWagesIncludeWeekOff: Boolean(serverData?.daily_wages_include_week_off ?? cycleForm.dailyWagesIncludeWeekOff),
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
           cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 0,
@@ -153,14 +158,19 @@ export const MasterPayrollCycle: React.FC = () => {
         showToast.success('Cycle Updated', `Master Payroll "${updatedItem.name}" updated successfully.`);
       } else {
         const postRes = await apiClient.post('/payroll/cycles', payload);
+        if (postRes?.data?.success === false) {
+          throw new Error(postRes.data.message || 'Failed to create cycle');
+        }
         const serverData = postRes?.data?.data || postRes?.data || {};
         savedId = String(serverData.id || serverData.uuid || '');
 
         const newItem: PayrollCycleItem = {
           id: savedId || String(Date.now()),
-          name: serverData?.cycle_name || cycleForm.name || 'Monthly',
-          cycle_name: serverData?.cycle_name || cycleForm.name || 'Monthly',
+          name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
+          cycle_name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
           isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
+          dailyWagesIncludePaidHolidays: Boolean(serverData?.daily_wages_include_paid_holidays ?? cycleForm.dailyWagesIncludePaidHolidays),
+          dailyWagesIncludeWeekOff: Boolean(serverData?.daily_wages_include_week_off ?? cycleForm.dailyWagesIncludeWeekOff),
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
           cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 0,
@@ -179,9 +189,10 @@ export const MasterPayrollCycle: React.FC = () => {
       await fetchCycles();
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving cycle:', err);
-      showToast.error('Save Error', 'Failed to save Master Payroll Cycle.');
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error?.message || err?.message || 'Failed to save Master Payroll Cycle.';
+      showToast.error('Save Error', errMsg);
     }
   };
 

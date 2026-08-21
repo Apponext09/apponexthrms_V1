@@ -196,19 +196,53 @@ export class LeaveService {
    * Helper to check array overlap for Eligibility Engine
    */
   private checkEmploymentEligibility(employee: any, settings: any): boolean {
-    if (!settings || Object.keys(settings).length === 0) return true; // No rules set
+    console.log('🔍 [ELIGIBILITY CHECK LOG]', {
+      empId: employee?.id,
+      dept: employee?.current_department_id || employee?.department_id,
+      loc: employee?.current_location_id || employee?.location_id,
+      empType: employee?.employment_type || employee?.employee_type,
+      status: employee?.status,
+      grade: employee?.current_grade_id || employee?.grade || employee?.grade_band,
+      settings
+    });
 
-    const hasOverlap = (employeeVal: any, ruleArray: any[]) => {
-      if (!ruleArray || !Array.isArray(ruleArray) || ruleArray.length === 0) return true;
-      if (!employeeVal) return false;
+    if (!settings || typeof settings !== 'object') return true;
+
+    const hasOverlap = (ruleName: string, employeeVal: any, ruleArray: any[]) => {
+      const cleanRules = (ruleArray || []).filter((r: any) => r !== null && r !== undefined && r !== '' && String(r).toLowerCase() !== 'select' && String(r).toLowerCase() !== 'all');
+      if (cleanRules.length === 0) return true;
+      if (employeeVal === undefined || employeeVal === null || employeeVal === '') {
+        // If employee profile field is not assigned (null/undefined), do not block leave application
+        return true;
+      }
       const eArray = Array.isArray(employeeVal) ? employeeVal : [employeeVal];
-      return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
+      const match = eArray.some(e => 
+        cleanRules.includes(e) || 
+        cleanRules.includes(String(e)) || 
+        (typeof e === 'number' && cleanRules.includes(Number(e)))
+      );
+      if (!match) {
+        console.warn(`❌ [ELIGIBILITY FAIL] Rule '${ruleName}' required ${JSON.stringify(cleanRules)}, but employee value was:`, eArray);
+      }
+      return match;
     };
 
-    if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId, settings.departments)) return false;
-    if (!hasOverlap(employee.current_location_id || employee.currentLocationId, settings.locations)) return false;
-    if (!hasOverlap(employee.employment_type || employee.employmentType || (employee as any).employee_type, settings.employeeTypes)) return false;
-    if (!hasOverlap(employee.status, settings.employeeStatuses)) return false;
+    const deptVal = employee.current_department_id || employee.currentDepartmentId || employee.department_id || employee.departmentId;
+    if (!hasOverlap('departments', deptVal, settings.departments)) return false;
+
+    const locVal = employee.current_location_id || employee.currentLocationId || employee.location_id || employee.locationId || employee.branch_id || employee.branchId;
+    if (!hasOverlap('locations', locVal, settings.locations)) return false;
+
+    const empTypeVal = employee.employment_type || employee.employmentType || (employee as any).employee_type || (employee as any).employeeType;
+    if (!hasOverlap('employeeTypes', empTypeVal, settings.employeeTypes)) return false;
+
+    const statusVal = employee.status;
+    if (!hasOverlap('employeeStatuses', statusVal, settings.employeeStatuses)) return false;
+
+    const gradeVal = employee.current_grade_id || employee.currentGradeId || employee.grade_id || employee.gradeId || employee.grade || employee.grade_band;
+    if (settings.grades && Array.isArray(settings.grades) && settings.grades.length > 0) {
+      if (!hasOverlap('grades', gradeVal, settings.grades)) return false;
+    }
 
     return true;
   }

@@ -611,7 +611,8 @@ export default function LeavePage() {
     }
     return true;
   }).map(b => {
-    const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', 12);
+    const quotaFallback = parseFloat((b as any).annual_quota ?? (b as any).annualQuota ?? 0) || 0;
+    const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
     const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
@@ -1121,7 +1122,8 @@ export default function LeavePage() {
 
           const theme = getCardTheme(leaveCode);
 
-          const total = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+          const quotaFallback = parseFloat((bal as any).annual_quota ?? (bal as any).annualQuota ?? 0) || 0;
+          const total = getBalNum(bal, 'allocated_balance', 'allocatedBalance', quotaFallback);
           const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 

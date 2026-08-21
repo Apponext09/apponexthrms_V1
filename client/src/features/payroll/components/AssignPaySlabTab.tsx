@@ -197,7 +197,7 @@ export const AssignPaySlabTab: React.FC = () => {
   const recalculateFromSalaryInput = (inputVal: number) => {
     if (isNaN(inputVal) || inputVal <= 0) return;
     const b = Math.round(inputVal * 0.5);
-    const h = Math.round(b * 0.4);
+    const h = Math.round(b * 0.5);
     const l = Math.max(0, inputVal - (b + h));
 
     setBasic(String(b));
@@ -216,7 +216,7 @@ export const AssignPaySlabTab: React.FC = () => {
 
   const recalculateFromBasicInput = (basicVal: number) => {
     if (isNaN(basicVal) || basicVal <= 0) return;
-    const h = Math.round(basicVal * 0.4);
+    const h = Math.round(basicVal * 0.5);
     setHra(String(h));
     const pfVal = Math.min(1800, Math.round(basicVal * 0.12));
     setPf(String(pfVal));

@@ -805,14 +805,22 @@ export class PayrollService {
     const frequency = data.frequency || 'Monthly';
     const startDate = Number(data.start_date ?? 1);
     const cutoffDay = Number(data.cutoff_day ?? 25);
-    const disbursementDate = Number(data.disbursement_date ?? data.salary_credit_date ?? 27);
+    const disbursementDate = Number(data.disbursement_date ?? data.disbursementDate ?? data.salary_credit_date ?? 27);
+
+    const freqLower = String(frequency).toLowerCase();
+    let cycleType = 'monthly';
+    if (freqLower.includes('week') && !freqLower.includes('bi')) {
+      cycleType = 'weekly';
+    } else if (freqLower.includes('biweek') || freqLower.includes('fortnight')) {
+      cycleType = 'biweekly';
+    }
 
     const cycle: any = {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       cycle_name: cycleName,
       cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
-      cycle_type: frequency.toLowerCase().replace(/-/g, '_'),
+      cycle_type: cycleType,
       // New Hoshi-style fields
       frequency,
       start_date: startDate,
@@ -823,6 +831,8 @@ export class PayrollService {
       month_offset: data.month_offset || 'Current',
       total_days_calc: data.total_days_calc || '30',
       cap_amount: Number(data.cap_amount ?? 1000000),
+      disbursement_date: disbursementDate,
+      disbursement_date_str: String(disbursementDate),
       is_daily_wages: Boolean(data.is_daily_wages),
       daily_wages_include_paid_holidays: Boolean(data.daily_wages_include_paid_holidays),
       daily_wages_include_week_off: Boolean(data.daily_wages_include_week_off),
@@ -876,7 +886,14 @@ export class PayrollService {
     }
     if (data.frequency !== undefined) {
       updateData.frequency = data.frequency;
-      updateData.cycle_type = String(data.frequency).toLowerCase().replace('-', '');
+      const freqLower = String(data.frequency).toLowerCase();
+      if (freqLower.includes('week') && !freqLower.includes('bi')) {
+        updateData.cycle_type = 'weekly';
+      } else if (freqLower.includes('biweek') || freqLower.includes('fortnight')) {
+        updateData.cycle_type = 'biweekly';
+      } else {
+        updateData.cycle_type = 'monthly';
+      }
     }
     if (data.startDate !== undefined || data.start_date !== undefined) {
       updateData.start_date = data.startDate ?? data.start_date;
@@ -888,7 +905,9 @@ export class PayrollService {
       updateData.month_offset = data.monthOffset ?? data.month_offset;
     }
     if (data.disbursementDate !== undefined || data.disbursement_date !== undefined) {
-      updateData.disbursement_date = data.disbursementDate ?? data.disbursement_date;
+      const disVal = Number(data.disbursementDate ?? data.disbursement_date);
+      updateData.disbursement_date = disVal;
+      updateData.disbursement_date_str = String(disVal);
     }
     if (data.capAmount !== undefined || data.cap_amount !== undefined) {
       updateData.cap_amount = data.capAmount ?? data.cap_amount;
@@ -919,6 +938,7 @@ export class PayrollService {
       }
     } catch (err) {
       console.error('Error updating cycle in DB:', err);
+      throw err;
     }
 
     let fetchQuery = db('payroll_cycles');
@@ -1054,11 +1074,35 @@ export class PayrollService {
     if (type === 'Value') {
       computedValue = fixedAmount;
     } else if (type === 'Derived') {
-      if (formula.includes('basic * 0.5') || formula.includes('basic * 0.50') || formula.toLowerCase().includes('hra')) {
-        computedValue = Math.round(parentValues.basic * 0.50);
-      } else if (formula.includes('basic * 0.12') || formula.toLowerCase().includes('pf')) {
-        const pfBase = Math.min(parentValues.earnedBasic, 15000);
-        computedValue = Math.round(pfBase * 0.12);
+      if (formula && formula.trim()) {
+        try {
+          let expr = formula.toLowerCase();
+          const epfEpsWages = Math.min(parentValues.earnedBasic || parentValues.basic || 0, 15000);
+
+          expr = expr
+            .replace(/\[epf_eps_wages\]/g, String(epfEpsWages))
+            .replace(/\[earned_basic\]/g, String(parentValues.earnedBasic || 0))
+            .replace(/\[earned_gross\]/g, String(parentValues.earnedGross || 0))
+            .replace(/\[basic\]/g, String(parentValues.basic || 0))
+            .replace(/\[gross\]/g, String(parentValues.gross || 0))
+            .replace(/\[lop_factor\]/g, String(lopFactor || 1))
+            .replace(/\[attendance_days\]/g, String(lopFactor || 1))
+            .replace(/\[salary_days\]/g, String(lopFactor || 1))
+            .replace(/\bbasic\b/g, String(parentValues.basic || 0))
+            .replace(/\bgross\b/g, String(parentValues.gross || 0));
+
+          // Strip any characters except digits, decimals, basic operators, and parentheses
+          const safeExpr = expr.replace(/[^0-9.\+\-\*\/\(\)\s]/g, '');
+          if (safeExpr.trim()) {
+            const evalResult = new Function(`"use strict"; return (${safeExpr});`)();
+            if (typeof evalResult === 'number' && !isNaN(evalResult)) {
+              computedValue = Math.round(evalResult);
+            }
+          }
+        } catch (err) {
+          console.error('Error evaluating formula expression:', formula, err);
+          computedValue = fixedAmount;
+        }
       } else {
         computedValue = fixedAmount;
       }

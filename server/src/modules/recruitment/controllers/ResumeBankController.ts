@@ -2,13 +2,16 @@ import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { validate } from '../../../common/middleware/validate';
 import { ResumeBankService } from '../services/ResumeBankService';
+import { ATSService } from '../services/ATSService';
 import { createResumeBankEntrySchema, shortlistResumeSchema } from '../types/mrf';
 
 export class ResumeBankController {
   private resumeBankService: ResumeBankService;
+  private atsService: ATSService;
 
   constructor() {
     this.resumeBankService = new ResumeBankService();
+    this.atsService = new ATSService();
   }
 
   addEntry = asyncHandler(async (req: Request, res: Response) => {
@@ -72,6 +75,97 @@ export class ResumeBankController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
+  runAtsScoring = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { jobId, manualSkills, topN = 10, sourceFilter, minMatchPct = 0, useAI = false } = req.body;
+
+    if (!jobId) {
+      res.status(400).json({ success: false, error: 'jobId is required to run ATS scoring' });
+      return;
+    }
+
+    let parsedManualSkills: string[] = [];
+    if (Array.isArray(manualSkills)) {
+      parsedManualSkills = manualSkills;
+    } else if (typeof manualSkills === 'string') {
+      parsedManualSkills = manualSkills.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    const atsResults = await this.atsService.scoreResumesForJob(ctx, Number(jobId), {
+      manualSkills: parsedManualSkills,
+      topN: Number(topN) || 10,
+      sourceFilter: sourceFilter as string,
+      minMatchPct: Number(minMatchPct) || 0,
+      useAI: Boolean(useAI),
+    });
+
+    res.json({
+      success: true,
+      data: atsResults.results,
+      meta: {
+        totalScanned: atsResults.totalScanned,
+        topN: Number(topN) || 10,
+        jobDetails: atsResults.jobDetails,
+      },
+    });
+  });
+
+  bulkUploadFiles = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const reqFiles = (req as any).files || [];
+    const singleFile = (req as any).file;
+    const { jobId, source } = req.body;
+
+    const filesToProcess: Array<{ buffer: Buffer; originalname: string }> = [];
+    const fs = await import('fs');
+
+    const extractBuffer = (f: any): Buffer | null => {
+      if (f.buffer && Buffer.isBuffer(f.buffer)) return f.buffer;
+      if (f.path && fs.existsSync(f.path)) {
+        const b = fs.readFileSync(f.path);
+        try { fs.unlinkSync(f.path); } catch (e) {}
+        return b;
+      }
+      return null;
+    };
+
+    if (Array.isArray(reqFiles) && reqFiles.length > 0) {
+      for (const f of reqFiles) {
+        const buf = extractBuffer(f);
+        if (buf) {
+          filesToProcess.push({
+            buffer: buf,
+            originalname: f.originalname,
+          });
+        }
+      }
+    } else if (singleFile) {
+      const buf = extractBuffer(singleFile);
+      if (buf) {
+        filesToProcess.push({
+          buffer: buf,
+          originalname: singleFile.originalname,
+        });
+      }
+    }
+
+    if (filesToProcess.length === 0) {
+      res.status(400).json({ success: false, error: 'No valid files received for upload' });
+      return;
+    }
+
+    const result = await this.resumeBankService.bulkUploadResumes(ctx, filesToProcess, {
+      jobId: jobId ? Number(jobId) : undefined,
+      source: (source as string) || 'bulk_import',
+    });
+
+    res.status(202).json({
+      success: true,
+      data: result,
+      message: `Bulk upload completed. Success: ${result.successCount}, Failed: ${result.failedCount}`,
+    });
+  });
+
   bulkUpload = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const file = (req as any).file;
@@ -81,7 +175,38 @@ export class ResumeBankController {
     }
 
     const fs = await import('fs');
-    const csvContent = fs.readFileSync(file.path, 'utf8');
+    let buffer: Buffer | null = file.buffer || null;
+    if (!buffer && file.path && fs.existsSync(file.path)) {
+      buffer = fs.readFileSync(file.path);
+      try { fs.unlinkSync(file.path); } catch (e) {}
+    }
+
+    if (!buffer) {
+      res.status(400).json({ success: false, error: 'Failed to read uploaded file buffer' });
+      return;
+    }
+
+    const ext = file.originalname.split('.').pop()?.toLowerCase();
+
+    if (ext === 'zip' || ext === 'rar' || ext === 'pdf' || ext === 'doc' || ext === 'docx') {
+      const result = await this.resumeBankService.bulkUploadResumes(
+        ctx,
+        [{ buffer, originalname: file.originalname }],
+        {
+          jobId: req.body.jobId ? Number(req.body.jobId) : undefined,
+          source: req.body.source || 'bulk_import',
+        }
+      );
+
+      res.status(202).json({
+        success: true,
+        data: result,
+        message: `Processed ${file.originalname}. Success: ${result.successCount}, Failed: ${result.failedCount}`,
+      });
+      return;
+    }
+
+    const csvContent = buffer.toString('utf8');
     const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     
     if (lines.length <= 1) {
@@ -94,7 +219,6 @@ export class ResumeBankController {
     
     const log = await this.resumeBankService.createUploadLog(ctx, file.originalname, dataRows.length);
 
-    // Process asynchronously (or synchronously here since we are in dev/local mode and it is very fast)
     let successCount = 0;
     let failedCount = 0;
     const errors: string[] = [];
@@ -137,16 +261,12 @@ export class ResumeBankController {
 
     await this.resumeBankService.updateUploadLog(ctx, log.id, successCount, failedCount, errors.length > 0 ? errors : null);
 
-    // Clean up temp file
-    try { fs.unlinkSync(file.path); } catch (e) {}
-
     res.status(202).json({
       success: true,
       data: log,
       message: `Processed ${dataRows.length} rows. Success: ${successCount}, Failed: ${failedCount}`,
     });
   });
-
 
   getUploadLogs = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;

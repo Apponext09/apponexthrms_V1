@@ -854,7 +854,8 @@ stored in the ApponextHRMS Secure Document Vault.
   };
 
   const getCalculatedAvailable = (bal: any): number => {
-    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+    const quotaFallback = parseFloat(bal?.annual_quota ?? bal?.annualQuota ?? 0) || 0;
+    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', quotaFallback);
     const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
@@ -1620,7 +1621,8 @@ stored in the ApponextHRMS Secure Document Vault.
                   {leaveBalances.map((bal, i) => {
                     const leaveName = getBalStr(bal, 'leave_name', 'leaveName', 'Leave');
                     const leaveCode = getBalStr(bal, 'leave_code', 'leaveCode', 'LV');
-                    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+                    const quotaFallback = parseFloat(bal?.annual_quota ?? bal?.annualQuota ?? 0) || 0;
+                    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', quotaFallback);
                     const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
                     const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
                     const available = getCalculatedAvailable(bal);

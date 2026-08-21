@@ -591,7 +591,7 @@ export function OrgLeaveSettings() {
         </div>
       ) : (
         <form onSubmit={handleSave} className="space-y-8">
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 rounded-2xl p-6 shadow-sm space-y-8">
+          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-8">
             {/* Header */}
             <div className="flex items-center gap-2 pb-4 border-b border-gray-50 dark:border-gray-800">
               <span className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -601,8 +601,8 @@ export function OrgLeaveSettings() {
 
             {/* Leave Clubbing */}
             <div className="mb-6">
-              <fieldset className="border border-gray-200 dark:border-gray-755 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Clubbing</legend>
+              <fieldset className="border border-gray-200 dark:border-slate-800 rounded-xl p-5 bg-gray-50/50 dark:bg-slate-800/40 relative">
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md">Leave Clubbing</legend>
                 <div className="space-y-4">
                   {leaveClubbingRules.map((rule, idx) => (
                     <div key={idx} className="space-y-3 pb-4 mb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:mb-0 last:pb-0 relative">
@@ -674,8 +674,8 @@ export function OrgLeaveSettings() {
 
             {/* Leave Restriction Policy */}
             <div className="mb-6">
-              <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 rounded-md">Leave Restriction Policy</legend>
+              <fieldset className="border border-gray-200 dark:border-slate-800 rounded-xl p-5 bg-gray-50/50 dark:bg-slate-800/40 relative">
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md">Leave Restriction Policy</legend>
                 <div className="space-y-4">
                   {leaveRestrictionRules.map((rule, idx) => (
                     <div key={idx} className="space-y-3 pb-4 mb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:mb-0 last:pb-0 relative">
@@ -760,8 +760,8 @@ export function OrgLeaveSettings() {
 
             {/* Leave Year Setting */}
             <div className="mb-6">
-              <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Year Setting</legend>
+              <fieldset className="border border-gray-200 dark:border-slate-800 rounded-xl p-5 bg-gray-50/50 dark:bg-slate-800/40 relative">
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md">Leave Year Setting</legend>
                 <div className="space-y-4">
 
                   {/* Leave Application Start Day */}
@@ -828,24 +828,24 @@ export function OrgLeaveSettings() {
                   </div>
 
                   {/* Table with Overrides */}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-750 rounded-lg bg-white dark:bg-gray-900 shadow-sm">
+                  <div className="pt-4 border-t border-gray-200 dark:border-slate-800">
+                    <div className="overflow-x-auto border border-gray-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm">
                       <table className="w-full text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                        <thead className="bg-gray-50 dark:bg-gray-850 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-755">
+                        <thead className="bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-b border-gray-200 dark:border-slate-700">
                           <tr>
                             <th className="px-4 py-2.5 w-16">#</th>
                             <th className="px-4 py-2.5">Leave Year Month</th>
                             <th className="px-4 py-2.5">Company - Location</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
                           {allOrgSettings
                             .filter(row => row.leave_application_start_month !== null && row.leave_application_start_month !== undefined)
                             .map((row, idx) => {
                               const locationObj = locations.find(l => l.uuid === row.location_id || (row.location_id === null && (l.uuid === '' || l.uuid === 'org-location-default')));
                               const monthName = months.find(m => m.value === row.leave_application_start_month)?.label || 'January';
                               return (
-                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
+                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-slate-800/60">
                                   <td className="px-4 py-2.5 flex items-center gap-2">
                                     <button
                                       type="button"
@@ -925,8 +925,8 @@ export function OrgLeaveSettings() {
 
             {/* Holiday Month Setting */}
             <div className="mb-6">
-              <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Holiday Month Setting</legend>
+              <fieldset className="border border-gray-200 dark:border-slate-800 rounded-xl p-5 bg-gray-50/50 dark:bg-slate-800/40 relative">
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md">Holiday Month Setting</legend>
                 <div className="space-y-4">
 
                   {/* Default Start Holiday Month + Save Default inline */}
@@ -953,24 +953,24 @@ export function OrgLeaveSettings() {
                   </div>
 
                   {/* Table with Overrides */}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-750 rounded-lg bg-white dark:bg-gray-900 shadow-sm">
+                  <div className="pt-4 border-t border-gray-200 dark:border-slate-800">
+                    <div className="overflow-x-auto border border-gray-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm">
                       <table className="w-full text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                        <thead className="bg-gray-50 dark:bg-gray-850 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-755">
+                        <thead className="bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-b border-gray-200 dark:border-slate-700">
                           <tr>
                             <th className="px-4 py-2.5 w-16">#</th>
                             <th className="px-4 py-2.5">Holiday Month</th>
                             <th className="px-4 py-2.5">Company - Location</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
                           {allOrgSettings
                             .filter(row => row.holiday_year_start_month !== null && row.holiday_year_start_month !== undefined)
                             .map((row, idx) => {
                               const locationObj = locations.find(l => l.uuid === row.location_id || (row.location_id === null && (l.uuid === '' || l.uuid === 'org-location-default')));
                               const monthName = months.find(m => m.value === row.holiday_year_start_month)?.label || 'January';
                               return (
-                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
+                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-slate-800/60">
                                   <td className="px-4 py-2.5 flex items-center gap-2">
                                     <button
                                       type="button"
@@ -1050,8 +1050,8 @@ export function OrgLeaveSettings() {
 
             {/* Leave Week Setting */}
             <div className="mb-6">
-              <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Week Setting</legend>
+              <fieldset className="border border-gray-200 dark:border-slate-800 rounded-xl p-5 bg-gray-50/50 dark:bg-slate-800/40 relative">
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md">Leave Week Setting</legend>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-250">Default Week Day:</span>
@@ -1075,24 +1075,24 @@ export function OrgLeaveSettings() {
                   </div>
 
                   {/* Table with Overrides */}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-750 rounded-lg bg-white dark:bg-gray-900 shadow-sm">
+                  <div className="pt-4 border-t border-gray-200 dark:border-slate-800">
+                    <div className="overflow-x-auto border border-gray-200 dark:border-slate-800 rounded-lg bg-white dark:bg-slate-900 shadow-sm">
                       <table className="w-full text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                        <thead className="bg-gray-50 dark:bg-gray-850 text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-755">
+                        <thead className="bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-b border-gray-200 dark:border-slate-700">
                           <tr>
                             <th className="px-4 py-2.5 w-16">#</th>
                             <th className="px-4 py-2.5">Week Day</th>
                             <th className="px-4 py-2.5">Company - Location</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
+                        <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
                           {allOrgSettings
                             .filter(row => row.default_week_day !== null && row.default_week_day !== undefined && row.default_week_day !== '')
                             .map((row, idx) => {
                               const locationObj = locations.find(l => l.uuid === row.location_id || (row.location_id === null && (l.uuid === '' || l.uuid === 'org-location-default')));
                               const dayName = row.default_week_day ? (row.default_week_day.charAt(0).toUpperCase() + row.default_week_day.slice(1)) : '-';
                               return (
-                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
+                                <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-slate-800/60">
                                   <td className="px-4 py-2.5 flex items-center gap-2">
                                     <button
                                       type="button"
@@ -1171,8 +1171,8 @@ export function OrgLeaveSettings() {
             </div>
 
             {/* Leave Application Reminder Settings */}
-            <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative mt-4">
-              <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+            <fieldset className="border border-gray-200 dark:border-slate-800 rounded-xl p-5 bg-gray-50/50 dark:bg-slate-800/40 relative mt-4">
+              <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md">
                 Leave Application Reminder Settings
               </legend>
               <div className="space-y-4">
@@ -1193,8 +1193,8 @@ export function OrgLeaveSettings() {
             </fieldset>
 
             {/* Leave Application Settings */}
-            <fieldset className="border border-gray-200 dark:border-gray-755 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative mt-4">
-              <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+            <fieldset className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 relative mt-4">
+              <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
                 Leave Application Settings
               </legend>
               <div className="space-y-4">
@@ -1277,11 +1277,11 @@ export function OrgLeaveSettings() {
           <form onSubmit={handleSaveHolidayMonthSetting} className="space-y-4">
 
             {/* Accordion Location List */}
-            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
+            <div className="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
               <button
                 type="button"
                 onClick={() => setIsModalLocationExpanded(!isModalLocationExpanded)}
-                className="w-full p-3 bg-gray-50 dark:bg-gray-850 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-755 dark:text-gray-300"
+                className="w-full p-3 bg-slate-100 dark:bg-slate-800 flex items-center justify-between border-b border-gray-200 dark:border-slate-700 text-xs font-bold text-gray-700 dark:text-gray-300"
               >
                 <span className="flex items-center gap-2">
                   {isModalLocationExpanded ? '[-]' : '[+]'} Company - Location

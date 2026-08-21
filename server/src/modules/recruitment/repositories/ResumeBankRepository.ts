@@ -36,6 +36,18 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
         });
       }
 
+      const hasAtsScore = await this.db.schema.hasColumn(this.tableName, 'ats_score');
+      if (!hasAtsScore) {
+        await this.db.schema.alterTable(this.tableName, (table) => {
+          table.integer('ats_score').nullable();
+          table.text('matched_skills').nullable();
+          table.text('missing_skills').nullable();
+          table.text('resume_text').nullable();
+          table.string('resume_file_url', 500).nullable();
+          table.timestamp('ats_scored_at').nullable();
+        });
+      }
+
       const hasCandidates = await this.db.schema.hasTable('candidates');
       if (hasCandidates) {
         const candidateCols = [

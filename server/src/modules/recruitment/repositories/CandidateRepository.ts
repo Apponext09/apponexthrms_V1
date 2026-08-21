@@ -57,6 +57,18 @@ export class CandidateRepository extends BaseRepository<Candidate> {
     } catch (err) {}
   }
 
+  override async create(ctx: TenantContext, data: Partial<Candidate>): Promise<Candidate> {
+    await this.ensureColumns();
+    const { v4: uuidv4 } = await import('uuid');
+    return super.create(ctx, {
+      uuid: data.uuid || uuidv4(),
+      status: data.status || 'applied',
+      created_by: data.created_by || ctx.userId || 1,
+      updated_by: data.updated_by || ctx.userId || 1,
+      ...data,
+    });
+  }
+
   protected getSearchableFields(): string[] {
     return ['first_name', 'last_name', 'email', 'current_company'];
   }

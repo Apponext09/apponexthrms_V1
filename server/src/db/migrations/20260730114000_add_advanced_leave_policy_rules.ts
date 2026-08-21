@@ -2,14 +2,17 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // 1. Add advanced policy columns to leave_policy_assignments
-  await knex.schema.alterTable('leave_policy_assignments', (table) => {
-    table.integer('max_backdated_days').nullable().defaultTo(null);
-    table.integer('max_future_days').nullable().defaultTo(null);
-    table.integer('max_consecutive_days').nullable().defaultTo(null);
-    table.boolean('notice_period_excluded').defaultTo(false);
-    table.boolean('prefix_suffix_rule_enabled').defaultTo(false);
-    table.integer('floating_holiday_quota').defaultTo(0);
-  });
+  const hasMaxBackdated = await knex.schema.hasColumn('leave_policy_assignments', 'max_backdated_days');
+  if (!hasMaxBackdated) {
+    await knex.schema.alterTable('leave_policy_assignments', (table) => {
+      table.integer('max_backdated_days').nullable().defaultTo(null);
+      table.integer('max_future_days').nullable().defaultTo(null);
+      table.integer('max_consecutive_days').nullable().defaultTo(null);
+      table.boolean('notice_period_excluded').defaultTo(false);
+      table.boolean('prefix_suffix_rule_enabled').defaultTo(false);
+      table.integer('floating_holiday_quota').defaultTo(0);
+    });
+  }
 
   // 2. Create leave_policy_mappings table for the bulk rule engine
   const mappingExists = await knex.schema.hasTable('leave_policy_mappings');
