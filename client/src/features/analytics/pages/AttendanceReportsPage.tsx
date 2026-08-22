@@ -11,6 +11,36 @@ import {
   useAttendanceReportQuery,
 } from '../hooks/useAttendanceReports';
 
+const getTodayStr = () => new Date().toISOString().split('T')[0];
+const get14DaysAgoStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  return d.toISOString().split('T')[0];
+};
+
+const defaultFilters: AttendanceReportFilterParams = {
+  companies: ['all'],
+  locations: [],
+  departments: [],
+  reportingOfficers: [],
+  employees: [],
+  status: 'active',
+  fromDate: get14DaysAgoStr(),
+  toDate: getTodayStr(),
+  isTabularView: true,
+  workType: 'choose',
+  statusFilters: {
+    present: true,
+    leave: true,
+    absent: true,
+    expected: true,
+    lateMark: false,
+    shortWorkingHour: false,
+    breakLog: false,
+    halfDay: true,
+  },
+};
+
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 

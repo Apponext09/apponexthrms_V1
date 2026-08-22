@@ -91,15 +91,18 @@ export function EmployeeBasicInfo({
   approvedRequestId,
 }: EmployeeBasicInfoProps) {
   const location = useLocation();
-  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const { user } = useAuthStore();
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user as any)?.role || (user as any)?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
+
+  const isEmployeePortal = location.pathname.startsWith('/employee') && !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const { consumePermission } = useConsumeEditPermission();
-  const { user } = useAuthStore();
-  const isAdmin = Boolean(
-    user?.roles?.includes('hr_manager') ||
-    user?.roles?.includes('organization_admin') ||
-    user?.roles?.includes('super_admin')
-  );
+  const isAdmin = isAdminOrHR;
 
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { employees } = useEmployees({ pageSize: 500 });

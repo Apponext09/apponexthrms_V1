@@ -21,10 +21,12 @@ import {
   MapPin,
   ShieldCheck,
   Eye,
+  Crown,
 } from 'lucide-react';
 import type { Employee } from '@/types';
 import { useDeleteEmployee } from '../hooks/useEmployees';
 import { EmployeeCustomizationConfig } from '../store/employeeCustomizationStore';
+import { cn } from '@/lib/utils';
 
 interface EmployeeDataTableProps {
   onEdit?: (employee: any) => void;
@@ -57,7 +59,7 @@ export function EmployeeDataTable({
     dateOfJoining: true,
     actions: true,
     actionViewProfile: true,
-    actionEdit: true,
+    actionEdit: false,
     actionDelete: true,
   };
 
@@ -107,11 +109,22 @@ export function EmployeeDataTable({
           {employees.map((employee: any) => {
             const initials = `${employee.firstName ? employee.firstName[0] : ''}${employee.lastName ? employee.lastName[0] : ''}`.toUpperCase() || 'E';
             const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || 'Unnamed';
+            const isCeo = Boolean(
+              employee.isCeo ||
+              employee.is_ceo ||
+              employee.accessRole === 'organization_admin' ||
+              (employee.employeeCode || employee.employee_code || '').startsWith('CEO-')
+            );
 
             return (
               <TableRow
                 key={employee.id}
-                className="group hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition-colors"
+                className={cn(
+                  'group transition-colors',
+                  isCeo
+                    ? 'bg-amber-500/10 dark:bg-amber-950/25 hover:bg-amber-500/15 border-l-4 border-l-amber-500 font-medium'
+                    : 'hover:bg-slate-50/80 dark:hover:bg-slate-900/40'
+                )}
               >
                 {/* Employee Name & Avatar */}
                 {cols.employeeNameAvatar && (
@@ -120,13 +133,27 @@ export function EmployeeDataTable({
                     className="py-3 px-4 font-medium cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary font-black flex items-center justify-center shrink-0 border border-primary/20 text-xs shadow-2xs group-hover:scale-105 transition-transform">
+                      <div
+                        className={cn(
+                          'w-8 h-8 rounded-full font-black flex items-center justify-center shrink-0 border text-xs shadow-2xs group-hover:scale-105 transition-transform',
+                          isCeo
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 font-extrabold shadow-amber-500/20'
+                            : 'bg-primary/10 text-primary border-primary/20'
+                        )}
+                      >
                         {initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="font-bold text-foreground group-hover:text-primary transition-colors truncate">
-                          {fullName}
-                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                            {fullName}
+                          </p>
+                          {isCeo && (
+                            <Badge className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] px-1.5 py-0 border-amber-400 gap-0.5 shadow-2xs">
+                              <Crown className="w-2.5 h-2.5 fill-slate-950" /> CEO
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-[11px] text-muted-foreground truncate flex items-center gap-1">
                           <Mail className="w-3 h-3 text-muted-foreground/70 shrink-0" />
                           {employee.email || '—'}
@@ -142,7 +169,14 @@ export function EmployeeDataTable({
                     onClick={() => navigate(`/employees/${employee.id}`)}
                     className="py-3 px-4 cursor-pointer font-mono font-semibold text-foreground/80"
                   >
-                    <span className="bg-muted/60 px-2 py-0.5 rounded text-[11px] border border-border/50">
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded text-[11px] border',
+                        isCeo
+                          ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200 border-amber-500/40 font-bold'
+                          : 'bg-muted/60 border-border/50'
+                      )}
+                    >
                       {employee.employeeCode || employee.employee_code || `EMP-${employee.id}`}
                     </span>
                   </TableCell>
@@ -188,8 +222,10 @@ export function EmployeeDataTable({
                 {cols.accessRole && (
                   <TableCell className="py-3 px-4">
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                        employee.accessRole === 'hr_manager' || employee.accessRole === 'organization_admin'
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                        isCeo
+                          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
+                          : employee.accessRole === 'hr_manager' || employee.accessRole === 'organization_admin'
                           ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
                           : employee.accessRole === 'department_head' || employee.accessRole === 'manager'
                           ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
@@ -198,18 +234,25 @@ export function EmployeeDataTable({
                           : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
                       }`}
                     >
-                      {employee.accessRole === 'organization_admin'
-                        ? 'Admin'
-                        : employee.accessRole === 'hr_manager'
-                        ? 'HR'
-                        : employee.accessRole === 'department_head' || employee.accessRole === 'manager'
-                        ? 'Manager'
-                        : employee.accessRole === 'team_lead'
-                        ? 'Team Lead'
-                        : 'Employee'}
+                      {isCeo ? (
+                        <>
+                          <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" /> CEO / Executive
+                        </>
+                      ) : employee.accessRole === 'organization_admin' ? (
+                        'Admin'
+                      ) : employee.accessRole === 'hr_manager' ? (
+                        'HR'
+                      ) : employee.accessRole === 'department_head' || employee.accessRole === 'manager' ? (
+                        'Manager'
+                      ) : employee.accessRole === 'team_lead' ? (
+                        'Team Lead'
+                      ) : (
+                        'Employee'
+                      )}
                     </span>
                   </TableCell>
                 )}
+
 
                 {/* Department */}
                 {cols.department && (
@@ -292,21 +335,6 @@ export function EmployeeDataTable({
                           className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-
-                      {cols.actionEdit && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Edit Employee"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/employees/${employee.id}/edit`);
-                          }}
-                          className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 cursor-pointer"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                       )}
 

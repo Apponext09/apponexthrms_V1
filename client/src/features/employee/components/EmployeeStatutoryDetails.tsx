@@ -6,6 +6,7 @@ import type { Employee } from '@/types';
 import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck, Lock, Eye, EyeOff } from 'lucide-react';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 // Helper functions to mask sensitive statutory & banking fields
 function maskAccountNumber(val: string): string {
@@ -86,7 +87,15 @@ interface EmployeeStatutoryDetailsProps {
 
 export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = false, approvedRequestId }: EmployeeStatutoryDetailsProps) {
   const location = useLocation();
-  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const { user } = useAuthStore();
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user as any)?.role || (user as any)?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
+
+  const isEmployeePortal = location.pathname.startsWith('/employee') && !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const { consumePermission } = useConsumeEditPermission();
 

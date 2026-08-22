@@ -467,6 +467,7 @@ export class GeoFenceService {
 
     const employees = await empQuery.select(
         'employees.id',
+        'employees.company_id',
         'employees.employee_code',
         'employees.first_name',
         'employees.last_name',
@@ -531,6 +532,7 @@ export class GeoFenceService {
       return {
         id: String(empId),
         employeeId: String(empId),
+        companyId: emp.companyId || emp.company_id || undefined,
         employeeCode: code,
         firstName: fn,
         lastName: ln,
@@ -556,6 +558,7 @@ export class GeoFenceService {
       const isOffice = Boolean(g.isOfficeLocation || g.is_office_location);
       return {
         id: String(g.id),
+        companyId: g.companyId || g.company_id || undefined,
         name: realName,
         code: realCode,
         city: isOffice ? 'Office Branch' : 'Client Site',
@@ -596,10 +599,89 @@ export class GeoFenceService {
         .filter((idNum) => !isNaN(idNum) && idNum > 0)
     ));
 
+    // Fetch existing geofence records for this organization to ensure foreign key validity
+    const existingGeofenceRows = await db('attendance_geofences')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .select('id', 'location_id');
+
+    const validGeofenceIds = new Set(existingGeofenceRows.map((g: any) => Number(g.id)));
+    const locationIdToGeoIdMap = new Map<number, number>();
+    existingGeofenceRows.forEach((g: any) => {
+      if (g.location_id) {
+        locationIdToGeoIdMap.set(Number(g.location_id), Number(g.id));
+      }
+    });
+
+    const resolvedGeoIds: number[] = [];
+    for (const rawIdNum of validGeoIds) {
+      if (validGeofenceIds.has(rawIdNum)) {
+        resolvedGeoIds.push(rawIdNum);
+      } else if (locationIdToGeoIdMap.has(rawIdNum)) {
+        resolvedGeoIds.push(locationIdToGeoIdMap.get(rawIdNum)!);
+      } else {
+        // Fallback: Check if there is a location in `locations` table and auto-create geofence record
+        const locMatch = await db('locations').where('id', rawIdNum).first().catch(() => null);
+        if (locMatch) {
+          // Ensure a matching attendance_locations record exists to satisfy foreign key `attendance_geofences_location_id_foreign`
+          let attLoc = await db('attendance_locations').where('id', locMatch.id).first().catch(() => null);
+          if (!attLoc && (locMatch.name || locMatch.location_name)) {
+            attLoc = await db('attendance_locations')
+              .where('location_name', locMatch.name || locMatch.location_name)
+              .first()
+              .catch(() => null);
+          }
+
+          let attLocId = attLoc ? attLoc.id : null;
+          if (!attLocId) {
+            const [newAttLocId] = await db('attendance_locations').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              company_id: locMatch.company_id || ctx.companyId || null,
+              location_name: locMatch.name || locMatch.location_name || `Location ${locMatch.id}`,
+              location_code: locMatch.code || `LOC-${locMatch.id}`,
+              latitude: 19.0760,
+              longitude: 72.8777,
+              is_primary: false,
+              is_active: true,
+              created_by: ctx.userId,
+              updated_by: ctx.userId,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            attLocId = newAttLocId;
+          }
+
+          if (attLocId) {
+            const [newGeoId] = await db('attendance_geofences').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              company_id: locMatch.company_id || ctx.companyId || null,
+              location_id: attLocId,
+              geofence_name: locMatch.name || locMatch.location_name || `Location ${locMatch.id}`,
+              latitude: 19.0760,
+              longitude: 72.8777,
+              radius_meters: 500,
+              is_office_location: 1,
+              created_by: ctx.userId,
+              updated_by: ctx.userId,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            if (newGeoId) {
+              validGeofenceIds.add(newGeoId);
+              resolvedGeoIds.push(newGeoId);
+            }
+          }
+        }
+      }
+    }
+
+    const cleanGeoIds = Array.from(new Set(resolvedGeoIds));
     const primaryGeoIdNum = Number(primaryLocationId);
-    const validPrimaryGeoId = !isNaN(primaryGeoIdNum) && primaryGeoIdNum > 0
+    const validPrimaryGeoId = cleanGeoIds.includes(primaryGeoIdNum)
       ? primaryGeoIdNum
-      : (validGeoIds[0] || null);
+      : (cleanGeoIds[0] || null);
 
     await db.transaction(async (trx) => {
       // Remove existing mapping for this employee
@@ -609,8 +691,8 @@ export class GeoFenceService {
         .delete();
 
       // Insert new mappings if any valid geofence IDs were selected
-      if (validGeoIds.length > 0) {
-        const rowsToInsert = validGeoIds.map((geoIdNum) => ({
+      if (cleanGeoIds.length > 0) {
+        const rowsToInsert = cleanGeoIds.map((geoIdNum) => ({
           organization_id: ctx.organizationId,
           employee_id: employeeId,
           geofence_id: geoIdNum,

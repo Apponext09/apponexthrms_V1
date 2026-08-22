@@ -142,6 +142,7 @@ export interface EmployeeDocumentCreate {
   fileUrl: string;
   fileName?: string;
   fileType?: string;
+  fileSize?: number;
   documentNumber?: string;
   issueDate?: string;
   expiryDate?: string;

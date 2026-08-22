@@ -55,7 +55,6 @@ const HR_NAV = [
         subItems: [
           { name: 'Employees', href: '/hr/employees', icon: Users },
           { name: 'Employee Lifecycle', href: '/hr/employee-lifecycle', icon: RefreshCw },
-          { name: 'Departments', href: '/hr/departments', icon: Building2 },
           { name: 'Org Structure', href: '/hr/org-structure', icon: GitBranch },
         ],
       },
@@ -115,7 +114,7 @@ const HR_NAV = [
         subItems: [
           { name: 'Attendance Dashboard', href: '/hr/attendance', icon: LayoutDashboard },
           { name: 'Live Employee Tracking', href: '/hr/live-tracking', icon: Navigation },
-          { name: 'Location Access Mapping', href: '/hr/attendance/locations', icon: MapPin },
+          { name: 'Location Management & Mapping', href: '/hr/attendance/locations', icon: MapPin },
         ],
       },
       { name: 'Leave Approvals', href: '/hr/leaves/approvals', icon: CheckCircle2 },

@@ -865,7 +865,14 @@ export class AttendanceController {
     const data = await this.policyService.assignPolicyScope(ctx, id, assignedDepartments || []);
     res.json({ success: true, message: 'Attendance policy scope assigned successfully in DB', data });
   });
+
+  getCeoPunches = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.attendanceService.getCeoPunches(ctx);
+    res.json({ success: true, data });
+  });
 }
 
 export const attendanceController = new AttendanceController();
+
 

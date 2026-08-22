@@ -8,6 +8,7 @@ import { Edit, Save, X, Loader2, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   useEmployeePersonalInfo,
   useUpdatePersonalInfo,
@@ -29,7 +30,15 @@ function formatValue(value: unknown): string {
 
 export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approvedRequestId }: EmployeePersonalInfoProps) {
   const location = useLocation();
-  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const { user } = useAuthStore();
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user as any)?.role || (user as any)?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
+
+  const isEmployeePortal = location.pathname.startsWith('/employee') && !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const { consumePermission } = useConsumeEditPermission();
 
