@@ -2221,6 +2221,7 @@ export class AttendanceService {
           }
         }
       }
+      //Date format yyyy-mm-dd
 
       let rawDate = r.check_in_date || r.checkInDate || rawIn;
       let formattedDate = '';
