@@ -152,4 +152,49 @@ export class BiometricController {
       });
     }
   };
+
+  ceoPunch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const { image, images, action } = req.body;
+      if (!image && (!Array.isArray(images) || images.length === 0)) {
+        res.status(400).json({ success: false, message: 'Snapshot image payload is required' });
+        return;
+      }
+      if (!['check_in', 'check_out'].includes(action)) {
+        res.status(400).json({ success: false, message: 'action must be check_in or check_out' });
+        return;
+      }
+      const result = await this.biometricService.ceoPunch(
+        req.ctx,
+        Array.isArray(images) && images.length ? images : image,
+        action as 'check_in' | 'check_out'
+      );
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: this.clientMessage(error, 'CEO biometric punch failed. Please try again.'),
+      });
+    }
+  };
+
+  getCeoStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const result = await this.biometricService.getCeoStatus(req.ctx);
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: this.clientMessage(error, 'Failed to load CEO status'),
+      });
+    }
+  };
 }

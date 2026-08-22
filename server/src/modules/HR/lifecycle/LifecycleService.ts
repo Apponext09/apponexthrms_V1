@@ -67,6 +67,9 @@ export class LifecycleService {
       .leftJoin('attendance_locations as loc', 'employees.current_location_id', 'loc.id')
       .where('employees.organization_id', ctx.organizationId)
       .whereNull('employees.deleted_at')
+      .where(function () {
+        this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
+      })
       .select(
         'employees.id',
         'employees.uuid',

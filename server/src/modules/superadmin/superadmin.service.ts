@@ -265,6 +265,38 @@ export class SuperAdminService {
             assigned_at: knex.fn.now(),
           });
         }
+
+        // Auto-provision CEO employee record for the newly created organization admin
+        try {
+          const ceoEmpExists = await knex('employees')
+            .where({ organization_id: id, is_ceo: true })
+            .whereNull('deleted_at')
+            .first();
+
+          if (!ceoEmpExists) {
+            const empCode = `CEO-${id}-${userId}`;
+            const [ceoEmpId] = await knex('employees').insert({
+              uuid: uuidv4(),
+              organization_id: id,
+              employee_code: empCode,
+              first_name: firstName || 'CEO',
+              last_name: lastName || '',
+              email: cleanEmail,
+              status: 'active',
+              is_ceo: true,
+              is_ceo_profile_hidden: true,
+              date_of_joining: new Date().toISOString().slice(0, 10),
+              created_by: userId,
+              updated_by: userId,
+              created_at: knex.fn.now(),
+              updated_at: knex.fn.now(),
+            });
+
+            await knex('users').where('id', userId).update({ employee_id: ceoEmpId, updated_at: knex.fn.now() }).catch(() => {});
+          }
+        } catch (ceoErr) {
+          console.warn('Failed to auto-create CEO employee record during tenant provisioning:', ceoErr);
+        }
       } catch (e) {
         console.error('Admin user auto-creation error during tenant provisioning:', e);
       }
