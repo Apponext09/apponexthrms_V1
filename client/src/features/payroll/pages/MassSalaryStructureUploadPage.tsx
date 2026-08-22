@@ -17,7 +17,17 @@ import {
   Search,
   Calendar,
   DollarSign,
-  Filter
+  Filter,
+  Mail,
+  UserCheck,
+  Building2,
+  Tag,
+  ChevronRight,
+  X,
+  FileCheck,
+  Hash,
+  Sliders,
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,6 +93,7 @@ export function MassSalaryStructureUploadPage() {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<any | null>(null);
   const [uploadLogs, setUploadLogs] = useState<UploadLog[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Fetch Master Slabs, Cycles & Employees
   useEffect(() => {
@@ -364,10 +375,8 @@ export function MassSalaryStructureUploadPage() {
   };
 
   // ── PARSE SPREADSHEET FILE ──
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processFile = (file: File) => {
     if (!file) return;
-
     setSelectedFile(file);
     setFileName(file.name);
     setUploadSuccess(null);
@@ -431,6 +440,18 @@ export function MassSalaryStructureUploadPage() {
     };
 
     reader.readAsText(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
   };
 
   // ── SUBMIT SPREADSHEET UPLOAD ──
@@ -500,102 +521,403 @@ export function MassSalaryStructureUploadPage() {
   const selectedSlabObj = slabs.find((s) => String(s.id) === String(selectedSlabId));
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in">
-      {/* Top Header Banner */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-            Mass Salary Structure &amp; Slab Assignment <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Assign Salary Slabs, Annual CTC, and Effective Dates across employees in bulk or via spreadsheet upload.
-          </p>
+    <div className="p-6 max-w-7xl mx-auto space-y-6 animate-fade-in font-sans">
+      {/* ── TOP HEADER BANNER (MATCHES PAYROLL MASTER SETTINGS EXACTLY) ── */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-[#5b52f6] text-white flex items-center justify-center shadow-sm flex-shrink-0">
+            <UploadCloud className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+              Mass Salary Structure &amp; Slab Assignment
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Assign Salary Slabs, Annual CTC, and Effective Dates across employees in bulk or via spreadsheet upload.
+            </p>
+          </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={fetchMasterData}
-          disabled={loading}
-          className="text-xs font-bold"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
-        </Button>
+        {/* Sub-Tab Navigation Switcher on Top Right (Matches Payroll Master Settings Header Tabs) */}
+        <div className="flex items-center gap-3">
+          <div className="bg-[#f1f5f9] dark:bg-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-inner">
+            <button
+              onClick={() => setActiveTab('upload')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'upload'
+                  ? 'bg-white dark:bg-slate-900 text-[#5b52f6] dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Spreadsheet Upload (CSV)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('assign')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'assign'
+                  ? 'bg-white dark:bg-slate-900 text-[#5b52f6] dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Bulk Assign Slabs &amp; CTC</span>
+              {selectedEmpIds.length > 0 && (
+                <Badge className="bg-[#5b52f6] text-white text-[10px] px-1.5 py-0 h-4 font-extrabold">
+                  {selectedEmpIds.length}
+                </Badge>
+              )}
+            </button>
+
+            <button
+              onClick={() => setActiveTab('log')}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'log'
+                  ? 'bg-white dark:bg-slate-900 text-[#5b52f6] dark:text-indigo-400 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>Upload Log History</span>
+            </button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchMasterData}
+            disabled={loading}
+            className="border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold h-9 px-3 rounded-xl shadow-2xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 text-indigo-600 ${loading ? 'animate-spin' : ''}`} />
+            Refresh Data
+          </Button>
+        </div>
       </div>
 
-      {/* Navigation Sub-Tabs */}
-      <div className="flex border-b border-border space-x-1">
-        <button
-          onClick={() => setActiveTab('upload')}
-          className={`px-5 py-2.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-            activeTab === 'upload'
-              ? 'border-primary text-primary bg-primary/5'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <UploadCloud className="w-3.5 h-3.5" /> Spreadsheet Upload (CSV)
-        </button>
+      {/* ── TAB 1: SPREADSHEET UPLOAD (CSV / EXCEL) ── */}
+      {activeTab === 'upload' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Box: Drag & Drop Portal */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <FileSpreadsheet className="w-5 h-5 text-[#5b52f6]" />
+                    Upload Salary Component Spreadsheet
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Upload employee salary structure sheets to map annual CTCs and slabs automatically.
+                  </p>
+                </div>
+                <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-950/50 text-[#5b52f6] dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-xs font-bold">
+                  Max Size: 10MB
+                </Badge>
+              </div>
 
-        <button
-          onClick={() => setActiveTab('assign')}
-          className={`px-5 py-2.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-            activeTab === 'assign'
-              ? 'border-primary text-primary bg-primary/5'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" /> Bulk Assign Slabs &amp; CTC
-        </button>
+              {/* Interactive Drag & Drop Area */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer relative group ${
+                  isDragging
+                    ? 'border-[#5b52f6] bg-indigo-50/60 dark:bg-indigo-950/40 scale-[0.99]'
+                    : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/20 hover:border-[#5b52f6]'
+                }`}
+              >
+                <input
+                  type="file"
+                  accept=".csv, .xlsx, .txt"
+                  onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                />
 
-        <button
-          onClick={() => setActiveTab('log')}
-          className={`px-5 py-2.5 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 ${
-            activeTab === 'log'
-              ? 'border-primary text-primary bg-primary/5'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <History className="w-3.5 h-3.5" /> Upload Log History
-        </button>
-      </div>
+                <div className="space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-[#5b52f6]/10 text-[#5b52f6] flex items-center justify-center mx-auto shadow-2xs group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-7 h-7" />
+                  </div>
 
-      {/* ── TAB 1: INTERACTIVE BULK ASSIGN GRID ── */}
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Drag &amp; drop your salary CSV file here
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      or <span className="text-[#5b52f6] dark:text-indigo-400 font-extrabold underline">click to browse</span> from your computer
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <span className="px-2.5 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-500">.CSV</span>
+                    <span className="px-2.5 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-500">.XLSX</span>
+                    <span className="px-2.5 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-500">UTF-8</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Selected File Preview Box */}
+              {selectedFile ? (
+                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between animate-fade-in shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-[#059669] text-white">
+                      <FileCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">{fileName}</div>
+                      <div className="text-[11px] text-[#059669] dark:text-emerald-400 font-semibold">
+                        {(selectedFile.size / 1024).toFixed(1)} KB • Ready for processing
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setFileName('');
+                      setParsedRows([]);
+                    }}
+                    className="text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                  >
+                    <X className="w-4 h-4 mr-1" /> Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-center py-1 text-xs text-slate-400 font-medium">
+                  No file selected yet. Choose a CSV or sample file to begin.
+                </div>
+              )}
+
+              {/* Main Submit Button (Emerald Green - Matches + + Add Component in Payroll Master Settings) */}
+              <Button
+                onClick={handleUploadSubmit}
+                disabled={isSubmitting || (!selectedFile && parsedRows.length === 0)}
+                className="w-full h-11 bg-[#059669] hover:bg-[#047857] text-white font-extrabold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-4 h-4" />
+                )}
+                <span>Upload &amp; Assign Salary Components</span>
+              </Button>
+            </div>
+
+            {/* Right Box: Configurations & Sample Template */}
+            <div className="lg:col-span-5 space-y-5">
+              {/* Default Slab Configuration */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <Tag className="w-4 h-4 text-[#5b52f6]" />
+                  Default Payroll Slab Settings
+                </h3>
+
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold text-slate-900 dark:text-white">
+                    Default Payroll Slab <span className="text-red-500">*</span>
+                  </Label>
+                  <select
+                    value={selectedSlabId}
+                    onChange={(e) => setSelectedSlabId(e.target.value)}
+                    className="w-full h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-[#5b52f6] shadow-2xs"
+                  >
+                    {slabs.length === 0 ? (
+                      <option value="">-- No Slabs Available --</option>
+                    ) : (
+                      slabs.map((slab) => {
+                        const matchedCycle = cycles.find(
+                          (c) => String(c.id) === String(slab.cycleId || slab.cycle_id)
+                        );
+                        const cycleLabel = matchedCycle
+                          ? matchedCycle.cycle_name || matchedCycle.name
+                          : 'Monthly';
+                        return (
+                          <option key={slab.id} value={slab.id}>
+                            {cycleLabel} • {slab.name || slab.slab_name || `Slab #${slab.id}`}
+                          </option>
+                        );
+                      })
+                    )}
+                  </select>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <Label className="text-xs font-bold text-slate-900 dark:text-white">
+                    Download Sheet Identifier Basis
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2 bg-[#f1f5f9] dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200/60 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setDownloadBasis('empCode')}
+                      className={`h-8 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        downloadBasis === 'empCode'
+                          ? 'bg-[#5b52f6] text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      }`}
+                    >
+                      <Hash className="w-3.5 h-3.5" />
+                      <span>Emp Code</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDownloadBasis('email')}
+                      className={`h-8 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        downloadBasis === 'email'
+                          ? 'bg-[#5b52f6] text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                      }`}
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Email</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sample Sheet Download Card */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Download className="w-4 h-4 text-[#5b52f6]" />
+                      Download Sample Template
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Get a pre-formatted CSV template tailored with active employees and columns.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs text-slate-500 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <div className="font-bold text-slate-700 dark:text-slate-300 text-[11px] uppercase tracking-wider">Included Columns:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-mono font-semibold">Employee Identifier</span>
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-mono font-semibold">Name</span>
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-mono font-semibold">Payroll Slab</span>
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-mono font-semibold">Annual CTC</span>
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-[11px] font-mono font-semibold">Effective Date</span>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleDownloadSample}
+                  className="w-full h-10 bg-[#059669] hover:bg-[#047857] text-white font-extrabold text-xs rounded-xl shadow-2xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Sample CSV File</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Parsed Preview Table */}
+          {parsedRows.length > 0 && (
+            <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h3 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  Loaded Records Preview ({parsedRows.length})
+                </h3>
+                <span className="text-xs font-bold text-[#5b52f6] bg-indigo-50 dark:bg-indigo-950 px-3 py-1 rounded-full border border-indigo-200 dark:border-indigo-800">
+                  Target Slab: {selectedSlabObj?.name || 'Selected Slab'}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 max-h-72 shadow-2xs">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800 sticky top-0">
+                    <tr>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Emp Identifier</th>
+                      <th className="p-3">Matched Employee Name</th>
+                      <th className="p-3">Payroll Slab</th>
+                      <th className="p-3 text-right">Offered Annual CTC</th>
+                      <th className="p-3">Effective Date</th>
+                      <th className="p-3 text-right">Est. Monthly Gross</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {parsedRows.map((r, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="p-3">
+                          {r.status === 'valid' ? (
+                            <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                              Valid
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 px-2.5 py-0.5 rounded-full border border-amber-200 dark:border-amber-800">
+                              Not Found
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 font-mono font-bold text-slate-900 dark:text-white">{r.employeeCode}</td>
+                        <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                          {r.matchedEmpName || (
+                            <span className="text-slate-400 italic">No match</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-[#5b52f6] dark:text-indigo-400 font-bold">{r.matchedSlabName}</td>
+                        <td className="p-3 text-right font-extrabold text-[#059669] dark:text-emerald-400">
+                          ₹{r.annualCtc.toLocaleString('en-IN')}
+                        </td>
+                        <td className="p-3 font-mono font-medium text-slate-700 dark:text-slate-300">{r.effectiveFrom}</td>
+                        <td className="p-3 text-right font-bold text-slate-900 dark:text-white">
+                          ₹{Math.round(r.annualCtc / 12).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TAB 2: INTERACTIVE BULK ASSIGN GRID ── */}
       {activeTab === 'assign' && (
-        <div className="space-y-4">
-          {/* Target Slab Assignment Control Bar */}
-          <div className="border border-emerald-300/80 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 rounded-xl shadow-xs space-y-4">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-emerald-200/60 dark:border-emerald-900/60">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-emerald-600 text-white shadow-2xs">
-                  <Layers className="w-4 h-4" />
+        <div className="space-y-5">
+          {/* Target Slab Assignment Control Bar (Teal Header Accent matching Group Headers in Master Settings) */}
+          <div className="border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 rounded-2xl shadow-xs overflow-hidden">
+            {/* Header Strip in Teal Accent */}
+            <div className="bg-gradient-to-r from-teal-600 to-cyan-600 text-white p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-white/20 backdrop-blur">
+                  <Layers className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-foreground">Bulk Assign Salary Slabs to Staff</h2>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="text-sm font-extrabold text-white">Bulk Assign Salary Slabs to Staff</h2>
+                  <p className="text-xs text-teal-100 mt-0.5">
                     Set target slab, annual CTC, and effective date, select employees, and assign with 1 click.
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-700">
+                <span className="text-xs font-extrabold text-white bg-white/20 px-3 py-1 rounded-full border border-white/30 backdrop-blur">
                   {selectedEmpIds.length} Staff Selected
                 </span>
                 <button
                   onClick={handleBulkAssign}
                   disabled={isSubmitting || selectedEmpIds.length === 0}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-xs cursor-pointer transition-all"
+                  className="flex items-center gap-2 bg-[#059669] hover:bg-[#047857] disabled:opacity-50 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-sm cursor-pointer transition-all"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-4 h-4" />
                   {isSubmitting ? 'Assigning...' : `Assign Slabs to Selected (${selectedEmpIds.length})`}
                 </button>
               </div>
             </div>
 
             {/* Global Slab Selector & Options: Slab + CTC + Effective Date */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+            <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1">
+                <label className="text-xs font-bold text-slate-900 dark:text-white block mb-1">
                   Target Salary Slab to Assign <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -606,7 +928,7 @@ export function MassSalaryStructureUploadPage() {
                     const minCtc = matched?.min_ctc || matched?.minCtc;
                     if (minCtc) setDefaultCtc(String(minCtc));
                   }}
-                  className="w-full h-9 text-xs border border-input rounded-lg px-2.5 bg-background text-foreground font-semibold"
+                  className="w-full h-10 text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold shadow-2xs"
                 >
                   {slabs.map((s: any) => (
                     <option key={s.id} value={s.id}>
@@ -619,7 +941,7 @@ export function MassSalaryStructureUploadPage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1">
+                <label className="text-xs font-bold text-slate-900 dark:text-white block mb-1">
                   Default Annual CTC (₹) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -627,39 +949,39 @@ export function MassSalaryStructureUploadPage() {
                   value={defaultCtc}
                   onChange={(e) => setDefaultCtc(e.target.value)}
                   placeholder="e.g. 600000"
-                  className="w-full h-9 text-xs border border-input rounded-lg px-2.5 bg-background text-foreground font-bold"
+                  className="w-full h-10 text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-bold shadow-2xs"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-foreground block mb-1">
+                <label className="text-xs font-bold text-slate-900 dark:text-white block mb-1">
                   Effective From Date <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="date"
                   value={defaultEffectiveFrom}
                   onChange={(e) => setDefaultEffectiveFrom(e.target.value)}
-                  className="w-full h-9 text-xs border border-input rounded-lg px-2.5 bg-background text-foreground font-semibold"
+                  className="w-full h-10 text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold shadow-2xs"
                 />
               </div>
             </div>
           </div>
 
           {/* Filter / Search Bar */}
-          <div className="bg-card border border-border rounded-xl p-3 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 bg-muted/40 border border-border/80 rounded-lg px-2.5 py-1.5 flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-muted-foreground" />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 flex flex-wrap items-center gap-3 shadow-xs">
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search staff by name or code..."
-                className="text-xs bg-transparent outline-none w-full text-foreground placeholder:text-muted-foreground"
+                className="text-xs bg-transparent outline-none w-full text-slate-900 dark:text-white placeholder:text-slate-400"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-muted-foreground hover:text-foreground text-xs"
+                  className="text-slate-400 hover:text-slate-700 text-xs font-bold px-1"
                 >
                   ✕
                 </button>
@@ -670,7 +992,7 @@ export function MassSalaryStructureUploadPage() {
             <select
               value={selectedDept}
               onChange={(e) => setSelectedDept(e.target.value)}
-              className="text-xs border border-input rounded-lg px-2.5 py-1.5 bg-background text-foreground cursor-pointer"
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs font-semibold"
             >
               <option value="ALL">All Departments</option>
               {departments.map((d: any) => (
@@ -684,7 +1006,7 @@ export function MassSalaryStructureUploadPage() {
             <select
               value={selectedGrade}
               onChange={(e) => setSelectedGrade(e.target.value)}
-              className="text-xs border border-input rounded-lg px-2.5 py-1.5 bg-background text-foreground cursor-pointer"
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs font-semibold"
             >
               <option value="ALL">All Grades</option>
               {grades.map((g: any) => (
@@ -698,7 +1020,7 @@ export function MassSalaryStructureUploadPage() {
             <select
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
-              className="text-xs border border-input rounded-lg px-2.5 py-1.5 bg-background text-foreground cursor-pointer"
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs font-semibold"
             >
               <option value="ALL">All Locations</option>
               {locations.map((l: any) => (
@@ -712,7 +1034,7 @@ export function MassSalaryStructureUploadPage() {
             <select
               value={selectedAssignmentStatus}
               onChange={(e) => setSelectedAssignmentStatus(e.target.value)}
-              className="text-xs border border-input rounded-lg px-2.5 py-1.5 bg-background text-foreground cursor-pointer"
+              className="text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 cursor-pointer shadow-2xs font-semibold"
             >
               <option value="ALL">All Staff</option>
               <option value="UNASSIGNED">Unassigned Only</option>
@@ -721,88 +1043,86 @@ export function MassSalaryStructureUploadPage() {
           </div>
 
           {/* Employee List Table */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
             <div className="overflow-x-auto max-h-[550px] overflow-y-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-muted/60 text-muted-foreground font-bold border-b border-border sticky top-0 backdrop-blur">
+                <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800 sticky top-0 backdrop-blur">
                   <tr>
-                    <th className="py-2.5 px-3 w-10 text-center">
+                    <th className="py-3 px-3 w-10 text-center">
                       <input
                         type="checkbox"
                         checked={isAllSelected}
                         onChange={handleToggleSelectAll}
-                        className="rounded border-border cursor-pointer"
+                        className="rounded border-slate-300 cursor-pointer"
                       />
                     </th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Employee Details</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Department &amp; Location</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Designation / Grade</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Current Slab</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Target Slab</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Offered Annual CTC (₹)</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground">Effective Date</th>
-                    <th className="py-2.5 px-4 font-bold text-foreground text-right">Quick Action</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Employee Details</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Department &amp; Location</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Designation / Grade</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Current Slab</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Target Slab</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Offered Annual CTC (₹)</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white">Effective Date</th>
+                    <th className="py-3 px-4 font-bold text-slate-900 dark:text-white text-right">Quick Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {filteredEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="text-center py-12 text-muted-foreground">
-                        No employees matching filter criteria found.
+                      <td colSpan={9} className="text-center py-12 text-slate-400 font-medium">
+                        No employees found matching criteria.
                       </td>
                     </tr>
                   ) : (
                     filteredEmployees.map((emp: any) => {
-                      const isChecked = selectedEmpIds.includes(Number(emp.id));
-                      const currentSlabName =
-                        emp.slab_name || emp.slabName || emp.structure_name || emp.salary_slab_id || emp.salarySlabId;
-                      const currentCtc =
-                        emp.annual_ctc || emp.annualCtc || (emp.gross_monthly ? Number(emp.gross_monthly) * 12 : null);
-                      const rowSlab = customSlabMap[emp.id] || emp.slab_id || selectedSlabId;
-                      const rowCtc = customCtcMap[emp.id] || (currentCtc ? String(currentCtc) : defaultCtc) || '480000';
-                      const rowEffDate =
-                        customEffectiveDateMap[emp.id] || defaultEffectiveFrom;
+                      const empId = Number(emp.id);
+                      const isSelected = selectedEmpIds.includes(empId);
+                      const currentSlabName = emp.slab_name || emp.salary_slab_name;
+                      const currentCtc = emp.annual_ctc;
+                      const rowSlab = customSlabMap[empId] || selectedSlabId;
+                      const rowCtc = customCtcMap[empId] ?? defaultCtc;
+                      const rowEffDate = customEffectiveDateMap[empId] ?? defaultEffectiveFrom;
 
                       return (
                         <tr
                           key={emp.id}
-                          className={`hover:bg-muted/40 transition-colors ${
-                            isChecked ? 'bg-primary/5' : ''
+                          className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${
+                            isSelected ? 'bg-indigo-50/40 dark:bg-indigo-950/20' : ''
                           }`}
                         >
                           <td className="py-3 px-3 text-center">
                             <input
                               type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleToggleSelectEmp(Number(emp.id))}
-                              className="rounded border-border cursor-pointer"
+                              checked={isSelected}
+                              onChange={() => handleToggleSelectEmp(empId)}
+                              className="rounded border-slate-300 cursor-pointer"
                             />
                           </td>
                           <td className="py-3 px-4">
-                            <div className="font-bold text-foreground">
+                            <div className="font-bold text-slate-900 dark:text-white">
                               {emp.firstName || emp.first_name || emp.name}{' '}
                               {emp.lastName || emp.last_name || ''}
                             </div>
-                            <div className="text-[10px] text-muted-foreground font-mono">
-                              {emp.employeeCode || emp.employee_code || emp.code || `EMP-${emp.id}`}
+                            <div className="text-[11px] font-mono text-slate-400">
+                              {emp.employeeCode || emp.employee_code || emp.code || '—'}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            <div className="font-semibold text-foreground">
-                              {emp.department || emp.department_name || 'General'}
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-900 dark:text-white">
+                              {emp.department || emp.department_name || '—'}
                             </div>
-                            <div className="text-[10px]">
-                              {emp.location || emp.location_name || 'Headquarters'}
+                            <div className="text-[11px] text-slate-400">
+                              {emp.location || emp.location_name || emp.branch || '—'}
                             </div>
                           </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            <div>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-900 dark:text-white">
                               {emp.designation ||
                                 emp.designation_name ||
                                 emp.job_title ||
                                 'Staff'}
                             </div>
-                            <div className="text-[10px] font-mono">
+                            <div className="text-[10px] font-mono text-slate-400">
                               Grade: {emp.grade || emp.grade_name || '—'}
                             </div>
                           </td>
@@ -830,9 +1150,9 @@ export function MassSalaryStructureUploadPage() {
                             <select
                               value={rowSlab}
                               onChange={(e) =>
-                                setCustomSlabMap({ ...customSlabMap, [emp.id]: e.target.value })
+                                setCustomSlabMap({ ...customSlabMap, [empId]: e.target.value })
                               }
-                              className="text-xs border border-input rounded px-2 py-1 bg-background text-foreground font-semibold"
+                              className="text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-semibold shadow-2xs"
                             >
                               {slabs.map((s: any) => (
                                 <option key={s.id} value={s.id}>
@@ -846,10 +1166,10 @@ export function MassSalaryStructureUploadPage() {
                               type="number"
                               value={rowCtc}
                               onChange={(e) =>
-                                setCustomCtcMap({ ...customCtcMap, [emp.id]: e.target.value })
+                                setCustomCtcMap({ ...customCtcMap, [empId]: e.target.value })
                               }
                               placeholder="Annual CTC"
-                              className="w-28 h-7 border border-input bg-background rounded px-2 text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400"
+                              className="w-28 h-8 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2 text-xs font-bold font-mono text-[#059669] dark:text-emerald-400 shadow-2xs"
                             />
                           </td>
                           <td className="py-3 px-4">
@@ -859,16 +1179,16 @@ export function MassSalaryStructureUploadPage() {
                               onChange={(e) =>
                                 setCustomEffectiveDateMap({
                                   ...customEffectiveDateMap,
-                                  [emp.id]: e.target.value,
+                                  [empId]: e.target.value,
                                 })
                               }
-                              className="w-32 h-7 border border-input bg-background rounded px-1.5 text-xs font-semibold text-foreground"
+                              className="w-32 h-8 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg px-2 text-xs font-semibold text-slate-800 dark:text-slate-200 shadow-2xs"
                             />
                           </td>
                           <td className="py-3 px-4 text-right">
                             <button
                               onClick={() => handleSingleAssign(emp)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition-colors shadow-2xs"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#059669] hover:bg-[#047857] text-white font-extrabold text-[11px] cursor-pointer transition-colors shadow-2xs"
                             >
                               ✓ Assign
                             </button>
@@ -884,198 +1204,17 @@ export function MassSalaryStructureUploadPage() {
         </div>
       )}
 
-      {/* ── TAB 2: SPREADSHEET UPLOAD (CSV/EXCEL) ── */}
-      {activeTab === 'upload' && (
-        <div className="space-y-6">
-          <div className="p-8 bg-card border border-border rounded-xl shadow-xs space-y-6 relative max-w-4xl mx-auto">
-            <div className="absolute top-6 right-6 text-muted-foreground/40">
-              <UploadCloud className="w-10 h-10" />
-            </div>
-
-            <h2 className="text-center font-extrabold text-foreground text-lg">
-              Upload Salary Component Spreadsheet
-            </h2>
-
-            {/* File Chooser Strip */}
-            <div className="flex items-center justify-center gap-3">
-              <div className="flex items-center border border-input rounded-md overflow-hidden bg-background max-w-md w-full">
-                <label className="bg-muted px-3 py-2 text-xs font-bold cursor-pointer hover:bg-muted/80 border-r text-foreground flex-shrink-0">
-                  Choose File
-                  <input
-                    type="file"
-                    accept=".csv, .xlsx, .txt"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                </label>
-                <span className="px-3 text-xs text-muted-foreground truncate flex-1">
-                  {fileName ? fileName : 'No file chosen'}
-                </span>
-              </div>
-
-              <Button
-                onClick={handleUploadSubmit}
-                disabled={isSubmitting}
-                className="bg-sky-600 hover:bg-sky-700 text-white font-extrabold text-xs px-6 shadow-sm flex items-center gap-1.5"
-              >
-                {isSubmitting ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <UploadCloud className="w-4 h-4" />
-                )}{' '}
-                Upload &amp; Assign
-              </Button>
-            </div>
-            <p className="text-[11px] text-emerald-600 font-bold text-center">Max Size : 10MB</p>
-
-            <hr className="border-border my-4" />
-
-            {/* Slab Selection & Sample File Download Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end pt-2">
-              <div className="space-y-3">
-                <Label className="text-xs font-bold text-foreground flex items-center gap-1">
-                  Default Payroll Slab <span className="text-red-500 font-extrabold">*</span>
-                </Label>
-                <select
-                  value={selectedSlabId}
-                  onChange={(e) => setSelectedSlabId(e.target.value)}
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground focus:ring-1 focus:ring-indigo-500"
-                >
-                  {slabs.length === 0 ? (
-                    <option value="">-- No Slabs Available --</option>
-                  ) : (
-                    slabs.map((slab) => {
-                      const matchedCycle = cycles.find(
-                        (c) => String(c.id) === String(slab.cycleId || slab.cycle_id)
-                      );
-                      const cycleLabel = matchedCycle
-                        ? matchedCycle.cycle_name || matchedCycle.name
-                        : 'Monthly';
-                      return (
-                        <option key={slab.id} value={slab.id}>
-                          {cycleLabel} • {slab.name || slab.slab_name || `Slab #${slab.id}`}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-
-                <Button
-                  onClick={handleDownloadSample}
-                  className="bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs px-4 py-2 shadow-xs"
-                >
-                  Download Sample File
-                </Button>
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-xs font-bold text-foreground">Download Sheet Identifier</Label>
-                <div className="flex border border-input rounded-md overflow-hidden bg-background w-fit">
-                  <button
-                    type="button"
-                    onClick={() => setDownloadBasis('empCode')}
-                    className={`px-4 py-1.5 text-xs font-bold transition-all ${
-                      downloadBasis === 'empCode'
-                        ? 'bg-sky-600 text-white'
-                        : 'bg-background text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Emp Code
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDownloadBasis('email')}
-                    className={`px-4 py-1.5 text-xs font-bold transition-all ${
-                      downloadBasis === 'email'
-                        ? 'bg-sky-600 text-white'
-                        : 'bg-background text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Email
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-[11px] text-muted-foreground italic mt-2">
-              * The sample CSV sheet includes columns for Employee Identifier, Name, Payroll Slab, Annual CTC, and Effective Date.
-            </p>
-          </div>
-
-          {/* Parsed Preview Table */}
-          {parsedRows.length > 0 && (
-            <div className="p-6 bg-card border border-border rounded-xl shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Loaded Records Preview (
-                  {parsedRows.length})
-                </h3>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-950 px-3 py-1 rounded-full border">
-                  Target Slab: {selectedSlabObj?.name || 'Selected Slab'}
-                </span>
-              </div>
-
-              <div className="overflow-x-auto border rounded-lg bg-background max-h-72">
-                <table className="w-full text-xs text-left">
-                  <thead className="bg-muted/60 text-muted-foreground font-bold border-b sticky top-0">
-                    <tr>
-                      <th className="p-3">Status</th>
-                      <th className="p-3">Emp Identifier</th>
-                      <th className="p-3">Matched Employee Name</th>
-                      <th className="p-3">Payroll Slab</th>
-                      <th className="p-3 text-right">Offered Annual CTC</th>
-                      <th className="p-3">Effective Date</th>
-                      <th className="p-3 text-right">Est. Monthly Gross</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {parsedRows.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-muted/30">
-                        <td className="p-3">
-                          {r.status === 'valid' ? (
-                            <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                              Valid
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                              Not Found
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 font-mono font-bold">{r.employeeCode}</td>
-                        <td className="p-3 font-semibold">
-                          {r.matchedEmpName || (
-                            <span className="text-muted-foreground italic">No match</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-indigo-600 font-bold">{r.matchedSlabName}</td>
-                        <td className="p-3 text-right font-bold text-emerald-600">
-                          ₹{r.annualCtc.toLocaleString('en-IN')}
-                        </td>
-                        <td className="p-3 font-mono font-medium">{r.effectiveFrom}</td>
-                        <td className="p-3 text-right font-bold">
-                          ₹{Math.round(r.annualCtc / 12).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── TAB 3: UPLOAD LOG HISTORY ── */}
       {activeTab === 'log' && (
-        <div className="p-6 bg-card border border-border rounded-xl shadow-xs space-y-4">
-          <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-            <History className="w-4 h-4 text-indigo-600" /> Mass Salary Component Upload Log
+        <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs space-y-4">
+          <h2 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+            <History className="w-4 h-4 text-[#5b52f6]" />
+            Mass Salary Component Upload Log
           </h2>
 
-          <div className="overflow-x-auto border rounded-lg bg-background">
+          <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-2xs">
             <table className="w-full text-xs text-left">
-              <thead className="bg-muted/60 text-muted-foreground font-bold border-b">
+              <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-800">
                 <tr>
                   <th className="p-3">Log ID</th>
                   <th className="p-3">File Name</th>
@@ -1086,24 +1225,24 @@ export function MassSalaryStructureUploadPage() {
                   <th className="p-3 text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {uploadLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground font-medium">
+                    <td colSpan={7} className="p-8 text-center text-slate-400 font-medium">
                       No upload logs recorded yet. Upload a salary component sheet to track history.
                     </td>
                   </tr>
                 ) : (
                   uploadLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-muted/30">
+                    <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-3 font-mono font-bold">#{log.id}</td>
-                      <td className="p-3 font-bold text-foreground">{log.fileName}</td>
-                      <td className="p-3 text-indigo-600 font-semibold">{log.slabName}</td>
+                      <td className="p-3 font-bold text-slate-900 dark:text-white">{log.fileName}</td>
+                      <td className="p-3 text-[#5b52f6] dark:text-indigo-400 font-semibold">{log.slabName}</td>
                       <td className="p-3 text-center font-extrabold">{log.totalRows}</td>
-                      <td className="p-3 text-muted-foreground">{log.uploadedAt}</td>
-                      <td className="p-3 font-semibold">{log.uploadedBy}</td>
+                      <td className="p-3 text-slate-400">{log.uploadedAt}</td>
+                      <td className="p-3 font-semibold text-slate-900 dark:text-white">{log.uploadedBy}</td>
                       <td className="p-3 text-center">
-                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-400 px-2.5 py-0.5 rounded-full">
+                        <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
                           {log.status}
                         </span>
                       </td>
@@ -1118,3 +1257,5 @@ export function MassSalaryStructureUploadPage() {
     </div>
   );
 }
+
+export default MassSalaryStructureUploadPage;

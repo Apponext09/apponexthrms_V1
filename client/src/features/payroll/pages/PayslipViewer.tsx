@@ -981,7 +981,7 @@ export const PayslipViewer: React.FC = () => {
     const tds = Number(data.tds ?? editFormData.tds ?? 0);
 
     const grossVal = Number(
-      data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? editFormData.gross ?? 0
+      data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? ((editFormData.basic || 0) + (editFormData.hra || 0) + (editFormData.special || 0))
     );
     let basicVal = Number(
       data.basic_earned ?? data.basic_salary ?? data.basicSalary ?? data.basic ?? editFormData.basic ?? 0
@@ -1025,7 +1025,7 @@ export const PayslipViewer: React.FC = () => {
       uanNo: data.uan_no || data.uanNo || data.uan || editFormData.uanNo || '—',
       esicNo: data.esic_no || data.esicNo || data.esic || editFormData.esicNo || '—',
       pan: data.pan || data.pan_number || editFormData.pan || '—',
-      period: data.period || (data.month ? formatPayrollMonth(data.month) : (MONTHS_LABEL[selectedMonth] || selectedMonth)),
+      period: data.period || (data.month ? formatMonthLabel(data.month) : (MONTHS_LABEL[selectedMonth] || selectedMonth)),
       doj: formatPayrollDate(data.date_of_joining || data.doj || editFormData.doj),
       accNo: data.account_no || data.accountNo || editFormData.accNo || '—',
       bankName: data.bank_name || data.bankName || editFormData.bankName || 'HDFC Bank',
@@ -1650,7 +1650,7 @@ export const PayslipViewer: React.FC = () => {
                       })
                       .map((emp) => (
                         <option key={emp.id} value={String(emp.id)}>
-                          {emp.name} ({emp.code}) — {emp.department} {!emp.hasSalaryStructure ? ' ⚠️ [No Salary Structure]' : ''}
+                          {emp.name}
                         </option>
                       ))}
                   </select>

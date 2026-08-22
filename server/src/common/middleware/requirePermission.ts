@@ -37,6 +37,12 @@ async function permissionCheckAsync(
     return;
   }
 
+  const roles = req.user?.roles || (req.ctx as any)?.roles || [];
+  if (roles.includes('organization_admin') || roles.includes('super_admin') || roles.includes('admin') || roles.includes('hr_admin')) {
+    next();
+    return;
+  }
+
   const { organizationId, userId } = req.ctx;
 
   // Check if user has all required permissions

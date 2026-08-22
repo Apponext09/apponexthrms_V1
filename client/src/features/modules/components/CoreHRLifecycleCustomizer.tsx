@@ -279,7 +279,6 @@ export function CoreHRLifecycleCustomizer() {
               { key: 'stageFilter', label: 'Lifecycle Stage Filter', desc: 'Filter by Active, Onboarding, Probation, Notice, Exit' },
               { key: 'departmentFilter', label: 'Department Filter', desc: 'Filter employees by organizational departments' },
               { key: 'designationFilter', label: 'Designation / Role Filter', desc: 'Filter employees by job title / designation master' },
-              { key: 'locationFilter', label: 'Office Location Filter', desc: 'Filter employees by office branch and physical city' },
               { key: 'employmentTypeFilter', label: 'Employment Type Filter', desc: 'Filter by Full Time, Part Time, Contract, Internship' },
             ] as const).map(({ key, label, desc }) => {
               const isChecked = config.filters[key] ?? true;

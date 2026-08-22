@@ -19,9 +19,9 @@ async function checkSlabs() {
   console.log("Total Payroll Slabs in DB:", slabs.length);
   console.log(slabs);
 
-  // Restore deleted_at = null and is_active = 1 for valid slabs so slabs appear on frontend!
-  await knex('payroll_slabs').update({ deleted_at: null, is_active: 1 });
-  console.log("Restored active state for all slabs.");
+  const activeSlabs = slabs.filter(s => !s.deleted_at);
+  console.log("Active Slabs count:", activeSlabs.length);
+
 
   await knex.destroy();
 }

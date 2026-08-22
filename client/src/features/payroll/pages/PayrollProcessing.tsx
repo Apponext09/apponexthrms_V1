@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { Badge } from '@/components/ui/badge';
 import {
   Upload,
@@ -630,8 +631,8 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
 };
 
 // ── Tab 2: Process Payroll Register Table ─────────────────────────────────
-const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
-  const [generateOnMode, setGenerateOnMode] = useState('- Select -');
+const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: string }> = ({ cycles, selectedCompanyId }) => {
+  const [generateOnMode, setGenerateOnMode] = useState('Attendance');
   const [cycleId, setCycleId] = useState('');
   const [payrollMonth, setPayrollMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [subPeriod, setSubPeriod] = useState('W1');
@@ -653,7 +654,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
   const [bypassCache, setBypassCache] = useState(false);
   const [paymentStatusMap, setPaymentStatusMap] = useState<Record<number, string>>({});
-  const [filtered, setFiltered] = useState(false);
+  const [filtered, setFiltered] = useState(true);
   const [selectedViewItem, setSelectedViewItem] = useState<any | null>(null);
   const [attendanceCalendarItem, setAttendanceCalendarItem] = useState<any | null>(null);
   const [attendanceCalendarLoading, setAttendanceCalendarLoading] = useState(false);
@@ -685,11 +686,25 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     }
   };
 
-  // Lookup data from database masters
+  // ── Company-scoped cycle logic ────────────────────────────────────────────
+  // When a specific company is chosen in the Company filter, fetch only that
+  // company's cycles. When no company filter is set and we are in parent-org
+  // context (selectedCompanyId == null/empty), return all org cycles so the
+  // admin can see every company's cycle and choose.
+  const effectiveCycleCompanyId = companyId || selectedCompanyId || '';
+
+  // Reset selected cycle when the effective company changes
+  useEffect(() => {
+    setCycleId('');
+  }, [effectiveCycleCompanyId]);
+
+  // Lookup data from database masters — cycle list scoped to effective company
   const { data: cyclesData = [] } = useQuery({
-    queryKey: ['payroll-cycles-process-tab'],
+    queryKey: ['payroll-cycles-process-tab', effectiveCycleCompanyId],
     queryFn: async () => {
-      const res = await apiClient.get('/payroll/cycles');
+      const params: Record<string, string> = {};
+      if (effectiveCycleCompanyId) params.companyId = String(effectiveCycleCompanyId);
+      const res = await apiClient.get('/payroll/cycles', { params });
       return res.data?.data || res.data?.cycles || res.data || [];
     },
     staleTime: 0
@@ -697,6 +712,12 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
   const rawCyclesList = cyclesData.length > 0 ? cyclesData : cycles;
   const activeCycles = deduplicate(rawCyclesList as any[], (c: any) => String(c.id || c.cycle_name || c.name));
+
+  // When company filter changes, also reset the cycle selection
+  const handleCompanyChange = (val: string) => {
+    setCompanyId(val);
+    setCycleId(''); // cycles will refetch via effectiveCycleCompanyId
+  };
 
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: async () => { const r = await apiClient.get('/settings/companies'); return r.data?.data || r.data || []; } });
   const { data: locations = [] } = useQuery({ queryKey: ['locs'], queryFn: async () => { const r = await apiClient.get('/settings/locations'); return r.data?.data || r.data || []; } });
@@ -1135,6 +1156,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
       const genRes = await apiClient.post('/payroll', {
         payrollCycleId: Number(cycleId),
         runType: 'regular',
+        companyId: companyId ? Number(companyId) : undefined,
         departmentId: departmentId ? Number(departmentId) : undefined,
         locationId: locationId ? Number(locationId) : undefined,
       });
@@ -1340,18 +1362,36 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
         {/* Row 2: Company, Location, Department, Reporting Officer, Employee Status, Employment Type */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+
+          {/* Company filter — locked for HR (child company), full list for Admin (parent) */}
           <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Company</label>
-            <select
-              value={companyId}
-              onChange={e => setCompanyId(e.target.value)}
-              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
-            >
-              <option value="">All Companies ({uniqueCompanies.length})▾</option>
-              {uniqueCompanies.map((c: any, idx: number) => (
-                <option key={`comp_${c.id ?? idx}`} value={String(c.id)}>{c.name || c.company_name}</option>
-              ))}
-            </select>
+            <label className="block text-xs font-bold text-foreground mb-1">
+              Company
+              {selectedCompanyId && (
+                <span className="ml-1 text-[10px] text-amber-600 font-bold">(Locked)</span>
+              )}
+            </label>
+            {selectedCompanyId ? (
+              // HR / child-company user: locked to their company only
+              <div className="w-full h-9 border border-amber-300 dark:border-amber-700 rounded-md px-3 py-1 text-xs bg-amber-50/60 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 font-semibold flex items-center gap-1.5">
+                <span className="inline-block w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                {uniqueCompanies.find((c: any) => String(c.id) === String(selectedCompanyId))?.name ||
+                  uniqueCompanies.find((c: any) => String(c.company_id) === String(selectedCompanyId))?.name ||
+                  'My Company'}
+              </div>
+            ) : (
+              // Admin / parent-org user: can choose any child company
+              <select
+                value={companyId}
+                onChange={e => handleCompanyChange(e.target.value)}
+                className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
+              >
+                <option value="">All Companies ({uniqueCompanies.length})▾</option>
+                {uniqueCompanies.map((c: any, idx: number) => (
+                  <option key={`comp_${c.id ?? idx}`} value={String(c.id)}>{c.name || c.company_name}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
@@ -2112,12 +2152,16 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 // ── Main Component ─────────────────────────────────────────────────────────
 export const PayrollProcessing: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MainTab>('process');
+  const { selectedCompanyId } = useCompanyStore();
 
+  // Fetch cycles scoped strictly to the active Topbar company
   const { data: cycles = [] } = useQuery<PayrollCycle[]>({
-    queryKey: ['payroll-cycles-parent'],
+    queryKey: ['payroll-cycles-parent', selectedCompanyId],
     queryFn: async () => {
       try {
-        const res = await apiClient.get('/payroll/cycles');
+        const params: Record<string, string> = {};
+        if (selectedCompanyId) params.companyId = String(selectedCompanyId);
+        const res = await apiClient.get('/payroll/cycles', { params });
         const list = res.data?.data || res.data?.cycles || res.data || [];
         if (Array.isArray(list) && list.length > 0) return list;
       } catch { }
@@ -2155,7 +2199,7 @@ export const PayrollProcessing: React.FC = () => {
 
       {/* Content */}
       <div>
-        {activeTab === 'process' && <ProcessPayrollTab cycles={cycles} />}
+        {activeTab === 'process' && <ProcessPayrollTab cycles={cycles} selectedCompanyId={selectedCompanyId ? String(selectedCompanyId) : ''} />}
         {activeTab === 'payroll_download' && <PayrollDownloadTab cycles={cycles} />}
         {activeTab === 'payroll_runs' && <PayrollRunsTab cycles={cycles} />}
       </div>

@@ -27,8 +27,9 @@ export function useCompanies() {
           ? response.data
           : [];
         return records.map((c: any) => ({
-          id: Number(c.companyId ?? c.company_id ?? c.id),
-          companyId: Number(c.companyId ?? c.company_id ?? c.id),
+          id: Number(c.company_id ?? c.companyId ?? c.id),
+          company_id: Number(c.company_id ?? c.companyId ?? c.id),
+          companyId: Number(c.company_id ?? c.companyId ?? c.id),
           name: c.name || c.company_name || c.companyName || 'Unnamed Company',
           code: c.code || c.company_code || '',
           logo: c.logo || null,

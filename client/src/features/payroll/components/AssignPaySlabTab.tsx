@@ -110,7 +110,7 @@ export const AssignPaySlabTab: React.FC = () => {
           name: full || e.name || e.fullName || e.full_name || e.email || `EMP #${e.id}`,
           code: e.employeeCode || e.employee_code || `EMP-${e.id}`,
           department: e.departmentName || e.department_name || e.department || e.dept || '',
-          grade: e.designationName || e.designation_name || e.designation || e.grade || e.jobTitle || e.job_title || '',
+          grade: e.gradeName || e.grade_name || e.grade || e.pay_grade || e.pay_grade_name || e.designationName || e.designation_name || e.designation || e.jobTitle || e.job_title || '',
           location: e.locationName || e.location_name || e.location || e.workLocation || e.work_location || e.city || '',
           branch: e.company_name || e.companyName || e.company || e.branchName || e.branch_name || e.branch || e.entity || '',
           companyId: e.company_id || e.companyId || null,
@@ -194,9 +194,10 @@ export const AssignPaySlabTab: React.FC = () => {
   // ─── 2-Option Modal Recalculation Helpers ────────────────────────────────────
   const recalculateFromSalaryInput = (inputVal: number) => {
     if (isNaN(inputVal) || inputVal <= 0) return;
-    const b = Math.round(inputVal * 0.5);
+    const monthlyVal = inputVal > 0 && inputVal < 50000 ? inputVal : Math.round(inputVal / 12);
+    const b = Math.round(monthlyVal * 0.5);
     const h = Math.round(b * 0.4);
-    const l = Math.max(0, inputVal - (b + h));
+    const l = Math.max(0, monthlyVal - (b + h));
 
     setBasic(String(b));
     setHra(String(h));
@@ -339,6 +340,8 @@ export const AssignPaySlabTab: React.FC = () => {
       await Promise.all(listToSave.map(async emp => {
         const payload = {
           employee_id: emp.id,
+          company_id: emp.companyId || null,
+          companyId: emp.companyId || null,
           slab_id: modalSlabId ? Number(modalSlabId) : emp.slabId,
           effective_from: modalEffectiveFrom,
           arrear_pay_month: arrearPayMonth,
@@ -693,7 +696,10 @@ export const AssignPaySlabTab: React.FC = () => {
                   className="w-full border border-sky-300 rounded px-2 py-1 text-xs font-bold bg-white text-sky-950 focus:outline-none"
                 >
                   <option value="">-- Select Slab --</option>
-                  {slabs.map((s: any) => (
+                  {(targetEmp?.companyId
+                    ? slabs.filter((s: any) => !(s.companyId ?? s.company_id) || String(s.companyId ?? s.company_id) === String(targetEmp.companyId))
+                    : slabs
+                  ).map((s: any) => (
                     <option key={s.id} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
                   ))}
                 </select>
@@ -707,14 +713,14 @@ export const AssignPaySlabTab: React.FC = () => {
 
             {/* CTC / Salary Input & Dates Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-sky-50/70 p-4 rounded-lg border border-sky-200">
-              {/* Monthly Gross / CTC Input */}
+              {/* Annual CTC Input */}
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">Monthly Gross / CTC Input :</label>
+                <label className="text-xs font-bold text-slate-800 block mb-1">Annual CTC Input :</label>
                 <input
                   type="number"
                   value={salaryInput}
                   onChange={e => handleSalaryInputChange(e.target.value)}
-                  placeholder="Enter Monthly Gross Salary / CTC"
+                  placeholder="Enter Annual CTC (e.g. 480000)"
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
                 />
                 <p className="text-[10px] text-sky-800 italic mt-1 mb-0">
@@ -881,7 +887,7 @@ export const AssignPaySlabTab: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Annual CTC</span>
-                <span className="text-base font-black text-amber-400">₹{(ctcCalculated * 12).toLocaleString('en-IN')}</span>
+                <span className="text-base font-black text-amber-400">₹{((salaryInput && Number(salaryInput) > 0) ? (Number(salaryInput) < 50000 ? Number(salaryInput) * 12 : Number(salaryInput)) : ctcCalculated * 12).toLocaleString('en-IN')}</span>
               </div>
             </div>
 

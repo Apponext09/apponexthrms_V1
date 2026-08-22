@@ -282,12 +282,7 @@ export class EmployeeController {
     res.json({
       success: true,
       status: employee.status || 'active',
-      data: {
-        employeeName: fullName,
-        employeeEmail: employee.email,
-        organizationName: org?.name || '',
-        status: employee.status || 'active',
-      },
+      data: employee,
     });
   });
 

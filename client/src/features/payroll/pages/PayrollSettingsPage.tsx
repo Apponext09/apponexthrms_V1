@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import {
   Calendar,
   Layers,
@@ -200,6 +201,7 @@ interface PayrollSlabItem {
 // ─────────────────────────────────────────────────────────────────────────────
 export const PayrollSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
   const searchParams = new URLSearchParams(window.location.search);
   const initialTab = (searchParams.get('tab') as any) || 'components';
   const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs' | 'settings'>(initialTab);
@@ -365,11 +367,11 @@ export const PayrollSettingsPage: React.FC = () => {
       const empList = empRes.data?.data || empRes.data || [];
       const empDepts = Array.isArray(empList) ? empList.map((e: any) => e.department || e.dept_name || e.department_name).filter(Boolean) : [];
       const empLocs = Array.isArray(empList) ? empList.map((e: any) => e.location || e.branch || e.city || e.location_name).filter(Boolean) : [];
-      const empGrades = Array.isArray(empList) ? empList.map((e: any) => e.grade || e.designation || e.title).filter(Boolean) : [];
+      const empGrades = Array.isArray(empList) ? empList.map((e: any) => e.grade || e.grade_name || e.pay_grade_name).filter(Boolean) : [];
 
       const finalDepts = [...new Set([...dbDepts, ...empDepts])];
       const finalLocs = [...new Set([...dbLocs, ...empLocs])];
-      const finalGrades = [...new Set([...dbGrades, ...dbDesigs, ...empGrades])];
+      const finalGrades = [...new Set([...dbGrades, ...empGrades])];
 
       if (finalDepts.length > 0) setAllDepartments(finalDepts);
       if (finalLocs.length > 0) setAllLocations(finalLocs);
@@ -391,9 +393,15 @@ export const PayrollSettingsPage: React.FC = () => {
         setApproverRoles(items.map((r: any) => ({ code: r.code, name: r.name })).filter((r: any) => r.code));
       }
     }).catch(() => {});
+  }, []);
+
+  // Fetch cycles and slabs whenever selected company changes
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (selectedCompanyId) params.companyId = String(selectedCompanyId);
 
     // 3. Fetch Cycles from DB (Real MySQL Data Only)
-    apiClient.get('/payroll/cycles').then((res: any) => {
+    apiClient.get('/payroll/cycles', { params }).then((res: any) => {
       const rawData = res.data?.data || res.data?.cycles || res.data;
       const data = Array.isArray(rawData) ? rawData : (Array.isArray(res) ? res : []);
       if (data.length > 0) {
@@ -422,20 +430,25 @@ export const PayrollSettingsPage: React.FC = () => {
           setCycles(unique);
           setSelectedCycleId(unique[0].id);
           setCycleForm({ ...unique[0] });
+          setSlabForm(prev => {
+            if (!prev.cycleId || !unique.some(u => String(u.id) === String(prev.cycleId))) {
+              return { ...prev, cycleId: String(unique[0].id) };
+            }
+            return prev;
+          });
         }
+      } else {
+        setCycles([]);
       }
     }).catch((err) => {
       console.error('Error fetching cycles in settings:', err);
     });
 
     // 4. Fetch Slabs from DB
-    apiClient.get('/payroll/slabs').then((res: any) => {
+    apiClient.get('/payroll/slabs', { params }).then((res: any) => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const mappedSlabs: PayrollSlabItem[] = data.map((s: any) => {
-          // The API (postProcessResponse) returns camelCase — min_ctc/selected_component_ids
-          // etc. never actually existed on the response, so these always silently fell
-          // back to defaults regardless of what was really saved.
           let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
           let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
           let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch {}
@@ -452,6 +465,7 @@ export const PayrollSettingsPage: React.FC = () => {
             maxCtc: Number(s.maxCtc ?? s.max_ctc ?? 10000000),
             selectedComponentIds: comps,
             cycleId: String(s.cycleId ?? s.cycle_id ?? ''),
+            companyId: s.companyId ? String(s.companyId) : (s.company_id ? String(s.company_id) : ''),
             isActive: Boolean((s.isActive ?? s.is_active) ?? true),
             employmentType: s.employment_type || s.employmentType || 'Regular',
             isFromDb: true
@@ -469,10 +483,10 @@ export const PayrollSettingsPage: React.FC = () => {
         setSlabs([]);
         setSelectedSlabId('');
       }
-    }).catch(() => {
-      setSlabs([]);
-    });
+    }).catch(() => {});
+  }, [selectedCompanyId]);
 
+  useEffect(() => {
     const fetchComponentData = async () => {
       let groupsFailed = false;
       let compsFailed = false;
@@ -928,6 +942,8 @@ export const PayrollSettingsPage: React.FC = () => {
 
     const payload = {
       name: slabForm.name.trim(),
+      companyId: selectedCompanyId ? Number(selectedCompanyId) : null,
+      company_id: selectedCompanyId ? Number(selectedCompanyId) : null,
       departments: targetDepartments,
       grades: targetGrades,
       locations: targetLocations,
@@ -986,7 +1002,7 @@ export const PayrollSettingsPage: React.FC = () => {
         } as any;
         setSlabs(prev => [newSlab, ...prev]);
         setSelectedSlabId(newId);
-        showToast.success('Saved to Database', `Payroll Slab "${slabForm.name}" created in MySQL.`);
+        showToast.success(`Payroll Slab "${slabForm.name}" saved successfully.`);
       }
     } catch (err) {
       console.error(err);
@@ -1330,6 +1346,9 @@ export const PayrollSettingsPage: React.FC = () => {
                             <option value="Choose">Choose</option>
                             <option value="Earnings">Earnings</option>
                             <option value="Deductions">Deductions</option>
+                            {groups.map(g => (
+                              <option key={g.id} value={g.name}>{g.name}</option>
+                            ))}
                           </select>
                         </div>
 
@@ -2821,12 +2840,13 @@ export const PayrollSettingsPage: React.FC = () => {
                   <div>
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Cycle <span className="text-red-500">*</span></label>
                     <select
-                      value={slabForm.cycleId || 'cycle-1'}
+                      value={slabForm.cycleId || (cycles[0]?.id ? String(cycles[0].id) : '')}
                       onChange={e => setSlabForm({ ...slabForm, cycleId: e.target.value })}
                       className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     >
+                      <option value="">-- Select Payroll Cycle --</option>
                       {cycles.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.frequency})</option>
+                        <option key={c.id} value={String(c.id)}>{c.name} ({c.frequency})</option>
                       ))}
                     </select>
                   </div>

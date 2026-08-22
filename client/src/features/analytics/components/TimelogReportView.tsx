@@ -63,7 +63,7 @@ export function TimelogReportView() {
   const [isInfoOpen, setIsInfoOpen] = useState(false);
 
   const [queryParams, setQueryParams] = useState<{
-    fromDate: string; toDate: string; employees?: string[]; locations?: string[];
+    fromDate: string; toDate: string; companies?: string[]; employees?: string[]; locations?: string[];
     departments?: string[]; reportingOfficers?: string[]; status?: string;
   }>({ fromDate: get14DaysAgoStr(), toDate: getTodayStr() });
 

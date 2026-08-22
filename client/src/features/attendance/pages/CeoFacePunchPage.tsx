@@ -161,6 +161,13 @@ export default function CeoFacePunchPage() {
     return () => { stopCamera(); };
   }, []);
 
+  useEffect(() => {
+    if (isCameraActive && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraActive, stream]);
+
   const grabFrame = (): string | null => {
     if (videoRef.current && canvasRef.current) {
       const v = videoRef.current;

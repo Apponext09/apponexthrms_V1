@@ -89,10 +89,18 @@ const mapStructureRecord = (s: any, activeSlabNameFallback: string): PayStructur
         : (s.customComponents || s.custom_components || {}));
   } catch {}
   
-  const grossVal = Number(s.gross || s.gross_monthly || s.grossMonthly || 0);
+  const savedInput = Number(s.salaryInput || s.salary_input || 0);
   const rawCtc = Number(s.ctc || s.annual_ctc || s.annualCtc || 0);
-  const ctcVal = rawCtc > 0 ? (rawCtc < 100000 && grossVal > 0 ? grossVal * 12 : rawCtc) : (grossVal * 12);
-  const netVal = Number(s.netSalary || s.net_salary_monthly || s.net_take_home || s.netTakeHome || (grossVal * 0.9));
+  const rawGross = Number(s.gross || s.gross_monthly || s.grossMonthly || 0);
+  const rawNet = Number(s.netSalary || s.net_salary_monthly || s.net_take_home || s.netTakeHome || 0);
+
+  const ctcVal = rawCtc > 0 ? rawCtc : (rawGross > 0 ? rawGross * 12 : (savedInput > 0 ? (savedInput < 50000 ? savedInput * 12 : savedInput) : 0));
+  const grossVal = rawGross > 0 ? rawGross : (ctcVal > 0 ? Math.round(ctcVal / 12) : (savedInput > 0 ? (savedInput < 50000 ? savedInput : Math.round(savedInput / 12)) : 0));
+  const netVal = rawNet > 0 ? rawNet : grossVal;
+
+  const displaySalaryInput = savedInput > 0
+    ? (savedInput < 50000 ? savedInput * 12 : savedInput)
+    : (ctcVal > 0 ? ctcVal : (grossVal > 0 ? grossVal * 12 : 480000));
 
   return {
     id: String(s.id),
@@ -107,7 +115,7 @@ const mapStructureRecord = (s: any, activeSlabNameFallback: string): PayStructur
     updateBy: s.updateBy || s.updated_by || '',
     updateOn: s.updateOn || s.updated_on || '',
     calcMode: s.calcMode || s.calculation_mode || 'salary_input',
-    salaryInput: grossVal || (ctcVal > 100000 ? Math.round(ctcVal / 12) : ctcVal) || 40000,
+    salaryInput: displaySalaryInput,
     basic: Number(s.basic || s.basic_monthly || (grossVal * 0.5)),
     hra: Number(s.hra || s.hra_monthly || (grossVal * 0.2)),
     standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
@@ -196,6 +204,10 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
         const groupComps = rawComps
           .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
+          .filter((c: any) => {
+            const cType = (c.componentType || c.component_type || c.type || '').toString().toLowerCase();
+            return cType !== 'module';
+          })
           .map((c: any) => ({
             id: String(c.id),
             name: c.name || 'Component',
@@ -210,7 +222,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           isEditable: Boolean(g.isEditable ?? g.is_editable),
           components: groupComps
         };
-      });
+      }).filter((g: ComponentGroup) => g.components.length > 0);
       setAllGroups(mappedGroups);
     });
 
@@ -219,9 +231,11 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     // slab name resolved from the structure row is always available when records are mapped.
     const loadPayrollData = async () => {
       try {
-        // Parallel: fetch slab catalog and employee structures at the same time
+        // Parallel: fetch slab catalog (scoped to employee company) and employee structures
+        const empCompanyId = (employee as any).companyId || (employee as any).company_id;
+        const slabsParams = empCompanyId ? { companyId: String(empCompanyId) } : undefined;
         const [slabsRes, structRes] = await Promise.all([
-          apiClient.get('/payroll/slabs').catch(() => ({ data: { data: [] } })),
+          apiClient.get('/payroll/slabs', { params: slabsParams }).catch(() => ({ data: { data: [] } })),
           apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
         ]);
 
@@ -297,7 +311,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   // Strict matching helper: ONLY show components explicitly assigned to the selected slab
   const isComponentInSlab = useCallback((comp: { id: string; name: string }, slabCompIds: string[]) => {
-    if (!slabCompIds || slabCompIds.length === 0) return false;
+    if (!slabCompIds || slabCompIds.length === 0) return true;
     const cId = String(comp.id).trim().toLowerCase();
     const cName = String(comp.name || '').trim().toLowerCase();
     const cSlug = cName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
@@ -309,13 +323,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     });
   }, []);
 
-  // Extract active slab's components grouped by category
+  // Extract active slab's components grouped by category (excluding Module type)
   const activeEarnings = useMemo(() => {
     return allGroups
       .filter(g => g.category === 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, slabComponentIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, slabComponentIds))
       }))
       .filter(g => g.components.length > 0);
   }, [allGroups, slabComponentIds, isComponentInSlab]);
@@ -325,7 +341,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category !== 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, slabComponentIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, slabComponentIds))
       }))
       .filter(g => g.components.length > 0);
   }, [allGroups, slabComponentIds, isComponentInSlab]);
@@ -384,8 +402,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   // Recalculate dynamic values based on CTC input
   const recalculateFromCTC = (ctcStr: string, currentSlabCompIds: string[] = slabComponentIds) => {
     const rawVal = Number(ctcStr) || 0;
-    const monthlyGross = rawVal > 100000 ? Math.round(rawVal / 12) : rawVal;
-    const annualCTC = monthlyGross * 12;
+    const annualCTC = rawVal > 0 && rawVal < 50000 ? rawVal * 12 : rawVal;
+    const monthlyGross = Math.round(annualCTC / 12);
     
     const context: Record<string, number> = {
       CTC: monthlyGross,
@@ -404,7 +422,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category === 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, currentSlabCompIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, currentSlabCompIds))
       }))
       .filter(g => g.components.length > 0);
 
@@ -412,7 +432,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.category !== 'Earning')
       .map(g => ({
         ...g,
-        components: g.components.filter(c => isComponentInSlab(c, currentSlabCompIds))
+        components: g.components
+          .filter(c => (c.type || '').toLowerCase() !== 'module')
+          .filter(c => isComponentInSlab(c, currentSlabCompIds))
       }))
       .filter(g => g.components.length > 0);
     
@@ -444,10 +466,14 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     }
 
     // Second Pass: Resolve HRA & Other Earnings
-    let allocatedEarnings = context.BASIC;
+    let allocatedEarnings = (foundBasicId && newValues[foundBasicId]) ? newValues[foundBasicId] : 0;
+    let fallbackEarningId: string | null = null;
+
     targetEarnings.forEach(g => {
       g.components.forEach(c => {
         if (c.id === foundBasicId) return;
+        if (!fallbackEarningId) fallbackEarningId = c.id;
+
         const lowerName = c.name.toLowerCase();
         if (lowerName.includes('hra') || lowerName.includes('house rent')) {
           foundHraId = c.id;
@@ -465,19 +491,22 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
           context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
           allocatedEarnings += (newValues[c.id] || 0);
-        } else if (c.type === 'Value') {
-          newValues[c.id] = c.amount || 0;
+        } else if (c.type === 'Value' && c.amount > 0) {
+          newValues[c.id] = c.amount;
           context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
           allocatedEarnings += (newValues[c.id] || 0);
         }
       });
     });
 
-    // Allocate remainder to Special/Standard Allowance
-    if (foundSpecialId) {
-      newValues[foundSpecialId] = Math.max(0, monthlyGross - allocatedEarnings);
-      context.SPECIAL_ALLOWANCE = newValues[foundSpecialId];
-      context.STANDARD_ALLOWANCE = newValues[foundSpecialId];
+    // Allocate remainder to Special/Standard Allowance OR first available earning component
+    const targetRemainderId = foundSpecialId || fallbackEarningId;
+    if (targetRemainderId) {
+      const alreadyAllocated = allocatedEarnings - (newValues[targetRemainderId] || 0);
+      const remainder = Math.max(0, monthlyGross - alreadyAllocated);
+      newValues[targetRemainderId] = remainder;
+      context.SPECIAL_ALLOWANCE = remainder;
+      context.STANDARD_ALLOWANCE = remainder;
     }
 
     // Third Pass: Deductions (PF, PT, ESIC, TDS)
@@ -510,13 +539,16 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     });
 
     // Update mapped legacy states for backend saving
-    if (foundBasicId) setBasic(String(newValues[foundBasicId] || 0));
-    if (foundHraId) setHra(String(newValues[foundHraId] || 0));
+    setBasic(foundBasicId ? String(newValues[foundBasicId] || 0) : '0');
+    setHra(foundHraId ? String(newValues[foundHraId] || 0) : '0');
     if (foundPfId) {
       setPf(String(newValues[foundPfId] || 0));
       setPfEmployer(String(newValues[foundPfId] || 0));
+    } else {
+      setPf('0');
+      setPfEmployer('0');
     }
-    if (foundPtId) setPt(String(newValues[foundPtId] || 0));
+    setPt(foundPtId ? String(newValues[foundPtId] || 0) : '0');
 
     setDynamicValues(newValues);
   };
@@ -541,7 +573,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   const netSalaryCalculated = Math.max(0, grossCalculated - totalDeductionCalculated);
   const monthlyCtcCalculated = grossCalculated + Number(pfEmployer || 0);
-  const annualCtcCalculated = monthlyCtcCalculated * 12;
+  const annualCtcCalculated = (salaryInput && Number(salaryInput) > 0)
+    ? Math.round(Number(salaryInput) < 50000 ? Number(salaryInput) * 12 : Number(salaryInput))
+    : Math.round(monthlyCtcCalculated * 12);
   const ctcCalculated = annualCtcCalculated;
 
   // Modal Open Handlers
@@ -587,15 +621,14 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       compIds = compIds.map(String);
       setSlabComponentIds(compIds);
     }
-    const inputVal = rec.gross || (rec.ctc > 100000 ? Math.round(rec.ctc / 12) : rec.ctc) || rec.salaryInput || 40000;
+    const inputVal = rec.salaryInput || rec.ctc || (rec.gross ? rec.gross * 12 : 480000);
     setSalaryInput(String(inputVal));
     setEffectiveFrom(rec.effectiveFrom);
     setArrearPayMonth(rec.arrearPayMonth || rec.effectiveFrom);
     if (rec.customComponents && Object.keys(rec.customComponents).length > 0) {
       setDynamicValues(rec.customComponents);
-    } else {
-      recalculateFromCTC(String(inputVal), compIds);
     }
+    recalculateFromCTC(String(inputVal), compIds);
     setModalOpen(true);
   };
 
@@ -617,35 +650,50 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   const handleSave = async () => {
     const todayStr = new Date().toISOString().split('T')[0];
+    const inputNum = Number(salaryInput) || 0;
+    const annualCtcVal = inputNum > 0 ? (inputNum < 50000 ? inputNum * 12 : inputNum) : 480000;
+    const monthlyGrossVal = Math.round(annualCtcVal / 12);
+
+    const finalGross = grossCalculated > 0 ? grossCalculated : monthlyGrossVal;
+    const finalCtc = annualCtcCalculated > 0 ? annualCtcCalculated : annualCtcVal;
+    const finalNet = netSalaryCalculated > 0 ? netSalaryCalculated : finalGross;
     
     // Construct payload with legacy fields (for DB columns) AND custom_components (for dynamic UI)
+    const empCompanyId = (employee as any).companyId || (employee as any).company_id || null;
     const payload = {
       employee_id: employee.id,
+      employeeId: employee.id,
+      company_id: empCompanyId,
+      companyId: empCompanyId,
       slab: activeSlabName || 'Monthly',
       slab_id: activeSlabId || null,
+      slabId: activeSlabId || null,
       cycle_id: activeCycleId || null,
+      cycleId: activeCycleId || null,
       pf_rate_pct: slabPfRate || 12,
       effective_from: effectiveFrom || todayStr,
+      effectiveFrom: effectiveFrom || todayStr,
       arrear_pay_month: arrearPayMonth || effectiveFrom || todayStr,
       calculation_mode: 'component_based',
-      salary_input: Number(salaryInput) || 0,
+      salary_input: annualCtcVal,
+      salaryInput: annualCtcVal,
       
       // Fallback schema mapping
-      basic_monthly: Number(basic) || 0,
-      hra_monthly: Number(hra) || 0,
-      pf_deduction: Number(pf) || 0,
-      pt_deduction: Number(pt) || 0,
-      esic_deduction: Number(esic) || 0,
-      pf_employer: Number(pfEmployer) || 0,
+      basic_monthly: Number(basic) > 0 ? Number(basic) : Math.round(finalGross * 0.5),
+      hra_monthly: Number(hra) > 0 ? Number(hra) : Math.round(finalGross * 0.2),
+      pf_deduction: Number(pf) > 0 ? Number(pf) : 0,
+      pt_deduction: Number(pt) > 0 ? Number(pt) : 0,
+      esic_deduction: Number(esic) > 0 ? Number(esic) : 0,
+      pf_employer: Number(pfEmployer) > 0 ? Number(pfEmployer) : 0,
       
-      gross_monthly: grossCalculated,
-      grossMonthly: grossCalculated,
+      gross_monthly: finalGross,
+      grossMonthly: finalGross,
       total_deductions_monthly: totalDeductionCalculated,
-      net_salary_monthly: netSalaryCalculated,
-      net_take_home: netSalaryCalculated,
-      netTakeHome: netSalaryCalculated,
-      annual_ctc: annualCtcCalculated,
-      annualCtc: annualCtcCalculated,
+      net_salary_monthly: finalNet,
+      net_take_home: finalNet,
+      netTakeHome: finalNet,
+      annual_ctc: finalCtc,
+      annualCtc: finalCtc,
       
       // Full Dynamic Payload mapped as JSON
       customComponents: JSON.stringify(dynamicValues)
@@ -666,7 +714,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
         const mapped = data.map((s: any) => mapStructureRecord(s, activeSlabName));
         const uniqueMap = new Map<string, PayStructureRecord>();
         mapped.forEach(r => {
-          const key = `${r.effectiveFrom}_${r.slab}`;
+          const key = `${r.effectiveFrom}_${r.id}`;
           if (!uniqueMap.has(key)) {
             uniqueMap.set(key, r);
           }
@@ -835,13 +883,13 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'flex-start', background: '#f8fafc', padding: 14, borderRadius: 6, border: '1px solid #e2e8f0' }}>
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Monthly Gross / CTC Input :</label>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Annual CTC Input :</label>
                 <input
                   type="number"
                   value={salaryInput}
                   onChange={(e) => handleSalaryInputChange(e.target.value)}
                   readOnly={!canEditPayroll}
-                  placeholder="Enter Gross Monthly Salary / CTC"
+                  placeholder="Enter Annual CTC (e.g. 480000)"
                   style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, fontWeight: 700, background: !canEditPayroll ? '#f1f5f9' : '#ffffff' }}
                 />
                 <p style={{ fontSize: 10, color: '#0369a1', fontStyle: 'italic', marginTop: 3, marginBottom: 0 }}>

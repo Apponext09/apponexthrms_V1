@@ -81,22 +81,45 @@ export const ManagerHRRegularizationApprovals: React.FC<Props> = ({ role }) => {
     fetchLists();
   }, [role]);
 
+  // Re-checks the server's pending queue for this item. Used when the approve/reject
+  // request throws client-side (e.g. a dropped connection) even though the write
+  // already committed on the server — without this, a successful action can still
+  // show a failure toast and leave the stale row in the list until a manual refresh.
+  const isStillPendingOnServer = async (id: number, action: string) => {
+    try {
+      const endpoint = action.startsWith('manager')
+        ? '/attendance/regularization/manager-pending'
+        : '/attendance/regularization/hr-pending';
+      const res = await apiClient.get(endpoint);
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
+      return list.some((r: any) => r.id === id);
+    } catch {
+      return true;
+    }
+  };
+
   const handleExecuteAction = async () => {
     if (!actionItem) return;
     setSubmittingAction(true);
+    const { item, action } = actionItem;
     try {
-      const { item, action } = actionItem;
       const url = `/attendance/regularization/${item.id}/${action}`;
       const res = await apiClient.post(url, { comments });
 
-      if (res.data?.success || res.status === 200) {
-        toast.success(res.data?.message || 'Action executed successfully!');
+      toast.success(res.data?.message || 'Action executed successfully!');
+      setActionItem(null);
+      setComments('');
+      await fetchLists();
+    } catch (err: any) {
+      const stillPending = await isStillPendingOnServer(item.id, action);
+      if (stillPending) {
+        toast.error(err.response?.data?.message || 'Failed to process request action');
+      } else {
+        toast.success('Action executed successfully!');
         setActionItem(null);
         setComments('');
-        fetchLists();
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to process request action');
+      await fetchLists();
     } finally {
       setSubmittingAction(false);
     }

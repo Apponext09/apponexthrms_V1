@@ -2,15 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calendar, Building, Filter, CheckCircle2, Globe } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { Badge } from '@/components/ui/badge';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface PayrollCycleItem {
   id: string;
   name: string;
   cycle_name?: string;
+  companyId?: string | number | null;
+  company_id?: string | number | null;
+  companyName?: string;
+  company_name?: string;
   isDailyWages?: boolean;
   dailyWagesIncludePaidHolidays?: boolean;
   dailyWagesIncludeWeekOff?: boolean;
@@ -29,44 +35,106 @@ export interface PayrollCycleItem {
   isActive: boolean;
 }
 
+interface CompanyItem {
+  id: string | number;
+  company_id?: string | number;
+  name: string;
+  company_code?: string;
+  code?: string;
+}
+
 export const MasterPayrollCycle: React.FC = () => {
   const queryClient = useQueryClient();
+  const { selectedCompanyId, selectedCompanyName } = useCompanyStore();
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
+  const [companies, setCompanies] = useState<CompanyItem[]>([]);
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
   const [selectedCycleId, setSelectedCycleId] = useState<string>('');
 
   const [cycleForm, setCycleForm] = useState<Partial<PayrollCycleItem>>({
     name: '',
+    companyId: selectedCompanyId ? String(selectedCompanyId) : '',
     isDailyWages: false,
     frequency: 'Monthly',
     startDate: 1,
-    cutoffDay: 0,
-    monthOffset: 'First',
-    disbursementDate: 27,
-    totalDaysCalc: 'Select',
-    capAmount: 3,
+    cutoffDay: 25,
+    monthOffset: 'Current',
+    disbursementDate: 28,
+    totalDaysCalc: '30',
+    capAmount: 1000000,
     isActive: true
   });
 
-  const fetchCycles = async () => {
+  const fetchCompanies = async () => {
     try {
-      const res = await apiClient.get('/payroll/cycles');
+      const res = await apiClient.get('/settings/companies');
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data)) {
+        const mapped = data.map((c: any) => {
+          const rawId = c.company_id ?? c.companyId ?? c.id;
+          const cid = rawId !== undefined && rawId !== null ? String(rawId) : '';
+          const numId = rawId !== undefined && rawId !== null ? Number(rawId) : 0;
+          return {
+            ...c,
+            id: cid,
+            company_id: numId,
+            companyId: numId,
+            code: c.code || c.company_code || '',
+            name: c.name || c.company_name || 'Company'
+          };
+        }).filter((c: any) => c.company_id > 0);
+        setCompanies(mapped);
+      }
+    } catch (err) {
+      console.warn('Could not fetch companies:', err);
+    }
+  };
+
+  const fetchCycles = async (companyFilter = selectedCompanyFilter) => {
+    try {
+      const params: any = {};
+      const activeComp = companyFilter !== 'all'
+        ? companyFilter
+        : (selectedCompanyId ? String(selectedCompanyId) : undefined);
+
+      if (activeComp && activeComp !== 'all') {
+        params.companyId = activeComp;
+      }
+      const res = await apiClient.get('/payroll/cycles', { params });
       const rawData = res.data?.data || res.data?.cycles || res.data;
       const data = Array.isArray(rawData) ? rawData : (Array.isArray(res) ? res : []);
       if (Array.isArray(data)) {
         const dbMapped: PayrollCycleItem[] = data.map((c: any) => {
-          const cycleName = c.cycleName || c.cycle_name || c.name || (c.frequency ? `${c.frequency}` : 'Monthly');
+          const cycleName = c.cycle_name || c.cycleName || c.name || (c.frequency ? `${c.frequency}` : 'Monthly');
+          const rawCompId = c.company_id ?? c.companyId ?? null;
+          const compIdStr = rawCompId !== null && rawCompId !== undefined && String(rawCompId) !== 'null' && String(rawCompId) !== '0' ? String(rawCompId) : null;
+          const matchedComp = companies.find(comp => String(comp.id || comp.company_id) === compIdStr);
+          const compName = c.company_name || c.companyName || matchedComp?.name || (compIdStr ? `Company #${compIdStr}` : 'All Companies');
+
           return {
             id: String(c.id || c.uuid),
             name: cycleName,
             cycle_name: cycleName,
-            isDailyWages: Boolean(c.isDailyWages ?? c.is_daily_wages),
+            companyId: compIdStr,
+            company_id: compIdStr ? Number(compIdStr) : null,
+            companyName: compName,
+            company_name: compName,
+            isDailyWages: Boolean(c.is_daily_wages ?? c.isDailyWages),
+            dailyWagesIncludePaidHolidays: Boolean(c.daily_wages_include_paid_holidays ?? c.dailyWagesIncludePaidHolidays),
+            dailyWagesIncludeWeekOff: Boolean(c.daily_wages_include_week_off ?? c.dailyWagesIncludeWeekOff),
             frequency: c.frequency || 'Monthly',
-            startDate: c.startDate ?? c.start_date ?? 1,
-            cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 0,
-            monthOffset: c.monthOffset || c.month_offset || 'First',
-            disbursementDate: c.disbursementDate ?? c.disbursement_date ?? 27,
-            capAmount: c.capAmount ?? c.cap_amount ?? 3,
-            isActive: c.isActive ?? (c.status !== 'closed' && (c.is_active ?? true))
+            startDate: c.start_date ?? c.startDate ?? 1,
+            startDate2: c.start_date_2 ?? c.startDate2 ?? 0,
+            startDay: c.start_day || c.startDay || 'Monday',
+            cutoffDay: c.cutoff_day ?? c.cutoffDay ?? 25,
+            cutoffDayName: c.cutoff_day_name || c.cutoffDayName || 'Friday',
+            monthOffset: c.month_offset || c.monthOffset || 'Current',
+            disbursementDate: c.disbursement_date_str ?? c.disbursement_date ?? c.disbursementDate ?? 28,
+            totalDaysCalc: c.total_days_calc || c.totalDaysCalc || '30',
+            capAmount: c.cap_amount ?? c.capAmount ?? 1000000,
+            toleranceEnabled: Boolean(c.tolerance_enabled ?? c.toleranceEnabled),
+            toleranceMinutes: Number(c.tolerance_minutes ?? c.toleranceMinutes ?? 15),
+            isActive: (c.is_active ?? c.isActive) !== 0 && (c.is_active ?? c.isActive) !== false
           };
         });
 
@@ -76,15 +144,23 @@ export const MasterPayrollCycle: React.FC = () => {
 
         setCycles(unique);
         if (unique.length > 0) {
-          if (!selectedCycleId) {
+          if (!selectedCycleId || !unique.some(t => String(t.id) === String(selectedCycleId))) {
             setSelectedCycleId(unique[0].id);
-            setCycleForm({ ...unique[0] });
+            setCycleForm({
+              ...unique[0],
+              companyId: unique[0].companyId || (selectedCompanyId ? String(selectedCompanyId) : '')
+            });
           } else {
             const active = unique.find(t => String(t.id) === String(selectedCycleId));
             if (active) {
-              setCycleForm({ ...active });
+              setCycleForm({
+                ...active,
+                companyId: active.companyId || (selectedCompanyId ? String(selectedCompanyId) : '')
+              });
             }
           }
+        } else {
+          setSelectedCycleId('');
         }
       }
     } catch (err) {
@@ -93,38 +169,60 @@ export const MasterPayrollCycle: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchCycles();
-  }, []);
+    fetchCompanies();
+    const activeFilter = selectedCompanyId ? String(selectedCompanyId) : 'all';
+    setSelectedCompanyFilter(activeFilter);
+    fetchCycles(activeFilter);
+
+    if (!selectedCycleId) {
+      setCycleForm(prev => ({
+        ...prev,
+        companyId: selectedCompanyId ? String(selectedCompanyId) : ''
+      }));
+    }
+  }, [selectedCompanyId]);
 
   const handleSelectCycle = (c: PayrollCycleItem) => {
     setSelectedCycleId(c.id);
-    setCycleForm({ ...c });
+    setCycleForm({
+      ...c,
+      companyId: c.companyId || c.company_id ? String(c.companyId || c.company_id) : (selectedCompanyId ? String(selectedCompanyId) : '')
+    });
   };
 
   const handleSaveCycle = async () => {
-    if (!cycleForm.name) {
+    if (!cycleForm.name || !cycleForm.name.trim()) {
       showToast.error('Validation Error', 'Please enter a valid Payroll Cycle Name');
       return;
     }
 
+    const companyNum = cycleForm.companyId && !isNaN(Number(cycleForm.companyId)) && Number(cycleForm.companyId) > 0
+      ? Number(cycleForm.companyId)
+      : null;
+
     const payload = {
-      cycle_name: cycleForm.name,
-      name: cycleForm.name,
-      is_daily_wages: cycleForm.isDailyWages,
-      isDailyWages: cycleForm.isDailyWages,
-      daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
-      dailyWagesIncludePaidHolidays: cycleForm.dailyWagesIncludePaidHolidays,
-      daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
-      dailyWagesIncludeWeekOff: cycleForm.dailyWagesIncludeWeekOff,
-      frequency: cycleForm.frequency,
+      cycle_name: cycleForm.name.trim(),
+      name: cycleForm.name.trim(),
+      company_id: companyNum,
+      companyId: companyNum,
+      is_daily_wages: Boolean(cycleForm.isDailyWages),
+      isDailyWages: Boolean(cycleForm.isDailyWages),
+      daily_wages_include_paid_holidays: Boolean(cycleForm.dailyWagesIncludePaidHolidays),
+      dailyWagesIncludePaidHolidays: Boolean(cycleForm.dailyWagesIncludePaidHolidays),
+      daily_wages_include_week_off: Boolean(cycleForm.dailyWagesIncludeWeekOff),
+      dailyWagesIncludeWeekOff: Boolean(cycleForm.dailyWagesIncludeWeekOff),
+      frequency: cycleForm.frequency || 'Monthly',
       start_date: Number(cycleForm.startDate || 1),
+      start_day: cycleForm.startDay || 'Monday',
       cutoff_day: Number(cycleForm.cutoffDay ?? 25),
+      cutoff_day_name: cycleForm.cutoffDayName || 'Friday',
       month_offset: cycleForm.monthOffset || 'Current',
-      disbursement_date: Number(cycleForm.disbursementDate || 1),
+      disbursement_date: Number(cycleForm.disbursementDate || 28),
+      total_days_calc: cycleForm.totalDaysCalc || '30',
       cap_amount: Number(cycleForm.capAmount || 1000000),
-      tolerance_enabled: cycleForm.toleranceEnabled,
+      tolerance_enabled: Boolean(cycleForm.toleranceEnabled),
       tolerance_minutes: Number(cycleForm.toleranceMinutes || 15),
-      is_active: cycleForm.isActive
+      is_active: cycleForm.isActive !== false
     };
 
     const isEdit = Boolean(selectedCycleId && cycles.some(c => String(c.id) === String(selectedCycleId)));
@@ -134,83 +232,108 @@ export const MasterPayrollCycle: React.FC = () => {
       if (isEdit) {
         const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
         const serverData = putRes?.data?.data || putRes?.data;
+        const matchedComp = companies.find(c => String(c.id) === String(companyNum));
         const updatedItem: PayrollCycleItem = {
+          ...cycleForm,
           id: String(serverData?.id || selectedCycleId),
           name: serverData?.cycle_name || cycleForm.name || 'Monthly',
           cycle_name: serverData?.cycle_name || cycleForm.name || 'Monthly',
+          companyId: companyNum ? String(companyNum) : null,
+          company_id: companyNum,
+          companyName: serverData?.company_name || matchedComp?.name || (companyNum ? 'Company' : 'All Companies'),
+          company_name: serverData?.company_name || matchedComp?.name || (companyNum ? 'Company' : 'All Companies'),
           isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
-          cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 0,
-          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'First',
-          disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 27,
-          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 3,
+          cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 25,
+          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'Current',
+          disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 28,
+          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 1000000,
           isActive: serverData?.status !== 'closed' && (serverData?.is_active ?? cycleForm.isActive ?? true)
         };
 
         setCycles(prev => prev.map(c => String(c.id) === String(selectedCycleId) ? updatedItem : c));
         setCycleForm(updatedItem);
-        showToast.success('Cycle Updated', `Master Payroll "${updatedItem.name}" updated successfully.`);
+        showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
       } else {
         const postRes = await apiClient.post('/payroll/cycles', payload);
         const serverData = postRes?.data?.data || postRes?.data || {};
         savedId = String(serverData.id || serverData.uuid || '');
+        const matchedComp = companies.find(c => String(c.id) === String(companyNum));
 
         const newItem: PayrollCycleItem = {
+          ...cycleForm,
           id: savedId || String(Date.now()),
-          name: serverData?.cycle_name || cycleForm.name || 'Monthly',
-          cycle_name: serverData?.cycle_name || cycleForm.name || 'Monthly',
-          isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
-          frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
-          startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
-          cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 0,
-          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'First',
-          disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 27,
-          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 3,
-          isActive: serverData?.status !== 'closed' && (serverData?.is_active ?? cycleForm.isActive ?? true)
+          name: serverData.cycle_name || cycleForm.name || 'Monthly',
+          cycle_name: serverData.cycle_name || cycleForm.name || 'Monthly',
+          companyId: companyNum ? String(companyNum) : null,
+          company_id: companyNum,
+          companyName: serverData.company_name || matchedComp?.name || (companyNum ? 'Company' : 'All Companies'),
+          company_name: serverData.company_name || matchedComp?.name || (companyNum ? 'Company' : 'All Companies'),
+          isDailyWages: Boolean(serverData.is_daily_wages ?? cycleForm.isDailyWages),
+          frequency: serverData.frequency || cycleForm.frequency || 'Monthly',
+          startDate: serverData.start_date ?? cycleForm.startDate ?? 1,
+          cutoffDay: serverData.cutoff_day ?? cycleForm.cutoffDay ?? 25,
+          monthOffset: serverData.month_offset || cycleForm.monthOffset || 'Current',
+          disbursementDate: serverData.disbursement_date ?? cycleForm.disbursementDate ?? 28,
+          capAmount: serverData.cap_amount ?? cycleForm.capAmount ?? 1000000,
+          isActive: serverData.status !== 'closed' && (serverData.is_active ?? cycleForm.isActive ?? true)
         };
 
-        if (savedId) setSelectedCycleId(savedId);
-        setCycles(prev => [newItem, ...prev]);
+        setSelectedCycleId(newItem.id);
+        setCycles(prev => [newItem, ...prev.filter(c => c.id !== newItem.id)]);
         setCycleForm(newItem);
-        showToast.success('Cycle Saved', `Master Payroll "${newItem.name}" created successfully.`);
+        showToast.success('Cycle Saved', `Payroll Cycle "${newItem.name}" created successfully.`);
       }
 
-      await fetchCycles();
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
-    } catch (err) {
-      console.error('Error saving cycle:', err);
-      showToast.error('Save Error', 'Failed to save Master Payroll Cycle.');
+      fetchCycles(selectedCompanyFilter);
+    } catch (err: any) {
+      console.error(err);
+      showToast.error('Save Failed', err?.response?.data?.message || 'Could not save the Payroll Cycle.');
     }
   };
 
   const handleDeleteCycle = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this Master Payroll Cycle?')) return;
+    if (!id) return;
+    if (!window.confirm('Are you sure you want to delete this payroll cycle?')) return;
 
-    setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
-    if (selectedCycleId === id) {
-      setSelectedCycleId('');
-      setCycleForm({
-        name: '',
-        frequency: 'Monthly',
-        startDate: 1,
-        cutoffDay: 0,
-        monthOffset: 'First',
-        disbursementDate: 27,
-        capAmount: 3,
-        isActive: true
-      });
-    }
+    setCycles(prev => {
+      const next = prev.filter(c => c.id !== id);
+      if (selectedCycleId === id) {
+        if (next.length > 0) {
+          setSelectedCycleId(next[0].id);
+          setCycleForm({ ...next[0] });
+        } else {
+          setSelectedCycleId('');
+          setCycleForm({
+            name: '',
+            companyId: selectedCompanyFilter !== 'all' ? selectedCompanyFilter : '',
+            isDailyWages: false,
+            frequency: 'Monthly',
+            startDate: 1,
+            cutoffDay: 25,
+            monthOffset: 'Current',
+            disbursementDate: 28,
+            totalDaysCalc: '30',
+            capAmount: 1000000,
+            isActive: true
+          });
+        }
+      }
+      return next;
+    });
 
     try {
       await apiClient.delete(`/payroll/cycles/${id}`);
-      showToast.success('Cycle Deleted', 'Master Payroll Cycle deleted successfully.');
+      showToast.success('Cycle Deleted', 'Payroll Cycle deleted successfully.');
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
     } catch (err) {
       console.error('Delete error:', err);
-      showToast.success('Cycle Deleted', 'Master Payroll Cycle removed successfully.');
+      showToast.success('Cycle Deleted', 'Payroll Cycle removed.');
     }
   };
 
@@ -218,6 +341,7 @@ export const MasterPayrollCycle: React.FC = () => {
     setSelectedCycleId('');
     setCycleForm({
       name: '',
+      companyId: selectedCompanyId ? String(selectedCompanyId) : (selectedCompanyFilter !== 'all' ? selectedCompanyFilter : ''),
       isDailyWages: false,
       frequency: 'Monthly',
       startDate: 1,
@@ -230,91 +354,143 @@ export const MasterPayrollCycle: React.FC = () => {
     });
   };
 
+  // Filter cycles in list
+  const filteredCycles = cycles.filter(c => {
+    if (selectedCompanyFilter === 'all') return true;
+    if (!c.companyId && !c.company_id) return true; // Global cycles show everywhere
+    return String(c.companyId || c.company_id) === String(selectedCompanyFilter);
+  });
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
       {/* Left Column: Master Payroll Cycles List */}
       <div className="lg:col-span-4 space-y-3">
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-          <CardHeader className="p-3 px-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-              <CardTitle className="text-xs font-bold">Master Payroll</CardTitle>
+          <CardHeader className="p-3 px-4 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                <CardTitle className="text-xs font-bold text-foreground">Master Payroll Cycles</CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddNewCycle}
+                  className="h-7 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-100"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add New
+                </Button>
+                <span className="text-[11px] font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">
+                  {filteredCycles.length}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleAddNewCycle}
-                className="h-7 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-100"
-              >
-                <Plus className="w-3 h-3 mr-1" /> Add New
-              </Button>
-              <span className="text-[11px] font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">
-                {cycles.length}
-              </span>
-            </div>
+
+            {/* Company Filter Selector */}
+            {companies.length > 0 && (
+              <div className="flex items-center gap-1.5 pt-1">
+                <Building className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <select
+                  value={selectedCompanyFilter}
+                  onChange={(e) => {
+                    const newFilter = e.target.value;
+                    setSelectedCompanyFilter(newFilter);
+                    fetchCycles(newFilter);
+                  }}
+                  className="w-full h-7 text-[11px] font-semibold border border-slate-200 dark:border-slate-700 rounded-md px-2 bg-background text-foreground focus:outline-none"
+                >
+                  <option value="all">🏢 All Companies (All Cycles)</option>
+                  {companies.map(comp => {
+                    const cid = String(comp.company_id || comp.id);
+                    return (
+                      <option key={cid} value={cid}>
+                        {comp.name} {comp.company_code || comp.code ? `(${comp.company_code || comp.code})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
           </CardHeader>
 
-          <CardContent className="p-2 space-y-1.5">
-            {cycles.map(cycle => (
-              <div
-                key={cycle.id}
-                onClick={() => handleSelectCycle(cycle)}
-                className={`p-3 rounded-md border transition-all cursor-pointer ${
-                  selectedCycleId === cycle.id
-                    ? 'bg-teal-700 text-white border-teal-700 shadow-xs'
-                    : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-foreground'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-bold text-xs truncate max-w-[180px]">
-                    <span className="capitalize">{cycle.name || cycle.cycle_name || 'Monthly'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectCycle(cycle);
-                      }}
-                      title="Edit Master Payroll"
-                      className={`p-1 rounded transition-all ${
-                        selectedCycleId === cycle.id ? 'hover:bg-white/20 text-white' : 'hover:bg-indigo-50 text-indigo-600 dark:text-indigo-400'
-                      }`}
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteCycle(cycle.id, e)}
-                      title="Delete Master Payroll"
-                      className={`p-1 rounded transition-all ${
-                        selectedCycleId === cycle.id ? 'hover:bg-red-500/30 text-white' : 'hover:bg-red-50 text-red-500 hover:text-red-600'
-                      }`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+          <CardContent className="p-2 space-y-1.5 max-h-[620px] overflow-y-auto">
+            {filteredCycles.length === 0 ? (
+              <div className="p-6 text-center text-xs text-muted-foreground">
+                No payroll cycles found for selected company filter.
+                <button
+                  onClick={handleAddNewCycle}
+                  className="block mx-auto mt-2 font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  + Create First Cycle
+                </button>
               </div>
-            ))}
+            ) : (
+              filteredCycles.map(cycle => {
+                const isSelected = selectedCycleId === cycle.id;
+                return (
+                  <div
+                    key={cycle.id}
+                    onClick={() => handleSelectCycle(cycle)}
+                    className={`p-3 rounded-lg border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 min-w-0">
+                        <div className="font-bold text-xs truncate">
+                          <span>{cycle.name || cycle.cycle_name || 'Monthly'}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                          <span className={`px-1.5 py-0.5 rounded font-bold ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                          }`}>
+                            {cycle.frequency || 'Monthly'}
+                          </span>
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium truncate max-w-[140px] ${
+                            isSelected ? 'bg-white/20 text-white' : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border border-indigo-200/60'
+                          }`}>
+                            <Building className="w-2.5 h-2.5 shrink-0" />
+                            {cycle.companyName || 'All Companies'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectCycle(cycle);
+                          }}
+                          title="Edit Master Payroll"
+                          className={`p-1 rounded transition-all ${
+                            isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-indigo-50 text-indigo-600 dark:text-indigo-400'
+                          }`}
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteCycle(cycle.id, e)}
+                          title="Delete Master Payroll"
+                          className={`p-1 rounded transition-all ${
+                            isSelected ? 'hover:bg-red-500/30 text-white' : 'hover:bg-red-50 text-red-500 hover:text-red-600'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
 
             <Button
-              onClick={() => {
-                setSelectedCycleId('');
-                setCycleForm({
-                  name: '',
-                  isDailyWages: false,
-                  frequency: 'Monthly',
-                  startDate: 1,
-                  cutoffDay: 0,
-                  monthOffset: 'First',
-                  disbursementDate: 27,
-                  totalDaysCalc: 'Select',
-                  capAmount: 3,
-                  isActive: true
-                });
-              }}
+              onClick={handleAddNewCycle}
               variant="outline"
               className="w-full mt-2 border-dashed border-indigo-400 text-xs font-bold text-indigo-600 flex items-center gap-1.5 justify-center h-9 hover:bg-indigo-50"
             >
@@ -324,7 +500,7 @@ export const MasterPayrollCycle: React.FC = () => {
         </Card>
       </div>
 
-      {/* Right Column: Add / Edit Form (Hoshi HRMS Layout) */}
+      {/* Right Column: Add / Edit Form */}
       <div className="lg:col-span-8">
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
           <CardHeader className="p-3 px-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
@@ -341,10 +517,47 @@ export const MasterPayrollCycle: React.FC = () => {
                 </>
               )}
             </CardTitle>
+            {cycleForm.companyId && (
+              <Badge variant="outline" className="text-[10px] font-bold border-indigo-300 text-indigo-700 bg-indigo-50/50 flex items-center gap-1">
+                <Building className="w-3 h-3" />
+                {companies.find(c => String(c.id) === String(cycleForm.companyId))?.name || 'Company Scoped'}
+              </Badge>
+            )}
           </CardHeader>
 
           <CardContent className="p-5 space-y-4">
             <div className="space-y-4">
+              {/* Field 0: Company Scope */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <label className="md:col-span-4 text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                  <Building className="w-3.5 h-3.5 text-indigo-600" />
+                  Target Company
+                </label>
+                <div className="md:col-span-8">
+                  <select
+                    value={cycleForm.companyId ? String(cycleForm.companyId) : ''}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setCycleForm(prev => ({ ...prev, companyId: val }));
+                    }}
+                    className="w-full h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
+                  >
+                    <option value="">🏢 All Companies (Organization Default)</option>
+                    {companies.map(comp => {
+                      const cid = String(comp.company_id || comp.id);
+                      return (
+                        <option key={cid} value={cid}>
+                          {comp.name} {comp.company_code || comp.code ? `(${comp.company_code || comp.code})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Assign this payroll cycle specifically to a company, or make it organization-wide.
+                  </p>
+                </div>
+              </div>
+
               {/* Field 1: Payroll Cycle Name */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                 <label className="md:col-span-4 text-xs font-bold text-slate-700 dark:text-slate-200">
@@ -360,7 +573,7 @@ export const MasterPayrollCycle: React.FC = () => {
                         setCycles(prev => prev.map(c => String(c.id) === String(selectedCycleId) ? { ...c, name: val, cycle_name: val } : c));
                       }
                     }}
-                    placeholder="e.g. Monthly, Weekly"
+                    placeholder="e.g. Monthly Pay Cycle, Weekly Plant Cycle"
                     className="h-9 text-xs font-medium border-slate-300 dark:border-slate-700"
                   />
                 </div>

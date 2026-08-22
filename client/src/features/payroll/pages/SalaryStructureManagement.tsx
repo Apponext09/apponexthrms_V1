@@ -364,6 +364,19 @@ export const SalaryStructureManagement: React.FC = () => {
     }
   };
 
+  const handleDeleteSlab = async (id: string | number, name?: string) => {
+    if (!window.confirm(`Are you sure you want to delete pay slab "${name || id}"?`)) return;
+    try {
+      await apiClient.delete(`/payroll/slabs/${id}`);
+      setPayrollSlabs(prev => prev.filter(s => String(s.id) !== String(id)));
+      setSuccessMsg(`Pay slab "${name || id}" deleted successfully.`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Delete slab error:', err);
+      alert(err?.response?.data?.message || 'Failed to delete pay slab.');
+    }
+  };
+
   // ── Auto-match Payroll Slab based on input CTC (Loads ONLY components assigned to matched slab) ──
   React.useEffect(() => {
     const ctcVal = Number(inputCtc) || 0;
@@ -1770,9 +1783,21 @@ export const SalaryStructureManagement: React.FC = () => {
                     View active grade slabs configured with monthly cycle badges and min-max CTC ranges.
                   </CardDescription>
                 </div>
-                <Badge variant="outline" className="bg-emerald-600/10 text-emerald-600 border-emerald-600/20 font-extrabold text-[10px]">
-                  {payrollSlabs.length || 7} Slabs Configured
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-emerald-600/10 text-emerald-600 border-emerald-600/20 font-extrabold text-[10px]">
+                    {payrollSlabs.length} Slabs Configured
+                  </Badge>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    onClick={() => {
+                      window.location.href = '/payroll/settings?tab=slabs';
+                    }}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    New Slab
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -1787,34 +1812,58 @@ export const SalaryStructureManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {(payrollSlabs.length > 0 ? payrollSlabs : [
-                        { id: 1, name: 'Executive Grade Slab', minCtc: 300000, maxCtc: 600000, dept: 'All Departments' },
-                        { id: 2, name: 'Senior Executive Slab', minCtc: 600000, maxCtc: 1000000, dept: 'Engineering, Sales' },
-                        { id: 3, name: 'Manager Pay Slab', minCtc: 1000000, maxCtc: 1800000, dept: 'Operations, Finance' },
-                        { id: 4, name: 'Director Pay Grade', minCtc: 1800000, maxCtc: 3500000, dept: 'Management' },
-                      ]).map((slab: any) => (
-                        <tr key={slab.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 font-extrabold text-foreground">
-                            {slab.name || slab.slab_name || 'Pay Grade Slab'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
-                              [Monthly]
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 font-mono font-bold text-foreground">
-                            ₹{(slab.minCtc || slab.min_ctc || 300000).toLocaleString('en-IN')} - ₹{(slab.maxCtc || slab.max_ctc || 1200000).toLocaleString('en-IN')}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground font-medium">
-                            {slab.dept || 'All Organization Departments'}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] font-bold">
-                              Edit Slab
-                            </Button>
+                      {payrollSlabs.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            No pay slabs configured yet. Click "New Slab" to create one.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        payrollSlabs.map((slab: any) => (
+                          <tr key={slab.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 font-extrabold text-foreground">
+                              {slab.name || slab.slab_name || 'Pay Grade Slab'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
+                                [Monthly]
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 font-mono font-bold text-foreground">
+                              ₹{(slab.minCtc || slab.min_ctc || 0).toLocaleString('en-IN')} - ₹{(slab.maxCtc || slab.max_ctc || 10000000).toLocaleString('en-IN')}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground font-medium">
+                              {Array.isArray(slab.departments) && slab.departments.length > 0
+                                ? slab.departments.join(', ')
+                                : (slab.dept || 'All Organization Departments')}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] font-bold"
+                                  onClick={() => {
+                                    window.location.href = '/payroll/settings?tab=slabs';
+                                  }}
+                                >
+                                  <Edit className="w-3 h-3 mr-1" />
+                                  Configure
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40"
+                                  title="Delete Slab"
+                                  onClick={() => handleDeleteSlab(slab.id, slab.name || slab.slab_name)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
