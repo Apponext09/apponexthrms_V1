@@ -159,6 +159,7 @@ const HR_NAV = [
       { name: 'Employee Status', href: '/hr/masters?tab=employee-status', icon: Users },
       { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
       { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
+      { name: 'Offer Letter Master', href: '/hr/masters?tab=offer-templates', icon: FileText },
       { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
       { name: 'Notification Merge Codes', href: '/hr/masters?tab=notification-merge-codes', icon: Code2 },
       { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },

@@ -26,7 +26,7 @@ export const OfferManagementPage: React.FC = () => {
   });
 
   const { data: appsResponse } = useApplications({ pageSize: 100 });
-  const { data: departments } = useDepartments();
+  const { data: departmentsResponse } = useDepartments(1, 100);
   const { designations } = useDesignations();
 
   const createOfferMutation = useCreateOffer();
@@ -40,9 +40,9 @@ export const OfferManagementPage: React.FC = () => {
     ? appsResponse.items 
     : (Array.isArray(appsResponse?.data) ? appsResponse.data : (Array.isArray(appsResponse) ? appsResponse : []));
 
-  const departmentList = Array.isArray(departments) 
-    ? departments 
-    : (Array.isArray(departments?.items) ? departments.items : (Array.isArray(departments?.data) ? departments.data : []));
+  const departmentList = Array.isArray(departmentsResponse?.items) 
+    ? departmentsResponse.items 
+    : (Array.isArray(departmentsResponse?.data) ? departmentsResponse.data : (Array.isArray(departmentsResponse) ? departmentsResponse : []));
 
   const designationList = Array.isArray(designations) 
     ? designations 
@@ -254,30 +254,42 @@ export const OfferManagementPage: React.FC = () => {
                 </TableRow>
               ) : (
                 filteredOffers.map((o: any) => {
-                  const formattedCTC = o.cost_to_company || o.costToCompany 
-                    ? `${o.currency || 'INR'} ${parseFloat(o.cost_to_company || o.costToCompany).toLocaleString()}` 
+                  const rawCTC = o.cost_to_company || o.costToCompany;
+                  const formattedCTC = rawCTC && !isNaN(parseFloat(rawCTC)) && parseFloat(rawCTC) > 0
+                    ? `${o.currency || 'INR'} ${parseFloat(rawCTC).toLocaleString()}`
                     : 'N/A';
+
+                  const candidateName = o.candidate_name || o.candidateName || 'Candidate';
+                  const candidateEmail = o.candidate_email || o.candidateEmail || 'No Email';
+                  const positionTitle = o.position_title || o.positionTitle || 'General Position';
+                  const offerCode = o.offer_code || o.offerCode || 'DRAFT';
+
+                  const formatDate = (dateVal: any) => {
+                    if (!dateVal) return 'N/A';
+                    const str = String(dateVal);
+                    return str.includes('T') ? str.split('T')[0] : str;
+                  };
                   
                   return (
                     <TableRow key={o.id} className="hover:bg-slate-50/50 transition">
                       <TableCell className="py-4 pl-6">
                         <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{o.offer_code || o.offerCode || 'DRAFT'}</span>
-                          <div className="font-bold text-slate-900 text-xs mt-0.5">{o.candidate_name || o.candidateName || 'Candidate'}</div>
-                          <div className="text-[10px] text-slate-500">{o.candidate_email || o.candidateEmail || 'No Email'}</div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{offerCode}</span>
+                          <div className="font-bold text-slate-900 text-xs mt-0.5">{candidateName}</div>
+                          <div className="text-[10px] text-slate-500">{candidateEmail}</div>
                         </div>
                       </TableCell>
                       <TableCell className="text-xs font-semibold text-slate-700">
-                        {o.position_title || o.positionTitle || 'General Position'}
+                        {positionTitle}
                       </TableCell>
                       <TableCell className="text-xs font-bold text-slate-900">
                         {formattedCTC}
                       </TableCell>
                       <TableCell className="text-xs text-slate-650">
-                        {o.offer_start_date || o.offerStartDate || 'N/A'}
+                        {formatDate(o.offer_start_date || o.offerStartDate)}
                       </TableCell>
                       <TableCell className="text-xs text-slate-650">
-                        {o.offer_expiry_date || o.offerExpiryDate || 'N/A'}
+                        {formatDate(o.offer_expiry_date || o.offerExpiryDate)}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(o.status)}

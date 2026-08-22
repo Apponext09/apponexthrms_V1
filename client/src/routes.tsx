@@ -563,6 +563,7 @@ export function AppRoutes() {
         <Route path="/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/recruitment/referrals" element={<ReferralManagementPage />} />
+        <Route path="/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
 
         {/* Asset Management Admin */}
         <Route path="/assets" element={<AssetDashboard />} />
@@ -625,6 +626,7 @@ export function AppRoutes() {
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
+        <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
           path="/masters"

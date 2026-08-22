@@ -487,8 +487,8 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
                   {/* Letterhead Header decoration */}
                   <div className="border-b-2 border-indigo-950 pb-4 mb-6 flex justify-between items-end font-sans">
                     <div>
-                      <h2 className="text-lg font-black tracking-tight text-indigo-950">APPONEXT TECHNOLOGIES PVT. LTD.</h2>
-                      <p className="text-[9px] text-slate-500 tracking-wider">Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103</p>
+                      <h2 className="text-lg font-black tracking-tight text-indigo-950 uppercase">{meta.companyName || 'APPONEXT TECHNOLOGIES PVT. LTD.'}</h2>
+                      <p className="text-[9px] text-slate-500 tracking-wider">{meta.companyAddress || 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103'}</p>
                     </div>
                     <div className="text-right text-[10px] text-slate-400">
                       <p className="font-bold text-indigo-900">CONFIDENTIAL</p>
@@ -509,19 +509,29 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
                       <p className="font-sans text-slate-500">{candidateEmail}</p>
                     </div>
 
-                    <p className="font-bold text-center text-sm tracking-wide text-slate-900 my-4 font-sans underline">Subject: Letter of Offer & Employment Agreement</p>
-
-                    <p>Dear <span className="font-bold">{candidateName}</span>,</p>
-
-                    <p>
-                      We are pleased to offer you employment with Apponext Technologies Pvt. Ltd. (the "Company") in the capacity of <strong>{positionTitle}</strong>. 
-                      You will be positioned in corporate grade <strong>{gradeBand}</strong> at our <strong>{officeLocation}</strong> office, reporting directly to your supervisor under a <strong>{workModel}</strong> work engagement layout.
+                    <p className="font-bold text-center text-sm tracking-wide text-slate-900 my-4 font-sans underline">
+                      {meta.compiledSubject || 'Subject: Letter of Offer & Employment Agreement'}
                     </p>
 
-                    <p>
-                      Your target date of joining is set as <strong>{startDate ? new Date(startDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '[Start Date]'}</strong>, subject to successful completion of all background checking protocols. 
-                      Your Annualized Cost to Company (CTC) compensation package is structured at <strong>{getCurrencySymbol()}{ctc.toLocaleString()}</strong>. Detailed split calculations are detailed in Annexure A.
-                    </p>
+                    {meta.compiledBody ? (
+                      <div className="whitespace-pre-line text-slate-800 space-y-3 font-serif">
+                        {meta.compiledBody}
+                      </div>
+                    ) : (
+                      <>
+                        <p>Dear <span className="font-bold">{candidateName}</span>,</p>
+
+                        <p>
+                          We are pleased to offer you employment with Apponext Technologies Pvt. Ltd. (the "Company") in the capacity of <strong>{positionTitle}</strong>. 
+                          You will be positioned in corporate grade <strong>{gradeBand}</strong> at our <strong>{officeLocation}</strong> office, reporting directly to your supervisor under a <strong>{workModel}</strong> work engagement layout.
+                        </p>
+
+                        <p>
+                          Your target date of joining is set as <strong>{startDate ? new Date(startDate).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '[Start Date]'}</strong>, subject to successful completion of all background checking protocols. 
+                          Your Annualized Cost to Company (CTC) compensation package is structured at <strong>{getCurrencySymbol()}{ctc.toLocaleString()}</strong>. Detailed split calculations are detailed in Annexure A.
+                        </p>
+                      </>
+                    )}
 
                     {/* Salary Annexure Table */}
                     <div className="border border-slate-200 rounded-lg overflow-hidden my-4 font-sans">

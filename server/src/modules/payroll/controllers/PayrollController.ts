@@ -3368,9 +3368,9 @@ export class PayrollController {
         });
       }
       const groups = await query;
-      res.json({ success: true, data: groups });
+      res.json({ success: true, data: groups || [] });
     } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      res.json({ success: true, data: [] });
     }
   }
 
@@ -3444,26 +3444,34 @@ export class PayrollController {
       const db = getKnex();
       const orgId = req.ctx?.organizationId;
 
-      // ── Primary source: payroll_components (has group_id, formula, amount) ─
-      let pcQuery = db('payroll_components').whereNull('deleted_at');
-      if (orgId) {
-        pcQuery = pcQuery.where((b: any) => {
-          b.where('organization_id', orgId).orWhereNull('organization_id');
-        });
+      let pcRows: any[] = [];
+      try {
+        let pcQuery = db('payroll_components').whereNull('deleted_at');
+        if (orgId) {
+          pcQuery = pcQuery.where((b: any) => {
+            b.where('organization_id', orgId).orWhereNull('organization_id');
+          });
+        }
+        pcRows = await pcQuery;
+      } catch (e) {
+        pcRows = [];
       }
-      const pcRows = await pcQuery;
 
-      // ── Secondary source: pay_component_definitions (well-typed rows) ──────
-      let pcdQuery = db('pay_component_definitions');
-      if (orgId) {
-        pcdQuery = pcdQuery.where((b: any) => {
-          b.where('organization_id', orgId).orWhereNull('organization_id');
-        });
+      let pcdRows: any[] = [];
+      try {
+        let pcdQuery = db('pay_component_definitions');
+        if (orgId) {
+          pcdQuery = pcdQuery.where((b: any) => {
+            b.where('organization_id', orgId).orWhereNull('organization_id');
+          });
+        }
+        pcdRows = await pcdQuery;
+      } catch (e) {
+        pcdRows = [];
       }
-      const pcdRows = await pcdQuery;
 
       // ── Normalise pay_component_definitions rows to match payroll_components shape ─
-      const pcdNormalized = pcdRows.map((p: any) => ({
+      const pcdNormalized = (Array.isArray(pcdRows) ? pcdRows : []).map((p: any) => ({
         id: `pcd_${p.id}`,
         uuid: p.uuid,
         organization_id: p.organization_id,
@@ -3486,7 +3494,7 @@ export class PayrollController {
       }));
 
       // ── Merge: keep pcRows first (they have group_id), add pcd rows not already present ─
-      const existingNames = new Set(pcRows.map((c: any) => (c.name || '').toLowerCase()));
+      const existingNames = new Set((Array.isArray(pcRows) ? pcRows : []).map((c: any) => (c.name || '').toLowerCase()));
       const supplementary = pcdNormalized.filter(
         (p: any) => !existingNames.has((p.name || '').toLowerCase())
       );

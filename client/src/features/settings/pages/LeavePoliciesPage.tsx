@@ -1120,13 +1120,15 @@ export function LeavePoliciesPage() {
       return;
     }
 
+    const computedQuota = parseInt(formData.allocation?.entitlementDays || String(formData.annual_quota || 0), 10) || 0;
+
     const payload = {
       leave_name: formData.leave_name,
       leave_code: formData.leave_code.toUpperCase(),
       leave_classification: formData.leave_classification,
       status: formData.status,
       paid_type: formData.allocation.noPayment ? 'unpaid' : formData.paid_type,
-      annual_quota: formData.annual_quota,
+      annual_quota: computedQuota,
       gender_applicable: (formData.allocation.gender || 'all').toLowerCase(),
       sandwich_rule_enabled: selectedLeaveType?.sandwich_rule_enabled ?? selectedLeaveType?.sandwichRuleEnabled ?? false,
       allow_negative_balance: selectedLeaveType?.allow_negative_balance ?? selectedLeaveType?.allowNegativeBalance ?? false,
@@ -1161,7 +1163,7 @@ export function LeavePoliciesPage() {
           toast.success('Leave settings updated successfully!');
           // Refresh list
           const updatedTypes = leaveTypes.map(t => 
-            t.id === selectedLeaveType.id ? { ...t, ...payload, leave_name: payload.leave_name, leave_code: payload.leave_code } : t
+            t.id === selectedLeaveType.id ? { ...t, ...payload, leave_name: payload.leave_name, leave_code: payload.leave_code, annual_quota: computedQuota, annualQuota: computedQuota } : t
           );
           setLeaveTypes(updatedTypes as any);
         }
@@ -1792,11 +1794,11 @@ export function LeavePoliciesPage() {
               </div>
 
               {/* ACCORDION 1: Leave Allocation Setting */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'allocation' ? null : 'allocation')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-800/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
                   <span className="flex items-center gap-3 text-left">
                     <Database className="h-5 w-5 text-teal-500" />
@@ -3037,11 +3039,11 @@ export function LeavePoliciesPage() {
             </div>
 
               {/* ACCORDION 2: Leave Application Setting */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'application' ? null : 'application')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-800/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
                   <span className="flex items-center gap-3 text-left">
                     <FileText className="h-5 w-5 text-indigo-500" />

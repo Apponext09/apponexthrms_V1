@@ -24,9 +24,15 @@ export class JobAiService {
    */
   async getJobAiSettings(ctx: TenantContext, jobId: number): Promise<any> {
     const db = getKnex();
-    const settings = await db('job_ai_settings')
-      .where({ job_id: jobId, organization_id: ctx.organizationId })
-      .first();
+    let settings: any = null;
+    try {
+      settings = await db('job_ai_settings')
+        .where({ job_id: jobId, organization_id: ctx.organizationId })
+        .first();
+    } catch (err) {
+      // Table job_ai_settings may not exist in some DB instances
+      settings = null;
+    }
 
     const job = await db('jobs')
       .where({ id: jobId, organization_id: ctx.organizationId })

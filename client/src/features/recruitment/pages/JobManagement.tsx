@@ -50,7 +50,7 @@ export const JobManagement: React.FC = () => {
   const publishJob = usePublishJob();
   
   // Table State
-  const [activeTab, setActiveTab] = useState<'active' | 'closed' | 'ai_suggestions'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -298,26 +298,10 @@ export const JobManagement: React.FC = () => {
           >
             Closed Jobs
           </button>
-          <button
-            onClick={() => { setActiveTab('ai_suggestions'); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 flex items-center gap-1.5 ${
-              activeTab === 'ai_suggestions'
-                ? 'bg-white text-indigo-700 border-t-indigo-600 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            <Sparkles className="w-4 h-4 text-indigo-500" />
-            AI Screening & Suggestions
-          </button>
         </div>
 
-        {activeTab === 'ai_suggestions' ? (
-          <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-            <AiSuggestionsTab initialJobId={selectedJobForAi} />
-          </div>
-        ) : (
-          /* Result Card Wrapper */
-          <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
+        {/* Result Card Wrapper */}
+        <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
             
             {/* Result Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
@@ -405,18 +389,6 @@ export const JobManagement: React.FC = () => {
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              onClick={() => {
-                                setSelectedJobForAi(item.id);
-                                setActiveTab('ai_suggestions');
-                              }}
-                              className="h-8 w-8 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50"
-                              title="AI Resume Screening & ATS Suggestions"
-                            >
-                              <Sparkles className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
                               onClick={() => setViewingJob(item)}
                               className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                               title="View Job Details"
@@ -440,15 +412,6 @@ export const JobManagement: React.FC = () => {
                               title="Copy Career Page Apply Link"
                             >
                               <Link2 className="w-4 h-4 text-indigo-600" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => handleDuplicateJob(item)}
-                              className="h-8 w-8 text-slate-400 hover:text-green-600 hover:bg-green-50"
-                              title="Duplicate Job"
-                            >
-                              <Copy className="w-4 h-4" />
                             </Button>
                             <Button 
                               variant="ghost" 
@@ -580,7 +543,6 @@ export const JobManagement: React.FC = () => {
               </div>
             )}
           </div>
-        )}
       </div>
 
       {/* Create / Edit Modal */}
@@ -976,191 +938,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
               </div>
             </div>
 
-            {/* AI Screening & ATS Settings Section */}
-            <div className="bg-gradient-to-br from-indigo-50/70 via-purple-50/40 to-slate-50 border border-indigo-100 p-4 rounded-xl space-y-4 shadow-sm">
-              <div className="flex items-center justify-between border-b border-indigo-100/70 pb-2">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-md bg-indigo-600 text-white">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider">AI Resume Screening & ATS Settings</h4>
-                    <p className="text-[11px] text-indigo-700">Configure separate ATS and JD match scoring rules for this position</p>
-                  </div>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={aiSettings.aiScreeningEnabled}
-                    onChange={(e) => setAiSettings(prev => ({ ...prev, aiScreeningEnabled: e.target.checked }))}
-                    className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
-                  />
-                  <span className="text-xs font-bold text-indigo-900">Enable AI Screening</span>
-                </label>
-              </div>
 
-              {aiSettings.aiScreeningEnabled && (
-                <div className="space-y-4 pt-1">
-                  {/* Twin Threshold Settings */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* ATS Score Screening */}
-                    <div className="p-3 bg-white rounded-lg border border-indigo-100 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={aiSettings.atsEnabled}
-                            onChange={(e) => setAiSettings(prev => ({ ...prev, atsEnabled: e.target.checked }))}
-                            className="rounded text-indigo-600 w-3.5 h-3.5"
-                          />
-                          Enable ATS Score
-                        </label>
-                        <span className="text-xs font-mono font-bold text-indigo-600">{aiSettings.atsThreshold}%</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">Evaluates resume parsing, keyword density & layout</p>
-                      <div className="space-y-1 pt-1">
-                        <div className="flex justify-between text-[11px] text-slate-600">
-                          <span>ATS Minimum Score:</span>
-                          <span className="font-bold text-indigo-700">{aiSettings.atsThreshold}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={50}
-                          max={95}
-                          step={1}
-                          value={aiSettings.atsThreshold}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, atsThreshold: parseInt(e.target.value, 10) }))}
-                          className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                        />
-                      </div>
-                    </div>
-
-                    {/* JD Match Screening */}
-                    <div className="p-3 bg-white rounded-lg border border-indigo-100 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={aiSettings.jdMatchEnabled}
-                            onChange={(e) => setAiSettings(prev => ({ ...prev, jdMatchEnabled: e.target.checked }))}
-                            className="rounded text-indigo-600 w-3.5 h-3.5"
-                          />
-                          Enable JD Match Score
-                        </label>
-                        <span className="text-xs font-mono font-bold text-indigo-600">{aiSettings.jdMatchThreshold}%</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">Evaluates candidate skills, experience & role match</p>
-                      <div className="space-y-1 pt-1">
-                        <div className="flex justify-between text-[11px] text-slate-600">
-                          <span>Minimum JD Match Score:</span>
-                          <span className="font-bold text-indigo-700">{aiSettings.jdMatchThreshold}%</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={50}
-                          max={95}
-                          step={1}
-                          value={aiSettings.jdMatchThreshold}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, jdMatchThreshold: parseInt(e.target.value, 10) }))}
-                          className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Shortlisting Rule Mode */}
-                  <div className="p-3 bg-white rounded-lg border border-indigo-100 space-y-2">
-                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">Shortlisting Mode</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      <label className={cn(
-                        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors",
-                        aiSettings.shortlistingMode === 'ATS_AND_JD' ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold" : "border-slate-200 text-slate-600"
-                      )}>
-                        <input
-                          type="radio"
-                          name="shortlistingMode"
-                          value="ATS_AND_JD"
-                          checked={aiSettings.shortlistingMode === 'ATS_AND_JD'}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, shortlistingMode: e.target.value as any }))}
-                          className="text-indigo-600"
-                        />
-                        <span>● ATS + JD Match (Recommended)</span>
-                      </label>
-
-                      <label className={cn(
-                        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors",
-                        aiSettings.shortlistingMode === 'WEIGHTED_SCORE' ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold" : "border-slate-200 text-slate-600"
-                      )}>
-                        <input
-                          type="radio"
-                          name="shortlistingMode"
-                          value="WEIGHTED_SCORE"
-                          checked={aiSettings.shortlistingMode === 'WEIGHTED_SCORE'}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, shortlistingMode: e.target.value as any }))}
-                          className="text-indigo-600"
-                        />
-                        <span>○ Weighted (ATS 40% + JD 60%)</span>
-                      </label>
-
-                      <label className={cn(
-                        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors",
-                        aiSettings.shortlistingMode === 'ATS_ONLY' ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold" : "border-slate-200 text-slate-600"
-                      )}>
-                        <input
-                          type="radio"
-                          name="shortlistingMode"
-                          value="ATS_ONLY"
-                          checked={aiSettings.shortlistingMode === 'ATS_ONLY'}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, shortlistingMode: e.target.value as any }))}
-                          className="text-indigo-600"
-                        />
-                        <span>○ ATS Score Only</span>
-                      </label>
-
-                      <label className={cn(
-                        "flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors",
-                        aiSettings.shortlistingMode === 'JD_MATCH_ONLY' ? "bg-indigo-50 border-indigo-300 text-indigo-950 font-semibold" : "border-slate-200 text-slate-600"
-                      )}>
-                        <input
-                          type="radio"
-                          name="shortlistingMode"
-                          value="JD_MATCH_ONLY"
-                          checked={aiSettings.shortlistingMode === 'JD_MATCH_ONLY'}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, shortlistingMode: e.target.value as any }))}
-                          className="text-indigo-600"
-                        />
-                        <span>○ JD Match Score Only</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Mandatory Skills & Auto-Shortlist Toggle */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-slate-700">Mandatory Skills (Comma separated)</label>
-                      <Input
-                        placeholder="e.g. Node.js, PostgreSQL, Docker"
-                        value={aiSettings.mandatorySkills || ''}
-                        onChange={(e) => setAiSettings(prev => ({ ...prev, mandatorySkills: e.target.value }))}
-                        className="bg-white border-slate-200 text-xs"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5 flex flex-col justify-end">
-                      <label className="flex items-center gap-2 cursor-pointer p-2 rounded-lg bg-white border border-slate-200">
-                        <input
-                          type="checkbox"
-                          checked={aiSettings.autoShortlistEnabled}
-                          onChange={(e) => setAiSettings(prev => ({ ...prev, autoShortlistEnabled: e.target.checked }))}
-                          className="rounded text-indigo-600 w-4 h-4"
-                        />
-                        <span className="text-xs font-semibold text-slate-800">Auto-shortlist candidates meeting rules</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
 
           </form>
         </div>

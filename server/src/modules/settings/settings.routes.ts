@@ -54,6 +54,219 @@ router.put('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCt
 router.patch('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.update(req, res)));
 router.delete('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.delete(req, res)));
 
+// ─── Offer Letter Templates Master Routes ──────────────────────────────────────
+const DEFAULT_PRESEEDED_OFFER_TEMPLATES = [
+  {
+    id: 'tpl_std_corp',
+    template_name: 'Standard Corporate Offer Letter',
+    template_code: 'TPL_STD_CORP',
+    subject: 'Subject: Letter of Offer & Employment Agreement - {{candidate_name}}',
+    company_name: 'Apponext Technologies Pvt. Ltd.',
+    company_address: 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103',
+    body_content: `Dear {{candidate_name}},
+
+We are pleased to offer you employment with {{company_name}} in the capacity of {{position_title}}. You will be positioned in corporate grade {{grade_band}} at our {{office_location}} office, reporting directly to {{reporting_manager}} under a {{work_model}} work engagement layout.
+
+Your target date of joining is set as {{offer_start_date}}, subject to successful completion of all background checking protocols. Your Annualized Cost to Company (CTC) compensation package is structured at {{currency}} {{cost_to_company}}.
+
+By accepting this offer, you agree to comply with all company rules, policies, confidentiality protocols, and statutory regulations.`,
+    bgv_mandatory: true,
+    nda_mandatory: true,
+    non_compete: true,
+    relieving_letter: true,
+    custom_clause: 'Standard 90 days probation applies. Relieving letter required prior to joining.',
+    is_active: 'Yes',
+    created_at: null,
+    updated_at: null,
+  },
+  {
+    id: 'tpl_exec_lead',
+    template_name: 'Executive Leadership Offer Letter',
+    template_code: 'TPL_EXEC_LEAD',
+    subject: 'Subject: Confidential Executive Employment Offer - {{candidate_name}}',
+    company_name: 'Apponext Technologies Pvt. Ltd.',
+    company_address: 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103',
+    body_content: `Dear {{candidate_name}},
+
+On behalf of the Executive Management of {{company_name}}, it gives us immense pleasure to invite you to join our leadership team in the role of {{position_title}} (Grade: {{grade_band}}).
+
+Your total annual CTC remuneration package will be {{currency}} {{cost_to_company}}, inclusive of fixed components, performance incentive bonuses, and joining allowance. You will report directly to {{reporting_manager}} based at {{office_location}}.
+
+Your anticipated joining date is {{offer_start_date}}. This executive appointment is contingent upon customary reference verification and execution of the Senior Officer Confidentiality & IP Agreement.`,
+    bgv_mandatory: true,
+    nda_mandatory: true,
+    non_compete: true,
+    relieving_letter: true,
+    custom_clause: 'Executive severance policy applies. Executive D&O insurance coverage included.',
+    is_active: 'Yes',
+    created_at: null,
+    updated_at: null,
+  },
+  {
+    id: 'tpl_tech_trainee',
+    template_name: 'Technical Trainee Offer Letter',
+    template_code: 'TPL_TECH_TRAINEE',
+    subject: 'Subject: Offer of Graduate Technical Traineeship - {{candidate_name}}',
+    company_name: 'Apponext Technologies Pvt. Ltd.',
+    company_address: 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103',
+    body_content: `Dear {{candidate_name}},
+
+Congratulations! We are delighted to offer you a position as {{position_title}} in our {{department_name}} department at {{company_name}}.
+
+Your traineeship program will commence on {{offer_start_date}} at our {{office_location}} center under {{work_model}} structure. Your annual CTC package is fixed at {{currency}} {{cost_to_company}}.
+
+During the initial probation period of {{probation_period}}, your performance and progress will be systematically evaluated before full corporate confirmation.`,
+    bgv_mandatory: true,
+    nda_mandatory: true,
+    non_compete: false,
+    relieving_letter: true,
+    custom_clause: 'Traineeship period of 6 months. Mandatory completion of onboarding technical certifications.',
+    is_active: 'Yes',
+    created_at: null,
+    updated_at: null,
+  },
+  {
+    id: 'tpl_sales_field',
+    template_name: 'Sales & Business Development Offer Letter',
+    template_code: 'TPL_SALES_FIELD',
+    subject: 'Subject: Appointment Letter for Sales & Growth Role - {{candidate_name}}',
+    company_name: 'Apponext Technologies Pvt. Ltd.',
+    company_address: 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103',
+    body_content: `Dear {{candidate_name}},
+
+We are excited to extend an offer for the position of {{position_title}} within our {{department_name}} division at {{company_name}}.
+
+Your base CTC is structured at {{currency}} {{cost_to_company}}, plus attractive quarterly sales commission incentives based on revenue targets. You will report to {{reporting_manager}} at {{office_location}}.
+
+Your date of joining is confirmed as {{offer_start_date}}.`,
+    bgv_mandatory: true,
+    nda_mandatory: true,
+    non_compete: true,
+    relieving_letter: true,
+    custom_clause: 'Quarterly sales commission structure as per Sales Incentive Plan Annexure B.',
+    is_active: 'Yes',
+    created_at: null,
+    updated_at: null,
+  }
+];
+
+router.get('/offer-templates', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  let dbTemplates: any[] = [];
+  if (await db.schema.hasTable('notification_templates')) {
+    dbTemplates = await db('notification_templates')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .where(function() {
+        this.where('template_name', 'like', '%Offer%')
+          .orWhere('template_code', 'like', '%OFFER%');
+      })
+      .orderBy('created_at', 'desc');
+  }
+
+  const mappedDb = dbTemplates
+    .map((t: any) => {
+      let parsed: any = {};
+      if (t.email_notification) {
+        try {
+          parsed = typeof t.email_notification === 'string' && t.email_notification.startsWith('{')
+            ? JSON.parse(t.email_notification)
+            : { body_content: t.email_notification };
+        } catch (e) {
+          parsed = { body_content: t.email_notification };
+        }
+      }
+      const tName = t.template_name || parsed.template_name || (t.template_code ? `Offer Template (${t.template_code})` : `Offer Letter Format #${t.id}`);
+      return {
+        id: t.id,
+        template_name: tName,
+        template_code: t.template_code || `OFFER_${t.id}`,
+        subject: t.subject || parsed.subject || 'Letter of Offer & Employment Agreement',
+        company_name: parsed.company_name || 'Apponext Technologies Pvt. Ltd.',
+        company_address: parsed.company_address || 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103',
+        body_content: parsed.body_content || (typeof t.email_notification === 'string' ? t.email_notification : ''),
+        bgv_mandatory: parsed.bgv_mandatory !== false,
+        nda_mandatory: parsed.nda_mandatory !== false,
+        non_compete: parsed.non_compete !== false,
+        relieving_letter: parsed.relieving_letter !== false,
+        custom_clause: parsed.custom_clause || '',
+        is_active: t.is_active || 'Yes',
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+      };
+    })
+    .filter(t => t.template_name && t.body_content);
+
+  // Merge custom DB templates with pre-seeded standard templates
+  const combined: any[] = [...mappedDb];
+  for (const def of DEFAULT_PRESEEDED_OFFER_TEMPLATES) {
+    if (!combined.some(c => String(c.template_code).toUpperCase() === String(def.template_code).toUpperCase())) {
+      combined.push(def);
+    }
+  }
+
+  res.json({ success: true, data: combined });
+}));
+
+router.post('/offer-templates', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const {
+    template_name,
+    template_code,
+    subject,
+    company_name,
+    company_address,
+    body_content,
+    bgv_mandatory,
+    nda_mandatory,
+    non_compete,
+    relieving_letter,
+    custom_clause,
+    is_active = 'Yes'
+  } = req.body;
+
+  const payloadMeta = JSON.stringify({
+    company_name,
+    company_address,
+    body_content,
+    bgv_mandatory: bgv_mandatory !== false,
+    nda_mandatory: nda_mandatory !== false,
+    non_compete: non_compete !== false,
+    relieving_letter: relieving_letter !== false,
+    custom_clause: custom_clause || '',
+  });
+
+  const [id] = await db('notification_templates').insert({
+    uuid: uuidv4(),
+    organization_id: ctx.organizationId,
+    template_name: template_name || 'Custom Offer Template',
+    template_code: template_code || `OFFER_${Date.now()}`,
+    subject: subject || 'Letter of Offer',
+    email_notification: payloadMeta,
+    is_active: is_active || 'Yes',
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+
+  res.status(201).json({ success: true, data: { id, template_name, template_code, subject } });
+}));
+
+router.delete('/offer-templates/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const id = Number(req.params.id);
+  if (!isNaN(id)) {
+    await db('notification_templates')
+      .where({ id, organization_id: ctx.organizationId })
+      .update({ deleted_at: new Date() });
+  }
+  res.json({ success: true, message: 'Offer template deleted' });
+}));
+
 // ─── Grade / Pay Grade Master Routes ──────────────────────────────────────────
 const gradeCtrl = new GradeController();
 router.get('/grades', asyncHandler((req, res) => gradeCtrl.list(req, res)));
@@ -1495,7 +1708,11 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
     return;
   }
 
-  const newQuota = parseInt(annual_quota, 10) || 0;
+  let allocEntitlement = allocation_settings?.entitlementDays;
+  if (!allocEntitlement && typeof allocation_settings === 'string') {
+    try { allocEntitlement = JSON.parse(allocation_settings)?.entitlementDays; } catch (e) {}
+  }
+  const newQuota = parseInt(annual_quota ?? allocEntitlement ?? 0, 10) || (parseInt(allocEntitlement, 10) || 0);
   const oldQuota = currentType.annual_quota || currentType.annualQuota || 0;
   const quotaDiff = newQuota - oldQuota;
 
@@ -1544,14 +1761,19 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
 
   // 3. Update active leave balances for this financial year (adjust available/opening balances by the diff)
   const currentYear = new Date().getFullYear();
-  const fyStart = `${currentYear}-04-01`;
 
   const balances = await db('leave_balances')
-    .where({ organization_id: ctx.organizationId, leave_type_id: id, financial_year_start: fyStart });
+    .where({ organization_id: ctx.organizationId, leave_type_id: id })
+    .where((builder: any) => {
+      builder.whereRaw('YEAR(financial_year_start) = ?', [currentYear])
+        .orWhereNull('financial_year_start');
+    });
 
   for (const bal of balances) {
-    const updatedOpening = (parseFloat(bal.opening_balance || bal.openingBalance) || 0) + quotaDiff;
-    const updatedAvailable = (parseFloat(bal.available_balance || bal.availableBalance) || 0) + quotaDiff;
+    const currentOpening = parseFloat(bal.opening_balance || bal.openingBalance) || 0;
+    const currentAvailable = parseFloat(bal.available_balance || bal.availableBalance) || 0;
+    const updatedOpening = Math.max(0, currentOpening + quotaDiff);
+    const updatedAvailable = Math.max(0, currentAvailable + quotaDiff);
 
     await db('leave_balances')
       .where({ id: bal.id })

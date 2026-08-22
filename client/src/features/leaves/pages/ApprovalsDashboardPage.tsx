@@ -283,21 +283,21 @@ export function ApprovalsDashboardPage() {
             <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[9px] font-bold">
               <button 
                 onClick={() => setChartTab('role')}
-                className={`px-2.5 py-1 rounded-md transition-all ${chartTab === 'role' ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`px-2.5 py-1 rounded-md transition-all ${chartTab === 'role' ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
                 By Role
               </button>
               <button 
                 onClick={() => setChartTab('department')}
-                className={`px-2.5 py-1 rounded-md transition-all ${chartTab === 'department' ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`px-2.5 py-1 rounded-md transition-all ${chartTab === 'department' ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
-                By Dept
+                By Department
               </button>
               <button 
                 onClick={() => setChartTab('employee')}
-                className={`px-2.5 py-1 rounded-md transition-all ${chartTab === 'employee' ? 'bg-white text-violet-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className={`px-2.5 py-1 rounded-md transition-all ${chartTab === 'employee' ? 'bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
-                Top Employees
+                By Employee
               </button>
             </div>
           </CardHeader>

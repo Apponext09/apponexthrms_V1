@@ -420,14 +420,28 @@ export class LeaveController {
         const isProbationExcluded = assignmentsMap.get(t.id) ?? false;
 
         if (match) {
+          let currentQuota = parseFloat(t.annualQuota ?? t.annual_quota ?? 0) || 0;
+          if (!currentQuota && t.allocation_settings) {
+            try {
+              const parsedAlloc = typeof t.allocation_settings === 'string' ? JSON.parse(t.allocation_settings) : t.allocation_settings;
+              currentQuota = parseFloat(parsedAlloc?.entitlementDays) || 0;
+            } catch (e) {}
+          }
+          const matchAllocated = match.allocatedBalance !== undefined ? parseFloat(match.allocatedBalance) : parseFloat(match.allocated_balance) || 0;
+          const quotaDiff = (currentQuota > 0 && matchAllocated > 0 && currentQuota > matchAllocated) ? (currentQuota - matchAllocated) : 0;
+
+          const effectiveAllocated = matchAllocated + quotaDiff;
+          const matchAvailable = match.availableBalance !== undefined ? parseFloat(match.availableBalance) : parseFloat(match.available_balance) || 0;
+          const effectiveAvailable = matchAvailable + quotaDiff;
+
           return {
             id: match.id,
             employee_id: empId,
             leave_type_id: t.id,
-            allocated_balance: match.allocatedBalance !== undefined ? parseFloat(match.allocatedBalance) : parseFloat(match.allocated_balance) || 0,
+            allocated_balance: effectiveAllocated,
             consumed_balance: match.consumedBalance !== undefined ? parseFloat(match.consumedBalance) : parseFloat(match.consumed_balance) || 0,
             pending_approval_balance: match.pendingApprovalBalance !== undefined ? parseFloat(match.pendingApprovalBalance) : parseFloat(match.pending_approval_balance) || 0,
-            available_balance: match.availableBalance !== undefined ? parseFloat(match.availableBalance) : parseFloat(match.available_balance) || 0,
+            available_balance: effectiveAvailable,
             expired_balance: match.expired_balance !== undefined ? parseFloat(match.expired_balance) : parseFloat(match.expired_balance) || 0,
             leave_name: t.leaveName || t.leave_name,
             leave_code: t.leaveCode || t.leave_code,
@@ -441,14 +455,21 @@ export class LeaveController {
             allocation_settings: t.allocation_settings,
           };
         } else {
+          let defaultQuota = parseFloat(t.annualQuota ?? t.annual_quota ?? 0) || 0;
+          if (!defaultQuota && t.allocation_settings) {
+            try {
+              const parsedAlloc = typeof t.allocation_settings === 'string' ? JSON.parse(t.allocation_settings) : t.allocation_settings;
+              defaultQuota = parseFloat(parsedAlloc?.entitlementDays) || 0;
+            } catch (e) {}
+          }
           return {
             id: null,
             employee_id: empId,
             leave_type_id: t.id,
-            allocated_balance: 0,
+            allocated_balance: defaultQuota,
             consumed_balance: 0,
             pending_approval_balance: 0,
-            available_balance: 0,
+            available_balance: defaultQuota,
             expired_balance: 0,
             leave_name: t.leaveName || t.leave_name,
             leave_code: t.leaveCode || t.leave_code,

@@ -96,10 +96,15 @@ export function createApp() {
 
   // Serve static uploads directory
   const uploadsDir = path.join(__dirname, '../uploads');
+  const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
+  if (!fs.existsSync(publicUploadsDir)) {
+    fs.mkdirSync(publicUploadsDir, { recursive: true });
+  }
   app.use('/uploads', express.static(uploadsDir));
+  app.use('/uploads', express.static(publicUploadsDir));
 
   // Swagger Documentation Endpoints
   const swaggerCustomOptions = {
