@@ -416,7 +416,7 @@ export function AppRoutes() {
         <Route path="/manager/performance" element={<PerformanceDashboard />} />
         <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
         <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
-        <Route path="/manager/approvals" element={<ApprovalsPage />} />
+        <Route path="/manager/approvals" element={<ApprovalsPage includeHrQueue={false} />} />
         <Route path="/manager/profile" element={<EmployeeProfilePage />} />
         <Route path="/manager/leaves" element={<LeavePage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
