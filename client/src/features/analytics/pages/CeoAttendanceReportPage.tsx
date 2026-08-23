@@ -130,20 +130,20 @@ export function CeoAttendanceReportPage() {
                 <thead>
                   <tr className="bg-muted/40 border-b border-border/80 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                     <th className="py-3 px-4 w-12 text-center">#</th>
-                    <th className="py-3 px-4">Date &amp; Day</th>
+                    <th className="py-3 px-4">Date</th>
                     <th className="py-3 px-4">Executive Name</th>
                     <th className="py-3 px-4">Punch-In Time</th>
-                    <th className="py-3 px-4">Location Boundary</th>
-                    <th className="py-3 px-4 text-center">Punch Status</th>
+                    <th className="py-3 px-4">Punch-Out Time</th>
+                    <th className="py-3 px-4">Total Hours</th>
+                    <th className="py-3 px-4">Location</th>
+                    <th className="py-3 px-4 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {punchRows.map((row, idx) => {
-                    const checkIn =
-                      row.checkInTime ||
-                      (row.actualTiming && !row.actualTiming.includes('-- - --')
-                        ? row.actualTiming.split(' - ')[0]
-                        : '09:30 AM');
+                    const checkIn = row.checkInTime || '--:--';
+                    const checkOut = row.checkOutTime || '--:--';
+                    const isCompleted = row.status === 'Completed' || checkOut !== '--:--';
 
                     return (
                       <tr key={row.id || idx} className="hover:bg-muted/20 transition-colors">
@@ -155,16 +155,24 @@ export function CeoAttendanceReportPage() {
                         <td className="py-3 px-4 font-bold text-foreground">
                           <div className="flex items-center gap-1.5">
                             <span>{row.employeeName || ceoName}</span>
-                            <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px] font-bold px-1.5 py-0">
+                            <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 text-[9px] font-bold px-1.5 py-0">
                               CEO / Admin
                             </Badge>
                           </div>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-emerald-700">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             {checkIn}
                           </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-indigo-700 dark:text-indigo-400">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800">
+                            {checkOut}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-foreground">
+                          {row.totalHours || '--'}
                         </td>
                         <td className="py-3 px-4 text-muted-foreground font-semibold">
                           <div className="flex items-center gap-1">
@@ -173,8 +181,14 @@ export function CeoAttendanceReportPage() {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                            Checked In
+                          <span
+                            className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-bold border ${
+                              isCompleted
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 border-purple-300 dark:border-purple-800'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                            }`}
+                          >
+                            {isCompleted ? 'Completed' : 'Checked In'}
                           </span>
                         </td>
                       </tr>
@@ -184,6 +198,7 @@ export function CeoAttendanceReportPage() {
               </table>
             </div>
           )}
+
         </div>
       </div>
     </div>

@@ -2132,92 +2132,131 @@ export class AttendanceService {
   async getCeoPunches(ctx: TenantContext): Promise<any[]> {
     const db = getKnex();
 
-    // 1. Find Organization Admin user account & linked employee record
-    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
-
-    let adminUser = await db('users')
-      .leftJoin('user_roles', 'users.id', 'user_roles.user_id')
-      .leftJoin('roles', 'user_roles.role_id', 'roles.id')
-      .where('users.organization_id', ctx.organizationId)
-      .where(function () {
-        this.where('roles.code', 'organization_admin')
-          .orWhere('users.id', ctx.userId)
-          .orWhereRaw('LOWER(users.email) = ?', [org?.email?.toLowerCase() || '']);
-      })
-      .select('users.*')
+    // 1. Find dedicated CEO employee row or Org Admin user
+    const ceoEmp = await db('employees')
+      .where({ organization_id: ctx.organizationId, is_ceo: true })
+      .whereNull('deleted_at')
       .first()
       .catch(() => null);
 
+    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
+
+    let adminUser: any = null;
+    if (ctx.userId) {
+      adminUser = await db('users').where('id', ctx.userId).first().catch(() => null);
+    }
     if (!adminUser) {
       adminUser = await db('users')
-        .where('organization_id', ctx.organizationId)
+        .leftJoin('user_roles', 'users.id', 'user_roles.user_id')
+        .leftJoin('roles', 'user_roles.role_id', 'roles.id')
+        .where('users.organization_id', ctx.organizationId)
+        .where('roles.code', 'organization_admin')
+        .select('users.*')
         .first()
         .catch(() => null);
     }
 
     const adminUserId = adminUser ? Number(adminUser.id) : ctx.userId;
-    const adminEmpId = adminUser?.employee_id ? Number(adminUser.employee_id) : null;
+    const ceoEmpId = ceoEmp?.id || adminUser?.employee_id || null;
 
-    let adminEmp: any = null;
-    if (adminEmpId) {
-      adminEmp = await db('employees').where('id', adminEmpId).first().catch(() => null);
-    }
-    if (!adminEmp && adminUser?.email) {
-      adminEmp = await db('employees')
-        .where('organization_id', ctx.organizationId)
-        .whereRaw('LOWER(email) = ?', [adminUser.email.toLowerCase()])
-        .first()
-        .catch(() => null);
-    }
+    const ceoName = ceoEmp
+      ? [ceoEmp.firstName || ceoEmp.first_name, ceoEmp.lastName || ceoEmp.last_name].filter(Boolean).join(' ')
+      : [adminUser?.firstName || adminUser?.first_name, adminUser?.lastName || adminUser?.last_name].filter(Boolean).join(' ') || org?.ownerName || org?.owner_name || 'Harsh Gawali (CEO)';
+    const ceoCode = ceoEmp?.employee_code || ceoEmp?.employeeCode || `CEO-${ctx.organizationId}-${adminUserId}`;
 
-    const ceoName = [adminUser?.first_name || adminEmp?.first_name, adminUser?.last_name || adminEmp?.last_name]
-      .filter(Boolean)
-      .join(' ') || org?.owner_name || 'Organization Admin';
-    const ceoCode = adminEmp?.employee_code || adminEmp?.employeeCode || `ADM-${adminUserId}`;
-
-    // 2. Query attendance_records by created_by = adminUserId OR employee_id = adminEmpId
+    // 2. Query attendance_records strictly for CEO (is_ceo_punch = 1 OR employee_id = ceoEmpId)
     const dbRecords = await db('attendance_records')
       .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
       .where('attendance_records.organization_id', ctx.organizationId)
-      .whereNotNull('attendance_records.check_in_time')
       .where(function () {
-        this.where('attendance_records.created_by', adminUserId);
-        if (adminEmpId) {
-          this.orWhere('attendance_records.employee_id', adminEmpId);
+        this.where('attendance_records.is_ceo_punch', 1)
+          .orWhere('attendance_records.is_ceo_punch', true);
+        if (ceoEmpId) {
+          this.orWhere('attendance_records.employee_id', ceoEmpId);
         }
       })
       .select(
         'attendance_records.*',
         'in_loc.location_name as check_in_location_name'
       )
-      .orderBy('attendance_records.check_in_time', 'desc')
+      .orderBy('attendance_records.created_at', 'desc')
       .catch(() => []);
+
 
     return dbRecords.map((r: any) => {
       const rawIn = r.check_in_time || r.checkInTime || r.created_at;
+      const rawOut = r.check_out_time || r.checkOutTime;
+
       let formattedIn = '--:--';
+      let formattedOut = '--:--';
+      let totalHours = '--';
+
       if (rawIn) {
-        const d = new Date(rawIn);
-        if (!isNaN(d.getTime())) {
-          formattedIn = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const dIn = new Date(rawIn);
+        if (!isNaN(dIn.getTime())) {
+          formattedIn = dIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
         } else {
           formattedIn = String(rawIn).slice(11, 16);
         }
       }
 
-      const rawDate = r.check_in_date || r.checkInDate || (rawIn ? String(rawIn).split('T')[0] : getLocalYYYYMMDD());
+      if (rawOut) {
+        const dOut = new Date(rawOut);
+        if (!isNaN(dOut.getTime())) {
+          formattedOut = dOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        } else {
+          formattedOut = String(rawOut).slice(11, 16);
+        }
+      }
+
+      if (rawIn && rawOut) {
+        const dIn = new Date(rawIn);
+        const dOut = new Date(rawOut);
+        if (!isNaN(dIn.getTime()) && !isNaN(dOut.getTime())) {
+          const diffMs = dOut.getTime() - dIn.getTime();
+          if (diffMs > 0) {
+            const hrs = Math.floor(diffMs / (1000 * 60 * 60));
+            const mins = Math.round((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            totalHours = `${hrs}h ${mins}m`;
+          }
+        }
+      }
+      //Date format yyyy-mm-dd
+
+      let rawDate = r.check_in_date || r.checkInDate || rawIn;
+      let formattedDate = '';
+      if (rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          formattedDate = `${y}-${m}-${day}`;
+        } else {
+          formattedDate = String(rawDate).slice(0, 10);
+        }
+      }
+      if (!formattedDate) formattedDate = getLocalYYYYMMDD();
+
+
+      const isCheckedOut = Boolean(rawOut);
 
       return {
         id: String(r.id),
-        date: rawDate,
-        employeeId: String(r.employee_id || adminEmpId || adminUserId),
+        date: formattedDate,
+        employeeId: String(r.employee_id || ceoEmpId || adminUserId),
         employeeName: ceoName,
         employeeCode: ceoCode,
         checkInTime: formattedIn,
+        checkOutTime: formattedOut,
+        totalHours,
         checkInLocation: r.check_in_location_name || r.notes || 'Executive Boundary / Headquarters',
         checkInMethod: r.check_in_method || 'biometric',
-        status: 'Checked In',
+        status: isCheckedOut ? 'Completed' : (rawIn ? 'Checked In' : 'Pending'),
       };
+
+
     });
   }
+
 }

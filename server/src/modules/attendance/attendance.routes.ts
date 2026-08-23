@@ -48,7 +48,9 @@ router.post(
   biometricController.enrollFace
 );
 router.get('/biometric/status', biometricController.getEnrollmentStatus);
+router.get('/biometric/ceo-status', biometricController.getCeoStatus);
 router.post('/biometric/verify-punch', biometricController.verifyAndPunch);
+router.post('/biometric/ceo-punch', biometricController.ceoPunch);
 router.get('/biometric/employees', biometricController.getEmployees);
 router.post(
   '/biometric/sync-existing',

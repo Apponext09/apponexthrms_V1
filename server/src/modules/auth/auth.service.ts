@@ -141,6 +141,27 @@ export class AuthService {
         assigned_at: new Date(),
       });
 
+      // Auto-provision CEO employee record for the registering organization admin
+      const empCode = `CEO-${orgId}-${userId}`;
+      const [ceoEmpId] = await trx('employees').insert({
+        uuid: uuidv4(),
+        organization_id: orgId,
+        employee_code: empCode,
+        first_name: input.firstName || 'CEO',
+        last_name: input.lastName || '',
+        email: input.email,
+        status: 'active',
+        is_ceo: true,
+        is_ceo_profile_hidden: true,
+        date_of_joining: new Date().toISOString().slice(0, 10),
+        created_by: userId,
+        updated_by: userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      await trx('users').where('id', userId).update({ employee_id: ceoEmpId, updated_at: new Date() });
+
       // Create session
       const sessionUuid = uuidv4();
       const accessToken = generateAccessToken({
