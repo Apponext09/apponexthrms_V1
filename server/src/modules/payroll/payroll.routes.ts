@@ -33,6 +33,7 @@ router.delete('/component-groups/:id', requirePermission('structure:edit'), asyn
 // Component Definitions
 router.get('/components', asyncHandler((req, res) => controller.getComponents(req, res)));
 router.post('/components', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponent(req, res)));
+router.delete('/components/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteComponentDefinition(req, res)));
 router.get('/component-definitions', asyncHandler((req, res) => controller.listComponentDefinitions(req, res)));
 router.post('/component-definitions', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponentDefinition(req, res)));
 router.put('/component-definitions/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateComponentDefinition(req, res)));
@@ -92,6 +93,7 @@ router.post('/approvals/:id/approve', requirePermission('payroll:approve'), asyn
 // Salary Structure — /my-salary-structure MUST be before /:id parameterized routes
 router.get('/my-salary-structure', asyncHandler((req, res) => controller.getMySalaryStructure(req, res)));
 
+router.post('/calculate-structure-preview', asyncHandler((req, res) => controller.calculateStructurePreview(req, res)));
 router.get('/salary-structure', asyncHandler((req, res) => controller.listStructures(req, res)));
 router.post('/salary-structure', requirePermission('structure:create'), asyncHandler((req, res) => controller.createStructure(req, res) as any));
 router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
@@ -158,18 +160,10 @@ router.post('/settlements/:id/process', requirePermission('settlement:process'),
 router.get('/gratuity-rules', asyncHandler((req, res) => controller.getGratuityRules(req, res)));
 router.post('/gratuity-rules', requirePermission('settlement:create'), asyncHandler((req, res) => controller.saveGratuityRule(req, res)));
 router.delete('/gratuity-rules/:id', requirePermission('settlement:create'), asyncHandler((req, res) => controller.deleteGratuityRule(req, res)));
-router.get('/settlements/gratuity-rules', asyncHandler((req, res) => controller.getGratuityRules(req, res)));
-router.post('/settlements/gratuity-rules', requirePermission('settlement:create'), asyncHandler((req, res) => controller.saveGratuityRule(req, res)));
-router.delete('/settlements/gratuity-rules/:id', requirePermission('settlement:create'), asyncHandler((req, res) => controller.deleteGratuityRule(req, res)));
 
 // Policies & Config
 router.get('/policies', asyncHandler((req, res) => controller.getPayrollPolicies(req, res)));
 router.post('/policies', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.updatePayrollPolicies(req, res)));
-
-// Pay Component Definitions
-router.get('/components', asyncHandler((req, res) => controller.getComponents(req, res)));
-router.post('/components', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponent(req, res)));
-router.delete('/components/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteComponentDefinition(req, res)));
 
 // Loan Type Configuration (Database persistence)
 router.get('/loan-types', asyncHandler((req, res) => controller.getLoanTypes(req, res)));

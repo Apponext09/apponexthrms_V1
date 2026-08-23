@@ -79,6 +79,16 @@ interface PayslipSetting {
   employeeSignatureFieldName?: string;
 }
 
+export interface PayslipItemDetail {
+  name: string;
+  amount: number;
+  actualAmount?: number;
+  cumulativeAmount?: number;
+  category: 'Earning' | 'Deduction';
+  groupName?: string;
+  groupForPayslip?: string;
+}
+
 interface PayslipDocData {
   name: string;
   code: string;
@@ -120,21 +130,99 @@ interface PayslipDocData {
   grossSalary: number;
   totalDeductions: number;
   netSalary: number;
+  items?: PayslipItemDetail[];
 }
+
 /**
  * Shared payslip template that dynamically renders the official salary payslip document
+ * according to organization's configured Payslip Settings & Component Groups.
  */
-function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: boolean = false): string {
-  const totalEarnings = d.basic + d.hra + d.cea + d.comm + d.lta + d.meal + d.std;
-  const grossEarned = totalEarnings;
-  const totalGross = grossEarned + (d.adj || 0) + (d.inc || 0) + (d.bonus || 0);
-  const totalDeductions = d.pf + d.esic + d.pt + (d.tds || 0);
-  const netPay = Math.max(0, totalGross - totalDeductions);
-  const words = numberToWords(netPay);
+function buildPayslipHtmlDoc(d: PayslipDocData & { items?: PayslipItemDetail[] }, s?: PayslipSetting, autoPrint: boolean = false): string {
+  const isLandscape = !!s?.enableLandscapeFormat;
+  const hideZero = !!s?.hideComponentIfZero;
+  const showActual = !!s?.displayActualValuesGross;
+  const showCumulative = !!s?.displayCumulativeValues;
+  const showTotal = s?.displayTotalAmount !== false;
+  const showLogo = s?.showCompanyLogo !== false;
+  const showBank = s?.showBankDetails !== false;
+  const showAttendance = s?.showAttendanceSummary !== false;
+  const showLeave = !!s?.showLeaveBalance;
+
+  const labelEarnings = (s?.labelEarningComponent || '').trim() || 'Earnings';
+  const labelDeductions = (s?.labelDeductionComponent || '').trim() || 'Deductions';
+  const labelActual = (s?.labelGrossSalary || '').trim() || 'Actual';
+  const labelEarned = (s?.labelGrossEarnedSalary || '').trim() || 'Amount';
+  const labelCumulative = (s?.labelCumulativeSalary || '').trim() || 'Cumulative';
+  const signatureLabel = (s?.employeeSignatureFieldName || '').trim();
+  const footerNoteText = (s?.footerNote || '').trim() || 'This is a system-generated payslip.';
+
   const fmt = (n: number) => (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // ── 1. Dynamically Build Earnings & Deductions List ──
+  let earningsList: Array<{ name: string; earned: number; actual: number; cumulative: number; group: string }> = [];
+  let deductionsList: Array<{ name: string; earned: number; actual: number; cumulative: number; group: string }> = [];
+
+  if (d.items && d.items.length > 0) {
+    for (const item of d.items) {
+      if (hideZero && (item.amount || 0) === 0 && (item.actualAmount || 0) === 0) continue;
+      const entry = {
+        name: item.name,
+        earned: Number(item.amount || 0),
+        actual: Number(item.actualAmount ?? item.amount ?? 0),
+        cumulative: Number(item.cumulativeAmount || 0),
+        group: item.groupForPayslip || item.groupName || (item.category === 'Deduction' ? 'Deductions' : 'Earnings')
+      };
+      if (item.category === 'Deduction') {
+        deductionsList.push(entry);
+      } else {
+        earningsList.push(entry);
+      }
+    }
+  } else {
+    // Default dynamic standard line items
+    const rawEarnings = [
+      { name: 'Basic Salary', earned: d.basic, actual: d.grossActual ? Math.round(d.grossActual * 0.5) : d.basic, group: 'Earnings' },
+      { name: 'House Rent Allowance (HRA)', earned: d.hra, actual: d.grossActual ? Math.round(d.grossActual * 0.161) : d.hra, group: 'Earnings' },
+      { name: 'Children Education Allowance', earned: d.cea, actual: d.cea, group: 'Allowances' },
+      { name: 'Communication Allowance', earned: d.comm, actual: d.comm, group: 'Allowances' },
+      { name: 'Leave Travel Allowance (LTA)', earned: d.lta, actual: d.lta, group: 'Allowances' },
+      { name: 'Meal Allowance', earned: d.meal, actual: d.meal, group: 'Allowances' },
+      { name: 'Special / Standard Allowance', earned: d.std, actual: d.std, group: 'Earnings' },
+      { name: 'Bonus / Incentives', earned: (d.bonus || 0) + (d.inc || 0), actual: (d.bonus || 0) + (d.inc || 0), group: 'Incentives' },
+      { name: 'Adjustment', earned: d.adj || 0, actual: d.adj || 0, group: 'Adjustments' },
+    ];
+
+    const rawDeductions = [
+      { name: 'Provident Fund (EPF)', earned: d.pf, actual: d.pf, group: 'Statutory Deductions' },
+      { name: 'Employee State Insurance (ESIC)', earned: d.esic, actual: d.esic, group: 'Statutory Deductions' },
+      { name: 'Professional Tax (PT)', earned: d.pt, actual: d.pt, group: 'Statutory Deductions' },
+      { name: 'Tax Deducted at Source (TDS)', earned: d.tds || 0, actual: d.tds || 0, group: 'Tax Deductions' },
+    ];
+
+    for (const item of rawEarnings) {
+      if (hideZero && (item.earned || 0) === 0 && (item.actual || 0) === 0) continue;
+      earningsList.push({ ...item, cumulative: 0 });
+    }
+    for (const item of rawDeductions) {
+      if (hideZero && (item.earned || 0) === 0 && (item.actual || 0) === 0) continue;
+      deductionsList.push({ ...item, cumulative: 0 });
+    }
+  }
+
+  const totalEarningsEarned = earningsList.reduce((acc, i) => acc + i.earned, 0);
+  const totalDeductionsEarned = deductionsList.reduce((acc, i) => acc + i.earned, 0);
+  const totalActualGross = earningsList.reduce((acc, i) => acc + i.actual, 0) || d.grossSalary;
+  const netPay = Math.max(0, totalEarningsEarned - totalDeductionsEarned);
+  const words = numberToWords(netPay);
+
   const compName = d.companyName || 'Apponext';
   const compAddr = d.companyAddress || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708';
   const compWeb = d.websiteUrl || 'www.apponexthrms.com';
+
+  const maxRows = Math.max(earningsList.length, deductionsList.length, 1);
+
+  // Group columns headers & spans
+  const colSpanCount = 2 + (showActual ? 1 : 0) + (showCumulative ? 1 : 0);
 
   return `
     <!DOCTYPE html>
@@ -145,8 +233,8 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         @page {
-          size: A4 portrait;
-          margin: 10mm 12mm;
+          size: ${isLandscape ? 'A4 landscape' : 'A4 portrait'};
+          margin: ${isLandscape ? '8mm 10mm' : '10mm 12mm'};
         }
         body {
           font-family: Arial, Helvetica, sans-serif;
@@ -172,7 +260,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
         }
         .payslip-container {
           width: 100%;
-          max-width: 740px;
+          max-width: ${isLandscape ? '980px' : '750px'};
           margin: 0 auto;
           background: #ffffff;
           border: 1.5px solid #000000;
@@ -231,33 +319,30 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
           font-weight: 700;
           font-size: 11px;
           color: #000000;
+          background: #f8fafc;
         }
         .financials-table td {
           border-left: 1px solid #000000;
           border-right: 1px solid #000000;
           border-top: none;
           border-bottom: none;
-          padding: 2.5px 8px;
+          padding: 3px 8px;
           font-size: 11px;
           color: #000000;
           vertical-align: top;
-        }
-        .financials-table tr.subtotal-row td {
-          border-top: 1px solid #000000;
-          border-bottom: 1px solid #000000;
-          font-weight: 700;
-          padding: 3.5px 8px;
         }
         .financials-table tr.total-row td {
           border-top: 1px solid #000000;
           border-bottom: 1px solid #000000;
           font-weight: 700;
-          padding: 3.5px 8px;
+          padding: 4px 8px;
+          background: #f8fafc;
         }
         .financials-table tr.net-row td {
           border-top: 1px solid #000000;
           font-weight: 700;
-          padding: 3.5px 8px;
+          padding: 5px 8px;
+          background: #f1f5f9;
         }
         .text-right {
           text-align: right;
@@ -268,6 +353,13 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
           font-size: 11px;
           font-weight: 700;
           color: #000000;
+        }
+        .signature-box {
+          padding: 16px 12px 10px;
+          border-bottom: 1px solid #000000;
+          display: flex;
+          justify-content: space-between;
+          font-size: 10px;
         }
         .disclaimer-box {
           padding: 6px 8px;
@@ -314,6 +406,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
     <body>
       <div class="payslip-container">
         <!-- Header -->
+        ${showLogo ? `
         <div class="header-logo">
           ${d.companyLogoUrl ? `
             <img src="${d.companyLogoUrl}" alt="${compName}" style="max-height: 38px; max-width: 220px; object-fit: contain;" />
@@ -324,6 +417,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
             </div>
           `}
         </div>
+        ` : ''}
 
         <!-- Employee Details Table -->
         <table class="grid-table">
@@ -333,115 +427,85 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
             <td style="width: 33%;"><strong>Designation :</strong> ${d.designation}</td>
           </tr>
           <tr>
-            <td><strong>PF No. :</strong> ${d.pfNo || ''}</td>
-            <td><strong>UAN No. :</strong> ${d.uanNo || ''}</td>
-            <td><strong>ESIC No. :</strong> ${d.esicNo || ''}</td>
+            <td><strong>PF No. :</strong> ${d.pfNo || 'N/A'}</td>
+            <td><strong>UAN No. :</strong> ${d.uanNo || 'N/A'}</td>
+            <td><strong>ESIC No. :</strong> ${d.esicNo || 'N/A'}</td>
           </tr>
           <tr>
-            <td><strong>PAN :</strong> ${d.pan || ''}</td>
+            <td><strong>PAN :</strong> ${d.pan || 'N/A'}</td>
             <td><strong>Period :</strong> ${d.period}</td>
-            <td><strong>Date of Joining :</strong> ${d.doj || ''}</td>
+            <td><strong>Date of Joining :</strong> ${d.doj || 'N/A'}</td>
           </tr>
+          ${showBank ? `
           <tr>
-            <td><strong>Account No. :</strong> ${d.accNo || ''}</td>
+            <td><strong>Account No. :</strong> ${d.accNo || 'N/A'}</td>
             <td colspan="2"><strong>Employee Bank :</strong> ${d.bankName || 'HDFC BANK'}</td>
           </tr>
+          ` : ''}
+          ${showAttendance ? `
           <tr>
             <td><strong>Paid Days :</strong> ${d.paidDays}</td>
             <td><strong>Unpaid Days :</strong> ${d.unpaidDays}</td>
-            <td><strong>Paid Leave :</strong> ${d.paidLeave || ''}</td>
+            <td>${showLeave ? `<strong>Leave Balance :</strong> ${d.leaveBalance ?? '0'}` : `<strong>Paid Leave :</strong> ${d.paidLeave || '0'}`}</td>
           </tr>
+          ` : (showLeave ? `
+          <tr>
+            <td colspan="3"><strong>Leave Balance :</strong> ${d.leaveBalance ?? '0'}</td>
+          </tr>
+          ` : '')}
         </table>
 
         <!-- Earnings & Deductions Table -->
         <table class="financials-table">
           <thead>
             <tr>
-              <th style="text-align: left; width: 38%;">Earnings</th>
-              <th class="text-right" style="width: 14%;">Amount</th>
-              <th style="text-align: left; width: 34%;">Deductions</th>
-              <th class="text-right" style="width: 14%;">Amount</th>
+              <th style="text-align: left;">${labelEarnings}</th>
+              ${showActual ? `<th class="text-right" style="width: 12%;">${labelActual}</th>` : ''}
+              <th class="text-right" style="width: 12%;">${labelEarned}</th>
+              ${showCumulative ? `<th class="text-right" style="width: 12%;">${labelCumulative}</th>` : ''}
+
+              <th style="text-align: left;">${labelDeductions}</th>
+              ${showActual ? `<th class="text-right" style="width: 12%;">${labelActual}</th>` : ''}
+              <th class="text-right" style="width: 12%;">${labelEarned}</th>
+              ${showCumulative ? `<th class="text-right" style="width: 12%;">${labelCumulative}</th>` : ''}
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>Basic Earned</td>
-              <td class="text-right">${fmt(d.basic)}</td>
-              <td>PF</td>
-              <td class="text-right">${fmt(d.pf)}</td>
-            </tr>
-            <tr>
-              <td>HRA Earned</td>
-              <td class="text-right">${fmt(d.hra)}</td>
-              <td>ESIC</td>
-              <td class="text-right">${fmt(d.esic)}</td>
-            </tr>
-            <tr>
-              <td>Children Education Allowance Earned</td>
-              <td class="text-right">${fmt(d.cea)}</td>
-              <td>PT</td>
-              <td class="text-right">${fmt(d.pt)}</td>
-            </tr>
-            <tr>
-              <td>Communication Allowance Earned</td>
-              <td class="text-right">${fmt(d.comm)}</td>
-              <td>${(d.tds && d.tds > 0) ? 'TDS' : ''}</td>
-              <td class="text-right">${(d.tds && d.tds > 0) ? fmt(d.tds) : ''}</td>
-            </tr>
-            <tr>
-              <td>LTA Earned</td>
-              <td class="text-right">${fmt(d.lta)}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
-            <tr>
-              <td>Meal Allowance Earned</td>
-              <td class="text-right">${fmt(d.meal)}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
-            <tr>
-              <td>Standard Allowance Earned</td>
-              <td class="text-right">${fmt(d.std)}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
-            <tr class="subtotal-row">
-              <td>Total Earnings :</td>
-              <td class="text-right">${fmt(totalEarnings)}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
-            <tr>
-              <td>Gross Earned</td>
-              <td class="text-right">${fmt(grossEarned)}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
-            <tr>
-              <td>Adjustment</td>
-              <td class="text-right">${fmt(d.adj || 0)}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
-            <tr>
-              <td>Incentives</td>
-              <td class="text-right">${fmt((d.inc || 0) + (d.bonus || 0))}</td>
-              <td></td>
-              <td class="text-right"></td>
-            </tr>
+            ${Array.from({ length: maxRows }).map((_, idx) => {
+              const e = earningsList[idx];
+              const ded = deductionsList[idx];
+              return `
+                <tr>
+                  <td>${e ? e.name : ''}</td>
+                  ${showActual ? `<td class="text-right">${e ? fmt(e.actual) : ''}</td>` : ''}
+                  <td class="text-right">${e ? fmt(e.earned) : ''}</td>
+                  ${showCumulative ? `<td class="text-right">${e && e.cumulative ? fmt(e.cumulative) : ''}</td>` : ''}
+
+                  <td>${ded ? ded.name : ''}</td>
+                  ${showActual ? `<td class="text-right">${ded ? fmt(ded.actual) : ''}</td>` : ''}
+                  <td class="text-right">${ded ? fmt(ded.earned) : ''}</td>
+                  ${showCumulative ? `<td class="text-right">${ded && ded.cumulative ? fmt(ded.cumulative) : ''}</td>` : ''}
+                </tr>
+              `;
+            }).join('')}
+
+            ${showTotal ? `
             <tr class="total-row">
-              <td>Total Gross :</td>
-              <td class="text-right">${fmt(totalGross)}</td>
+              <td>Total Earnings :</td>
+              ${showActual ? `<td class="text-right">${fmt(totalActualGross)}</td>` : ''}
+              <td class="text-right">${fmt(totalEarningsEarned)}</td>
+              ${showCumulative ? `<td class="text-right"></td>` : ''}
+
               <td>Total Deductions :</td>
-              <td class="text-right">${fmt(totalDeductions)}</td>
+              ${showActual ? `<td class="text-right">${fmt(totalDeductionsEarned)}</td>` : ''}
+              <td class="text-right">${fmt(totalDeductionsEarned)}</td>
+              ${showCumulative ? `<td class="text-right"></td>` : ''}
             </tr>
             <tr class="net-row">
-              <td>Net Pay :</td>
-              <td class="text-right">${fmt(netPay)}</td>
-              <td></td>
-              <td class="text-right"></td>
+              <td colspan="${colSpanCount}"><strong>Net Pay : ${fmt(netPay)}</strong></td>
+              <td colspan="${colSpanCount}"></td>
             </tr>
+            ` : ''}
           </tbody>
         </table>
 
@@ -450,9 +514,17 @@ function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting, autoPrint: b
           RUPEES : ${words}
         </div>
 
+        <!-- Optional Signatures -->
+        ${signatureLabel ? `
+        <div class="signature-box">
+          <div><strong>${signatureLabel} :</strong> ________________________</div>
+          <div><strong>Authorized Signatory :</strong> ________________________</div>
+        </div>
+        ` : ''}
+
         <!-- Disclaimer & Company Info -->
         <div class="disclaimer-box">
-          <div class="disclaimer-title">* Document validity subject to Company's Stamp and Signature</div>
+          <div class="disclaimer-title">* ${footerNoteText}</div>
           <div class="disclaimer-address">
             ${compAddr}
           </div>
@@ -489,8 +561,8 @@ export const PayslipViewer: React.FC = () => {
     ['super_admin', 'organization_admin', 'admin'].includes(r.toLowerCase())
   ) ?? false;
 
-  const { payslips, isLoading, getPayslipDetails, refetch } = usePayslip();
   const { selectedCompanyName, selectedCompanyId } = useCompanyStore();
+  const { payslips, isLoading, getPayslipDetails, refetch } = usePayslip(undefined, selectedCompanyId || undefined);
   const [activeCompanyInfo, setActiveCompanyInfo] = useState<{
     name: string;
     address: string;
@@ -915,9 +987,10 @@ export const PayslipViewer: React.FC = () => {
     const period = rawPeriod || 'July 2026';
     const payslipNumber = data.payslip_number || data.payslipNumber || `PS-${(data.month || defaultMonth).toString().slice(0, 7).replace('-', '')}-${empId || '01'}`;
 
-    const paidDays = data.paid_days ?? data.paidDays ?? data.working_days ?? data.payable_days ?? data.payableDays ?? matchedProfile?.paid_days ?? matchedProfile?.working_days ?? 30;
-    const unpaidDays = data.unpaid_days ?? data.unpaidDays ?? data.unpaid_leave_days ?? data.lop_days ?? data.lopDays ?? matchedProfile?.unpaid_days ?? matchedProfile?.unpaid_leave_days ?? 0;
-    const paidLeave = data.paid_leave ?? data.paidLeave ?? data.paid_leave_days ?? matchedProfile?.paid_leave ?? matchedProfile?.paid_leave_days ?? 0;
+    const paidDays = data.paid_days ?? data.paidDays ?? data.attendance?.paidDays ?? data.working_days ?? data.payable_days ?? data.payableDays ?? matchedProfile?.paid_days ?? matchedProfile?.working_days ?? 30;
+    const unpaidDays = data.unpaid_days ?? data.unpaidDays ?? data.attendance?.unpaidDays ?? data.unpaid_leave_days ?? data.lop_days ?? data.lopDays ?? matchedProfile?.unpaid_days ?? matchedProfile?.unpaid_leave_days ?? 0;
+    const paidLeave = data.paid_leave ?? data.paidLeave ?? data.attendance?.paidLeave ?? data.paid_leave_days ?? matchedProfile?.paid_leave ?? matchedProfile?.paid_leave_days ?? 0;
+    const leaveBalance = data.leave_balance ?? data.leaveBalance ?? data.attendance?.leaveBalance ?? matchedProfile?.leave_balance ?? matchedProfile?.leaveBalance ?? 0;
 
     const grossVal = Number(data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? matchedProfile?.gross ?? 50000);
     let basicVal = Number(data.basic_salary ?? data.basicSalary ?? data.basic ?? data.basic_earned ?? matchedProfile?.basic ?? 0);
@@ -968,6 +1041,45 @@ export const PayslipViewer: React.FC = () => {
     const compLogo = data.companyLogoUrl || data.company_logo || activeCompanyInfo.logo || null;
     const webUrl = data.websiteUrl || activeCompanyInfo.website || 'www.apponexthrms.com';
 
+    // Dynamic components mapping from component_values or earnings/deductions breakdown
+    let dynamicItems: PayslipItemDetail[] = [];
+    if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+      dynamicItems = data.items;
+    } else if (data.component_values && typeof data.component_values === 'object') {
+      for (const [_, comp] of Object.entries<any>(data.component_values)) {
+        if (!comp || !comp.name) continue;
+        dynamicItems.push({
+          name: comp.name,
+          amount: Number(comp.earned ?? comp.monthly ?? 0),
+          actualAmount: Number(comp.monthly ?? comp.earned ?? 0),
+          category: comp.category === 'Deduction' ? 'Deduction' : 'Earning',
+          groupName: comp.group_name || (comp.category === 'Deduction' ? 'Deductions' : 'Earnings'),
+          groupForPayslip: comp.group_for_payslip || comp.group_name || (comp.category === 'Deduction' ? 'Deductions' : 'Earnings')
+        });
+      }
+    } else if (Array.isArray(data.earnings) || Array.isArray(data.deductions)) {
+      for (const e of (data.earnings || [])) {
+        dynamicItems.push({
+          name: e.componentName || e.formula_used || e.name || 'Earning',
+          amount: Number(e.actualValue ?? e.actual_value ?? e.amount ?? 0),
+          actualAmount: Number(e.actualValue ?? e.actual_value ?? e.amount ?? 0),
+          category: 'Earning',
+          groupName: e.groupName || 'Earnings',
+          groupForPayslip: e.groupForPayslip || 'Earnings'
+        });
+      }
+      for (const d of (data.deductions || [])) {
+        dynamicItems.push({
+          name: d.componentName || d.component_name || d.name || 'Deduction',
+          amount: Number(d.actualValue ?? d.actual_value ?? d.amount ?? 0),
+          actualAmount: Number(d.actualValue ?? d.actual_value ?? d.amount ?? 0),
+          category: 'Deduction',
+          groupName: d.groupName || 'Deductions',
+          groupForPayslip: d.groupForPayslip || 'Deductions'
+        });
+      }
+    }
+
     return {
       name: empName,
       code: empCode,
@@ -989,6 +1101,7 @@ export const PayslipViewer: React.FC = () => {
       paidDays,
       unpaidDays,
       paidLeave,
+      leaveBalance,
       basic: basicVal,
       hra: hraVal,
       cea: ceaVal,
@@ -1005,7 +1118,8 @@ export const PayslipViewer: React.FC = () => {
       tds: tdsVal,
       grossSalary: computedTotalGross,
       totalDeductions: computedTotalDeductions,
-      netSalary: computedNetSalary
+      netSalary: computedNetSalary,
+      items: dynamicItems.length > 0 ? dynamicItems : undefined
     };
   };
 
@@ -1058,9 +1172,47 @@ export const PayslipViewer: React.FC = () => {
     }
   };
 
-  const handleViewPayslipDoc = (cardOrData: any) => {
+  const handleViewPayslipDoc = async (cardOrData: any) => {
     const empId = String(cardOrData.employee_id || cardOrData.employeeId || cardOrData.id || '');
     const matchedProfile = employeeOptions.find(e => String(e.id) === empId);
+
+    if (cardOrData.id && !cardOrData.isCustomEdited) {
+      try {
+        const detailsData = await getPayslipDetails(cardOrData.id);
+        if (detailsData) {
+          if (detailsData.settings) {
+            setPayslipSetting(detailsData.settings);
+          }
+          if (detailsData.company) {
+            setActiveCompanyInfo(detailsData.company);
+          }
+          const serverPayslip = detailsData.payslip || cardOrData;
+          const serverEmp = detailsData.employee || matchedProfile;
+          const mergedData = {
+            ...cardOrData,
+            ...serverPayslip,
+            ...serverEmp,
+            earnings: detailsData.earnings,
+            deductions: detailsData.deductions,
+            attendance: detailsData.attendance,
+            leave_balance: detailsData.attendance?.leaveBalance,
+            paid_days: detailsData.attendance?.paidDays,
+            unpaid_days: detailsData.attendance?.unpaidDays,
+            paid_leave: detailsData.attendance?.paidLeave,
+            companyName: detailsData.company?.name || activeCompanyInfo.name,
+            companyAddress: detailsData.company?.address || activeCompanyInfo.address,
+            companyLogoUrl: detailsData.company?.logo || activeCompanyInfo.logo,
+            websiteUrl: detailsData.company?.website || activeCompanyInfo.website,
+          };
+          const doc = buildPayslipDocFromData(mergedData, serverEmp, cardOrData.month || selectedMonth);
+          setSelectedPayslipDoc(doc);
+          return;
+        }
+      } catch (err) {
+        console.warn('getPayslipDetails fallback to local:', err);
+      }
+    }
+
     const doc = buildPayslipDocFromData(cardOrData, matchedProfile, cardOrData.month || selectedMonth);
     setSelectedPayslipDoc(doc);
   };
@@ -1129,7 +1281,12 @@ export const PayslipViewer: React.FC = () => {
   useEffect(() => {
     // 1. Fetch live organization employees, salary structures, mappings, and payslip settings
     Promise.all([
-      apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: [] })),
+      apiClient.get('/employees', {
+        params: {
+          pageSize: 500,
+          companyId: selectedCompanyId && String(selectedCompanyId) !== 'all' ? selectedCompanyId : undefined
+        }
+      }).catch(() => ({ data: [] })),
       apiClient.get('/payroll/structures').catch(() => ({ data: [] })),
       apiClient.get('/payroll/structures/mappings').catch(() => ({ data: [] })),
       apiClient.get('/payroll/settings').catch(() => ({ data: null }))
@@ -1139,7 +1296,11 @@ export const PayslipViewer: React.FC = () => {
         setPayslipSetting(settingsData.payslipSetting);
       }
       
-      const list = empRes.data?.data || empRes.data || [];
+      const rawList = empRes.data?.data || empRes.data || [];
+      const list = (Array.isArray(rawList) ? rawList : []).filter((e: any) => {
+        if (!selectedCompanyId || String(selectedCompanyId) === 'all') return true;
+        return String(e.company_id || e.companyId) === String(selectedCompanyId) || (!e.company_id && !e.companyId);
+      });
       const structures = structRes.data?.data || structRes.data || [];
       const mappings = mappingRes.data?.data || mappingRes.data || [];
 
@@ -2097,166 +2258,13 @@ export const PayslipViewer: React.FC = () => {
 
               {/* Scrollable Document Paper */}
               <div className="p-4 sm:p-6 overflow-y-auto bg-muted/30 flex justify-center">
-                <div className="w-full max-w-[740px] bg-white text-black border-[1.5px] border-black shadow-lg font-sans text-xs">
-                  {/* Top Header */}
-                  <div className="p-3.5 pb-2 text-center border-b border-black">
-                    {selectedPayslipDoc.companyLogoUrl ? (
-                      <img src={selectedPayslipDoc.companyLogoUrl} alt={selectedPayslipDoc.companyName || 'Company'} className="max-h-10 max-w-[200px] object-contain mx-auto" />
-                    ) : (
-                      <div className="inline-flex items-center justify-center gap-2">
-                        <div className="w-7 h-7 rounded-md bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-xs">
-                          {(selectedPayslipDoc.companyName || 'A').charAt(0).toUpperCase()}
-                        </div>
-                        <span className="text-2xl font-extrabold text-slate-900 tracking-tight">{selectedPayslipDoc.companyName || 'Apponext'}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Employee Metadata Grid Table */}
-                  <table className="w-full border-collapse border-b border-black text-[11px] leading-tight">
-                    <tbody>
-                      <tr>
-                        <td className="border border-black p-1.5 w-[34%]"><strong>Name :</strong> {selectedPayslipDoc.name}</td>
-                        <td className="border border-black p-1.5 w-[33%]"><strong>Emp Code :</strong> {selectedPayslipDoc.code}</td>
-                        <td className="border border-black p-1.5 w-[33%]"><strong>Designation :</strong> {selectedPayslipDoc.designation}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-black p-1.5"><strong>PF No. :</strong> {selectedPayslipDoc.pfNo || ''}</td>
-                        <td className="border border-black p-1.5"><strong>UAN No. :</strong> {selectedPayslipDoc.uanNo || ''}</td>
-                        <td className="border border-black p-1.5"><strong>ESIC No. :</strong> {selectedPayslipDoc.esicNo || ''}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-black p-1.5"><strong>PAN :</strong> {selectedPayslipDoc.pan || ''}</td>
-                        <td className="border border-black p-1.5"><strong>Period :</strong> {selectedPayslipDoc.period}</td>
-                        <td className="border border-black p-1.5"><strong>Date of Joining :</strong> {selectedPayslipDoc.doj || ''}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-black p-1.5"><strong>Account No. :</strong> {selectedPayslipDoc.accNo || ''}</td>
-                        <td colSpan={2} className="border border-black p-1.5"><strong>Employee Bank :</strong> {selectedPayslipDoc.bankName || 'HDFC BANK'}</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-black p-1.5"><strong>Paid Days :</strong> {selectedPayslipDoc.paidDays}</td>
-                        <td className="border border-black p-1.5"><strong>Unpaid Days :</strong> {selectedPayslipDoc.unpaidDays}</td>
-                        <td className="border border-black p-1.5"><strong>Paid Leave :</strong> {selectedPayslipDoc.paidLeave || ''}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* Earnings & Deductions Table */}
-                  <table className="w-full border-collapse border-b border-black text-[11px] leading-tight">
-                    <thead>
-                      <tr>
-                        <th className="border border-black p-1.5 text-left font-bold w-[38%]">Earnings</th>
-                        <th className="border border-black p-1.5 text-right font-bold w-[14%]">Amount</th>
-                        <th className="border border-black p-1.5 text-left font-bold w-[34%]">Deductions</th>
-                        <th className="border border-black p-1.5 text-right font-bold w-[14%]">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Basic Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.basic) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5">PF</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.pf) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">HRA Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.hra) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5">ESIC</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.esic) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Children Education Allowance Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.cea) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5">PT</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.pt) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Communication Allowance Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.comm) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5">{(selectedPayslipDoc.tds && selectedPayslipDoc.tds > 0) ? 'TDS' : ''}</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(selectedPayslipDoc.tds && selectedPayslipDoc.tds > 0) ? (Number(selectedPayslipDoc.tds) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''}</td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">LTA Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.lta) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5"></td>
-                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Meal Allowance Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.meal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5"></td>
-                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Standard Allowance Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.std) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5"></td>
-                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
-                      </tr>
-                      <tr className="border-y border-black font-bold">
-                        <td className="border-x border-black px-2 py-1">Total Earnings :</td>
-                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.basic + selectedPayslipDoc.hra + selectedPayslipDoc.cea + selectedPayslipDoc.comm + selectedPayslipDoc.lta + selectedPayslipDoc.meal + selectedPayslipDoc.std) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-1"></td>
-                        <td className="border-x border-black px-2 py-1 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Gross Earned</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.basic + selectedPayslipDoc.hra + selectedPayslipDoc.cea + selectedPayslipDoc.comm + selectedPayslipDoc.lta + selectedPayslipDoc.meal + selectedPayslipDoc.std) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5"></td>
-                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Adjustment</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number(selectedPayslipDoc.adj || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5"></td>
-                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
-                      </tr>
-                      <tr>
-                        <td className="border-x border-black px-2 py-0.5">Incentives</td>
-                        <td className="border-x border-black px-2 py-0.5 text-right">{(Number((selectedPayslipDoc.inc || 0) + (selectedPayslipDoc.bonus || 0))).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-0.5"></td>
-                        <td className="border-x border-black px-2 py-0.5 text-right"></td>
-                      </tr>
-                      <tr className="border-y border-black font-bold">
-                        <td className="border-x border-black px-2 py-1">Total Gross :</td>
-                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.grossSalary) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-1">Total Deductions :</td>
-                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.totalDeductions) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      <tr className="border-t border-black font-bold">
-                        <td className="border-x border-black px-2 py-1">Net Pay :</td>
-                        <td className="border-x border-black px-2 py-1 text-right">{(Number(selectedPayslipDoc.netSalary) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="border-x border-black px-2 py-1"></td>
-                        <td className="border-x border-black px-2 py-1 text-right"></td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* Rupees in Words */}
-                  <div className="border-b border-black p-1.5 font-bold text-[11px]">
-                    RUPEES : {numberToWords(selectedPayslipDoc.netSalary)}
-                  </div>
-
-                  {/* Disclaimer & Address */}
-                  <div className="border-b border-black p-2 text-[10px] space-y-1 text-slate-800">
-                    <div>* Document validity subject to Company's Stamp and Signature</div>
-                    <div className="text-center text-slate-800 font-medium">
-                      {selectedPayslipDoc.companyAddress || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708'}
-                    </div>
-                  </div>
-
-                  {/* Bottom Footer */}
-                  <div className="p-2 px-3 flex justify-between items-center text-[10px] text-slate-900">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-extrabold text-xs text-slate-900">{selectedPayslipDoc.companyName || 'Apponext'}</span>
-                      <span className="text-[9px] text-slate-600 ml-0.5">Human Resource Management System</span>
-                    </div>
-                    <div>
-                      Log on to <strong>{selectedPayslipDoc.websiteUrl || 'www.apponexthrms.com'}</strong>
-                    </div>
-                  </div>
+                <div className="w-full max-w-[820px] bg-white rounded-xl shadow-lg overflow-hidden border border-border/80">
+                  <iframe
+                    srcDoc={buildPayslipHtmlDoc(selectedPayslipDoc, payslipSetting, false)}
+                    title="Payslip Preview"
+                    className="w-full border-0"
+                    style={{ minHeight: payslipSetting?.enableLandscapeFormat ? '580px' : '820px' }}
+                  />
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
@@ -61,6 +61,8 @@ interface ReportRow {
   net_salary?: number;
   ctc?: number;
   slab_name?: string;
+  cycle_id?: number | null;
+  cycle_name?: string;
 }
 
 // Masking helpers for sensitive bank info
@@ -231,6 +233,28 @@ export const PayrollReportsPage: React.FC = () => {
   const increasedCount = varianceRows.filter(vr => vr.status === 'up').length;
   const decreasedCount = varianceRows.filter(vr => vr.status === 'down').length;
   const newCount = varianceRows.filter(vr => vr.status === 'new').length;
+
+  // Per-cycle breakdown (used when multiple cycles exist and 'ALL' is selected)
+  const cycleBreakdown = useMemo(() => {
+    if (cycles.length <= 1 || selectedCycle !== 'ALL') return [];
+    const cycleMap = new Map<string, { id: string; name: string; employees: number; gross: number; net: number; pf: number; pt: number; tds: number; esic: number }>();
+    for (const r of filteredRows) {
+      const cid = String(r.cycle_id || 'default');
+      const cname = r.cycle_name || 'Default Cycle';
+      if (!cycleMap.has(cid)) {
+        cycleMap.set(cid, { id: cid, name: cname, employees: 0, gross: 0, net: 0, pf: 0, pt: 0, tds: 0, esic: 0 });
+      }
+      const entry = cycleMap.get(cid)!;
+      entry.employees += 1;
+      entry.gross += Number(r.gross_earned || r.gross || 0);
+      entry.net += Number(r.net_salary || (Number(r.gross_earned || r.gross || 0) - Number(r.total_deduction || 0)));
+      entry.pf += Number(r.pf || 0);
+      entry.pt += Number(r.pt || 0);
+      entry.tds += Number(r.tds || 0);
+      entry.esic += Number(r.esic || 0);
+    }
+    return Array.from(cycleMap.values());
+  }, [cycles, selectedCycle, filteredRows]);
 
   const handleResetFilters = () => {
     setSelectedCycle('ALL');
@@ -502,6 +526,68 @@ export const PayrollReportsPage: React.FC = () => {
           </div>
         </div>
       </Card>
+
+      {/* ── Multi-Cycle Process Breakdown (shown when multiple cycles exist) ── */}
+      {cycleBreakdown.length > 1 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-border/60" />
+            <span className="text-[11px] font-black text-muted-foreground uppercase tracking-widest px-2 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-primary" />
+              {cycleBreakdown.length} Payroll Cycles Active — Click to Filter
+            </span>
+            <div className="h-px flex-1 bg-border/60" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {cycleBreakdown.map((cyc, idx) => {
+              const palette = [
+                { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-700 dark:text-blue-300', icon: 'text-blue-600' },
+                { bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-700 dark:text-emerald-300', icon: 'text-emerald-600' },
+                { bg: 'bg-violet-500/10', border: 'border-violet-500/30', text: 'text-violet-700 dark:text-violet-300', icon: 'text-violet-600' },
+                { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-700 dark:text-amber-300', icon: 'text-amber-600' },
+              ];
+              const pal = palette[idx % palette.length];
+              return (
+                <button
+                  key={cyc.id}
+                  type="button"
+                  onClick={() => setSelectedCycle(cyc.id)}
+                  className={`text-left w-full p-4 rounded-xl border ${pal.border} ${pal.bg} hover:shadow-md transition-all cursor-pointer group`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className={`text-[10px] font-black uppercase tracking-wider ${pal.text}`}>Payroll Cycle</p>
+                      <h4 className="text-sm font-black text-foreground mt-0.5">{cyc.name}</h4>
+                    </div>
+                    <div className={`p-2 rounded-lg ${pal.bg} border ${pal.border}`}>
+                      <Calendar className={`w-4 h-4 ${pal.icon}`} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-semibold">Employees</p>
+                      <p className="text-base font-black text-foreground">{cyc.employees}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-semibold">Gross Outlay</p>
+                      <p className="text-base font-black text-foreground">₹{cyc.gross.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-semibold">Net Payout</p>
+                      <p className={`text-base font-black ${pal.text}`}>₹{cyc.net.toLocaleString('en-IN')}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground font-semibold">PF + PT</p>
+                      <p className="text-base font-black text-foreground">₹{(cyc.pf + cyc.pt).toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                  <p className={`text-[10px] mt-2.5 font-bold ${pal.text} group-hover:underline`}>Click to view this cycle only →</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── 4 Executive KPI Metric Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

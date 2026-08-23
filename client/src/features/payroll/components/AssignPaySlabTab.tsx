@@ -338,17 +338,43 @@ export const AssignPaySlabTab: React.FC = () => {
     setSaving(true);
     try {
       await Promise.all(listToSave.map(async emp => {
+        const modalSlabObj = slabs.find(s => String(s.id) === modalSlabId);
+        
+        const earningsBreakup = [
+          { component_id: 1, code: 'BASIC', name: 'Basic Salary', type: 'Formula', amount: numBasic },
+          { component_id: 2, code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'Formula', amount: numHra },
+          ...(numSa > 0 ? [{ component_id: 4, code: 'STANDARD_ALLOWANCE', name: 'Standard Allowance', type: 'Value', amount: numSa }] : []),
+          ...(numMa > 0 ? [{ component_id: 5, code: 'MEAL_ALLOWANCE', name: 'Meal Allowance', type: 'Value', amount: numMa }] : []),
+          ...(numCa > 0 ? [{ component_id: 6, code: 'COMMUNICATION_ALLOWANCE', name: 'Communication Allowance', type: 'Value', amount: numCa }] : []),
+          ...(numCea > 0 ? [{ component_id: 7, code: 'CHILDREN_EDU_ALLOWANCE', name: 'Children Education Allowance', type: 'Value', amount: numCea }] : []),
+          ...(numLta > 0 ? [{ component_id: 8, code: 'LTA', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: numLta }] : []),
+        ];
+
+        const specialAllowanceVal = Math.max(0, grossCalculated - earningsBreakup.reduce((acc, cur) => acc + cur.amount, 0));
+        if (specialAllowanceVal > 0) {
+          earningsBreakup.push({ component_id: 3, code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'Derived', amount: specialAllowanceVal });
+        }
+
+        const deductionsBreakup = [
+          ...(numPf > 0 ? [{ component_id: 9, code: 'PF', name: 'Employee Provident Fund (EPF)', type: 'Formula', amount: numPf }] : []),
+          ...(numPt > 0 ? [{ component_id: 11, code: 'PT', name: 'Professional Tax', type: 'Value', amount: numPt }] : []),
+          ...(numEsic > 0 ? [{ component_id: 10, code: 'ESIC', name: 'Employee State Insurance (ESIC)', type: 'Formula', amount: numEsic }] : []),
+        ];
+
         const payload = {
           employee_id: emp.id,
           company_id: emp.companyId || null,
           companyId: emp.companyId || null,
           slab_id: modalSlabId ? Number(modalSlabId) : emp.slabId,
+          cycle_id: modalSlabObj?.cycle_id || null,
+          cycleId: modalSlabObj?.cycle_id || null,
           effective_from: modalEffectiveFrom,
           arrear_pay_month: arrearPayMonth,
           calculation_mode: calcMode,
           salary_input: Number(salaryInput) || 0,
           basic_monthly: numBasic,
           hra_monthly: numHra,
+          special_allowance_monthly: specialAllowanceVal,
           standard_allowance_monthly: numSa,
           meal_allowance_monthly: numMa,
           communication_allowance_monthly: numCa,
@@ -359,9 +385,12 @@ export const AssignPaySlabTab: React.FC = () => {
           pf_deduction: numPf,
           pf_employer: numPfEmployer,
           gross_monthly: grossCalculated,
+          total_deductions: totalDeductionCalculated,
           total_deductions_monthly: totalDeductionCalculated,
           net_take_home: netSalaryCalculated,
           annual_ctc: ctcCalculated * 12,
+          earnings_breakup: earningsBreakup,
+          deductions_breakup: deductionsBreakup
         };
 
         await apiClient.post('/payroll/salary-structure', payload).catch(() => {});

@@ -677,7 +677,7 @@ export const LoanManagement: React.FC = () => {
                   }}
                   className="w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1 shadow-2xs mb-2 cursor-pointer"
                 >
-                  <Plus className="w-3.5 h-3.5" /> + New Loan Type
+                  <Plus className="w-3.5 h-3.5" /> New Loan Type
                 </Button>
 
                 {loanTypesList
@@ -1222,7 +1222,7 @@ export const LoanManagement: React.FC = () => {
                   </Button>
                 ) : (
                   <Button onClick={handleSaveLoanType} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <Plus className="w-3.5 h-3.5" /> + Add Loan Type
+                    <Plus className="w-3.5 h-3.5" /> Add Loan Type
                   </Button>
                 )}
                 <Button variant="destructive" onClick={() => setShowLoanTypeSettings(false)} className="bg-rose-600 hover:bg-rose-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">

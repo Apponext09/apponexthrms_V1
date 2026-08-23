@@ -40,7 +40,12 @@ export class PayrollSettingsRepository extends BaseRepository<PayrollSettings> {
   /** One settings row per organization (+ optional company scope). */
   async getForOrg(ctx: TenantContext): Promise<PayrollSettings | null> {
     let q = this.query(ctx).whereNull('deleted_at');
-    q = ctx.companyId ? q.where('company_id', ctx.companyId) : q.whereNull('company_id');
-    return (await q.first()) || null;
+    if (ctx.companyId) {
+      const byComp = await this.query(ctx).whereNull('deleted_at').where('company_id', ctx.companyId).first();
+      if (byComp) return byComp as PayrollSettings;
+    }
+    const byOrg = await this.query(ctx).whereNull('deleted_at').whereNull('company_id').first();
+    if (byOrg) return byOrg as PayrollSettings;
+    return (await this.query(ctx).whereNull('deleted_at').first()) as PayrollSettings | null;
   }
 }

@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   FileText,
   Edit2,
@@ -12,19 +12,35 @@ import {
   X,
   CheckCircle2,
   Lock,
-  ShieldAlert,
+  Banknote,
+  Calendar,
+  Layers,
+  Sparkles,
+  RefreshCw,
+  Eye
 } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
-import { apiClient } from '@/lib/api';
+import { apiClient } from '@/config/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { formatPayrollDate } from '@/lib/utils';
 import type { Employee } from '@/types';
+
+const extract = (res: any): any[] => {
+  const p = res?.data?.data ?? res?.data;
+  if (Array.isArray(p)) return p;
+  if (p && typeof p === 'object') {
+    if (Array.isArray(p.items)) return p.items;
+    if (Array.isArray(p.data)) return p.data;
+  }
+  return [];
+};
 
 interface PayStructureRecord {
   id: string;
   slab: string;
   slabId?: string;
   cycleId?: string;
+  cycleName?: string;
   effectiveFrom: string;
   arrearPayMonth?: string;
   status: 'Active' | 'Deleted';
@@ -45,13 +61,12 @@ interface PayStructureRecord {
   communicationAllowance: number;
   childrenEduAllowance: number;
   lta: number;
+  specialAllowance: number;
 
   // Deductions
   esic: number;
   pt: number;
   pf: number;
-
-  // Employer Contribution
   pfEmployer: number;
 
   // Totals
@@ -61,6 +76,8 @@ interface PayStructureRecord {
   ctc: number;
   
   customComponents?: any;
+  earningsBreakup?: any[];
+  deductionsBreakup?: any[];
 }
 
 interface ComponentDef {
@@ -88,6 +105,18 @@ const mapStructureRecord = (s: any, activeSlabNameFallback: string): PayStructur
         ? JSON.parse(s.custom_components)
         : (s.customComponents || s.custom_components || {}));
   } catch {}
+
+  let eb = [];
+  try {
+    const rawEB = s.earningsBreakup || s.earnings_breakup;
+    eb = typeof rawEB === 'string' ? JSON.parse(rawEB) : (rawEB || []);
+  } catch {}
+
+  let db = [];
+  try {
+    const rawDB = s.deductionsBreakup || s.deductions_breakup;
+    db = typeof rawDB === 'string' ? JSON.parse(rawDB) : (rawDB || []);
+  } catch {}
   
   const savedInput = Number(s.salaryInput || s.salary_input || 0);
   const rawCtc = Number(s.ctc || s.annual_ctc || s.annualCtc || 0);
@@ -102,36 +131,48 @@ const mapStructureRecord = (s: any, activeSlabNameFallback: string): PayStructur
     ? (savedInput < 50000 ? savedInput * 12 : savedInput)
     : (ctcVal > 0 ? ctcVal : (grossVal > 0 ? grossVal * 12 : 480000));
 
+  const basicVal = Number(s.basic || s.basic_monthly || s.basicMonthly || (grossVal * 0.5));
+  const hraVal = Number(s.hra || s.hra_monthly || s.hraMonthly || (basicVal * 0.4));
+  const saVal = Number(s.specialAllowance || s.special_allowance_monthly || s.specialAllowanceMonthly || Math.max(0, grossVal - (basicVal + hraVal)));
+  const pfVal = Number(s.pf || s.pf_deduction || s.pfDeduction || Math.min(1800, Math.round(basicVal * 0.12)));
+  const ptVal = Number(s.pt || s.pt_deduction || s.ptDeduction || (grossVal > 15000 ? 200 : 0));
+  const esiVal = Number(s.esic || s.esi_deduction || s.esiDeduction || (grossVal <= 21000 ? Math.round(grossVal * 0.0075) : 0));
+  const totalDed = Number(s.totalDeduction || s.total_deductions || s.total_deductions_monthly || (pfVal + ptVal + esiVal));
+
   return {
     id: String(s.id),
-    slab: s.slab || s.slabName || s.slab_name || s.structureName || s.structure_name || activeSlabNameFallback || 'Monthly',
+    slab: s.slab || s.slabName || s.slab_name || s.structureName || s.structure_name || activeSlabNameFallback || 'Monthly Slab',
     slabId: s.slabId !== undefined ? String(s.slabId) : (s.slab_id !== undefined ? String(s.slab_id) : undefined),
     cycleId: s.cycleId !== undefined ? String(s.cycleId) : (s.cycle_id !== undefined ? String(s.cycle_id) : undefined),
+    cycleName: s.cycleName || s.cycle_name || '',
     effectiveFrom: s.effectiveFrom || s.effective_from || new Date().toISOString().split('T')[0],
     arrearPayMonth: s.arrearPayMonth || s.arrear_pay_month || s.effective_from || '',
     status: s.status === 'Deleted' || s.is_active === false || s.isActive === false ? 'Deleted' : 'Active',
-    addedBy: s.addedBy || s.added_by || 'hradmin',
+    addedBy: s.addedBy || s.added_by || 'Admin',
     addedOn: s.addedOn || s.added_on || new Date().toISOString().replace('T', ' ').substring(0, 19),
     updateBy: s.updateBy || s.updated_by || '',
     updateOn: s.updateOn || s.updated_on || '',
     calcMode: s.calcMode || s.calculation_mode || 'salary_input',
     salaryInput: displaySalaryInput,
-    basic: Number(s.basic || s.basic_monthly || (grossVal * 0.5)),
-    hra: Number(s.hra || s.hra_monthly || (grossVal * 0.2)),
+    basic: basicVal,
+    hra: hraVal,
+    specialAllowance: saVal,
     standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
     mealAllowance: Number(s.mealAllowance || s.meal_allowance_monthly || 0),
     communicationAllowance: Number(s.communicationAllowance || s.communication_allowance_monthly || 0),
     childrenEduAllowance: Number(s.childrenEduAllowance || s.children_edu_allowance_monthly || 0),
     lta: Number(s.lta || s.lta_monthly || 0),
-    esic: Number(s.esic || s.esic_deduction || 0),
-    pt: Number(s.pt || s.pt_deduction || (grossVal > 15000 ? 200 : 0)),
-    pf: Number(s.pf || s.pf_deduction || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
-    pfEmployer: Number(s.pfEmployer || s.pf_employer || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
+    esic: esiVal,
+    pt: ptVal,
+    pf: pfVal,
+    pfEmployer: Number(s.pfEmployer || s.pf_employer || pfVal),
     gross: grossVal,
-    totalDeduction: Number(s.totalDeduction || s.total_deductions_monthly || 0),
+    totalDeduction: totalDed,
     netSalary: netVal,
     ctc: ctcVal,
-    customComponents: customComps
+    customComponents: customComps,
+    earningsBreakup: eb,
+    deductionsBreakup: db
   };
 };
 
@@ -140,7 +181,6 @@ interface EmployeePayrollDetailProps {
 }
 
 export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) {
-  // Role-based permission check: Only Admin can create, edit, delete, or reassign salary structures. HR is Read-Only.
   const { user } = useAuthStore();
   const uAny = user as any;
   const userRole = (
@@ -156,6 +196,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   // Pay Structure records
   const [payStructures, setPayStructures] = useState<PayStructureRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Slab Info
   const [allSlabs, setAllSlabs] = useState<any[]>([]);
@@ -175,43 +216,61 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   const [viewRecord, setViewRecord] = useState<PayStructureRecord | null>(null);
 
   // Form Fields inside Modal
-  const [salaryInput, setSalaryInput] = useState<string>('120000');
-  const [effectiveFrom, setEffectiveFrom] = useState<string>('2026-08-08');
-  const [arrearPayMonth, setArrearPayMonth] = useState<string>('2026-08-08');
+  const [salaryInput, setSalaryInput] = useState<string>('600000');
+  const [effectiveFrom, setEffectiveFrom] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [arrearPayMonth, setArrearPayMonth] = useState<string>(new Date().toISOString().slice(0, 10));
 
   // Dynamic Component Values
   const [dynamicValues, setDynamicValues] = useState<Record<string, number>>({});
 
-  // Legacy state for payload mapping (fallback for server schema)
-  const [basic, setBasic] = useState('0');
-  const [hra, setHra] = useState('0');
-  const [pf, setPf] = useState('0');
-  const [pfEmployer, setPfEmployer] = useState('0');
-  const [pt, setPt] = useState('0');
+  // Calculations
+  const [basic, setBasic] = useState('25000');
+  const [hra, setHra] = useState('10000');
+  const [specialAllowance, setSpecialAllowance] = useState('15000');
+  const [pf, setPf] = useState('1800');
+  const [pfEmployer, setPfEmployer] = useState('1800');
+  const [pt, setPt] = useState('200');
   const [esic, setEsic] = useState('0');
 
-  useEffect(() => {
+  const loadPayrollData = useCallback(async () => {
     if (!employee?.id) return;
+    setLoading(true);
+    try {
+      const empCompanyId = (employee as any).companyId || (employee as any).company_id;
+      const slabsParams = empCompanyId ? { companyId: String(empCompanyId) } : undefined;
 
-    // Fetch Master Component Data
-    Promise.all([
-      apiClient.get('/payroll/component-groups').catch(() => ({ data: { data: [] } })),
-      apiClient.get('/payroll/component-definitions').catch(() => ({ data: { data: [] } }))
-    ]).then(([groupsRes, compsRes]) => {
-      const rawGroups = groupsRes.data?.data || groupsRes.data || [];
-      const rawComps = compsRes.data?.data || compsRes.data || [];
-      
+      const [groupsRes, compsRes, slabsRes, structRes] = await Promise.all([
+        apiClient.get('/payroll/component-groups').catch(() => ({ data: [] })),
+        apiClient.get('/payroll/component-definitions').catch(() => ({ data: [] })),
+        apiClient.get('/payroll/slabs', { params: slabsParams }).catch(() => ({ data: [] })),
+        apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: [] }))
+      ]);
+
+      const rawGroups = extract(groupsRes);
+      const rawComps = extract(compsRes);
+      const slabsData = extract(slabsRes);
+      const data = extract(structRes);
+
+      setAllSlabs(slabsData);
+
       const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
         const groupComps = rawComps
           .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
           .filter((c: any) => {
             const cType = (c.componentType || c.component_type || c.type || '').toString().toLowerCase();
+            // Module-sourced components are excluded from the profile component list
+            // (their values flow in via PayrollService automatically)
             return cType !== 'module';
           })
           .map((c: any) => ({
             id: String(c.id),
             name: c.name || 'Component',
-            type: c.componentType || c.component_type || 'Value',
+            type: (() => {
+              const raw = (c.componentType || c.component_type || 'Value').toString();
+              // Formula and Module both display as Derived in the employee profile
+              if (raw === 'Formula' || raw === 'Module' || raw === 'module' || raw === 'formula') return 'Derived';
+              return raw === 'Derived' ? 'Derived' : 'Value';
+            })() as 'Value' | 'Derived',
             formula: c.formula || '',
             amount: Number(c.amount || 0)
           }));
@@ -224,411 +283,152 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
         };
       }).filter((g: ComponentGroup) => g.components.length > 0);
       setAllGroups(mappedGroups);
-    });
 
-    // Load the full slab catalog for reference (component picker, PF rate lookup, etc.)
-    // AND fetch employee salary structures in a single coordinated flow so that the
-    // slab name resolved from the structure row is always available when records are mapped.
-    const loadPayrollData = async () => {
-      try {
-        // Parallel: fetch slab catalog (scoped to employee company) and employee structures
-        const empCompanyId = (employee as any).companyId || (employee as any).company_id;
-        const slabsParams = empCompanyId ? { companyId: String(empCompanyId) } : undefined;
-        const [slabsRes, structRes] = await Promise.all([
-          apiClient.get('/payroll/slabs', { params: slabsParams }).catch(() => ({ data: { data: [] } })),
-          apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
-        ]);
+      // Resolve active slab
+      const currentStructure = data[0];
+      let resolvedSlabName = 'Standard Pay Slab';
+      let resolvedSlabId = '';
+      let resolvedCycleId = '';
 
-        const slabsData: any[] = slabsRes.data?.data || slabsRes.data || [];
-        setAllSlabs(slabsData);
+      if (currentStructure) {
+        resolvedSlabId = String(currentStructure.slabId || currentStructure.slab_id || '');
+        const joinedSlabName = currentStructure.slabName || currentStructure.slab_name;
+        const catalogSlab = slabsData.find((s: any) => String(s.id) === resolvedSlabId);
+        resolvedSlabName = joinedSlabName || catalogSlab?.name || 'Standard Pay Slab';
+        resolvedCycleId = String(currentStructure.cycleId || currentStructure.cycle_id || '');
 
-        const data: any[] = structRes.data?.data || structRes.data || [];
+        setActiveSlabId(resolvedSlabId);
+        setActiveSlabName(resolvedSlabName);
+        setActiveCycleId(resolvedCycleId);
 
-        // -- Resolve active slab from the structure row (the JOIN already returned slab_name / slabName) --
-        const currentStructure = data.find((s: any) => s.slabId || s.slab_id);
-        let resolvedSlabName = 'Not Assigned';
-        let resolvedSlabId = '';
-        let resolvedCycleId = '';
-
-        if (currentStructure) {
-          resolvedSlabId = String(currentStructure.slabId || currentStructure.slab_id || '');
-          // Prefer the slab_name joined from payroll_slabs (already camelCased to slabName by Knex).
-          // Also check the slab catalog as a fallback.
-          const joinedSlabName = currentStructure.slabName || currentStructure.slab_name;
-          const catalogSlab = slabsData.find((s: any) => String(s.id) === resolvedSlabId);
-          resolvedSlabName = joinedSlabName || catalogSlab?.name || 'Assigned Slab';
-          resolvedCycleId = String(currentStructure.cycleId || currentStructure.cycle_id || '');
-
-          setActiveSlabId(resolvedSlabId);
-          setActiveSlabName(resolvedSlabName);
-          setActiveCycleId(resolvedCycleId);
-
-          // Pull PF rate and component IDs from the catalog slab
-          if (catalogSlab) {
-            const rawPfRate = catalogSlab.pfRatePct ?? catalogSlab.pf_rate_pct;
-            setSlabPfRate(Number(rawPfRate ?? 12));
-            const rawComponentIds = catalogSlab.selectedComponentIds ?? catalogSlab.selected_component_ids;
-            let comps: any[] = [];
-            try {
-              comps = typeof rawComponentIds === 'string' ? JSON.parse(rawComponentIds) : (rawComponentIds || []);
-            } catch {}
-            setSlabComponentIds(comps.map(String));
-          }
-        } else {
-          setActiveSlabId('');
-          setActiveSlabName('Not Assigned');
+        if (catalogSlab) {
+          const rawPfRate = catalogSlab.pfRatePct ?? catalogSlab.pf_rate_pct;
+          setSlabPfRate(Number(rawPfRate ?? 12));
+          const rawComponentIds = catalogSlab.selectedComponentIds ?? catalogSlab.selected_component_ids;
+          let comps: any[] = [];
+          try {
+            comps = typeof rawComponentIds === 'string' ? JSON.parse(rawComponentIds) : (rawComponentIds || []);
+          } catch {}
+          setSlabComponentIds(comps.map(String));
         }
-
-        // -- Map structure records using the LOCALLY resolved slab name (not stale React state) --
-        if (Array.isArray(data) && data.length > 0) {
-          const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
-            // Each row already has slabName from the JOIN — use it directly per-row
-            const perRowSlabName = s.slabName || s.slab_name;
-            const perRowSlabId = s.slabId || s.slab_id;
-            const catalogSlabForRow = perRowSlabId
-              ? slabsData.find((sl: any) => String(sl.id) === String(perRowSlabId))
-              : null;
-            const fallbackName = perRowSlabName || catalogSlabForRow?.name || resolvedSlabName;
-            return mapStructureRecord(s, fallbackName);
-          });
-          // Deduplicate records to prevent repeat rows
-          const uniqueMap = new Map<string, PayStructureRecord>();
-          mappedRecords.forEach(r => {
-            const key = `${r.effectiveFrom}_${r.id}`;
-            if (!uniqueMap.has(key)) {
-              uniqueMap.set(key, r);
-            }
-          });
-          setPayStructures(Array.from(uniqueMap.values()));
-        }
-      } catch (err) {
-        console.error('Error loading payroll data:', err);
       }
-    };
 
-    loadPayrollData();
+      if (Array.isArray(data) && data.length > 0) {
+        const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
+          const perRowSlabName = s.slabName || s.slab_name;
+          const perRowSlabId = s.slabId || s.slab_id;
+          const catalogSlabForRow = perRowSlabId
+            ? slabsData.find((sl: any) => String(sl.id) === String(perRowSlabId))
+            : null;
+          const fallbackName = perRowSlabName || catalogSlabForRow?.name || resolvedSlabName;
+          return mapStructureRecord(s, fallbackName);
+        });
+
+        const uniqueMap = new Map<string, PayStructureRecord>();
+        mappedRecords.forEach(r => {
+          const key = `${r.effectiveFrom}_${r.id}`;
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, r);
+          }
+        });
+        setPayStructures(Array.from(uniqueMap.values()));
+      } else {
+        setPayStructures([]);
+      }
+    } catch (err) {
+      console.error('Error loading payroll data:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [employee]);
 
-  // Strict matching helper: ONLY show components explicitly assigned to the selected slab
-  const isComponentInSlab = useCallback((comp: { id: string; name: string }, slabCompIds: string[]) => {
-    if (!slabCompIds || slabCompIds.length === 0) return true;
-    const cId = String(comp.id).trim().toLowerCase();
-    const cName = String(comp.name || '').trim().toLowerCase();
-    const cSlug = cName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+  useEffect(() => {
+    loadPayrollData();
+  }, [loadPayrollData]);
 
-    return slabCompIds.some(raw => {
-      const s = String(raw).trim().toLowerCase();
-      const sSlug = s.replace(/[^a-zA-Z0-9]/g, '_');
-      return s === cId || s === cName || sSlug === cSlug;
-    });
-  }, []);
-
-  // Extract active slab's components grouped by category (excluding Module type)
-  const activeEarnings = useMemo(() => {
-    return allGroups
-      .filter(g => g.category === 'Earning')
-      .map(g => ({
-        ...g,
-        components: g.components
-          .filter(c => (c.type || '').toLowerCase() !== 'module')
-          .filter(c => isComponentInSlab(c, slabComponentIds))
-      }))
-      .filter(g => g.components.length > 0);
-  }, [allGroups, slabComponentIds, isComponentInSlab]);
-
-  const activeDeductions = useMemo(() => {
-    return allGroups
-      .filter(g => g.category !== 'Earning')
-      .map(g => ({
-        ...g,
-        components: g.components
-          .filter(c => (c.type || '').toLowerCase() !== 'module')
-          .filter(c => isComponentInSlab(c, slabComponentIds))
-      }))
-      .filter(g => g.components.length > 0);
-  }, [allGroups, slabComponentIds, isComponentInSlab]);
-
-  // Robust Formula Evaluator supporting %, (N*CTC)/100, N*0.4, and JS expressions referencing any present components
-  const evaluateComponentFormula = (formula: string, context: Record<string, number>) => {
-    if (!formula || typeof formula !== 'string') return 0;
-    const f = formula.trim();
-
-    // Pattern A: "50%" or "50% of CTC" or "50% of BASIC"
-    const pctMatch = f.match(/^(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?([a-zA-Z_0-9]+)?$/i);
-    if (pctMatch) {
-      const pct = parseFloat(pctMatch[1]) / 100;
-      const baseKey = (pctMatch[2] || '').toUpperCase();
-      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
-      return Math.round(base * pct);
+  // Helper for formatting CTC in Lakhs
+  const formatLakhsRange = (min: number, max: number) => {
+    if (min > 0 && max > 0) {
+      const minL = (min / 100000).toFixed(min % 100000 === 0 ? 0 : 1);
+      const maxL = (max / 100000).toFixed(max % 100000 === 0 ? 0 : 1);
+      return `(₹${minL}L – ₹${maxL}L)`;
+    } else if (min > 0) {
+      return `(₹${(min / 100000).toFixed(0)}L+)`;
     }
-
-    // Pattern B: "(50 * CTC) / 100" or "(40 * BASIC) / 100"
-    const div100Match = f.match(/^\(?(\d+(?:\.\d+)?)\s*\*\s*([a-zA-Z_0-9]+)\)?\s*\/\s*100$/i);
-    if (div100Match) {
-      const pct = parseFloat(div100Match[1]) / 100;
-      const baseKey = div100Match[2].toUpperCase();
-      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
-      return Math.round(base * pct);
-    }
-
-    // Pattern C: "BASIC * 0.40" or "CTC * 0.50"
-    const multMatch = f.match(/^([a-zA-Z_0-9]+)\s*\*\s*(0?\.\d+)$/i) || f.match(/^(0?\.\d+)\s*\*\s*([a-zA-Z_0-9]+)$/i);
-    if (multMatch) {
-      const factor = parseFloat(multMatch[1]) || parseFloat(multMatch[2]);
-      const baseKey = (isNaN(parseFloat(multMatch[1])) ? multMatch[1] : multMatch[2]).toUpperCase();
-      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
-      return Math.round(base * factor);
-    }
-
-    // Pattern D: Complex / Dynamic arithmetic expressions e.g. "GROSS - BASIC - HRA" or "(CTC * 0.5) + 2000"
-    try {
-      let expr = f;
-      // Sort keys longest first so "ANNUAL_CTC" is replaced before "CTC"
-      const keys = Object.keys(context).sort((a, b) => b.length - a.length);
-      for (const k of keys) {
-        const regex = new RegExp(`\\b${k}\\b`, 'gi');
-        expr = expr.replace(regex, String(context[k] || 0));
-      }
-      // Sanitize: allow only numbers, operators, parentheses, decimal points, spaces
-      if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
-        return 0;
-      }
-      return Math.round(Number(Function('"use strict";return (' + expr + ')')()) || 0);
-    } catch {
-      return 0;
-    }
+    return '';
   };
 
-  // Recalculate dynamic values based on CTC input
-  const recalculateFromCTC = (ctcStr: string, currentSlabCompIds: string[] = slabComponentIds) => {
+  // Recalculate dynamic values when CTC or Slab changes
+  const recalculateFromCTC = useCallback((ctcStr: string, customPfRate?: number) => {
     const rawVal = Number(ctcStr) || 0;
-    const annualCTC = rawVal > 0 && rawVal < 50000 ? rawVal * 12 : rawVal;
-    const monthlyGross = Math.round(annualCTC / 12);
-    
-    const context: Record<string, number> = {
-      CTC: monthlyGross,
-      MONTHLY_CTC: monthlyGross,
-      ANNUAL_CTC: annualCTC,
-      GROSS: monthlyGross,
-      MONTHLY_GROSS: monthlyGross,
-      BASIC: Math.round(monthlyGross * 0.50),
-      HRA: Math.round(monthlyGross * 0.20),
-      PF_RATE: slabPfRate || 12,
-    };
-    
-    const newValues: Record<string, number> = {};
+    const ctc = rawVal < 50000 && rawVal > 0 ? rawVal * 12 : rawVal;
+    const monthlyGross = Math.round(ctc / 12);
+    const pfRateToUse = customPfRate !== undefined ? customPfRate : slabPfRate;
 
-    const targetEarnings = allGroups
-      .filter(g => g.category === 'Earning')
-      .map(g => ({
-        ...g,
-        components: g.components
-          .filter(c => (c.type || '').toLowerCase() !== 'module')
-          .filter(c => isComponentInSlab(c, currentSlabCompIds))
-      }))
-      .filter(g => g.components.length > 0);
+    const b = Math.round(monthlyGross * 0.50);
+    const h = Math.round(b * 0.40);
+    const sa = Math.max(0, monthlyGross - (b + h));
+    const pfVal = Math.round(Math.min(b, 15000) * (pfRateToUse / 100));
+    const ptVal = monthlyGross > 15000 ? 200 : 0;
+    const esiVal = monthlyGross <= 21000 ? Math.round(monthlyGross * 0.0075) : 0;
 
-    const targetDeductions = allGroups
-      .filter(g => g.category !== 'Earning')
-      .map(g => ({
-        ...g,
-        components: g.components
-          .filter(c => (c.type || '').toLowerCase() !== 'module')
-          .filter(c => isComponentInSlab(c, currentSlabCompIds))
-      }))
-      .filter(g => g.components.length > 0);
-    
-    let foundBasicId: string | null = null;
-    let foundHraId: string | null = null;
-    let foundPfId: string | null = null;
-    let foundPtId: string | null = null;
-    let foundSpecialId: string | null = null;
-
-    // First Pass: Resolve Basic
-    targetEarnings.forEach(g => {
-      g.components.forEach(c => {
-        const lowerName = c.name.toLowerCase();
-        if (lowerName.includes('basic') && !lowerName.includes('earned')) {
-          foundBasicId = c.id;
-          if (c.type === 'Derived' && c.formula) {
-            newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
-          } else {
-            newValues[c.id] = Math.round(monthlyGross * 0.50);
-          }
-          context.BASIC = newValues[c.id] || context.BASIC;
-          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
-        }
-      });
-    });
-
-    if (!foundBasicId) {
-      context.BASIC = Math.round(monthlyGross * 0.50);
-    }
-
-    // Second Pass: Resolve HRA & Other Earnings
-    let allocatedEarnings = (foundBasicId && newValues[foundBasicId]) ? newValues[foundBasicId] : 0;
-    let fallbackEarningId: string | null = null;
-
-    targetEarnings.forEach(g => {
-      g.components.forEach(c => {
-        if (c.id === foundBasicId) return;
-        if (!fallbackEarningId) fallbackEarningId = c.id;
-
-        const lowerName = c.name.toLowerCase();
-        if (lowerName.includes('hra') || lowerName.includes('house rent')) {
-          foundHraId = c.id;
-          if (c.type === 'Derived' && c.formula) {
-            newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
-          } else {
-            newValues[c.id] = Math.round(context.BASIC * 0.40);
-          }
-          context.HRA = newValues[c.id] || context.HRA;
-          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
-          allocatedEarnings += (newValues[c.id] || 0);
-        } else if (lowerName.includes('special') || lowerName.includes('standard')) {
-          foundSpecialId = c.id;
-        } else if (c.type === 'Derived' && c.formula) {
-          newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
-          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
-          allocatedEarnings += (newValues[c.id] || 0);
-        } else if (c.type === 'Value' && c.amount > 0) {
-          newValues[c.id] = c.amount;
-          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
-          allocatedEarnings += (newValues[c.id] || 0);
-        }
-      });
-    });
-
-    // Allocate remainder to Special/Standard Allowance OR first available earning component
-    const targetRemainderId = foundSpecialId || fallbackEarningId;
-    if (targetRemainderId) {
-      const alreadyAllocated = allocatedEarnings - (newValues[targetRemainderId] || 0);
-      const remainder = Math.max(0, monthlyGross - alreadyAllocated);
-      newValues[targetRemainderId] = remainder;
-      context.SPECIAL_ALLOWANCE = remainder;
-      context.STANDARD_ALLOWANCE = remainder;
-    }
-
-    // Third Pass: Deductions (PF, PT, ESIC, TDS)
-    targetDeductions.forEach(g => {
-      g.components.forEach(c => {
-        const lowerName = c.name.toLowerCase();
-        if (lowerName.includes('pf') || lowerName.includes('provident')) {
-          foundPfId = c.id;
-          const pfWage = Math.min(context.BASIC, 15000);
-          newValues[c.id] = Math.round(pfWage * (slabPfRate / 100 || 0.12));
-          context.PF = newValues[c.id];
-        } else if (lowerName.includes('pt') || lowerName.includes('professional tax')) {
-          foundPtId = c.id;
-          newValues[c.id] = monthlyGross > 15000 ? 200 : 0;
-          context.PT = newValues[c.id];
-        } else if (lowerName.includes('esi') || lowerName.includes('esic')) {
-          newValues[c.id] = monthlyGross <= 21000 ? Math.ceil(monthlyGross * 0.0075) : 0;
-          context.ESIC = newValues[c.id];
-        } else if (lowerName.includes('tds') || lowerName.includes('tax')) {
-          newValues[c.id] = 0;
-          context.TDS = 0;
-        } else if (c.type === 'Derived' && c.formula) {
-          newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
-          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
-        } else if (c.type === 'Value') {
-          newValues[c.id] = c.amount || 0;
-          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
-        }
-      });
-    });
-
-    // Update mapped legacy states for backend saving
-    setBasic(foundBasicId ? String(newValues[foundBasicId] || 0) : '0');
-    setHra(foundHraId ? String(newValues[foundHraId] || 0) : '0');
-    if (foundPfId) {
-      setPf(String(newValues[foundPfId] || 0));
-      setPfEmployer(String(newValues[foundPfId] || 0));
-    } else {
-      setPf('0');
-      setPfEmployer('0');
-    }
-    setPt(foundPtId ? String(newValues[foundPtId] || 0) : '0');
-
-    setDynamicValues(newValues);
-  };
+    setBasic(String(b));
+    setHra(String(h));
+    setSpecialAllowance(String(sa));
+    setPf(String(pfVal));
+    setPfEmployer(String(pfVal));
+    setPt(String(ptVal));
+    setEsic(String(esiVal));
+  }, [slabPfRate]);
 
   const handleSalaryInputChange = (val: string) => {
     setSalaryInput(val);
     recalculateFromCTC(val);
   };
 
-  const handleDynamicValueChange = (compId: string, val: string) => {
-    setDynamicValues(prev => ({ ...prev, [compId]: Number(val) || 0 }));
-  };
-
-  // Computed Totals
-  const grossCalculated = activeEarnings.reduce((sum, g) => {
-    return sum + g.components.reduce((gSum, c) => gSum + (dynamicValues[c.id] || 0), 0);
-  }, 0);
-
-  const totalDeductionCalculated = activeDeductions.reduce((sum, g) => {
-    return sum + g.components.reduce((gSum, c) => gSum + (dynamicValues[c.id] || 0), 0);
-  }, 0);
-
-  const netSalaryCalculated = Math.max(0, grossCalculated - totalDeductionCalculated);
-  const monthlyCtcCalculated = grossCalculated + Number(pfEmployer || 0);
-  const annualCtcCalculated = (salaryInput && Number(salaryInput) > 0)
-    ? Math.round(Number(salaryInput) < 50000 ? Number(salaryInput) * 12 : Number(salaryInput))
-    : Math.round(monthlyCtcCalculated * 12);
-  const ctcCalculated = annualCtcCalculated;
-
-  // Modal Open Handlers
   const handleOpenAddModal = () => {
     setEditingRecord(null);
-    const chosenSlab = allSlabs.find(s => String(s.id) === String(activeSlabId)) || allSlabs[0];
-    let compIds: string[] = [];
-    if (chosenSlab) {
-      setActiveSlabId(String(chosenSlab.id));
-      setActiveSlabName(chosenSlab.name || chosenSlab.slab_name || 'Monthly');
-      setActiveCycleId((chosenSlab.cycleId || chosenSlab.cycle_id) ? String(chosenSlab.cycleId || chosenSlab.cycle_id) : '');
-      const rawPf = chosenSlab.pfRatePct ?? chosenSlab.pf_rate_pct;
-      setSlabPfRate(Number(rawPf ?? 12));
-      const rawComps = chosenSlab.selectedComponentIds ?? chosenSlab.selected_component_ids;
-      try {
-        compIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
-      } catch {}
-      compIds = compIds.map(String);
-      setSlabComponentIds(compIds);
-    }
-    setSalaryInput('40000'); // Default Monthly Gross/CTC
-    recalculateFromCTC('40000', compIds);
-    const today = new Date().toISOString().split('T')[0];
-    setEffectiveFrom(today);
-    setArrearPayMonth(today);
+    const empSlabId = (employee as any)?.salary_slab_id || (employee as any)?.salarySlabId;
+    const defaultSlab = (empSlabId ? allSlabs.find(s => String(s.id) === String(empSlabId)) : null) || allSlabs[0];
+    const defaultSlabId = defaultSlab ? String(defaultSlab.id) : '';
+    const defaultSlabName = defaultSlab?.name || defaultSlab?.slab_name || 'Standard Pay Slab';
+    const minCtc = Number(defaultSlab?.min_ctc ?? defaultSlab?.minCtc ?? 0);
+    const pfRate = Number(defaultSlab?.pf_rate_pct ?? defaultSlab?.pfRatePct ?? 12);
+
+    setActiveSlabId(defaultSlabId);
+    setActiveSlabName(defaultSlabName);
+    setSlabPfRate(pfRate);
+
+    // Initial CTC from employee or slab min_ctc
+    const empCtc = Number((employee as any)?.annual_ctc || (employee as any)?.annualCtc || ((employee as any)?.gross_salary ? (employee as any)?.gross_salary * 12 : 0));
+    const initialCtc = empCtc > 0 ? empCtc : (minCtc > 0 ? minCtc : 600000);
+
+    setSalaryInput(String(initialCtc));
+    recalculateFromCTC(String(initialCtc), pfRate);
+    setEffectiveFrom(new Date().toISOString().slice(0, 10));
+    setArrearPayMonth(new Date().toISOString().slice(0, 10));
     setModalOpen(true);
   };
 
   const handleOpenEditModal = (rec: PayStructureRecord) => {
     setEditingRecord(rec);
-    const matchedSlab = allSlabs.find(s => (s.name || s.slab_name) === rec.slab || String(s.id) === String((rec as any).slabId || (rec as any).slab_id)) || allSlabs[0];
-    let compIds: string[] = [];
+    const matchedSlab = allSlabs.find(s => String(s.id) === String(rec.slabId));
+    setActiveSlabId(rec.slabId || (allSlabs[0]?.id ? String(allSlabs[0].id) : ''));
+    setActiveSlabName(rec.slab || matchedSlab?.name || 'Standard Pay Slab');
     if (matchedSlab) {
-      setActiveSlabId(String(matchedSlab.id));
-      setActiveSlabName(matchedSlab.name || matchedSlab.slab_name || rec.slab);
-      setActiveCycleId((matchedSlab.cycleId || matchedSlab.cycle_id) ? String(matchedSlab.cycleId || matchedSlab.cycle_id) : '');
-      const rawPf = matchedSlab.pfRatePct ?? matchedSlab.pf_rate_pct;
-      setSlabPfRate(Number(rawPf ?? 12));
-      const rawComps = matchedSlab.selectedComponentIds ?? matchedSlab.selected_component_ids;
-      try {
-        compIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
-      } catch {}
-      compIds = compIds.map(String);
-      setSlabComponentIds(compIds);
+      const pfRate = Number(matchedSlab.pf_rate_pct ?? matchedSlab.pfRatePct ?? 12);
+      setSlabPfRate(pfRate);
     }
-    const inputVal = rec.salaryInput || rec.ctc || (rec.gross ? rec.gross * 12 : 480000);
-    setSalaryInput(String(inputVal));
+    setSalaryInput(String(rec.ctc || rec.gross * 12));
+    setBasic(String(rec.basic));
+    setHra(String(rec.hra));
+    setSpecialAllowance(String(rec.specialAllowance));
+    setPf(String(rec.pf));
+    setPfEmployer(String(rec.pfEmployer));
+    setPt(String(rec.pt));
+    setEsic(String(rec.esic));
     setEffectiveFrom(rec.effectiveFrom);
     setArrearPayMonth(rec.arrearPayMonth || rec.effectiveFrom);
-    if (rec.customComponents && Object.keys(rec.customComponents).length > 0) {
-      setDynamicValues(rec.customComponents);
-    }
-    recalculateFromCTC(String(inputVal), compIds);
     setModalOpen(true);
   };
 
@@ -638,391 +438,505 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   };
 
   const handleDelete = async (rec: PayStructureRecord) => {
-    if (!confirm('Are you sure you want to delete this Pay Structure?')) return;
+    if (!confirm(`Are you sure you want to remove the salary structure effective from ${formatPayrollDate(rec.effectiveFrom)}?`)) return;
     try {
       await apiClient.delete(`/payroll/salary-structure/${rec.id}`);
-      setPayStructures(prev => prev.map(p => p.id === rec.id ? { ...p, status: 'Deleted' } : p));
-      showToast.success('Structure deleted successfully');
-    } catch (err) {
-      console.error('Delete error', err);
+      showToast.success('Structure Deleted', 'Salary structure has been deactivated.');
+      loadPayrollData();
+    } catch (err: any) {
+      showToast.error('Delete Failed', err?.message || 'Could not delete structure.');
     }
   };
 
   const handleSave = async () => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const inputNum = Number(salaryInput) || 0;
-    const annualCtcVal = inputNum > 0 ? (inputNum < 50000 ? inputNum * 12 : inputNum) : 480000;
-    const monthlyGrossVal = Math.round(annualCtcVal / 12);
-
-    const finalGross = grossCalculated > 0 ? grossCalculated : monthlyGrossVal;
-    const finalCtc = annualCtcCalculated > 0 ? annualCtcCalculated : annualCtcVal;
-    const finalNet = netSalaryCalculated > 0 ? netSalaryCalculated : finalGross;
-    
-    // Construct payload with legacy fields (for DB columns) AND custom_components (for dynamic UI)
-    const empCompanyId = (employee as any).companyId || (employee as any).company_id || null;
-    const payload = {
-      employee_id: employee.id,
-      employeeId: employee.id,
-      company_id: empCompanyId,
-      companyId: empCompanyId,
-      slab: activeSlabName || 'Monthly',
-      slab_id: activeSlabId || null,
-      slabId: activeSlabId || null,
-      cycle_id: activeCycleId || null,
-      cycleId: activeCycleId || null,
-      pf_rate_pct: slabPfRate || 12,
-      effective_from: effectiveFrom || todayStr,
-      effectiveFrom: effectiveFrom || todayStr,
-      arrear_pay_month: arrearPayMonth || effectiveFrom || todayStr,
-      calculation_mode: 'component_based',
-      salary_input: annualCtcVal,
-      salaryInput: annualCtcVal,
-      
-      // Fallback schema mapping
-      basic_monthly: Number(basic) > 0 ? Number(basic) : Math.round(finalGross * 0.5),
-      hra_monthly: Number(hra) > 0 ? Number(hra) : Math.round(finalGross * 0.2),
-      pf_deduction: Number(pf) > 0 ? Number(pf) : 0,
-      pt_deduction: Number(pt) > 0 ? Number(pt) : 0,
-      esic_deduction: Number(esic) > 0 ? Number(esic) : 0,
-      pf_employer: Number(pfEmployer) > 0 ? Number(pfEmployer) : 0,
-      
-      gross_monthly: finalGross,
-      grossMonthly: finalGross,
-      total_deductions_monthly: totalDeductionCalculated,
-      net_salary_monthly: finalNet,
-      net_take_home: finalNet,
-      netTakeHome: finalNet,
-      annual_ctc: finalCtc,
-      annualCtc: finalCtc,
-      
-      // Full Dynamic Payload mapped as JSON
-      customComponents: JSON.stringify(dynamicValues)
-    };
-
     try {
+      const ctcVal = Number(salaryInput) || 0;
+      const annualCtc = ctcVal < 50000 && ctcVal > 0 ? ctcVal * 12 : ctcVal;
+      const grossMonthly = Math.round(annualCtc / 12);
+      const b = Number(basic) || Math.round(grossMonthly * 0.50);
+      const h = Number(hra) || Math.round(b * 0.40);
+      const sa = Number(specialAllowance) || Math.max(0, grossMonthly - (b + h));
+      const pfVal = Number(pf) || Math.round(Math.min(b, 15000) * 0.12);
+      const ptVal = Number(pt) || 200;
+      const esiVal = Number(esic) || 0;
+      const totalDed = pfVal + ptVal + esiVal;
+      const netTakeHome = grossMonthly - totalDed;
+
+      const earningsBreakup = [
+        { component_id: 1, code: 'BASIC', name: 'Basic Salary', type: 'Derived', formula: '50% of CTC', amount: b },
+        { component_id: 2, code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'Derived', formula: '40% of Basic', amount: h },
+        { component_id: 3, code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'Derived', formula: 'CTC - (Basic + HRA + Other)', amount: sa }
+      ];
+
+      const deductionsBreakup = [
+        { component_id: 9, code: 'PF', name: 'Employee Provident Fund (EPF)', type: 'Derived', formula: '12% of Basic (capped at 1800)', amount: pfVal },
+        { component_id: 11, code: 'PT', name: 'Professional Tax', type: 'Value', formula: 'Fixed PT Slab', amount: ptVal },
+        ...(esiVal > 0 ? [{ component_id: 10, code: 'ESIC', name: 'Employee State Insurance (ESIC)', type: 'Derived', amount: esiVal }] : [])
+      ];
+
+      const chosenSlab = allSlabs.find(s => String(s.id) === activeSlabId);
+      const finalCycleId = chosenSlab?.cycle_id || (employee as any).cycleId || 12;
+
+      const payload = {
+        employee_id: employee.id,
+        company_id: (employee as any).companyId || (employee as any).company_id || null,
+        slab_id: activeSlabId ? Number(activeSlabId) : null,
+        cycle_id: Number(finalCycleId),
+        effective_from: effectiveFrom,
+        arrear_pay_month: arrearPayMonth,
+        annual_ctc: annualCtc,
+        gross_monthly: grossMonthly,
+        basic_monthly: b,
+        hra_monthly: h,
+        special_allowance_monthly: sa,
+        total_deductions: totalDed,
+        pf_deduction: pfVal,
+        esi_deduction: esiVal,
+        pt_deduction: ptVal,
+        net_take_home: netTakeHome,
+        earnings_breakup: earningsBreakup,
+        deductions_breakup: deductionsBreakup
+      };
+
       if (editingRecord) {
         await apiClient.put(`/payroll/salary-structure/${editingRecord.id}`, payload);
-        showToast.success('Pay structure updated successfully');
+        showToast.success('Structure Updated', 'Employee salary structure updated successfully.');
       } else {
         await apiClient.post('/payroll/salary-structure', payload);
-        showToast.success('New pay structure saved successfully');
+        showToast.success('Structure Created', 'New salary structure assigned to employee.');
       }
-      // Re-fetch after save
-      const res = await apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`);
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data)) {
-        const mapped = data.map((s: any) => mapStructureRecord(s, activeSlabName));
-        const uniqueMap = new Map<string, PayStructureRecord>();
-        mapped.forEach(r => {
-          const key = `${r.effectiveFrom}_${r.id}`;
-          if (!uniqueMap.has(key)) {
-            uniqueMap.set(key, r);
-          }
-        });
-        setPayStructures(Array.from(uniqueMap.values()));
-      }
-    } catch (err: any) {
-      console.error('Error saving pay structure:', err);
-      showToast.error('Save Failed', err?.response?.data?.message || 'Could not save this pay structure — it was not saved.');
-      return;
-    }
 
-    setModalOpen(false);
+      setModalOpen(false);
+      loadPayrollData();
+    } catch (err: any) {
+      showToast.error('Save Failed', err?.message || 'Could not save salary structure.');
+    }
   };
 
-  return (
-    <div className="space-y-6 font-sans">
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <div style={{ background: '#1e88e5', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0, letterSpacing: '0.2px' }}>Payroll Detail</h2>
-        </div>
+  const numBasic = Number(basic) || 0;
+  const numHra = Number(hra) || 0;
+  const numSa = Number(specialAllowance) || 0;
+  const grossCalculated = numBasic + numHra + numSa;
+  const numPf = Number(pf) || 0;
+  const numPt = Number(pt) || 0;
+  const numEsic = Number(esic) || 0;
+  const totalDeductionCalculated = numPf + numPt + numEsic;
+  const netSalaryCalculated = Math.max(0, grossCalculated - totalDeductionCalculated);
+  const annualCtcCalculated = grossCalculated * 12;
 
-        <div style={{ padding: '14px 16px' }}>
-          <div style={{ marginBottom: 14 }}>
+  return (
+    <div className="space-y-4">
+      {/* Main Container Card matching App Theme */}
+      <Card className="border border-border/80 bg-card rounded-xl shadow-xs overflow-hidden">
+        {/* Header Bar */}
+        <div className="flex items-center justify-between p-4 border-b border-border/60 bg-muted/20 flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+              <Banknote className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Payroll Structure & Compensation</h3>
+              <p className="text-[11px] text-muted-foreground">Assigned salary slab, monthly gross, statutory deductions & net take-home</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadPayrollData}
+              className="text-xs font-semibold h-8 gap-1.5 border-border hover:bg-muted/40"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
             {canEditPayroll ? (
-              <button
+              <Button
                 onClick={handleOpenAddModal}
-                style={{
-                  background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4,
-                  padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#1e293b',
-                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                }}
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold h-8 gap-1.5 shadow-xs"
               >
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>+</span> Add Pay Structure
-              </button>
+                <Plus className="w-3.5 h-3.5" /> Add Pay Structure
+              </Button>
             ) : (
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs font-semibold">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-semibold">
                 <Lock className="w-3.5 h-3.5 text-amber-600" />
-                <span>Salary structure modification is restricted to Organization Admin only (Read-Only for HR).</span>
+                <span>Read-Only View</span>
               </div>
             )}
           </div>
+        </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, textAlign: 'left' }}>
-              <thead>
-                <tr style={{ background: '#fafafa', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>
-                  <th style={{ padding: '10px 12px', width: 90 }}>Action</th>
-                  <th style={{ padding: '10px 12px' }}>Slab Template</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Annual CTC (₹)</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Monthly Gross (₹)</th>
-                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Net Take-Home (₹)</th>
-                  <th style={{ padding: '10px 12px' }}>Effective From</th>
-                  <th style={{ padding: '10px 12px' }}>Status</th>
+        {/* Table Container */}
+        <div className="p-0 overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-muted/40 text-muted-foreground border-b border-border/60 text-[10px] font-bold uppercase tracking-wider">
+                <th className="px-4 py-3 w-24">Action</th>
+                <th className="px-4 py-3">Slab Template</th>
+                <th className="px-4 py-3 text-right">Annual CTC</th>
+                <th className="px-4 py-3 text-right">Monthly Gross</th>
+                <th className="px-4 py-3 text-right">Net Take-Home</th>
+                <th className="px-4 py-3">Effective From</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/40">
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      <span>Loading payroll structure...</span>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {payStructures.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No structure records found.</td></tr>
-                )}
-                {payStructures.map(rec => {
+              ) : payStructures.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                    <Banknote className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                    <p className="font-semibold text-xs">No payroll structure records assigned yet.</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Click "Add Pay Structure" above to assign an active compensation package.</p>
+                  </td>
+                </tr>
+              ) : (
+                payStructures.map(rec => {
                   const ctcDisplay = rec.ctc || (rec.gross * 12);
                   return (
-                    <tr key={rec.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '10px 12px' }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <button onClick={() => handleViewModal(rec)} title="View Breakdown" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e88e5' }}>
+                    <tr key={rec.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleViewModal(rec)}
+                            title="View Full Breakdown"
+                            className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                          >
                             <FileText className="w-3.5 h-3.5" />
                           </button>
                           {canEditPayroll && (
                             <>
-                              <button onClick={() => handleOpenEditModal(rec)} title="Edit Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981' }}>
+                              <button
+                                onClick={() => handleOpenEditModal(rec)}
+                                title="Edit Pay Structure"
+                                className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                              >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
-                              <button onClick={() => handleDelete(rec)} title="Delete Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
+                              <button
+                                onClick={() => handleDelete(rec)}
+                                title="Delete Pay Structure"
+                                className="p-1 rounded-md text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </>
                           )}
-                        </span>
+                        </div>
                       </td>
-                      <td style={{ padding: '10px 12px', color: '#334155', fontWeight: 600 }}>{rec.slab}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>
+                      <td className="px-4 py-3 font-semibold text-foreground">
+                        <div className="flex items-center gap-1.5">
+                          <span>{rec.slab}</span>
+                          {rec.cycleName && (
+                            <Badge variant="outline" className="text-[9px] font-bold bg-muted/30">
+                              {rec.cycleName}
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
                         ₹{ctcDisplay.toLocaleString('en-IN')}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600, color: '#334155' }}>
+                      <td className="px-4 py-3 text-right font-semibold text-foreground">
                         ₹{rec.gross.toLocaleString('en-IN')}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: '#0284c7' }}>
+                      <td className="px-4 py-3 text-right font-bold text-primary">
                         ₹{rec.netSalary.toLocaleString('en-IN')}
                       </td>
-                      <td style={{ padding: '10px 12px', color: '#334155', fontWeight: 600 }}>{formatPayrollDate(rec.effectiveFrom)}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {rec.status === 'Active' ? <span style={{ color: '#22c55e', background: '#dcfce7', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700 }}>Active</span> : <span style={{ color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: 12, fontSize: 10, fontWeight: 700 }}>Deleted</span>}
+                      <td className="px-4 py-3 font-medium text-muted-foreground">
+                        {formatPayrollDate(rec.effectiveFrom)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            rec.status === 'Active'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold text-[10px]'
+                              : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 font-bold text-[10px]'
+                          }
+                        >
+                          {rec.status}
+                        </Badge>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </Card>
 
-      {/* MODAL */}
+      {/* MODAL: Configure / Edit Pay Structure */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-4xl w-[95vw] p-0 overflow-hidden bg-white text-slate-900 border-none shadow-2xl rounded-lg">
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Payroll Structure</span>
-            <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 16 }}>✕</button>
-          </div>
-
-          <div style={{ padding: '16px 24px 20px', maxHeight: '82vh', overflowY: 'auto' }}>
-            <div style={{ paddingBottom: 10, borderBottom: '2px solid #00a8a8', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#991b1b', margin: 0 }}>
-                Payroll Breakup <span style={{ color: '#b91c1c' }}>[Dynamic Structure]</span>
-              </h3>
-            </div>
-
-            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>🏷️ Salary Slab:</span>
-              <select
-                value={activeSlabId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const chosen = allSlabs.find(s => String(s.id) === String(val));
-                  if (chosen) {
-                    const cycleIdVal = chosen.cycleId ?? chosen.cycle_id;
-                    const pfRateVal = chosen.pfRatePct ?? chosen.pf_rate_pct;
-                    const componentIdsVal = chosen.selectedComponentIds ?? chosen.selected_component_ids;
-                    setActiveSlabId(String(chosen.id));
-                    setActiveSlabName(chosen.name || chosen.slab_name || 'Monthly');
-                    setActiveCycleId(cycleIdVal ? String(cycleIdVal) : '');
-                    setSlabPfRate(Number(pfRateVal ?? 12));
-                    let parsedCompIds: string[] = [];
-                    try {
-                      parsedCompIds = typeof componentIdsVal === 'string' ? JSON.parse(componentIdsVal) : (componentIdsVal || []);
-                    } catch {}
-                    const nextCompIds = parsedCompIds.map(String);
-                    setSlabComponentIds(nextCompIds);
-                    recalculateFromCTC(salaryInput, nextCompIds);
-                  }
-                }}
-                style={{
-                  height: 32, border: '1.5px solid #0284c7', borderRadius: 6, padding: '0 10px',
-                  fontSize: 12, fontWeight: 700, background: !canEditPayroll ? '#f1f5f9' : '#ffffff', color: '#0c4a6e',
-                  cursor: !canEditPayroll ? 'not-allowed' : 'pointer'
-                }}
-                disabled={!canEditPayroll}
-              >
-                {allSlabs.map(s => {
-                  const minCtcVal = s.minCtc ?? s.min_ctc;
-                  const maxCtcVal = s.maxCtc ?? s.max_ctc;
-                  return (
-                    <option key={s.id} value={String(s.id)}>
-                      🏷️ {s.name || s.slab_name} {minCtcVal ? `(₹${(Number(minCtcVal) / 100000).toFixed(1)}L - ₹${(Number(maxCtcVal || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-              <span style={{ fontSize: 11, color: '#0369a1', fontWeight: 600 }}>
-                ({slabComponentIds.length} components assigned to this slab)
+        <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden bg-card text-card-foreground border border-border shadow-2xl rounded-2xl">
+          <DialogHeader className="p-4 px-6 border-b border-border/60 bg-muted/20">
+            <DialogTitle className="text-sm font-bold text-foreground flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-primary" />
+                {editingRecord ? 'Edit Employee Payroll Structure' : 'Assign New Payroll Structure'}
               </span>
-            </div>
+            </DialogTitle>
+          </DialogHeader>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'flex-start', background: '#f8fafc', padding: 14, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+          <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+            {/* Top Config Row */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-muted/20 p-4 rounded-xl border border-border/60">
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Annual CTC Input :</label>
-                <input
+                <label className="text-[11px] font-bold text-foreground block mb-1.5">Salary Slab Band *</label>
+                <select
+                  value={activeSlabId}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const chosen = allSlabs.find(s => String(s.id) === String(val));
+                    if (chosen) {
+                      setActiveSlabId(String(chosen.id));
+                      setActiveSlabName(chosen.name || 'Standard Pay Slab');
+                      const minCtc = Number(chosen.min_ctc ?? chosen.minCtc ?? 0);
+                      const maxCtc = Number(chosen.max_ctc ?? chosen.maxCtc ?? 10000000);
+                      const pfRate = Number(chosen.pf_rate_pct ?? chosen.pfRatePct ?? 12);
+                      setSlabPfRate(pfRate);
+
+                      const curVal = Number(salaryInput) || 0;
+                      let newCtc = salaryInput;
+                      if (minCtc > 0 && (curVal < minCtc || curVal > maxCtc || curVal === 600000)) {
+                        newCtc = String(minCtc);
+                        setSalaryInput(newCtc);
+                      }
+                      recalculateFromCTC(newCtc, pfRate);
+                    }
+                  }}
+                  className="w-full h-9 border border-border bg-background text-foreground rounded-lg px-2.5 text-xs font-semibold focus:ring-2 focus:ring-primary outline-none"
+                >
+                  {allSlabs.map(s => {
+                    const min = Number(s.min_ctc ?? s.minCtc ?? 0);
+                    const max = Number(s.max_ctc ?? s.maxCtc ?? 0);
+                    const rangeStr = formatLakhsRange(min, max);
+                    return (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name || s.slab_name} {rangeStr}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-foreground block mb-1.5">Annual CTC Input (₹) *</label>
+                <Input
                   type="number"
                   value={salaryInput}
                   onChange={(e) => handleSalaryInputChange(e.target.value)}
-                  readOnly={!canEditPayroll}
-                  placeholder="Enter Annual CTC (e.g. 480000)"
-                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, fontWeight: 700, background: !canEditPayroll ? '#f1f5f9' : '#ffffff' }}
+                  placeholder="e.g. 600000"
+                  className="h-9 text-xs font-bold"
                 />
-                <p style={{ fontSize: 10, color: '#0369a1', fontStyle: 'italic', marginTop: 3, marginBottom: 0 }}>
-                  * Modifying this will re-calculate dynamic derived components.
-                </p>
+                {(() => {
+                  const selectedModalSlab = allSlabs.find(s => String(s.id) === String(activeSlabId));
+                  const minCtc = Number(selectedModalSlab?.min_ctc ?? selectedModalSlab?.minCtc ?? 0);
+                  const maxCtc = Number(selectedModalSlab?.max_ctc ?? selectedModalSlab?.maxCtc ?? 0);
+                  const curVal = Number(salaryInput) || 0;
+                  const isOutOfRange = maxCtc > 0 && (curVal < minCtc || curVal > maxCtc);
+
+                  if (minCtc > 0) {
+                    return (
+                      <div className="mt-1 flex items-center justify-between text-[10px]">
+                        <span className="text-muted-foreground font-medium">
+                          Range: ₹{minCtc.toLocaleString('en-IN')} – ₹{maxCtc.toLocaleString('en-IN')}
+                        </span>
+                        {isOutOfRange && (
+                          <span className="text-amber-600 dark:text-amber-400 font-bold">
+                            ⚠️ Outside slab range
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
+
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Effective From :</label>
-                <input
+                <label className="text-[11px] font-bold text-foreground block mb-1.5">Effective From *</label>
+                <Input
                   type="date"
                   value={effectiveFrom}
                   onChange={(e) => setEffectiveFrom(e.target.value)}
-                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#ffffff' }}
+                  className="h-9 text-xs font-semibold"
                 />
               </div>
+            </div>
+
+            {/* Earnings vs Deductions 2-Column Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Earnings Column */}
+              <div className="border border-border/70 rounded-xl overflow-hidden bg-card shadow-2xs">
+                <div className="px-4 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between">
+                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Earnings (Monthly)</span>
+                  <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                    ₹{grossCalculated.toLocaleString('en-IN')}
+                  </Badge>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Basic Salary (50% CTC)</label>
+                    <Input
+                      type="number"
+                      value={basic}
+                      onChange={(e) => setBasic(e.target.value)}
+                      className="h-8 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">House Rent Allowance (HRA 40% Basic)</label>
+                    <Input
+                      type="number"
+                      value={hra}
+                      onChange={(e) => setHra(e.target.value)}
+                      className="h-8 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Special Allowance (Residual Balance)</label>
+                    <Input
+                      type="number"
+                      value={specialAllowance}
+                      onChange={(e) => setSpecialAllowance(e.target.value)}
+                      className="h-8 text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Deductions Column */}
+              <div className="border border-border/70 rounded-xl overflow-hidden bg-card shadow-2xs">
+                <div className="px-4 py-2.5 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">Deductions (Monthly)</span>
+                  <Badge variant="outline" className="text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30">
+                    ₹{totalDeductionCalculated.toLocaleString('en-IN')}
+                  </Badge>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Employee Provident Fund (EPF 12%)</label>
+                    <Input
+                      type="number"
+                      value={pf}
+                      onChange={(e) => setPf(e.target.value)}
+                      className="h-8 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Professional Tax (PT)</label>
+                    <Input
+                      type="number"
+                      value={pt}
+                      onChange={(e) => setPt(e.target.value)}
+                      className="h-8 text-xs font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">ESIC Deduction</label>
+                    <Input
+                      type="number"
+                      value={esic}
+                      onChange={(e) => setEsic(e.target.value)}
+                      className="h-8 text-xs font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Compensation Summary Card */}
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between flex-wrap gap-3">
               <div>
-                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Arrear Pay Month :</label>
-                <input
-                  type="date"
-                  value={arrearPayMonth}
-                  onChange={(e) => setArrearPayMonth(e.target.value)}
-                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#ffffff' }}
-                />
+                <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Monthly Take-Home</span>
+                <span className="text-xl font-black text-primary">₹{netSalaryCalculated.toLocaleString('en-IN')}</span>
               </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20 }}>
-              {/* EARNINGS */}
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ borderTop: '3px solid #22c55e', padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#fff' }}>
-                  <h4 style={{ fontSize: 14, fontWeight: 700, color: '#334155', margin: 0 }}>Employee's Earning</h4>
+              <div className="flex items-center gap-6">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Gross Monthly</span>
+                  <span className="text-sm font-bold text-foreground">₹{grossCalculated.toLocaleString('en-IN')}</span>
                 </div>
-                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, background: '#fff' }}>
-                  {activeEarnings.map(group => (
-                    <div key={group.id} style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>{group.name}</div>
-                      {group.components.map(comp => (
-                        <div key={comp.id} style={{ marginBottom: 8 }}>
-                          <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>{comp.name}</label>
-                          <input
-                            type="number"
-                            value={dynamicValues[comp.id] || ''}
-                            onChange={(e) => handleDynamicValueChange(comp.id, e.target.value)}
-                            readOnly={!group.isEditable}
-                            placeholder={comp.name}
-                            style={{
-                              width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4,
-                              padding: '0 10px', fontSize: 12, fontWeight: 600,
-                              background: !group.isEditable ? '#f1f5f9' : '#fff',
-                              color: !group.isEditable ? '#64748b' : '#0f172a'
-                            }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                  {activeEarnings.length === 0 && (
-                    <p style={{ fontSize: 12, color: '#94a3b8' }}>No earning components assigned to this slab.</p>
-                  )}
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Total Deductions</span>
+                  <span className="text-sm font-bold text-rose-600">₹{totalDeductionCalculated.toLocaleString('en-IN')}</span>
                 </div>
-              </div>
-
-              {/* DEDUCTIONS */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ borderTop: '3px solid #ef4444', padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#fff' }}>
-                    <h4 style={{ fontSize: 14, fontWeight: 700, color: '#334155', margin: 0 }}>Employee's Deduction</h4>
-                  </div>
-                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, background: '#fff' }}>
-                    {activeDeductions.map(group => (
-                      <div key={group.id} style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 }}>{group.name}</div>
-                        {group.components.map(comp => (
-                          <div key={comp.id} style={{ marginBottom: 8 }}>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>{comp.name}</label>
-                            <input
-                              type="number"
-                              value={dynamicValues[comp.id] || ''}
-                              onChange={(e) => handleDynamicValueChange(comp.id, e.target.value)}
-                              readOnly={!group.isEditable}
-                              placeholder={comp.name}
-                              style={{
-                                width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4,
-                                padding: '0 10px', fontSize: 12, fontWeight: 600,
-                                background: !group.isEditable ? '#f1f5f9' : '#fff',
-                                color: !group.isEditable ? '#64748b' : '#0f172a'
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                    {activeDeductions.length === 0 && (
-                      <p style={{ fontSize: 12, color: '#94a3b8' }}>No deduction components assigned to this slab.</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* COMPUTED SUMMARY */}
-                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#059669' }}>Annual CTC</span>
-                    <span style={{ fontSize: 14, fontWeight: 900, color: '#059669' }}>₹{annualCtcCalculated.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Total Monthly Gross</span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#334155' }}>₹{grossCalculated.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Total Deductions</span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#ef4444' }}>₹{totalDeductionCalculated.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div style={{ borderTop: '1px dashed #cbd5e1', margin: '10px 0' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Net Take Home (Monthly)</span>
-                    <span style={{ fontSize: 15, fontWeight: 800, color: '#1e88e5' }}>₹{netSalaryCalculated.toLocaleString('en-IN')}</span>
-                  </div>
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground block">Annual CTC</span>
+                  <span className="text-sm font-black text-emerald-600">₹{annualCtcCalculated.toLocaleString('en-IN')}</span>
                 </div>
               </div>
             </div>
 
-            {/* Modal Bottom Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-              <Button variant="outline" onClick={() => setModalOpen(false)} style={{ fontSize: 12, height: 36, fontWeight: 600 }}>
-                {canEditPayroll ? 'Cancel' : 'Close'}
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setModalOpen(false)} className="h-8 text-xs font-semibold">
+                Cancel
               </Button>
-              {canEditPayroll && (
-                <Button onClick={handleSave} style={{ fontSize: 12, height: 36, fontWeight: 600, background: '#1e88e5' }}>
-                  {editingRecord ? 'Update Structure' : 'Save & Active'}
-                </Button>
-              )}
+              <Button size="sm" onClick={handleSave} className="bg-primary text-primary-foreground h-8 text-xs font-bold">
+                {editingRecord ? 'Update Structure' : 'Save & Activate'}
+              </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* VIEW BREAKDOWN MODAL */}
+      <Dialog open={viewModalOpen} onOpenChange={setViewModalOpen}>
+        <DialogContent className="max-w-md w-[95vw] p-0 overflow-hidden bg-card text-card-foreground border border-border shadow-2xl rounded-2xl">
+          <DialogHeader className="p-4 px-6 border-b border-border/60 bg-muted/20">
+            <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" />
+              Salary Structure Breakdown
+            </DialogTitle>
+          </DialogHeader>
+
+          {viewRecord && (
+            <div className="p-6 space-y-4 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <span className="font-semibold text-muted-foreground">Slab Name:</span>
+                <span className="font-bold text-foreground">{viewRecord.slab}</span>
+              </div>
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <span className="font-semibold text-muted-foreground">Annual CTC:</span>
+                <span className="font-bold text-emerald-600 text-sm">₹{viewRecord.ctc.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <span className="font-semibold text-muted-foreground">Basic Pay (Monthly):</span>
+                <span className="font-semibold text-foreground">₹{viewRecord.basic.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <span className="font-semibold text-muted-foreground">HRA (Monthly):</span>
+                <span className="font-semibold text-foreground">₹{viewRecord.hra.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <span className="font-semibold text-muted-foreground">Special Allowance:</span>
+                <span className="font-semibold text-foreground">₹{viewRecord.specialAllowance.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <span className="font-semibold text-muted-foreground">Monthly Deductions (PF/PT):</span>
+                <span className="font-bold text-rose-600">₹{viewRecord.totalDeduction.toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <span className="font-bold text-foreground text-sm">Net Monthly In-Hand:</span>
+                <span className="font-black text-primary text-base">₹{viewRecord.netSalary.toLocaleString('en-IN')}</span>
+              </div>
+
+              <div className="pt-3 border-t border-border flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setViewModalOpen(false)} className="h-8 text-xs font-semibold">
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
