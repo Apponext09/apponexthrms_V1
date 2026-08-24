@@ -78,7 +78,9 @@ export class PayrollRunController {
           locationId,
           departmentId,
           employeeIds,
-        }
+          month: month ? String(month) : undefined,
+        },
+        month ? String(month) : undefined
       );
       res.status(201).json({ success: true, data: run });
     } catch (e: any) {

@@ -64,6 +64,8 @@ interface PayrollCycleItem {
   capAmount?: number | string;
   toleranceEnabled?: boolean;
   toleranceMinutes?: number;
+  companyId?: string | number | null;
+  company_id?: string | number | null;
   isActive: boolean;
 }
 
@@ -572,6 +574,36 @@ export const PayrollSettingsPage: React.FC = () => {
       showToast.error('Validation Error', 'Please enter a valid Payroll Cycle Name');
       return;
     }
+
+    const targetCompId = selectedCompanyId ? String(selectedCompanyId) : (cycleForm.companyId || (cycleForm as any).company_id || '');
+    if (!targetCompId || targetCompId === 'all') {
+      const activeAllCompCycle = cycles.find(c =>
+        (!c.company_id && !c.companyId) &&
+        String(c.id) !== String(selectedCycleId) &&
+        (c.isActive !== false)
+      );
+      if (activeAllCompCycle) {
+        showToast.error(
+          'Validation Error',
+          `Payroll cycle "${activeAllCompCycle.name}" is already assigned to All Companies. You cannot target All Companies for another cycle while one is active.`
+        );
+        return;
+      }
+    } else {
+      const activeSameCompCycle = cycles.find(c =>
+        (String(c.company_id || c.companyId) === String(targetCompId)) &&
+        String(c.id) !== String(selectedCycleId) &&
+        (c.isActive !== false)
+      );
+      if (activeSameCompCycle) {
+        showToast.error(
+          'Validation Error',
+          `Payroll cycle "${activeSameCompCycle.name}" is already active for this Company. Only one active cycle per company is allowed.`
+        );
+        return;
+      }
+    }
+
     const targetName = cycleForm.name.trim();
     const payload = {
       cycle_name: targetName,
@@ -721,9 +753,6 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        // A failed save here used to be silently swallowed — local state and
-        // the success toast happened unconditionally either way, so a real
-        // API failure looked identical to a successful save.
         const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
         serverId = res?.data?.data?.id || res?.data?.id;
         const updatedId = String(serverId || selectedGroupId);
@@ -802,10 +831,6 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        // A failed save here used to be silently swallowed — the UI would
-        // still update local state and show "Component Updated" even though
-        // nothing was actually persisted. Let a real failure fall through
-        // to the outer catch below instead.
         const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
         serverId = res?.data?.data?.id || res?.data?.id;
         setGroups(prev => prev.map(g => {
@@ -862,16 +887,40 @@ export const PayrollSettingsPage: React.FC = () => {
 
   const handleSaveSlab = async () => {
     if (!slabForm.name || !slabForm.name.trim()) {
-      showToast.error('Validation Error', 'Payroll Slab Name is required');
+      showToast.error('Validation Error', 'Please enter a Payroll Slab Name');
       return;
     }
-    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0) ? slabForm.departments : [];
-    const targetGrades = (slabForm.grades && slabForm.grades.length > 0) ? slabForm.grades : [];
+
+    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0 && slabForm.departments[0] !== 'Choose') ? slabForm.departments : [];
+    if (targetDepartments.length === 0) {
+      showToast.error('Validation Error', 'Please select a Department for the payroll slab');
+      return;
+    }
+
+    const targetGrades = (slabForm.grades && slabForm.grades.length > 0 && slabForm.grades[0] !== 'Choose') ? slabForm.grades : [];
+    if (targetGrades.length === 0) {
+      showToast.error('Validation Error', 'Please select a Grade for the payroll slab');
+      return;
+    }
+
     const targetLocations = (slabForm.locations && slabForm.locations.length > 0) ? slabForm.locations : [];
+    if (targetLocations.length === 0) {
+      showToast.error('Validation Error', 'Please select at least one Location for the payroll slab');
+      return;
+    }
+
+    const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
+    if (!numericCycleId) {
+      showToast.error('Validation Error', 'Please select a Payroll Cycle for the slab');
+      return;
+    }
 
     // Use only the components explicitly selected by the user — never fall back to hardcoded IDs.
     const activeCompIds = slabForm.selectedComponentIds || [];
-    const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
+    if (activeCompIds.length === 0) {
+      showToast.error('Validation Error', 'Please select at least one Payroll Component for the slab');
+      return;
+    }
 
     const payload: Record<string, any> = {
       name: slabForm.name.trim(),
@@ -985,13 +1034,13 @@ export const PayrollSettingsPage: React.FC = () => {
         </div>
 
         {/* 3 Master Setup Sub-Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 shadow-2xs">
           <button
             onClick={() => setActiveTab('cycles')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'cycles'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
@@ -999,10 +1048,10 @@ export const PayrollSettingsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('components')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'components'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -1010,10 +1059,10 @@ export const PayrollSettingsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('slabs')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'slabs'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Calculator className="w-3.5 h-3.5" />
@@ -1021,10 +1070,10 @@ export const PayrollSettingsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Settings2 className="w-3.5 h-3.5" />
@@ -1043,78 +1092,78 @@ export const PayrollSettingsPage: React.FC = () => {
       ────────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'components' && <MasterPayrollComponents />}
 
-
-
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 3: PAYROLL SLAB — HOSHI EXACT MATCH
+          TAB 3: PAYROLL SLAB — CLEAN UNIFORM DESIGN
       ────────────────────────────────────────────────────────────────────────── */}
-
       {activeTab === 'slabs' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Slabs List — Hoshi Teal Card Style */}
-          <div className="lg:col-span-4 space-y-4">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              {/* Header bar matching Hoshi */}
-              <div style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Payroll Slab</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Left Column: Slabs List */}
+          <div className="lg:col-span-4 space-y-3">
+            <Card className="border border-border/80 bg-card shadow-xs overflow-hidden rounded-xl">
+              {/* Header bar */}
+              <div className="p-3.5 px-4 border-b border-border/60 flex items-center justify-between bg-muted/25">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center text-primary">
+                    <Calculator className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-foreground">Payroll Slabs</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 800, background: '#f1f5f9', color: '#64748b', borderRadius: 4, padding: '2px 8px' }}>{slabs.length}</span>
+                <span className="text-xs font-bold bg-muted text-muted-foreground rounded-md px-2 py-0.5 border border-border/60">{slabs.length}</span>
               </div>
-              <div style={{ padding: '8px', background: '#fff' }}>
-                {/* Slab Cards — Hoshi Teal Style */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+              <div className="p-2 space-y-2 bg-card">
+                {/* Slab Cards List */}
+                <div className="flex flex-col gap-2 max-h-[580px] overflow-y-auto pr-0.5">
                   {slabs.map(slab => {
                     const isSelected = selectedSlabId === slab.id;
-                    const cycleName = cycles.find(c => c.id === slab.cycleId)?.name || 'Monthly';
+                    const cycleName = cycles.find(c => String(c.id) === String(slab.cycleId))?.name || 'Monthly';
                     const gradeLabel = slab.grades && slab.grades.length > 0 ? slab.grades.slice(0, 2).join(', ') + (slab.grades.length > 2 ? '...' : '') : 'All Grades';
                     return (
                       <div
                         key={slab.id}
                         onClick={() => handleSelectSlab(slab)}
-                        style={{
-                          borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                          border: isSelected ? '2px solid hsl(var(--primary))' : '1px solid hsl(var(--border))',
-                          boxShadow: isSelected ? '0 4px 12px rgba(99,102,241,0.15)' : 'none',
-                          transition: 'all 0.15s'
-                        }}
+                        className={`rounded-xl overflow-hidden cursor-pointer border transition-all duration-150 ${
+                          isSelected
+                            ? 'border-primary ring-1 ring-primary/30 shadow-xs bg-primary/5 dark:bg-primary/10'
+                            : 'border-border/80 hover:border-border bg-card hover:bg-muted/40'
+                        }`}
                       >
-                        {/* Teal header like Hoshi */}
-                        <div style={{
-                          background: isSelected ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
-                          padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {/* Calendar icon */}
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>{cycleName}</span>
+                        {/* Header banner */}
+                        <div className={`px-3 py-2 flex items-center justify-between border-b ${
+                          isSelected
+                            ? 'bg-primary text-primary-foreground border-primary/40'
+                            : 'bg-muted/40 text-foreground border-border/50'
+                        }`}>
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <Calendar className="w-3.5 h-3.5 opacity-80" />
+                            <span>{cycleName}</span>
                           </div>
                           <button
                             type="button"
                             onClick={(e) => handleDeleteSlab(slab.id, e)}
-                            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', color: '#fff', fontSize: 10, fontWeight: 700 }}
+                            className={`p-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
+                              isSelected ? 'hover:bg-primary-foreground/20 text-primary-foreground' : 'text-muted-foreground hover:text-destructive'
+                            }`}
                             title="Delete Slab"
                           >
-                            ✕
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
+
                         {/* Slab info rows */}
-                        <div style={{ background: 'hsl(var(--card))', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                            {/* Dollar icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
-                            <span style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{slab.name}</span>
+                        <div className="p-2.5 space-y-1 text-xs">
+                          <div className="flex items-center gap-2 font-bold text-foreground truncate">
+                            <DollarSign className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="truncate">{slab.name}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                            {/* Badge icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                            <span style={{ color: '#374151', fontWeight: 600 }}>{gradeLabel}</span>
+                          <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
+                            <Award className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                            <span className="truncate">{gradeLabel}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                            {/* Range icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                            <span style={{ color: '#374151', fontWeight: 600 }}>
-                              {Number(slab.minCtc || 0).toLocaleString('en-IN')} – {Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
+                          <div className="flex items-center gap-2 text-muted-foreground font-mono text-[11px]">
+                            <Sliders className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                            <span>
+                              ₹{Number(slab.minCtc || 0).toLocaleString('en-IN')} – ₹{Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
                             </span>
                           </div>
                         </div>
@@ -1141,96 +1190,89 @@ export const PayrollSettingsPage: React.FC = () => {
                       employmentType: 'Regular'
                     });
                   }}
-                  style={{
-                    width: '100%', marginTop: 10, padding: '10px', border: '1.5px dashed #cbd5e1',
-                    borderRadius: 8, background: '#f8fafc', color: '#4f46e5', fontSize: 12,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: 6
-                  }}
+                  className="w-full mt-2 py-2.5 border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 text-primary text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                 >
-                  <Plus style={{ width: 14, height: 14 }} /> Add Payroll Slab
+                  <Plus className="w-3.5 h-3.5" /> Add Payroll Slab
                 </button>
               </div>
             </Card>
           </div>
 
-          {/* Right Column: Add Payroll Slab Form — Hoshi Exact Match */}
+          {/* Right Column: Add/Edit Payroll Slab Form */}
           <div className="lg:col-span-8">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              {/* Hoshi-style right panel header */}
-              <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: '#4f46e5', fontSize: 18 }}>+</span>
+            <Card className="border border-border/80 bg-card rounded-xl shadow-xs overflow-hidden">
+              {/* Form Header */}
+              <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/25">
+                <span className="text-xs font-bold text-foreground flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center text-primary">
+                    <Plus className="w-3.5 h-3.5" />
+                  </div>
                   {selectedSlabId ? 'Edit Payroll Slab' : 'Add Payroll Slab'}
                 </span>
-                <Button onClick={handleSaveSlab} style={{ background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 12, height: 34, paddingLeft: 16, paddingRight: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Button
+                  onClick={handleSaveSlab}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-8 px-4 flex items-center gap-1.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer active:scale-95"
+                >
                   <Save className="w-3.5 h-3.5" /> Save Slab
                 </Button>
               </div>
 
-              <CardContent className="p-5 space-y-5">
-
-                {/* Row 1: Slab Name — Hoshi style: label on left, input on right */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <label style={{ width: 160, flexShrink: 0, fontSize: 12, fontWeight: 700, color: '#374151' }}>Payroll Slab Name <span style={{ color: '#ef4444' }}>*</span></label>
+              <CardContent className="p-5 space-y-4">
+                {/* Row 1: Slab Name */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <label className="sm:w-40 shrink-0 text-xs font-bold text-foreground">
+                    Payroll Slab Name <span className="text-rose-500">*</span>
+                  </label>
                   <Input
                     value={slabForm.name || ''}
                     onChange={e => setSlabForm({ ...slabForm, name: e.target.value })}
                     placeholder="e.g. Monthly Senior Slab"
-                    style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
+                    className="flex-1 text-xs font-semibold h-9 bg-background"
                   />
                 </div>
 
-                {/* Row 2: Department + Grade — single-choice searchable dropdowns.
-                    A slab applies to exactly one Department and one Grade at a
-                    time; stored internally as a 1-element array to stay
-                    compatible with the existing departments/grades JSON columns. */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                {/* Row 2: Department + Grade */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Department */}
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Department<span style={{ color: '#ef4444' }}>*</span></label>
+                  <div className="relative">
+                    <label className="text-xs font-bold text-foreground block mb-1">
+                      Department <span className="text-rose-500">*</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => { setShowDeptDropdown(v => !v); setShowGradeDropdown(false); setDeptSearchQuery(''); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
-                        fontSize: 13, fontWeight: 400, color: (slabForm.departments && slabForm.departments.length > 0) ? '#1f2937' : '#6b7280',
-                        cursor: 'pointer', marginTop: 6
-                      }}
+                      className="w-full flex items-center justify-between border border-input rounded-lg px-3 py-2 bg-background text-xs font-medium text-foreground cursor-pointer shadow-2xs focus:ring-1 focus:ring-primary"
                     >
-                      <span>{slabForm.departments?.[0] || 'Choose'}</span>
-                      <ChevronDown size={16} color="#6b7280" style={{ transform: showDeptDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                      <span className={slabForm.departments?.[0] ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
+                        {slabForm.departments?.[0] || 'Choose Department'}
+                      </span>
+                      <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-150 ${showDeptDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showDeptDropdown && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                      <div className="absolute top-full left-0 right-0 z-30 mt-1 border border-border rounded-xl bg-card shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <input
                           autoFocus
                           value={deptSearchQuery}
                           onChange={e => setDeptSearchQuery(e.target.value)}
                           placeholder="Search department..."
-                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
+                          className="w-full border-b border-border px-3 py-2 text-xs bg-background focus:outline-none"
                         />
-                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                        <div className="max-h-44 overflow-y-auto p-1">
                           {allDepartments
                             .filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase()))
                             .map(dept => (
                               <div
                                 key={dept}
                                 onClick={() => { setSlabForm({ ...slabForm, departments: [dept] }); setShowDeptDropdown(false); }}
-                                style={{
-                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
-                                  background: slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent',
-                                  color: '#1f2937'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent')}
+                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
+                                  slabForm.departments?.[0] === dept ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
+                                }`}
                               >
                                 {dept}
                               </div>
                             ))}
                           {allDepartments.filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase())).length === 0 && (
-                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                            <div className="p-3 text-xs text-muted-foreground text-center italic">No matches found</div>
                           )}
                         </div>
                       </div>
@@ -1238,50 +1280,45 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
 
                   {/* Grade */}
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Grade<span style={{ color: '#ef4444' }}>*</span></label>
+                  <div className="relative">
+                    <label className="text-xs font-bold text-foreground block mb-1">
+                      Grade <span className="text-rose-500">*</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => { setShowGradeDropdown(v => !v); setShowDeptDropdown(false); setGradeSearchQuery(''); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
-                        fontSize: 13, fontWeight: 400, color: (slabForm.grades && slabForm.grades.length > 0) ? '#1f2937' : '#6b7280',
-                        cursor: 'pointer', marginTop: 6
-                      }}
+                      className="w-full flex items-center justify-between border border-input rounded-lg px-3 py-2 bg-background text-xs font-medium text-foreground cursor-pointer shadow-2xs focus:ring-1 focus:ring-primary"
                     >
-                      <span>{slabForm.grades?.[0] || 'Choose'}</span>
-                      <ChevronDown size={16} color="#6b7280" style={{ transform: showGradeDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                      <span className={slabForm.grades?.[0] ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
+                        {slabForm.grades?.[0] || 'Choose Grade'}
+                      </span>
+                      <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-150 ${showGradeDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showGradeDropdown && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                      <div className="absolute top-full left-0 right-0 z-30 mt-1 border border-border rounded-xl bg-card shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <input
                           autoFocus
                           value={gradeSearchQuery}
                           onChange={e => setGradeSearchQuery(e.target.value)}
                           placeholder="Search grade..."
-                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
+                          className="w-full border-b border-border px-3 py-2 text-xs bg-background focus:outline-none"
                         />
-                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                        <div className="max-h-44 overflow-y-auto p-1">
                           {allGrades
                             .filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase()))
                             .map(grade => (
                               <div
                                 key={grade}
                                 onClick={() => { setSlabForm({ ...slabForm, grades: [grade] }); setShowGradeDropdown(false); }}
-                                style={{
-                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
-                                  background: slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent',
-                                  color: '#1f2937'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent')}
+                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
+                                  slabForm.grades?.[0] === grade ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
+                                }`}
                               >
                                 {grade}
                               </div>
                             ))}
                           {allGrades.filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase())).length === 0 && (
-                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                            <div className="p-3 text-xs text-muted-foreground text-center italic">No matches found</div>
                           )}
                         </div>
                       </div>
@@ -1289,35 +1326,29 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Location — Hoshi style: scrollable checkbox list (Select all + items) */}
+                {/* Location */}
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Location</label>
-                  <div style={{
-                    maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8,
-                    padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4
-                  }}>
-                    {/* Navigation arrows (decorative, matching Hoshi) */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>◀</span>
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>▶</span>
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer', paddingBottom: 4, borderBottom: '1px solid #f1f5f9' }}>
-                      <input type="checkbox"
+                  <label className="text-xs font-bold text-foreground block mb-1.5">Locations</label>
+                  <div className="max-h-36 overflow-y-auto border border-border/80 rounded-xl p-2.5 bg-background flex flex-col gap-1.5">
+                    <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer pb-1.5 border-b border-border/60">
+                      <input
+                        type="checkbox"
                         checked={allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))}
                         onChange={e => setSlabForm({ ...slabForm, locations: e.target.checked ? [...allLocations] : [] })}
-                        style={{ accentColor: '#4f46e5' }}
+                        className="rounded accent-primary w-4 h-4 cursor-pointer"
                       />
-                      Select all
+                      Select all locations
                     </label>
                     {allLocations.map(loc => (
-                      <label key={loc} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
-                        <input type="checkbox"
+                      <label key={loc} className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer py-0.5 hover:text-primary transition-colors">
+                        <input
+                          type="checkbox"
                           checked={slabForm.locations?.includes(loc)}
                           onChange={e => {
                             const curr = slabForm.locations || [];
                             setSlabForm({ ...slabForm, locations: e.target.checked ? [...curr, loc] : curr.filter(l => l !== loc) });
                           }}
-                          style={{ accentColor: '#4f46e5' }}
+                          className="rounded accent-primary w-3.5 h-3.5 cursor-pointer"
                         />
                         {loc}
                       </label>
@@ -1325,17 +1356,16 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* CTC — Hoshi exact: label + range display + dual slider */}
+                {/* CTC Range */}
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>CTC <span style={{ color: '#ef4444' }}>*</span></label>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1', fontFamily: 'monospace' }}>
-                      {Number(slabForm.minCtc || 1).toLocaleString('en-IN')} – {Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-foreground">CTC Range <span className="text-rose-500">*</span></label>
+                    <span className="text-xs font-bold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                      ₹{Number(slabForm.minCtc || 1).toLocaleString('en-IN')} – ₹{Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
                     </span>
                   </div>
-                  {/* Min Slider */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: '#64748b', width: 28, flexShrink: 0 }}>Min</span>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xs text-muted-foreground w-8 shrink-0 font-medium">Min</span>
                     <input
                       type="range"
                       min="1"
@@ -1343,7 +1373,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       step="10000"
                       value={slabForm.minCtc || 1}
                       onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
-                      style={{ flex: 1, accentColor: '#00a8a8', cursor: 'pointer' }}
+                      className="flex-1 accent-primary cursor-pointer"
                     />
                     <input
                       type="number"
@@ -1351,12 +1381,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       max={slabForm.maxCtc || 10000000}
                       value={slabForm.minCtc || 1}
                       onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
-                      style={{ width: 90, height: 28, border: '1px solid #d1d5db', borderRadius: 4, padding: '0 6px', fontSize: 11, fontWeight: 600, textAlign: 'right' }}
+                      className="w-24 h-8 border border-input rounded-lg px-2 text-xs font-semibold text-right bg-background"
                     />
                   </div>
-                  {/* Max Slider */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 11, color: '#64748b', width: 28, flexShrink: 0 }}>Max</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-8 shrink-0 font-medium">Max</span>
                     <input
                       type="range"
                       min="1"
@@ -1364,7 +1393,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       step="10000"
                       value={slabForm.maxCtc || 10000000}
                       onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                      style={{ flex: 1, accentColor: '#00a8a8', cursor: 'pointer' }}
+                      className="flex-1 accent-primary cursor-pointer"
                     />
                     <input
                       type="number"
@@ -1372,18 +1401,17 @@ export const PayrollSettingsPage: React.FC = () => {
                       max="10000000"
                       value={slabForm.maxCtc || 10000000}
                       onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                      style={{ width: 90, height: 28, border: '1px solid #d1d5db', borderRadius: 4, padding: '0 6px', fontSize: 11, fontWeight: 600, textAlign: 'right' }}
+                      className="w-24 h-8 border border-input rounded-lg px-2 text-xs font-semibold text-right bg-background"
                     />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-1 font-mono">
                     <span>₹1</span><span>₹25L</span><span>₹50L</span><span>₹75L</span><span>₹1Cr</span>
                   </div>
                 </div>
 
-                {/* Payroll Component — Hoshi exact: label + scrollable checkbox list */}
+                {/* Components Selector */}
                 <div>
                   {(() => {
-                    // Use DB components loaded from groups
                     const getUniqueComponents = (): { id: string; name: string; type: string }[] => {
                       const masterComps: { id: string; name: string; type: string }[] = (groups || []).flatMap(g =>
                         (g.components || []).map((c: any) => ({
@@ -1403,9 +1431,6 @@ export const PayrollSettingsPage: React.FC = () => {
                     };
 
                     const uniqueComps = getUniqueComponents();
-                    const allUniqueIds = uniqueComps.map(c => String(c.id));
-
-                    // Helper to match component ID, name, or slug against slab's selectedComponentIds with exact matching
                     const isComponentChecked = (comp: { id: string; name: string }) => {
                       const selected = slabForm.selectedComponentIds || [];
                       if (!selected || selected.length === 0) return false;
@@ -1421,17 +1446,18 @@ export const PayrollSettingsPage: React.FC = () => {
                     };
 
                     const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
-                    const allSelected = uniqueComps.length > 0 && selectedCount === uniqueComps.length;
+                    const totalCount = uniqueComps.length;
+                    const allSelected = totalCount > 0 && selectedCount === totalCount;
 
                     return (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-                            Payroll Component <span style={{ color: '#ef4444' }}>*</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs font-bold text-foreground">
+                            Payroll Components <span className="text-rose-500">*</span>
                           </label>
                           <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              {selectedCount} Components Selected
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                              {selectedCount} Selected
                             </span>
                             <button
                               type="button"
@@ -1441,28 +1467,26 @@ export const PayrollSettingsPage: React.FC = () => {
                                   selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
                                 });
                               }}
-                              className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                              className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
                             >
                               {allSelected ? 'Deselect All' : 'Select All'}
                             </button>
                           </div>
                         </div>
 
-                        <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl">
-                          {/* Search component filter input */}
+                        <div className="space-y-2 p-3 bg-muted/20 border border-border/80 rounded-xl">
                           <div className="relative">
-                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                             <input
                               type="text"
                               placeholder="Search pay component..."
                               value={compSearch}
                               onChange={e => setCompSearch(e.target.value)}
-                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border/80 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
                             />
                           </div>
 
-                          {/* Checkbox List Box */}
-                          <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                          <div className="space-y-1 max-h-56 overflow-y-auto border border-border/60 rounded-lg p-2 bg-background text-xs">
                             {(() => {
                               const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
@@ -1479,10 +1503,10 @@ export const PayrollSettingsPage: React.FC = () => {
                                 return (
                                   <label
                                     key={c.id}
-                                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors border ${
+                                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border ${
                                       isChecked
-                                        ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 font-bold border-emerald-300 dark:border-emerald-700 shadow-sm'
-                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-transparent'
+                                        ? 'bg-primary/10 text-foreground font-semibold border-primary/30 shadow-2xs'
+                                        : 'hover:bg-muted text-muted-foreground border-transparent'
                                     }`}
                                   >
                                     <div className="flex items-center gap-2.5">
@@ -1495,11 +1519,10 @@ export const PayrollSettingsPage: React.FC = () => {
                                           const cname = c.name.trim().toLowerCase();
                                           const cslug = cname.replace(/[^a-z0-9]+/g, '_');
 
-                                          let next: string[];
+                                          let next;
                                           if (e.target.checked) {
                                             next = [...new Set([...current, String(c.id), cslug])];
                                           } else {
-                                            // Exact filter out
                                             next = current.filter(id => {
                                               const sid = String(id).trim().toLowerCase();
                                               const sslug = sid.replace(/[^a-z0-9]+/g, '_');
@@ -1508,16 +1531,16 @@ export const PayrollSettingsPage: React.FC = () => {
                                           }
                                           setSlabForm({ ...slabForm, selectedComponentIds: next });
                                         }}
-                                        className="rounded accent-emerald-600 w-4 h-4 cursor-pointer"
+                                        className="rounded accent-primary w-4 h-4 cursor-pointer"
                                       />
                                       <span className="text-xs">{c.name}</span>
                                     </div>
                                     <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
                                       String(c.type) === 'Derived'
-                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
                                         : String(c.type) === 'Module'
-                                        ? 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300'
-                                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                        ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20'
+                                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                                     }`}>
                                       {c.type}
                                     </span>
@@ -1532,16 +1555,14 @@ export const PayrollSettingsPage: React.FC = () => {
                   })()}
                 </div>
 
-
-
-                {/* Row: Payroll Cycle + Active toggle */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Payroll Cycle */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Cycle <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-bold text-foreground">Payroll Cycle <span className="text-rose-500">*</span></label>
                     <select
                       value={slabForm.cycleId || (cycles[0]?.id ? String(cycles[0].id) : '')}
                       onChange={e => setSlabForm({ ...slabForm, cycleId: e.target.value })}
-                      className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full mt-1 border border-input bg-background rounded-lg p-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
                     >
                       <option value="">-- Select Payroll Cycle --</option>
                       {cycles.map(c => (
@@ -1550,19 +1571,19 @@ export const PayrollSettingsPage: React.FC = () => {
                     </select>
                   </div>
                   <div className="flex items-center gap-3 pt-5">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Status</span>
+                    <span className="text-xs font-bold text-foreground">Status</span>
                     <button
                       type="button"
                       onClick={() => setSlabForm({ ...slabForm, isActive: !slabForm.isActive })}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        slabForm.isActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        slabForm.isActive ? 'bg-emerald-600' : 'bg-muted border border-border'
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                         slabForm.isActive ? 'translate-x-6' : 'translate-x-1'
                       }`} />
                     </button>
-                    <span className={`text-xs font-bold ${slabForm.isActive ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <span className={`text-xs font-bold ${slabForm.isActive ? 'text-emerald-600' : 'text-muted-foreground'}`}>
                       {slabForm.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>

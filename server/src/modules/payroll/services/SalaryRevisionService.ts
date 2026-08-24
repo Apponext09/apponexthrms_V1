@@ -7,6 +7,7 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
+import { PayrollFormulaEvaluator } from '../utils/PayrollFormulaEvaluator';
 
 interface RequestRevisionInput {
   employeeId: number;
@@ -199,28 +200,97 @@ export class SalaryRevisionService {
       try {
         const db = getKnex();
         const newGrossMonthly = Math.round(Number(revision.new_ctc) / 12);
-        const newBasicMonthly = Math.round(newGrossMonthly * 0.50);
-        const newHraMonthly   = Math.round(newBasicMonthly * 0.40);
-        const newLtaMonthly   = Math.max(0, newGrossMonthly - newBasicMonthly - newHraMonthly);
-        const newPfDeduction  = Math.min(1800, Math.round(newBasicMonthly * 0.12));
-        const newPfEmployer   = newPfDeduction;
-        const newNetTakeHome  = newGrossMonthly - newPfDeduction - 200; // 200 PT estimate
+
+        // Fetch employee's current slab & active components
+        const currentStruct = await db('salary_structures')
+          .where('employee_id', revision.employee_id)
+          .whereNull('deleted_at')
+          .orderBy('effective_from', 'desc')
+          .first();
+
+        let slabComps: any[] = [];
+        if (currentStruct?.slab_id) {
+          const slabRow = await db('payroll_slabs').where('id', currentStruct.slab_id).first();
+          let compIds: number[] = [];
+          try {
+            const raw = slabRow?.selected_component_ids;
+            compIds = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
+          } catch {}
+          if (compIds.length > 0) {
+            slabComps = await db('payroll_components').whereIn('id', compIds).where('is_active', true);
+          }
+        }
+        if (slabComps.length === 0) {
+          slabComps = await db('payroll_components').where('is_active', true);
+        }
+
+        const formulaCtx: any = {
+          ctc: newGrossMonthly,
+          monthly_ctc: newGrossMonthly,
+          annual_ctc: Number(revision.new_ctc),
+          gross: newGrossMonthly,
+          gross_salary: newGrossMonthly,
+          basic: Math.round(newGrossMonthly * 0.5),
+        };
+
+        let newBasicMonthly = 0;
+        let newHraMonthly = 0;
+        let newPfDeduction = 0;
+        let newPtDeduction = 0;
+        let newEsiDeduction = 0;
+        let totalDeductions = 0;
+
+        for (const comp of slabComps) {
+          const compNameLower = (comp.name || '').toLowerCase();
+          const compType = comp.component_type || comp.type || 'Value';
+          const formula = comp.formula || '';
+
+          let amt = 0;
+          if (compType === 'Value') amt = Number(comp.amount || 0);
+          else if (formula) amt = PayrollFormulaEvaluator.evaluate(formula, formulaCtx);
+          else amt = Number(comp.amount || 0);
+
+          if (compNameLower.includes('basic')) {
+            newBasicMonthly = amt || Math.round(newGrossMonthly * 0.5);
+            formulaCtx.basic = newBasicMonthly;
+          } else if (compNameLower.includes('hra') || compNameLower.includes('house rent')) {
+            newHraMonthly = amt;
+            formulaCtx.hra = newHraMonthly;
+          } else if (compNameLower.includes('provident') || compNameLower.includes('pf')) {
+            newPfDeduction = amt;
+            totalDeductions += amt;
+          } else if (compNameLower.includes('professional') || compNameLower.includes('pt')) {
+            newPtDeduction = amt;
+            totalDeductions += amt;
+          } else if (compNameLower.includes('esic') || compNameLower.includes('esi')) {
+            newEsiDeduction = amt;
+            totalDeductions += amt;
+          }
+        }
+
+        if (!newBasicMonthly) newBasicMonthly = Math.round(newGrossMonthly * 0.5);
+        if (!newHraMonthly) newHraMonthly = Math.round(newBasicMonthly * 0.4);
+        const newSpecialAllowance = Math.max(0, newGrossMonthly - (newBasicMonthly + newHraMonthly));
+        const newNetTakeHome = Math.max(0, newGrossMonthly - totalDeductions);
 
         // Update active salary structure
         await db('salary_structures')
           .where('employee_id', revision.employee_id)
           .whereNull('deleted_at')
           .update({
-            gross_monthly:   newGrossMonthly,
-            basic_monthly:   newBasicMonthly,
-            hra_monthly:     newHraMonthly,
-            lta_monthly:     newLtaMonthly,
-            annual_ctc:      revision.new_ctc,
-            pf_deduction:    newPfDeduction,
-            pf_employer:     newPfEmployer,
-            net_take_home:   newNetTakeHome,
-            effective_from:  revision.effective_from || new Date().toISOString().slice(0, 10),
-            updated_at:      new Date()
+            gross_monthly:             newGrossMonthly,
+            basic_monthly:             newBasicMonthly,
+            hra_monthly:               newHraMonthly,
+            special_allowance_monthly: newSpecialAllowance,
+            annual_ctc:                revision.new_ctc,
+            pf_deduction:              newPfDeduction,
+            pf_employer:               newPfDeduction,
+            pt_deduction:              newPtDeduction,
+            esi_deduction:             newEsiDeduction,
+            total_deductions:          totalDeductions,
+            net_take_home:             newNetTakeHome,
+            effective_from:            revision.effective_from || new Date().toISOString().slice(0, 10),
+            updated_at:                new Date()
           })
           .catch(() => {});
 

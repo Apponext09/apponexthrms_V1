@@ -31,6 +31,8 @@ interface EmpRow {
   gender: string;
   slabId: number | null;
   slabName: string | null;
+  cycleId?: number | null;
+  annualCtc?: number;
 }
 
 import { useCompanies } from '@/features/settings/hooks/useCompanies';
@@ -78,23 +80,26 @@ export const AssignPaySlabTab: React.FC = () => {
 
   // Deductions
   const [esic, setEsic] = useState('0');
-  const [pt, setPt] = useState('200');
-  const [pf, setPf] = useState('1800');
-  const [pfEmployer, setPfEmployer] = useState('1800');
+  const [pt, setPt] = useState('0');
+  const [pf, setPf] = useState('0');
+  const [pfEmployer, setPfEmployer] = useState('0');
+  const [componentDefs, setComponentDefs] = useState<any[]>([]);
 
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [empRes, slabRes, compRes] = await Promise.all([
+      const [empRes, slabRes, compRes, defsRes] = await Promise.all([
         apiClient.get('/employees', { params: { pageSize: 500 } }),
         apiClient.get('/payroll/slabs'),
         apiClient.get('/settings/companies').catch(() => null),
+        apiClient.get('/payroll/component-definitions').catch(() => ({ data: [] })),
       ]);
       const emps = extract(empRes);
       const slabList = extract(slabRes);
-      const companyList = extract(compRes);
+      const defsList = extract(defsRes);
 
       setSlabs(slabList);
+      setComponentDefs(defsList);
 
       const slabMap: Record<number, string> = {};
       slabList.forEach((s: any) => { slabMap[s.id] = s.name || s.slab_name || `Slab #${s.id}`; });
@@ -118,10 +123,15 @@ export const AssignPaySlabTab: React.FC = () => {
           gender: e.gender || '',
           slabId: empSlabId,
           slabName: empSlabId ? (slabMap[empSlabId] || `Slab #${empSlabId}`) : null,
+          cycleId: e.payrollCycleId || e.payroll_cycle_id || null,
+          annualCtc: e.annualCtc || e.annual_ctc || (e.gross_salary ? e.gross_salary * 12 : 0) || 0,
         };
       }));
-    } catch { /* silent */ }
-    setLoadingData(false);
+    } catch {
+      showToast.error('Load Failed', 'Could not load employees or slabs.');
+    } finally {
+      setLoadingData(false);
+    }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -192,25 +202,34 @@ export const AssignPaySlabTab: React.FC = () => {
   };
 
   // ─── 2-Option Modal Recalculation Helpers ────────────────────────────────────
-  const recalculateFromSalaryInput = (inputVal: number) => {
+  const [inputFrequency, setInputFrequency] = useState<'annual' | 'monthly'>('annual');
+
+  const recalculateFromSalaryInput = (inputVal: number, freq?: 'annual' | 'monthly') => {
     if (isNaN(inputVal) || inputVal <= 0) return;
-    const monthlyVal = inputVal > 0 && inputVal < 50000 ? inputVal : Math.round(inputVal / 12);
+    const activeFreq = freq || inputFrequency;
+    const monthlyVal = activeFreq === 'annual' ? Math.round(inputVal / 12) : inputVal;
     const b = Math.round(monthlyVal * 0.5);
     const h = Math.round(b * 0.4);
-    const l = Math.max(0, monthlyVal - (b + h));
+    const conv = monthlyVal > 25000 ? 1600 : 0;
+    const med = monthlyVal > 25000 ? 1250 : 0;
+    const l = Math.max(0, monthlyVal - (b + h + conv + med));
 
     setBasic(String(b));
     setHra(String(h));
-    setStandardAllowance('0');
-    setMealAllowance('0');
+    setStandardAllowance(String(conv));
+    setMealAllowance(String(med));
     setCommunicationAllowance('0');
     setChildrenEduAllowance('0');
     setLta(String(l));
 
-    setPf('1800');
-    setPt('200');
-    setEsic('0');
-    setPfEmployer('1800');
+    const pfVal = Math.min(1800, Math.round(b * 0.12));
+    const ptVal = monthlyVal > 15000 ? 200 : 0;
+    const esiVal = monthlyVal <= 21000 ? Math.round(monthlyVal * 0.0075) : 0;
+
+    setPf(String(pfVal));
+    setPt(String(ptVal));
+    setEsic(String(esiVal));
+    setPfEmployer(String(pfVal));
   };
 
   const recalculateFromBasicInput = (basicVal: number) => {
@@ -223,22 +242,32 @@ export const AssignPaySlabTab: React.FC = () => {
 
     const estGross = basicVal + h + (Number(standardAllowance) || 0) + (Number(mealAllowance) || 0) + (Number(communicationAllowance) || 0) + (Number(childrenEduAllowance) || 0) + (Number(lta) || 0);
     setEsic(estGross <= 21000 ? String(Math.round(estGross * 0.0075)) : '0');
-    setPt('200');
+    setPt(estGross > 15000 ? '200' : '0');
   };
 
   const handleModeChange = (mode: 'salary_input' | 'component_based') => {
     setCalcMode(mode);
     if (mode === 'salary_input') {
-      recalculateFromSalaryInput(Number(salaryInput) || 60000);
+      recalculateFromSalaryInput(Number(salaryInput) || 600000, inputFrequency);
     } else {
-      recalculateFromBasicInput(Number(basic) || 30000);
+      recalculateFromBasicInput(Number(basic) || 25000);
     }
   };
 
-  const handleSalaryInputChange = (val: string) => {
+  const handleSalaryInputChange = (val: string, freq?: 'annual' | 'monthly') => {
     setSalaryInput(val);
     const num = Number(val);
-    if (!isNaN(num) && num > 0) recalculateFromSalaryInput(num);
+    if (!isNaN(num) && num > 0) recalculateFromSalaryInput(num, freq || inputFrequency);
+  };
+
+  const handleFrequencyChange = (newFreq: 'annual' | 'monthly') => {
+    setInputFrequency(newFreq);
+    const num = Number(salaryInput) || 0;
+    if (num > 0) {
+      const converted = newFreq === 'monthly' ? Math.round(num / 12) : num * 12;
+      setSalaryInput(String(converted));
+      recalculateFromSalaryInput(converted, newFreq);
+    }
   };
 
   const handleBasicChange = (val: string) => {
@@ -574,7 +603,7 @@ export const AssignPaySlabTab: React.FC = () => {
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
             </div>
 
-            <input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}
+            <input type="date" value={effectiveFrom ? String(effectiveFrom).slice(0, 10) : ''} onChange={e => setEffectiveFrom(e.target.value)}
               className="border border-border rounded-lg px-3 py-2 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-9" />
 
             {selectedSlab && (
@@ -742,18 +771,46 @@ export const AssignPaySlabTab: React.FC = () => {
 
             {/* CTC / Salary Input & Dates Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-sky-50/70 p-4 rounded-lg border border-sky-200">
-              {/* Annual CTC Input */}
+              {/* Salary Input with Frequency Toggle */}
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">Annual CTC Input :</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-800">Salary Input :</label>
+                  <div className="inline-flex rounded p-0.5 bg-sky-200/60 border border-sky-300">
+                    <button
+                      type="button"
+                      onClick={() => handleFrequencyChange('annual')}
+                      className={`px-1.5 py-0.5 text-[9px] font-bold rounded cursor-pointer ${
+                        inputFrequency === 'annual'
+                          ? 'bg-sky-600 text-white shadow-2xs'
+                          : 'text-sky-900 hover:text-slate-900'
+                      }`}
+                    >
+                      Annual CTC (₹/yr)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFrequencyChange('monthly')}
+                      className={`px-1.5 py-0.5 text-[9px] font-bold rounded cursor-pointer ${
+                        inputFrequency === 'monthly'
+                          ? 'bg-sky-600 text-white shadow-2xs'
+                          : 'text-sky-900 hover:text-slate-900'
+                      }`}
+                    >
+                      Monthly Gross (₹/mo)
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="number"
                   value={salaryInput}
                   onChange={e => handleSalaryInputChange(e.target.value)}
-                  placeholder="Enter Annual CTC (e.g. 480000)"
+                  placeholder={inputFrequency === 'annual' ? 'e.g. 600000' : 'e.g. 50000'}
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
                 />
-                <p className="text-[10px] text-sky-800 italic mt-1 mb-0">
-                  * Components auto-calculate based on selected Pay Slab rules.
+                <p className="text-[10px] text-sky-800 font-semibold mt-1 mb-0">
+                  {inputFrequency === 'annual'
+                    ? `Monthly Gross: ₹${Math.round((Number(salaryInput) || 0) / 12).toLocaleString('en-IN')}/mo`
+                    : `Annual CTC: ₹${((Number(salaryInput) || 0) * 12).toLocaleString('en-IN')}/yr`}
                 </p>
               </div>
 
@@ -762,7 +819,7 @@ export const AssignPaySlabTab: React.FC = () => {
                 <label className="text-xs font-bold text-slate-800 block mb-1">Effective From :</label>
                 <input
                   type="date"
-                  value={modalEffectiveFrom}
+                  value={modalEffectiveFrom ? String(modalEffectiveFrom).slice(0, 10) : ''}
                   onChange={e => setModalEffectiveFrom(e.target.value)}
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs bg-white"
                 />
@@ -773,7 +830,7 @@ export const AssignPaySlabTab: React.FC = () => {
                 <label className="text-xs font-bold text-slate-800 block mb-1">Arrear Pay Month :</label>
                 <input
                   type="date"
-                  value={arrearPayMonth}
+                  value={arrearPayMonth ? String(arrearPayMonth).slice(0, 10) : ''}
                   onChange={e => setArrearPayMonth(e.target.value)}
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs bg-white"
                 />
@@ -916,7 +973,12 @@ export const AssignPaySlabTab: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Annual CTC</span>
-                <span className="text-base font-black text-amber-400">₹{((salaryInput && Number(salaryInput) > 0) ? (Number(salaryInput) < 50000 ? Number(salaryInput) * 12 : Number(salaryInput)) : ctcCalculated * 12).toLocaleString('en-IN')}</span>
+                <span className="text-base font-black text-amber-400">
+                  ₹{((salaryInput && Number(salaryInput) > 0)
+                    ? (inputFrequency === 'annual' ? Number(salaryInput) : Number(salaryInput) * 12)
+                    : grossCalculated * 12
+                  ).toLocaleString('en-IN')}
+                </span>
               </div>
             </div>
 

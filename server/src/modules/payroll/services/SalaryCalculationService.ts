@@ -1,89 +1,140 @@
 /**
  * SalaryCalculationService.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Dynamic salary structure calculation engine.
- * Extracted from PayrollService.ts — zero logic changes.
+ * Dynamic salary structure calculation engine powered by PayrollFormulaEvaluator.
+ * Handles dynamic component names, CTC variables, operators, math functions,
+ * conditions, and boundaries.
  */
 
 import { getKnex } from '../../../db/knex';
 import { withSnakeAliases, positiveNum } from '../utils/payroll.utils';
+import { PayrollFormulaEvaluator, FormulaContext } from '../utils/PayrollFormulaEvaluator';
 
 export class SalaryCalculationService {
   /**
    * UNIVERSAL PAYROLL COMPONENT CALCULATION ENGINE
-   * Handles all 5 core scenarios:
-   * 1. Fixed Value components (Basic, Special)
-   * 2. Derived Formula components (HRA, PF, ESIC)
-   * 3. Module-linked ledger components (Loans EMI, OT, Reimbursements)
-   * 4. Min/Max Guardrails & Statutory Capping
-   * 5. Employer Contribution Tracking (EPF 3.67%+8.33%, ESIC 3.25%)
+   * Evaluates individual component against context, conditions, and boundaries.
    */
   evaluateComponent(params: {
-    type: 'Value' | 'Derived' | 'Module';
+    type: 'Value' | 'Derived' | 'Module' | string;
     fixedAmount?: number;
     formula?: string;
     moduleSource?: string;
-    parentValues: { basic: number; gross: number; earnedBasic: number; earnedGross: number };
-    lopFactor: number;
+    parentValues?: { basic: number; gross: number; earnedBasic?: number; earnedGross?: number };
+    context?: FormulaContext;
+    lopFactor?: number;
     basedOnAttendance?: boolean;
     minBoundary?: number;
     maxBoundary?: number;
+    boundaryType?: string;
+    conditionOn?: string;
+    conditionOperator?: string;
+    conditionValue1?: string | number;
+    conditionValue2?: string | number;
     loanEmiAmount?: number;
   }): number {
     const {
-      type,
+      type = 'Value',
       fixedAmount = 0,
       formula = '',
-      parentValues,
+      parentValues = { basic: 0, gross: 0, earnedBasic: 0, earnedGross: 0 },
+      context = {},
       lopFactor = 1,
       basedOnAttendance = true,
       minBoundary,
       maxBoundary,
+      boundaryType,
+      conditionOn,
+      conditionOperator,
+      conditionValue1,
+      conditionValue2,
       loanEmiAmount = 0,
     } = params;
 
+    // Merge parentValues into evaluation context
+    const fullContext: FormulaContext = {
+      gross: parentValues.gross,
+      basic: parentValues.basic,
+      earned_basic: parentValues.earnedBasic ?? parentValues.basic,
+      earned_gross: parentValues.earnedGross ?? parentValues.gross,
+      attendance_factor: lopFactor,
+      ...context,
+    };
+
+    // 1. Check Condition
+    if (conditionOn && conditionOperator) {
+      const isEligible = PayrollFormulaEvaluator.checkCondition(
+        conditionOn,
+        conditionOperator,
+        conditionValue1,
+        conditionValue2,
+        fullContext
+      );
+      if (!isEligible) return 0;
+    }
+
+    // 2. Calculate Base Amount
     let computedValue = 0;
 
     if (type === 'Value') {
-      computedValue = fixedAmount;
-    } else if (type === 'Derived') {
-      if (
-        formula.includes('basic * 0.5') ||
-        formula.includes('basic * 0.50') ||
-        formula.toLowerCase().includes('hra')
-      ) {
-        computedValue = Math.round(parentValues.basic * 0.5);
-      } else if (formula.includes('basic * 0.12') || formula.toLowerCase().includes('pf')) {
-        const pfBase = Math.min(parentValues.earnedBasic, 15000);
-        computedValue = Math.round(pfBase * 0.12);
+      computedValue = Number(fixedAmount || 0);
+    } else if (type === 'Derived' || type === 'Formula') {
+      if (formula && formula.trim()) {
+        computedValue = PayrollFormulaEvaluator.evaluate(formula, fullContext);
       } else {
-        computedValue = fixedAmount;
+        computedValue = Number(fixedAmount || 0);
       }
     } else if (type === 'Module') {
-      if (params.moduleSource === 'Loan' || formula.toLowerCase().includes('loan')) {
+      if (params.moduleSource === 'Loan EMI' || params.moduleSource === 'Loan' || formula.toLowerCase().includes('loan')) {
         computedValue = loanEmiAmount;
       } else {
-        computedValue = fixedAmount;
+        computedValue = Number(fixedAmount || 0);
       }
     }
 
-    if (basedOnAttendance && type === 'Value') {
+    // 3. Attendance LOP Factor for attendance-linked value components
+    if (basedOnAttendance && type === 'Value' && lopFactor < 1) {
       computedValue = Math.round(computedValue * lopFactor);
     }
 
-    if (minBoundary !== undefined && computedValue < minBoundary) {
-      computedValue = minBoundary;
-    }
-    if (maxBoundary !== undefined && computedValue > maxBoundary) {
-      computedValue = maxBoundary;
-    }
+    // 4. Apply Min/Max Boundaries
+    computedValue = PayrollFormulaEvaluator.applyBoundaries(
+      computedValue,
+      boundaryType || (minBoundary ? 'Min' : maxBoundary ? 'Max' : 'Choose'),
+      minBoundary,
+      maxBoundary
+    );
 
     return Math.max(0, computedValue);
   }
 
   /**
-   * Dynamically calculate employee salary structure based on Actual CTC and
-   * Slab component rules.
+   * Static convenience helper for calculateDynamicSalaryStructure
+   */
+  static async calculateSalaryBreakup(
+    ctx: { organizationId?: number; userId?: number; companyId?: number },
+    params: {
+      ctc?: number;
+      grossMonthly?: number;
+      slabId?: number | null;
+      cycleId?: number | null;
+      employeeId?: number | null;
+      effectiveFrom?: string;
+    }
+  ) {
+    const service = new SalaryCalculationService();
+    const firstOrg = await getKnex()('organizations').first().catch(() => null);
+    const orgId = Number(ctx?.organizationId || firstOrg?.id || 1);
+    return service.calculateDynamicSalaryStructure({
+      orgId,
+      companyId: ctx?.companyId,
+      ...params
+    });
+  }
+
+  /**
+   * Dynamically calculate employee salary structure based on Actual CTC,
+   * user-defined custom components, operators, formulas, and conditions.
    */
   async calculateDynamicSalaryStructure(params: {
     orgId: number;
@@ -169,144 +220,309 @@ export class SalaryCalculationService {
     const rawComponents = await componentsQuery.catch(() => []);
     const components = rawComponents.map((c: any) => withSnakeAliases(c) || c);
 
-    // 4. Sequential Evaluation
-    let basicAmount = Math.round(grossMonthly * 0.5);
-    const basicComp = components.find((c: any) => (c.name || '').toLowerCase().includes('basic'));
-    if (basicComp && Number(basicComp.amount) > 0 && basicComp.component_type === 'Formula') {
-      basicAmount = Math.round((grossMonthly * Number(basicComp.amount)) / 100);
+    // 3b. If employeeId is given, fetch employee attributes to evaluate demographic filters
+    let empRecord: any = null;
+    if (params.employeeId) {
+      empRecord = await db('employees').where('id', params.employeeId).first().catch(() => null);
     }
 
-    let hraAmount = Math.round(basicAmount * 0.4);
-    const hraComp = components.find(
-      (c: any) =>
-        (c.name || '').toLowerCase().includes('hra') ||
-        (c.name || '').toLowerCase().includes('rent')
-    );
-    if (hraComp && Number(hraComp.amount) > 0 && hraComp.component_type === 'Formula') {
-      hraAmount = Math.round((basicAmount * Number(hraComp.amount)) / 100);
+    const checkDemographicEligibility = (c: any): boolean => {
+      if (!empRecord) return true;
+
+      // Gender filter ('All', 'Male', 'Female')
+      const genderFilter = (c.gender_filter || c.genderFilter || 'All').toString().toLowerCase();
+      if (genderFilter !== 'all' && empRecord.gender) {
+        if (empRecord.gender.toString().toLowerCase() !== genderFilter) return false;
+      }
+
+      // Department filter
+      if (c.departments) {
+        try {
+          const depts = typeof c.departments === 'string' ? JSON.parse(c.departments) : c.departments;
+          if (Array.isArray(depts) && depts.length > 0 && empRecord.department_id) {
+            if (!depts.map(String).includes(String(empRecord.department_id))) return false;
+          }
+        } catch {}
+      }
+
+      // Grades / Designations filter
+      if (c.grades) {
+        try {
+          const grades = typeof c.grades === 'string' ? JSON.parse(c.grades) : c.grades;
+          if (Array.isArray(grades) && grades.length > 0 && (empRecord.grade_id || empRecord.designation_id)) {
+            const matchesGrade = empRecord.grade_id && grades.map(String).includes(String(empRecord.grade_id));
+            const matchesDesig = empRecord.designation_id && grades.map(String).includes(String(empRecord.designation_id));
+            if (!matchesGrade && !matchesDesig) return false;
+          }
+        } catch {}
+      }
+
+      // Locations filter
+      if (c.locations) {
+        try {
+          const locs = typeof c.locations === 'string' ? JSON.parse(c.locations) : c.locations;
+          if (Array.isArray(locs) && locs.length > 0 && (empRecord.location_id || empRecord.branch_id)) {
+            const matchesLoc = empRecord.location_id && locs.map(String).includes(String(empRecord.location_id));
+            const matchesBranch = empRecord.branch_id && locs.map(String).includes(String(empRecord.branch_id));
+            if (!matchesLoc && !matchesBranch) return false;
+          }
+        } catch {}
+      }
+
+      // Specific Employees filter
+      if (c.employees) {
+        try {
+          const emps = typeof c.employees === 'string' ? JSON.parse(c.employees) : c.employees;
+          if (Array.isArray(emps) && emps.length > 0) {
+            if (!emps.map(String).includes(String(empRecord.id))) return false;
+          }
+        } catch {}
+      }
+
+      // Month filter (e.g. [10, 11] for Diwali bonus)
+      if (c.months && (params as any).month) {
+        try {
+          const mArr = typeof c.months === 'string' ? JSON.parse(c.months) : c.months;
+          if (Array.isArray(mArr) && mArr.length > 0) {
+            const runMonthNum = new Date((params as any).month).getMonth() + 1; // 1-12
+            if (!mArr.map(Number).includes(runMonthNum)) return false;
+          }
+        } catch {}
+      }
+
+      return true;
+    };
+
+    // 4. Build Evaluation Context
+    const evalContext: FormulaContext = {
+      ctc: annualCtc,
+      annual_ctc: annualCtc,
+      monthly_ctc: grossMonthly,
+      gross: grossMonthly,
+      gross_salary: grossMonthly,
+      present_days: 30,
+      total_days: 30,
+      paid_days: 30,
+      attendance_factor: 1,
+    };
+
+    // Separate Earnings and Deductions
+    const earningComponents: any[] = [];
+    const deductionComponents: any[] = [];
+
+    for (const c of components) {
+      if (!checkDemographicEligibility(c)) continue;
+      const cat = (c.group_category || c.category || '').toLowerCase();
+      if (cat.includes('deduct')) {
+        deductionComponents.push(c);
+      } else {
+        earningComponents.push(c);
+      }
     }
+
+    // 5. Pre-register all fixed Value components into evaluation context
+    for (const c of earningComponents) {
+      const compType = c.type || c.component_type || 'Value';
+      if (compType === 'Value') {
+        const val = Number(c.amount || 0);
+        const normKey = PayrollFormulaEvaluator.normalizeKey(c.name);
+        evalContext[normKey] = val;
+        evalContext[c.name.toLowerCase()] = val;
+      }
+    }
+
+    const getFormula = (c: any): string => {
+      if (c.formula && typeof c.formula === 'string' && c.formula.trim()) return c.formula.trim();
+      const match = (c.name || '').match(/\(([^)]+)\)/);
+      if (match && match[1]) {
+        const inside = match[1].trim();
+        if (
+          inside.includes('%') ||
+          inside.includes('*') ||
+          inside.includes('+') ||
+          inside.includes('-') ||
+          inside.includes('/') ||
+          inside.includes('min(') ||
+          inside.includes('max(') ||
+          inside.includes('if') ||
+          inside.toLowerCase().includes('gross') ||
+          inside.toLowerCase().includes('basic') ||
+          inside.toLowerCase().includes('ctc')
+        ) {
+          return inside;
+        }
+      }
+      return '';
+    };
+
+    // 6. Evaluate Basic Component (Primary Anchor) — fully DB-driven, no hardcoded %
+    let basicAmount = 0;
+    const basicComp = earningComponents.find((c: any) =>
+      (c.name || '').toLowerCase().includes('basic')
+    );
+
+    if (basicComp) {
+      const compType = basicComp.type || basicComp.component_type || 'Value';
+      const bFormula = getFormula(basicComp);
+      if (bFormula) {
+        basicAmount = PayrollFormulaEvaluator.evaluate(bFormula, evalContext);
+      } else if (compType === 'Value' && Number(basicComp.amount || 0) > 0) {
+        basicAmount = Number(basicComp.amount);
+      } else {
+        basicAmount = Number(basicComp.amount || 0);
+      }
+    }
+
+    evalContext.basic = basicAmount;
+    evalContext.basic_salary = basicAmount;
+    evalContext.earned_basic = basicAmount;
 
     const earningsBreakup: any[] = [];
     let allocatedEarnings = 0;
 
-    earningsBreakup.push({
-      component_id: basicComp?.id || 1,
-      code: 'BASIC',
-      name: basicComp?.name || 'Basic Salary',
-      type: basicComp?.component_type || 'Formula',
-      formula: basicComp?.formula || '50% of CTC',
-      amount: basicAmount,
-    });
-    allocatedEarnings += basicAmount;
+    // Push Basic only if it's in the slab components
+    if (basicComp) {
+      earningsBreakup.push({
+        component_id: basicComp.id,
+        code: (basicComp.name || 'BASIC').replace(/\s+/g, '_').toUpperCase(),
+        name: basicComp.name,
+        type: basicComp.type || basicComp.component_type || 'Value',
+        formula: getFormula(basicComp) || basicComp.formula || '',
+        amount: basicAmount,
+      });
+      allocatedEarnings += basicAmount;
+    }
 
-    earningsBreakup.push({
-      component_id: hraComp?.id || 2,
-      code: 'HRA',
-      name: hraComp?.name || 'House Rent Allowance (HRA)',
-      type: hraComp?.component_type || 'Formula',
-      formula: hraComp?.formula || '40% of Basic',
-      amount: hraAmount,
-    });
-    allocatedEarnings += hraAmount;
+    // 7. Evaluate Remaining Earning Components (Values & Multi-Tier Derived)
+    for (const c of earningComponents) {
+      const nameLower = (c.name || '').toLowerCase();
+      if (nameLower.includes('basic') || nameLower.includes('special')) continue;
 
-    for (const c of components) {
-      const isEarning =
-        (c.group_category || '').toLowerCase().includes('earn') ||
-        !(c.group_category || '').toLowerCase().includes('deduct');
-      const isBasic = (c.name || '').toLowerCase().includes('basic');
-      const isHra =
-        (c.name || '').toLowerCase().includes('hra') ||
-        (c.name || '').toLowerCase().includes('rent');
-      const isSpecial = (c.name || '').toLowerCase().includes('special');
+      const compType = c.type || c.component_type || 'Value';
+      const formulaStr = getFormula(c);
+      let compAmount = 0;
 
-      if (isEarning && !isBasic && !isHra && !isSpecial) {
-        let val = 0;
-        if (c.component_type === 'Value') {
-          val = Number(c.amount || 0);
-        } else if (c.component_type === 'Formula' || c.component_type === 'Derived') {
-          const pct = Number(c.amount || 0);
-          val = pct > 0 ? Math.round((basicAmount * pct) / 100) : 0;
-        }
-        if (val > 0) {
-          earningsBreakup.push({
-            component_id: c.id,
-            code: c.name?.replace(/\s+/g, '_').toUpperCase() || `COMP_${c.id}`,
-            name: c.name,
-            type: c.component_type,
-            formula: c.formula || '',
-            amount: val,
-          });
-          allocatedEarnings += val;
-        }
+      if (formulaStr) {
+        compAmount = PayrollFormulaEvaluator.evaluate(formulaStr, evalContext);
+      } else if (compType === 'Value') {
+        compAmount = Number(c.amount || 0);
+      } else if (compType === 'Module') {
+        compAmount = Number(c.amount || 0);
+      }
+
+      // Check condition & boundaries
+      const isEligible = PayrollFormulaEvaluator.checkCondition(
+        c.condition_on || c.conditionOn,
+        c.condition_operator || c.conditionOperator,
+        c.condition_value1 || c.conditionValue1,
+        c.condition_value2 || c.conditionValue2,
+        evalContext
+      );
+
+      if (!isEligible) {
+        compAmount = 0;
+      } else {
+        compAmount = PayrollFormulaEvaluator.applyBoundaries(
+          compAmount,
+          c.boundary_type || c.boundaryType,
+          Number(c.min_amount || c.minAmount || 0),
+          Number(c.max_amount || c.maxAmount || 0)
+        );
+      }
+
+      // Register into evaluation context so subsequent components can use it
+      const normKey = PayrollFormulaEvaluator.normalizeKey(c.name);
+      evalContext[normKey] = compAmount;
+      evalContext[c.name.toLowerCase()] = compAmount;
+
+      if (compAmount > 0) {
+        earningsBreakup.push({
+          component_id: c.id,
+          code: c.name?.replace(/\s+/g, '_').toUpperCase() || `COMP_${c.id}`,
+          name: c.name,
+          type: compType,
+          formula: c.formula || '',
+          amount: compAmount,
+        });
+        allocatedEarnings += compAmount;
       }
     }
 
-    const specialAllowance = Math.max(0, grossMonthly - allocatedEarnings);
-    const specialComp = components.find((c: any) =>
+    // 8. Special Allowance — dynamic residual balancing component (Gross minus all other earnings)
+    const specialComp = earningComponents.find((c: any) =>
       (c.name || '').toLowerCase().includes('special')
     );
-    earningsBreakup.push({
-      component_id: specialComp?.id || 3,
-      code: 'SPECIAL_ALLOWANCE',
-      name: specialComp?.name || 'Special Allowance',
-      type: 'Derived',
-      formula: 'CTC - (Basic + HRA + Other)',
-      amount: specialAllowance,
-    });
+    let specialAllowance = 0;
+    if (specialComp) {
+      // Residual: gross minus everything allocated so far
+      specialAllowance = Math.max(0, grossMonthly - allocatedEarnings);
+      earningsBreakup.push({
+        component_id: specialComp.id,
+        code: (specialComp.name || 'SPECIAL_ALLOWANCE').replace(/\s+/g, '_').toUpperCase(),
+        name: specialComp.name,
+        type: specialComp.type || specialComp.component_type || 'Derived',
+        formula: specialComp.formula || '',
+        amount: Math.round(specialAllowance * 100) / 100,
+      });
+      evalContext['special_allowance'] = specialAllowance;
+    }
 
+    // 8. Evaluate Deductions
     const deductionsBreakup: any[] = [];
     let totalDeductions = 0;
-
-    const pfComp = components.find(
-      (c: any) =>
-        (c.name || '').toLowerCase().includes('pf') ||
-        (c.name || '').toLowerCase().includes('provident')
-    );
-    const pfAmount = Math.round(Math.min(basicAmount, 15000) * 0.12);
-    deductionsBreakup.push({
-      component_id: pfComp?.id || 9,
-      code: 'PF',
-      name: pfComp?.name || 'Employee Provident Fund (EPF)',
-      type: 'Formula',
-      formula: '12% of Basic (capped at 1800)',
-      amount: pfAmount,
-    });
-    totalDeductions += pfAmount;
-
-    const ptComp = components.find(
-      (c: any) =>
-        (c.name || '').toLowerCase().includes('pt') ||
-        (c.name || '').toLowerCase().includes('professional')
-    );
-    const ptAmount = ptComp ? Number(ptComp.amount || 200) : 200;
-    deductionsBreakup.push({
-      component_id: ptComp?.id || 11,
-      code: 'PT',
-      name: ptComp?.name || 'Professional Tax',
-      type: 'Value',
-      formula: 'Fixed PT Slab',
-      amount: ptAmount,
-    });
-    totalDeductions += ptAmount;
-
-    const esicComp = components.find(
-      (c: any) =>
-        (c.name || '').toLowerCase().includes('esic') ||
-        (c.name || '').toLowerCase().includes('insurance')
-    );
+    let pfAmount = 0;
     let esicAmount = 0;
-    if (grossMonthly <= 21000) {
-      esicAmount = Math.round(grossMonthly * 0.0075);
-      deductionsBreakup.push({
-        component_id: esicComp?.id || 10,
-        code: 'ESIC',
-        name: esicComp?.name || 'Employee State Insurance (ESIC)',
-        type: 'Formula',
-        formula: '0.75% of Gross (if Gross <= 21000)',
-        amount: esicAmount,
-      });
-      totalDeductions += esicAmount;
+    let ptAmount = 0;
+
+    for (const c of deductionComponents) {
+      const nameLower = (c.name || '').toLowerCase();
+      const compType = c.type || c.component_type || 'Value';
+      const formulaStr = getFormula(c);
+      let compAmount = 0;
+
+      if (formulaStr) {
+        compAmount = PayrollFormulaEvaluator.evaluate(formulaStr, evalContext);
+      } else if (compType === 'Value') {
+        compAmount = Number(c.amount || 0);
+      } else if (compType === 'Derived' || compType === 'Formula') {
+        compAmount = Number(c.amount || 0);
+      }
+
+      // Check condition & boundaries
+      const isEligible = PayrollFormulaEvaluator.checkCondition(
+        c.condition_on || c.conditionOn,
+        c.condition_operator || c.conditionOperator,
+        c.condition_value1 || c.conditionValue1,
+        c.condition_value2 || c.conditionValue2,
+        evalContext
+      );
+
+      if (isEligible && compAmount > 0) {
+        compAmount = PayrollFormulaEvaluator.applyBoundaries(
+          compAmount,
+          c.boundary_type || c.boundaryType,
+          Number(c.min_amount || c.minAmount || 0),
+          Number(c.max_amount || c.maxAmount || 0)
+        );
+
+        if (nameLower.includes('pf') || nameLower.includes('provident')) pfAmount = compAmount;
+        if (nameLower.includes('esic') || nameLower.includes('insurance')) esicAmount = compAmount;
+        if (nameLower.includes('pt') || nameLower.includes('professional')) ptAmount = compAmount;
+
+        deductionsBreakup.push({
+          component_id: c.id,
+          code: c.name?.replace(/\s+/g, '_').toUpperCase() || `DEDUCT_${c.id}`,
+          name: c.name,
+          type: compType,
+          formula: c.formula || '',
+          amount: compAmount,
+        });
+        totalDeductions += compAmount;
+      }
     }
+
+    // No hardcoded fallback — if no deduction components are in the slab, deductions = 0.
+    // HR must configure deduction components (PF, PT, ESIC, TDS) in Settings → Components.
 
     const netTakeHome = Math.max(0, grossMonthly - totalDeductions);
 
@@ -317,7 +533,7 @@ export class SalaryCalculationService {
       annualCtc,
       grossMonthly,
       basicMonthly: basicAmount,
-      hraMonthly: hraAmount,
+      hraMonthly: evalContext['hra'] ?? evalContext['house_rent_allowance'] ?? 0,
       specialAllowanceMonthly: specialAllowance,
       totalDeductions,
       netTakeHome,

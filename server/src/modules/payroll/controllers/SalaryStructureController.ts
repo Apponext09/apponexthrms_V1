@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
 import { withSnakeAliases } from '../utils/payroll.utils';
 import { PayrollService } from '../services/PayrollService';
+import { SalaryCalculationService } from '../services/SalaryCalculationService';
 
 export class SalaryStructureController {
   constructor(private payrollService?: PayrollService) {}
@@ -29,12 +30,26 @@ export class SalaryStructureController {
           'payroll_slabs.name as slab_name',
           'payroll_slabs.selected_component_ids as slab_component_ids'
         )
-        .where('salary_structures.organization_id', orgId)
         .whereNull('salary_structures.deleted_at')
         .orderBy('salary_structures.id', 'desc');
 
       if (employeeId) {
-        query = query.where('salary_structures.employee_id', employeeId);
+        const assignedStructIds = await db('employee_salary_structures')
+          .where('employee_id', employeeId)
+          .where('is_current', true)
+          .pluck('salary_structure_id')
+          .catch(() => []);
+
+        query = query.where(function (this: any) {
+          this.where('salary_structures.employee_id', employeeId);
+          if (assignedStructIds.length > 0) {
+            this.orWhereIn('salary_structures.id', assignedStructIds);
+          }
+        });
+      } else if (orgId) {
+        query = query.where(function (this: any) {
+          this.where('salary_structures.organization_id', orgId).orWhereNull('salary_structures.organization_id');
+        });
       }
 
       const rows = await query;
@@ -829,29 +844,32 @@ export class SalaryStructureController {
     const mappings = await db('salary_structures as ss')
       .join('employees as e', 'ss.employee_id', 'e.id')
       .leftJoin('payroll_slabs as ps', 'ss.slab_id', 'ps.id')
-      .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
       .where(builder => {
-        if (orgId) builder.where('ss.organization_id', orgId);
+        if (orgId) {
+          builder.where(function (this: any) {
+            this.where('ss.organization_id', orgId).orWhereNull('ss.organization_id');
+          });
+        }
       })
       .whereNull('ss.deleted_at')
       .whereNull('e.deleted_at')
-      .groupBy('ss.id', 'e.id', 'ps.id')
       .select(
         'ss.id as mappingId',
         'e.id as empId',
         'e.first_name',
         'e.last_name',
-        'e.employee_code',
+        'e.employee_code as employeeCode',
+        'e.email',
         'ss.id as structureId',
         'ss.slab_id as slabId',
         'ss.effective_from as effectiveFrom',
         db.raw('COALESCE(ps.name, ss.structure_name, "Standard Monthly Slab") as structureName'),
         db.raw('COALESCE(ps.name, ss.structure_name, "Standard Monthly Slab") as slabName'),
-        db.raw('COALESCE(ss.gross_monthly, MAX(ssc.gross_monthly), 0) as grossMonthly'),
-        db.raw('COALESCE(ss.annual_ctc, MAX(ssc.annual_ctc), 0) as annualCtc'),
-        db.raw('COALESCE(ss.net_take_home, MAX(ssc.net_take_home), 0) as netTakeHome')
+        'ss.gross_monthly as grossMonthly',
+        'ss.annual_ctc as annualCtc',
+        'ss.net_take_home as netTakeHome'
       )
-      .orderBy('e.id', 'asc')
+      .orderBy('ss.id', 'desc')
       .catch(() => []);
 
     res.json({ success: true, data: mappings });
@@ -887,20 +905,49 @@ export class SalaryStructureController {
         const annualCtc = Number(item.annualCtc ?? item.annual_ctc ?? 0);
 
         let empRow = null;
-        if (employeeCode) {
-          empRow = await db('employees').where({ organization_id: orgId, employee_code: employeeCode }).whereNull('deleted_at').first();
+        const targetEmpId = item.employeeId || item.employee_id || item.id;
+        if (targetEmpId) {
+          empRow = await db('employees').where('id', targetEmpId).whereNull('deleted_at').first();
+        }
+        if (!empRow && employeeCode) {
+          empRow = await db('employees')
+            .where(builder => {
+              builder.where('employee_code', employeeCode);
+              if (orgId) builder.orWhere({ organization_id: orgId, employee_code: employeeCode });
+            })
+            .whereNull('deleted_at')
+            .first();
         }
         if (!empRow && email) {
-          empRow = await db('employees').whereRaw('LOWER(email) = ?', [String(email).toLowerCase()]).where('organization_id', orgId).whereNull('deleted_at').first();
+          empRow = await db('employees').whereRaw('LOWER(email) = ?', [String(email).toLowerCase()]).whereNull('deleted_at').first();
         }
-        if (!empRow) throw new Error(`Employee not found (code=${employeeCode || '-'}, email=${email || '-'})`);
+        if (!empRow) throw new Error(`Employee not found (id=${targetEmpId || '-'}, code=${employeeCode || '-'}, email=${email || '-'})`);
 
         const employeeId = empRow.id;
         const slabRow = await db('payroll_slabs').where('id', slabId).first();
         const effectiveFromVal = item.effectiveFrom || item.effective_from || new Date().toISOString().slice(0, 10);
-        const grossMonthly = annualCtc > 0 ? Math.round(annualCtc / 12) : 0;
-        const basicMonthly = Math.round(grossMonthly * 0.5);
-        const hraMonthly = Math.round(basicMonthly * 0.4);
+
+        let calculatedBreakup: any = null;
+        try {
+          calculatedBreakup = await SalaryCalculationService.calculateSalaryBreakup(ctx, {
+            ctc: annualCtc,
+            slabId: Number(slabId),
+            cycleId: slabRow?.cycle_id,
+            employeeId,
+            effectiveFrom: effectiveFromVal
+          });
+        } catch { /* silent fallback */ }
+
+        const grossMonthly = calculatedBreakup?.grossMonthly || (annualCtc > 0 ? Math.round(annualCtc / 12) : 0);
+        const basicMonthly = calculatedBreakup?.basicMonthly || Math.round(grossMonthly * 0.5);
+        const hraMonthly = calculatedBreakup?.hraMonthly || Math.round(basicMonthly * 0.4);
+        const pfDeduction = calculatedBreakup?.pfDeduction || 0;
+        const esiDeduction = calculatedBreakup?.esiDeduction || 0;
+        const ptDeduction = calculatedBreakup?.ptDeduction || 0;
+        const totalDeductions = calculatedBreakup?.totalDeductions || (pfDeduction + esiDeduction + ptDeduction);
+        const netTakeHome = calculatedBreakup?.netTakeHome || Math.max(0, grossMonthly - totalDeductions);
+        const earningsBreakup = calculatedBreakup?.earningsBreakup ? JSON.stringify(calculatedBreakup.earningsBreakup) : null;
+        const deductionsBreakup = calculatedBreakup?.deductionsBreakup ? JSON.stringify(calculatedBreakup.deductionsBreakup) : null;
 
         let structRow = await db('salary_structures')
           .where({ employee_id: employeeId, organization_id: orgId })
@@ -916,6 +963,13 @@ export class SalaryStructureController {
           gross_monthly: grossMonthly,
           basic_monthly: basicMonthly,
           hra_monthly: hraMonthly,
+          special_allowance_monthly: calculatedBreakup?.specialAllowanceMonthly || 0,
+          pf_deduction: pfDeduction,
+          esi_deduction: esiDeduction,
+          total_deductions: totalDeductions,
+          net_take_home: netTakeHome,
+          earnings_breakup: earningsBreakup,
+          deductions_breakup: deductionsBreakup,
           effective_from: effectiveFromVal,
           updated_by: validUserId
         };
@@ -931,7 +985,6 @@ export class SalaryStructureController {
             employee_id: employeeId,
             structure_name: slabRow?.name || 'Assigned Slab',
             structure_code: sCode,
-            grade_code: sCode,
             status: 'active',
             created_by: validUserId,
             ...structurePayload

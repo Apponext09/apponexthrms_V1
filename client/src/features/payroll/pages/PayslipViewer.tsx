@@ -215,9 +215,9 @@ function buildPayslipHtmlDoc(d: PayslipDocData & { items?: PayslipItemDetail[] }
   const netPay = Math.max(0, totalEarningsEarned - totalDeductionsEarned);
   const words = numberToWords(netPay);
 
-  const compName = d.companyName || 'Apponext';
-  const compAddr = d.companyAddress || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708';
-  const compWeb = d.websiteUrl || 'www.apponexthrms.com';
+  const compName = d.companyName || 'Company';
+  const compAddr = d.companyAddress || '';
+  const compWeb = d.websiteUrl || '';
 
   const maxRows = Math.max(earningsList.length, deductionsList.length, 1);
 
@@ -616,28 +616,14 @@ export const PayslipViewer: React.FC = () => {
   const localStorageKey = `generated_payslips_org_${orgId}`;
   const visibilityKey = `payslip_visibility_org_${orgId}`;
 
+  // Purge legacy mock cache on initial load
   const [generatedList, setGeneratedList] = useState<any[]>(() => {
     try {
-      const all = JSON.parse(localStorage.getItem(localStorageKey) || '[]');
-      let merged = Array.isArray(all) ? [...all] : [];
-
-      // Check legacy user-scoped key if available and merge
-      const legacyKey = `generated_payslips_${currentUserId}`;
-      const legacy = JSON.parse(localStorage.getItem(legacyKey) || '[]');
-      if (Array.isArray(legacy) && legacy.length > 0) {
-        for (const item of legacy) {
-          const itemEmpId = String(item.employee_id || item.employeeId || '');
-          const itemMonth = String(item.month || item.payslip_month || '');
-          if (!merged.some(m => String(m.employee_id || m.employeeId) === itemEmpId && String(m.month || m.payslip_month) === itemMonth)) {
-            merged.push(item);
-          }
-        }
-        localStorage.setItem(localStorageKey, JSON.stringify(merged));
-      }
-      return merged;
-    } catch {
-      return [];
-    }
+      localStorage.removeItem(localStorageKey);
+      localStorage.removeItem(`generated_payslips_${currentUserId}`);
+      localStorage.removeItem('generated_payslips');
+    } catch {}
+    return [];
   });
 
   const [hiddenPayslipIds, setHiddenPayslipIds] = useState<Record<string, boolean>>(() => {
@@ -687,10 +673,12 @@ export const PayslipViewer: React.FC = () => {
   // Custom Edit & Manual Generate Modal State
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editFormData, setEditFormData] = useState<{
+    payslipId?: number;
     empId: string;
     empName: string;
     empCode: string;
     designation: string;
+    department?: string;
     pfNo: string;
     uanNo: string;
     esicNo: string;
@@ -702,80 +690,65 @@ export const PayslipViewer: React.FC = () => {
     paidDays: number;
     unpaidDays: number;
     paidLeave: number;
-    basic: number;
-    hra: number;
-    special: number;
-    childrenEducation: number;
-    communication: number;
-    lta: number;
-    meal: number;
-    standardAllowance: number;
-    adjustment: number;
-    incentives: number;
-    bonus: number;
-    pf: number;
-    esi: number;
-    pt: number;
-    tds: number;
-    absentDays: number;
     month: string;
+    earnings: Array<{ name: string; amount: number; isCustom?: boolean }>;
+    deductions: Array<{ name: string; amount: number; isCustom?: boolean }>;
   }>({
     empId: '',
-    empName: 'Akanksha Sagar Nikam',
-    empCode: 'T02',
-    designation: 'BACK OFFICE EXECUTIVE',
+    empName: '',
+    empCode: '',
+    designation: '',
     pfNo: '',
     uanNo: '',
     esicNo: '',
     pan: '',
-    period: 'April 2025',
-    doj: '05 May 2021',
+    period: '',
+    doj: '',
     accNo: '',
-    bankName: 'HDFC BANK',
-    paidDays: 4,
-    unpaidDays: 26,
+    bankName: '',
+    paidDays: 30,
+    unpaidDays: 0,
     paidLeave: 0,
-    basic: 2267,
-    hra: 600,
-    special: 0,
-    childrenEducation: 27,
-    communication: 133,
-    lta: 133,
-    meal: 27,
-    standardAllowance: 533,
-    adjustment: 0,
-    incentives: 0,
-    bonus: 0,
-    pf: 272,
-    esi: 0,
-    pt: 0,
-    tds: 0,
-    absentDays: 0,
-    month: '2026-07-01'
+    month: `${new Date().toISOString().slice(0, 7)}-01`,
+    earnings: [],
+    deductions: []
   });
 
   const handleOpenManualGenerate = () => {
     const targetEmpId = selectedEmpId || (employeeOptions[0] ? String(employeeOptions[0].id) : '1');
     const empObj = employeeOptions.find(e => String(e.id) === targetEmpId) || employeeOptions[0] || {};
 
-    const grossSalary = Number(empObj.gross ?? 50000);
-    const basicVal = Number(empObj.basic_earned ?? empObj.basic ?? (grossSalary > 0 ? Math.round(grossSalary * 0.50) : 25000));
-    const hraVal = Number(empObj.hra_earned ?? empObj.hra ?? (grossSalary > 0 ? Math.round(grossSalary * 0.161) : 8050));
-    const eduVal = Number(empObj.children_education_allowance_earned ?? empObj.children_education_allowance ?? (grossSalary > 0 ? Math.round(grossSalary * 0.007) : 350));
-    const commVal = Number(empObj.communication_allowance_earned ?? empObj.communication_allowance ?? (grossSalary > 0 ? Math.round(grossSalary * 0.0358) : 1790));
-    const ltaVal = Number(empObj.lta_earned ?? empObj.lta ?? (grossSalary > 0 ? Math.round(grossSalary * 0.0358) : 1790));
-    const mealVal = Number(empObj.meal_allowance_earned ?? empObj.meal_allowance ?? (grossSalary > 0 ? Math.round(grossSalary * 0.007) : 350));
-    const stdVal = Number(empObj.standard_allowance_earned ?? empObj.standard_allowance ?? (grossSalary > 0 ? Math.max(0, grossSalary - (basicVal + hraVal + eduVal + commVal + ltaVal + mealVal)) : 12670));
+    const grossSalary = Number(empObj.gross ?? 0);
+    const basicVal = Number(empObj.basic ?? (grossSalary > 0 ? Math.round(grossSalary * 0.50) : 0));
+    const hraVal = Math.round(basicVal * 0.40);
+    const convVal = grossSalary > 20000 ? 1600 : 0;
+    const medVal = grossSalary > 20000 ? 1250 : 0;
+    const specialVal = Math.max(0, grossSalary - (basicVal + hraVal + convVal + medVal));
 
+    const initialEarnings: Array<{ name: string; amount: number; isCustom?: boolean }> = [];
+    if (basicVal > 0) initialEarnings.push({ name: 'Basic Salary', amount: basicVal });
+    if (hraVal > 0) initialEarnings.push({ name: 'House Rent Allowance (HRA)', amount: hraVal });
+    if (convVal > 0) initialEarnings.push({ name: 'Conveyance Allowance', amount: convVal });
+    if (medVal > 0) initialEarnings.push({ name: 'Medical Allowance', amount: medVal });
+    if (specialVal > 0) initialEarnings.push({ name: 'Special Allowance', amount: specialVal });
+    if (initialEarnings.length === 0 && grossSalary > 0) initialEarnings.push({ name: 'Basic Salary', amount: grossSalary });
+
+    const initialDeductions: Array<{ name: string; amount: number; isCustom?: boolean }> = [];
     const pfVal = Number(empObj.pf ?? Math.min(1800, Math.round(basicVal * 0.12)));
-    const esiVal = Number(empObj.esi ?? empObj.esic ?? 0);
+    const esiVal = Number(empObj.esi ?? empObj.esic ?? (grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0));
     const ptVal = Number(empObj.pt ?? (grossSalary > 15000 ? 200 : 0));
+    const tdsVal = Number(empObj.tds ?? 0);
+    if (pfVal > 0) initialDeductions.push({ name: 'Provident Fund (EPF)', amount: pfVal });
+    if (esiVal > 0) initialDeductions.push({ name: 'ESIC Contribution', amount: esiVal });
+    if (ptVal > 0) initialDeductions.push({ name: 'Professional Tax (PT)', amount: ptVal });
+    if (tdsVal > 0) initialDeductions.push({ name: 'Tax Deducted at Source (TDS)', amount: tdsVal });
 
     setEditFormData({
       empId: targetEmpId,
       empName: empObj.name || (empObj.first_name ? `${empObj.first_name} ${empObj.last_name || ''}`.trim() : 'Employee'),
       empCode: empObj.employee_code || empObj.code || `EMP-${targetEmpId}`,
-      designation: empObj.designation || empObj.job_title || empObj.designation_name || 'Software Engineer',
+      designation: empObj.designation || empObj.job_title || empObj.designation_name || 'Staff',
+      department: empObj.department || 'General',
       pfNo: empObj.pf_no || '',
       uanNo: empObj.uan_no || '',
       esicNo: empObj.esic_no || '',
@@ -783,44 +756,94 @@ export const PayslipViewer: React.FC = () => {
       period: MONTHS_LABEL[selectedMonth] || selectedMonth,
       doj: empObj.date_of_joining ? formatPayrollDate(empObj.date_of_joining) : '',
       accNo: empObj.account_no || '',
-      bankName: empObj.bank_name || 'HDFC BANK',
-      paidDays: Number(empObj.paid_days ?? 30),
+      bankName: empObj.bank_name || activeCompanyInfo.name || '',
+      paidDays: Number(empObj.paid_days ?? 28),
       unpaidDays: Number(empObj.unpaid_days ?? 0),
       paidLeave: 0,
-      basic: basicVal,
-      hra: hraVal,
-      special: 0,
-      childrenEducation: eduVal,
-      communication: commVal,
-      lta: ltaVal,
-      meal: mealVal,
-      standardAllowance: stdVal,
-      adjustment: 0,
-      incentives: 0,
-      bonus: 0,
-      pf: pfVal,
-      esi: esiVal,
-      pt: ptVal,
-      tds: 0,
-      absentDays: Number(empObj.unpaid_days ?? 0),
-      month: `${selectedMonth}-01`
+      month: `${selectedMonth}-01`,
+      earnings: initialEarnings,
+      deductions: initialDeductions,
     });
     setShowEditModal(true);
   };
 
-  const handleOpenCardEdit = (card: any) => {
+  const handleOpenCardEdit = async (card: any) => {
     const empId = String(card.employee_id || card.employeeId || card.id || '');
     const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empId);
 
     const displayName = card.empName || card.employee_name || (matchedProfile ? `${matchedProfile.firstName || matchedProfile.first_name || ''} ${matchedProfile.lastName || matchedProfile.last_name || ''}`.trim() : '') || `Employee #${empId}`;
     const displayCode = matchedProfile?.employee_code || card.empCode || card.employee_code || matchedProfile?.code || `EMP-${empId}`;
-    const displayDesig = matchedProfile?.designation || matchedProfile?.job_title || card.designation || 'Software Engineer';
+    const displayDesig = matchedProfile?.designation || matchedProfile?.job_title || card.designation || 'Staff';
+    const displayDept = matchedProfile?.department || card.department || 'General';
+
+    let initialEarnings: Array<{ name: string; amount: number; isCustom?: boolean }> = [];
+    let initialDeductions: Array<{ name: string; amount: number; isCustom?: boolean }> = [];
+
+    // Try fetching breakdown details from server
+    if (card.id && !card.isCustomEdited) {
+      try {
+        const detailsData = await getPayslipDetails(card.id);
+        if (detailsData) {
+          if (Array.isArray(detailsData.earnings) && detailsData.earnings.length > 0) {
+            initialEarnings = detailsData.earnings.map((e: any) => ({
+              name: e.componentName || e.formula_used || e.name || 'Earning',
+              amount: Number(e.actualValue ?? e.actual_value ?? e.amount ?? 0)
+            }));
+          }
+          if (Array.isArray(detailsData.deductions) && detailsData.deductions.length > 0) {
+            initialDeductions = detailsData.deductions.map((d: any) => ({
+              name: d.componentName || d.component_name || d.name || 'Deduction',
+              amount: Number(d.actualValue ?? d.actual_value ?? d.amount ?? 0)
+            }));
+          }
+        }
+      } catch {}
+    }
+
+    if (initialEarnings.length === 0 && Array.isArray(card.earnings) && card.earnings.length > 0) {
+      initialEarnings = card.earnings.map((e: any) => ({ name: e.name, amount: Number(e.amount || 0) }));
+    }
+    if (initialDeductions.length === 0 && Array.isArray(card.deductions_list) && card.deductions_list.length > 0) {
+      initialDeductions = card.deductions_list.map((d: any) => ({ name: d.name, amount: Number(d.amount || 0) }));
+    }
+
+    const grossVal = Number(card.gross_salary ?? card.gross ?? card.grossSalary ?? matchedProfile?.gross ?? 0);
+    const basicVal = Number(card.basic_salary ?? card.basic ?? card.basicSalary ?? matchedProfile?.basic ?? (grossVal > 0 ? Math.round(grossVal * 0.50) : 0));
+    const dedVal = Number(card.total_deductions ?? card.deductions ?? card.totalDeductions ?? (card.net_salary != null ? Math.max(0, grossVal - Number(card.net_salary)) : 0));
+
+    if (initialEarnings.length === 0) {
+      const hraVal = Math.round(basicVal * 0.40);
+      const convVal = grossVal > 20000 ? 1600 : 0;
+      const medVal = grossVal > 20000 ? 1250 : 0;
+      const specVal = Math.max(0, grossVal - (basicVal + hraVal + convVal + medVal));
+      if (basicVal > 0) initialEarnings.push({ name: 'Basic Salary', amount: basicVal });
+      if (hraVal > 0) initialEarnings.push({ name: 'House Rent Allowance (HRA)', amount: hraVal });
+      if (convVal > 0) initialEarnings.push({ name: 'Conveyance Allowance', amount: convVal });
+      if (medVal > 0) initialEarnings.push({ name: 'Medical Allowance', amount: medVal });
+      if (specVal > 0) initialEarnings.push({ name: 'Special Allowance', amount: specVal });
+      if (initialEarnings.length === 0 && grossVal > 0) initialEarnings.push({ name: 'Basic Salary', amount: grossVal });
+    }
+
+    if (initialDeductions.length === 0 && dedVal > 0) {
+      const pfVal = Math.min(1800, Math.round(basicVal * 0.12));
+      const ptVal = grossVal > 15000 ? 200 : 0;
+      const esiVal = grossVal <= 21000 ? Math.round(grossVal * 0.0075) : 0;
+      const tdsVal = Math.max(0, dedVal - (pfVal + ptVal + esiVal));
+
+      if (pfVal > 0) initialDeductions.push({ name: 'Provident Fund (EPF)', amount: pfVal });
+      if (ptVal > 0) initialDeductions.push({ name: 'Professional Tax (PT)', amount: ptVal });
+      if (esiVal > 0) initialDeductions.push({ name: 'ESIC Contribution', amount: esiVal });
+      if (tdsVal > 0) initialDeductions.push({ name: 'Tax Deducted at Source (TDS)', amount: tdsVal });
+      if (initialDeductions.length === 0) initialDeductions.push({ name: 'Statutory Deductions', amount: dedVal });
+    }
 
     setEditFormData({
+      payslipId: card.id,
       empId,
       empName: displayName,
       empCode: displayCode,
       designation: displayDesig,
+      department: displayDept,
       pfNo: card.pfNo || card.pf_no || matchedProfile?.pf_no || '',
       uanNo: card.uanNo || card.uan_no || matchedProfile?.uan_no || '',
       esicNo: card.esicNo || card.esic_no || matchedProfile?.esic_no || '',
@@ -828,32 +851,18 @@ export const PayslipViewer: React.FC = () => {
       period: card.period || (MONTHS_LABEL[selectedMonth] || selectedMonth),
       doj: card.doj || (matchedProfile?.date_of_joining ? formatPayrollDate(matchedProfile.date_of_joining) : ''),
       accNo: card.accNo || card.account_no || matchedProfile?.account_no || '',
-      bankName: card.bankName || card.bank_name || matchedProfile?.bank_name || 'HDFC BANK',
-      paidDays: card.paidDays !== undefined ? card.paidDays : 30,
+      bankName: card.bankName || card.bank_name || matchedProfile?.bank_name || activeCompanyInfo.name || '',
+      paidDays: card.paidDays !== undefined ? card.paidDays : 28,
       unpaidDays: card.unpaidDays !== undefined ? card.unpaidDays : 0,
       paidLeave: card.paidLeave !== undefined ? card.paidLeave : 0,
-      basic: Number(card.basic || 25000),
-      hra: Number(card.hra || 8050),
-      special: Number(card.special || 0),
-      childrenEducation: Number(card.childrenEducation || card.children_education_allowance || 350),
-      communication: Number(card.communication || card.communication_allowance || 1790),
-      lta: Number(card.lta || card.lta_allowance || 1790),
-      meal: Number(card.meal || card.meal_allowance || 350),
-      standardAllowance: Number(card.standardAllowance || card.standard_allowance || 12670),
-      adjustment: Number(card.adjustment || 0),
-      incentives: Number(card.incentives || 0),
-      bonus: Number(card.bonus || 0),
-      pf: Number(card.pf || 1800),
-      esi: Number(card.esi || card.esic || 0),
-      pt: Number(card.pt || 200),
-      tds: Number(card.tds || 0),
-      absentDays: Number(card.absentDays || 0),
-      month: card.month || card.payslip_month || `${selectedMonth}-01`
+      month: card.month || card.payslip_month || `${selectedMonth}-01`,
+      earnings: initialEarnings,
+      deductions: initialDeductions,
     });
     setShowEditModal(true);
   };
 
-  const buildPayslipDocFromData = (data: any, matchedProfile?: any, defaultMonth: string = '2026-08'): PayslipDocData => {
+  const buildPayslipDocFromData = (data: any, matchedProfile?: any, defaultMonth: string = new Date().toISOString().slice(0, 7)): PayslipDocData => {
     const empId = String(data.employee_id || data.employeeId || data.id || matchedProfile?.id || '');
     
     // Robust name resolver that never lets 'Employee #' override a real name
@@ -992,55 +1001,6 @@ export const PayslipViewer: React.FC = () => {
     const paidLeave = data.paid_leave ?? data.paidLeave ?? data.attendance?.paidLeave ?? data.paid_leave_days ?? matchedProfile?.paid_leave ?? matchedProfile?.paid_leave_days ?? 0;
     const leaveBalance = data.leave_balance ?? data.leaveBalance ?? data.attendance?.leaveBalance ?? matchedProfile?.leave_balance ?? matchedProfile?.leaveBalance ?? 0;
 
-    const grossVal = Number(data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? matchedProfile?.gross ?? 50000);
-    let basicVal = Number(data.basic_salary ?? data.basicSalary ?? data.basic ?? data.basic_earned ?? matchedProfile?.basic ?? 0);
-    if (!basicVal && grossVal > 0) basicVal = Math.round(grossVal * 0.50);
-
-    let hraVal = Number(data.hra ?? data.hra_earned ?? matchedProfile?.hra ?? 0);
-    if (!hraVal && basicVal > 0) hraVal = Math.round(grossVal * 0.161);
-
-    let ceaVal = Number(data.children_education_allowance ?? data.children_education_allowance_earned ?? data.childrenEducation ?? matchedProfile?.childrenEducation ?? 0);
-    if (!ceaVal && grossVal > 0) ceaVal = Math.round(grossVal * 0.007);
-
-    let commVal = Number(data.communication_allowance ?? data.communication_allowance_earned ?? data.communication ?? matchedProfile?.communication ?? 0);
-    if (!commVal && grossVal > 0) commVal = Math.round(grossVal * 0.0358);
-
-    let ltaVal = Number(data.lta_allowance ?? data.lta_earned ?? data.lta ?? matchedProfile?.lta ?? 0);
-    if (!ltaVal && grossVal > 0) ltaVal = Math.round(grossVal * 0.0358);
-
-    let mealVal = Number(data.meal_allowance ?? data.meal_allowance_earned ?? data.meal ?? matchedProfile?.meal ?? 0);
-    if (!mealVal && grossVal > 0) mealVal = Math.round(grossVal * 0.007);
-
-    let stdVal = Number(data.standard_allowance ?? data.standard_allowance_earned ?? data.standardAllowance ?? data.special ?? matchedProfile?.special ?? 0);
-    if (!stdVal && grossVal > 0) {
-      stdVal = Math.max(0, grossVal - (basicVal + hraVal + ceaVal + commVal + ltaVal + mealVal));
-    }
-
-    const adjVal = Number(data.adjustment ?? data.adj ?? 0);
-    const incVal = Number(data.incentives ?? data.inc ?? 0);
-    const bonusVal = Number(data.bonus ?? 0);
-
-    let pfVal = Number(data.pf ?? data.pf_deduction ?? matchedProfile?.pf ?? 0);
-    if (!pfVal && basicVal > 0) pfVal = Math.min(1800, Math.round(basicVal * 0.12));
-
-    let esicVal = Number(data.esic ?? data.esi ?? data.esi_deduction ?? matchedProfile?.esi ?? 0);
-    if (!esicVal && grossVal > 0 && grossVal <= 21000) esicVal = Math.round(grossVal * 0.0075);
-
-    let ptVal = Number(data.pt ?? data.pt_deduction ?? matchedProfile?.pt ?? 0);
-    if (!ptVal && grossVal > 0) ptVal = grossVal > 15000 ? 200 : (grossVal > 7500 ? 175 : 0);
-
-    const tdsVal = Number(data.tds ?? data.tds_deduction ?? matchedProfile?.tds ?? 0);
-
-    const computedTotalEarnings = (basicVal + hraVal + ceaVal + commVal + ltaVal + mealVal + stdVal);
-    const computedTotalGross = computedTotalEarnings + adjVal + incVal + bonusVal;
-    const computedTotalDeductions = (pfVal + ptVal + esicVal + tdsVal) || Number(data.total_deductions ?? data.totalDeductions ?? 0);
-    const computedNetSalary = Math.max(0, computedTotalGross - computedTotalDeductions);
-
-    const compName = data.companyName || data.company_name || matchedProfile?.companyName || matchedProfile?.company_name || matchedProfile?.company || activeCompanyInfo.name || selectedCompanyName || 'Apponext';
-    const compAddress = data.companyAddress || data.company_address || activeCompanyInfo.address || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708';
-    const compLogo = data.companyLogoUrl || data.company_logo || activeCompanyInfo.logo || null;
-    const webUrl = data.websiteUrl || activeCompanyInfo.website || 'www.apponexthrms.com';
-
     // Dynamic components mapping from component_values or earnings/deductions breakdown
     let dynamicItems: PayslipItemDetail[] = [];
     if (data.items && Array.isArray(data.items) && data.items.length > 0) {
@@ -1057,28 +1017,47 @@ export const PayslipViewer: React.FC = () => {
           groupForPayslip: comp.group_for_payslip || comp.group_name || (comp.category === 'Deduction' ? 'Deductions' : 'Earnings')
         });
       }
-    } else if (Array.isArray(data.earnings) || Array.isArray(data.deductions)) {
+    } else if (Array.isArray(data.earnings) || Array.isArray(data.deductions) || Array.isArray(data.deductions_list)) {
       for (const e of (data.earnings || [])) {
         dynamicItems.push({
-          name: e.componentName || e.formula_used || e.name || 'Earning',
+          name: e.componentName || e.component_name || e.formulaUsed || e.formula_used || e.name || 'Earning',
           amount: Number(e.actualValue ?? e.actual_value ?? e.amount ?? 0),
-          actualAmount: Number(e.actualValue ?? e.actual_value ?? e.amount ?? 0),
+          actualAmount: Number(e.calculatedValue ?? e.calculated_value ?? e.actualValue ?? e.actual_value ?? e.amount ?? 0),
           category: 'Earning',
-          groupName: e.groupName || 'Earnings',
-          groupForPayslip: e.groupForPayslip || 'Earnings'
+          groupName: e.groupName || e.group_name || 'Base & Fixed Allowances',
+          groupForPayslip: e.groupForPayslip || e.group_for_payslip || 'Earnings'
         });
       }
-      for (const d of (data.deductions || [])) {
+      for (const d of (data.deductions || data.deductions_list || [])) {
         dynamicItems.push({
           name: d.componentName || d.component_name || d.name || 'Deduction',
           amount: Number(d.actualValue ?? d.actual_value ?? d.amount ?? 0),
-          actualAmount: Number(d.actualValue ?? d.actual_value ?? d.amount ?? 0),
+          actualAmount: Number(d.calculatedValue ?? d.calculated_value ?? d.actualValue ?? d.actual_value ?? d.amount ?? 0),
           category: 'Deduction',
-          groupName: d.groupName || 'Deductions',
-          groupForPayslip: d.groupForPayslip || 'Deductions'
+          groupName: d.groupName || d.group_name || 'Statutory Deductions',
+          groupForPayslip: d.groupForPayslip || d.group_for_payslip || 'Deductions'
         });
       }
     }
+
+    const earningItems = dynamicItems.filter(i => i.category === 'Earning');
+    const deductionItems = dynamicItems.filter(i => i.category === 'Deduction');
+    const itemsGross = earningItems.length > 0 ? earningItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) : null;
+    const itemsDeductions = deductionItems.length > 0 ? deductionItems.reduce((s, i) => s + (Number(i.amount) || 0), 0) : null;
+
+    const grossVal = Number(data.gross_salary ?? data.grossSalary ?? data.gross ?? data.grossEarned ?? itemsGross ?? matchedProfile?.gross ?? 0);
+    const basicItem = dynamicItems.find(i => i.name.toLowerCase().includes('basic'));
+    const basicVal = basicItem ? Number(basicItem.amount) : Number(data.basic_salary ?? data.basicSalary ?? data.basic ?? data.basic_earned ?? matchedProfile?.basic ?? (grossVal > 0 ? Math.round(grossVal * 0.50) : 0));
+    const hraItem = dynamicItems.find(i => i.name.toLowerCase().includes('hra') || i.name.toLowerCase().includes('house rent'));
+    const hraVal = hraItem ? Number(hraItem.amount) : Number(data.hra ?? data.hra_earned ?? matchedProfile?.hra ?? 0);
+
+    const totalDeductionsVal = Number(data.total_deductions ?? data.totalDeductions ?? data.deductions ?? itemsDeductions ?? 0);
+    const netVal = Number(data.net_salary ?? data.netSalary ?? data.net ?? Math.max(0, grossVal - totalDeductionsVal));
+
+    const compName = data.companyName || data.company_name || matchedProfile?.companyName || matchedProfile?.company_name || matchedProfile?.company || activeCompanyInfo.name || selectedCompanyName || 'Apponext';
+    const compAddress = data.companyAddress || data.company_address || activeCompanyInfo.address || 'Corporate Office, Hadapsar, Pune, Maharashtra - 400708';
+    const compLogo = data.companyLogoUrl || data.company_logo || activeCompanyInfo.logo || null;
+    const webUrl = data.websiteUrl || activeCompanyInfo.website || 'www.apponexthrms.com';
 
     return {
       name: empName,
@@ -1104,21 +1083,21 @@ export const PayslipViewer: React.FC = () => {
       leaveBalance,
       basic: basicVal,
       hra: hraVal,
-      cea: ceaVal,
-      comm: commVal,
-      lta: ltaVal,
-      meal: mealVal,
-      std: stdVal,
-      adj: adjVal,
-      inc: incVal,
-      bonus: bonusVal,
-      pf: pfVal,
-      esic: esicVal,
-      pt: ptVal,
-      tds: tdsVal,
-      grossSalary: computedTotalGross,
-      totalDeductions: computedTotalDeductions,
-      netSalary: computedNetSalary,
+      cea: 0,
+      comm: 0,
+      lta: 0,
+      meal: 0,
+      std: 0,
+      adj: 0,
+      inc: 0,
+      bonus: 0,
+      pf: 0,
+      esic: 0,
+      pt: 0,
+      tds: 0,
+      grossSalary: grossVal,
+      totalDeductions: totalDeductionsVal,
+      netSalary: netVal,
       items: dynamicItems.length > 0 ? dynamicItems : undefined
     };
   };
@@ -1155,18 +1134,8 @@ export const PayslipViewer: React.FC = () => {
 
   const handleDownloadPayslipPDF = (docData: PayslipDocData) => {
     try {
-      const htmlDoc = buildPayslipHtmlDoc(docData, payslipSetting, false);
-      const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      const fileName = `Payslip_${(docData.code || docData.name || 'EMP').replace(/[^a-zA-Z0-9_-]/g, '_')}_${(docData.period || 'Month').replace(/[^a-zA-Z0-9_-]/g, '_')}.html`;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      showToast.success('Payslip Downloaded', `Saved ${fileName}. You can also click Print to print or save directly as PDF.`);
+      handlePrintPayslip(docData);
+      showToast.success('Export PDF / Print', 'Print dialog opened. Select "Save as PDF" to save your official PDF payslip.');
     } catch (e) {
       console.error('Error downloading payslip:', e);
     }
@@ -1218,28 +1187,34 @@ export const PayslipViewer: React.FC = () => {
   };
 
   const handleSaveCustomPayslip = () => {
-    const gross = editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus;
-    const deductions = editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds;
-    const net = gross - deductions;
+    const totEarn = editFormData.earnings.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const totDed = editFormData.deductions.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const net = Math.max(0, totEarn - totDed);
+    const basicComp = editFormData.earnings.find(e => e.name.toLowerCase().includes('basic'))?.amount || (totEarn > 0 ? Math.round(totEarn * 0.50) : 0);
     const psMonth = editFormData.month.length === 7 ? `${editFormData.month}-01` : editFormData.month;
     const psNum = `PS-${psMonth.slice(0, 7).replace('-', '')}-${editFormData.empId}`;
 
     const customCard = {
-      id: Number(editFormData.empId) * 1000 + Date.now(),
+      id: editFormData.payslipId || (Number(editFormData.empId) * 1000 + Date.now()),
       employee_id: editFormData.empId,
       payslip_number: psNum,
       month: psMonth,
       empName: editFormData.empName,
       empCode: editFormData.empCode,
-      basic: editFormData.basic,
-      gross: gross,
-      deductions: deductions,
+      designation: editFormData.designation,
+      basic: basicComp,
+      basic_salary: basicComp,
+      gross: totEarn,
+      gross_salary: totEarn,
+      deductions: totDed,
+      total_deductions: totDed,
       net: net,
-      bonus: editFormData.bonus,
-      pf: editFormData.pf,
-      esi: editFormData.esi,
-      pt: editFormData.pt,
-      tds: editFormData.tds,
+      net_salary: net,
+      paidDays: editFormData.paidDays,
+      unpaidDays: editFormData.unpaidDays,
+      paidLeave: editFormData.paidLeave,
+      earnings: editFormData.earnings,
+      deductions_list: editFormData.deductions,
       isCustomEdited: true
     };
 
@@ -1258,9 +1233,9 @@ export const PayslipViewer: React.FC = () => {
       employeeId: editFormData.empId,
       payslipNumber: psNum,
       month: psMonth,
-      basicSalary: editFormData.basic,
-      grossSalary: gross,
-      totalDeductions: deductions,
+      basicSalary: basicComp,
+      grossSalary: totEarn,
+      totalDeductions: totDed,
       netSalary: net
     }).catch(() => { });
 
@@ -1468,7 +1443,7 @@ export const PayslipViewer: React.FC = () => {
     }).catch(() => { });
 
     // 3. Fetch company branding and location details
-    apiClient.get('/company').then((res: any) => {
+    apiClient.get('/settings/companies').then((res: any) => {
       const comps = res.data?.data || res.data || [];
       if (Array.isArray(comps) && comps.length > 0) {
         const matchedComp = (selectedCompanyId ? comps.find((c: any) => c.company_id === selectedCompanyId || c.companyId === selectedCompanyId) : null) ||
@@ -1529,7 +1504,25 @@ export const PayslipViewer: React.FC = () => {
         const serverEmp = payslipDetails.employee || {};
         const matchedProfile = employeeOptions.find(e => String(e.id) === String(p.employee_id || p.employeeId));
         const fullEmp = { ...matchedProfile, ...serverEmp };
-        const doc = buildPayslipDocFromData({ ...fullEmp, ...p }, fullEmp, p.payslip_month || p.month || selectedMonth);
+        const earningsList = payslipDetails.earnings || p.earnings || [];
+        const deductionsList = payslipDetails.deductions || p.deductions || [];
+        const targetMonth = p.payslip_month || p.month || selectedMonth;
+
+        const doc = buildPayslipDocFromData(
+          {
+            ...fullEmp,
+            ...p,
+            earnings: earningsList,
+            deductions: deductionsList,
+            attendance: payslipDetails.attendance || p.attendance,
+            paid_days: payslipDetails.attendance?.paidDays ?? p.paidDays ?? p.paid_days,
+            unpaid_days: payslipDetails.attendance?.unpaidDays ?? p.unpaidDays ?? p.unpaid_days,
+            month: targetMonth,
+            period: formatMonthLabel(targetMonth)
+          },
+          fullEmp,
+          targetMonth
+        );
         setSelectedPayslipDoc(doc);
       }
     } catch { }
@@ -1553,21 +1546,21 @@ export const PayslipViewer: React.FC = () => {
       return;
     }
 
-    // No local calculation here — this pulls whatever Payroll Process already
-    // computed for this employee/month (payroll_run_employees) and just
-    // renders/saves the payslip from that. If nothing was processed yet, the
-    // backend says so instead of us inventing numbers.
+    // Pull whatever Payroll Process already computed for this employee/month
     try {
       const res = await apiClient.post('/payroll/payslips/generate-from-process', {
         employeeId: emp.id,
         month: selectedMonth
       });
       const result = res.data?.data;
-      const payslip = result?.payslip || {};
+      const payslip = result?.payslip || result || {};
       const serverEmp = result?.employee || {};
       const fullEmp = { ...emp, ...serverEmp };
 
-      const grossVal = Number(payslip.grossSalary ?? payslip.gross_salary ?? fullEmp.gross ?? 50000);
+      const earningsList = result?.earnings || payslip.earnings || [];
+      const deductionsList = result?.deductions || payslip.deductions || [];
+
+      const grossVal = Number(payslip.grossSalary ?? payslip.gross_salary ?? fullEmp.gross ?? 0);
       const totalDed = Number(payslip.totalDeductions ?? payslip.total_deductions ?? 0);
       const netVal = Number(payslip.netSalary ?? payslip.net_salary ?? fullEmp.net ?? 0);
       const basicVal = Number(payslip.basicSalary ?? payslip.basic_salary ?? fullEmp.basic ?? (grossVal * 0.5));
@@ -1578,11 +1571,17 @@ export const PayslipViewer: React.FC = () => {
         {
           ...fullEmp,
           ...payslip,
+          earnings: earningsList,
+          deductions: deductionsList,
+          attendance: result?.attendance || payslip.attendance,
+          paid_days: result?.attendance?.paidDays ?? payslip.paidDays ?? payslip.paid_days,
+          unpaid_days: result?.attendance?.unpaidDays ?? payslip.unpaidDays ?? payslip.unpaid_days,
           basic_salary: basicVal,
           gross_salary: grossVal,
           total_deductions: totalDed,
           net_salary: netVal,
-          month: psMonth,
+          month: selectedMonth,
+          period: formatMonthLabel(selectedMonth),
           payslip_number: psNumber
         },
         fullEmp,
@@ -1988,10 +1987,10 @@ export const PayslipViewer: React.FC = () => {
 
                           const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empIdStr);
 
-                          const cardGross = Number(matchedProfile?.gross ?? sample.gross ?? sample.gross_salary ?? 10000);
-                          const cardBasic = Number(matchedProfile?.basic ?? sample.basic ?? sample.basic_salary ?? Math.round(cardGross * 0.50));
-                          const cardDeductions = Math.round(Math.min(cardBasic, 15000) * 0.12) + (cardGross > 15000 ? 200 : 150) + 500 + Math.round(cardGross * 0.05);
-                          const cardNet = cardGross - cardDeductions;
+                          const cardGross = Number(sample.gross_salary ?? sample.grossSalary ?? sample.gross ?? matchedProfile?.gross ?? 0);
+                          const cardBasic = Number(sample.basic_salary ?? sample.basicSalary ?? sample.basic ?? matchedProfile?.basic ?? (cardGross > 0 ? Math.round(cardGross * 0.50) : 0));
+                          const cardDeductions = Number(sample.total_deductions ?? sample.totalDeductions ?? sample.deductions ?? (sample.net_salary != null ? Math.max(0, cardGross - Number(sample.net_salary)) : 0));
+                          const cardNet = Number(sample.net_salary ?? sample.netSalary ?? sample.net ?? Math.max(0, cardGross - cardDeductions));
                           const displayName = matchedProfile?.name || empNameStr || 'Employee';
                           const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
                           const psRef = sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`;
@@ -2122,11 +2121,10 @@ export const PayslipViewer: React.FC = () => {
                     String(e.id) === empIdStr
                   );
 
-                  const isEdited = sample.isCustomEdited === true;
-                  const cardGross = isEdited ? Number(sample.gross || sample.gross_salary || 0) : Number(matchedProfile?.gross || sample.gross_salary || sample.grossSalary || sample.gross || 0);
-                  const cardBasic = isEdited ? Number(sample.basic || sample.basic_salary || 0) : Number(matchedProfile?.basic || sample.basic_salary || sample.basicSalary || sample.basic || Math.round(cardGross * 0.50));
-                  const cardNet = isEdited ? Number(sample.net || sample.net_salary || 0) : Number(matchedProfile?.net || sample.net_salary || sample.netSalary || sample.netTakeHome || sample.net || Math.round(cardGross * 0.90));
-                  const cardDeductions = isEdited ? Number(sample.deductions || sample.total_deductions || 0) : Number((matchedProfile?.gross && matchedProfile?.net) ? (cardGross - matchedProfile.net) : (sample.total_deductions ?? sample.totalDeductions ?? (cardGross - cardNet)));
+                  const cardGross = Number(sample.gross_salary ?? sample.grossSalary ?? sample.gross ?? matchedProfile?.gross ?? 0);
+                  const cardBasic = Number(sample.basic_salary ?? sample.basicSalary ?? sample.basic ?? matchedProfile?.basic ?? (cardGross > 0 ? Math.round(cardGross * 0.50) : 0));
+                  const cardDeductions = Number(sample.total_deductions ?? sample.totalDeductions ?? sample.deductions ?? (sample.net_salary != null ? Math.max(0, cardGross - Number(sample.net_salary)) : 0));
+                  const cardNet = Number(sample.net_salary ?? sample.netSalary ?? sample.net ?? Math.max(0, cardGross - cardDeductions));
                   const displayName = matchedProfile?.name || empNameStr || 'Employee';
                   const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
 
@@ -2433,85 +2431,159 @@ export const PayslipViewer: React.FC = () => {
                 {/* 2. Earnings & Deductions Breakdown Tables */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   {/* Earnings */}
-                  <div className="border border-emerald-200 rounded-xl p-3 bg-emerald-50/20 space-y-2">
-                    <div className="font-extrabold text-emerald-700 uppercase tracking-wider text-[11px] border-b border-emerald-200 pb-1">
-                      Earnings Components (₹)
+                  <div className="border border-emerald-200 dark:border-emerald-900/60 rounded-xl p-3 bg-emerald-50/20 dark:bg-emerald-950/10 space-y-2">
+                    <div className="flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900/60 pb-1">
+                      <div className="font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider text-[11px]">
+                        Earnings Components (₹)
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditFormData(prev => ({
+                          ...prev,
+                          earnings: [...prev.earnings, { name: 'Other Allowance', amount: 0, isCustom: true }]
+                        }))}
+                        className="h-6 text-[10px] font-bold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-100/50 p-1"
+                      >
+                        + Add Component
+                      </Button>
                     </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Basic Earned</span>
-                        <Input
-                          type="number"
-                          value={editFormData.basic}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, basic: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">HRA Earned</span>
-                        <Input
-                          type="number"
-                          value={editFormData.hra}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, hra: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {editFormData.earnings.length === 0 ? (
+                        <div className="text-xs text-muted-foreground italic py-2 text-center">No earnings configured. Click + Add Component</div>
+                      ) : (
+                        editFormData.earnings.map((earn, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2">
+                            {earn.isCustom ? (
+                              <Input
+                                type="text"
+                                value={earn.name}
+                                onChange={(e) => {
+                                  const updated = [...editFormData.earnings];
+                                  updated[idx].name = e.target.value;
+                                  setEditFormData(prev => ({ ...prev, earnings: updated }));
+                                }}
+                                className="h-7 text-xs font-semibold text-foreground flex-1"
+                                placeholder="Component Name"
+                              />
+                            ) : (
+                              <span className="font-medium text-foreground text-xs flex-1 truncate" title={earn.name}>
+                                {earn.name}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                value={earn.amount}
+                                onChange={(e) => {
+                                  const updated = [...editFormData.earnings];
+                                  updated[idx].amount = Number(e.target.value);
+                                  setEditFormData(prev => ({ ...prev, earnings: updated }));
+                                }}
+                                className="h-7 w-28 text-right font-bold text-xs"
+                              />
+                              {earn.isCustom && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const updated = editFormData.earnings.filter((_, i) => i !== idx);
+                                    setEditFormData(prev => ({ ...prev, earnings: updated }));
+                                  }}
+                                  className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700"
+                                >
+                                  ✕
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
                   {/* Deductions */}
-                  <div className="border border-rose-200 rounded-xl p-3 bg-rose-50/20 space-y-2">
-                    <div className="font-extrabold text-rose-700 uppercase tracking-wider text-[11px] border-b border-rose-200 pb-1">
-                      Deductions &amp; Tax (₹)
+                  <div className="border border-rose-200 dark:border-rose-900/60 rounded-xl p-3 bg-rose-50/20 dark:bg-rose-950/10 space-y-2">
+                    <div className="flex items-center justify-between border-b border-rose-200 dark:border-rose-900/60 pb-1">
+                      <div className="font-extrabold text-rose-700 dark:text-rose-400 uppercase tracking-wider text-[11px]">
+                        Deductions &amp; Tax (₹)
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditFormData(prev => ({
+                          ...prev,
+                          deductions: [...prev.deductions, { name: 'Other Deduction', amount: 0, isCustom: true }]
+                        }))}
+                        className="h-6 text-[10px] font-bold text-rose-700 hover:text-rose-800 hover:bg-rose-100/50 p-1"
+                      >
+                        + Add Component
+                      </Button>
                     </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Provident Fund (PF)</span>
-                        <Input
-                          type="number"
-                          value={editFormData.pf}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, pf: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">ESIC</span>
-                        <Input
-                          type="number"
-                          value={editFormData.esi}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, esi: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Professional Tax (PT)</span>
-                        <Input
-                          type="number"
-                          value={editFormData.pt}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, pt: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {editFormData.deductions.length === 0 ? (
+                        <div className="text-xs text-muted-foreground italic py-2 text-center">No deductions configured. Click + Add Component</div>
+                      ) : (
+                        editFormData.deductions.map((ded, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-2">
+                            {ded.isCustom ? (
+                              <Input
+                                type="text"
+                                value={ded.name}
+                                onChange={(e) => {
+                                  const updated = [...editFormData.deductions];
+                                  updated[idx].name = e.target.value;
+                                  setEditFormData(prev => ({ ...prev, deductions: updated }));
+                                }}
+                                className="h-7 text-xs font-semibold text-foreground flex-1"
+                                placeholder="Deduction Name"
+                              />
+                            ) : (
+                              <span className="font-medium text-foreground text-xs flex-1 truncate" title={ded.name}>
+                                {ded.name}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                value={ded.amount}
+                                onChange={(e) => {
+                                  const updated = [...editFormData.deductions];
+                                  updated[idx].amount = Number(e.target.value);
+                                  setEditFormData(prev => ({ ...prev, deductions: updated }));
+                                }}
+                                className="h-7 w-28 text-right font-bold text-xs"
+                              />
+                              {ded.isCustom && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const updated = editFormData.deductions.filter((_, i) => i !== idx);
+                                    setEditFormData(prev => ({ ...prev, deductions: updated }));
+                                  }}
+                                  className="h-6 w-6 p-0 text-rose-500 hover:text-rose-700"
+                                >
+                                  ✕
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
 
                 {/* 3. Live Computed Summary Preview */}
                 {(() => {
-                  const basic = Number(editFormData.basic || 0);
-                  const hra = Number(editFormData.hra || 0);
-                  const edu = Number(editFormData.childrenEducation || 0);
-                  const comm = Number(editFormData.communication || 0);
-                  const lta = Number(editFormData.lta || 0);
-                  const meal = Number(editFormData.meal || 0);
-                  const std = Number(editFormData.standardAllowance || 0);
-                  const adj = Number(editFormData.adjustment || 0);
-                  const inc = Number(editFormData.incentives || 0);
-
-                  const totEarn = basic + hra + edu + comm + lta + meal + std;
-                  const totGross = totEarn + adj + inc;
-                  const totDed = Number(editFormData.pf || 0) + Number(editFormData.esi || 0) + Number(editFormData.pt || 0);
-                  const net = Math.max(0, totGross - totDed);
+                  const totEarn = editFormData.earnings.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+                  const totDed = editFormData.deductions.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+                  const net = Math.max(0, totEarn - totDed);
                   const words = numberToWords(net);
 
                   return (
@@ -2523,14 +2595,10 @@ export const PayslipViewer: React.FC = () => {
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                         <div>
-                          <span className="text-[9px] text-slate-400 block font-bold">TOTAL EARNINGS</span>
+                          <span className="text-[9px] text-slate-400 block font-bold">TOTAL EARNINGS (GROSS)</span>
                           <span className="font-extrabold text-emerald-400 text-xs">₹{totEarn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div>
-                          <span className="text-[9px] text-slate-400 block font-bold">TOTAL GROSS</span>
-                          <span className="font-extrabold text-emerald-300 text-xs">₹{totGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                         </div>
                         <div>
                           <span className="text-[9px] text-slate-400 block font-bold">TOTAL DEDUCTIONS</span>
@@ -2562,19 +2630,11 @@ export const PayslipViewer: React.FC = () => {
                       size="sm"
                       onClick={() => {
                         handleSaveCustomPayslip();
-                        const basic = Number(editFormData.basic || 0);
-                        const hra = Number(editFormData.hra || 0);
-                        const edu = Number(editFormData.childrenEducation || 0);
-                        const comm = Number(editFormData.communication || 0);
-                        const lta = Number(editFormData.lta || 0);
-                        const meal = Number(editFormData.meal || 0);
-                        const std = Number(editFormData.standardAllowance || 0);
-                        const adj = Number(editFormData.adjustment || 0);
-                        const inc = Number(editFormData.incentives || 0);
-                        const totEarn = basic + hra + edu + comm + lta + meal + std;
-                        const totGross = totEarn + adj + inc;
-                        const totDed = Number(editFormData.pf || 0) + Number(editFormData.esi || 0) + Number(editFormData.pt || 0);
-                        const net = Math.max(0, totGross - totDed);
+                        const totEarn = editFormData.earnings.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+                        const totDed = editFormData.deductions.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+                        const net = Math.max(0, totEarn - totDed);
+                        const basicComp = editFormData.earnings.find(e => e.name.toLowerCase().includes('basic'))?.amount || (totEarn > 0 ? Math.round(totEarn * 0.50) : 0);
+                        const hraComp = editFormData.earnings.find(e => e.name.toLowerCase().includes('hra') || e.name.toLowerCase().includes('house rent'))?.amount || 0;
 
                         const doc = buildPayslipDocFromData({
                           ...editFormData,
@@ -2592,19 +2652,13 @@ export const PayslipViewer: React.FC = () => {
                           paid_days: editFormData.paidDays,
                           unpaid_days: editFormData.unpaidDays,
                           paid_leave: editFormData.paidLeave,
-                          basic_salary: basic,
-                          hra: hra,
-                          children_education_allowance: edu,
-                          communication_allowance: comm,
-                          lta_allowance: lta,
-                          meal_allowance: meal,
-                          standard_allowance: std,
-                          gross_salary: totGross,
-                          pf_deduction: editFormData.pf,
-                          esi_deduction: editFormData.esi,
-                          pt_deduction: editFormData.pt,
+                          basic_salary: basicComp,
+                          hra: hraComp,
+                          gross_salary: totEarn,
                           total_deductions: totDed,
                           net_salary: net,
+                          earnings: editFormData.earnings,
+                          deductions: editFormData.deductions,
                         }, null, editFormData.month);
 
                         setSelectedPayslipDoc(doc);

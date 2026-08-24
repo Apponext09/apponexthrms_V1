@@ -50,6 +50,7 @@ router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, 
 router.get('/manager-stats', asyncHandler((req, res) => controller.getManagerDeptStats(req, res)));
 router.get('/process-register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
 router.post('/process-register/override', requirePermission('payroll:process'), asyncHandler((req, res) => controller.saveProcessRegisterOverride(req, res)));
+router.post('/process-register/reset-override', requirePermission('payroll:process'), asyncHandler((req, res) => controller.resetProcessRegisterOverride(req, res)));
 router.patch('/run-employees/:id', requirePermission('payroll:process'), asyncHandler(async (req, res) => {
   const db = (await import('../../db/knex')).getKnex();
   const { id } = req.params;
@@ -62,6 +63,8 @@ router.patch('/run-employees/:id', requirePermission('payroll:process'), asyncHa
   const row = await db('payroll_run_employees').where('id', id).first();
   res.json({ success: true, data: row });
 }));
+router.get('/runs', asyncHandler((req, res) => controller.listPayrolls(req, res)));
+router.get('/runs/:id/register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
 router.post('/', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.generatePayroll(req, res)));
 router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/:id/status', asyncHandler((req, res) => controller.getPayrollStatus(req, res)));
@@ -110,9 +113,9 @@ router.delete('/structures/:id', requirePermission('structure:edit'), asyncHandl
 
 // Salary Revisions
 router.get('/salary-revisions', asyncHandler((req, res) => controller.listSalaryRevisions(req, res)));
-router.post('/salary-revisions', requirePermission('revision:request'), asyncHandler((req, res) => controller.createSalaryRevision(req, res)));
-router.put('/salary-revisions/:id/approve', requirePermission('revision:approve'), asyncHandler((req, res) => controller.approveSalaryRevision(req, res)));
-router.put('/salary-revisions/:id/reject', requirePermission('revision:approve'), asyncHandler((req, res) => controller.rejectRevision(req, res)));
+router.post('/salary-revisions', asyncHandler((req, res) => controller.createSalaryRevision(req, res)));
+router.put('/salary-revisions/:id/approve', asyncHandler((req, res) => controller.approveSalaryRevision(req, res)));
+router.put('/salary-revisions/:id/reject', asyncHandler((req, res) => controller.rejectRevision(req, res)));
 router.post('/revisions', requirePermission('revision:request'), asyncHandler((req, res) => controller.requestRevision(req, res)));
 router.get('/revisions', asyncHandler((req, res) => controller.getRevisions(req, res)));
 router.post('/revisions/:id/submit', requirePermission('revision:submit'), asyncHandler((req, res) => controller.submitRevisionForApproval(req, res)));

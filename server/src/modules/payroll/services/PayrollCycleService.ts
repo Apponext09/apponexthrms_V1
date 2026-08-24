@@ -36,8 +36,10 @@ export class PayrollCycleService {
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth();
-    const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-    const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    const lastDayNum = new Date(year, month + 1, 0).getDate();
+    const firstDay = `${year}-${pad2(month + 1)}-01`;
+    const lastDay = `${year}-${pad2(month + 1)}-${pad2(lastDayNum)}`;
 
     const cycleName = data.cycle_name || data.name || 'Monthly';
     const frequency = data.frequency || 'Monthly';
@@ -48,6 +50,14 @@ export class PayrollCycleService {
     const rawType = frequency.toLowerCase().replace(/[^a-z]/g, '');
     const validEnumTypes = ['monthly', 'biweekly', 'weekly', 'fortnightly'];
     const cycleType = validEnumTypes.includes(rawType) ? rawType : 'monthly';
+
+    let totalDaysCalc = data.total_days_calc;
+    if (!totalDaysCalc) {
+      if (rawType === 'weekly') totalDaysCalc = '7';
+      else if (rawType === 'biweekly' || rawType === 'fortnightly') totalDaysCalc = '14';
+      else if (rawType === 'semimonthly') totalDaysCalc = '15';
+      else totalDaysCalc = String(lastDayNum);
+    }
 
     const cycle: any = {
       uuid: uuidv4(),
@@ -62,14 +72,14 @@ export class PayrollCycleService {
       cutoff_day: cutoffDay,
       cutoff_day_name: data.cutoff_day_name || null,
       month_offset: data.month_offset || 'Current',
-      total_days_calc: data.total_days_calc || '30',
+      total_days_calc: totalDaysCalc,
       cap_amount: Number(data.cap_amount ?? 1000000),
       is_daily_wages: Boolean(data.is_daily_wages),
       daily_wages_include_paid_holidays: Boolean(data.daily_wages_include_paid_holidays),
       daily_wages_include_week_off: Boolean(data.daily_wages_include_week_off),
       tolerance_enabled: Boolean(data.tolerance_enabled),
       tolerance_minutes: Number(data.tolerance_minutes ?? 15),
-      is_active: data.is_active !== false,
+      is_active: data.is_active !== false ? 1 : 0,
       cycle_start_date: data.cycle_start_date || firstDay,
       cycle_end_date: data.cycle_end_date || lastDay,
       payroll_run_date: data.payroll_run_date || lastDay,

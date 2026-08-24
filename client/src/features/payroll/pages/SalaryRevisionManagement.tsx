@@ -58,6 +58,7 @@ export const SalaryRevisionManagement: React.FC = () => {
   const [revisionsList, setRevisionsList] = useState<RevisionRecord[]>([]);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
   const [paySlabs, setPaySlabs] = useState<any[]>([]);
+  const [componentDefs, setComponentDefs] = useState<any[]>([]);
   const [employeeStructuresMap, setEmployeeStructuresMap] = useState<Record<number, { structureName: string; slabId?: number; annualCtc: number; grossMonthly: number }>>({});
 
   const [showForm, setShowForm] = useState(false);
@@ -69,13 +70,16 @@ export const SalaryRevisionManagement: React.FC = () => {
   const [reason, setReason] = useState('Annual compensation review and performance adjustment');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // 1. Fetch Slabs Catalog
+  // 1. Fetch Slabs Catalog & Component Definitions
   useEffect(() => {
-    apiClient.get('/payroll/slabs').then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list)) {
-        setPaySlabs(list);
-      }
+    Promise.all([
+      apiClient.get('/payroll/slabs').catch(() => ({ data: [] })),
+      apiClient.get('/payroll/component-definitions').catch(() => ({ data: [] }))
+    ]).then(([slabsRes, defsRes]: any) => {
+      const slabList = slabsRes.data?.data || slabsRes.data || [];
+      const defsList = defsRes.data?.data || defsRes.data || [];
+      if (Array.isArray(slabList)) setPaySlabs(slabList);
+      if (Array.isArray(defsList)) setComponentDefs(defsList);
     }).catch(() => {});
   }, []);
 
@@ -94,6 +98,167 @@ export const SalaryRevisionManagement: React.FC = () => {
       if (matched) return matched.name || matched.slab_name;
     }
     return paySlabs[0]?.name || 'Standard Monthly Slab';
+  };
+
+  // Universal client formula evaluator
+  const evaluateRevisionExpr = (exprStr: string, ctx: Record<string, number>): number => {
+    if (!exprStr || !exprStr.trim()) return 0;
+    let expr = exprStr.toLowerCase();
+
+    // Handle min(a, b) and max(a, b)
+    expr = expr.replace(/min\s*\(([^,]+),\s*([^)]+)\)/g, 'Math.min($1, $2)');
+    expr = expr.replace(/max\s*\(([^,]+),\s*([^)]+)\)/g, 'Math.max($1, $2)');
+
+    // Handle "50% of Basic", etc.
+    expr = expr.replace(/(\d+(\.\d+)?)%\s*(?:of\s*)?([a-z_]+)/g, '($3 * ($1 / 100))');
+
+    // Replace square bracket variables like [Basic Salary], [Gross], [CTC]
+    expr = expr.replace(/\[([^\]]+)\]/g, (_, name) => {
+      const k = name.toLowerCase().trim().replace(/[\s\-_]+/g, '_');
+      return String(ctx[k] ?? ctx[name.toLowerCase()] ?? 0);
+    });
+
+    for (const [k, v] of Object.entries(ctx)) {
+      const regex = new RegExp(`\\b${k}\\b`, 'g');
+      expr = expr.replace(regex, String(v));
+    }
+
+    expr = expr.replace(/[^0-9+\-*/().\s,Mathminax]/g, '');
+    try {
+      const res = Function(`'use strict'; return (${expr})`)();
+      return isNaN(res) ? 0 : Math.round(res * 100) / 100;
+    } catch { return 0; }
+  };
+
+  // Compute dynamic breakdown for given CTC as per Slab and Component Master Settings
+  const calculateBreakdown = (ctc: number) => {
+    const monthlyGross = Math.round(ctc / 12);
+    const selectedSlab = paySlabs.find(s => String(s.id) === String(selectedSlabId));
+    let allowedIds: string[] = [];
+    if (selectedSlab?.selected_component_ids || selectedSlab?.selectedComponentIds) {
+      try {
+        const raw = selectedSlab.selected_component_ids ?? selectedSlab.selectedComponentIds;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) allowedIds = parsed.map(String);
+      } catch {}
+    }
+
+    // Filter components for the slab
+    const relevantComps = componentDefs.filter(c => {
+      if (allowedIds.length === 0) return true;
+      const cid = String(c.id);
+      const cname = (c.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      return allowedIds.some(id => String(id) === cid || String(id).toLowerCase() === cname);
+    });
+
+    const ctx: Record<string, number> = {
+      ctc: monthlyGross,
+      monthly_ctc: monthlyGross,
+      annual_ctc: ctc,
+      gross: monthlyGross,
+      gross_salary: monthlyGross,
+      basic: Math.round(monthlyGross * 0.5),
+      basic_salary: Math.round(monthlyGross * 0.5)
+    };
+
+    // 1. Basic Component
+    const basicComp = relevantComps.find(c => (c.name || '').toLowerCase().includes('basic'));
+    let basicAmount = 0;
+    if (basicComp) {
+      if (basicComp.formula) basicAmount = evaluateRevisionExpr(basicComp.formula, ctx);
+      else if (basicComp.amount) basicAmount = Number(basicComp.amount);
+      else basicAmount = Math.round(monthlyGross * 0.5);
+    } else {
+      basicAmount = Math.round(monthlyGross * 0.5);
+    }
+    ctx.basic = basicAmount;
+    ctx.basic_salary = basicAmount;
+
+    const earningsList: { name: string; amount: number; type: string }[] = [];
+    earningsList.push({
+      name: basicComp?.name || 'Basic Salary',
+      amount: basicAmount,
+      type: basicComp?.component_type || 'Derived'
+    });
+    let allocatedEarnings = basicAmount;
+
+    // 2. Other Earning Components
+    for (const c of relevantComps) {
+      const name = c.name || '';
+      const nameLower = name.toLowerCase();
+      const cat = (c.category || c.component_type || '').toLowerCase();
+      if (nameLower.includes('basic') || nameLower.includes('special')) continue;
+      // If it's a deduction component, skip
+      if (cat.includes('deduct') || ['provident fund', 'employee state insurance', 'labour welfare fund', 'professional tax', 'tax deducted at source', 'salary advance recovery', 'loan emi recovery', 'loss of pay', 'attendance penalty', 'health insurance premium', 'staff welfare fund'].some(d => nameLower.includes(d))) {
+        continue;
+      }
+
+      let amt = 0;
+      if (c.formula) amt = evaluateRevisionExpr(c.formula, ctx);
+      else if (c.amount) amt = Number(c.amount);
+
+      const normKey = nameLower.replace(/[^a-z0-9]+/g, '_');
+      ctx[normKey] = amt;
+
+      if (amt > 0) {
+        earningsList.push({ name, amount: amt, type: c.component_type || 'Value' });
+        allocatedEarnings += amt;
+      }
+    }
+
+    // 3. Special Allowance (Residual Balancer)
+    const specialComp = relevantComps.find(c => (c.name || '').toLowerCase().includes('special'));
+    const specialAllowance = Math.max(0, monthlyGross - allocatedEarnings);
+    if (specialComp || specialAllowance > 0) {
+      earningsList.push({
+        name: specialComp?.name || 'Special Allowance',
+        amount: specialAllowance,
+        type: 'Derived'
+      });
+    }
+
+    // 4. Deduction Components
+    const deductionsList: { name: string; amount: number; type: string }[] = [];
+    let totalDeductions = 0;
+
+    for (const c of relevantComps) {
+      const name = c.name || '';
+      const nameLower = name.toLowerCase();
+      const cat = (c.category || c.component_type || '').toLowerCase();
+      const isDeduction = cat.includes('deduct') || ['provident fund', 'employee state insurance', 'labour welfare fund', 'professional tax', 'tax deducted at source', 'salary advance recovery', 'loan emi recovery', 'loss of pay', 'attendance penalty', 'health insurance premium', 'staff welfare fund'].some(d => nameLower.includes(d));
+      if (!isDeduction) continue;
+
+      let amt = 0;
+      if (nameLower.includes('provident fund') || nameLower.includes('pf')) {
+        amt = Math.min(1800, Math.round(basicAmount * 0.12));
+      } else if (nameLower.includes('employee state insurance') || nameLower.includes('esic')) {
+        amt = monthlyGross <= 21000 ? Math.round(monthlyGross * 0.0075) : 0;
+      } else if (nameLower.includes('professional tax') || nameLower.includes('pt')) {
+        amt = monthlyGross > 15000 ? 200 : 0;
+      } else if (c.formula) {
+        amt = evaluateRevisionExpr(c.formula, ctx);
+      } else if (c.amount) {
+        amt = Number(c.amount);
+      }
+
+      if (amt > 0) {
+        deductionsList.push({ name, amount: amt, type: c.component_type || 'Value' });
+        totalDeductions += amt;
+      }
+    }
+
+    const totalEarnings = monthlyGross;
+    const netSalary = Math.max(0, totalEarnings - totalDeductions);
+
+    return {
+      monthlyGross,
+      basic: basicAmount,
+      earningsList,
+      deductionsList,
+      totalEarnings,
+      totalDeductions,
+      netSalary
+    };
   };
 
   // 2. Fetch Revisions List
@@ -211,31 +376,6 @@ export const SalaryRevisionManagement: React.FC = () => {
   const currentMonthlyGross = Math.round(currentCtcVal / 12);
   const proposedMonthlyGross = Math.round(proposedCtcVal / 12);
   const monthlyDifference = proposedMonthlyGross - currentMonthlyGross;
-
-  // Compute breakdown for given CTC
-  const calculateBreakdown = (ctc: number) => {
-    const monthly = Math.round(ctc / 12);
-    const basic = Math.round(monthly * 0.50);
-    const hra = Math.round(basic * 0.40);
-    const pf = Math.min(1800, Math.round(basic * 0.12));
-    const pt = 200;
-    const specialAllowance = Math.max(0, monthly - (basic + hra));
-    const totalEarnings = basic + hra + specialAllowance;
-    const totalDeductions = pf + pt;
-    const netSalary = totalEarnings - totalDeductions;
-
-    return {
-      monthlyGross: monthly,
-      basic,
-      hra,
-      specialAllowance,
-      pf,
-      pt,
-      totalEarnings,
-      totalDeductions,
-      netSalary
-    };
-  };
 
   const currentBreakdown = calculateBreakdown(currentCtcVal);
   const proposedBreakdown = calculateBreakdown(proposedCtcVal);
@@ -575,64 +715,78 @@ export const SalaryRevisionManagement: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Left: Current Breakdown */}
-                <div className="border border-border/80 rounded-xl p-4 bg-muted/10 space-y-2.5">
+                <div className="border border-border/80 rounded-xl p-4 bg-muted/10 space-y-3">
                   <div className="flex justify-between items-center border-b border-border/60 pb-2">
                     <span className="text-xs font-bold text-muted-foreground uppercase">Current Salary</span>
-                    <span className="text-xs font-black text-foreground">₹{currentCtcVal.toLocaleString('en-IN')} / yr</span>
+                    <span className="text-xs font-black text-foreground">₹{currentCtcVal.toLocaleString('en-IN')} / yr <span className="text-[10px] text-muted-foreground font-normal">(₹{currentMonthlyGross.toLocaleString('en-IN')}/mo)</span></span>
                   </div>
 
+                  {/* Earnings */}
                   <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Basic Pay (50%)</span>
-                      <span className="font-semibold text-foreground">₹{currentBreakdown.basic.toLocaleString('en-IN')}/mo</span>
+                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Earnings Breakup</p>
+                    {currentBreakdown.earningsList.map((e, idx) => (
+                      <div key={idx} className="flex justify-between text-muted-foreground">
+                        <span>{e.name}</span>
+                        <span className="font-semibold text-foreground">₹{Math.round(e.amount).toLocaleString('en-IN')}/mo</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Deductions */}
+                  {currentBreakdown.deductionsList.length > 0 && (
+                    <div className="space-y-1.5 text-xs border-t border-border/40 pt-2">
+                      <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Statutory Deductions</p>
+                      {currentBreakdown.deductionsList.map((d, idx) => (
+                        <div key={idx} className="flex justify-between text-rose-600 dark:text-rose-400">
+                          <span>{d.name}</span>
+                          <span className="font-semibold">-₹{Math.round(d.amount).toLocaleString('en-IN')}/mo</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>HRA (40% Basic)</span>
-                      <span className="font-semibold text-foreground">₹{currentBreakdown.hra.toLocaleString('en-IN')}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Special Allowance</span>
-                      <span className="font-semibold text-foreground">₹{currentBreakdown.specialAllowance.toLocaleString('en-IN')}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-rose-600 border-t border-border/40 pt-1">
-                      <span>Statutory Deductions (PF &amp; PT)</span>
-                      <span className="font-semibold">-₹{currentBreakdown.totalDeductions.toLocaleString('en-IN')}/mo</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border/60">
-                      <span>Est. Net Take-Home</span>
-                      <span className="font-black text-foreground">₹{currentBreakdown.netSalary.toLocaleString('en-IN')}/mo</span>
-                    </div>
+                  )}
+
+                  {/* Est. Net Take-Home */}
+                  <div className="flex justify-between font-bold text-foreground pt-2 border-t border-border/60 text-xs">
+                    <span>Est. Net Take-Home</span>
+                    <span className="font-black text-foreground">₹{Math.round(currentBreakdown.netSalary).toLocaleString('en-IN')}/mo</span>
                   </div>
                 </div>
 
                 {/* Right: Proposed / Revised Breakdown */}
-                <div className="border border-emerald-500/30 rounded-xl p-4 bg-emerald-500/5 space-y-2.5">
+                <div className="border border-emerald-500/30 rounded-xl p-4 bg-emerald-500/5 space-y-3">
                   <div className="flex justify-between items-center border-b border-emerald-500/20 pb-2">
                     <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase">Revised Proposed Salary</span>
-                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">₹{proposedCtcVal.toLocaleString('en-IN')} / yr</span>
+                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">₹{proposedCtcVal.toLocaleString('en-IN')} / yr <span className="text-[10px] text-emerald-600/80 font-normal">(₹{proposedMonthlyGross.toLocaleString('en-IN')}/mo)</span></span>
                   </div>
 
+                  {/* Earnings */}
                   <div className="space-y-1.5 text-xs">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Basic Pay (50%)</span>
-                      <span className="font-semibold text-foreground">₹{proposedBreakdown.basic.toLocaleString('en-IN')}/mo</span>
+                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Earnings Breakup</p>
+                    {proposedBreakdown.earningsList.map((e, idx) => (
+                      <div key={idx} className="flex justify-between text-muted-foreground">
+                        <span>{e.name}</span>
+                        <span className="font-semibold text-foreground">₹{Math.round(e.amount).toLocaleString('en-IN')}/mo</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Deductions */}
+                  {proposedBreakdown.deductionsList.length > 0 && (
+                    <div className="space-y-1.5 text-xs border-t border-emerald-500/20 pt-2">
+                      <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Statutory Deductions</p>
+                      {proposedBreakdown.deductionsList.map((d, idx) => (
+                        <div key={idx} className="flex justify-between text-rose-600 dark:text-rose-400">
+                          <span>{d.name}</span>
+                          <span className="font-semibold">-₹{Math.round(d.amount).toLocaleString('en-IN')}/mo</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>HRA (40% Basic)</span>
-                      <span className="font-semibold text-foreground">₹{proposedBreakdown.hra.toLocaleString('en-IN')}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Special Allowance</span>
-                      <span className="font-semibold text-foreground">₹{proposedBreakdown.specialAllowance.toLocaleString('en-IN')}/mo</span>
-                    </div>
-                    <div className="flex justify-between text-rose-600 border-t border-border/40 pt-1">
-                      <span>Statutory Deductions (PF &amp; PT)</span>
-                      <span className="font-semibold">-₹{proposedBreakdown.totalDeductions.toLocaleString('en-IN')}/mo</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-300 pt-1 border-t border-emerald-500/20">
-                      <span>Est. New Net Take-Home</span>
-                      <span className="font-black text-emerald-600 dark:text-emerald-400">₹{proposedBreakdown.netSalary.toLocaleString('en-IN')}/mo</span>
-                    </div>
+                  )}
+
+                  {/* Est. New Net Take-Home */}
+                  <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-300 pt-2 border-t border-emerald-500/20 text-xs">
+                    <span>Est. New Net Take-Home</span>
+                    <span className="font-black text-emerald-600 dark:text-emerald-400">₹{Math.round(proposedBreakdown.netSalary).toLocaleString('en-IN')}/mo</span>
                   </div>
                 </div>
               </div>
