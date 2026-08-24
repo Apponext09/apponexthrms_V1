@@ -93,6 +93,30 @@ router.get(
   asyncHandler((req, res) => rolePolicyController.getMyPolicy(req, res))
 );
 
+// GET /api/v1/auth/role-policies
+router.get(
+  '/role-policies',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => rolePolicyController.getAllPolicies(req, res))
+);
+
+// POST /api/v1/auth/role-policies
+router.post(
+  '/role-policies',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => rolePolicyController.createPolicy(req, res))
+);
+
+// PUT /api/v1/auth/role-policies/:id
+router.put(
+  '/role-policies/:id',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => rolePolicyController.updatePolicy(req, res))
+);
+
 // POST /api/v1/auth/accept-policy
 router.post(
   '/accept-policy',

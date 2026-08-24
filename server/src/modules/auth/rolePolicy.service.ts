@@ -6,14 +6,21 @@ export interface PolicySection {
   content: string;
 }
 
-export interface UserRolePolicyResponse {
-  policyId: number;
+export interface RolePolicyRecord {
+  id: number;
   roleCode: string;
+  documentRef?: string;
   title: string;
-  description: string;
+  description?: string;
   sections: PolicySection[];
-  policyAccepted: boolean;
-  policyAcceptedAt: string | null;
+  status?: string;
+  effectiveDate?: string | null;
+  organizationId?: number | null;
+  createdBy?: number | null;
+  policyAccepted?: boolean;
+  policyAcceptedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export class RolePolicyService {
@@ -22,7 +29,7 @@ export class RolePolicyService {
   /**
    * Determine primary role code for policy selection with fallback checks on user row & designation
    */
-  private resolveRoleCode(userRoles: string[] = [], userRow?: any): string {
+  public resolveRoleCode(userRoles: string[] = [], userRow?: any): string {
     const normalized = userRoles.map((r) => String(r).toLowerCase().trim());
     const userRoleStr = (userRow?.role || '').toLowerCase().trim();
     const userDesigStr = (userRow?.designation || '').toLowerCase().trim();
@@ -71,9 +78,9 @@ export class RolePolicyService {
   }
 
   /**
-   * Get role-assigned policy document for the current authenticated user
+   * Get role-assigned policy document for mandatory login acceptance popup
    */
-  async getPolicyForUser(userId: number, roles: string[] = []): Promise<UserRolePolicyResponse> {
+  async getPolicyForUser(userId: number, roles: string[] = []): Promise<RolePolicyRecord> {
     let user = await this.db('users').where({ id: userId }).first().catch(() => null);
     if (!user) {
       const sa = await this.db('super_admins').where({ id: userId }).orWhere({ user_id: userId }).first().catch(() => null);
@@ -100,8 +107,9 @@ export class RolePolicyService {
 
     if (!policy) {
       return {
-        policyId: 0,
+        id: 0,
         roleCode: 'employee',
+        documentRef: 'POL-005',
         title: 'EMPLOYEE CODE OF CONDUCT & WORKPLACE ETHICS POLICY',
         description: 'Standard workplace policy regarding ethics, attendance, asset care, and IT security.',
         sections: [
@@ -128,14 +136,134 @@ export class RolePolicyService {
     }
 
     return {
-      policyId: policy.id,
-      roleCode: policy.role_code || roleCode,
+      id: policy.id,
+      roleCode: policy.role_code || policy.roleCode || roleCode,
+      documentRef: policy.document_ref || policy.documentRef || `POL-${String(policy.id).padStart(3, '0')}`,
       title: policy.title,
       description: policy.description || '',
       sections: parsedSections,
+      status: policy.status || 'published',
       policyAccepted: Boolean(user?.policy_accepted ?? user?.policyAccepted ?? false),
       policyAcceptedAt: (user?.policy_accepted_at || user?.policyAcceptedAt) ? new Date(user.policy_accepted_at || user.policyAcceptedAt).toISOString() : null,
     };
+  }
+
+  /**
+   * Get all visible policies for a user based on their role and organization context
+   */
+  async getAllPoliciesForUser(userId: number, roles: string[] = [], organizationId?: number): Promise<RolePolicyRecord[]> {
+    let user = await this.db('users').where({ id: userId }).first().catch(() => null);
+    if (!user) {
+      const sa = await this.db('super_admins').where({ id: userId }).orWhere({ user_id: userId }).first().catch(() => null);
+      if (sa) {
+        user = { id: userId, role: 'organization_admin', designation: 'Organization Administrator' };
+      }
+    }
+
+    const primaryRole = this.resolveRoleCode(roles, user);
+    const isSuperAdmin = roles.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase()));
+    const isOrgAdmin = primaryRole === 'organization_admin';
+
+    let query = this.db('role_policies');
+
+    if (isSuperAdmin) {
+      // Super Admin sees all policies (drafts, published, all tenant policies)
+    } else if (isOrgAdmin) {
+      // Org Admin sees published policies + org-scoped policies
+      query = query.where(function () {
+        this.where({ status: 'published' }).orWhere('created_by', userId);
+        if (organizationId) {
+          this.orWhere('organization_id', organizationId);
+        }
+      });
+    } else {
+      // HR, Employee, Manager, Team Lead, Intern see ONLY published policies assigned to their specific role
+      query = query.where('status', 'published').where(function () {
+        this.where('role_code', primaryRole).orWhere('role_code', 'all');
+      });
+
+      if (organizationId) {
+        query = query.where(function () {
+          this.whereNull('organization_id').orWhere('organization_id', organizationId);
+        });
+      }
+    }
+
+    const rows = await query.orderBy('id', 'asc');
+
+    return rows.map((p) => {
+      let parsedSections: PolicySection[] = [];
+      try {
+        let raw = p.sections;
+        while (typeof raw === 'string') {
+          raw = JSON.parse(raw);
+        }
+        parsedSections = Array.isArray(raw) ? raw : [];
+      } catch {
+        parsedSections = [];
+      }
+
+      return {
+        id: p.id,
+        roleCode: p.role_code || p.roleCode || primaryRole,
+        documentRef: p.document_ref || p.documentRef || `POL-${String(p.id).padStart(3, '0')}`,
+        title: p.title,
+        description: p.description || '',
+        sections: parsedSections,
+        status: p.status || 'published',
+        effectiveDate: p.effective_date ? new Date(p.effective_date).toISOString() : null,
+        organizationId: p.organization_id || null,
+        createdBy: p.created_by || null,
+        policyAccepted: Boolean(user?.policy_accepted ?? user?.policyAccepted ?? false),
+        policyAcceptedAt: user?.policy_accepted_at ? new Date(user.policy_accepted_at).toISOString() : null,
+        createdAt: p.created_at ? new Date(p.created_at).toISOString() : undefined,
+        updatedAt: p.updated_at ? new Date(p.updated_at).toISOString() : undefined,
+      };
+    });
+  }
+
+  /**
+   * Create new policy (Super Admin & Admin only)
+   */
+  async createPolicy(data: any, authorId: number) {
+    const sectionsJson = typeof data.sections === 'string' ? data.sections : JSON.stringify(data.sections || []);
+    const now = new Date();
+
+    const [id] = await this.db('role_policies').insert({
+      role_code: data.roleCode || data.role_code || 'employee',
+      organization_id: data.organizationId || null,
+      document_ref: data.documentRef || `POL-${Date.now().toString().slice(-4)}`,
+      title: data.title,
+      description: data.description || '',
+      sections: sectionsJson,
+      status: data.status || 'published',
+      effective_date: data.effectiveDate ? new Date(data.effectiveDate) : now,
+      created_by: authorId,
+      created_at: now,
+      updated_at: now,
+    });
+
+    return { success: true, message: 'Policy created successfully.', policyId: id };
+  }
+
+  /**
+   * Update existing policy (Super Admin & Admin only)
+   */
+  async updatePolicy(id: number, data: any) {
+    const updateData: any = { updated_at: new Date() };
+
+    if (data.title) updateData.title = data.title;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.roleCode || data.role_code) updateData.role_code = data.roleCode || data.role_code;
+    if (data.documentRef) updateData.document_ref = data.documentRef;
+    if (data.status) updateData.status = data.status;
+    if (data.sections) {
+      updateData.sections = typeof data.sections === 'string' ? data.sections : JSON.stringify(data.sections);
+    }
+    if (data.effectiveDate) updateData.effective_date = new Date(data.effectiveDate);
+
+    await this.db('role_policies').where({ id }).update(updateData);
+    return { success: true, message: 'Policy updated successfully.' };
   }
 
   /**

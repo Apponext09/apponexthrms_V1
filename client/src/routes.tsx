@@ -713,6 +713,9 @@ export function AppRoutes() {
         <Route path="/employee/learning" element={<LearningPage />} />
         <Route path="/employee/training" element={<TrainingPage />} />
         <Route path="/employee/policies" element={<PoliciesPage />} />
+        <Route path="/hr/policies" element={<PoliciesPage />} />
+        <Route path="/manager/policies" element={<PoliciesPage />} />
+        <Route path="/policies" element={<PoliciesPage />} />
         <Route path="/employee/announcements" element={<AnnouncementsPage />} />
         <Route path="/employee/surveys" element={<SurveysPage />} />
         <Route path="/employee/helpdesk" element={<HelpdeskPage />} />

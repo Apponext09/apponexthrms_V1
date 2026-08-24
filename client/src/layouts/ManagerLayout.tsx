@@ -112,9 +112,10 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'APPROVALS',
+    label: 'APPROVALS & GOVERNANCE',
     items: [
       { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
+      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
     ],
   },
 ];

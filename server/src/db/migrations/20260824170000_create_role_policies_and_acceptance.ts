@@ -6,12 +6,53 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasRolePolicies) {
     await knex.schema.createTable('role_policies', (table) => {
       table.increments('id').primary();
-      table.string('role_code', 100).notNullable().unique();
+      table.string('role_code', 100).notNullable();
+      table.bigInteger('organization_id').unsigned().nullable();
+      table.string('document_ref', 50).defaultTo('POL-001');
       table.string('title', 255).notNullable();
       table.text('description').nullable();
       table.text('sections').notNullable(); // JSON stringified [{ id, title, content }]
+      table.string('status', 20).defaultTo('published');
+      table.timestamp('effective_date').nullable();
+      table.bigInteger('created_by').unsigned().nullable();
       table.timestamps(true, true);
     });
+  } else {
+    // Add missing columns to existing role_policies table
+    const hasOrgId = await knex.schema.hasColumn('role_policies', 'organization_id');
+    if (!hasOrgId) {
+      await knex.schema.alterTable('role_policies', (table) => {
+        table.bigInteger('organization_id').unsigned().nullable();
+      });
+    }
+
+    const hasDocRef = await knex.schema.hasColumn('role_policies', 'document_ref');
+    if (!hasDocRef) {
+      await knex.schema.alterTable('role_policies', (table) => {
+        table.string('document_ref', 50).defaultTo('POL-001');
+      });
+    }
+
+    const hasStatus = await knex.schema.hasColumn('role_policies', 'status');
+    if (!hasStatus) {
+      await knex.schema.alterTable('role_policies', (table) => {
+        table.string('status', 20).defaultTo('published');
+      });
+    }
+
+    const hasEffectiveDate = await knex.schema.hasColumn('role_policies', 'effective_date');
+    if (!hasEffectiveDate) {
+      await knex.schema.alterTable('role_policies', (table) => {
+        table.timestamp('effective_date').nullable();
+      });
+    }
+
+    const hasCreatedBy = await knex.schema.hasColumn('role_policies', 'created_by');
+    if (!hasCreatedBy) {
+      await knex.schema.alterTable('role_policies', (table) => {
+        table.bigInteger('created_by').unsigned().nullable();
+      });
+    }
   }
 
   // 2. Add policy_accepted and policy_accepted_at to users table if missing
@@ -27,6 +68,8 @@ export async function up(knex: Knex): Promise<void> {
   const formalPolicies = [
     {
       role_code: 'organization_admin',
+      document_ref: 'POL-001',
+      status: 'published',
       title: 'ORGANIZATION ADMINISTRATOR GOVERNANCE & SYSTEM CONTROL POLICY',
       description: 'Operational policy establishing governance rules for system administration, RBAC privilege allocation, tenant security, biometric hardware settings, and audit log protection in ApponextHRMS.',
       sections: JSON.stringify([
@@ -59,6 +102,8 @@ export async function up(knex: Knex): Promise<void> {
     },
     {
       role_code: 'hr_manager',
+      document_ref: 'POL-002',
+      status: 'published',
       title: 'HUMAN RESOURCES GOVERNANCE, PRIVACY & EMPLOYEE RELATIONS POLICY',
       description: 'Operational HR policy governing employee data management, compensation confidentiality, leave quota allocation, payroll validation, recruitment, and dispute resolution.',
       sections: JSON.stringify([
@@ -91,6 +136,8 @@ export async function up(knex: Knex): Promise<void> {
     },
     {
       role_code: 'department_head',
+      document_ref: 'POL-003',
+      status: 'published',
       title: 'DEPARTMENT MANAGER SUPERVISION, LEADERSHIP & APPROVAL POLICY',
       description: 'Operational governance policy for Department Managers covering L1/L2 approval SLA adherence, objective performance appraisals, capacity planning, and shift scheduling.',
       sections: JSON.stringify([
@@ -123,6 +170,8 @@ export async function up(knex: Knex): Promise<void> {
     },
     {
       role_code: 'team_lead',
+      document_ref: 'POL-004',
+      status: 'published',
       title: 'TEAM LEAD MENTORSHIP, TASK GUIDANCE & EXECUTION POLICY',
       description: 'Policy defining Team Lead expectations regarding daily task allocation, technical mentorship, project milestone tracking, and attendance anomaly reporting.',
       sections: JSON.stringify([
@@ -155,6 +204,8 @@ export async function up(knex: Knex): Promise<void> {
     },
     {
       role_code: 'employee',
+      document_ref: 'POL-005',
+      status: 'published',
       title: 'EMPLOYEE CODE OF CONDUCT, WORKPLACE ETHICS & ATTENDANCE POLICY',
       description: 'Standard formal workplace policy for all organization employees governing biometric attendance, leave booking, IT asset security, and self-service features.',
       sections: JSON.stringify([
@@ -187,6 +238,8 @@ export async function up(knex: Knex): Promise<void> {
     },
     {
       role_code: 'intern',
+      document_ref: 'POL-006',
+      status: 'published',
       title: 'INTERNSHIP PROGRAM AGREEMENT, LEARNING & CONFIDENTIALITY POLICY',
       description: 'Formal agreement policy governing intern learning responsibilities, mentor guidance, attendance tracking, and strict non-disclosure.',
       sections: JSON.stringify([
@@ -223,6 +276,8 @@ export async function up(knex: Knex): Promise<void> {
     const existing = await knex('role_policies').where({ role_code: policy.role_code }).first();
     if (existing) {
       await knex('role_policies').where({ id: existing.id }).update({
+        document_ref: policy.document_ref,
+        status: policy.status,
         title: policy.title,
         description: policy.description,
         sections: policy.sections,
