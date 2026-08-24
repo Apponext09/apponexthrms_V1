@@ -23,165 +23,165 @@ export async function up(knex: Knex): Promise<void> {
     });
   }
 
-  // 3. Seed formal, role-specific HR policy documents matching formal document layout
+  // 3. Seed formal, role-specific HR policy documents matching practical ApponextHRMS modules
   const formalPolicies = [
     {
       role_code: 'organization_admin',
-      title: 'ORGANIZATION ADMINISTRATOR GOVERNANCE & SYSTEM SECURITY POLICY',
-      description: 'Formal administrative governance policy defining system control, user access management, multi-tenant isolation, data privacy, and audit responsibilities.',
+      title: 'ORGANIZATION ADMINISTRATOR GOVERNANCE & SYSTEM CONTROL POLICY',
+      description: 'Operational policy establishing governance rules for system administration, RBAC privilege allocation, tenant security, biometric hardware settings, and audit log protection in ApponextHRMS.',
       sections: JSON.stringify([
         {
           id: 'admin_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'ApponextHRMS grants Organization Administrators full administrative authority to govern tenant settings, manage user accounts, assign role permissions, and oversee enterprise system operations. Administrators must exercise this authority with the highest standards of professional ethics, confidentiality, and data stewardship.'
+          content: 'This Policy defines authorized boundaries, governance controls, and security duties for System Administrators managing ApponextHRMS. Administrators must manage tenant settings, user accounts, and security configurations with absolute integrity and technical responsibility.'
         },
         {
           id: 'admin_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy establishes strict administrative governance controls, operational protocols, and security expectations for Super Administrators, Organization Administrators, and System IT Leads operating within ApponextHRMS across all organizational units and branches.'
+          content: 'Applies to Super Administrators, Organization Administrators, and System IT Leads managing platform configuration, RBAC permissions, and system workflows across all tenant units.'
         },
         {
           id: 'admin_sec_3',
-          title: '3. ROLE RESPONSIBILITIES & SYSTEM CONTROL',
-          content: '• User Account Lifecycle Management: Provision, update, and revoke user accounts in strict accordance with authorized HR requests and employment lifecycle events.\n• Role & Permission Allocation: Assign system roles strictly based on the Principle of Least Privilege. Unauthorized elevation of user access rights is strictly prohibited.\n• Tenant Security & Configuration: Maintain multi-tenant data isolation, configure organization shift patterns, leave policies, and biometric integration settings.\n• System Audit & Activity Monitoring: System activity logs, audit trails, and administrative operations are monitored and subject to periodic compliance reviews.'
+          title: '3. ROLE RESPONSIBILITIES & SYSTEM PERMISSIONS',
+          content: '• RBAC & Least Privilege Management: Provision and assign system roles strictly based on verified HR authorization and the Principle of Least Privilege. Unauthorized elevation of user access rights is strictly prohibited.\n• User Account Lifecycle Control: Deactivate terminated or suspended user credentials immediately upon HR notification to prevent unauthorized system access.\n• System Configuration & Tenant Security: Maintain multi-tenant data isolation, configure organization shift patterns, leave rule engines, and biometric hardware IP settings accurately.\n• Audit Trail & System Logging: Ensure system audit logs, security events, and administrative transaction histories remain enabled and protected against deletion or modification.'
         },
         {
           id: 'admin_sec_4',
-          title: '4. DATA PRIVACY & CONFIDENTIALITY',
-          content: '• Confidential Data Custody: All employee personal records, payroll data, performance ratings, and system configurations are strictly confidential.\n• Unauthorized Inspection Prohibited: Administrators must refrain from accessing, inspecting, or extracting personal employee data unless explicitly authorized for official administrative investigations.\n• Credential Security: Multi-Factor Authentication (MFA) and strong password protocols are mandatory. Credential sharing is grounds for immediate privilege revocation.'
+          title: '4. AUTHORIZED USE & SYSTEM RESTRICTIONS',
+          content: '• Unauthorized Data Extraction Prohibited: Administrators must not inspect, export, or share confidential employee databases, compensation tables, or personal files unless explicitly authorized for official system maintenance or security audits.\n• Administrative Credential Security: Multi-Factor Authentication (MFA) and strong credentials are mandatory. Sharing administrative passwords or API access tokens is strictly forbidden.'
         },
         {
           id: 'admin_sec_5',
-          title: '5. COMPLIANCE & GOVERNANCE ENFORCEMENT',
-          content: 'Compliance with this Administrative Policy is a mandatory condition of holding system administrator privileges. Any unauthorized data access, privilege abuse, or security protocol violation will result in immediate termination of administrative access, employment review, and potential legal action.'
+          title: '5. DATA RESPONSIBILITY & COMPLIANCE',
+          content: 'All system logs, user tables, and database schemas remain strictly confidential. Misuse of administrative access, unapproved data deletion, or security rule tampering will result in immediate privilege revocation and formal disciplinary proceedings.'
         }
       ])
     },
     {
       role_code: 'hr_manager',
       title: 'HUMAN RESOURCES GOVERNANCE, PRIVACY & EMPLOYEE RELATIONS POLICY',
-      description: 'Comprehensive HR policy establishing ethical standards for employee records management, fair recruitment, leave administration, and workplace dispute redressal.',
+      description: 'Operational HR policy governing employee data management, compensation confidentiality, leave quota allocation, payroll validation, recruitment, and dispute resolution.',
       sections: JSON.stringify([
         {
           id: 'hr_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'The Human Resources Department holds a primary fiduciary duty to protect employee personal privacy, enforce objective workplace policies, ensure meritocratic recruitment, and maintain harmonious employee relations throughout the employment lifecycle.'
+          content: 'The Human Resources Department holds a primary fiduciary responsibility to safeguard employee personal data, maintain transparent HR workflows, manage payroll and leave entitlements accurately, and conduct fair recruitment and grievance redressal.'
         },
         {
           id: 'hr_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy establishes operational standards, privacy frameworks, and professional expectations for HR Managers, HR Executives, and Personnel Administrators operating within ApponextHRMS.'
+          content: 'Applies to HR Managers, HR Executives, and Personnel Administrators managing employee lifecycle workflows, recruitment, leave quotas, and performance reviews in ApponextHRMS.'
         },
         {
           id: 'hr_sec_3',
           title: '3. HR OPERATIONAL RESPONSIBILITIES',
-          content: '• Employee Lifecycle Administration: Manage digital employee onboarding, profile verifications, document management, and offboarding workflows.\n• Leave & Attendance Oversight: Oversee organization leave policies, verify attendance regularization requests, and validate monthly payroll inputs accurately.\n• Objective Recruitment & Selection: Execute recruitment processes based strictly on qualifications, merit, and job requirements without bias or discrimination.\n• Grievance Redressal: Investigate employee complaints, workplace conflicts, and harassment reports impartially within established SLA timelines.'
+          content: '• Employee Profile & Document Management: Accurately create and maintain digital employee profiles, document verifications, designation assignments, and department mappings.\n• Attendance & Leave Quota Administration: Review attendance regularization requests, manage annual leave quotas, and validate monthly payroll inputs with exact attendance records.\n• Recruitment & Offer Processing: Issue MRFs, candidate assessments, and job offer letters based strictly on qualifications and approved compensation bands without bias.\n• Grievance & Disciplinary Redressal: Investigate employee complaints, workplace conflicts, and harassment reports impartially within established SLA timelines.'
         },
         {
           id: 'hr_sec_4',
-          title: '4. EMPLOYEE DATA PRIVACY & CONFIDENTIALITY',
-          content: '• Personal Identifiable Information (PII): Employee medical records, compensation details, background verification reports, and performance reviews must be stored securely.\n• Restricted Information Sharing: HR personnel shall not disclose confidential employee data to unauthorized internal staff or third parties.'
+          title: '4. DATA PRIVACY & COMPENSATION CONFIDENTIALITY',
+          content: '• Salary & PII Security: Employee compensation structures, bank account details, medical records, and performance ratings must be kept strictly confidential.\n• Unauthorized Alterations Prohibited: HR personnel must not modify employee salary data, designation tiers, or leave balances without formal approval from executive management.'
         },
         {
           id: 'hr_sec_5',
-          title: '5. PROFESSIONAL CONDUCT & ENFORCEMENT',
-          content: 'HR Professionals must uphold absolute impartiality, foster an inclusive environment, and serve as ethical custodians of company values. Non-compliance with privacy standards or biased HR practices will result in formal disciplinary action.'
+          title: '5. COMPLIANCE & ETHICAL RESPONSIBILITY',
+          content: 'HR professionals must act as ethical custodians of company values. Violations of data privacy regulations, unauthorized compensation edits, or biased HR decisions will result in immediate employment review.'
         }
       ])
     },
     {
       role_code: 'department_head',
       title: 'DEPARTMENT MANAGER SUPERVISION, LEADERSHIP & APPROVAL POLICY',
-      description: 'Operational governance policy for Department Managers covering supervisory responsibilities, objective performance appraisals, approval SLA adherence, and team leadership.',
+      description: 'Operational governance policy for Department Managers covering L1/L2 approval SLA adherence, objective performance appraisals, capacity planning, and shift scheduling.',
       sections: JSON.stringify([
         {
           id: 'mgr_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'Department Managers and Functional Leaders are entrusted with guiding departmental operations, executing fair supervisory decisions, managing team capacity, and fostering high-performance work environments.'
+          content: 'Department Managers and Functional Leaders are entrusted with guiding departmental goals, executing supervisory approvals, conducting objective evaluations, and managing team capacity effectively.'
         },
         {
           id: 'mgr_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy applies to all Department Heads, Functional Managers, and Supervisory Executives responsible for team management, performance review, and workflow approvals in ApponextHRMS.'
+          content: 'Applies to all Department Heads, Functional Managers, and Supervisory Executives responsible for team management, performance review, and workflow approvals in ApponextHRMS.'
         },
         {
           id: 'mgr_sec_3',
           title: '3. SUPERVISORY RESPONSIBILITIES & APPROVAL SLA',
-          content: '• Timely Workflow Approvals: Review and process team leave applications, attendance regularization requests, and expense claims within 24–48 hours.\n• Objective Performance Appraisals: Conduct transparent, unbiased performance evaluations based on documented metrics, deliverables, and agreed Key Performance Indicators (KPIs).\n• Workload Allocation & Capacity Planning: Distribute departmental projects equitably and maintain balanced team capacity.'
+          content: '• Timely Workflow Approvals: Review and process team leave applications, attendance regularization requests, shift swaps, and expense reimbursements within 24–48 hours.\n• Objective Performance Appraisals: Conduct transparent, unbiased performance evaluations based on documented deliverables, project KPIs, and measurable outcomes.\n• Shift Roster & Capacity Planning: Approve shift schedules and ensure balanced departmental headcount to prevent operational bottlenecks.'
         },
         {
           id: 'mgr_sec_4',
-          title: '4. LEADERSHIP ETHICS & TEAM ENVIRONMENT',
-          content: '• Supportive Work Culture: Lead by example, respect employee work-life balance, and maintain a professional work environment free from favoritism.\n• Conflict Resolution: Address operational bottlenecks and team disputes constructively, escalating complex grievances to HR when appropriate.'
+          title: '4. AUTHORIZED USE & RESTRICTIONS',
+          content: '• Confidentiality of Ratings & Salaries: Keep team appraisal ratings, promotion recommendations, and compensation details strictly confidential.\n• Non-Interference with HR Policies: Managers must not grant informal leave or override attendance policies outside the ApponextHRMS approval engine.'
         },
         {
           id: 'mgr_sec_5',
-          title: '5. CONFIDENTIALITY & GOVERNANCE',
-          content: 'Department Managers must keep team compensation details, appraisal scores, and internal operational reports strictly confidential. Failure to adhere to approval SLAs or supervisory standards will trigger executive management review.'
+          title: '5. COMPLIANCE & MANAGEMENT SLA',
+          content: 'Failure to process approval workflows within SLA timelines, chronic approval delays, or biased supervisory practices will be subject to executive management review.'
         }
       ])
     },
     {
       role_code: 'team_lead',
       title: 'TEAM LEAD MENTORSHIP, TASK GUIDANCE & EXECUTION POLICY',
-      description: 'Policy defining Team Lead expectations regarding daily task allocation, technical mentorship, project milestone tracking, and team communication.',
+      description: 'Policy defining Team Lead expectations regarding daily task allocation, technical mentorship, project milestone tracking, and attendance anomaly reporting.',
       sections: JSON.stringify([
         {
           id: 'tl_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'Team Leads serve as the essential link between department objectives and daily project execution, guiding team members toward milestones with technical support and constructive mentorship.'
+          content: 'Team Leads serve as the essential operational link between department goals and daily project execution, providing technical mentorship, monitoring task deliverables, and maintaining team alignment.'
         },
         {
           id: 'tl_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy outlines operational expectations for Team Leads, Module Leads, and Project Coordinators managing daily project deliverables in ApponextHRMS.'
+          content: 'Outlines expectations for Team Leads, Module Leads, and Project Coordinators managing daily project deliverables and team coordination in ApponextHRMS.'
         },
         {
           id: 'tl_sec_3',
-          title: '3. OPERATIONAL RESPONSIBILITIES & MENTORSHIP',
-          content: '• Equitable Task Distribution: Allocate daily tasks fairly based on individual skill sets, capacity, and project schedules.\n• Daily Technical Guidance: Conduct regular standups, assist team members with technical blockers, and mentor junior team members.\n• Progress Logging & Status Accuracy: Ensure team task status logs, shift check-ins, and milestone updates are accurately recorded in ApponextHRMS.'
+          title: '3. OPERATIONAL RESPONSIBILITIES & TASK GUIDANCE',
+          content: '• Equitable Task Distribution: Allocate daily tasks fairly based on individual skill sets, capacity, and project milestone commitments.\n• Daily Technical Guidance: Conduct regular standups, assist team members with technical blockers, and guide junior staff.\n• Progress Logging & Status Accuracy: Ensure task status updates, shift check-in logs, and project milestone completion dates are accurately maintained in ApponextHRMS.\n• Attendance Anomaly Reporting: Identify and report unexcused absences, shift mismatches, or project delays to the Department Manager.'
         },
         {
           id: 'tl_sec_4',
-          title: '4. PROFESSIONAL CONDUCT & COLLABORATION',
-          content: '• Collaborative Work Environment: Cultivate mutual respect, encourage teamwork, and refrain from personal favoritism.\n• Transparent Escalation: Communicate operational risks and resource shortages promptly to Department Managers.'
+          title: '4. DATA PROTECTION & REPOSITORY SECURITY',
+          content: '• Source Code & IP Security: Protect project repositories, client specifications, and technical architecture documents against unauthorized external sharing.\n• Credential Integrity: Never share developer access keys or system credentials.'
         },
         {
           id: 'tl_sec_5',
-          title: '5. CONFIDENTIALITY & DATA PROTECTION',
-          content: 'Safeguard project source code, client specifications, and internal repository data against unauthorized external distribution. Non-compliance will lead to supervisory review.'
+          title: '5. COMPLIANCE & EXECUTION REVIEW',
+          content: 'Adherence to project guidelines and confidentiality is strictly enforced. Unverified task reporting or data leakage will result in supervisory review.'
         }
       ])
     },
     {
       role_code: 'employee',
       title: 'EMPLOYEE CODE OF CONDUCT, WORKPLACE ETHICS & ATTENDANCE POLICY',
-      description: 'Standard formal workplace policy for all organization employees governing professional ethics, attendance, IT asset security, and data responsibility.',
+      description: 'Standard formal workplace policy for all organization employees governing biometric attendance, leave booking, IT asset security, and self-service features.',
       sections: JSON.stringify([
         {
           id: 'emp_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'ApponextHRMS expects all employees to perform their assigned duties with dedication, integrity, and mutual respect, upholding organization values and contributing to a productive workplace.'
+          content: 'ApponextHRMS expects all employees to perform their assigned duties with dedication, integrity, and mutual respect, utilizing employee self-service features responsibly.'
         },
         {
           id: 'emp_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy applies to all regular full-time, part-time, and contractual employees across all operational business units and branch locations.'
+          content: 'Applies to all regular full-time, part-time, and contractual employees across all operational business units and branch locations.'
         },
         {
           id: 'emp_sec_3',
-          title: '3. ATTENDANCE, PUNCTUALITY & LEAVE RULES',
-          content: '• Shift Schedule Adherence: Employees must adhere to assigned shift schedules and record daily attendance accurately using designated biometric terminals.\n• Advance Leave Request: Submit leave applications via the HRMS portal in advance in accordance with organization leave entitlement guidelines.\n• Break Duration Management: Record meal and rest breaks accurately to maintain uninterrupted team workflow.'
+          title: '3. ATTENDANCE & SELF-SERVICE RESPONSIBILITIES',
+          content: '• Biometric & GPS Attendance Punch: Employees must record check-in/check-out accurately using designated biometric terminals or approved GPS location bounds.\n• Proxy Attendance Strictly Prohibited: Attempting to punch attendance for another employee or utilizing location-spoofing software is grounds for immediate termination.\n• Advance Leave Applications: Submit leave requests in advance via the HRMS portal. Unexcused absences without approval will be marked as Loss of Pay (LOP).\n• Accurate Reimbursements & Claims: Expense reimbursements and claim receipts submitted via HRMS must be genuine and accurate.'
         },
         {
           id: 'emp_sec_4',
-          title: '4. WORKPLACE ETHICS & IT ASSET SECURITY',
-          content: '• Professional Interaction: Maintain polite, professional communication with colleagues and clients. Discrimination or harassment will not be tolerated.\n• IT Asset Stewardship: Protect company laptops, software credentials, and digital infrastructure. System resources must be used strictly for official business.'
+          title: '4. WORKPLACE ETHICS & IT ASSETS',
+          content: '• Professional Interaction: Maintain courteous, respectful communication with colleagues. Harassment or discrimination is strictly prohibited.\n• IT Asset Protection: Safeguard company laptops, software credentials, and digital tools. Company resources must be used strictly for authorized business.'
         },
         {
           id: 'emp_sec_5',
-          title: '5. CONFIDENTIALITY & COMPLIANCE ENFORCEMENT',
-          content: 'Safeguard proprietary company information, trade secrets, employee records, and client data. Failure to comply with this Code of Conduct may result in warning notices, suspension, or employment termination.'
+          title: '5. CONFIDENTIALITY & ENFORCEMENT',
+          content: 'Safeguard company proprietary data, trade secrets, employee details, and client information. Failure to comply with this Code of Conduct will result in formal disciplinary action.'
         }
       ])
     },
@@ -193,27 +193,27 @@ export async function up(knex: Knex): Promise<void> {
         {
           id: 'int_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'The Internship Program is structured to provide practical learning, industry exposure, and professional skill development under dedicated mentor supervision.'
+          content: 'The Internship Program is structured to provide practical learning, technical mentorship, and industry skill development under dedicated mentor supervision.'
         },
         {
           id: 'int_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy governs all project interns, trainees, and seasonal apprentices engaged with the organization.'
+          content: 'Applies to all project interns, trainees, and seasonal apprentices engaged with the organization.'
         },
         {
           id: 'int_sec_3',
-          title: '3. LEARNING RESPONSIBILITIES & MENTORSHIP',
-          content: '• Training Engagement: Actively participate in assigned learning modules and complete tasks under mentor guidance.\n• Accurate Time Tracking: Record daily working hours and attendance in ApponextHRMS accurately.\n• Feedback Integration: Proactively seek guidance and incorporate mentor feedback into project assignments.'
+          title: '3. LEARNING RESPONSIBILITIES & TIME TRACKING',
+          content: '• Training Engagement: Actively participate in assigned learning modules and complete tasks under mentor direction.\n• Daily Work Log & Time Tracking: Record daily working hours, task completion status, and attendance in ApponextHRMS accurately.\n• Proactive Communication: Seek guidance when encountering technical blockers and incorporate mentor feedback.'
         },
         {
           id: 'int_sec_4',
-          title: '4. PROFESSIONAL WORKPLACE CONDUCT',
-          content: 'Demonstrate punctuality, professional curiosity, respectful communication, and adherence to company culture and policies.'
+          title: '4. SYSTEM RESTRICTIONS & STRICT CONFIDENTIALITY',
+          content: '• Authorized System Use: Access company repositories, software tools, and project documents strictly for authorized learning tasks.\n• Proprietary Data Non-Disclosure: All source code, technical documentation, research materials, and internal data remain strictly confidential.\n• Unauthorized System Changes Prohibited: Interns must not modify system settings or delete project files.'
         },
         {
           id: 'int_sec_5',
-          title: '5. STRICT CONFIDENTIALITY & NON-DISCLOSURE',
-          content: 'All source code, project repositories, research documents, and internal tools accessed during the internship remain strictly confidential. Unauthorized sharing or unexcused absences will result in immediate termination of the internship agreement.'
+          title: '5. COMPLIANCE & AGREEMENT TERMINATION',
+          content: 'Demonstrate punctuality, professional conduct, and respect for company policies. Unexcused absences or confidentiality breaches will result in immediate termination of the internship agreement.'
         }
       ])
     }
