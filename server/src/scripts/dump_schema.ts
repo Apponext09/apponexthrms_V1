@@ -1,4 +1,4 @@
-import { getKnex } from '../common/lib/knex';
+import { getKnex } from '../db/knex';
 
 async function dumpReferralsSchema() {
   const db = getKnex();

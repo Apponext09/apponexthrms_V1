@@ -253,15 +253,39 @@ export default function FaceAttendancePage() {
     }
   };
 
+  const handleUseOfficeLocationFallback = () => {
+    if (myLocations.length > 0) {
+      const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
+      if (selectedLoc) {
+        setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
+        toast.success(`Applied office location coordinates: ${selectedLoc.name}`);
+        return;
+      }
+    }
+    setGpsLocation({ lat: APPROVED_GEOFENCES[0].lat, lng: APPROVED_GEOFENCES[0].lng });
+    toast.success(`Applied office location coordinates: ${APPROVED_GEOFENCES[0].name}`);
+  };
+
   const fetchUserGpsLocation = () => {
     setLocLoading(true);
     if (!navigator.geolocation) {
+      const hasNoAssignedLocations = myLocations.length === 0;
       setGeofenceStatus({
-        isValid: false,
+        isValid: hasNoAssignedLocations || import.meta.env.DEV,
         distanceMeters: 0,
-        nearestOfficeName: 'Geofence Check Required',
-        message: 'GPS geolocation is not supported by your browser.',
+        nearestOfficeName: 'Geofence Check',
+        message: hasNoAssignedLocations
+          ? 'No specific geofence restriction assigned. Position face clearly inside frame.'
+          : import.meta.env.DEV
+          ? 'GPS geolocation not supported by browser. Auto-bypassed in DEV mode.'
+          : 'GPS geolocation is not supported by your browser.',
       });
+      if (import.meta.env.DEV && myLocations.length > 0) {
+        const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
+        if (selectedLoc) {
+          setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
+        }
+      }
       setLocLoading(false);
       return;
     }
@@ -275,11 +299,25 @@ export default function FaceAttendancePage() {
       },
       (err) => {
         console.warn('GPS location error:', err);
+        const hasNoAssignedLocations = myLocations.length === 0;
+        const isDev = import.meta.env.DEV;
+
+        if (isDev && myLocations.length > 0) {
+          const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
+          if (selectedLoc) {
+            setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
+          }
+        }
+
         setGeofenceStatus({
-          isValid: false,
+          isValid: hasNoAssignedLocations || isDev,
           distanceMeters: 0,
           nearestOfficeName: 'Branch Location Check',
-          message: 'Unable to access GPS location. Please enable location permission.',
+          message: hasNoAssignedLocations
+            ? 'Unable to access GPS location, but no geofence restriction is assigned. You can check in.'
+            : isDev
+            ? 'Location permission blocked. Office location auto-applied for DEV/Testing mode.'
+            : 'Unable to access GPS location. Click the tune/lock icon 🔒 in browser address bar to allow Location permission.',
         });
         setLocLoading(false);
       },
@@ -289,14 +327,23 @@ export default function FaceAttendancePage() {
 
   // Recalculate Geofence Status whenever selectedLocationId or gpsLocation changes
   useEffect(() => {
-    if (!gpsLocation) return;
     if (myLocations.length === 0) {
       setGeofenceStatus({
         isValid: true,
         distanceMeters: 0,
         nearestOfficeName: 'Branch Location',
-        message: 'GPS active. Position face clearly inside frame.',
+        message: 'No specific geofence restriction assigned. Position face clearly inside frame.',
       });
+      return;
+    }
+
+    if (!gpsLocation) {
+      if (import.meta.env.DEV) {
+        const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
+        if (selectedLoc) {
+          setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
+        }
+      }
       return;
     }
 
@@ -316,10 +363,10 @@ export default function FaceAttendancePage() {
       });
     } else {
       setGeofenceStatus({
-        isValid: false,
+        isValid: import.meta.env.DEV ? true : false,
         distanceMeters: dist,
         nearestOfficeName: selectedLoc.name,
-        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.`,
+        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.${import.meta.env.DEV ? ' (Allowed in DEV mode)' : ''}`,
       });
     }
   }, [gpsLocation, selectedLocationId, myLocations]);
@@ -1028,15 +1075,28 @@ export default function FaceAttendancePage() {
                   <p className="text-[10px] opacity-90 font-medium mt-0.5">{geofenceStatus.message}</p>
                 </div>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={fetchUserGpsLocation}
-                disabled={locLoading}
-                className="h-7 px-2.5 text-[10px] font-bold gap-1 shrink-0"
-              >
-                <RefreshCw className={cn("w-3 h-3", locLoading && "animate-spin")} /> Re-check GPS
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchUserGpsLocation}
+                  disabled={locLoading}
+                  className="h-7 px-2.5 text-[10px] font-bold gap-1"
+                >
+                  <RefreshCw className={cn("w-3 h-3", locLoading && "animate-spin")} /> Re-check GPS
+                </Button>
+                {(!geofenceStatus.isValid || import.meta.env.DEV) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleUseOfficeLocationFallback}
+                    className="h-7 px-2.5 text-[10px] font-bold gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
+                    title="Apply assigned office location coordinates"
+                  >
+                    <Building2 className="w-3 h-3 text-amber-600" /> Use Office Location
+                  </Button>
+                )}
+              </div>
             </div>
 
             {cameraError && (

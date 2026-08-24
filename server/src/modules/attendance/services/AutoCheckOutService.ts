@@ -11,7 +11,9 @@ export class AutoCheckOutService {
     logger.info('Auto check-out functionality is disabled.');
     return { processedCount: 0 };
 
+    let totalProcessed = 0;
     try {
+      const db = getKnex();
       // 1. Get all organizations
       const orgs = await db('organizations').select('id', 'name');
 

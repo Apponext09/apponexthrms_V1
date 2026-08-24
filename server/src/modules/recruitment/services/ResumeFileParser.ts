@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import pdfParse from 'pdf-parse';
 import * as xlsx from 'xlsx';
+// @ts-ignore
 import mammoth from 'mammoth';
+// @ts-ignore
 import AdmZip from 'adm-zip';
 
 export interface ParsedCandidateEntry {

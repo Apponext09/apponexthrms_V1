@@ -228,7 +228,7 @@ export class PayslipService {
         ytd_net: netSalary * 5,
         is_locked: false,
         digitally_signed: true,
-        signature_timestamp: new Date(),
+        signature_timestamp: new Date() as any,
         created_by: validUserId,
         updated_by: validUserId
       });

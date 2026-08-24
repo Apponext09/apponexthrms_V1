@@ -501,7 +501,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    (items as any[]).forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -575,10 +575,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items as any[];
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = (items as any[]).filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -797,7 +797,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    (items as any[]).forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -871,10 +871,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items as any[];
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = (items as any[]).filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -933,7 +933,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    (resultItems as any[]).forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -1007,37 +1007,6 @@ export class RecruitmentController {
 
     await this.assessmentService.deleteAssessment(ctx, assessmentId);
     res.json({ success: true, message: 'Assessment deleted successfully' });
-  });
-
-  getAttemptsByAssessment = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const assessmentId = parseInt(req.params.assessmentId, 10);
-    const db = (await import('../../../db/knex')).getKnex();
-
-    const attempts = await db('assessment_attempts')
-      .where({ assessment_id: assessmentId, organization_id: ctx.organizationId })
-      .orderBy('created_at', 'desc');
-
-    // Enrich with candidate info
-    const enriched = await Promise.all(attempts.map(async (attempt: any) => {
-      const application = await db('applications').where('id', attempt.application_id).first();
-      let candidateName = `App #${attempt.application_id}`;
-      let candidateEmail = '';
-      if (application) {
-        const candidate = await db('candidates').where('id', application.candidate_id).first();
-        if (candidate) {
-          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim();
-          candidateEmail = candidate.email || '';
-        }
-      }
-      return {
-        ...attempt,
-        candidate_name: candidateName,
-        candidate_email: candidateEmail,
-      };
-    }));
-
-    res.json({ success: true, data: enriched });
   });
 
   // ==================== Offer Endpoints ====================
@@ -1173,15 +1142,6 @@ export class RecruitmentController {
 
   // ==================== Additional Interview Endpoints ====================
 
-  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const validated = validate(req.body, submitFeedbackSchema);
-
-    const feedback = await this.interviewService.submitFeedback(ctx, validated.interviewId, validated);
-
-    res.status(201).json({ success: true, data: feedback });
-  });
-
   recordInterviewDecision = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { interviewId } = req.params;
@@ -1234,7 +1194,7 @@ export class RecruitmentController {
       .where('interview_id', interviewId)
       .andWhere(function () {
         this.where('interviewer_id', ctx.userId)
-          .orWhere('interviewer_id', ctx.employeeId || 0);
+          .orWhere('interviewer_id', (ctx as any).employeeId || 0);
       })
       .first();
 
@@ -1257,7 +1217,7 @@ export class RecruitmentController {
         uuid: newUuid,
         organization_id: interview.organization_id || ctx.organizationId,
         interview_id: interviewId,
-        interviewer_id: ctx.userId || ctx.employeeId || 1,
+        interviewer_id: ctx.userId || (ctx as any).employeeId || 1,
         overall_rating: overallRating,
         technical_rating: technicalRating,
         communication_rating: communicationRating,
@@ -2501,25 +2461,7 @@ export class RecruitmentController {
     res.json({ success: true, data: skills });
   });
 
-  // ==================== Dashboard & Analytics ====================
 
-  getDashboard = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const dashboard = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: dashboard });
-  });
-
-  getMetrics = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: metrics });
-  });
-
-  getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const funnel = await this.analyticsService.generateHiringFunnel(ctx);
-    res.json({ success: true, data: funnel });
-  });
 }
 
 export const recruitmentController = new RecruitmentController();

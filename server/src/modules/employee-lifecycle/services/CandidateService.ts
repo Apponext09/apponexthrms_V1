@@ -1,7 +1,7 @@
-import { Database } from '@/database';
-import { AppError, ValidationError } from '@/lib/errors';
-import { AuditService } from '@/modules/audit/AuditService';
-import { NotificationService } from '@/modules/notifications/NotificationService';
+import { getKnex } from '../../../db/knex';
+import { AppError, ValidationError } from '../../../common/errors';
+import { AuditService } from '../../audit/audit.service';
+import { NotificationService } from '../../notifications/services/notification.service';
 
 export interface CreateCandidateInput {
   organizationId: string;
@@ -32,9 +32,9 @@ export interface UpdateCandidateInput {
 
 export class CandidateService {
   constructor(
-    private db: Database,
-    private auditService: AuditService,
-    private notificationService: NotificationService
+    private db: any,
+    private auditService: any = new AuditService(),
+    private notificationService: any = new NotificationService()
   ) {}
 
   /**

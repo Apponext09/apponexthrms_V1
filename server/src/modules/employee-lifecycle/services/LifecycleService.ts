@@ -8,6 +8,12 @@ import { LIFECYCLE_STATES, STATE_TRANSITIONS } from '../constants';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 
+class ValidationError extends AppError {
+  constructor(message: string) {
+    super(message, 400);
+  }
+}
+
 interface LifecycleState {
   currentState: string;
   previousState?: string;
@@ -102,7 +108,7 @@ export class LifecycleService {
         triggeredBy: userId,
       });
 
-      await this.auditService.logChange({
+      await (this.auditService as any).logChange({
         entityType: 'lifecycle_state',
         entityId: employeeId,
         organizationId,

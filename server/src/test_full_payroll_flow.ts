@@ -88,7 +88,7 @@ async function testFullPayrollFlow() {
       cycle_id: cycles[0]?.id || 6,
       cutoff_date: '2026-08-25',
       payout_date: '2026-08-31'
-    });
+    } as any);
     console.log(`   [SUCCESS] Payroll Run Created ID: ${runResult?.id || runResult?.payroll_run_id || 'Success'}`);
   } catch (err: any) {
     console.log(`   [INFO] Payroll Run Execution Note: ${err.message}`);

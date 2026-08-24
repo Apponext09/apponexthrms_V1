@@ -590,8 +590,8 @@ export class AssessmentService {
           targetFn;
         `;
 
-        const script = new vm.Script(scriptCode, { timeout: 3000 });
-        const fn = script.runInContext(context);
+        const script = new vm.Script(scriptCode);
+        const fn = script.runInContext(context, { timeout: 3000 });
 
         for (let i = 0; i < sampleTestCases.length; i++) {
           const tc = sampleTestCases[i];

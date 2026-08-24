@@ -128,6 +128,7 @@ function SelectValue({ placeholder, className, ...props }: SelectValueProps) {
 
 interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
+  className?: string;
 }
 
 function SelectContent({ className, children, style, ...props }: SelectContentProps) {

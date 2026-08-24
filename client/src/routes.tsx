@@ -540,6 +540,8 @@ export function AppRoutes() {
         <Route path="/payroll/gratuity" element={<GratuityPolicyPage />} />
         <Route path="/gratuity" element={<GratuityPolicyPage />} />
         <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
+        <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/setting" element={<PayrollSettingsPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
