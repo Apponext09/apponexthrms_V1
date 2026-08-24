@@ -337,7 +337,7 @@ export function EmployeeListPage() {
       {/* Data Table */}
       <div className="flex-1 bg-card border border-border/80 rounded-xl overflow-hidden shadow-2xs">
         {error ? (
-          <div className="p-4 text-xs font-semibold text-rose-600">Error: {error}</div>
+          <div className="p-4 text-xs font-semibold text-rose-600">Error: {typeof error === 'string' ? error : (error as any)?.message || 'Failed to load employees'}</div>
         ) : (
           <EmployeeDataTable
             employees={filteredEmployees}

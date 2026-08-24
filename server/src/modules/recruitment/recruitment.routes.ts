@@ -12,11 +12,8 @@ const router = Router();
 
 // Configure multer for file uploads
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, 'uploads/'),
-    filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`),
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 });
 
 // Apply authentication and tenant resolution
@@ -172,7 +169,9 @@ router.get('/referrals/:id/progress', requirePermission('recruitment.candidate.r
 router.post('/resume-bank', requirePermission('recruitment.candidate.write'), resumeBankController.addEntry);
 router.post('/resume-bank/:id/shortlist', requirePermission('recruitment.candidate.write'), resumeBankController.shortlistToPipeline);
 router.get('/resume-bank', requirePermission('recruitment.candidate.read'), resumeBankController.listEntries);
-router.post('/resume-bank/bulk-upload', requirePermission('recruitment.candidate.write'), upload.any(), resumeBankController.bulkUpload);
+router.post('/resume-bank/bulk-upload', requirePermission('recruitment.candidate.write'), upload.single('file'), resumeBankController.bulkUpload);
+router.post('/resume-bank/bulk-upload-files', requirePermission('recruitment.candidate.write'), upload.array('files', 20), resumeBankController.bulkUploadFiles);
+router.post('/resume-bank/ats-score', requirePermission('recruitment.candidate.read'), resumeBankController.runAtsScoring);
 router.get('/resume-bank/upload-logs', requirePermission('recruitment.candidate.read'), resumeBankController.getUploadLogs);
 router.get('/resume-bank/export', requirePermission('recruitment.candidate.read'), resumeBankController.exportCsv);
 

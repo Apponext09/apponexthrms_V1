@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { showToast, toast } from '@/components/ui/toast';
 import { loadModulesState } from '@/features/modules/types';
+import { isLeaveTypeApplicableForGender } from '@/utils/genderFilter';
 
 interface LeaveType {
   id: number;
@@ -597,21 +598,28 @@ export default function LeavePage() {
   };
 
   // Processed Balances array (handles backend properties & defaults)
+  const currentEmpGender = employee?.gender || (user as any)?.gender || (user as any)?.personal_info?.gender || '';
   const displayBalances = balances.filter(b => {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
     if (code === 'LOP') return false; // Keep main quota cards clean (exclude LOP 0-day quota)
     
-    // Filter out leave types that do not match the employee's gender
-    const leaveGender = ((b as any).gender_applicable || (b as any).genderApplicable || 'all').toLowerCase();
-    if (leaveGender !== 'all') {
-      const empGender = (employee?.gender || '').toLowerCase();
-      if (empGender && empGender !== leaveGender) {
-        return false;
-      }
-    }
-    return true;
+    // Find matching leave type object to ensure policy settings & onlyWhen condition tree are present
+    const matchingType = leaveTypes.find(t => String(t.id) === String(b.leave_type_id || b.leaveTypeId || b.id));
+    const mergedItem = matchingType
+      ? {
+          ...matchingType,
+          ...b,
+          allocation_settings: b.allocation_settings || b.allocationSettings || matchingType.allocation_settings || matchingType.allocationSettings,
+          allocation: b.allocation || matchingType.allocation,
+          gender_applicable: b.gender_applicable || b.genderApplicable || matchingType.gender_applicable || matchingType.genderApplicable,
+          only_when: b.only_when || b.onlyWhen || matchingType.only_when || matchingType.onlyWhen,
+        }
+      : b;
+
+    return isLeaveTypeApplicableForGender(mergedItem, currentEmpGender);
   }).map(b => {
-    const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', 12);
+    const quotaFallback = parseFloat((b as any).annual_quota ?? (b as any).annualQuota ?? 0) || 0;
+    const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
     const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
@@ -626,11 +634,7 @@ export default function LeavePage() {
   });
 
   const allLeaveTypes = leaveTypes.filter(t => {
-    const leaveGender = (t.gender_applicable || t.genderApplicable || 'all').toLowerCase();
-    if (leaveGender === 'all') return true;
-    const empGender = (employee?.gender || '').toLowerCase();
-    if (!empGender) return true;
-    return empGender === leaveGender;
+    return isLeaveTypeApplicableForGender(t, currentEmpGender);
   });
 
   // Stats Calculations
@@ -692,30 +696,20 @@ export default function LeavePage() {
                   className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
                 >
                   <option value="">Select Leave Category...</option>
-                  {allLeaveTypes.map((t) => {
-                    const name = t.leave_name || t.leaveName || 'Leave';
-                    const code = t.leave_code || t.leaveCode || 'PTO';
-                    const balObj = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(t.id));
+                  {displayBalances
+                    .filter((b) => isLeaveTypeApplicableForGender(b, currentEmpGender))
+                    .map((b) => {
+                      const name = b.leave_name || b.leaveName || 'Leave';
+                      const code = b.leave_code || b.leaveCode || 'PTO';
+                      const targetId = b.leave_type_id || b.leaveTypeId || b.id;
+                      const avail = b.available_balance ?? 0;
 
-                    let avail = 0;
-                    if (balObj) {
-                      const total = typeof balObj.allocated_balance === 'number' ? balObj.allocated_balance : parseFloat(balObj.allocated_balance) || 0;
-                      const consumed = typeof balObj.consumed_balance === 'number' ? balObj.consumed_balance : parseFloat(balObj.consumed_balance) || 0;
-                      const pending = typeof balObj.pending_approval_balance === 'number' ? balObj.pending_approval_balance : parseFloat(balObj.pending_approval_balance) || 0;
-
-                      avail = total - consumed - pending;
-                      const isAllowNeg = Boolean((t as any).allow_negative_balance || (t as any).allowNegativeBalance || (balObj as any).allow_negative_balance || (balObj as any).allowNegativeBalance);
-                      if (!isAllowNeg) {
-                        avail = Math.max(0, avail);
-                      }
-                    }
-
-                    return (
-                      <option key={t.id} value={t.id}>
-                        {name} ({code}) - Allowance: {avail} days
-                      </option>
-                    );
-                  })}
+                      return (
+                        <option key={targetId} value={targetId}>
+                          {name} ({code}) - Allowance: {avail} days
+                        </option>
+                      );
+                    })}
                 </select>
               </div>
 
@@ -1121,7 +1115,8 @@ export default function LeavePage() {
 
           const theme = getCardTheme(leaveCode);
 
-          const total = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+          const quotaFallback = parseFloat((bal as any).annual_quota ?? (bal as any).annualQuota ?? 0) || 0;
+          const total = getBalNum(bal, 'allocated_balance', 'allocatedBalance', quotaFallback);
           const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 

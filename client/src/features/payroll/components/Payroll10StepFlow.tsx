@@ -163,7 +163,7 @@ export const Payroll10StepFlow: React.FC = () => {
       {error && (
         <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 rounded-lg p-3 text-xs text-rose-700">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          {error}
+          {typeof error === 'string' ? error : (error as any)?.message || 'An error occurred'}
         </div>
       )}
 

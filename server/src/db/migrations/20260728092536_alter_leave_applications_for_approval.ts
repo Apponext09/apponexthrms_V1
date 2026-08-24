@@ -4,7 +4,11 @@ export async function up(knex: Knex): Promise<void> {
   const hasTable = await knex.schema.hasTable('leave_applications');
   if (!hasTable) return;
 
+<<<<<<< HEAD
+  // 1. Add new columns
+=======
   // 1. Add new columns if not present
+>>>>>>> 4825c726bbdedae8d5c3b893c36de60124305872
   const hasLop = await knex.schema.hasColumn('leave_applications', 'lop_days');
   if (!hasLop) {
     await knex.schema.alterTable('leave_applications', (table) => {
@@ -21,10 +25,17 @@ export async function up(knex: Knex): Promise<void> {
     });
   }
 
+<<<<<<< HEAD
+  // 2. Modify status column to VARCHAR(50)
+  await knex.raw(`
+    ALTER TABLE leave_applications 
+    MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'draft'
+=======
   // 2. Modify status enum to VARCHAR(50)
   await knex.raw(`
     ALTER TABLE leave_applications 
     MODIFY COLUMN status VARCHAR(50) DEFAULT 'draft'
+>>>>>>> 4825c726bbdedae8d5c3b893c36de60124305872
   `);
 }
 

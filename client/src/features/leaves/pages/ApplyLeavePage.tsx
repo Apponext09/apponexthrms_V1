@@ -6,6 +6,7 @@ import { Calendar, Clock, FileText, Send, ArrowLeft, CheckCircle2, AlertCircle }
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/lib/api';
+import { isLeaveTypeApplicableForGender } from '@/utils/genderFilter';
 
 export function ApplyLeavePage() {
   const navigate = useNavigate();
@@ -165,7 +166,7 @@ export function ApplyLeavePage() {
         {error && (
           <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{error}</span>
+            <span>{typeof error === 'string' ? error : (error as any)?.message || 'An error occurred'}</span>
           </div>
         )}
 
@@ -187,11 +188,13 @@ export function ApplyLeavePage() {
                   required
                 >
                   <option value="">Select Leave Category</option>
-                  {balances.map((b: any) => (
-                    <option key={b.leave_type_id || b.leaveTypeId} value={String(b.leave_type_id || b.leaveTypeId)}>
-                      {b.leave_name || b.leaveName || `Category ${b.leave_type_id || b.leaveTypeId}`} ({b.leave_code || b.leaveCode})
-                    </option>
-                  ))}
+                  {balances
+                    .filter((b: any) => isLeaveTypeApplicableForGender(b, (employee as any)?.gender || (user as any)?.gender))
+                    .map((b: any) => (
+                      <option key={b.leave_type_id || b.leaveTypeId} value={String(b.leave_type_id || b.leaveTypeId)}>
+                        {b.leave_name || b.leaveName || `Category ${b.leave_type_id || b.leaveTypeId}`} ({b.leave_code || b.leaveCode})
+                      </option>
+                    ))}
                 </select>
                 {formData.leaveTypeId && (() => {
                   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);

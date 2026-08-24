@@ -18,6 +18,8 @@ import {
   Lock,
   Layers,
   ArrowRight,
+  Palette,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
@@ -218,6 +220,57 @@ export function GeneralSettingsPage() {
                 <option value={5}>5 Days or more</option>
               </select>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ─── CAREER & RECRUITMENT PORTAL CONFIGURATION ─── */}
+      <div className="space-y-3.5 pt-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+              Career &amp; Recruitment Portal Configuration
+            </h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Customize public job application fields, branding colors, banner images, and candidate submission rules
+            </p>
+          </div>
+
+          <Link to="/settings/career-customization">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs font-bold rounded-xl h-8 text-indigo-600 border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/20"
+            >
+              <Palette className="w-3.5 h-3.5" /> Career Portal Studio <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+
+        <Card className="border border-border/80 rounded-2xl shadow-xs bg-card hover:border-border transition-colors">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
+                <Palette className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground tracking-tight">
+                  Public Career Page Customizer
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Configure custom fields for candidate application forms, change portal colors, upload brand banners, and manage public job listing settings.
+                </p>
+              </div>
+            </div>
+
+            <Link to="/settings/career-customization" className="shrink-0">
+              <Button
+                size="sm"
+                className="gap-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-9 px-4 shadow-sm"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Customize Career Portal
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

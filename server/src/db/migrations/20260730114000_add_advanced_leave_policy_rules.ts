@@ -2,8 +2,8 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // 1. Add advanced policy columns to leave_policy_assignments
-  const hasBackdatedCol = await knex.schema.hasColumn('leave_policy_assignments', 'max_backdated_days');
-  if (!hasBackdatedCol) {
+  const hasMaxBackdated = await knex.schema.hasColumn('leave_policy_assignments', 'max_backdated_days');
+  if (!hasMaxBackdated) {
     await knex.schema.alterTable('leave_policy_assignments', (table) => {
       table.integer('max_backdated_days').nullable().defaultTo(null);
       table.integer('max_future_days').nullable().defaultTo(null);

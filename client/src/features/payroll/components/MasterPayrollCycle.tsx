@@ -231,6 +231,9 @@ export const MasterPayrollCycle: React.FC = () => {
       let savedId = selectedCycleId;
       if (isEdit) {
         const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
+        if (putRes?.data?.success === false) {
+          throw new Error(putRes.data.message || 'Failed to update cycle');
+        }
         const serverData = putRes?.data?.data || putRes?.data;
         const matchedComp = companies.find(c => String(c.id) === String(companyNum));
         const updatedItem: PayrollCycleItem = {
@@ -243,6 +246,8 @@ export const MasterPayrollCycle: React.FC = () => {
           companyName: serverData?.company_name || matchedComp?.name || (companyNum ? 'Company' : 'All Companies'),
           company_name: serverData?.company_name || matchedComp?.name || (companyNum ? 'Company' : 'All Companies'),
           isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
+          dailyWagesIncludePaidHolidays: Boolean(serverData?.daily_wages_include_paid_holidays ?? cycleForm.dailyWagesIncludePaidHolidays),
+          dailyWagesIncludeWeekOff: Boolean(serverData?.daily_wages_include_week_off ?? cycleForm.dailyWagesIncludeWeekOff),
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
           cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 25,
@@ -257,6 +262,9 @@ export const MasterPayrollCycle: React.FC = () => {
         showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
       } else {
         const postRes = await apiClient.post('/payroll/cycles', payload);
+        if (postRes?.data?.success === false) {
+          throw new Error(postRes.data.message || 'Failed to create cycle');
+        }
         const serverData = postRes?.data?.data || postRes?.data || {};
         savedId = String(serverData.id || serverData.uuid || '');
         const matchedComp = companies.find(c => String(c.id) === String(companyNum));

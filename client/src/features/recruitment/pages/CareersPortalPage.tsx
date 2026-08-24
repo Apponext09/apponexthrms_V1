@@ -56,10 +56,24 @@ export const CareersPortalPage: React.FC = () => {
 
 
       if (!candRes.data?.success) throw new Error('Failed to create candidate profile');
+      const candidateId = candRes.data.data.id;
+
+      // Index in resume_bank so it appears in Resume Source Screen Bank & ATS Screening
+      await api.post('/recruitment/resume-bank', {
+        name: `${form.firstName} ${form.lastName}`,
+        email: form.email,
+        contact: form.phone || undefined,
+        company: form.currentCompany || undefined,
+        totalExp: form.totalExperience || undefined,
+        skills: form.skills || undefined,
+        jobId: selectedJob.id,
+        position: selectedJob.job_title || selectedJob.jobTitle || 'Software Engineer',
+        source: 'Career Portal',
+      }).catch(() => {});
 
       // Then, link application
       return api.post('/recruitment/applications', {
-        candidateId: candRes.data.data.id,
+        candidateId,
         jobId: selectedJob.id,
         appliedFromSource: 'Careers Portal',
       });
@@ -80,7 +94,9 @@ export const CareersPortalPage: React.FC = () => {
       });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error || 'Failed to submit application');
+      const errObj = err.response?.data?.error;
+      const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to submit application';
+      toast.error(msg);
     }
   });
 
