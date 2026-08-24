@@ -166,21 +166,16 @@ export class RolePolicyService {
 
     let query = this.db('role_policies');
 
-    if (isSuperAdmin) {
-      // Super Admin sees all policies (drafts, published, all tenant policies)
-    } else if (isOrgAdmin) {
-      // Org Admin sees published policies + org-scoped policies
-      query = query.where(function () {
-        this.where({ status: 'published' }).orWhere('created_by', userId);
-        if (organizationId) {
-          this.orWhere('organization_id', organizationId);
-        }
-      });
+    if (isSuperAdmin || isOrgAdmin) {
+      // Admin / Super Admin see ALL role policies (so they can review & manage policies across all roles)
     } else {
-      // HR, Employee, Manager, Team Lead, Intern see ONLY published policies assigned to their specific role
-      query = query.where('status', 'published').where(function () {
-        this.where('role_code', primaryRole).orWhere('role_code', 'all');
-      });
+      // Role-wise policies: show role's policy + general employee policy (if applicable)
+      const allowedRoles = [primaryRole, 'all'];
+      if (primaryRole !== 'employee' && primaryRole !== 'intern') {
+        allowedRoles.push('employee');
+      }
+
+      query = query.where('status', 'published').whereIn('role_code', allowedRoles);
 
       if (organizationId) {
         query = query.where(function () {
