@@ -11,7 +11,7 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
   FilePlus, LineChart, ListChecks, UploadCloud, Palette
 } from 'lucide-react';

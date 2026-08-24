@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
