@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/config/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ShieldCheck, FileText, Scale, Shield, Plus, Edit, Eye, CheckCircle2, Lock, AlertCircle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, FileText, Shield, Plus, Eye, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PolicySection {
@@ -43,22 +42,45 @@ export default function PoliciesPage() {
   const [newDesc, setNewDesc] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const isSuperAdmin = user?.roles?.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase()));
-  const isOrgAdmin = user?.roles?.some((r) => ['organization_admin', 'admin'].includes(String(r).toLowerCase())) || user?.designation?.toLowerCase().includes('admin');
+  const rolesArray = Array.isArray(user?.roles) ? user.roles : (user?.role ? [user.role] : []);
+  const isSuperAdmin = rolesArray.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase()));
+  const isOrgAdmin = rolesArray.some((r) => ['organization_admin', 'admin'].includes(String(r).toLowerCase())) || (user?.designation || '').toLowerCase().includes('admin');
   const canManage = isSuperAdmin || isOrgAdmin;
 
   const fetchPolicies = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get('/auth/role-policies');
-      const data = res.data?.data || res.data;
-      if (Array.isArray(data)) {
-        setPolicies(data);
-        if (data.length > 0 && !selectedPolicy) {
-          setSelectedPolicy(data[0]);
+      let loaded: RolePolicyItem[] = [];
+
+      // Primary fetch: role-policies endpoint
+      try {
+        const res = await apiClient.get('/auth/role-policies');
+        const data = res.data?.data || res.data?.policies || res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          loaded = data;
         }
+      } catch (err) {
+        console.warn('GET /auth/role-policies failed, falling back to /auth/my-policies:', err);
+      }
+
+      // Fallback fetch if role-policies is empty
+      if (loaded.length === 0) {
+        try {
+          const res = await apiClient.get('/auth/my-policies');
+          const data = res.data?.data || res.data;
+          if (data && data.title) {
+            loaded = [data];
+          }
+        } catch (err) {
+          console.error('GET /auth/my-policies failed:', err);
+        }
+      }
+
+      setPolicies(loaded);
+      if (loaded.length > 0) {
+        setSelectedPolicy(loaded[0]);
       } else {
-        setPolicies([]);
+        setSelectedPolicy(null);
       }
     } catch (err) {
       console.error('Failed to fetch role policies:', err);
@@ -77,7 +99,7 @@ export default function PoliciesPage() {
       setSubmitting(true);
       await acceptPolicy();
       toast.success('Policy acknowledged successfully!', {
-        description: 'Your acknowledgement record has been saved.',
+        description: 'Your compliance record has been saved.',
       });
       fetchPolicies();
     } catch (err) {
@@ -142,9 +164,10 @@ export default function PoliciesPage() {
   };
 
   const filteredPolicies = policies.filter((p) => {
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (p.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (p.documentRef || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const titleMatch = (p.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const descMatch = (p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const refMatch = (p.documentRef || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = titleMatch || descMatch || refMatch;
     const matchesRole = filterRole === 'all' || p.roleCode === filterRole;
     return matchesSearch && matchesRole;
   });
@@ -159,7 +182,7 @@ export default function PoliciesPage() {
               <Shield className="w-5 h-5 text-primary" /> Role-Based Company Policies
             </h2>
             <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-extrabold uppercase">
-              {user?.roles?.[0]?.replace('_', ' ') || 'Official'} Scope
+              {(rolesArray[0] || 'Employee').replace('_', ' ')} Scope
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -187,7 +210,7 @@ export default function PoliciesPage() {
             onClick={() => setFilterRole('all')}
             className="h-8 rounded-lg text-xs font-bold"
           >
-            All Policies ({policies.length})
+            All Assigned Policies ({policies.length})
           </Button>
           {canManage && ['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'employee', 'intern'].map((r) => (
             <Button
@@ -217,7 +240,7 @@ export default function PoliciesPage() {
           <p className="text-xs font-medium text-muted-foreground">Loading role-assigned policies...</p>
         </div>
       ) : filteredPolicies.length === 0 ? (
-        /* Mandatory Empty State */
+        /* Empty State */
         <div className="flex flex-col items-center justify-center py-16 px-4 bg-card border border-border/80 rounded-xl space-y-3 text-center">
           <div className="h-12 w-12 rounded-2xl bg-muted/60 text-muted-foreground flex items-center justify-center border border-border">
             <AlertCircle className="w-6 h-6" />
@@ -256,7 +279,7 @@ export default function PoliciesPage() {
                           {p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}
                         </span>
                         <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                          {p.roleCode.replace('_', ' ')}
+                          {(p.roleCode || 'Role').replace('_', ' ')}
                         </span>
                       </div>
                       <CardTitle className="text-sm font-bold text-foreground leading-tight">
@@ -301,8 +324,8 @@ export default function PoliciesPage() {
                     <span className="font-bold text-foreground">{selectedPolicy.documentRef || `POL-${String(selectedPolicy.id).padStart(3, '0')}`}</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Role Assignment</span>
-                    <span className="font-bold text-foreground uppercase">{selectedPolicy.roleCode.replace('_', ' ')}</span>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Role Scope</span>
+                    <span className="font-bold text-foreground uppercase">{(selectedPolicy.roleCode || '').replace('_', ' ')}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[10px] uppercase font-bold">Status</span>
@@ -330,7 +353,7 @@ export default function PoliciesPage() {
                             const trimmed = line.trim();
                             if (trimmed.startsWith('•')) {
                               return (
-                                <p key={lineIdx} className="pl-3 text-foreground/90">
+                                <p key={lineIdx} className="pl-3 text-foreground/90 font-medium">
                                   {line}
                                 </p>
                               );
