@@ -13,6 +13,7 @@ import { requestLogger } from './common/middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './common/middleware/errorHandler';
 import swaggerUi from 'swagger-ui-express';
 import v1Routes from './routes/v1';
+import masterHolidayCalendarRoutes from './modules/master/routes/masterHolidayCalendar.routes';
 import { swaggerDocument } from './swagger/swaggerDoc';
 import { getSwaggerHtml } from './swagger/swaggerHtml';
 
@@ -141,6 +142,11 @@ export function createApp() {
    * API v1 routes
    */
   app.use('/api/v1', v1Routes);
+
+  /**
+   * Direct Master API alias routes
+   */
+  app.use('/api/master/holiday-calendars', (req, res, next) => masterHolidayCalendarRoutes(req, res, next));
 
   /**
    * 404 handler (must come after all routes)

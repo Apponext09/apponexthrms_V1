@@ -120,6 +120,10 @@ export default function LeavePage() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [attachedFileName, setAttachedFileName] = useState<string>('');
 
+  // Dynamic published holiday calendar & weekly-off rules
+  const [holidaysList, setHolidaysList] = useState<any[]>([]);
+  const [weeklyOffRulesList, setWeeklyOffRulesList] = useState<any[]>([]);
+
   // Day-wise breakdown state
   const [dayBreakdown, setDayBreakdown] = useState<any[]>([]);
   const [hasManuallyOverridden, setHasManuallyOverridden] = useState<boolean>(false);
@@ -163,7 +167,7 @@ export default function LeavePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [balRes, typesRes, appsRes, settingsRes, optRes, encashRes, orgLeaveSettingsRes] = await Promise.all([
+      const [balRes, typesRes, appsRes, settingsRes, optRes, encashRes, orgLeaveSettingsRes, calRes, masterCalsRes] = await Promise.all([
         apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/applications').catch(() => ({ data: { data: [] } })),
@@ -171,6 +175,8 @@ export default function LeavePage() {
         apiClient.get('/leaves/optional-holidays').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/encashments/my').catch(() => ({ data: { data: [] } })),
         apiClient.get('/settings/org-leave-settings/resolved').catch(() => ({ data: { data: null } })),
+        apiClient.get('/leaves/calendar').catch(() => ({ data: { data: null } })),
+        apiClient.get('/master/holiday-calendars').catch(() => ({ data: { data: [] } })),
       ]);
 
       if (balRes.data?.data) {
@@ -198,6 +204,44 @@ export default function LeavePage() {
           setIsBackupPersonEnabled(Boolean(rawBP));
         }
       }
+
+      let resolvedHols: any[] = [];
+      let resolvedRules: any[] = [];
+
+      if (calRes.data?.data) {
+        if (Array.isArray(calRes.data.data.holidays) && calRes.data.data.holidays.length > 0) {
+          resolvedHols = [...calRes.data.data.holidays];
+        }
+        if (Array.isArray(calRes.data.data.weeklyOffRules) && calRes.data.data.weeklyOffRules.length > 0) {
+          resolvedRules = [...calRes.data.data.weeklyOffRules];
+        }
+      }
+
+      // If resolvedHols is empty, fallback to master holiday calendar details
+      if (resolvedHols.length === 0 && masterCalsRes.data?.data) {
+        const cals = Array.isArray(masterCalsRes.data.data) ? masterCalsRes.data.data : (masterCalsRes.data.data.items || []);
+        if (cals.length > 0) {
+          const activeCal = cals.find((c: any) => c.status === 'Published') || cals[0];
+          if (activeCal?.id) {
+            try {
+              const detailRes = await apiClient.get(`/master/holiday-calendars/${activeCal.id}`);
+              if (detailRes.data?.data?.holidays && Array.isArray(detailRes.data.data.holidays)) {
+                resolvedHols = detailRes.data.data.holidays;
+              }
+              if (detailRes.data?.data?.weekly_off_rules && Array.isArray(detailRes.data.data.weekly_off_rules)) {
+                resolvedRules = detailRes.data.data.weekly_off_rules;
+              } else if (detailRes.data?.data?.weeklyOffRules && Array.isArray(detailRes.data.data.weeklyOffRules)) {
+                resolvedRules = detailRes.data.data.weeklyOffRules;
+              }
+            } catch (e) {
+              console.warn('Master holiday fallback detail error:', e);
+            }
+          }
+        }
+      }
+
+      setHolidaysList(resolvedHols);
+      setWeeklyOffRulesList(resolvedRules);
     } catch (err) {
       console.error('Failed to fetch leave data', err);
     } finally {
@@ -277,43 +321,145 @@ export default function LeavePage() {
     return (bal as any)[keySnake] || (bal as any)[keyCamel] || fallback;
   };
 
-  // 2026 Holidays list
-  const HOLIDAYS_2026 = [
-    '2026-01-01', // New Year's Day
-    '2026-01-26', // Republic Day
-    '2026-03-02', // Holi
-    '2026-04-03', // Good Friday
-    '2026-05-01', // May Day
-    '2026-08-15', // Independence Day
-    '2026-10-02', // Gandhi Jayanti
-    '2026-11-09', // Diwali
-    '2026-12-25', // Christmas
-  ];
-
   const isWeekendOrHoliday = (date: Date): { isWorking: boolean; reason: string } => {
-    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
-    if (day === 0 || day === 6) {
-      return { isWorking: false, reason: day === 0 ? 'Sunday (Weekend)' : 'Saturday (Weekend)' };
-    }
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
-    if (HOLIDAYS_2026.includes(dateStr)) {
-      return { isWorking: false, reason: 'Public Holiday' };
+
+    // Helper to get local YYYY-MM-DD from any date string / ISO timestamp
+    const getLocalHolidayDateStr = (raw: any): string => {
+      if (!raw) return '';
+      const d = new Date(raw);
+      if (isNaN(d.getTime())) {
+        return typeof raw === 'string' ? raw.split('T')[0] : '';
+      }
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dNum = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${dNum}`;
+    };
+
+    // 1. Check against dynamic published holidays from Holiday Calendar
+    if (holidaysList && holidaysList.length > 0) {
+      const matched = holidaysList.find((h: any) => {
+        const raw = h.holiday_date || h.holidayDate || h.date;
+        if (!raw) return false;
+
+        // A. Local Date string
+        if (getLocalHolidayDateStr(raw) === dateStr) return true;
+
+        // B. String split / startsWith
+        if (typeof raw === 'string') {
+          const clean = raw.trim();
+          if (clean.startsWith(dateStr)) return true;
+          const [yr, mo, da] = dateStr.split('-');
+          if (clean === `${da}-${mo}-${yr}` || clean.startsWith(`${da}-${mo}-${yr}`)) return true;
+        }
+
+        // C. UTC Date string
+        const dObj = new Date(raw);
+        if (!isNaN(dObj.getTime())) {
+          const uy = dObj.getUTCFullYear();
+          const um = String(dObj.getUTCMonth() + 1).padStart(2, '0');
+          const ud = String(dObj.getUTCDate()).padStart(2, '0');
+          if (`${uy}-${um}-${ud}` === dateStr) return true;
+        }
+
+        return false;
+      });
+
+      if (matched) {
+        const name = matched.holiday_name || matched.holidayName || matched.name || 'Holiday';
+        const type = matched.holiday_type || matched.holidayType || matched.type || 'Public';
+        return { isWorking: false, reason: `${name} (${type} Holiday)` };
+      }
     }
+
+    // 2. Check against Weekly Off Rules
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const shortDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const currentDayName = dayNames[date.getDay()];
+    const currentShortDay = shortDayNames[date.getDay()];
+
+    if (weeklyOffRulesList && weeklyOffRulesList.length > 0) {
+      const matchedRule = weeklyOffRulesList.find((r: any) => {
+        const rawDay = (r.week_day || r.weekDay || r.day_of_week || r.dayOfWeek || r.day || '').trim().toLowerCase();
+        return (
+          rawDay === currentDayName.toLowerCase() ||
+          rawDay === currentShortDay.toLowerCase() ||
+          (rawDay.length >= 3 && currentDayName.toLowerCase().startsWith(rawDay))
+        );
+      });
+
+      if (matchedRule) {
+        const isAlt = Boolean(matchedRule.is_alternate ?? matchedRule.isAlternate);
+        const offType = matchedRule.off_type || matchedRule.offType || 'Full Day';
+        const isHalfDayOff = offType.toLowerCase().includes('half');
+
+        if (isAlt) {
+          const dayOfMonth = date.getDate();
+          const weekNumber = Math.ceil(dayOfMonth / 7);
+          let altWeeks: number[] = [];
+          const rawAlt = matchedRule.alternate_weeks || matchedRule.alternateWeeks;
+
+          if (Array.isArray(rawAlt)) {
+            altWeeks = rawAlt.map((w: any) => parseInt(String(w).trim(), 10)).filter(n => !isNaN(n));
+          } else if (typeof rawAlt === 'string') {
+            try {
+              if (rawAlt.startsWith('[')) {
+                const parsed = JSON.parse(rawAlt);
+                if (Array.isArray(parsed)) {
+                  altWeeks = parsed.map((w: any) => parseInt(String(w).trim(), 10)).filter(n => !isNaN(n));
+                }
+              } else {
+                altWeeks = rawAlt.split(',').map((s: string) => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+              }
+            } catch {
+              altWeeks = rawAlt.split(',').map((s: string) => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+            }
+          }
+
+          if (altWeeks.length === 0) {
+            altWeeks = [2, 4];
+          }
+
+          if (altWeeks.includes(weekNumber)) {
+            const suffix = weekNumber === 1 ? 'st' : weekNumber === 2 ? 'nd' : weekNumber === 3 ? 'rd' : 'th';
+            if (isHalfDayOff) {
+              return { isWorking: true, isHalfDay: true, reason: `${currentDayName} (${weekNumber}${suffix} Half-Day Weekend)` };
+            }
+            return { isWorking: false, reason: `${currentDayName} (${weekNumber}${suffix} Alternate Weekend)` };
+          }
+        } else {
+          if (isHalfDayOff) {
+            return { isWorking: true, isHalfDay: true, reason: `${currentDayName} (Half-Day Weekend)` };
+          }
+          return { isWorking: false, reason: `${currentDayName} (Weekend)` };
+        }
+      }
+    } else {
+      // Default fallback when no rules are configured: Sunday is Weekend
+      if (date.getDay() === 0) {
+        return { isWorking: false, reason: 'Sunday (Weekend)' };
+      }
+    }
+
     return { isWorking: true, reason: '' };
   };
 
-  // Auto-generate day-wise breakdown list when date range changes
+  // Auto-generate day-wise breakdown list when date range or holiday lists change
   useEffect(() => {
     if (!startDate || !endDate) {
       setDayBreakdown([]);
       setHasManuallyOverridden(false);
       return;
     }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    const end = new Date(ey, em - 1, ed);
+
     if (end < start) {
       setDayBreakdown([]);
       setHasManuallyOverridden(false);
@@ -324,7 +470,11 @@ export default function LeavePage() {
     const current = new Date(start);
     while (current <= end) {
       const check = isWeekendOrHoliday(current);
-      const dateStr = current.toISOString().split('T')[0];
+      const yyyy = current.getFullYear();
+      const mm = String(current.getMonth() + 1).padStart(2, '0');
+      const dd = String(current.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
       breakdown.push({
         date: dateStr,
         isWorkingDay: check.isWorking,
@@ -337,7 +487,7 @@ export default function LeavePage() {
     }
     setDayBreakdown(breakdown);
     setHasManuallyOverridden(false);
-  }, [startDate, endDate]);
+  }, [startDate, endDate, holidaysList, weeklyOffRulesList]);
 
   const computedTotalRequestedDays = () => {
     const totalCents = dayBreakdown.reduce((acc, day) => {
@@ -768,18 +918,23 @@ export default function LeavePage() {
                         Day-by-Day Overrides
                       </span>
                       <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1">
-                        {dayBreakdown.map((day, idx) => (
-                          <div key={day.date} className="flex items-center justify-between gap-3 text-xs bg-card p-2.5 rounded-xl border border-border">
-                            <div className="min-w-0">
-                              <span className="font-bold text-foreground block">
-                                {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                              </span>
-                              {!day.isWorkingDay && (
-                                <span className="text-[9px] font-extrabold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded mt-0.5 inline-block">
-                                  {day.reason}
+                        {dayBreakdown.map((day, idx) => {
+                          const [y, m, d] = (day.date || '').split('-').map(Number);
+                          const dateObj = y && m && d ? new Date(y, m - 1, d) : new Date(day.date);
+                          const displayDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+                          return (
+                            <div key={day.date} className="flex items-center justify-between gap-3 text-xs bg-card p-2.5 rounded-xl border border-border">
+                              <div className="min-w-0">
+                                <span className="font-bold text-foreground block">
+                                  {displayDate}
                                 </span>
-                              )}
-                            </div>
+                                {!day.isWorkingDay && (
+                                  <span className="text-[9px] font-extrabold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                    {day.reason}
+                                  </span>
+                                )}
+                              </div>
 
                             {day.isWorkingDay ? (
                               <div className="flex gap-1.5 items-center">
@@ -826,7 +981,8 @@ export default function LeavePage() {
                               <span className="text-[11px] font-bold text-muted-foreground">0.0 Days</span>
                             )}
                           </div>
-                        ))}
+                        );
+                      })}
                       </div>
                     </div>
                   )}

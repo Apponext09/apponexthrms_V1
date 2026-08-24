@@ -12,18 +12,41 @@ interface AddLeaveTypeModalProps {
 }
 
 const COLOR_OPTIONS = [
-  { id: 'Sky', label: 'Sky Blue', dot: 'bg-sky-500' },
-  { id: 'Indigo', label: 'Indigo Purple', dot: 'bg-indigo-600' },
-  { id: 'Emerald', label: 'Emerald Green', dot: 'bg-emerald-500' },
-  { id: 'Amber', label: 'Amber Gold', dot: 'bg-amber-500' },
-  { id: 'Rose', label: 'Rose Red', dot: 'bg-rose-500' },
+  { id: 'None', label: '⚪ None / Slate', dot: 'bg-slate-400' },
+  { id: 'Sky', label: '🔵 Sky Blue', dot: 'bg-sky-500' },
+  { id: 'Indigo', label: '🟣 Indigo Purple', dot: 'bg-indigo-600' },
+  { id: 'Emerald', label: '🟢 Emerald Green', dot: 'bg-emerald-500' },
+  { id: 'Amber', label: '🟠 Amber Gold', dot: 'bg-amber-500' },
+  { id: 'Rose', label: '🔴 Rose Red', dot: 'bg-rose-500' },
+  { id: 'Teal', label: '🩵 Teal Cyan', dot: 'bg-teal-500' },
+  { id: 'Violet', label: '🔮 Deep Violet', dot: 'bg-violet-600' },
+  { id: 'Fuchsia', label: '🌸 Fuchsia Pink', dot: 'bg-fuchsia-500' },
+  { id: 'Orange', label: '🔥 Sunset Orange', dot: 'bg-orange-500' },
+  { id: 'Lime', label: '🌱 Lime Green', dot: 'bg-lime-500' },
+  { id: 'Cyan', label: '💠 Electric Cyan', dot: 'bg-cyan-500' },
 ];
 
 const ICON_OPTIONS = [
+  { id: 'None', emoji: '🚫', label: 'None' },
   { id: 'Sun', emoji: '☀️', label: 'Sun' },
   { id: 'Palm', emoji: '🌴', label: 'Palm' },
   { id: 'Vacation', emoji: '🏖️', label: 'Vacation' },
-  { id: 'Hospital', emoji: '🏥', label: 'Medical' },
+  { id: 'Hospital', emoji: '🏥', label: 'Hospital' },
+  { id: 'Pill', emoji: '💊', label: 'Pill' },
+  { id: 'Thermometer', emoji: '🌡️', label: 'Flu/Fever' },
+  { id: 'Heart', emoji: '💖', label: 'Wellness' },
+  { id: 'Baby', emoji: '👶', label: 'Maternity' },
+  { id: 'Briefcase', emoji: '💼', label: 'Official' },
+  { id: 'Coffee', emoji: '☕', label: 'Break' },
+  { id: 'Clock', emoji: '⏰', label: 'Comp-off' },
+  { id: 'Plane', emoji: '✈️', label: 'Travel' },
+  { id: 'Book', emoji: '📚', label: 'Study' },
+  { id: 'Home', emoji: '🏠', label: 'Personal' },
+  { id: 'Award', emoji: '🏆', label: 'Privilege' },
+  { id: 'Star', emoji: '⭐', label: 'Special' },
+  { id: 'Shield', emoji: '🛡️', label: 'Emergency' },
+  { id: 'Party', emoji: '🎉', label: 'Celebration' },
+  { id: 'Umbrella', emoji: '☂️', label: 'Weather' },
 ];
 
 export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
@@ -221,20 +244,20 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
                 <span>Category Icon</span>
                 <Info className="w-3.5 h-3.5 text-slate-400" />
               </label>
-              <div className="grid grid-cols-4 gap-2 pt-0.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 pt-0.5 max-h-52 overflow-y-auto p-1.5 border border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/40 dark:bg-slate-900/40">
                 {ICON_OPTIONS.map(i => (
                   <button
                     key={i.id}
                     type="button"
                     onClick={() => setIcon(i.id)}
-                    className={`flex items-center justify-center gap-2 p-2.5 rounded-2xl border text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                       icon === i.id
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20'
-                        : 'bg-slate-50/70 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <span className="text-base">{i.emoji}</span>
-                    <span>{i.label}</span>
+                    <span className="text-sm">{i.emoji}</span>
+                    <span className="truncate text-[11px]">{i.label}</span>
                   </button>
                 ))}
               </div>

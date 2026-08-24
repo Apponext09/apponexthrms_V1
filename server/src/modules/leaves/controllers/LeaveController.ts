@@ -13,6 +13,7 @@ import { logger } from '../../../common/lib/logger';
 import { calculateFinancialYearStart, toLocalYYYYMMDD } from '../utils/dateUtils';
 import { db } from '../../../db/knex';
 import { evaluateConditionGroup } from '../utils/ruleEngine';
+import { holidayCalendarService } from '../../master/services/HolidayCalendarService';
 
 export class LeaveController {
   private leaveService: LeaveService;
@@ -628,20 +629,91 @@ export class LeaveController {
   }
 
   /**
-   * HR Override for pending_hr_override status leaves
+   * HR Override for pending leaves
    */
   async hrOverride(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
+      const ctx = req.ctx!;
       const { applicationId } = req.params;
-      const { decision, comment } = req.body;
+      const { decision, action, comment, adminNotes } = req.body;
+      const dec = decision || action;
+      const comm = comment || adminNotes || '';
 
-      if (!decision || (decision !== 'grant_without_deduction' && decision !== 'convert_to_lop')) {
-        throw new ValidationError('Invalid decision. Must be grant_without_deduction or convert_to_lop');
+      if (dec === 'grant_without_deduction' || dec === 'convert_to_lop') {
+        await this.approvalService.hrOverride(ctx, parseInt(applicationId), ctx.userId, dec, comm);
+      } else if (dec === 'approve' || dec === 'force_approve') {
+        await this.approvalService.approveLeave(ctx, parseInt(applicationId), ctx.userId, comm);
+      } else if (dec === 'reject' || dec === 'force_reject') {
+        await this.approvalService.rejectLeave(ctx, parseInt(applicationId), ctx.userId, comm || 'Rejected via HR Override');
+      } else {
+        throw new ValidationError('Invalid decision. Must be grant_without_deduction, convert_to_lop, force_approve, or force_reject');
       }
 
-      await this.approvalService.hrOverride(ctx, parseInt(applicationId), ctx.userId, decision, comment);
       res.json({ success: true, message: 'Leave override processed successfully' });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Get employee resolved holiday calendar, published holidays, and weekly off rules
+   */
+  async getLeaveCalendar(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      let employeeId = 1;
+      try {
+        employeeId = await this.getEmployeeIdFromCtx(ctx);
+      } catch (e) {
+        employeeId = 1;
+      }
+      const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
+
+      let data = await holidayCalendarService.getEmployeeHolidaysAndRules(null, ctx, employeeId, year);
+
+      // Fallback: If no calendar or holidays found, query any holiday calendars for this org
+      if (!data || !data.holidays || data.holidays.length === 0) {
+        const knex = (this.applicationRepo as any).db;
+        const fallbackCal = await knex('holiday_calendars')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .orderByRaw("CASE WHEN status = 'Published' THEN 1 WHEN status = 'Draft' THEN 2 ELSE 3 END")
+          .first();
+
+        if (fallbackCal) {
+          const holidays = await knex('holidays')
+            .where('holiday_calendar_id', fallbackCal.id)
+            .whereNull('deleted_at')
+            .orderBy('holiday_date', 'asc');
+
+          const weeklyOffRules = await knex('weekly_off_rules')
+            .where('holiday_calendar_id', fallbackCal.id)
+            .whereNull('deleted_at');
+
+          data = {
+            calendar: fallbackCal,
+            holidays: holidays || [],
+            weeklyOffRules: weeklyOffRules || [],
+          };
+        } else {
+          // If no holiday calendar table found, query any active holidays directly
+          const allHolidays = await knex('holidays')
+            .where('organization_id', ctx.organizationId)
+            .whereNull('deleted_at')
+            .orderBy('holiday_date', 'asc');
+
+          data = {
+            calendar: null,
+            holidays: allHolidays || [],
+            weeklyOffRules: [],
+          };
+        }
+      }
+
+      res.json({
+        success: true,
+        data: data || { calendar: null, holidays: [], weeklyOffRules: [] }
+      });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -1112,62 +1184,46 @@ export class LeaveController {
     try {
       const ctx = req.ctx!;
       const empId = await this.getEmployeeIdFromCtx(ctx);
-      const employee = await db('employees').where('id', empId).first();
-      const locationId = employee ? employee.current_location_id : null;
-      const startYear = new Date().getFullYear();
+      const startYear = req.query.year ? parseInt(String(req.query.year), 10) : new Date().getFullYear();
 
-      let calendar = null;
-      if (locationId) {
-        calendar = await db('holiday_calendars')
-          .where('organization_id', ctx.organizationId)
-          .where('year', startYear)
-          .where('applicable_location_id', locationId)
-          .where('status', 'active')
-          .whereNull('deleted_at')
-          .first();
-      }
-      if (!calendar) {
-        calendar = await db('holiday_calendars')
-          .where('organization_id', ctx.organizationId)
-          .where('year', startYear)
-          .where('is_default', true)
-          .where('status', 'active')
-          .whereNull('deleted_at')
-          .first();
-      }
+      // Touchpoint 3: Resolve published Holiday Calendar for this employee
+      const calRes = await holidayCalendarService.getCalendarForEmployee(null, ctx, empId, startYear);
 
-      if (!calendar) {
-        res.json({ success: true, data: [] });
+      if (!calRes) {
+        res.json({ success: true, data: [], message: 'No published holiday calendar assigned for this year.' });
         return;
       }
 
       const holidays = await db('holidays')
         .where({
           organization_id: ctx.organizationId,
-          holiday_calendar_id: calendar.id,
-          is_optional: true
+          calendar_id: calRes.calendarId,
         })
-        .whereNull('deleted_at');
+        .where((builder) => {
+          builder.where('is_optional', true).orWhere('holiday_type', 'Optional');
+        })
+        .whereNull('deleted_at')
+        .orderBy('holiday_date', 'asc');
 
       const selections = await db('optional_holiday_selections')
         .where({
           organization_id: ctx.organizationId,
           employee_id: empId,
-          year: startYear
+          year: startYear,
         })
         .whereNull('deleted_at');
 
-      const data = holidays.map(h => {
-        const selection = selections.find(s => s.holiday_id === h.id);
+      const data = holidays.map((h) => {
+        const selection = selections.find((s) => s.holiday_id === h.id);
         return {
           ...h,
           selected: !!selection,
           selection_status: selection ? selection.status : null,
-          selection_id: selection ? selection.id : null
+          selection_id: selection ? selection.id : null,
         };
       });
 
-      res.json({ success: true, data });
+      res.json({ success: true, data, calendar_id: calRes.calendarId, calendar_name: calRes.calendar.calendar_name || calRes.calendar.name });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -1175,20 +1231,25 @@ export class LeaveController {
 
   /**
    * Select optional holiday
+   * Touchpoint 3: Enforces quota, creates optional_holiday_selections and creates approved 1-day leave_applications
    */
   async selectOptionalHoliday(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
       const empId = await this.getEmployeeIdFromCtx(ctx);
-      const { holidayId } = req.body;
-      if (!holidayId) {
+      const { holidayId, holiday_id } = req.body;
+      const targetHolidayId = holidayId || holiday_id;
+      if (!targetHolidayId) {
         throw new ValidationError('Holiday ID is required');
       }
 
       const year = new Date().getFullYear();
 
       const holiday = await db('holidays')
-        .where({ id: parseInt(holidayId, 10), organization_id: ctx.organizationId, is_optional: true })
+        .where({ id: parseInt(targetHolidayId, 10), organization_id: ctx.organizationId })
+        .where((builder) => {
+          builder.where('is_optional', true).orWhere('holiday_type', 'Optional');
+        })
         .whereNull('deleted_at')
         .first();
 
@@ -1196,7 +1257,7 @@ export class LeaveController {
         throw new NotFoundError('Optional holiday not found or not eligible');
       }
 
-      let quota = 2;
+      let quota = 2; // Assumption/Default: 2 optional floating holidays per year
       const assignment = await db('leave_policy_assignments')
         .where({ employee_id: empId, organization_id: ctx.organizationId, is_active: true })
         .whereNull('deleted_at')
@@ -1215,12 +1276,19 @@ export class LeaveController {
         throw new ValidationError(`You have already selected ${currentSelections.length} optional holidays. Your annual quota is ${quota}.`);
       }
 
+      // Check if already selected
+      const existing = currentSelections.find((s) => s.holiday_id === holiday.id);
+      if (existing) {
+        throw new ValidationError('You have already selected this optional holiday.');
+      }
+
       const uuid = uuidv4();
-      const [id] = await db('optional_holiday_selections').insert({
+      const [selectionId] = await db('optional_holiday_selections').insert({
         uuid,
         organization_id: ctx.organizationId,
+        company_id: ctx.companyId || null,
         employee_id: empId,
-        holiday_id: parseInt(holidayId, 10),
+        holiday_id: holiday.id,
         year,
         status: 'approved',
         created_by: ctx.userId,
@@ -1229,7 +1297,69 @@ export class LeaveController {
         updated_at: new Date(),
       });
 
-      res.status(201).json({ success: true, message: 'Optional holiday selected successfully', data: { id, uuid } });
+      // Find or fallback leave type for Floating / Optional Holiday
+      let floatLeaveType = await db('leave_types')
+        .where('organization_id', ctx.organizationId)
+        .where((builder) => {
+          builder.whereIn('leave_code', ['FL', 'OH', 'OPT', 'CL', 'PL'])
+            .orWhere('is_optional', true)
+            .orWhere('leave_name', 'like', '%optional%')
+            .orWhere('leave_name', 'like', '%floating%');
+        })
+        .where('status', 'active')
+        .whereNull('deleted_at')
+        .first();
+
+      if (!floatLeaveType) {
+        floatLeaveType = await db('leave_types')
+          .where('organization_id', ctx.organizationId)
+          .where('status', 'active')
+          .whereNull('deleted_at')
+          .first();
+      }
+
+      if (floatLeaveType) {
+        const appUuid = uuidv4();
+        const holidayDateStr = toLocalYYYYMMDD(new Date(holiday.holiday_date));
+
+        const [appId] = await db('leave_applications').insert({
+          uuid: appUuid,
+          organization_id: ctx.organizationId,
+          company_id: ctx.companyId || null,
+          employee_id: empId,
+          leave_type_id: floatLeaveType.id,
+          application_start_date: holidayDateStr,
+          application_end_date: holidayDateStr,
+          total_days: 1.0,
+          is_half_day: false,
+          reason: `Optional Holiday: ${holiday.holiday_name || 'Floating Holiday'}`,
+          status: 'approved',
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+
+        // Day record
+        await db('leave_application_days').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          application_id: appId,
+          leave_date: holidayDateStr,
+          day_type: 'FULL',
+          is_weekend: false,
+          is_holiday: false,
+          is_sandwich_day: false,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+
+      res.status(201).json({
+        success: true,
+        message: `Optional holiday "${holiday.holiday_name}" selected successfully.`,
+        data: { id: selectionId, uuid, holiday_name: holiday.holiday_name, holiday_date: holiday.holiday_date },
+      });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -1246,6 +1376,7 @@ export class LeaveController {
 
       const selection = await db('optional_holiday_selections')
         .where({ id: parseInt(selectionId, 10), employee_id: empId, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
         .first();
 
       if (!selection) {
@@ -1257,10 +1388,140 @@ export class LeaveController {
         .update({
           deleted_at: new Date(),
           updated_by: ctx.userId,
-          updated_at: new Date()
+          updated_at: new Date(),
         });
 
-      res.json({ success: true, message: 'Optional holiday selection cancelled successfully' });
+      // Also cancel any corresponding auto-generated leave application for that holiday date
+      const holiday = await db('holidays').where('id', selection.holiday_id).first();
+      if (holiday) {
+        const holidayDateStr = toLocalYYYYMMDD(new Date(holiday.holiday_date));
+        await db('leave_applications')
+          .where({
+            employee_id: empId,
+            organization_id: ctx.organizationId,
+            application_start_date: holidayDateStr,
+            application_end_date: holidayDateStr,
+          })
+          .update({
+            status: 'cancelled',
+            deleted_at: new Date(),
+            updated_at: new Date(),
+          });
+      }
+
+      res.json({ success: true, message: 'Optional holiday selection cancelled successfully.' });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Request / Earn Compensatory Off
+   * Touchpoint 4: Validates worked_date against published Holiday Calendar and rejects regular working days.
+   */
+  async createCompOffRequest(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+      const { workedDate, worked_date, hoursEarned, hours, reason } = req.body;
+
+      const dateToValidate = workedDate || worked_date;
+      if (!dateToValidate) {
+        throw new ValidationError('Worked date is required to request comp-off.');
+      }
+
+      const earnedHours = parseFloat(hoursEarned || hours || 8);
+      if (isNaN(earnedHours) || earnedHours <= 0) {
+        throw new ValidationError('Valid earned hours are required (e.g. 4 for half day, 8 for full day).');
+      }
+
+      const workedYear = new Date(dateToValidate).getFullYear();
+
+      // Resolve employee's published calendar
+      const calRes = await holidayCalendarService.getCalendarForEmployee(null, ctx, empId, workedYear);
+
+      let isEligibleOffDay = false;
+      if (calRes) {
+        const offCheck = await holidayCalendarService.isHolidayOrWeekOff(null, ctx, calRes.calendarId, dateToValidate);
+        isEligibleOffDay = offCheck.isOff;
+      } else {
+        // Fallback: Check if date is a weekend (Sunday = 0, Saturday = 6)
+        const dObj = new Date(dateToValidate);
+        isEligibleOffDay = [0, 6].includes(dObj.getDay());
+      }
+
+      if (!isEligibleOffDay) {
+        throw new ValidationError('Comp-off can only be earned for holidays or week-offs.');
+      }
+
+      const expiresAt = new Date(dateToValidate);
+      expiresAt.setDate(expiresAt.getDate() + 60); // 60 days validity
+      const expiresAtStr = toLocalYYYYMMDD(expiresAt);
+
+      const uuid = uuidv4();
+      const [balanceId] = await db('comp_off_balances').insert({
+        uuid,
+        organization_id: ctx.organizationId,
+        company_id: ctx.companyId || null,
+        employee_id: empId,
+        comp_off_earned_date: dateToValidate,
+        comp_off_earned_hours: earnedHours,
+        comp_off_expires_at: expiresAtStr,
+        status: 'available',
+        reason: reason || 'Comp-off earned for extra work on holiday/week-off',
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const reqUuid = uuidv4();
+      await db('comp_off_requests').insert({
+        uuid: reqUuid,
+        organization_id: ctx.organizationId,
+        company_id: ctx.companyId || null,
+        employee_id: empId,
+        comp_off_id: balanceId,
+        request_date: dateToValidate,
+        reason: reason || 'Comp-off earned for extra work on holiday/week-off',
+        status: 'approved',
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Comp-off recorded successfully.',
+        data: {
+          id: balanceId,
+          uuid,
+          earnedHours,
+          workedDate: dateToValidate,
+          expiresAt: expiresAtStr,
+        },
+      });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Get Comp Off balances & requests
+   */
+  async getCompOffRequests(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+
+      const balances = await db('comp_off_balances')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', empId)
+        .whereNull('deleted_at')
+        .orderBy('comp_off_earned_date', 'desc');
+
+      res.json({ success: true, data: balances });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -1690,10 +1951,18 @@ export class LeaveController {
 
       await this.ensureLeaveEncashmentSchema(db);
 
-      const settings = await db('leave_encashment_settings')
+      let q = db('leave_encashment_settings')
         .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
-        .orderBy('id', 'asc');
+        .whereNull('deleted_at');
+
+      const companyId = req.query.company_id || ctx.companyId || (req.headers['x-company-id'] && req.headers['x-company-id'] !== 'all' ? parseInt(req.headers['x-company-id'] as string, 10) : null);
+      if (companyId) {
+        q = q.where(function() {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        });
+      }
+
+      const settings = await q.orderBy('id', 'asc');
       res.json({ success: true, data: settings });
     } catch (error) {
       this.handleError(error, res);
@@ -1711,9 +1980,12 @@ export class LeaveController {
         throw new ValidationError('Name and formula are required');
       }
       await this.ensureLeaveEncashmentSchema(db);
+      const resolvedCompanyId = req.body.company_id || req.body.companyId || ctx.companyId || (req.headers['x-company-id'] ? parseInt(req.headers['x-company-id'] as string, 10) : null) || ctx.organizationId || null;
+
       const [id] = await db('leave_encashment_settings').insert({
         uuid: uuidv4(),
         organization_id: ctx.organizationId,
+        company_id: resolvedCompanyId,
         name,
         formula,
         limit: limit ? parseFloat(limit) : null,
@@ -1740,18 +2012,25 @@ export class LeaveController {
       const id = Number(req.params.id);
       const { name, formula, limit, isActive, employment, daysBasis } = req.body;
       await this.ensureLeaveEncashmentSchema(db);
+      const resolvedCompanyId = req.body.company_id || req.body.companyId || ctx.companyId || (req.headers['x-company-id'] ? parseInt(req.headers['x-company-id'] as string, 10) : null) || ctx.organizationId || null;
+
+      const updateData: any = {
+        name,
+        formula,
+        limit: limit ? parseFloat(limit) : null,
+        is_active: isActive !== undefined ? !!isActive : true,
+        days_basis: daysBasis ? parseInt(daysBasis, 10) : 30,
+        employment: employment ? (typeof employment === 'string' ? employment : JSON.stringify(employment)) : null,
+        updated_by: ctx.userId,
+        updated_at: new Date()
+      };
+      if (resolvedCompanyId) {
+        updateData.company_id = resolvedCompanyId;
+      }
+
       const count = await db('leave_encashment_settings')
         .where({ id, organization_id: ctx.organizationId })
-        .update({
-          name,
-          formula,
-          limit: limit ? parseFloat(limit) : null,
-          is_active: isActive !== undefined ? !!isActive : true,
-          days_basis: daysBasis ? parseInt(daysBasis, 10) : 30,
-          employment: employment ? (typeof employment === 'string' ? employment : JSON.stringify(employment)) : null,
-          updated_by: ctx.userId,
-          updated_at: new Date()
-        });
+        .update(updateData);
       if (!count) {
         throw new NotFoundError('Leave encashment setting not found');
       }
@@ -1787,6 +2066,20 @@ export class LeaveController {
 
   private async ensureLeaveEncashmentSchema(db: any): Promise<void> {
     try {
+      const hasCompanyId = await db.schema.hasColumn('leave_encashment_settings', 'company_id');
+      if (!hasCompanyId) {
+        await db.schema.alterTable('leave_encashment_settings', (table: any) => {
+          table.bigInteger('company_id').unsigned().nullable();
+        });
+        logger.info('[LeaveController] Added company_id column to leave_encashment_settings');
+      }
+
+      // Backfill any existing NULL company_id with organization_id
+      await db('leave_encashment_settings')
+        .whereNull('company_id')
+        .update({ company_id: db.raw('COALESCE(organization_id, 1)') })
+        .catch(() => {});
+
       const hasDaysBasis = await db.schema.hasColumn('leave_encashment_settings', 'days_basis');
       if (!hasDaysBasis) {
         await db.schema.alterTable('leave_encashment_settings', (table: any) => {
@@ -1857,47 +2150,77 @@ export class LeaveController {
       throw new ValidationError('Active salary structure not found for this employee.');
     }
 
-    // 4. Parse formula and sum components
-    const formulaStr = policy.formula || 'basic_monthly';
-    const components = formulaStr.split('+').map((c: string) => c.trim().toLowerCase());
-    let sum = 0;
-    for (const comp of components) {
-      if (comp === 'basic' || comp === 'basic_monthly' || comp === 'basic monthly') {
-        sum += Number(struct.basic_monthly || 0);
-      } else if (comp === 'hra' || comp === 'hra_monthly' || comp === 'hra monthly') {
-        sum += Number(struct.hra_monthly || 0);
-      } else if (comp === 'special_allowance' || comp === 'special allowance' || comp === 'special_allowance_monthly') {
-        sum += Number(struct.special_allowance_monthly || 0);
-      } else if (comp === 'gross' || comp === 'gross_monthly' || comp === 'gross monthly') {
-        sum += Number(struct.gross_monthly || 0);
-      } else {
-        // Look inside custom_components JSON if it exists
-        let customVal = 0;
-        if (struct.custom_components) {
-          try {
-            const custom = typeof struct.custom_components === 'string'
-              ? JSON.parse(struct.custom_components)
-              : struct.custom_components;
-            if (custom && custom[comp] !== undefined) {
-              customVal = Number(custom[comp] || 0);
-            } else {
-              // Try case-insensitive matching in custom JSON keys
-              const foundKey = Object.keys(custom).find(k => k.toLowerCase() === comp);
-              if (foundKey) {
-                customVal = Number(custom[foundKey] || 0);
-              }
-            }
-          } catch (e) {
-            console.error('Error parsing custom components:', e);
-          }
-        }
-        sum += customVal;
-      }
+    // 4. Determine days limit & capped days
+    let cappedDays = requestedDays;
+    if (isFullAndFinal && policy.limit !== null && policy.limit !== undefined) {
+      cappedDays = Math.min(requestedDays, Number(policy.limit));
     }
 
-    // 5. Calculate daily rate
+    // 5. Parse formula and calculate dynamic base or full total
+    const formulaStr = String(policy.formula || 'Basic + DA').trim();
     const daysBasis = Number(policy.days_basis || 30);
-    const dailyRate = sum / daysBasis;
+    
+    // Map employee's actual database salary components
+    const basicVal = Number(struct.basic_monthly || 0);
+    const hraVal = Number(struct.hra_monthly || 0);
+    const daVal = Number(struct.da_monthly || struct.da || 0);
+    const specialVal = Number(struct.special_allowance_monthly || 0);
+    const conveyanceVal = Number(struct.conveyance_monthly || 0);
+    const medicalVal = Number(struct.medical_monthly || 0);
+    const grossVal = Number(struct.gross_monthly || (basicVal + hraVal + daVal + specialVal + conveyanceVal + medicalVal));
+    const ctcVal = Number(struct.ctc_monthly || (grossVal * 1.15));
+    const perDayVal = daysBasis > 0 ? (basicVal / daysBasis) : 0;
+
+    let dailyRate = 0;
+    let totalAmount = 0;
+
+    let evalStr = formulaStr
+      .replace(/\bBasic\b|\bbasic_monthly\b|\bbasic monthly\b/gi, String(basicVal))
+      .replace(/\bDA\b|\bda_monthly\b|\bda monthly\b/gi, String(daVal))
+      .replace(/\bHRA\b|\bhra_monthly\b|\bhra monthly\b/gi, String(hraVal))
+      .replace(/\bSpecial_Allowance\b|\bspecial_allowance\b|\bspecial allowance\b/gi, String(specialVal))
+      .replace(/\bConveyance\b|\bconveyance\b/gi, String(conveyanceVal))
+      .replace(/\bMedical_Allowance\b|\bmedical_allowance\b/gi, String(medicalVal))
+      .replace(/\bGross_Salary\b|\bGross\b|\bgross_monthly\b|\bgross monthly\b/gi, String(grossVal))
+      .replace(/\bCTC\b|\bctc_monthly\b/gi, String(ctcVal))
+      .replace(/\bPER_DAY_SALARY\b/gi, String(perDayVal))
+      .replace(/\bLEAVE_BALANCE\b|\bLEAVE_DAYS\b|\bNUMBER_OF_LEAVE\b/gi, String(cappedDays));
+
+    if (struct.custom_components) {
+      try {
+        const custom = typeof struct.custom_components === 'string' ? JSON.parse(struct.custom_components) : struct.custom_components;
+        if (custom && typeof custom === 'object') {
+          for (const [k, v] of Object.entries(custom)) {
+            const re = new RegExp(`\\b${k}\\b`, 'gi');
+            evalStr = evalStr.replace(re, String(Number(v) || 0));
+          }
+        }
+      } catch (e) {}
+    }
+
+    try {
+      if (/^[\d\s\+\-\*\/\(\)\.]+$/.test(evalStr)) {
+        // eslint-disable-next-line no-new-func
+        const evaluated = Function(`"use strict"; return (${evalStr});`)();
+        if (typeof evaluated === 'number' && !isNaN(evaluated) && isFinite(evaluated)) {
+          if (formulaStr.includes('LEAVE_BALANCE') || formulaStr.includes('LEAVE_DAYS') || formulaStr.includes('NUMBER_OF_LEAVE') || formulaStr.includes('/')) {
+            totalAmount = Math.max(0, evaluated);
+            dailyRate = cappedDays > 0 ? (totalAmount / cappedDays) : totalAmount;
+          } else {
+            const sumBase = Math.max(0, evaluated);
+            dailyRate = daysBasis > 0 ? (sumBase / daysBasis) : 0;
+            totalAmount = dailyRate * cappedDays;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error evaluating dynamic encashment formula:', err);
+    }
+
+    if (!dailyRate && !totalAmount) {
+      dailyRate = (basicVal + daVal) / (daysBasis || 30);
+      totalAmount = dailyRate * cappedDays;
+    }
 
     // 6. Fetch leave balance
     const settings = await db('organization_leave_settings')
@@ -1924,14 +2247,6 @@ export class LeaveController {
       .first();
 
     const availableBalance = balance ? Number(balance.available_balance || 0) : 0;
-
-    // 7. Apply limits for FNF/resignation if enabled
-    let cappedDays = requestedDays;
-    if (isFullAndFinal && policy.limit !== null && policy.limit !== undefined) {
-      cappedDays = Math.min(requestedDays, Number(policy.limit));
-    }
-
-    const totalAmount = dailyRate * cappedDays;
 
     return {
       employeeName: `${employee.first_name} ${employee.last_name}`,

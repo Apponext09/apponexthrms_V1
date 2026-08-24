@@ -58,6 +58,14 @@ router.delete('/employee-statuses/:id', asyncHandler((req, res) => employeeStatu
 router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) => {
   const db = getKnex();
 
+  const formatLabel = (str: any) => {
+    if (!str) return '';
+    return String(str)
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase())
+      .trim();
+  };
+
   const safeQueryTable = async (table: string) => {
     try {
       const hasTable = await db.schema.hasTable(table);
@@ -67,6 +75,12 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       let builder = db(table);
       if (hasDeletedAt) {
         builder = builder.whereNull('deleted_at');
+      }
+
+      if (req.ctx?.organizationId && (await db.schema.hasColumn(table, 'organization_id'))) {
+        builder = builder.where(function () {
+          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
+        });
       }
 
       // Dynamically detect existing ID column
@@ -80,6 +94,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       const hasLocationName = await db.schema.hasColumn(table, 'location_name');
       const hasBranchName = await db.schema.hasColumn(table, 'branch_name');
       const hasDeptName = await db.schema.hasColumn(table, 'department_name');
+      const hasDesigName = await db.schema.hasColumn(table, 'designation_name');
+      const hasGradeName = await db.schema.hasColumn(table, 'grade_name');
+      const hasTypeName = await db.schema.hasColumn(table, 'type_name');
+      const hasStatusName = await db.schema.hasColumn(table, 'status_name');
       const hasName = await db.schema.hasColumn(table, 'name');
       const hasLegalName = await db.schema.hasColumn(table, 'legal_name');
 
@@ -89,36 +107,90 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       else if (hasLocationName) nameCol = 'location_name';
       else if (hasBranchName) nameCol = 'branch_name';
       else if (hasDeptName) nameCol = 'department_name';
+      else if (hasDesigName) nameCol = 'designation_name';
+      else if (hasGradeName) nameCol = 'grade_name';
+      else if (hasTypeName) nameCol = 'type_name';
+      else if (hasStatusName) nameCol = 'status_name';
       else if (hasLegalName) nameCol = 'legal_name';
 
       const rows = await builder.select(`${idCol} as rawId`, `${nameCol} as rawName`);
-      return rows
-        .filter((r: any) => r.rawName && String(r.rawName).trim() !== '')
-        .map((r: any) => ({ id: r.rawId, name: String(r.rawName).trim() }));
+      const seen = new Set<string>();
+      const uniqueList: any[] = [];
+      for (const r of rows) {
+        const cleanName = String(r.rawName || '').trim();
+        if (cleanName && cleanName !== 'null' && cleanName !== 'undefined' && !seen.has(cleanName.toLowerCase())) {
+          seen.add(cleanName.toLowerCase());
+          uniqueList.push({ id: r.rawId, name: cleanName });
+        }
+      }
+      return uniqueList;
     } catch (e) {
       console.error(`Error querying master table ${table}:`, e);
       return [];
     }
   };
 
+  const safeQuery = async (table: string, _colExpr?: string) => {
+    return safeQueryTable(table);
+  };
+
   // 1. Companies (Robust query across company, companies, and organizations tables)
   let companies: any[] = [];
   try {
-    const targetTable = (await db.schema.hasTable('company'))
-      ? 'company'
-      : ((await db.schema.hasTable('companies')) ? 'companies' : ((await db.schema.hasTable('organizations')) ? 'organizations' : ''));
+    const hasCompany = await db.schema.hasTable('company');
+    const hasCompanies = await db.schema.hasTable('companies');
+    const hasOrgs = await db.schema.hasTable('organizations');
 
-    if (targetTable) {
-      let q = db(targetTable);
-      if (await db.schema.hasColumn(targetTable, 'deleted_at')) {
+    if (hasCompany) {
+      let q = db('company');
+      if (await db.schema.hasColumn('company', 'deleted_at')) {
+        q = q.whereNull('deleted_at');
+      }
+      if (req.ctx?.organizationId && (await db.schema.hasColumn('company', 'organization_id'))) {
+        q = q.where(function () {
+          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
+        });
+      }
+      const rows = await q.select('*');
+      companies = rows
+        .map((r: any) => ({
+          id: Number(r.companyId ?? r.company_id ?? r.id),
+          name: String(r.name || r.companyName || r.company_name || r.employerName || r.employer_name || r.legalName || r.legal_name || `Company #${r.companyId || r.company_id || r.id}`).trim(),
+          code: r.code || r.companyCode || r.company_code || '',
+        }))
+        .filter((r: any) => r.name && r.name !== 'null' && r.name !== 'undefined');
+    }
+
+    if (companies.length === 0 && hasCompanies) {
+      let q = db('companies');
+      if (await db.schema.hasColumn('companies', 'deleted_at')) {
         q = q.whereNull('deleted_at');
       }
       const rows = await q.select('*');
       companies = rows
         .map((r: any) => ({
-          id: r.company_id || r.id,
-          name: String(r.name || r.company_name || r.employer_name || r.legal_name || `Company #${r.company_id || r.id}`).trim(),
-          code: r.code || r.company_code || ''
+          id: Number(r.companyId ?? r.company_id ?? r.id),
+          name: String(r.name || r.companyName || r.company_name || r.employerName || r.employer_name || `Company #${r.companyId || r.id}`).trim(),
+          code: r.code || r.companyCode || '',
+        }))
+        .filter((r: any) => r.name && r.name !== 'null' && r.name !== 'undefined');
+    }
+
+    // Fallback to organizations if company table is empty
+    if (companies.length === 0 && hasOrgs) {
+      let q = db('organizations');
+      if (await db.schema.hasColumn('organizations', 'deleted_at')) {
+        q = q.whereNull('deleted_at');
+      }
+      if (req.ctx?.organizationId) {
+        q = q.where('id', req.ctx.organizationId);
+      }
+      const rows = await q.select('*');
+      companies = rows
+        .map((r: any) => ({
+          id: Number(r.id),
+          name: String(r.name || r.companyName || r.legalName || 'Apponext HRMS').trim(),
+          code: r.code || 'COMP-001',
         }))
         .filter((r: any) => r.name && r.name !== 'null' && r.name !== 'undefined');
     }
@@ -126,11 +198,8 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
     console.error('Error fetching companies in scope-masters:', e);
   }
 
-  // 2. Locations (Queries `branches` table first, fallback to `locations`)
-  let locations = await safeQueryTable('branches');
-  if (locations.length === 0) {
-    locations = await safeQueryTable('locations');
-  }
+  // 2. Locations (Queries `locations` table)
+  let locations = await safeQueryTable('locations');
 
   // 3. Departments
   let departments = await safeQueryTable('departments');
@@ -292,6 +361,45 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
     }
   }
 
+  // 9. Salary Components
+  let salaryComponents: any[] = [];
+  try {
+    const hasSalaryComps = await db.schema.hasTable('salary_components');
+    if (hasSalaryComps) {
+      let q = db('salary_components').whereNull('deleted_at');
+      if (req.ctx?.organizationId && (await db.schema.hasColumn('salary_components', 'organization_id'))) {
+        q = q.where(function () {
+          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
+        });
+      }
+      const rows = await q.select('id', db.raw('COALESCE(component_name, name) as compName'), db.raw('COALESCE(component_code, code) as compCode'));
+      const seen = new Set<string>();
+      for (const r of rows) {
+        const name = String(r.compName || r.compCode || '').trim();
+        const code = String(r.compCode || r.compName || '').trim().replace(/\s+/g, '_');
+        if (name && !seen.has(code.toLowerCase())) {
+          seen.add(code.toLowerCase());
+          salaryComponents.push({ id: code, name, code });
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching salary components in scope-masters:', e);
+  }
+
+  if (salaryComponents.length === 0) {
+    salaryComponents = [
+      { id: 'Basic', name: 'Basic Salary', code: 'Basic' },
+      { id: 'DA', name: 'Dearness Allowance (DA)', code: 'DA' },
+      { id: 'HRA', name: 'House Rent Allowance (HRA)', code: 'HRA' },
+      { id: 'Special_Allowance', name: 'Special Allowance', code: 'Special_Allowance' },
+      { id: 'Conveyance', name: 'Conveyance Allowance', code: 'Conveyance' },
+      { id: 'Medical_Allowance', name: 'Medical Allowance', code: 'Medical_Allowance' },
+      { id: 'Gross_Salary', name: 'Gross Monthly Salary', code: 'Gross_Salary' },
+      { id: 'CTC', name: 'Monthly CTC', code: 'CTC' },
+    ];
+  }
+
   res.json({
     success: true,
     data: {
@@ -303,6 +411,7 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       grades,
       employmentTypes,
       employmentStatuses,
+      salaryComponents,
     },
   });
 }));
@@ -1322,12 +1431,16 @@ router.get('/employment-options', asyncHandler(async (req: Request, res: Respons
     dbEmployeeStatuses = ['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni'];
   }
 
+  const uniqueGrades = Array.from(new Set(dbGrades.filter(Boolean)));
+  const uniqueTypes = Array.from(new Set(dbEmployeeTypes.filter(Boolean)));
+  const uniqueStatuses = Array.from(new Set(dbEmployeeStatuses.filter(Boolean)));
+
   const response: ApiResponse = {
     success: true,
     data: {
-      employeeTypes: dbEmployeeTypes,
-      employeeStatuses: dbEmployeeStatuses,
-      grades: dbGrades
+      employeeTypes: uniqueTypes,
+      employeeStatuses: uniqueStatuses,
+      grades: uniqueGrades
     }
   };
 
@@ -1704,16 +1817,48 @@ router.delete('/holidays/:id', asyncHandler(async (req: Request, res: Response) 
 router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx;
   const db = getKnex();
+  const orgId = ctx?.organizationId || (ctx as any)?.organization_id;
 
   let query = db('leave_types').whereNull('deleted_at');
-  if (ctx?.organizationId) {
+  if (orgId) {
     query = query.where(function (this: any) {
-      this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      this.where('organization_id', orgId).orWhereNull('organization_id');
     });
   }
 
   const types = await query.orderBy('id', 'asc');
-  res.json({ success: true, data: types });
+  const parsedTypes = types.map((t: any) => {
+    let alloc: any = {};
+    const rawAlloc = t.allocationSettings || t.allocation_settings;
+    try {
+      alloc = typeof rawAlloc === 'string' ? JSON.parse(rawAlloc) : (rawAlloc || {});
+      if (typeof alloc === 'string') {
+        alloc = JSON.parse(alloc);
+      }
+    } catch (e) {
+      alloc = {};
+    }
+    const color = t.color || alloc?.color || 'Sky';
+    const icon = t.icon || alloc?.icon || 'Sun';
+    const effective_from = t.effectiveFrom || t.effective_from || alloc?.effective_from || alloc?.effectiveFrom || null;
+    const effective_to = t.effectiveTo || t.effective_to || alloc?.effective_to || alloc?.effectiveTo || null;
+    return {
+      ...t,
+      color,
+      themeColor: color,
+      theme_color: color,
+      icon,
+      categoryIcon: icon,
+      category_icon: icon,
+      effective_from,
+      effectiveFrom: effective_from,
+      effective_to,
+      effectiveTo: effective_to,
+      allocation_settings: alloc,
+      allocationSettings: alloc,
+    };
+  });
+  res.json({ success: true, data: parsedTypes });
 }));
 
 router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => {
@@ -1736,6 +1881,10 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
     pool_from_leave_type_id,
     paid_type,
     leave_classification,
+    color,
+    icon,
+    effective_from,
+    effective_to,
     allocation_settings,
     application_settings,
     payroll_settings,
@@ -1765,6 +1914,19 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
 
   const stringifyJson = (val: any) => val ? (typeof val === 'string' ? val : JSON.stringify(val)) : null;
 
+  let allocObj: any = {};
+  if (allocation_settings) {
+    try {
+      allocObj = typeof allocation_settings === 'string' ? JSON.parse(allocation_settings) : { ...allocation_settings };
+    } catch (e) {
+      allocObj = {};
+    }
+  }
+  if (color) allocObj.color = color;
+  if (icon) allocObj.icon = icon;
+  if (effective_from) allocObj.effective_from = effective_from;
+  if (effective_to) allocObj.effective_to = effective_to;
+
   await db.transaction(async (trx) => {
     const [id] = await trx('leave_types').insert({
       uuid: uuidv4(),
@@ -1785,7 +1947,7 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       negative_balance_action: action,
       pool_from_leave_type_id: poolId,
       leave_classification: leave_classification || 'uncategorized',
-      allocation_settings: stringifyJson(allocation_settings),
+      allocation_settings: stringifyJson(allocObj),
       application_settings: stringifyJson(application_settings),
       payroll_settings: stringifyJson(payroll_settings),
       employment_allocation_settings: stringifyJson(employment_allocation_settings),
@@ -1968,9 +2130,12 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   if (!allocEntitlement && typeof allocation_settings === 'string') {
     try { allocEntitlement = JSON.parse(allocation_settings)?.entitlementDays; } catch (e) {}
   }
-  const newQuota = parseInt(annual_quota ?? allocEntitlement ?? 0, 10) || (parseInt(allocEntitlement, 10) || 0);
+  const isQuotaProvided = annual_quota !== undefined || allocEntitlement !== undefined;
   const oldQuota = currentType.annual_quota || currentType.annualQuota || 0;
-  const quotaDiff = newQuota - oldQuota;
+  const newQuota = isQuotaProvided
+    ? (parseInt(annual_quota ?? allocEntitlement ?? 0, 10) || 0)
+    : oldQuota;
+  const quotaDiff = isQuotaProvided ? (newQuota - oldQuota) : 0;
 
   const stringifyJson = (val: any) => val ? (typeof val === 'string' ? val : JSON.stringify(val)) : null;
 
@@ -1980,7 +2145,7 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   };
 
   if (leave_name !== undefined) updateData.leave_name = leave_name;
-  if (leave_code !== undefined) updateData.leave_code = leave_code.toUpperCase();
+  if (leave_code !== undefined) updateData.leave_code = leave_code ? String(leave_code).toUpperCase() : currentType.leave_code;
   if (paid_type !== undefined) updateData.paid_type = paid_type;
   if (leave_classification !== undefined) updateData.leave_classification = leave_classification;
   if (status !== undefined) updateData.status = status;
@@ -1991,12 +2156,31 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   if (negative_balance_action !== undefined) updateData.negative_balance_action = action;
   if (pool_from_leave_type_id !== undefined) updateData.pool_from_leave_type_id = poolId;
 
-  if (annual_quota !== undefined || allocEntitlement !== undefined) {
-    updateData.annual_quota = newQuota > 0 ? newQuota : (currentType.annual_quota || currentType.annualQuota || 0);
+  if (isQuotaProvided) {
+    updateData.annual_quota = newQuota > 0 ? newQuota : oldQuota;
   }
 
-  if (allocation_settings !== undefined && allocation_settings !== null) {
-    updateData.allocation_settings = stringifyJson(allocation_settings);
+  const allocRaw = allocation_settings !== undefined ? allocation_settings : (currentType.allocationSettings || currentType.allocation_settings);
+  let allocObj: any = {};
+  if (allocRaw) {
+    try {
+      allocObj = typeof allocRaw === 'string' ? JSON.parse(allocRaw) : { ...allocRaw };
+      if (typeof allocObj === 'string') {
+        allocObj = JSON.parse(allocObj);
+      }
+    } catch (e) {
+      allocObj = {};
+    }
+  }
+  if (req.body.color !== undefined) allocObj.color = req.body.color;
+  if (req.body.icon !== undefined) allocObj.icon = req.body.icon;
+  if (req.body.effective_from !== undefined) allocObj.effective_from = req.body.effective_from;
+  if (req.body.effective_to !== undefined) allocObj.effective_to = req.body.effective_to;
+  if (req.body.effectiveFrom !== undefined) allocObj.effective_from = req.body.effectiveFrom;
+  if (req.body.effectiveTo !== undefined) allocObj.effective_to = req.body.effectiveTo;
+
+  if (allocation_settings !== undefined || req.body.color !== undefined || req.body.icon !== undefined || req.body.effective_from !== undefined || req.body.effective_to !== undefined || req.body.effectiveFrom !== undefined || req.body.effectiveTo !== undefined) {
+    updateData.allocation_settings = stringifyJson(allocObj);
   }
   if (application_settings !== undefined && application_settings !== null) {
     updateData.application_settings = stringifyJson(application_settings);
@@ -2019,41 +2203,45 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
     .where({ id })
     .update(updateData);
 
-  // 2. Update all active policy assignments for this type in this organization
-  await db('leave_policy_assignments')
-    .where({ organization_id: ctx.organizationId, leave_type_id: id })
-    .update({
+  // 2. Update all active policy assignments and balances ONLY IF quota actually changed
+  if (isQuotaProvided && quotaDiff !== 0) {
+    const assignmentUpdate: Record<string, any> = {
       annual_quota: newQuota,
-      carry_forward_enabled: Boolean(carry_forward_enabled) ? 1 : 0,
-      carry_forward_limit: parseInt(carry_forward_limit, 10) || null,
       updated_by: ctx.userId,
       updated_at: new Date()
-    });
+    };
+    if (carry_forward_enabled !== undefined) assignmentUpdate.carry_forward_enabled = Boolean(carry_forward_enabled) ? 1 : 0;
+    if (carry_forward_limit !== undefined) assignmentUpdate.carry_forward_limit = parseInt(carry_forward_limit, 10) || null;
 
-  // 3. Update active leave balances for this financial year (adjust available/opening balances by the diff)
-  const currentYear = new Date().getFullYear();
+    await db('leave_policy_assignments')
+      .where({ organization_id: ctx.organizationId, leave_type_id: id })
+      .update(assignmentUpdate);
 
-  const balances = await db('leave_balances')
-    .where({ organization_id: ctx.organizationId, leave_type_id: id })
-    .where((builder: any) => {
-      builder.whereRaw('YEAR(financial_year_start) = ?', [currentYear])
-        .orWhereNull('financial_year_start');
-    });
+    // 3. Update active leave balances for this financial year (adjust available/opening balances by the diff)
+    const currentYear = new Date().getFullYear();
 
-  for (const bal of balances) {
-    const currentOpening = parseFloat(bal.opening_balance || bal.openingBalance) || 0;
-    const currentAvailable = parseFloat(bal.available_balance || bal.availableBalance) || 0;
-    const updatedOpening = Math.max(0, currentOpening + quotaDiff);
-    const updatedAvailable = Math.max(0, currentAvailable + quotaDiff);
-
-    await db('leave_balances')
-      .where({ id: bal.id })
-      .update({
-        opening_balance: updatedOpening,
-        available_balance: updatedAvailable,
-        updated_by: ctx.userId,
-        updated_at: new Date()
+    const balances = await db('leave_balances')
+      .where({ organization_id: ctx.organizationId, leave_type_id: id })
+      .where((builder: any) => {
+        builder.whereRaw('YEAR(financial_year_start) = ?', [currentYear])
+          .orWhereNull('financial_year_start');
       });
+
+    for (const bal of balances) {
+      const currentOpening = parseFloat(bal.opening_balance || bal.openingBalance) || 0;
+      const currentAvailable = parseFloat(bal.available_balance || bal.availableBalance) || 0;
+      const updatedOpening = Math.max(0, currentOpening + quotaDiff);
+      const updatedAvailable = Math.max(0, currentAvailable + quotaDiff);
+
+      await db('leave_balances')
+        .where({ id: bal.id })
+        .update({
+          opening_balance: updatedOpening,
+          available_balance: updatedAvailable,
+          updated_by: ctx.userId,
+          updated_at: new Date()
+        });
+    }
   }
 
   // Write to audit_logs
@@ -2081,21 +2269,21 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
       pool_from_leave_type_id: currentType.pool_from_leave_type_id
     }),
     after_state: JSON.stringify({
-      leave_name,
-      leave_code: leave_code.toUpperCase(),
+      leave_name: leave_name || currentType.leave_name,
+      leave_code: leave_code ? String(leave_code).toUpperCase() : currentType.leave_code,
       annual_quota: newQuota,
-      carry_forward_enabled: Boolean(carry_forward_enabled),
-      carry_forward_limit: parseInt(carry_forward_limit, 10) || null,
-      encashment_enabled: Boolean(encashment_enabled),
-      encashment_limit: parseInt(encashment_limit, 10) || null,
-      sandwich_rule_enabled: Boolean(sandwich_rule_enabled),
-      gender_applicable: gender_applicable || 'all',
-      description: description || null,
-      status: status || 'active',
-      paid_type: paid_type || 'paid',
-      allow_negative_balance: isAllowNeg,
-      negative_balance_action: action,
-      pool_from_leave_type_id: poolId
+      carry_forward_enabled: carry_forward_enabled !== undefined ? Boolean(carry_forward_enabled) : !!currentType.carry_forward_enabled,
+      carry_forward_limit: carry_forward_limit !== undefined ? (parseInt(carry_forward_limit, 10) || null) : currentType.carry_forward_limit,
+      encashment_enabled: encashment_enabled !== undefined ? Boolean(encashment_enabled) : !!currentType.encashment_enabled,
+      encashment_limit: encashment_limit !== undefined ? (parseInt(encashment_limit, 10) || null) : currentType.encashment_limit,
+      sandwich_rule_enabled: sandwich_rule_enabled !== undefined ? Boolean(sandwich_rule_enabled) : !!currentType.sandwich_rule_enabled,
+      gender_applicable: gender_applicable || currentType.gender_applicable || 'all',
+      description: description !== undefined ? description : currentType.description,
+      status: status || currentType.status || 'active',
+      paid_type: paid_type || currentType.paid_type || 'paid',
+      allow_negative_balance: allow_negative_balance !== undefined ? isAllowNeg : !!currentType.allow_negative_balance,
+      negative_balance_action: negative_balance_action !== undefined ? action : currentType.negative_balance_action,
+      pool_from_leave_type_id: pool_from_leave_type_id !== undefined ? poolId : currentType.pool_from_leave_type_id
     }),
     ip_address: req.ip || '127.0.0.1',
     user_agent: req.headers['user-agent'] || 'unknown',

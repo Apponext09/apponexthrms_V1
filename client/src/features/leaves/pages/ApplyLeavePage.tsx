@@ -32,14 +32,24 @@ export function ApplyLeavePage() {
   useEffect(() => {
     const loadSettingsAndHolidays = async () => {
       try {
-        const settingsRes = await apiClient.get('/settings/org-leave-settings/my-resolved');
+        const [settingsRes, holidaysRes, calRes] = await Promise.all([
+          apiClient.get('/settings/org-leave-settings/my-resolved').catch(() => ({ data: { success: false } })),
+          apiClient.get('/settings/holidays/upcoming?limit=100').catch(() => ({ data: { success: false } })),
+          apiClient.get('/leaves/calendar').catch(() => ({ data: { success: false } })),
+        ]);
+
         if (settingsRes.data && settingsRes.data.success) {
           setResolvedSettings(settingsRes.data.data);
         }
-        const holidaysRes = await apiClient.get('/settings/holidays/upcoming?limit=100');
-        if (holidaysRes.data && holidaysRes.data.success) {
-          setHolidaysList(holidaysRes.data.data || []);
+
+        let combinedHolidays: any[] = [];
+        if (holidaysRes.data && holidaysRes.data.success && Array.isArray(holidaysRes.data.data)) {
+          combinedHolidays = [...holidaysRes.data.data];
         }
+        if (calRes.data?.data?.holidays && Array.isArray(calRes.data.data.holidays)) {
+          combinedHolidays = [...combinedHolidays, ...calRes.data.data.holidays];
+        }
+        setHolidaysList(combinedHolidays);
       } catch (err) {
         console.error("Failed to load settings or holidays", err);
       }

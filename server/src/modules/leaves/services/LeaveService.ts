@@ -16,6 +16,8 @@ import { withTransaction } from '../../../db/knex';
 import { calculateFinancialYearStart, calculateFinancialYearEnd, toLocalYYYYMMDD } from '../utils/dateUtils';
 import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../utils/settingsResolver';
 import { evaluateConditionGroup } from '../utils/ruleEngine';
+import { holidayCalendarService, OffDayCheckResult } from '../../master/services/HolidayCalendarService';
+import { logger } from '../../../common/lib/logger';
 import axios from 'axios';
 
 interface ApplyLeaveInput {
@@ -346,6 +348,16 @@ export class LeaveService {
       // EMPLOYMENT ELIGIBILITY VALIDATION
       if (!this.checkEmploymentEligibility(employee, employmentAppSettings)) {
         throw new ValidationError('You are not eligible to apply for this leave type based on your current employment configuration (Department, Grade, Location, etc).');
+      }
+
+      // LEAVE CATEGORY EFFECTIVE DATES / VALIDITY WINDOW VALIDATION
+      const effFrom = leaveType.effective_from || leaveType.effectiveFrom || allocationSettings.effective_from || allocationSettings.effectiveFrom;
+      const effTo = leaveType.effective_to || leaveType.effectiveTo || allocationSettings.effective_to || allocationSettings.effectiveTo;
+      if (effFrom && input.startDate < effFrom) {
+        throw new ValidationError(`This leave category is only effective from ${effFrom}. The requested start date (${input.startDate}) is before the effective date.`);
+      }
+      if (effTo && input.endDate > effTo) {
+        throw new ValidationError(`This leave category is only valid until ${effTo}. The requested end date (${input.endDate}) is after the validity period.`);
       }
 
       // SUPPORTING DOCUMENTS VALIDATION
@@ -1645,57 +1657,32 @@ export class LeaveService {
     totalDays: number;
     days: Array<{ date: string; type: 'FULL' | 'FIRST_HALF' | 'SECOND_HALF'; isHoliday: boolean; isWeekend: boolean; isSandwichDay: boolean; isPrefixSuffixDay?: boolean }>;
   }> {
-    // 1. Fetch organization weekly work pattern from settings (resolving location fallback)
+    // 1. Fetch organization weekly work pattern from settings (as fallback if no published calendar found)
     const settings = await getOrgLeaveSettings(ctx.organizationId, locationId);
     const weeklyWorkPattern = settings.weeklyWorkPattern || getDefaultWeeklyWorkPattern();
     const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const weeklyOffDays: number[] = [];
+    const fallbackWeeklyOffDays: number[] = [];
     for (let i = 0; i < 7; i++) {
       const dayName = dayNames[i];
       const pattern = weeklyWorkPattern[dayName];
       if (pattern) {
         if (pattern.isWorking === false || pattern.is_working === false) {
-          weeklyOffDays.push(i);
+          fallbackWeeklyOffDays.push(i);
         }
       } else {
-        // Fallback: Default Sunday and Saturday as week off if pattern for that day is missing
         if (i === 0 || i === 6) {
-          weeklyOffDays.push(i);
+          fallbackWeeklyOffDays.push(i);
         }
       }
     }
 
-    // 2. Fetch holiday calendar resolution
+    // 2. Resolve published Holiday Calendar for this employee (Touchpoint 1)
     const startYear = new Date(startDate).getFullYear();
-    let calendar = null;
-    if (locationId) {
-      calendar = await trx('holiday_calendars')
-        .where('organization_id', ctx.organizationId)
-        .where('year', startYear)
-        .where('applicable_location_id', locationId)
-        .where('status', 'active')
-        .whereNull('deleted_at')
-        .first();
-    }
-    if (!calendar) {
-      calendar = await trx('holiday_calendars')
-        .where('organization_id', ctx.organizationId)
-        .where('year', startYear)
-        .where('is_default', true)
-        .where('status', 'active')
-        .whereNull('deleted_at')
-        .first();
-    }
-
-    const holidayDates = new Set<string>();
-    if (calendar) {
-      const holidays = await trx('holidays')
-        .where('organization_id', ctx.organizationId)
-        .where('holiday_calendar_id', calendar.id)
-        .whereNull('deleted_at');
-      for (const h of holidays) {
-        holidayDates.add(toLocalYYYYMMDD(h.holidayDate));
-      }
+    let assignedCalendarInfo: { calendarId: number; calendar: any } | null = null;
+    try {
+      assignedCalendarInfo = await holidayCalendarService.getCalendarForEmployee(trx, ctx, employeeId, startYear);
+    } catch (calErr) {
+      logger.warn(`Failed to resolve published holiday calendar for employee ${employeeId}:`, calErr);
     }
 
     // Check if policy has entitlement_includes_public_holidays enabled and leave code is EL/PL
@@ -1718,10 +1705,37 @@ export class LeaveService {
       : false;
     const leaveCode = assignment ? String(assignment.leaveCode || assignment.leave_code || '').toUpperCase() : '';
 
-    // Helper functions for checking weekend/holiday
-    const isWeekend = (d: Date): boolean => weeklyOffDays.includes(d.getDay());
-    const isHoliday = (dateStr: string): boolean => {
-      if (holidayDates.has(dateStr)) {
+    // Cache day checks for quick lookups
+    const dayCheckCache = new Map<string, OffDayCheckResult>();
+
+    const getDayCheck = async (d: Date, dateStr: string): Promise<OffDayCheckResult> => {
+      if (dayCheckCache.has(dateStr)) {
+        return dayCheckCache.get(dateStr)!;
+      }
+
+      if (assignedCalendarInfo) {
+        const res = await holidayCalendarService.isHolidayOrWeekOff(trx, ctx, assignedCalendarInfo.calendarId, dateStr);
+        dayCheckCache.set(dateStr, res);
+        return res;
+      }
+
+      // Fallback: Check fallbackWeeklyOffDays
+      const isWk = fallbackWeeklyOffDays.includes(d.getDay());
+      const fallbackRes: OffDayCheckResult = isWk
+        ? { isOff: true, type: 'WeekOff', offType: 'Full Day' }
+        : { isOff: false };
+      dayCheckCache.set(dateStr, fallbackRes);
+      return fallbackRes;
+    };
+
+    const isWeekend = async (d: Date, dateStr: string): Promise<boolean> => {
+      const res = await getDayCheck(d, dateStr);
+      return res.isOff && res.type === 'WeekOff';
+    };
+
+    const isHoliday = async (d: Date, dateStr: string): Promise<boolean> => {
+      const res = await getDayCheck(d, dateStr);
+      if (res.isOff && res.type === 'Holiday') {
         if (includesHolidays && (leaveCode === 'EL' || leaveCode === 'PL')) {
           return false; // Treat as normal consumed leave day
         }
@@ -1729,7 +1743,12 @@ export class LeaveService {
       }
       return false;
     };
-    const isWeekendOrHoliday = (d: Date, dateStr: string): boolean => isWeekend(d) || isHoliday(dateStr);
+
+    const isWeekendOrHoliday = async (d: Date, dateStr: string): Promise<boolean> => {
+      const isWk = await isWeekend(d, dateStr);
+      const isHol = await isHoliday(d, dateStr);
+      return isWk || isHol;
+    };
 
     // 3. Fetch existing leave days within margin for sandwich checks
     const marginStart = toLocalYYYYMMDD(new Date(new Date(startDate).getTime() - 15 * 24 * 60 * 60 * 1000));
@@ -1765,7 +1784,7 @@ export class LeaveService {
     const currentApplicationLeaveDays = new Set<string>();
     for (const dateStr of dates) {
       const dObj = new Date(dateStr);
-      if (!isWeekendOrHoliday(dObj, dateStr)) {
+      if (!(await isWeekendOrHoliday(dObj, dateStr))) {
         currentApplicationLeaveDays.add(dateStr);
       }
     }
@@ -1774,12 +1793,12 @@ export class LeaveService {
       return currentApplicationLeaveDays.has(dateStr) || existingLeaveDays.has(dateStr);
     };
 
-    // Helper to find sandwich status
-    const checkIsSandwiched = (dateStr: string): boolean => {
+    // Helper to find sandwich status (Touchpoint 2)
+    const checkIsSandwiched = async (dateStr: string): Promise<boolean> => {
       const prev = new Date(dateStr);
       prev.setDate(prev.getDate() - 1);
       let prevStr = toLocalYYYYMMDD(prev);
-      while (isWeekendOrHoliday(prev, prevStr)) {
+      while (await isWeekendOrHoliday(prev, prevStr)) {
         prev.setDate(prev.getDate() - 1);
         prevStr = toLocalYYYYMMDD(prev);
       }
@@ -1788,7 +1807,7 @@ export class LeaveService {
       const next = new Date(dateStr);
       next.setDate(next.getDate() + 1);
       let nextStr = toLocalYYYYMMDD(next);
-      while (isWeekendOrHoliday(next, nextStr)) {
+      while (await isWeekendOrHoliday(next, nextStr)) {
         next.setDate(next.getDate() + 1);
         nextStr = toLocalYYYYMMDD(next);
       }
@@ -1803,12 +1822,12 @@ export class LeaveService {
 
     for (const dateStr of dates) {
       const dObj = new Date(dateStr);
-      const isWeekOff = isWeekend(dObj);
-      const isPubHoliday = isHoliday(dateStr);
+      const isWeekOff = await isWeekend(dObj, dateStr);
+      const isPubHoliday = await isHoliday(dObj, dateStr);
 
       let isSandwich = false;
       if ((isWeekOff || isPubHoliday) && sandwichRuleEnabled) {
-        isSandwich = checkIsSandwiched(dateStr);
+        isSandwich = await checkIsSandwiched(dateStr);
       }
 
       let isPrefixSuffix = false;

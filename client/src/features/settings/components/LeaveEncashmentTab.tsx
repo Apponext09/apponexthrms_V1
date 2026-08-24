@@ -14,6 +14,7 @@ import {
 interface LeaveEncashmentTabProps {
   formData: any;
   setFormData: React.Dispatch<React.SetStateAction<any>>;
+  companies?: { id: number; name: string }[];
   departments: { id: number; name: string }[];
   locations: { id: number; name: string }[];
   gradeOptions: string[];
@@ -22,6 +23,7 @@ interface LeaveEncashmentTabProps {
 export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
   formData,
   setFormData,
+  companies = [],
   departments,
   locations,
   gradeOptions,
@@ -41,9 +43,27 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
   const updateEmployment = (category: string, id: any) => {
     setFormData((prev: any) => {
       const currentArr = prev.employment_allocation?.[category] || [];
-      const updated = currentArr.includes(id)
-        ? currentArr.filter((x: any) => x !== id)
+      const exists = currentArr.some((x: any) => String(x) === String(id));
+      const updated = exists
+        ? currentArr.filter((x: any) => String(x) !== String(id))
         : [...currentArr, id];
+      return {
+        ...prev,
+        employment_allocation: {
+          ...prev.employment_allocation,
+          [category]: updated,
+        },
+      };
+    });
+  };
+
+  const toggleSelectAll = (category: string, allItems: any[]) => {
+    setFormData((prev: any) => {
+      const currentArr = prev.employment_allocation?.[category] || [];
+      const allSelected =
+        allItems.length > 0 &&
+        allItems.every((item) => currentArr.some((x: any) => String(x) === String(item.id)));
+      const updated = allSelected ? [] : allItems.map((item) => item.id);
       return {
         ...prev,
         employment_allocation: {
@@ -394,59 +414,150 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             {/* Scope Card 1: Company */}
             <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
               <div className="flex items-center justify-between text-xs font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                <span>[-] Company</span>
-                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">0</span>
+                <div className="flex items-center gap-2">
+                  <span>[-] Company</span>
+                  {companies && companies.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectAll('companies', companies)}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
+                    >
+                      {companies.length > 0 && companies.every((c) => (formData.employment_allocation?.companies || []).some((x: any) => String(x) === String(c.id)))
+                        ? 'Clear'
+                        : 'Select all'}
+                    </button>
+                  )}
+                </div>
+                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">
+                  {formData.employment_allocation?.companies?.length || 0}
+                </span>
               </div>
-              <select className="w-full h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
-                <option value="all">All</option>
-              </select>
+              <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
+                {companies && companies.length > 0 ? (
+                  <>
+                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-200 cursor-pointer pb-1 border-b border-slate-200/80 dark:border-slate-800 mb-1">
+                      <Checkbox
+                        checked={companies.length > 0 && companies.every((c) => (formData.employment_allocation?.companies || []).some((x: any) => String(x) === String(c.id)))}
+                        onCheckedChange={() => toggleSelectAll('companies', companies)}
+                      />
+                      <span>Select All</span>
+                    </label>
+                    {companies.map((comp) => {
+                      const isChecked = (formData.employment_allocation?.companies || []).some((x: any) => String(x) === String(comp.id));
+                      return (
+                        <label key={comp.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => updateEmployment('companies', comp.id)}
+                          />
+                          <span className="truncate">{comp.name}</span>
+                        </label>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <span className="text-[11px] text-slate-400 italic">No companies found</span>
+                )}
+              </div>
             </div>
 
             {/* Scope Card 2: Location */}
             <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
               <div className="flex items-center justify-between text-xs font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                <span>[-] Location</span>
+                <div className="flex items-center gap-2">
+                  <span>[-] Location</span>
+                  {locations && locations.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectAll('locations', locations)}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
+                    >
+                      {locations.length > 0 && locations.every((l) => (formData.employment_allocation?.locations || []).some((x: any) => String(x) === String(l.id)))
+                        ? 'Clear'
+                        : 'Select all'}
+                    </button>
+                  )}
+                </div>
                 <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">
                   {formData.employment_allocation?.locations?.length || 0}
                 </span>
               </div>
               <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
-                {locations.map((loc) => {
-                  const isChecked = (formData.employment_allocation?.locations || []).includes(loc.id);
-                  return (
-                    <label key={loc.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                {locations && locations.length > 0 ? (
+                  <>
+                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-200 cursor-pointer pb-1 border-b border-slate-200/80 dark:border-slate-800 mb-1">
                       <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={() => updateEmployment('locations', loc.id)}
+                        checked={locations.length > 0 && locations.every((l) => (formData.employment_allocation?.locations || []).some((x: any) => String(x) === String(l.id)))}
+                        onCheckedChange={() => toggleSelectAll('locations', locations)}
                       />
-                      <span>{loc.name}</span>
+                      <span>Select All</span>
                     </label>
-                  );
-                })}
+                    {locations.map((loc) => {
+                      const isChecked = (formData.employment_allocation?.locations || []).some((x: any) => String(x) === String(loc.id));
+                      return (
+                        <label key={loc.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => updateEmployment('locations', loc.id)}
+                          />
+                          <span className="truncate">{loc.name}</span>
+                        </label>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <span className="text-[11px] text-slate-400 italic">No locations found</span>
+                )}
               </div>
             </div>
 
             {/* Scope Card 3: Department */}
             <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
               <div className="flex items-center justify-between text-xs font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                <span>[-] Department</span>
+                <div className="flex items-center gap-2">
+                  <span>[-] Department</span>
+                  {departments && departments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectAll('departments', departments)}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-medium cursor-pointer"
+                    >
+                      {departments.length > 0 && departments.every((d) => (formData.employment_allocation?.departments || []).some((x: any) => String(x) === String(d.id)))
+                        ? 'Clear'
+                        : 'Select all'}
+                    </button>
+                  )}
+                </div>
                 <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">
                   {formData.employment_allocation?.departments?.length || 0}
                 </span>
               </div>
               <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
-                {departments.map((dept) => {
-                  const isChecked = (formData.employment_allocation?.departments || []).includes(dept.id);
-                  return (
-                    <label key={dept.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                {departments && departments.length > 0 ? (
+                  <>
+                    <label className="flex items-center gap-2 text-[11px] font-semibold text-slate-800 dark:text-slate-200 cursor-pointer pb-1 border-b border-slate-200/80 dark:border-slate-800 mb-1">
                       <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={() => updateEmployment('departments', dept.id)}
+                        checked={departments.length > 0 && departments.every((d) => (formData.employment_allocation?.departments || []).some((x: any) => String(x) === String(d.id)))}
+                        onCheckedChange={() => toggleSelectAll('departments', departments)}
                       />
-                      <span>{dept.name}</span>
+                      <span>Select All</span>
                     </label>
-                  );
-                })}
+                    {departments.map((dept) => {
+                      const isChecked = (formData.employment_allocation?.departments || []).some((x: any) => String(x) === String(dept.id));
+                      return (
+                        <label key={dept.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={() => updateEmployment('departments', dept.id)}
+                          />
+                          <span className="truncate">{dept.name}</span>
+                        </label>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <span className="text-[11px] text-slate-400 italic">No departments found</span>
+                )}
               </div>
             </div>
           </div>
