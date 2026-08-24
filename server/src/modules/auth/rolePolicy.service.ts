@@ -25,23 +25,22 @@ export class RolePolicyService {
   private resolveRoleCode(userRoles: string[] = []): string {
     const normalized = userRoles.map((r) => String(r).toLowerCase().trim());
 
-    if (normalized.some((r) => ['super_admin', 'superadmin', 'organization_admin', 'admin'].includes(r))) {
+    if (normalized.some((r) => ['super_admin', 'superadmin', 'organization_admin', 'admin', 'super admin', 'org admin'].includes(r))) {
       return 'organization_admin';
     }
-    if (normalized.some((r) => ['hr_manager', 'hr_admin', 'hr', 'hr_executive'].includes(r))) {
+    if (normalized.some((r) => ['hr_manager', 'hr_admin', 'hr', 'hr manager', 'hr executive'].includes(r))) {
       return 'hr_manager';
     }
-    if (normalized.some((r) => ['department_head', 'dept_head', 'manager', 'dept_manager'].includes(r))) {
+    if (normalized.some((r) => ['department_head', 'dept_head', 'manager', 'dept_manager', 'department manager'].includes(r))) {
       return 'department_head';
     }
-    if (normalized.some((r) => ['team_lead', 'teamlead', 'lead'].includes(r))) {
+    if (normalized.some((r) => ['team_lead', 'teamlead', 'lead', 'team lead'].includes(r))) {
       return 'team_lead';
     }
-    if (normalized.some((r) => ['intern', 'trainee'].includes(r))) {
+    if (normalized.some((r) => ['intern', 'trainee', 'internship'].includes(r))) {
       return 'intern';
     }
 
-    // Default or primary role code fallback
     return normalized[0] || 'employee';
   }
 
@@ -49,9 +48,18 @@ export class RolePolicyService {
    * Get role-assigned policy document for the current authenticated user
    */
   async getPolicyForUser(userId: number, roles: string[] = []): Promise<UserRolePolicyResponse> {
-    const user = await this.db('users').where({ id: userId }).first();
+    let user = await this.db('users').where({ id: userId }).first().catch(() => null);
     if (!user) {
-      throw new Error('User not found.');
+      const sa = await this.db('super_admins').where({ id: userId }).orWhere({ user_id: userId }).first().catch(() => null);
+      if (sa) {
+        user = {
+          id: userId,
+          policy_accepted: sa.policy_accepted || false,
+          policy_accepted_at: sa.policy_accepted_at || null,
+        };
+      } else {
+        user = { id: userId, policy_accepted: false, policy_accepted_at: null };
+      }
     }
 
     const roleCode = this.resolveRoleCode(roles);
@@ -63,7 +71,6 @@ export class RolePolicyService {
     }
 
     if (!policy) {
-      // Fallback dummy structure if table is empty
       return {
         policyId: 0,
         roleCode: 'employee',
@@ -72,18 +79,22 @@ export class RolePolicyService {
         sections: [
           {
             id: 'emp_1',
-            title: '1. Professional Ethics & Conduct',
+            title: '1. PROFESSIONAL ETHICS & CONDUCT',
             content: 'Employees must interact professionally, respectfully, and adhere to corporate guidelines.',
           },
         ],
-        policyAccepted: Boolean(user.policy_accepted),
-        policyAcceptedAt: user.policy_accepted_at ? new Date(user.policy_accepted_at).toISOString() : null,
+        policyAccepted: Boolean(user?.policy_accepted ?? user?.policyAccepted ?? false),
+        policyAcceptedAt: (user?.policy_accepted_at || user?.policyAcceptedAt) ? new Date(user.policy_accepted_at || user.policyAcceptedAt).toISOString() : null,
       };
     }
 
     let parsedSections: PolicySection[] = [];
     try {
-      parsedSections = typeof policy.sections === 'string' ? JSON.parse(policy.sections) : policy.sections;
+      let raw = policy.sections;
+      while (typeof raw === 'string') {
+        raw = JSON.parse(raw);
+      }
+      parsedSections = Array.isArray(raw) ? raw : [];
     } catch {
       parsedSections = [];
     }
@@ -94,8 +105,8 @@ export class RolePolicyService {
       title: policy.title,
       description: policy.description || '',
       sections: parsedSections,
-      policyAccepted: Boolean(user.policy_accepted ?? user.policyAccepted ?? false),
-      policyAcceptedAt: (user.policy_accepted_at || user.policyAcceptedAt) ? new Date(user.policy_accepted_at || user.policyAcceptedAt).toISOString() : null,
+      policyAccepted: Boolean(user?.policy_accepted ?? user?.policyAccepted ?? false),
+      policyAcceptedAt: (user?.policy_accepted_at || user?.policyAcceptedAt) ? new Date(user.policy_accepted_at || user.policyAcceptedAt).toISOString() : null,
     };
   }
 
@@ -108,7 +119,13 @@ export class RolePolicyService {
       policy_accepted: 1,
       policy_accepted_at: now,
       updated_at: now,
-    });
+    }).catch(() => {});
+
+    await this.db('super_admins').where({ id: userId }).orWhere({ user_id: userId }).update({
+      policy_accepted: 1,
+      policy_accepted_at: now,
+      updated_at: now,
+    }).catch(() => {});
 
     return {
       success: true,

@@ -17,7 +17,7 @@ interface UserPolicyData {
   roleCode: string;
   title: string;
   description: string;
-  sections: PolicySection[];
+  sections: PolicySection[] | string;
   policyAccepted: boolean;
 }
 
@@ -37,7 +37,7 @@ export const PolicyAcceptanceModal: React.FC = () => {
         .then((res) => {
           if (isMounted) {
             const data = res.data?.data || res.data;
-            if (data && (data.sections || data.title)) {
+            if (data) {
               setPolicyData(data);
               if (data.policyAccepted) {
                 useAuthStore.getState().updateUser({ policyAccepted: true });
@@ -89,6 +89,22 @@ export const PolicyAcceptanceModal: React.FC = () => {
     .replace(/_/g, ' ')
     .toUpperCase();
 
+  // Safely parse sections array even if received as stringified JSON
+  let normalizedSections: PolicySection[] = [];
+  if (policyData?.sections) {
+    let raw: any = policyData.sections;
+    try {
+      while (typeof raw === 'string') {
+        raw = JSON.parse(raw);
+      }
+      if (Array.isArray(raw)) {
+        normalizedSections = raw;
+      }
+    } catch {
+      normalizedSections = [];
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[92vh]">
@@ -139,28 +155,30 @@ export const PolicyAcceptanceModal: React.FC = () => {
 
               {/* Policy Document Sections */}
               <div className="space-y-6 pt-2">
-                {policyData?.sections && policyData.sections.length > 0 ? (
-                  policyData.sections.map((sec, idx) => (
+                {normalizedSections.length > 0 ? (
+                  normalizedSections.map((sec, idx) => (
                     <div key={sec.id || idx} className="space-y-2">
                       <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
                         {sec.title}
                       </h3>
                       <div className="text-xs sm:text-xs leading-relaxed text-slate-700 dark:text-slate-300 space-y-1.5 pl-1">
-                        {sec.content.split('\n').map((line, lineIdx) => {
-                          const trimmed = line.trim();
-                          if (trimmed.startsWith('•')) {
+                        {sec.content ? (
+                          sec.content.split('\n').map((line, lineIdx) => {
+                            const trimmed = line.trim();
+                            if (trimmed.startsWith('•')) {
+                              return (
+                                <p key={lineIdx} className="pl-4 font-normal leading-relaxed text-slate-700 dark:text-slate-300">
+                                  {line}
+                                </p>
+                              );
+                            }
                             return (
-                              <p key={lineIdx} className="pl-4 font-normal leading-relaxed text-slate-700 dark:text-slate-300">
+                              <p key={lineIdx} className="leading-relaxed font-normal">
                                 {line}
                               </p>
                             );
-                          }
-                          return (
-                            <p key={lineIdx} className="leading-relaxed font-normal">
-                              {line}
-                            </p>
-                          );
-                        })}
+                          })
+                        ) : null}
                       </div>
                     </div>
                   ))
