@@ -38,7 +38,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const friendlyBiometricError = (error: any, fallback: string): string => {
-  const message = error?.response?.data?.message;
+  const message = error?.response?.data?.message || error?.response?.data?.error?.message || error?.message;
   if (typeof message !== 'string' || !message.trim()) return fallback;
 
   const containsTechnicalDetails =
@@ -735,6 +735,31 @@ export default function FaceAttendancePage() {
     startCamera();
   };
 
+  const handleEnrollFace = async () => {
+    const images = capturedImage ? [capturedImage] : await captureVerificationBurst();
+    if (images.length === 0) {
+      toast.error('Face capture failed. Please make sure camera is active.');
+      return;
+    }
+    try {
+      setBiometricLoading(true);
+      const res = await apiClient.post('/attendance/biometric/enroll', {
+        employeeId: String(employeeId),
+        images,
+      });
+      if (res.data?.success) {
+        toast.success(`Face enrolled successfully for ${empName}!`);
+        speakVoiceAnnouncement(`Face enrolled successfully for ${empName}. You can now check in.`);
+        setSuccessMsg(`Face template enrolled successfully for ${empName}! Click Check In.`);
+      }
+    } catch (err: any) {
+      const msg = friendlyBiometricError(err, 'Failed to enroll face.');
+      toast.error(msg);
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
   // Grab a frame from live video without interrupting stream
   const grabVideoFrame = (): string | null => {
     if (videoRef.current && canvasRef.current) {
@@ -1184,25 +1209,38 @@ export default function FaceAttendancePage() {
 
             {/* ACTION CONTROLS */}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              {isCameraActive ? (
+              <div className="flex items-center gap-2">
+                {isCameraActive ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={stopCamera}
+                    className="h-8 text-xs font-semibold"
+                  >
+                    <VideoOff className="w-3.5 h-3.5 mr-1 text-rose-500" /> Close Camera
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={startCamera}
+                    className="h-8 text-xs font-semibold"
+                  >
+                    <Video className="w-3.5 h-3.5 mr-1 text-primary" /> Turn On Camera
+                  </Button>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={stopCamera}
-                  className="h-8 text-xs font-semibold"
+                  onClick={handleEnrollFace}
+                  disabled={biometricLoading}
+                  className="h-8 text-xs font-semibold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20"
+                  title="Enroll or update face biometric template"
                 >
-                  <VideoOff className="w-3.5 h-3.5 mr-1 text-rose-500" /> Close Camera
+                  <Sparkles className="w-3.5 h-3.5 mr-1 text-indigo-600" /> Enroll My Face
                 </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={startCamera}
-                  className="h-8 text-xs font-semibold"
-                >
-                  <Video className="w-3.5 h-3.5 mr-1 text-primary" /> Turn On Camera
-                </Button>
-              )}
+              </div>
 
               <Button
                 disabled={!geofenceStatus.isValid || locLoading || biometricLoading || checkInStatus === 'completed'}

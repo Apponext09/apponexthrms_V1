@@ -124,8 +124,13 @@ export const PublicOfferPage: React.FC = () => {
     );
   }
 
+  const offer = offerData?.offer || offerData || {};
+  const companyName = offerData?.companyName || 'Company';
+  const candidateName = offerData?.candidateName || 'Candidate';
+  const departmentName = offerData?.departmentName || 'General';
+
   let meta: any = {};
-  if (offer.meta) {
+  if (offer?.meta) {
     try {
       meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta) : offer.meta;
     } catch (e) {

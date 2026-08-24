@@ -454,7 +454,33 @@ export class BiometricService {
       profileQuery.andWhere({ employee_id: targetEmployeeId });
     }
 
-    const profiles = await profileQuery;
+    let profiles = await profileQuery;
+
+    // Auto-enrollment fallback: If target employee specified but has no enrolled face vector yet, auto-enroll using current snapshot!
+    if (profiles.length === 0 && targetEmployeeId) {
+      const targetEmp = await db('employees')
+        .where({ id: targetEmployeeId, organization_id: ctx.organizationId })
+        .first();
+      if (targetEmp) {
+        await this.saveEnrollment(ctx, targetEmp, images);
+        profiles = await db(PROFILE_TABLE)
+          .select(
+            'employee_id as employeeId',
+            'employee_code as employeeCode',
+            'employee_name as employeeName',
+            'face_vector as faceVector',
+            'embedding_model as embeddingModel',
+            'profile_photo as profilePhoto'
+          )
+          .where({
+            organization_id: ctx.organizationId,
+            employee_id: targetEmployeeId,
+            is_active: true,
+            embedding_model: EMBEDDING_MODEL,
+          });
+      }
+    }
+
     const candidates = profiles
       .map((profile: any) => ({
         employee_id: String(profile.employeeId),
@@ -472,7 +498,7 @@ export class BiometricService {
         throw new Error(serviceOffline.reason);
       }
       throw new Error(
-        'No valid employee face templates are enrolled for this organization.'
+        'No valid employee face templates are enrolled for this organization. Please enroll face biometrics first.'
       );
     }
 

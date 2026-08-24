@@ -603,18 +603,18 @@ export default function LeavePage() {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
     if (code === 'LOP') return false; // Keep main quota cards clean (exclude LOP 0-day quota)
     
-    // Find matching leave type object to ensure policy settings & onlyWhen condition tree are present
-    const matchingType = leaveTypes.find(t => String(t.id) === String(b.leave_type_id || b.leaveTypeId || b.id));
+    const bAny: any = b;
+    const matchingType: any = leaveTypes.find(t => String(t.id) === String(bAny.leave_type_id || bAny.leaveTypeId || bAny.id));
     const mergedItem = matchingType
       ? {
           ...matchingType,
-          ...b,
-          allocation_settings: b.allocation_settings || b.allocationSettings || matchingType.allocation_settings || matchingType.allocationSettings,
-          allocation: b.allocation || matchingType.allocation,
-          gender_applicable: b.gender_applicable || b.genderApplicable || matchingType.gender_applicable || matchingType.genderApplicable,
-          only_when: b.only_when || b.onlyWhen || matchingType.only_when || matchingType.onlyWhen,
+          ...bAny,
+          allocation_settings: bAny.allocation_settings || bAny.allocationSettings || matchingType.allocation_settings || matchingType.allocationSettings,
+          allocation: bAny.allocation || matchingType.allocation,
+          gender_applicable: bAny.gender_applicable || bAny.genderApplicable || matchingType.gender_applicable || matchingType.genderApplicable,
+          only_when: bAny.only_when || bAny.onlyWhen || matchingType.only_when || matchingType.onlyWhen,
         }
-      : b;
+      : bAny;
 
     return isLeaveTypeApplicableForGender(mergedItem, currentEmpGender);
   }).map(b => {
