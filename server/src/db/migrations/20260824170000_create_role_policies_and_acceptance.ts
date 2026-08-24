@@ -23,143 +23,118 @@ export async function up(knex: Knex): Promise<void> {
     });
   }
 
-  // 3. Seed formal, comprehensive role-wise HR policy documents
+  // 3. Seed formal, role-specific HR policy documents matching formal document layout
   const formalPolicies = [
     {
       role_code: 'organization_admin',
-      title: 'Organization Administrator Governance & System Control Policy',
-      description: 'Formal administrative governance framework defining system access, data security, tenant isolation, and audit responsibilities for Organization Administrators.',
+      title: 'ORGANIZATION ADMINISTRATOR GOVERNANCE POLICY',
+      description: 'Formal administrative governance framework defining system access, data security, tenant isolation, and audit responsibilities for System Administrators.',
       sections: JSON.stringify([
         {
           id: 'admin_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'ApponextHRMS grants System Administrators administrative authority to govern tenant data, manage user credentials, and configure enterprise workflows. Administrators must exercise this authority with the highest standard of ethical conduct, accountability, and organizational integrity.'
+          content: 'This Organization Administrator Policy defines the principles, authority boundaries, and system governance guidelines for System Administrators managing ApponextHRMS. Administrators must exercise their privilege with ethical integrity and accountability.'
         },
         {
           id: 'admin_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy defines the governance boundaries, operational rules, and security obligations for Organization Administrators. It applies to all super administrators, organization administrators, and IT system administrators operating within ApponextHRMS.'
+          content: 'This policy establishes operational controls, security obligations, and access boundaries for Organization Administrators, Super Administrators, and IT System Administrators operating within ApponextHRMS.'
         },
         {
           id: 'admin_sec_3',
-          title: '3. ROLE RESPONSIBILITIES',
-          content: 'Administrators are responsible for overseeing tenant security configurations, managing system role assignments, monitoring user access privileges, maintaining data integrity, and ensuring compliance with multi-tenant data isolation standards.'
+          title: '3. AUTHORIZED SYSTEM ACCESS & GOVERNANCE',
+          content: '• Privilege Boundaries: Administrative access is granted solely to configure system settings, manage tenant security, and maintain enterprise workflows.\n• Credential Integrity: Multi-Factor Authentication (MFA) and strong password policies must be strictly enforced for all administrative credentials.\n• System Auditing: Every administrative action, user role assignment, and security change is logged and subject to periodic compliance audits.'
         },
         {
           id: 'admin_sec_4',
-          title: '4. RULES AND GUIDELINES',
-          content: 'a. Access Privilege Management: Assign roles strictly according to the Principle of Least Privilege.\nb. Security Credentials: Multi-factor authentication and strong password rules are mandatory.\nc. Audit Compliance: All administrative actions, user creation, and role updates are monitored and logged.'
+          title: '4. DATA RESPONSIBILITY & MULTI-TENANT ISOLATION',
+          content: '• Tenant Data Protection: Ensure strict separation and data isolation across organization tenants at all times.\n• Data Confidentiality: All employee database records, financial summaries, and system logs remain strictly confidential and protected against unauthorized inspection.'
         },
         {
           id: 'admin_sec_5',
-          title: '5. PROFESSIONAL CONDUCT',
-          content: 'Administrators must maintain strict neutrality, refrain from unauthorized inspection of private employee records, and never utilize administrative access for personal interest or unapproved monitoring.'
-        },
-        {
-          id: 'admin_sec_6',
-          title: '6. CONFIDENTIALITY AND DATA RESPONSIBILITY',
-          content: 'All corporate database records, employee personal data, compensation files, and proprietary configurations are strictly confidential. Unauthorized data export, external disclosure, or credential sharing is strictly prohibited.'
-        },
-        {
-          id: 'admin_sec_7',
-          title: '7. COMPLIANCE AND ENFORCEMENT',
-          content: 'Compliance with this policy is mandatory. Any breach of administrative privileges, unauthorized data modification, or security protocol violation will result in immediate privilege revocation, disciplinary action, and potential legal proceedings.'
+          title: '5. COMPLIANCE AND ENFORCEMENT',
+          content: 'Adherence to this policy is mandatory. Misuse of administrative access, unauthorized data export, or credential sharing will result in immediate revocation of access and formal disciplinary proceedings.'
         }
       ])
     },
     {
       role_code: 'hr_manager',
-      title: 'Human Resources Governance, Privacy & Employee Relations Policy',
+      title: 'HUMAN RESOURCE GOVERNANCE & PRIVACY POLICY',
       description: 'Comprehensive HR policy establishing standards for employee data confidentiality, fair recruitment practices, leave management, and workplace dispute redressal.',
       sections: JSON.stringify([
         {
           id: 'hr_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'The Human Resources department holds a primary duty to safeguard employee personal privacy, enforce transparent workplace policies, and ensure objective recruitment and personnel lifecycle management.'
+          content: 'This Human Resource Policy outlines the principles and guidelines that govern employment practices, benefits, record management, and workplace conduct within the organization. HR Professionals must ensure fair treatment and employee privacy.'
         },
         {
           id: 'hr_sec_2',
-          title: '2. PURPOSE AND SCOPE',
-          content: 'This policy establishes the operational standards, privacy frameworks, and ethical expectations for HR Managers, HR Executives, and Personnel Administrators operating within ApponextHRMS.'
+          title: '2. EQUAL EMPLOYMENT OPPORTUNITY',
+          content: 'The organization is committed to providing equal employment opportunities to all individuals without regard to race, color, religion, sex, national origin, age, disability, or any other protected status as defined by applicable laws. We strive to maintain a diverse and inclusive workplace.'
         },
         {
           id: 'hr_sec_3',
-          title: '3. ROLE RESPONSIBILITIES',
-          content: 'HR Managers are responsible for overseeing onboarding workflows, maintaining digital employee files, facilitating meritocratic performance reviews, managing leave and shift policies, and resolving workplace grievances.'
+          title: '3. RECRUITMENT AND SELECTION',
+          content: 'We recruit and select candidates based on their qualifications, skills, and abilities relevant to job requirements. Hiring decisions will be made without bias or discrimination in accordance with organizational hiring protocols.'
         },
         {
           id: 'hr_sec_4',
-          title: '4. RULES AND GUIDELINES',
-          content: 'a. Fair Practice: Candidate selection and employee promotions must be strictly merit-based without bias.\nb. Record Maintenance: Ensure prompt updating of employee lifecycle events, attendance corrections, and payroll inputs.\nc. Dispute Resolution: Investigate employee complaints impartially within established SLA timelines.'
+          title: '4. EMPLOYMENT RELATIONSHIP',
+          content: '• Employment Categories: Employees will be classified as regular full-time, regular part-time, or contract based on their agreed work schedule and terms of employment.\n• Probationary Period: New hires may be subject to a probationary evaluation period to evaluate performance and suitability for the role.\n• Work Authorization: Employees must provide valid proof of eligibility to work in accordance with local regulations.'
         },
         {
           id: 'hr_sec_5',
-          title: '5. PROFESSIONAL CONDUCT',
-          content: 'HR professionals must uphold absolute impartiality, foster an inclusive environment free from discrimination or harassment, and act as ethical custodians of organization values.'
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: '• Personnel Records: Personally Identifiable Information (PII), medical records, compensation structures, and background check reports must be stored securely and held in strict confidence.\n• Access Control: Access to employee records is restricted to authorized HR personnel only.'
         },
         {
           id: 'hr_sec_6',
-          title: '6. CONFIDENTIALITY AND DATA RESPONSIBILITY',
-          content: 'Personally Identifiable Information (PII), medical records, compensation structures, performance ratings, and background check reports must be stored securely and held in strict confidence.'
-        },
-        {
-          id: 'hr_sec_7',
-          title: '7. COMPLIANCE AND ENFORCEMENT',
-          content: 'Adherence to HR governance policies is strictly enforced. Violations of employee data privacy, non-compliance with labor guidelines, or breach of trust will trigger formal disciplinary proceedings.'
+          title: '6. COMPLIANCE AND ENFORCEMENT',
+          content: 'Adherence to HR governance policies is strictly enforced. Violations of employee privacy, non-compliance with labor standards, or breach of trust will trigger formal disciplinary action.'
         }
       ])
     },
     {
       role_code: 'department_head',
-      title: 'Department Manager Leadership, Supervision & Approval Policy',
+      title: 'DEPARTMENT MANAGER SUPERVISION & LEADERSHIP POLICY',
       description: 'Operational guidelines for Department Managers covering supervisory responsibilities, objective evaluations, approval timelines, and team leadership.',
       sections: JSON.stringify([
         {
           id: 'mgr_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'Department Managers and Functional Leaders are entrusted with leading teams, driving operational excellence, and executing fair, transparent supervisory decisions.'
+          content: 'This Policy defines expectations for Department Managers in leading departmental operations, executing fair supervisory decisions, and fostering team productivity.'
         },
         {
           id: 'mgr_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy applies to all Department Heads, Functional Managers, and Supervisory Executives responsible for team management, performance review, and workflow approvals in ApponextHRMS.'
+          content: 'This policy applies to all Department Heads, Functional Managers, and Supervisory Executives responsible for team oversight, performance evaluation, and workflow approvals in ApponextHRMS.'
         },
         {
           id: 'mgr_sec_3',
-          title: '3. ROLE RESPONSIBILITIES',
-          content: 'Managers are responsible for approving employee leave and attendance regularization requests, allocating departmental tasks, evaluating team performance, and mentoring team members.'
+          title: '3. SUPERVISORY RESPONSIBILITIES',
+          content: '• Workflow Approvals: Review and process team leave applications, expense claims, and shift allocations within 24–48 hours.\n• Objective Appraisals: Conduct unbiased performance evaluations based on clear metrics and Key Performance Indicators (KPIs).\n• Workload Management: Distribute departmental tasks equitably and manage team resources efficiently.'
         },
         {
           id: 'mgr_sec_4',
-          title: '4. RULES AND GUIDELINES',
-          content: 'a. Approval SLA Adherence: Review and process team leave, expense, and shift requests within 24–48 hours.\nb. Objective Appraisals: Evaluate team members objectively based on documented performance metrics and deliverables.\nc. Operational Communication: Maintain open dialogue and address workflow bottlenecks constructively.'
+          title: '4. PROFESSIONAL CONDUCT & LEADERSHIP',
+          content: '• Fair Leadership: Lead by example, respect employee work-life balance, and maintain a supportive work culture.\n• Dispute Resolution: Address team conflicts constructively and escalate complex grievances to HR when appropriate.'
         },
         {
           id: 'mgr_sec_5',
-          title: '5. PROFESSIONAL CONDUCT',
-          content: 'Managers must lead by example, demonstrate integrity, respect employee work-life balance, and foster a supportive team atmosphere free from favoritism.'
-        },
-        {
-          id: 'mgr_sec_6',
-          title: '6. CONFIDENTIALITY AND DATA RESPONSIBILITY',
-          content: 'Keep departmental compensation data, performance ratings, and internal operational reports strictly confidential within authorized management channels.'
-        },
-        {
-          id: 'mgr_sec_7',
-          title: '7. COMPLIANCE AND ENFORCEMENT',
-          content: 'Non-compliance with managerial guidelines, chronic approval delays, or biased supervisory practices will be subject to executive management review and corrective action.'
+          title: '5. CONFIDENTIALITY AND ENFORCEMENT',
+          content: 'Keep team compensation details, appraisal scores, and internal operational reports strictly confidential within authorized management channels. Failure to comply with supervisory guidelines will lead to management review.'
         }
       ])
     },
     {
       role_code: 'team_lead',
-      title: 'Team Lead Mentorship, Task Guidance & Operational Policy',
+      title: 'TEAM LEAD MENTORSHIP & PROJECT GUIDANCE POLICY',
       description: 'Policy defining Team Lead expectations regarding task delegation, daily mentorship, project tracking, and team communication.',
       sections: JSON.stringify([
         {
           id: 'tl_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'Team Leads act as the vital link between departmental objectives and daily task execution, guiding team members toward project milestones with clarity and constructive support.'
+          content: 'This Policy outlines the guidance and operational standards for Team Leads overseeing day-to-day task execution and team mentorship.'
         },
         {
           id: 'tl_sec_2',
@@ -168,112 +143,82 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'tl_sec_3',
-          title: '3. ROLE RESPONSIBILITIES',
-          content: 'Team Leads are responsible for daily task assignment, monitoring project progress, providing technical mentorship, ensuring shift adherence, and escalating operational risks.'
+          title: '3. OPERATIONAL RESPONSIBILITIES',
+          content: '• Task Distribution: Distribute tasks equitably based on individual skill sets and project timelines.\n• Technical Mentorship: Provide daily guidance and assist team members facing technical or process hurdles.\n• Progress Tracking: Ensure accurate task status logging, shift progress tracking, and milestone updates in ApponextHRMS.'
         },
         {
           id: 'tl_sec_4',
-          title: '4. RULES AND GUIDELINES',
-          content: 'a. Equitable Task Distribution: Assign work fairly based on skill sets and workload capacity.\nb. Daily Standups & Guidance: Assist team members facing technical or process hurdles promptly.\nc. Accurate Progress Reporting: Maintain accurate task status logs and shift progress reports.'
+          title: '4. PROFESSIONAL CONDUCT',
+          content: '• Teamwork & Respect: Cultivate a collaborative, respectful team environment free from favoritism.\n• Clear Communication: Maintain clear, open communication between team members and department managers.'
         },
         {
           id: 'tl_sec_5',
-          title: '5. PROFESSIONAL CONDUCT',
-          content: 'Team Leads must cultivate mutual respect, encourage team collaboration, refrain from personal bias, and maintain professional workplace communication.'
-        },
-        {
-          id: 'tl_sec_6',
-          title: '6. CONFIDENTIALITY AND DATA RESPONSIBILITY',
-          content: 'Protect project source code, client specifications, and internal operational data against unauthorized disclosure or external distribution.'
-        },
-        {
-          id: 'tl_sec_7',
-          title: '7. COMPLIANCE AND ENFORCEMENT',
-          content: 'Adherence to team guidance standards and confidentiality is required. Failure to uphold team responsibilities will lead to supervisory review.'
+          title: '5. CONFIDENTIALITY AND ENFORCEMENT',
+          content: 'Protect project source code, client specifications, and internal documentation against unauthorized distribution. Failure to uphold team responsibilities will lead to supervisory review.'
         }
       ])
     },
     {
       role_code: 'employee',
-      title: 'Employee Code of Conduct, Workplace Ethics & General Policy',
+      title: 'EMPLOYEE CODE OF CONDUCT & WORKPLACE ETHICS POLICY',
       description: 'Standard formal workplace policy for all organization employees governing professional ethics, attendance, IT asset security, and data responsibility.',
       sections: JSON.stringify([
         {
           id: 'emp_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'ApponextHRMS expects all employees to perform their duties with dedication, integrity, and respect, upholding organization values and contributing to a positive, productive work environment.'
+          content: 'This Policy sets forth expectations for professional conduct, workplace ethics, attendance, and corporate responsibility for all organization employees.'
         },
         {
           id: 'emp_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy applies to all full-time, part-time, and contractual employees across all business units, branches, and operational locations.'
+          content: 'This policy applies to all regular full-time, part-time, and contractual employees across all business units and locations.'
         },
         {
           id: 'emp_sec_3',
-          title: '3. ROLE RESPONSIBILITIES',
-          content: 'Employees are responsible for completing assigned work, logging daily attendance via designated biometric terminals, managing leave requests responsibly, and protecting organization assets.'
+          title: '3. ATTENDANCE AND PUNCTUALITY',
+          content: '• Shift Schedule: Employees must adhere to assigned shift schedules and log attendance accurately using biometric check-in terminals.\n• Leave Requests: Submit leave applications in advance via the HRMS portal in accordance with organization leave rules.\n• Break Management: Record meal and rest breaks accurately to ensure smooth workflow continuity.'
         },
         {
           id: 'emp_sec_4',
-          title: '4. RULES AND GUIDELINES',
-          content: 'a. Attendance & Punctuality: Adhere to assigned shift schedules, log check-in/check-out accurately, and log break durations.\nb. Asset Protection: Use company laptops, credentials, and network resources strictly for authorized business purposes.\nc. Policy Compliance: Follow safety protocols, expense rules, and organizational workflows.'
+          title: '4. WORKPLACE ETHICS AND ASSETS',
+          content: '• Professional Conduct: Interact respectfully with colleagues, clients, and visitors. Discrimination or harassment is strictly prohibited.\n• IT Asset Security: Protect company laptops, credentials, and digital assets. Use resources strictly for business purposes.'
         },
         {
           id: 'emp_sec_5',
-          title: '5. PROFESSIONAL CONDUCT',
-          content: 'Maintain courteous, professional interactions with colleagues and clients. Discrimination, harassment, substance abuse, or disruptive behavior will not be tolerated.'
-        },
-        {
-          id: 'emp_sec_6',
-          title: '6. CONFIDENTIALITY AND DATA RESPONSIBILITY',
-          content: 'Safeguard company proprietary data, trade secrets, employee records, and client information. Never share access credentials or internal documents externally.'
-        },
-        {
-          id: 'emp_sec_7',
-          title: '7. COMPLIANCE AND ENFORCEMENT',
-          content: 'Compliance with this Code of Conduct is a mandatory condition of employment. Infractions may result in warning letters, suspension, or termination.'
+          title: '5. CONFIDENTIALITY AND COMPLIANCE',
+          content: 'Safeguard company proprietary information, trade secrets, employee records, and client data. Non-compliance with the Code of Conduct may result in warning letters, suspension, or termination.'
         }
       ])
     },
     {
       role_code: 'intern',
-      title: 'Internship Program Terms, Learning & Confidentiality Policy',
+      title: 'INTERNSHIP PROGRAM AGREEMENT & LEARNING POLICY',
       description: 'Formal agreement policy governing intern learning responsibilities, mentor guidance, attendance tracking, and strict non-disclosure.',
       sections: JSON.stringify([
         {
           id: 'int_sec_1',
           title: '1. POLICY STATEMENT',
-          content: 'The Internship Program is designed to foster professional growth, practical skill development, and industry exposure under structured mentor supervision.'
+          content: 'This Policy establishes guidelines for the Internship Program, focusing on practical learning, mentor engagement, and professional skill development.'
         },
         {
           id: 'int_sec_2',
           title: '2. PURPOSE AND SCOPE',
-          content: 'This policy governs all interns, project trainees, and seasonal apprentices engaged with the organization.'
+          content: 'This policy governs all project interns, trainees, and apprentices engaged with the organization.'
         },
         {
           id: 'int_sec_3',
-          title: '3. ROLE RESPONSIBILITIES',
-          content: 'Interns are responsible for actively participating in assigned learning modules, completing daily tasks under mentor guidance, maintaining attendance logs, and submitting progress reports.'
+          title: '3. INTERNSHIP RESPONSIBILITIES',
+          content: '• Learning Commitment: Actively participate in assigned learning modules and complete project tasks under mentor guidance.\n• Attendance Logging: Record daily working hours and attendance in ApponextHRMS accurately.\n• Proactive Communication: Seek guidance when needed and incorporate mentor feedback into project assignments.'
         },
         {
           id: 'int_sec_4',
-          title: '4. RULES AND GUIDELINES',
-          content: 'a. Mentorship Engagement: Seek guidance proactively and incorporate mentor feedback into assignments.\nb. Time Tracking: Record daily working hours and attendance in ApponextHRMS accurately.\nc. Asset Responsibility: Maintain all assigned learning materials, software accounts, and hardware carefully.'
+          title: '4. PROFESSIONAL CONDUCT',
+          content: 'Demonstrate punctuality, curiosity, professional communication, and respect for organization guidelines and workplace culture.'
         },
         {
           id: 'int_sec_5',
-          title: '5. PROFESSIONAL CONDUCT',
-          content: 'Demonstrate professional curiosity, punctuality, respectful communication, and adherence to company culture.'
-        },
-        {
-          id: 'int_sec_6',
-          title: '6. CONFIDENTIALITY AND DATA RESPONSIBILITY',
-          content: 'All source code, project repositories, research materials, and internal documentation accessed during internship remain strictly confidential and non-transferable.'
-        },
-        {
-          id: 'int_sec_7',
-          title: '7. COMPLIANCE AND ENFORCEMENT',
-          content: 'Failure to comply with internship policy, unexcused absences, or confidentiality breaches will lead to immediate termination of the internship agreement.'
+          title: '5. CONFIDENTIALITY & NON-DISCLOSURE',
+          content: 'All source code, internal research, project materials, and repository data accessed during the internship remain strictly confidential and non-transferable. Unexcused absences or confidentiality breaches will lead to immediate termination of the internship agreement.'
         }
       ])
     }
