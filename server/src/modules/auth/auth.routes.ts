@@ -81,4 +81,24 @@ router.post(
   asyncHandler((req, res) => controller.changePassword(req, res))
 );
 
+import { RolePolicyController } from './rolePolicy.controller';
+
+const rolePolicyController = new RolePolicyController();
+
+// GET /api/v1/auth/my-policies
+router.get(
+  '/my-policies',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => rolePolicyController.getMyPolicy(req, res))
+);
+
+// POST /api/v1/auth/accept-policy
+router.post(
+  '/accept-policy',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => rolePolicyController.acceptPolicy(req, res))
+);
+
 export default router;

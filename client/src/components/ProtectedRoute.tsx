@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../features/auth/store/authStore';
 import type { Role } from '@/config/roles';
 import { hasAnyRole } from '@/lib/rbac';
+import { PolicyAcceptanceModal } from '../features/auth/components/PolicyAcceptanceModal';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -22,5 +23,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     }
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <PolicyAcceptanceModal />
+      {children}
+    </>
+  );
 }

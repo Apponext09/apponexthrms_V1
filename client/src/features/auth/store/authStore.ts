@@ -24,6 +24,8 @@ export interface User {
   designation?: string;
   companyId?: number | null;
   companyName?: string | null;
+  policyAccepted?: boolean;
+  policyAcceptedAt?: string | null;
 }
 
 interface AuthState {
@@ -33,6 +35,7 @@ interface AuthState {
   updateUser: (partialUser: Partial<User>) => void;
   login: (email: string, password: string) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  acceptPolicy: () => Promise<void>;
   logout: () => void;
 }
 
@@ -89,6 +92,8 @@ export const useAuthStore = create<AuthState>()(
             designation: userObj.designation || (isDemoKot ? 'Finance Manager' : 'Organization Admin'),
             companyId: compId,
             companyName: compName,
+            policyAccepted: Boolean(userObj.policyAccepted ?? userObj.policy_accepted ?? loginData.policyAccepted ?? false),
+            policyAcceptedAt: userObj.policyAcceptedAt || userObj.policy_accepted_at || loginData.policyAcceptedAt || null,
           };
 
           if (loginData.accessToken) {
@@ -126,21 +131,38 @@ export const useAuthStore = create<AuthState>()(
                 user: {
                   ...state.user,
                   ...data.user,
-                  // roles/permissions are top-level siblings of `user` in the
-                  // /auth/me response, not nested inside it — spreading only
-                  // data.user silently left whatever roles/permissions were
-                  // already in the store untouched (e.g. left over from a
-                  // previous session's login in the same tab). Always take
-                  // the freshly-fetched values, defaulting to no access.
-                  roles: data.roles || [],
-                  permissions: data.permissions || [],
+                  roles: data.roles || data.user.roles || state.user.roles || [],
+                  permissions: data.permissions || data.user.permissions || state.user.permissions || [],
                   departmentName: data.user.departmentName || state.user.departmentName || 'Finance',
+                  policyAccepted: Boolean(data.user.policyAccepted ?? data.user.policy_accepted ?? state.user.policyAccepted ?? false),
+                  policyAcceptedAt: data.user.policyAcceptedAt || data.user.policy_accepted_at || state.user.policyAcceptedAt || null,
                 },
               };
             });
           }
         } catch (error) {
           console.warn('fetchCurrentUser skipped:', error);
+        }
+      },
+
+      acceptPolicy: async () => {
+        try {
+          const res = await apiClient.post('/auth/accept-policy');
+          if (res.data?.success || res.data?.policyAccepted) {
+            set((state) => {
+              if (!state.user) return state;
+              return {
+                user: {
+                  ...state.user,
+                  policyAccepted: true,
+                  policyAcceptedAt: new Date().toISOString(),
+                },
+              };
+            });
+          }
+        } catch (error) {
+          console.error('acceptPolicy failed:', error);
+          throw error;
         }
       },
 

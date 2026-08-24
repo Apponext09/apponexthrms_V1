@@ -415,10 +415,9 @@ export class BiometricService {
     // This bootstraps the existing Samarth/Harsh captured profile photos once.
     const syncResult = await this.syncExistingEmployeePhotos(ctx);
 
-    let targetEmployeeId: number | undefined;
-    let targetEmployeeRow: EmployeeRow | undefined;
-    if (payload.employeeId) {
-      targetEmployeeRow = await this.resolveEmployee(ctx, payload.employeeId).catch(() => undefined);
+    const empIdParam = payload?.employeeId || targetEmployeeIdentifier;
+    if (empIdParam) {
+      targetEmployeeRow = await this.resolveEmployee(ctx, empIdParam).catch(() => undefined);
       targetEmployeeId = targetEmployeeRow?.id;
     }
 
