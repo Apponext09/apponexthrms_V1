@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { apiClient } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ShieldCheck, LogOut, Lock } from 'lucide-react';
+import { ShieldCheck, LogOut, Lock, FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PolicySection {
@@ -109,7 +109,7 @@ export const PolicyAcceptanceModal: React.FC = () => {
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
       <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
-        {/* Top Bar Banner */}
+        {/* Top Header Banner */}
         <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-primary/20 text-primary border border-primary/30 flex items-center justify-center shrink-0">
@@ -138,36 +138,64 @@ export const PolicyAcceptanceModal: React.FC = () => {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-              <p className="text-xs font-medium text-slate-400">Loading role policy document...</p>
+              <p className="text-xs font-medium text-slate-400">Retrieving formal policy document for your role...</p>
             </div>
           ) : (
             <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl p-6 sm:p-10 max-w-3xl mx-auto space-y-6 font-sans">
               
               {/* Document Header Title */}
               <div className="text-center space-y-2 border-b-2 border-slate-900 dark:border-slate-100 pb-5">
-                <h1 className="text-xl sm:text-2xl font-black tracking-wider uppercase text-slate-900 dark:text-slate-100">
+                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 tracking-widest uppercase">
+                  ApponextHRMS Enterprise Governance Document
+                </p>
+                <h1 className="text-xl sm:text-2xl font-black tracking-wide uppercase text-slate-900 dark:text-slate-100">
                   {policyData?.title || 'HUMAN RESOURCE POLICY'}
                 </h1>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 tracking-wide uppercase">
-                  ApponextHRMS Official Role-Wise Governance Policy
-                </p>
               </div>
+
+              {/* Metadata Table Header */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700/60">
+                <div>
+                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Role Scope</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-bold">{formattedRoleBadge}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Document Ref</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-bold">POL-{policyData?.policyId ? String(policyData.policyId).padStart(3, '0') : '001'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Effective Date</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-bold">{new Date().getFullYear()} Annual</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Classification</span>
+                  <span className="text-slate-900 dark:text-slate-100 font-bold">Confidential</span>
+                </div>
+              </div>
+
+              {/* Policy Description Summary */}
+              {policyData?.description && (
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border-l-4 border-primary rounded-r-lg text-xs leading-relaxed text-slate-700 dark:text-slate-300 italic">
+                  {policyData.description}
+                </div>
+              )}
 
               {/* Policy Document Sections */}
               <div className="space-y-6 pt-2">
                 {normalizedSections.length > 0 ? (
                   normalizedSections.map((sec, idx) => (
                     <div key={sec.id || idx} className="space-y-2">
-                      <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                      <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                         {sec.title}
                       </h3>
-                      <div className="text-xs sm:text-xs leading-relaxed text-slate-700 dark:text-slate-300 space-y-1.5 pl-1">
+                      <div className="text-xs sm:text-xs leading-relaxed text-slate-700 dark:text-slate-300 space-y-1.5 pl-5">
                         {sec.content ? (
                           sec.content.split('\n').map((line, lineIdx) => {
                             const trimmed = line.trim();
                             if (trimmed.startsWith('•')) {
                               return (
-                                <p key={lineIdx} className="pl-4 font-normal leading-relaxed text-slate-700 dark:text-slate-300">
+                                <p key={lineIdx} className="pl-3 font-normal leading-relaxed text-slate-800 dark:text-slate-200">
                                   {line}
                                 </p>
                               );
@@ -191,8 +219,8 @@ export const PolicyAcceptanceModal: React.FC = () => {
 
               {/* Document Footer Bar */}
               <div className="border-t border-slate-300 dark:border-slate-700 pt-4 flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                <span className="truncate max-w-[250px]">{policyData?.title || 'Human Resource Policy'}</span>
-                <span>Page 1 of 1</span>
+                <span className="truncate max-w-[280px]">{policyData?.title || 'Human Resource Policy'}</span>
+                <span>ApponextHRMS Policy Control | Page 1 of 1</span>
               </div>
 
             </div>

@@ -22,7 +22,12 @@ export class RolePolicyController {
         return;
       }
 
-      const roles = userAny?.roles || ctxAny?.roles || req.userRoles || [];
+      let roles: string[] = userAny?.roles || ctxAny?.roles || req.userRoles || [];
+      if (typeof roles === 'string') roles = [roles];
+      if (userAny?.role) roles.push(userAny.role);
+      if (userAny?.access_level) roles.push(userAny.access_level);
+      if (userAny?.designation) roles.push(userAny.designation);
+
       const result = await this.service.getPolicyForUser(Number(userId), roles);
 
       res.json({

@@ -20,24 +20,50 @@ export class RolePolicyService {
   private db = getKnex();
 
   /**
-   * Determine primary role code for policy selection
+   * Determine primary role code for policy selection with fallback checks on user row & designation
    */
-  private resolveRoleCode(userRoles: string[] = []): string {
+  private resolveRoleCode(userRoles: string[] = [], userRow?: any): string {
     const normalized = userRoles.map((r) => String(r).toLowerCase().trim());
+    const userRoleStr = (userRow?.role || '').toLowerCase().trim();
+    const userDesigStr = (userRow?.designation || '').toLowerCase().trim();
 
-    if (normalized.some((r) => ['super_admin', 'superadmin', 'organization_admin', 'admin', 'super admin', 'org admin'].includes(r))) {
+    if (
+      normalized.some((r) => ['super_admin', 'superadmin', 'organization_admin', 'admin', 'super admin', 'org admin', 'owner'].includes(r)) ||
+      ['superadmin', 'organization_admin', 'admin'].includes(userRoleStr) ||
+      userDesigStr.includes('admin')
+    ) {
       return 'organization_admin';
     }
-    if (normalized.some((r) => ['hr_manager', 'hr_admin', 'hr', 'hr manager', 'hr executive'].includes(r))) {
+
+    if (
+      normalized.some((r) => ['hr_manager', 'hr_admin', 'hr', 'hr manager', 'hr executive'].includes(r)) ||
+      ['hr_manager', 'hr'].includes(userRoleStr) ||
+      userDesigStr.includes('hr')
+    ) {
       return 'hr_manager';
     }
-    if (normalized.some((r) => ['department_head', 'dept_head', 'manager', 'dept_manager', 'department manager'].includes(r))) {
+
+    if (
+      normalized.some((r) => ['department_head', 'dept_head', 'manager', 'dept_manager', 'department manager'].includes(r)) ||
+      ['department_head', 'manager'].includes(userRoleStr) ||
+      userDesigStr.includes('manager')
+    ) {
       return 'department_head';
     }
-    if (normalized.some((r) => ['team_lead', 'teamlead', 'lead', 'team lead'].includes(r))) {
+
+    if (
+      normalized.some((r) => ['team_lead', 'teamlead', 'lead', 'team lead'].includes(r)) ||
+      ['team_lead'].includes(userRoleStr) ||
+      userDesigStr.includes('lead')
+    ) {
       return 'team_lead';
     }
-    if (normalized.some((r) => ['intern', 'trainee', 'internship'].includes(r))) {
+
+    if (
+      normalized.some((r) => ['intern', 'trainee', 'internship'].includes(r)) ||
+      ['intern'].includes(userRoleStr) ||
+      userDesigStr.includes('intern')
+    ) {
       return 'intern';
     }
 
@@ -54,6 +80,8 @@ export class RolePolicyService {
       if (sa) {
         user = {
           id: userId,
+          role: 'organization_admin',
+          designation: 'Organization Administrator',
           policy_accepted: sa.policy_accepted || false,
           policy_accepted_at: sa.policy_accepted_at || null,
         };
@@ -62,7 +90,7 @@ export class RolePolicyService {
       }
     }
 
-    const roleCode = this.resolveRoleCode(roles);
+    const roleCode = this.resolveRoleCode(roles, user);
 
     // Fetch exact role policy or fallback to employee policy
     let policy = await this.db('role_policies').where({ role_code: roleCode }).first();
@@ -74,12 +102,12 @@ export class RolePolicyService {
       return {
         policyId: 0,
         roleCode: 'employee',
-        title: 'Apponext HRMS Employee Code of Conduct & Workplace Policy',
+        title: 'EMPLOYEE CODE OF CONDUCT & WORKPLACE ETHICS POLICY',
         description: 'Standard workplace policy regarding ethics, attendance, asset care, and IT security.',
         sections: [
           {
             id: 'emp_1',
-            title: '1. PROFESSIONAL ETHICS & CONDUCT',
+            title: '1. POLICY STATEMENT',
             content: 'Employees must interact professionally, respectfully, and adhere to corporate guidelines.',
           },
         ],
