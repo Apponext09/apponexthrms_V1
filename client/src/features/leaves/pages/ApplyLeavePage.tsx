@@ -6,6 +6,7 @@ import { Calendar, Clock, FileText, Send, ArrowLeft, CheckCircle2, AlertCircle }
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/lib/api';
+import { isLeaveTypeApplicableForGender } from '@/utils/genderFilter';
 
 export function ApplyLeavePage() {
   const navigate = useNavigate();
@@ -187,11 +188,13 @@ export function ApplyLeavePage() {
                   required
                 >
                   <option value="">Select Leave Category</option>
-                  {balances.map((b: any) => (
-                    <option key={b.leave_type_id || b.leaveTypeId} value={String(b.leave_type_id || b.leaveTypeId)}>
-                      {b.leave_name || b.leaveName || `Category ${b.leave_type_id || b.leaveTypeId}`} ({b.leave_code || b.leaveCode})
-                    </option>
-                  ))}
+                  {balances
+                    .filter((b: any) => isLeaveTypeApplicableForGender(b, (employee as any)?.gender || (user as any)?.gender))
+                    .map((b: any) => (
+                      <option key={b.leave_type_id || b.leaveTypeId} value={String(b.leave_type_id || b.leaveTypeId)}>
+                        {b.leave_name || b.leaveName || `Category ${b.leave_type_id || b.leaveTypeId}`} ({b.leave_code || b.leaveCode})
+                      </option>
+                    ))}
                 </select>
                 {formData.leaveTypeId && (() => {
                   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);

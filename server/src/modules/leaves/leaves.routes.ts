@@ -57,7 +57,9 @@ leavesRouter.delete('/policy-mappings/:mappingId', asyncHandler((req, res) => le
 // Optional/Floating Holidays Selection
 leavesRouter.get('/optional-holidays', asyncHandler((req, res) => leaveController.getOptionalHolidays(req, res)));
 leavesRouter.get('/policies', asyncHandler((req, res) => leaveController.getPolicies(req, res)));
+leavesRouter.post('/policies', asyncHandler((req, res) => leaveController.createPolicy(req, res)));
 leavesRouter.put('/policies/:id', asyncHandler((req, res) => leaveController.updatePolicy(req, res)));
+leavesRouter.post('/sync-balances', asyncHandler((req, res) => leaveController.syncBalances(req, res)));
 leavesRouter.post('/optional-holidays', asyncHandler((req, res) => leaveController.selectOptionalHoliday(req, res)));
 leavesRouter.delete('/optional-holidays/:selectionId', asyncHandler((req, res) => leaveController.cancelOptionalHolidaySelection(req, res)));
 

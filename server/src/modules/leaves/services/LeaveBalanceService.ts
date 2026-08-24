@@ -7,6 +7,7 @@ import type { TenantContext } from '../../../db/types';
 import type { LeaveBalance } from '../repositories/LeaveBalanceRepository';
 import { calculateFinancialYearStart, calculateFinancialYearEnd, toLocalYYYYMMDD } from '../utils/dateUtils';
 import { getOrgLeaveSettings } from '../utils/settingsResolver';
+import { evaluateConditionGroup } from '../utils/ruleEngine';
 
 export class LeaveBalanceService {
   private balanceRepo: LeaveBalanceRepository;
@@ -50,6 +51,57 @@ export class LeaveBalanceService {
       .whereNull('deleted_at');
 
     for (const lt of leaveTypes) {
+      if (employee) {
+        // Parse allocation_settings for rules & gender
+        let allocSettings: any = {};
+        if (lt.allocation_settings) {
+          try {
+            allocSettings = typeof lt.allocation_settings === 'string'
+              ? JSON.parse(lt.allocation_settings)
+              : lt.allocation_settings;
+          } catch (e) {}
+        }
+
+        // 1. Gender applicability check
+        const genderApplicable = (lt.gender_applicable || lt.genderApplicable || allocSettings.gender || 'all').toString().toLowerCase();
+        if (genderApplicable !== 'all' && genderApplicable !== 'both' && employee.gender) {
+          if (employee.gender.toLowerCase() !== genderApplicable) {
+            continue;
+          }
+        }
+
+        // 2. Advanced Allocation Conditions (onlyWhen rule tree)
+        if (allocSettings.onlyWhen || allocSettings.only_when) {
+          const isEligible = evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, employee);
+          if (!isEligible) {
+            continue;
+          }
+        }
+
+        // 3. Employment Allocation Settings (Scope filter: Companies, Departments, Locations, Grades, EmployeeTypes)
+        let empSettings: any = {};
+        const rawEmpSettings = lt.employment_allocation_settings || lt.employmentAllocationSettings;
+        if (rawEmpSettings) {
+          try {
+            empSettings = typeof rawEmpSettings === 'string' ? JSON.parse(rawEmpSettings) : rawEmpSettings;
+          } catch (e) {}
+        }
+        if (empSettings && Object.keys(empSettings).length > 0) {
+          const hasOverlap = (employeeVal: any, ruleArray: any[]) => {
+            if (!ruleArray || !Array.isArray(ruleArray) || ruleArray.length === 0) return true;
+            if (!employeeVal) return false;
+            const eArray = Array.isArray(employeeVal) ? employeeVal : [employeeVal];
+            return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
+          };
+
+          if (!hasOverlap(employee.organization_id || employee.organizationId, empSettings.companies || empSettings.organizations)) continue;
+          if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId, empSettings.departments)) continue;
+          if (!hasOverlap(employee.current_location_id || employee.currentLocationId, empSettings.locations)) continue;
+          if (!hasOverlap(employee.employment_type || employee.employmentType, empSettings.employeeTypes)) continue;
+          if (!hasOverlap(employee.current_grade_id || employee.currentGradeId, empSettings.grades)) continue;
+        }
+      }
+
       const startMonth = await this.getStartMonthForLeaveType(ctx, lt.id, settings.holidayYearStartMonth);
       const expectedFyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), startMonth);
       
@@ -297,8 +349,24 @@ export class LeaveBalanceService {
       throw new NotFoundError('Leave balance not found');
     }
 
-    const newCredited = balance.credited_balance + accrualDays;
-    const newAvailable = balance.opening_balance + newCredited + balance.carry_forward_balance - balance.encashed_balance - balance.consumed_balance;
+    let newCredited = balance.credited_balance + accrualDays;
+    let newAvailable = balance.opening_balance + newCredited + balance.carry_forward_balance - balance.encashed_balance - balance.consumed_balance;
+
+    // Check continuous max balance cap from allocation settings
+    try {
+      const db = this.balanceRepo.db;
+      const leaveType = await db('leave_types').where('id', leaveTypeId).first();
+      if (leaveType?.allocation_settings) {
+        const parsed = typeof leaveType.allocation_settings === 'string' ? JSON.parse(leaveType.allocation_settings) : leaveType.allocation_settings;
+        const maxCapStr = parsed.neverLetBalanceExceed || parsed.maxBalanceCap;
+        if (maxCapStr) {
+          const maxCap = parseFloat(maxCapStr);
+          if (!isNaN(maxCap) && maxCap > 0) {
+            newAvailable = Math.min(newAvailable, maxCap);
+          }
+        }
+      }
+    } catch (e) {}
 
     return this.balanceRepo.update(ctx, balance.id, {
       credited_balance: newCredited,

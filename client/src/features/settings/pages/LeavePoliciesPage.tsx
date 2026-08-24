@@ -7,13 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Link } from 'react-router-dom';
-import { 
-  Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck, 
+import {
+  Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck,
   HelpCircle, Calendar, Settings, Search, Database, Info,
-  ChevronDown, ChevronUp, Play, ArrowLeft, Clock, FileText, Check, X, AlertCircle, CreditCard
+  ChevronDown, ChevronUp, Play, ArrowLeft, Clock, FileText, Check, X, AlertCircle, CreditCard,
+  Zap, Loader2, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, SlidersHorizontal
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
+import { RuleConditionBuilder } from '../components/RuleConditionBuilder';
+import { LeaveAllocationTab } from '../components/LeaveAllocationTab';
+import { LeaveApplicationTab } from '../components/LeaveApplicationTab';
+import { LeaveEncashmentTab } from '../components/LeaveEncashmentTab';
+import { HelpHint } from '../components/HelpHint';
+import { AuditTrailModal } from '../components/AuditTrailModal';
+import { AddLeaveTypeModal } from '../components/AddLeaveTypeModal';
+import { LeaveYearSettingsModal, LeaveYearSettingItem } from '../components/LeaveYearSettingsModal';
 
 interface LeaveType {
   id: number;
@@ -62,13 +71,95 @@ interface LeaveType {
 export function LeavePoliciesPage() {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'leave' | 'policy' | 'late_deduction_policy' | 'late_auto_deduction' | 'encashment'>('leave');
-  
+  const [configureTab, setConfigureTab] = useState<'allocation' | 'application' | 'encashment'>('allocation');
+  const [viewMode, setViewMode] = useState<'table' | 'edit' | 'configure' | 'leave-year'>('table');
+
+  // Sidebar collapse states for maximum form workspace
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState<boolean>(false);
+
   // Master lists
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveType | null>(null);
+  const [isAddLeaveModalOpen, setIsAddLeaveModalOpen] = useState<boolean>(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState<boolean>(false);
+  const [isExecutingCron, setIsExecutingCron] = useState<boolean>(false);
+
+  // Leave Year Setting & Scope Master List States
+  const [isLeaveYearModalOpen, setIsLeaveYearModalOpen] = useState<boolean>(false);
+  const [leaveYearToEdit, setLeaveYearToEdit] = useState<LeaveYearSettingItem | null>(null);
+  const [leaveYearSettings, setLeaveYearSettings] = useState<LeaveYearSettingItem[]>([]);
+  const [isLoadingLeaveYear, setIsLoadingLeaveYear] = useState<boolean>(false);
+
+  const [locationsList, setLocationsList] = useState<any[]>([]);
+  const [departmentsList, setDepartmentsList] = useState<any[]>([]);
+  const [gradesList, setGradesList] = useState<any[]>([]);
+  const [companiesList, setCompaniesList] = useState<any[]>([]);
+  const [subDepartmentsList, setSubDepartmentsList] = useState<any[]>([]);
+  const [designationsList, setDesignationsList] = useState<any[]>([]);
+  const [employmentTypesList, setEmploymentTypesList] = useState<any[]>([]);
+  const [employmentStatusesList, setEmploymentStatusesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchScopeMasters = async () => {
+      try {
+        const res = await apiClient.get('/settings/scope-masters');
+        if (res.data && res.data.success && res.data.data) {
+          const d = res.data.data;
+          if (d.companies && d.companies.length > 0) {
+            setCompaniesList(d.companies);
+          } else {
+            // Direct fallback fetch from Company Controller
+            try {
+              const compRes = await apiClient.get('/settings/companies');
+              if (compRes.data && compRes.data.success && Array.isArray(compRes.data.data)) {
+                const mapped = compRes.data.data.map((c: any) => ({
+                  id: c.company_id || c.id,
+                  name: String(c.name || c.company_name || c.employerName || `Company #${c.company_id || c.id}`).trim()
+                }));
+                setCompaniesList(mapped);
+              }
+            } catch (err) {}
+          }
+          if (d.locations) setLocationsList(d.locations);
+          if (d.departments) setDepartmentsList(d.departments);
+          if (d.subDepartments) setSubDepartmentsList(d.subDepartments);
+          if (d.designations) setDesignationsList(d.designations);
+          if (d.grades) setGradesList(d.grades);
+          if (d.employmentTypes) setEmploymentTypesList(d.employmentTypes);
+          if (d.employmentStatuses) setEmploymentStatusesList(d.employmentStatuses);
+        }
+      } catch (e) {
+        console.error('Failed to load scope masters:', e);
+      }
+    };
+    fetchScopeMasters();
+  }, []);
+
+  const fetchLeaveYearSettings = async () => {
+    setIsLoadingLeaveYear(true);
+    try {
+      const res = await apiClient.get('/settings/leave-year-settings');
+      if (res.data && res.data.success) {
+        setLeaveYearSettings(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch leave year settings", err);
+    } finally {
+      setIsLoadingLeaveYear(false);
+    }
+  };
+
+  const handleCreateLeaveTypeApi = async (payload: any) => {
+    const res = await apiClient.post('/settings/leave-types', payload);
+    if (res.data && res.data.success) {
+      toast.success('Leave category created successfully!');
+      fetchLeaveTypes();
+      return res.data.data || res.data;
+    }
+  };
 
   const fetchAuditLogs = async () => {
     if (!selectedLeaveType?.id) return;
@@ -399,7 +490,7 @@ export function LeavePoliciesPage() {
       setIsExecutingJob(false);
     }
   };
-  
+
   // Search and filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -407,7 +498,7 @@ export function LeavePoliciesPage() {
 
   // Accordion expansion state
   const [expandedAccordion, setExpandedAccordion] = useState<string | null>('allocation');
-  
+
   // Nested employment accordions state
   const [expandedAllocSub, setExpandedAllocSub] = useState<string | null>(null);
   const [expandedAppSub, setExpandedAppSub] = useState<string | null>(null);
@@ -438,7 +529,7 @@ export function LeavePoliciesPage() {
   const [isEncashRuleModalOpen, setIsEncashRuleModalOpen] = useState(false);
   const [isDisbursementModalOpen, setIsDisbursementModalOpen] = useState(false);
   const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
-  
+
   // Encashment Rule Form State
   const [ruleForm, setRuleForm] = useState({
     periodicity: 'Select',
@@ -476,7 +567,7 @@ export function LeavePoliciesPage() {
   const [selectedEncashmentId, setSelectedEncashmentId] = useState<number | null>(1);
   const [encashmentSearchQuery, setEncashmentSearchQuery] = useState('');
   const [encashmentStatusFilter, setEncashmentStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
-  
+
   const [encashmentTabForm, setEncashmentTabForm] = useState({
     name: 'Leave encashment one',
     formula: '[NUMBER_OF_LEAVE] * [PER_DAY_SALARY]',
@@ -491,7 +582,7 @@ export function LeavePoliciesPage() {
     }
   });
   const [expandedEncashmentSub, setExpandedEncashmentSub] = useState<string | null>(null);
-  
+
   const handleToggleEncashmentEmploymentTarget = (category: 'locations' | 'departments' | 'grades' | 'employeeTypes', id: any) => {
     setEncashmentTabForm(prev => {
       const arr = prev.employment[category] as any[];
@@ -529,6 +620,40 @@ export function LeavePoliciesPage() {
     applicable_location_id: '',
   });
 
+  // Quick Create Policy States
+  const [isCreatePolicyOpen, setIsCreatePolicyOpen] = useState(false);
+  const [newPolicyName, setNewPolicyName] = useState('');
+  const [isSavingNewPolicy, setIsSavingNewPolicy] = useState(false);
+
+  const handleQuickCreatePolicy = async () => {
+    if (!newPolicyName.trim()) {
+      toast.error('Please enter a policy name');
+      return;
+    }
+    setIsSavingNewPolicy(true);
+    try {
+      const res = await apiClient.post('/leaves/policies', { name: newPolicyName.trim() });
+      if (res.data?.success) {
+        toast.success(`Leave Policy "${newPolicyName.trim()}" created successfully!`);
+        setNewPolicyName('');
+        setIsCreatePolicyOpen(false);
+
+        const resPolicies = await apiClient.get('/leaves/policies');
+        const updatedList = resPolicies.data?.data || [];
+        setPolicies(updatedList);
+
+        if (res.data?.data?.id) {
+          setMappingForm(prev => ({ ...prev, leavePolicyId: String(res.data.data.id) }));
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to create leave policy');
+    } finally {
+      setIsSavingNewPolicy(false);
+    }
+  };
+
   // Helper to parse JSON safely, handling potential double-stringification from DB
   const parseJson = (val: any, fallback: any) => {
     if (!val) return fallback;
@@ -545,7 +670,7 @@ export function LeavePoliciesPage() {
     if (typeof parsed === 'string') {
       try {
         parsed = JSON.parse(parsed);
-      } catch (e) {}
+      } catch (e) { }
     }
     return (typeof parsed === 'object' && parsed !== null) ? parsed : fallback;
   };
@@ -557,13 +682,13 @@ export function LeavePoliciesPage() {
     leave_classification: 'calendar' as 'calendar' | 'non-calendar' | 'uncategorized',
     status: 'active' as 'active' | 'inactive',
     paid_type: 'paid' as 'paid' | 'unpaid' | 'half_paid',
-    annual_quota: 12,
+    annual_quota: '' as number | string,
 
     // Allocation Settings
     allocation: {
       considerLeaveStartYearAsFrom: false,
       leaveStartMonth: '4',
-      entitlementDays: '0',
+      entitlementDays: '',
       entitlementPeriodicity: 'Select',
       entitlementEndType: 'End',
       entitlementEndTypeVal: '',
@@ -693,22 +818,40 @@ export function LeavePoliciesPage() {
   const fetchLeaveTypes = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.get('/settings/leave-types');
-      if (res.data?.success) {
-        const types = res.data.data || [];
-        setLeaveTypes(types);
-        
-        // Auto-select first leave type or LWP if exists
-        if (types.length > 0) {
-          const paid = types.find((t: any) => (t.leaveName || t.leave_name || '').toLowerCase().includes('paid'));
-          setSelectedLeaveType(paid || types[0]);
-        } else {
-          setSelectedLeaveType(null);
+      let types: any[] = [];
+      try {
+        const res = await apiClient.get('/settings/leave-types');
+        if (res.data?.success || Array.isArray(res.data?.data)) {
+          types = res.data?.data || res.data || [];
+        }
+      } catch (e) {
+        try {
+          const fallbackRes = await apiClient.get('/leaves/leave-types');
+          if (fallbackRes.data?.success || Array.isArray(fallbackRes.data?.data)) {
+            types = fallbackRes.data?.data || fallbackRes.data || [];
+          }
+        } catch (errFallback) {
+          console.warn('Fallback leave types fetch failed silently:', errFallback);
         }
       }
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to load leave categories.');
+
+      setLeaveTypes(types);
+
+      // Auto-select or preserve current selection
+      if (types.length > 0) {
+        setSelectedLeaveType((prev: any) => {
+          if (prev?.id) {
+            const matched = types.find((t: any) => t.id === prev.id);
+            if (matched) return matched;
+          }
+          const paid = types.find((t: any) => (t.leaveName || t.leave_name || '').toLowerCase().includes('paid'));
+          return paid || types[0];
+        });
+      } else {
+        setSelectedLeaveType(null);
+      }
+    } catch (err: any) {
+      console.error('Failed to load leave types', err);
     } finally {
       setLoading(false);
     }
@@ -732,30 +875,43 @@ export function LeavePoliciesPage() {
         }
       };
 
-      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes, empOptsRes, shiftsRes, rolesRes] = await Promise.all([
+      const [policiesRes, mappingsRes, deptsRes, desigsRes, locsRes, empOptsRes, shiftsRes, rolesRes] = await Promise.all([
         apiClient.get('/leaves/policies').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
         fetchWithFallback('/settings/departments', '/departments'),
-        apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
+        fetchWithFallback('/settings/designations', '/designations'),
         fetchWithFallback('/settings/locations', '/settings/branches'),
         apiClient.get('/settings/employment-options').catch(() => ({ data: { data: { grades: [], employeeTypes: [], employeeStatuses: [] } } })),
         apiClient.get('/attendance/shifts/active').catch(() => ({ data: { data: [] } })),
         apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } })),
       ]);
 
-      setPolicies(policiesRes.data?.data || []);
-      setMappings(mappingsRes.data?.data || []);
-      setDepartments(deptsRes.data?.data || deptsRes.data || []);
-      setDesignations(optsRes.data?.data?.designations || []);
-      setLocations(locsRes.data?.data || locsRes.data || []);
-      setShiftOptions(shiftsRes.data?.data || []);
-      setRoles(rolesRes.data?.data?.items || []);
-      
+      const policiesData = policiesRes.data?.data || policiesRes.data || [];
+      setPolicies(Array.isArray(policiesData) ? policiesData : []);
+
+      const mappingsData = mappingsRes.data?.data || mappingsRes.data || [];
+      setMappings(Array.isArray(mappingsData) ? mappingsData : []);
+
+      const deptsData = deptsRes.data?.data?.items || deptsRes.data?.data || deptsRes.data || [];
+      setDepartments(Array.isArray(deptsData) ? deptsData : []);
+
+      const desigsData = desigsRes.data?.data?.items || desigsRes.data?.data || desigsRes.data || [];
+      setDesignations(Array.isArray(desigsData) ? desigsData : []);
+
+      const locsData = locsRes.data?.data?.items || locsRes.data?.data || locsRes.data || [];
+      setLocations(Array.isArray(locsData) ? locsData : []);
+
+      const shiftsData = shiftsRes.data?.data || shiftsRes.data || [];
+      setShiftOptions(Array.isArray(shiftsData) ? shiftsData : []);
+
+      const rolesData = rolesRes.data?.data?.items || rolesRes.data?.data || rolesRes.data || [];
+      setRoles(Array.isArray(rolesData) ? rolesData : []);
+
       const empData = empOptsRes.data?.data || {};
       setGradeOptions(empData.grades || []);
       setEmployeeTypeOptions(empData.employeeTypes || []);
       setEmployeeStatusOptions(empData.employeeStatuses || []);
-      
+
       // Load blackout periods
       const blackoutRes = await apiClient.get('/leaves/blackout-periods').catch(() => ({ data: { data: [] } }));
       setBlackoutPeriods(blackoutRes.data?.data || []);
@@ -822,9 +978,9 @@ export function LeavePoliciesPage() {
       if (target && target.type === 'checkbox') {
         const labelEl = target.nextElementSibling as HTMLLabelElement;
         const labelText = labelEl ? labelEl.innerText.trim() : 'Setting';
-        
+
         const effectMsg = tooltipMapping[labelText];
-        
+
         if (effectMsg) {
           if (target.checked) {
             toast.success(`Enabled: ${effectMsg}`, { duration: 1500, position: 'top-center' });
@@ -840,11 +996,40 @@ export function LeavePoliciesPage() {
     return () => document.removeEventListener('change', handleGlobalChange);
   }, []);
 
+  // Fit LeavePoliciesPage inside AppShellLayout without outer overflow
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+
+    const mainEl = document.querySelector('.app-shell-scroll') as HTMLElement | null;
+    const contentEl = document.querySelector('.app-shell-content') as HTMLElement | null;
+
+    if (mainEl) {
+      mainEl.scrollTop = 0;
+      mainEl.style.overflow = 'hidden';
+    }
+    if (contentEl) {
+      contentEl.style.height = '100%';
+      contentEl.style.padding = '0';
+    }
+
+    return () => {
+      if (mainEl) {
+        mainEl.style.overflow = '';
+      }
+      if (contentEl) {
+        contentEl.style.height = '';
+        contentEl.style.padding = '';
+      }
+    };
+  }, []);
+
   // When selected Leave Type changes, populate form
   useEffect(() => {
     if (selectedLeaveType) {
       const lt = selectedLeaveType;
-      
+
       const alloc = parseJson(lt.allocationSettings || lt.allocation_settings, {});
       const app = parseJson(lt.applicationSettings || lt.application_settings, {});
       const pay = parseJson(lt.payrollSettings || lt.payroll_settings, {});
@@ -855,17 +1040,18 @@ export function LeavePoliciesPage() {
       setFormData({
         leave_name: lt.leaveName || lt.leave_name || '',
         leave_code: lt.leaveCode || lt.leave_code || '',
-        leave_classification: lt.leave_classification || 
+        leave_classification: lt.leave_classification ||
           ((lt.leaveName || lt.leave_name || '').toLowerCase().includes('lwp') ? 'uncategorized' :
-           (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilage') || (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilege') ? 'non-calendar' : 'calendar'),
+            (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilage') || (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilege') ? 'non-calendar' : 'calendar'),
         status: lt.status || 'active',
         paid_type: (lt.paidType || lt.paid_type) as any || 'paid',
         annual_quota: lt.annualQuota ?? lt.annual_quota ?? 12,
 
         allocation: {
+          ...alloc,
           considerLeaveStartYearAsFrom: alloc.considerLeaveStartYearAsFrom ?? false,
           leaveStartMonth: alloc.leaveStartMonth || '4',
-          entitlementDays: alloc.entitlementDays ?? '0',
+          entitlementDays: alloc.entitlementDays ?? String(lt.annualQuota ?? lt.annual_quota ?? '0'),
           entitlementPeriodicity: alloc.entitlementPeriodicity || 'Select',
           entitlementEndType: alloc.entitlementEndType || 'End',
           entitlementEndTypeVal: alloc.entitlementEndTypeVal ?? '',
@@ -922,8 +1108,10 @@ export function LeavePoliciesPage() {
           restrictLeaveApplicationTillExpiry: alloc.restrictLeaveApplicationTillExpiry ?? false,
           showFromToDateForRequest: alloc.showFromToDateForRequest ?? false,
           addLeaveApplicationAfterApproval: alloc.addLeaveApplicationAfterApproval ?? false,
+          onlyWhen: alloc.onlyWhen || alloc.only_when || undefined,
         },
         application: {
+          ...app,
           category: app.category || 'unplanned',
           daysInAdvance: app.daysInAdvance ?? '',
           daysInAdvanceUnit: app.daysInAdvanceUnit || 'Days',
@@ -953,9 +1141,11 @@ export function LeavePoliciesPage() {
           applyRestrictionForWeekoffHoliday: app.applyRestrictionForWeekoffHoliday ?? false,
           cancelFutureAppliedLeaveOnResignation: app.cancelFutureAppliedLeaveOnResignation ?? false,
           customHook: app.customHook || '',
+          onlyWhen: app.onlyWhen || app.only_when || undefined,
         },
-        
+
         payroll: {
+          ...pay,
           conditionOn: pay.conditionOn || 'Choose',
           operator: pay.operator || 'Choose',
           value1: pay.value1 ?? '0',
@@ -965,6 +1155,7 @@ export function LeavePoliciesPage() {
         },
 
         employment_allocation: {
+          ...empAlloc,
           locations: empAlloc.locations || [],
           departments: empAlloc.departments || [],
           grades: empAlloc.grades || [],
@@ -973,6 +1164,7 @@ export function LeavePoliciesPage() {
         },
 
         employment_application: {
+          ...empApp,
           locations: empApp.locations || [],
           departments: empApp.departments || [],
           grades: empApp.grades || [],
@@ -981,6 +1173,7 @@ export function LeavePoliciesPage() {
         },
 
         encashment: {
+          ...enc,
           rules: enc.rules || [],
           disbursement: enc.disbursement || { periodicity: 'Select', disbursementAfter: '' }
         }
@@ -992,11 +1185,11 @@ export function LeavePoliciesPage() {
         leave_classification: 'calendar',
         status: 'active',
         paid_type: 'paid',
-        annual_quota: 12,
+        annual_quota: '',
         allocation: {
           considerLeaveStartYearAsFrom: false,
           leaveStartMonth: '4',
-          entitlementDays: '0',
+          entitlementDays: '',
           entitlementPeriodicity: 'Select',
           entitlementEndType: 'End',
           entitlementEndTypeVal: '',
@@ -1112,6 +1305,78 @@ export function LeavePoliciesPage() {
     }
   }, [selectedLeaveType]);
 
+  const handleToggleLeaveStatus = async (lt: LeaveType) => {
+    const newStatus = lt.status === 'active' ? 'inactive' : 'active';
+    try {
+      await apiClient.put(`/settings/leave-types/${lt.id}`, { status: newStatus });
+      toast.success(`${lt.leaveName || lt.leave_name} status updated to ${newStatus}`);
+      fetchLeaveTypes();
+    } catch (err: any) {
+      toast.error('Failed to update status');
+    }
+  };
+
+  const handleSaveEditLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.leave_name) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!selectedLeaveType?.id) {
+      try {
+        const payload = {
+          leave_name: formData.leave_name,
+          leave_code: (formData.leave_code || 'L001').toUpperCase(),
+          paid_type: formData.paid_type || 'paid',
+          leave_classification: formData.leave_classification || 'calendar',
+          status: formData.status || 'active',
+          color: (formData as any).color || 'Sky',
+          icon: (formData as any).icon || 'Sun',
+          effective_from: (formData as any).effective_from || null,
+          effective_to: (formData as any).effective_to || null,
+          description: (formData as any).description || '',
+          allocation_settings: formData.allocation,
+          application_settings: formData.application,
+          encashment_settings: formData.encashment,
+        };
+        const res = await apiClient.post('/settings/leave-types', payload);
+        if (res.data?.success) {
+          toast.success('Leave category created successfully');
+          fetchLeaveTypes();
+          setViewMode('table');
+        }
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to create leave category');
+      }
+      return;
+    }
+
+    try {
+      const payload = {
+        leave_name: formData.leave_name,
+        leave_code: (formData.leave_code || '').toUpperCase(),
+        paid_type: formData.paid_type || 'paid',
+        leave_classification: formData.leave_classification || 'calendar',
+        status: formData.status || 'active',
+        color: (formData as any).color || 'Sky',
+        icon: (formData as any).icon || 'Sun',
+        effective_from: (formData as any).effective_from || null,
+        effective_to: (formData as any).effective_to || null,
+        description: (formData as any).description || '',
+        annual_quota: formData.annual_quota ?? 12,
+        allocation_settings: formData.allocation,
+        application_settings: formData.application,
+        encashment_settings: formData.encashment,
+      };
+      await apiClient.put(`/settings/leave-types/${selectedLeaveType.id}`, payload);
+      toast.success('Leave category details updated successfully');
+      fetchLeaveTypes();
+      setViewMode('configure');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update leave details');
+    }
+  };
+
   // Handle Save (Create or Update)
   const handleSaveDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1145,7 +1410,7 @@ export function LeavePoliciesPage() {
         const rules = formData.encashment?.rules || [];
         return rules.some((r: any) => (parseFloat(r.maxCarryForward) || 0) > 0);
       })(),
-      
+
       // Pass config JSONs directly
       allocation_settings: formData.allocation,
       application_settings: formData.application,
@@ -1161,18 +1426,37 @@ export function LeavePoliciesPage() {
         const res = await apiClient.put(`/settings/leave-types/${selectedLeaveType.id}`, payload);
         if (res.data?.success) {
           toast.success('Leave settings updated successfully!');
-          // Refresh list
-          const updatedTypes = leaveTypes.map(t => 
-            t.id === selectedLeaveType.id ? { ...t, ...payload, leave_name: payload.leave_name, leave_code: payload.leave_code, annual_quota: computedQuota, annualQuota: computedQuota } : t
-          );
-          setLeaveTypes(updatedTypes as any);
+          const updatedType: any = {
+            ...selectedLeaveType,
+            ...payload,
+            leave_name: payload.leave_name,
+            leaveName: payload.leave_name,
+            leave_code: payload.leave_code,
+            leaveCode: payload.leave_code,
+            annual_quota: computedQuota,
+            annualQuota: computedQuota,
+            allocation_settings: payload.allocation_settings,
+            allocationSettings: payload.allocation_settings,
+            application_settings: payload.application_settings,
+            applicationSettings: payload.application_settings,
+            payroll_settings: payload.payroll_settings,
+            payrollSettings: payload.payroll_settings,
+            employment_allocation_settings: payload.employment_allocation_settings,
+            employmentAllocationSettings: payload.employment_allocation_settings,
+            employment_application_settings: payload.employment_application_settings,
+            employmentApplicationSettings: payload.employment_application_settings,
+            encashment_settings: payload.encashment_settings,
+            encashmentSettings: payload.encashment_settings,
+          };
+          setSelectedLeaveType(updatedType);
+          setLeaveTypes((prev) => prev.map(t => t.id === selectedLeaveType.id ? updatedType : t));
         }
       } else {
         // Create
         const res = await apiClient.post('/settings/leave-types', payload);
         if (res.data?.success) {
           toast.success('Leave category created successfully!');
-          fetchLeaveTypes();
+          await fetchLeaveTypes();
         }
       }
     } catch (err: any) {
@@ -1183,13 +1467,18 @@ export function LeavePoliciesPage() {
 
   // Trigger Cron allocation
   const handleTriggerCron = async () => {
+    setIsExecutingCron(true);
     try {
-      const res = await apiClient.post('/leaves/cron/allocate');
+      const res = await apiClient.post('/leaves/sync-balances');
       if (res.data?.success) {
-        toast.success(res.data.message || 'Leave allocation cron executed successfully!');
+        toast.success(res.data.message || 'All employee leave balances successfully synchronized!');
+        await fetchLeaveTypes();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to trigger cron allocation.');
+      const errMsg = err.response?.data?.message || err.response?.data?.error?.message || err.message || 'Failed to sync leave balances.';
+      toast.error(errMsg);
+    } finally {
+      setIsExecutingCron(false);
     }
   };
 
@@ -1224,13 +1513,35 @@ export function LeavePoliciesPage() {
 
   const handleSaveMapping = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mappingForm.leavePolicyId) {
-      toast.error('Please select a leave policy');
+    let targetPolicyId = mappingForm.leavePolicyId;
+
+    if (targetPolicyId === 'custom' || isCreatePolicyOpen) {
+      if (!newPolicyName.trim()) {
+        toast.error('Please enter a custom Policy Name');
+        return;
+      }
+      try {
+        const createRes = await apiClient.post('/leaves/policies', { name: newPolicyName.trim() });
+        if (createRes.data?.data?.id) {
+          targetPolicyId = String(createRes.data.data.id);
+        } else {
+          toast.error('Failed to create custom policy');
+          return;
+        }
+      } catch (createErr: any) {
+        toast.error(createErr.response?.data?.message || 'Failed to create custom policy');
+        return;
+      }
+    }
+
+    if (!targetPolicyId) {
+      toast.error('Please select or enter a leave policy name');
       return;
     }
+
     try {
       const res = await apiClient.post('/leaves/policy-mappings', {
-        leavePolicyId: parseInt(mappingForm.leavePolicyId, 10),
+        leavePolicyId: parseInt(targetPolicyId, 10),
         roleId: mappingForm.roleId ? parseInt(mappingForm.roleId, 10) : null,
         departmentId: mappingForm.departmentId ? parseInt(mappingForm.departmentId, 10) : null,
         designationId: mappingForm.designationId ? parseInt(mappingForm.designationId, 10) : null,
@@ -1241,6 +1552,8 @@ export function LeavePoliciesPage() {
       if (res.data?.success) {
         toast.success('Policy mapping created successfully!');
         setIsMappingModalOpen(false);
+        setIsCreatePolicyOpen(false);
+        setNewPolicyName('');
         setMappingForm({
           leavePolicyId: '',
           roleId: '',
@@ -1424,7 +1737,7 @@ export function LeavePoliciesPage() {
   const handleToggleEmploymentTarget = (scope: 'allocation' | 'application', category: 'locations' | 'departments' | 'grades' | 'employeeTypes' | 'employeeStatuses', item: any) => {
     const key = scope === 'allocation' ? 'employment_allocation' : 'employment_application';
     const currentList = (formData as any)[key][category] as any[];
-    
+
     let newList;
     if (currentList.includes(item)) {
       newList = currentList.filter(x => x !== item);
@@ -1494,7 +1807,7 @@ export function LeavePoliciesPage() {
   const handleSaveRule = (e: React.FormEvent) => {
     e.preventDefault();
     const currentRules = [...(formData.encashment?.rules || [])];
-    
+
     if (editingRuleIndex !== null) {
       // Update
       currentRules[editingRuleIndex] = ruleForm;
@@ -1565,2387 +1878,821 @@ export function LeavePoliciesPage() {
 
   // Filter Leave types list
   const filteredLeaveTypes = leaveTypes.filter(lt => {
-    const nameMatch = (lt.leaveName || lt.leave_name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                      (lt.leaveCode || lt.leave_code || '').toLowerCase().includes(searchQuery.toLowerCase());
-    
+    const nameMatch = (lt.leaveName || lt.leave_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (lt.leaveCode || lt.leave_code || '').toLowerCase().includes(searchQuery.toLowerCase());
+
     const statusMatch = statusFilter === 'all' || lt.status === statusFilter;
     const classMatch = classificationFilter === 'all' || lt.leave_classification === classificationFilter;
-    
+
     return nameMatch && statusMatch && classMatch;
   });
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen bg-gray-50 dark:bg-gray-950 overflow-y-auto lg:overflow-hidden">
-      
-      {/* 1st COLUMN: Sidebar Sub-Navigation */}
-      <div className="w-full lg:w-64 bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 flex flex-col lg:h-full shrink-0">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full pl-9 pr-4 py-2 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
-            />
-          </div>
+    <div className="w-full h-full flex flex-col lg:flex-row bg-gray-50 dark:bg-gray-950 overflow-hidden">
+
+      {/* 1st COLUMN: Sidebar Sub-Navigation (Collapsible Rail) */}
+      <div className={`bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-full lg:w-48 xl:w-52'
+        }`}>
+        <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+          {!isSidebarCollapsed && (
+            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Administration
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className={`h-7 w-7 p-0 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer ${isSidebarCollapsed ? 'mx-auto' : ''
+              }`}
+            title={isSidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </Button>
         </div>
-        
-        <div className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-          <p className="px-3 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">Leave Administration</p>
-          
-          <button
-            onClick={() => setActiveTab('leave')}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
-              activeTab === 'leave'
-                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
-                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
-            }`}
-          >
-            <Database className="h-4 w-4" />
-            <span>Leave Categories</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('policy')}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
-              activeTab === 'policy'
-                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
-                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
-            }`}
-          >
-            <ShieldCheck className="h-4 w-4" />
-            <span>Leave Policy Mappings</span>
-          </button>
 
-          <button
-            onClick={() => setActiveTab('late_deduction_policy')}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
-              activeTab === 'late_deduction_policy'
-                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
-                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
-            }`}
-          >
-            <Clock className="h-4 w-4" />
-            <span>Late Deduction Policy</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('late_auto_deduction')}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
-              activeTab === 'late_auto_deduction'
-                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
-                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
-            }`}
-          >
-            <Play className="h-4 w-4" />
-            <span>Late Auto Deduction</span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('encashment')}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
-              activeTab === 'encashment'
-                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
-                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
-            }`}
-          >
-            <Calendar className="h-4 w-4" />
-            <span>Leave Encashment</span>
-          </button>
+        <div className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+          {[
+            { id: 'leave', label: 'Categories', icon: Database },
+            { id: 'policy', label: 'Policy Mappings', icon: ShieldCheck },
+            { id: 'late_deduction_policy', label: 'Late Policy', icon: Clock },
+            { id: 'late_auto_deduction', label: 'Auto Deduction', icon: Play },
+            { id: 'encashment', label: 'Encashment', icon: Calendar },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id as any)}
+                title={isSidebarCollapsed ? item.label : undefined}
+                className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
+                  } py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${isActive
+                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 font-bold shadow-xs'
+                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800/60'
+                  }`}
+              >
+                <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}`} />
+                {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* RENDER DYNAMIC VIEWS DEPENDING ON SIDEBAR ACTIVE TAB */}
-      
-      {activeTab === 'leave' && (
-        <>
-          {/* 2nd COLUMN: Leave Types List */}
-          <div className="w-full lg:w-80 bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 flex flex-col h-[400px] lg:h-full shrink-0">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-              <div className="flex items-center flex-wrap gap-2">
-                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                  <Database className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm">Leave</h3>
-                  <p className="text-[10px] text-gray-500 font-semibold">{filteredLeaveTypes.length} Categories</p>
-                </div>
-              </div>
-              
-              <Button 
-                onClick={() => setSelectedLeaveType(null)} 
-                size="sm"
-                className="h-8 w-8 p-0 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="p-3 border-b border-gray-200 dark:border-gray-800 space-y-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search categories..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
-                />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={statusFilter}
-                  onChange={(e: any) => setStatusFilter(e.target.value)}
-                  className="px-2 py-1 text-[10px] bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg font-medium text-gray-600 dark:text-gray-300 focus:outline-none"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-                <select
-                  value={classificationFilter}
-                  onChange={(e: any) => setClassificationFilter(e.target.value)}
-                  className="px-2 py-1 text-[10px] bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg font-medium text-gray-600 dark:text-gray-300 focus:outline-none"
-                >
-                  <option value="all">All Types</option>
-                  <option value="calendar">Calendar</option>
-                  <option value="non-calendar">Non-Calendar</option>
-                  <option value="uncategorized">Uncategorized</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-              {filteredLeaveTypes.map((lt) => {
-                const isSelected = selectedLeaveType?.id === lt.id;
-                const classification = lt.leave_classification || 
-                  ((lt.leaveName || lt.leave_name || '').toLowerCase().includes('lwp') ? 'uncategorized' :
-                   (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilage') || (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilege') ? 'non-calendar' : 'calendar');
-                
-                let typeColorClass = "bg-rose-50 text-rose-700 border-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30";
-                if (classification === 'calendar') {
-                  typeColorClass = "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30";
-                } else if (classification === 'non-calendar') {
-                  typeColorClass = "bg-cyan-50 text-cyan-700 border-cyan-100 dark:bg-cyan-950/20 dark:text-cyan-400 dark:border-cyan-900/30";
-                }
 
-                return (
-                  <div
-                    key={lt.id}
-                    onClick={() => setSelectedLeaveType(lt)}
-                    className={`p-3.5 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col gap-1.5 ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-teal-500/10 to-indigo-500/10 border-indigo-500 shadow-md ring-1 ring-indigo-500/10'
-                        : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800/80 hover:bg-gray-50/50 hover:border-gray-200 shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isSelected ? 'text-indigo-700 dark:text-indigo-400' : 'text-gray-800 dark:text-gray-200'}`}>
-                        {lt.leaveName || lt.leave_name}
-                      </span>
-                      {lt.status === 'inactive' && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500">Inactive</span>
-                      )}
+      {activeTab === 'leave' && (
+        <div className="flex-1 flex flex-col lg:flex-row bg-slate-50/70 dark:bg-slate-950 h-full overflow-hidden">
+          {/* LEFT MASTER PANEL: Leave Categories Roster */}
+          <div className={`bg-white dark:bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col h-full shrink-0 transition-all duration-300 ${isCategoriesCollapsed ? 'w-14' : 'w-full lg:w-72 xl:w-80'}`}>
+            {/* Header */}
+            <div className="p-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+              {!isCategoriesCollapsed ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl shadow-2xs">
+                      <Database className="h-4 w-4" />
                     </div>
-                    
-                    <div className="flex items-center justify-between mt-1 text-[10px] text-gray-500 dark:text-gray-400 font-semibold">
-                      <span className={`px-2 py-0.5 rounded-md border text-[9px] uppercase tracking-wider ${typeColorClass}`}>
-                        Type: {classification}
-                      </span>
-                      <span>{lt.annualQuota ?? lt.annual_quota} Days</span>
+                    <div>
+                      <h3 className="font-bold text-slate-900 dark:text-white text-xs">Categories</h3>
+                      <p className="text-[10px] text-slate-400 font-semibold">{filteredLeaveTypes.length} Policies Configured</p>
                     </div>
                   </div>
-                );
-              })}
-              
-              {filteredLeaveTypes.length === 0 && (
-                <div className="text-center py-10 text-xs text-gray-400 font-medium">No leave categories found.</div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      onClick={() => setIsAddLeaveModalOpen(true)}
+                      size="sm"
+                      className="h-7 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-2xs cursor-pointer flex items-center gap-1"
+                      title="Add New Leave Category"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>New</span>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsCategoriesCollapsed(true)}
+                      className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-indigo-600 cursor-pointer"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-2 mx-auto py-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsCategoriesCollapsed(false)}
+                    className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-indigo-600 cursor-pointer"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => setIsAddLeaveModalOpen(true)}
+                    size="sm"
+                    className="h-7 w-7 p-0 rounded-lg bg-indigo-600 text-white shadow-2xs cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               )}
             </div>
+
+            {!isCategoriesCollapsed && (
+              <>
+                {/* Search & Filters */}
+                <div className="p-2.5 border-b border-slate-100 dark:border-slate-800 space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search policies..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={statusFilter}
+                      onChange={(e: any) => setStatusFilter(e.target.value)}
+                      className="flex-1 px-2 py-1 text-[10px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg font-semibold text-slate-700 dark:text-slate-300 focus:outline-none"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+
+                    <button
+                      onClick={() => setViewMode(viewMode === 'table' ? 'configure' : 'table')}
+                      className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                        viewMode === 'table'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                      }`}
+                      title="Toggle Full Table View"
+                    >
+                      {viewMode === 'table' ? '📋 Workspace' : '📊 Table View'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Categories List Cards */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                  {filteredLeaveTypes.map((lt) => {
+                    const isSelected = selectedLeaveType?.id === lt.id;
+                    const isPaid = (lt.paidType || lt.paid_type) !== 'unpaid';
+
+                    return (
+                      <div
+                        key={lt.id}
+                        onClick={() => {
+                          setSelectedLeaveType(lt);
+                          if (viewMode === 'table') setViewMode('configure');
+                        }}
+                        className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col gap-1.5 ${
+                          isSelected
+                            ? 'bg-gradient-to-r from-indigo-50/90 to-purple-50/60 dark:from-indigo-950/40 dark:to-purple-950/30 border-indigo-500/80 shadow-xs ring-1 ring-indigo-500/20'
+                            : 'bg-white dark:bg-slate-900 border-slate-200/60 dark:border-slate-800/80 hover:bg-slate-50/80 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">☀️</span>
+                            <span className={`text-xs font-bold truncate max-w-[130px] ${isSelected ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}`}>
+                              {lt.leaveName || lt.leave_name}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md">
+                            {lt.annualQuota ?? lt.annual_quota ?? 0}d
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                          <span className="font-mono text-slate-500 dark:text-slate-400 font-bold">
+                            {lt.leaveCode || lt.leave_code}
+                          </span>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold ${isPaid ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
+                              {isPaid ? 'Paid' : 'Unpaid'}
+                            </span>
+                            {lt.status === 'inactive' && (
+                              <span className="text-[8px] font-bold px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">Off</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
 
-          {/* 3rd COLUMN: Details Settings Config (Accordion Forms) */}
-          <div className="flex-1 bg-gray-50 dark:bg-gray-950 lg:overflow-y-auto">
-            <form onSubmit={handleSaveDetails} className="max-w-4xl mx-auto p-8 space-y-8">
-              
-              {/* Details Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-200 dark:border-gray-800">
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-                    {selectedLeaveType ? `Configure ${selectedLeaveType.leaveName || selectedLeaveType.leave_name}` : 'Create Leave Setting'}
-                  </h1>
-                  <p className="text-xs text-gray-500 mt-1">Define advanced policies, eligibility rules, sandwich conditions, and payroll logic.</p>
+          {/* RIGHT WORKSPACE: Full Roster Table OR 3-Tab Master Configuration */}
+          <div className="flex-1 flex flex-col h-full overflow-y-auto">
+            {/* VIEW 1: FULL ROSTER TABLE (Apponext Styling) */}
+            {viewMode === 'table' && (
+              <div className="p-6 space-y-5 max-w-7xl mx-auto w-full">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Leave Category Directory</h2>
+                    <p className="text-xs text-slate-500">Overview of all active leave entitlements and rules across the organization.</p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setIsAddLeaveModalOpen(true)}
+                      className="h-8 px-3.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add New</span>
+                    </Button>
+
+                    <Button
+                      onClick={() => setViewMode('configure')}
+                      variant="outline"
+                      className="h-8 px-3.5 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 gap-1.5 cursor-pointer"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span>Configure Active Policy</span>
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        fetchLeaveYearSettings();
+                        setViewMode('leave-year');
+                      }}
+                      className="h-8 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-center cursor-pointer shadow-2xs"
+                      title="Leave year setting"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                
-                  {selectedLeaveType?.id && (
+
+                <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-2xl overflow-hidden bg-white dark:bg-slate-950">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-800">
+                        <TableRow>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5">Leave Category Name</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5">Leave Code</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5">Pay Type</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5">Leave Unit</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5">Accrual Basis</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5">Status</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-900 dark:text-white py-3.5 text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredLeaveTypes.map((lt) => {
+                          const isPaid = (lt.paidType || lt.paid_type) !== 'unpaid';
+                          const alloc = parseJson(lt.allocationSettings || lt.allocation_settings, {});
+                          const entitlementType = alloc.accrualBasis === 'ratio' ? 'Attendance Ratio' : (alloc.fixedLeave ? 'Fixed Quota' : 'Request Based');
+
+                          return (
+                            <TableRow key={lt.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/60">
+                              <TableCell className="text-xs font-bold text-slate-900 dark:text-white py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+                                    ☀️
+                                  </div>
+                                  <span>{lt.leaveName || lt.leave_name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 py-3">
+                                {lt.leaveCode || lt.leave_code}
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isPaid ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40'}`}>
+                                  {isPaid ? 'Paid Leave' : 'Unpaid LWP'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-xs font-medium text-slate-600 dark:text-slate-400 py-3">
+                                Days
+                              </TableCell>
+                              <TableCell className="text-xs font-medium text-slate-600 dark:text-slate-400 py-3">
+                                {entitlementType}
+                              </TableCell>
+                              <TableCell className="py-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleLeaveStatus(lt)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer ${lt.status === 'active' ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'}`}
+                                >
+                                  <span className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${lt.status === 'active' ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+                                </button>
+                              </TableCell>
+                              <TableCell className="text-right py-3">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedLeaveType(lt);
+                                      setViewMode('edit');
+                                    }}
+                                    className="w-7 h-7 p-0 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 rounded-lg cursor-pointer flex items-center justify-center shadow-2xs"
+                                    title="Edit Category Info"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedLeaveType(lt);
+                                      setViewMode('configure');
+                                    }}
+                                    className="h-7 px-3 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                  >
+                                    <SlidersHorizontal className="w-3 h-3 text-white" />
+                                    <span>Configure</span>
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* VIEW 2: EDIT LEAVE CATEGORY IDENTITY */}
+            {viewMode === 'edit' && (
+              <div className="p-6 max-w-3xl mx-auto space-y-5 w-full">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div>
+                    <h1 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                      {selectedLeaveType?.id ? `Edit Category: ${formData.leave_name}` : 'Create New Leave Category'}
+                    </h1>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Define the name, code, display icon, color token, and validity dates for this leave type.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setViewMode('configure')}
+                    className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back to Workspace</span>
+                  </Button>
+                </div>
+
+                <form onSubmit={handleSaveEditLeave} className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Category Name *</Label>
+                      <Input
+                        type="text"
+                        value={formData.leave_name || ''}
+                        onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_name: e.target.value }))}
+                        placeholder="e.g. Annual Leave"
+                        className="h-9 mt-1 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Short Code</Label>
+                      <Input
+                        type="text"
+                        value={formData.leave_code || ''}
+                        onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_code: e.target.value.toUpperCase() }))}
+                        placeholder="e.g. AL_01"
+                        className="h-9 mt-1 text-xs font-mono font-bold uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Theme Color</Label>
+                      <select
+                        value={(formData as any).color || 'Sky'}
+                        onChange={(e) => setFormData((prev: any) => ({ ...prev, color: e.target.value }))}
+                        className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold"
+                      >
+                        <option value="Sky">🔵 Sky Blue</option>
+                        <option value="Indigo">🟣 Indigo</option>
+                        <option value="Emerald">🟢 Emerald Green</option>
+                        <option value="Amber">🟠 Amber Gold</option>
+                        <option value="Rose">🔴 Rose Red</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Category Icon</Label>
+                      <select
+                        value={(formData as any).icon || 'Sun'}
+                        onChange={(e) => setFormData((prev: any) => ({ ...prev, icon: e.target.value }))}
+                        className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold"
+                      >
+                        <option value="Sun">☀️ Sun</option>
+                        <option value="Palm">🌴 Palm</option>
+                        <option value="Vacation">🏖️ Vacation</option>
+                        <option value="Hospital">🏥 Hospital</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Effective From</Label>
+                      <Input
+                        type="date"
+                        value={(formData as any).effective_from || ''}
+                        onChange={(e) => setFormData((prev: any) => ({ ...prev, effective_from: e.target.value }))}
+                        className="h-9 mt-1 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Effective To</Label>
+                      <Input
+                        type="date"
+                        value={(formData as any).effective_to || ''}
+                        onChange={(e) => setFormData((prev: any) => ({ ...prev, effective_to: e.target.value }))}
+                        className="h-9 mt-1 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Policy Notes & Description</Label>
+                    <textarea
+                      rows={3}
+                      value={(formData as any).description || ''}
+                      onChange={(e) => setFormData((prev: any) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Add organizational guidelines or notes for HR admins..."
+                      className="w-full mt-1 p-2.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 pt-3">
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => {
-                        setIsAuditModalOpen(true);
-                        fetchAuditLogs();
-                      }}
-                      className="border-gray-200 text-gray-700 hover:bg-gray-100 font-semibold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
+                      onClick={() => setViewMode('configure')}
+                      className="h-9 px-4 text-xs font-semibold border-slate-200 cursor-pointer"
                     >
-                      <Settings className="w-4 h-4" /> Audit Log
+                      Cancel
                     </Button>
-                  )}
+
+                    <Button
+                      type="submit"
+                      className="h-9 px-5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs cursor-pointer"
+                    >
+                      Save Category Info
+                    </Button>
+                  </div>
+                </form>
               </div>
+            )}
 
-              {/* ACCORDION 1: Leave Allocation Setting */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedAccordion(expandedAccordion === 'allocation' ? null : 'allocation')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-800/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
-                >
-                  <span className="flex items-center gap-3 text-left">
-                    <Database className="h-5 w-5 text-teal-500" />
-                    <span>Leave Allocation Setting</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'allocation' ? 'rotate-180' : ''}`} />
-                </button>
+            {/* VIEW 4: LEAVE YEAR SETTING WORKSPACE */}
+            {viewMode === 'leave-year' && (
+              <div className="p-6 space-y-5 max-w-6xl mx-auto w-full">
+                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+                  <div>
+                    <h1 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Leave year setting</span>
+                    </h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                      The day and month the leave year starts on. Cards are ordered narrowest filter first — the first one that matches an employee is the one that applies.
+                    </p>
+                  </div>
 
-                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'allocation' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                  <div className="overflow-hidden">
-                    <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Leave Name *</Label>
-                        <Input
-                          value={formData.leave_name}
-                          onChange={(e) => setFormData({ ...formData, leave_name: e.target.value })}
-                          placeholder="e.g. Paid leaves"
-                          className="h-10 rounded-xl"
-                          required
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Leave Code *</Label>
-                        <Input
-                          value={formData.leave_code}
-                          onChange={(e) => setFormData({ ...formData, leave_code: e.target.value })}
-                          placeholder="e.g. PL"
-                          className="h-10 rounded-xl font-mono uppercase"
-                          required
-                        />
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setViewMode('table')}
+                      className="h-8 px-3.5 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-300 rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Back</span>
+                    </Button>
 
-                    <div className="space-y-2.5">
-                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Leave Type</Label>
-                      <div className="flex flex-wrap gap-2.5">
-                        {['calendar', 'non-calendar', 'uncategorized'].map((type) => {
-                          const isSelected = formData.leave_classification === type;
-                          
-                          let activeClass = 'bg-gray-100 text-gray-800 dark:bg-gray-850 dark:text-gray-200 border-gray-200';
-                          if (isSelected) {
-                            if (type === 'calendar') activeClass = 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent';
-                            else if (type === 'non-calendar') activeClass = 'bg-cyan-600 hover:bg-cyan-700 text-white border-transparent';
-                            else activeClass = 'bg-rose-600 hover:bg-rose-700 text-white border-transparent'; 
-                          }
-                          
-                          return (
-                            <button
-                              type="button"
-                              key={type}
-                              onClick={() => setFormData({ ...formData, leave_classification: type as any })}
-                              className={`px-4 py-2 text-xs font-bold capitalize border rounded-xl transition-all duration-200 shadow-sm ${
-                                isSelected ? activeClass : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 hover:bg-gray-50'
-                              }`}
-                            >
-                              {type}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsAuditModalOpen(true)}
+                      className="h-8 px-3.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-800 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Clock className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Audit Log</span>
+                    </Button>
 
-                    {/* --- 1. UNCATEGORIZED LEAVE TYPE --- */}
-                    {formData.leave_classification === 'uncategorized' && (
-                      <>
-                        <div className="space-y-3 pt-2">
-                          {[
-                            { key: 'expireLeaveOnDashboard', label: 'Expire Leave On Dashboard' },
-                            { key: 'considerLeaveCalendarYear', label: 'Consider Leave Calendar Year' },
-                            { key: 'allocateLeaveIfConfirmationDatePresent', label: 'Allocate Leave If Confirmation Date Is Present [For Resigned Status Employees]' },
-                            { key: 'noPayment', label: 'No Payment (Unpaid Leave)' },
-                            { key: 'excludeLeaveFromSandwichPolicy', label: 'Exclude Leave from Sandwich Policy' },
-                          ].map((chk) => (
-                            <div key={chk.key} className="flex items-start gap-3">
-                              <input
-                                type="checkbox"
-                                id={`uncat-chk-${chk.key}`}
-                                checked={!!(formData.allocation as any)[chk.key]}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, [chk.key]: e.target.checked }
-                                })}
-                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor={`uncat-chk-${chk.key}`} className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                                {chk.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setLeaveYearToEdit(null);
+                        setIsLeaveYearModalOpen(true);
+                      }}
+                      className="h-8 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add</span>
+                    </Button>
+                  </div>
+                </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-gray-50 dark:border-gray-800/80">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Notify Leave Expire Before</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 30"
-                              value={formData.allocation.notifyLeaveExpireBeforeDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, notifyLeaveExpireBeforeDays: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days of expiration.</span>
-                          </div>
-                          
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Request leave within</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 15"
-                              value={formData.allocation.requestLeaveWithinDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, requestLeaveWithinDays: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 font-medium">days.</span>
-                          </div>
-                        </div>
+                {/* Grid of Cards */}
+                {isLoadingLeaveYear ? (
+                  <div className="flex items-center justify-center py-12 text-slate-400 text-xs font-medium">
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    <span>Loading leave year settings...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                    {leaveYearSettings.map((item) => {
+                      const locCount = item.locations?.length || 0;
+                      const deptCount = item.departments?.length || 0;
+                      const gradeCount = item.grades?.length || 0;
+                      const compCount = item.companies?.length || 0;
 
-                        <div className="pt-4 border-t border-gray-50 dark:border-gray-800/80 flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            id="uncat-chk-fnf-limits"
-                            checked={!!formData.allocation.encashmentsSubjectToLimitsFNF}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, encashmentsSubjectToLimitsFNF: e.target.checked }
-                            })}
-                            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <Label htmlFor="uncat-chk-fnf-limits" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                            Encashments subject to the limits defined for FNF
-                          </Label>
-                        </div>
-                      </>
-                    )}
+                      const scopeParts: string[] = [];
+                      if (compCount > 0) scopeParts.push(`Company (${compCount})`);
+                      if (deptCount > 0) scopeParts.push(`Department (${deptCount})`);
+                      if (gradeCount > 0) scopeParts.push(`Grade (${gradeCount})`);
+                      if (locCount > 0) scopeParts.push(`Location (${locCount})`);
 
-                    {/* --- 2. CALENDAR LEAVE TYPE --- */}
-                    {formData.leave_classification === 'calendar' && (
-                      <>
-                        <div className="flex items-center flex-wrap gap-3 pt-2">
-                          <input
-                            type="checkbox"
-                            id="considerLeaveStartYearAsFrom"
-                            checked={!!formData.allocation.considerLeaveStartYearAsFrom}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, considerLeaveStartYearAsFrom: e.target.checked }
-                            })}
-                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <Label htmlFor="considerLeaveStartYearAsFrom" className="text-xs font-semibold text-gray-755 dark:text-gray-355 cursor-pointer">
-                            Consider Leave Start Year as From
-                          </Label>
+                      const scopeLabel = scopeParts.length > 0 ? scopeParts.join(', ') : 'All employees';
+                      const isDefault = item.is_default || scopeParts.length === 0;
 
-                          {formData.allocation.considerLeaveStartYearAsFrom && (
-                            <select
-                              value={formData.allocation.leaveStartMonth}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveStartMonth: e.target.value }
-                              })}
-                              className="h-8 px-2 bg-white dark:bg-gray-900 border rounded-lg text-xs font-semibold text-gray-655 ml-2"
-                            >
-                              <option value="1">1st January</option>
-                              <option value="2">1st February</option>
-                              <option value="3">1st March</option>
-                              <option value="4">1st April (Financial Year)</option>
-                              <option value="5">1st May</option>
-                              <option value="6">1st June</option>
-                              <option value="7">1st July</option>
-                              <option value="8">1st August</option>
-                              <option value="9">1st September</option>
-                              <option value="10">1st October</option>
-                              <option value="11">1st November</option>
-                              <option value="12">1st December</option>
-                            </select>
-                          )}
-                        </div>
-
-                        {/* Paid Leave Specific: Entitlement Sub-Panel */}
-                        <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-4">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entitlement</p>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] font-bold text-gray-655">Number of Days *</Label>
-                              <Input
-                                type="number"
-                                value={formData.allocation.entitlementDays}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, entitlementDays: e.target.value }
-                                })}
-                                className="h-9 rounded-lg"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] font-bold text-gray-655 font-medium">Periodicity *</Label>
-                              <select
-                                value={formData.allocation.entitlementPeriodicity}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, entitlementPeriodicity: e.target.value }
-                                })}
-                                className="w-full h-9 px-3 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-750 rounded-lg text-xs font-semibold"
-                              >
-                                <option value="Select">Select</option>
-                                <option value="Yearly">Yearly</option>
-                                <option value="Monthly">Monthly</option>
-                                <option value="Quarterly">Quarterly</option>
-                                <option value="Weekly">Weekly</option>
-                              </select>
-                            </div>
-                          </div>
-
-                        </div>
-
-                        <div className="space-y-3 pt-2 border-t border-gray-50 dark:border-gray-800/80">
-                          {[
-                            { key: 'expireLeaveOnDashboard', label: 'Expire Leave On Dashboard' },
-                            { key: 'considerLeaveCalendarYear', label: 'Consider Leave Calendar Year' },
-                            { key: 'allocateLeaveIfConfirmationDatePresent', label: 'Allocate Leave If Confirmation Date Is Present [For Resigned Status Employees]' },
-                            { key: 'noPayment', label: 'No Payment (Unpaid Leave)' },
-                            { key: 'excludeLeaveFromSandwichPolicy', label: 'Exclude Leave from Sandwich Policy' },
-                          ].map((chk) => (
-                            <div key={chk.key} className="flex items-start gap-3">
-                              <input
-                                type="checkbox"
-                                id={`cal-chk-${chk.key}`}
-                                checked={!!(formData.allocation as any)[chk.key]}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, [chk.key]: e.target.checked }
-                                })}
-                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor={`cal-chk-${chk.key}`} className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                                {chk.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-55 dark:border-gray-800">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655 min-w-36">Minimum Service Required</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 6"
-                              value={formData.allocation.minServiceRequired}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, minServiceRequired: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <select
-                              value={formData.allocation.minServiceRequiredUnit}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, minServiceRequiredUnit: e.target.value }
-                              })}
-                              className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="Select">Select</option>
-                              <option value="Months">Months</option>
-                              <option value="Days">Days</option>
-                              <option value="Years">Years</option>
-                            </select>
-                          </div>
-
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655 min-w-28">Gender</span>
-                            <select
-                              value={formData.allocation.gender}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, gender: e.target.value }
-                              })}
-                              className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="All">All</option>
-                              <option value="Male">Male</option>
-                              <option value="Female">Female</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center flex-wrap gap-3 pt-2">
-                          <span className="text-xs font-semibold text-gray-655 min-w-36">Minimum Working Days</span>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 240"
-                            value={formData.allocation.minWorkingDays}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, minWorkingDays: e.target.value }
-                            })}
-                            className="w-24 h-9"
-                          />
-                        </div>
-
-                        <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-3">
-                          <div className="flex items-start gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-initial-date-range"
-                              checked={!!formData.allocation.initialAllocationDateRange}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, initialAllocationDateRange: e.target.checked }
-                              })}
-                              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-initial-date-range" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                              Initial Leave allocation based on Date Range
-                            </Label>
-                          </div>
-                          
-                          {formData.allocation.initialAllocationDateRange && (
-                            <div className="space-y-3 pl-7">
-                              <div className="flex items-center flex-wrap gap-3">
-                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Consider full month, if date of</span>
-                                <select
-                                  value={formData.allocation.considerFullMonthIfDateOf}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, considerFullMonthIfDateOf: e.target.value }
-                                  })}
-                                  className="h-8 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-655"
-                                >
-                                  <option value="Confirmation">Confirmation</option>
-                                  <option value="Joining">Joining</option>
-                                </select>
-                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">is before</span>
-                                <Input
-                                  type="number"
-                                  value={formData.allocation.considerFullMonthBeforeDay}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, considerFullMonthBeforeDay: e.target.value }
-                                  })}
-                                  className="w-16 text-center h-8"
-                                />
-                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">of the month.</span>
-                              </div>
-
-                              <div className="flex items-center flex-wrap gap-3">
-                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Allocate leave before</span>
-                                <Input
-                                  type="number"
-                                  value={formData.allocation.allocateLeaveBeforeDays}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, allocateLeaveBeforeDays: e.target.value }
-                                  })}
-                                  className="w-16 text-center h-8"
-                                />
-                                <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days.</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-3 pt-2">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-round-off"
-                              checked={!!formData.allocation.leaveRoundOff}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveRoundOff: e.target.checked }
-                              })}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-round-off" className="text-xs font-semibold text-gray-755 dark:text-gray-355 cursor-pointer">
-                              Leave Round Off
-                            </Label>
-                          </div>
-
-                          <div className="flex items-center flex-wrap gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-allocation-till-resigned"
-                              checked={!!formData.allocation.considerAllocationTillResignedDate}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, considerAllocationTillResignedDate: e.target.checked }
-                              })}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-allocation-till-resigned" className="text-xs font-semibold text-gray-755 dark:text-gray-355 cursor-pointer">
-                              Consider leave allocation till resigned date
-                            </Label>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center flex-wrap gap-3 pt-2">
-                          <span className="text-xs font-semibold text-gray-655 min-w-36">Expire Leave after</span>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 180"
-                            value={formData.allocation.expireLeaveAfterValue}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, expireLeaveAfterValue: e.target.value }
-                            })}
-                            className="w-20 text-center h-9"
-                          />
-                          <span className="text-xs font-semibold text-gray-655 font-medium">days from date of credit</span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-gray-50 dark:border-gray-800/80">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Notify Leave Expire Before</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 30"
-                              value={formData.allocation.notifyLeaveExpireBeforeDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, notifyLeaveExpireBeforeDays: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days of expiration.</span>
-                          </div>
-                          
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Request leave within</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 15"
-                              value={formData.allocation.requestLeaveWithinDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, requestLeaveWithinDays: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 font-medium">days.</span>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                          <div className="flex items-center flex-wrap gap-4">
-                            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Disable pro-rata allocation</span>
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, disableProRata: true }
-                                })}
-                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                  formData.allocation.disableProRata
-                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                Yes
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, disableProRata: false }
-                                })}
-                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                  !formData.allocation.disableProRata
-                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                No
-                              </button>
-                            </div>
-                          </div>
-
-                          {!formData.allocation.disableProRata && (
-                            <div className="flex items-center flex-wrap gap-3">
-                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Leave Prorata Date Type *</span>
-                              <select
-                                value={formData.allocation.leaveProrataDateType}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, leaveProrataDateType: e.target.value }
-                                })}
-                                className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                              >
-                                <option value="Select">Select</option>
-                                <option value="Confirmation">Confirmation</option>
-                                <option value="Joining">Joining</option>
-                              </select>
-                              <Input
-                                type="number"
-                                value={formData.allocation.leaveProrataDays}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, leaveProrataDays: e.target.value }
-                                })}
-                                className="w-16 text-center h-8"
-                              />
-                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days.</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-4 border-t border-gray-50 dark:border-gray-800/80 flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            id="chk-fnf-limits"
-                            checked={formData.allocation.encashmentsSubjectToLimitsFNF}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, encashmentsSubjectToLimitsFNF: e.target.checked }
-                            })}
-                            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <Label htmlFor="chk-fnf-limits" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                            Encashments subject to the limits defined for FNF
-                          </Label>
-                        </div>
-
-                        <div className="pt-2 flex items-center flex-wrap gap-4">
-                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Encashment on Prorata Basis</span>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, encashmentOnProrataBasis: true }
-                              })}
-                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                formData.allocation.encashmentOnProrataBasis
-                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              Yes
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, encashmentOnProrataBasis: false }
-                              })}
-                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                !formData.allocation.encashmentOnProrataBasis
-                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              No
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-4 relative">
-                          <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Carry Forward and Encashment</p>
-                            <span className="text-xs text-gray-400">↑↓</span>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">Maximum encash unit</span>
-                              <Input
-                                type="number"
-                                value={formData.allocation.maxEncashUnit}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, maxEncashUnit: e.target.value }
-                                })}
-                                className="h-9"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 block">Maximum carry forward unit</span>
-                              <Input
-                                type="number"
-                                value={formData.allocation.maxCarryForwardUnit}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, maxCarryForwardUnit: e.target.value }
-                                })}
-                                className="h-9"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* --- 3. NON-CALENDAR LEAVE TYPE --- */}
-                    {formData.leave_classification === 'non-calendar' && (
-                      <>
-                        {/* Credit Type Buttons */}
-                        <div className="space-y-2">
-                          <Label className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Credit Type *</Label>
-                          <div className="flex gap-2">
-                            {['manual', 'on_request', 'auto'].map((ct) => {
-                              const isCtSel = formData.allocation.creditType === ct;
-                              let ctClass = isCtSel ? 'bg-rose-600 hover:bg-rose-700 text-white border-transparent' : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border-gray-200 hover:bg-gray-50';
-                              return (
-                                <button
-                                  type="button"
-                                  key={ct}
-                                  onClick={() => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, creditType: ct as any }
-                                  })}
-                                  className={`px-4 py-2 text-xs font-bold capitalize border rounded-xl transition-all duration-200 shadow-sm ${ctClass}`}
-                                >
-                                  {ct.replace('_', '-')}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Credit Type: Manual / Auto Rule Builder */}
-                        {(formData.allocation.creditType === 'manual' || formData.allocation.creditType === 'auto') && (
-                          <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-850 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 flex-wrap">
-                            <span>Day Type</span>
-                            <select
-                              value={formData.allocation.dayType}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, dayType: e.target.value }
-                              })}
-                              className="h-8 px-2 bg-white dark:bg-gray-900 border rounded-lg text-xs"
-                            >
-                              <option value="Week Off">Week Off</option>
-                              <option value="Working Day">Working Day</option>
-                              <option value="Holiday">Holiday</option>
-                            </select>
-                            <span>is between</span>
-                            <Input
-                              type="number"
-                              placeholder="Hour(s)"
-                              className="w-16 h-8 text-center"
-                              value={formData.allocation.hourStart}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, hourStart: e.target.value }
-                              })}
-                            />
-                            <span>Hour(s) and</span>
-                            <Input
-                              type="number"
-                              placeholder="Hour(s)"
-                              className="w-16 h-8 text-center"
-                              value={formData.allocation.hourEnd}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, hourEnd: e.target.value }
-                              })}
-                            />
-                            <span>Hour(s) then allocate</span>
-                            <Input
-                              type="number"
-                              placeholder="leave(s)"
-                              className="w-16 h-8 text-center"
-                              value={formData.allocation.allocateLeaves}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, allocateLeaves: e.target.value }
-                              })}
-                            />
-                            <span>leave(s)</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const dayT = formData.allocation.dayType || 'Week Off';
-                                const hStart = formData.allocation.hourStart;
-                                const hEnd = formData.allocation.hourEnd;
-                                const allocL = formData.allocation.allocateLeaves;
-                                
-                                if (!hStart || !hEnd || !allocL) {
-                                  toast.error('Please enter Hour(s) range and allocate leaves.');
-                                  return;
-                                }
-                                
-                                const newRule = {
-                                  dayType: dayT,
-                                  hourStart: parseFloat(hStart),
-                                  hourEnd: parseFloat(hEnd),
-                                  allocateLeaves: parseFloat(allocL)
-                                };
-                                
-                                const rules = [...(formData.allocation.nonCalendarRules || [])];
-                                rules.push(newRule);
-                                
-                                setFormData({
-                                  ...formData,
-                                  allocation: {
-                                    ...formData.allocation,
-                                    nonCalendarRules: rules,
-                                    hourStart: '',
-                                    hourEnd: '',
-                                    allocateLeaves: ''
-                                  }
-                                });
-                                toast.success('Rule added successfully!');
-                              }}
-                              className="h-8 w-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold text-lg shadow-sm"
-                            >
-                              +
-                            </button>
-                          </div>
-                        )}
-
-                        {/* Display list of configured non-calendar rules */}
-                        {(formData.allocation.creditType === 'manual' || formData.allocation.creditType === 'auto') && 
-                          formData.allocation.nonCalendarRules && 
-                          formData.allocation.nonCalendarRules.length > 0 && (
-                          <div className="space-y-2 mt-2">
-                            <Label className="text-xs font-bold text-gray-500 block">Configured Rules:</Label>
-                            <div className="space-y-2 pl-2">
-                              {formData.allocation.nonCalendarRules.map((rule: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-850 border border-gray-150 dark:border-gray-800 rounded-lg text-xs font-semibold">
-                                  <span>
-                                    Day Type <strong className="text-rose-600 font-bold">{rule.dayType}</strong> is between <strong>{rule.hourStart}</strong> hour(s) and <strong>{rule.hourEnd}</strong> hour(s) then allocate <strong>{rule.allocateLeaves}</strong> leave(s)
+                      return (
+                        <div
+                          key={item.id}
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                        >
+                          {/* Card Header Row */}
+                          <div className="flex items-start justify-between gap-3 w-full border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                            <div className="flex-1 min-w-0 pr-1">
+                              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                                APPLIES TO
+                              </span>
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                <span className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
+                                  {scopeLabel}
+                                </span>
+                                {isDefault && (
+                                  <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800 rounded-full shrink-0">
+                                    Default
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const rules = [...(formData.allocation.nonCalendarRules || [])];
-                                      rules.splice(idx, 1);
-                                      setFormData({
-                                        ...formData,
-                                        allocation: {
-                                          ...formData.allocation,
-                                          nonCalendarRules: rules
-                                        }
-                                      });
-                                      toast.success('Rule removed successfully!');
-                                    }}
-                                    className="text-xs text-red-500 hover:text-red-700 font-bold transition-all px-2 py-0.5 rounded border border-red-200 hover:bg-red-50"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Credit Type: On-Request Checkboxes */}
-                        {formData.allocation.creditType === 'on_request' && (
-                          <div className="space-y-2 pl-2">
-                            <div className="flex items-center flex-wrap gap-3">
-                              <input
-                                type="checkbox"
-                                id="chk-working-date-req"
-                                checked={formData.allocation.workingDateRequired}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, workingDateRequired: e.target.checked }
-                                })}
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor="chk-working-date-req" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                                Working date required for date
-                              </Label>
-                            </div>
-                            <div className="flex items-center flex-wrap gap-3">
-                              <input
-                                type="checkbox"
-                                id="chk-apply-auto-req"
-                                checked={formData.allocation.applyAutoRequestPolicy}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, applyAutoRequestPolicy: e.target.checked }
-                                })}
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor="chk-apply-auto-req" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                                Apply Auto Request Policy on On-Request
-                              </Label>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Non-Calendar Entitlement Box */}
-                        <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-4">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Entitlement</p>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] font-bold text-gray-650">Number of Days *</Label>
-                              <Input
-                                type="number"
-                                value={formData.allocation.entitlementDays}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, entitlementDays: e.target.value }
-                                })}
-                                className="h-9 rounded-lg"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] font-bold text-gray-650">Accrual Timing *</Label>
-                              <div className="flex gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, entitlementEndType: 'Start' }
-                                  })}
-                                  className={`h-9 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                    formData.allocation.entitlementEndType === 'Start'
-                                      ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                      : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  Start
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, entitlementEndType: 'End' }
-                                  })}
-                                  className={`h-9 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                    formData.allocation.entitlementEndType === 'End'
-                                      ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                      : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  End
-                                </button>
+                                )}
                               </div>
                             </div>
-                          </div>
 
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655">Strictly Run Cron On Periodicity Start/End</span>
-                            <div className="flex gap-2">
+                            {/* Active Switch Box */}
+                            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1 rounded-xl border border-slate-100 dark:border-slate-800">
+                              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                                {item.status === 'inactive' ? 'Inactive' : 'Active'}
+                              </span>
                               <button
                                 type="button"
-                                onClick={() => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, strictCronPeriodicity: true }
-                                })}
-                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                  formData.allocation.strictCronPeriodicity
-                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                onClick={async () => {
+                                  try {
+                                    await apiClient.patch(`/settings/leave-year-settings/${item.id}/status`);
+                                    toast.success('Status updated');
+                                    fetchLeaveYearSettings();
+                                  } catch (err) {
+                                    toast.error('Failed to toggle status');
+                                  }
+                                }}
+                                className={`relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer ${
+                                  item.status !== 'inactive' ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
                                 }`}
                               >
-                                Yes
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, strictCronPeriodicity: false }
-                                })}
-                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                  !formData.allocation.strictCronPeriodicity
-                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                                }`}
-                              >
-                                No
+                                <span
+                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                                    item.status !== 'inactive' ? 'translate-x-[15px]' : 'translate-x-[2px]'
+                                  }`}
+                                />
                               </button>
                             </div>
                           </div>
-                          </div>
 
-                          <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-                            <Label className="text-[11px] font-bold text-gray-655 font-medium">No. of times in service *</Label>
-                            <Input
-                              type="number"
-                              value={formData.allocation.noOfTimesInService}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, noOfTimesInService: e.target.value }
-                              })}
-                              className="h-9"
-                            />
-                          </div>
-
-                          {formData.allocation.creditType === 'on_request' && (
-                            <div className="flex items-center flex-wrap gap-3 pt-2">
-                              <input
-                                type="checkbox"
-                                id="chk-fixed-leave"
-                                checked={formData.allocation.fixedLeave}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, fixedLeave: e.target.checked }
-                                })}
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor="chk-fixed-leave" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                                Fixed Leave
-                              </Label>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Standard Checkboxes */}
-                        <div className="space-y-3 pt-2 border-t border-gray-50 dark:border-gray-800/80">
-                          {[
-                            { key: 'expireLeaveOnDashboard', label: 'Expire Leave On Dashboard' },
-                            { key: 'considerLeaveCalendarYear', label: 'Consider Leave Calendar Year' },
-                            { key: 'allocateLeaveIfConfirmationDatePresent', label: 'Allocate Leave If Confirmation Date Is Present [For Resigned Status Employees]' },
-                            { key: 'noPayment', label: 'No Payment (Unpaid Leave)' },
-                            { key: 'excludeLeaveFromSandwichPolicy', label: 'Exclude Leave from Sandwich Policy' },
-                          ].map((chk) => (
-                            <div key={chk.key} className="flex items-start gap-3">
-                              <input
-                                type="checkbox"
-                                id={`non-chk-${chk.key}`}
-                                checked={!!(formData.allocation as any)[chk.key]}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, [chk.key]: e.target.checked }
-                                })}
-                                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor={`non-chk-${chk.key}`} className="text-xs font-semibold text-gray-700 dark:text-gray-350 cursor-pointer">
-                                {chk.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* Non-Calendar Criteria Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-150 dark:border-gray-800">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655 min-w-36">Minimum Service Required</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 6"
-                              value={formData.allocation.minServiceRequired}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, minServiceRequired: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <select
-                              value={formData.allocation.minServiceRequiredUnit}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, minServiceRequiredUnit: e.target.value }
-                              })}
-                              className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="Select">Select</option>
-                              <option value="Months">Months</option>
-                              <option value="Days">Days</option>
-                              <option value="Years">Years</option>
-                            </select>
-                          </div>
-
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655 min-w-28">Gender</span>
-                            <select
-                              value={formData.allocation.gender}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, gender: e.target.value }
-                              })}
-                              className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="All">All</option>
-                              <option value="Male">Male</option>
-                              <option value="Female">Female</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655 min-w-36">Marital Status</span>
-                            <select
-                              value={formData.allocation.maritalStatus}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, maritalStatus: e.target.value }
-                              })}
-                              className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="All">All</option>
-                              <option value="Single">Single</option>
-                              <option value="Married">Married</option>
-                              <option value="Divorced">Divorced</option>
-                            </select>
-                          </div>
-
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-655 min-w-28">Maximum Allowed</span>
-                            <Input
-                              type="number"
-                              value={formData.allocation.maximumAllowed}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, maximumAllowed: e.target.value }
-                              })}
-                              className="w-full max-w-[200px] h-9"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-3 pt-2">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <input
-                              type="checkbox"
-                              id="non-chk-round-off"
-                              checked={formData.allocation.leaveRoundOff}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveRoundOff: e.target.checked }
-                              })}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="non-chk-round-off" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                              Leave Round Off
-                            </Label>
-                          </div>
-
-                          <div className="flex items-center flex-wrap gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-weekend-holiday-req"
-                              checked={formData.allocation.requestLeaveOnlyOnWeekendAndHoliday}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, requestLeaveOnlyOnWeekendAndHoliday: e.target.checked }
-                              })}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-weekend-holiday-req" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                              Request leave only on Weekend and Holiday
-                            </Label>
-                          </div>
-
-                          <div className="flex items-center flex-wrap gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-attendance-exists-req"
-                              checked={formData.allocation.requestLeaveOnlyIfAttendanceExists}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, requestLeaveOnlyIfAttendanceExists: e.target.checked }
-                              })}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-attendance-exists-req" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                              Request leave only if Attendance Exists
-                            </Label>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center flex-wrap gap-3 pt-2">
-                          <span className="text-xs font-semibold text-gray-655 min-w-36">Expire Leave after</span>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 180"
-                            value={formData.allocation.expireLeaveAfterValue}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, expireLeaveAfterValue: e.target.value }
-                            })}
-                            className="w-20 text-center h-9"
-                          />
-                          <span className="text-xs font-semibold text-gray-655 font-medium">days from</span>
-                          <select
-                            value={formData.allocation.expireLeaveAfterBase}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, expireLeaveAfterBase: e.target.value }
-                            })}
-                            className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                          >
-                            <option value="Date of Credit/Approval">Date of Credit/Approval</option>
-                            <option value="Joining Date">Joining Date</option>
-                            <option value="Confirmation Date">Confirmation Date</option>
-                          </select>
-                        </div>
-
-                        <div className="flex items-center flex-wrap gap-3 pt-2">
-                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Notify Leave Expire Before</span>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 30"
-                            value={formData.allocation.notifyLeaveExpireBeforeDays}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, notifyLeaveExpireBeforeDays: e.target.value }
-                            })}
-                            className="w-20 text-center h-9"
-                          />
-                          <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 font-medium">days of expiration.</span>
-                        </div>
-
-                        {formData.allocation.creditType === 'on_request' && (
-                          <div className="flex items-center flex-wrap gap-3 pt-2">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Request leave within</span>
-                            <Input
-                              type="number"
-                              placeholder="e.g. 15"
-                              value={formData.allocation.requestLeaveWithinDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, requestLeaveWithinDays: e.target.value }
-                              })}
-                              className="w-20 text-center h-9"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400 font-medium">days.</span>
-                          </div>
-                        )}
-
-                        <div className="space-y-2 pt-2">
-                          <div className="flex items-center flex-wrap gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-restrict-till-expiry"
-                              checked={formData.allocation.restrictLeaveApplicationTillExpiry}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, restrictLeaveApplicationTillExpiry: e.target.checked }
-                              })}
-                              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-restrict-till-expiry" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                              Restrict Leave Application till expiry
-                            </Label>
-                          </div>
-
-                          {formData.allocation.creditType === 'on_request' && (
-                            <>
-                              <div className="flex items-center flex-wrap gap-3">
-                                <input
-                                  type="checkbox"
-                                  id="chk-show-from-to-req"
-                                  checked={formData.allocation.showFromToDateForRequest}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, showFromToDateForRequest: e.target.checked }
-                                  })}
-                                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <Label htmlFor="chk-show-from-to-req" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                                  Show From date and To date for Request
-                                </Label>
+                          {/* Start Date Body */}
+                          <div className="py-1">
+                            <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                              LEAVE YEAR STARTS
+                            </span>
+                            <div className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 mt-2">
+                              <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                                <Calendar className="w-5 h-5" />
                               </div>
-                              <div className="flex items-center flex-wrap gap-3">
-                                <input
-                                  type="checkbox"
-                                  id="chk-add-leave-after-approval"
-                                  checked={formData.allocation.addLeaveApplicationAfterApproval}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, addLeaveApplicationAfterApproval: e.target.checked }
-                                  })}
-                                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                />
-                                <Label htmlFor="chk-add-leave-after-approval" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                                  Add Leave Application after approval of leave request
-                                </Label>
-                              </div>
-                            </>
-                          )}
+                              <span>{item.start_day} {item.start_month}</span>
+                            </div>
+                          </div>
 
-                          <div className="flex items-start gap-3">
-                            <input
-                              type="checkbox"
-                              id="chk-non-fnf-limits"
-                              checked={formData.allocation.encashmentsSubjectToLimitsFNF}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, encashmentsSubjectToLimitsFNF: e.target.checked }
-                              })}
-                              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <Label htmlFor="chk-non-fnf-limits" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                              Encashments subject to the limits defined for FNF
-                            </Label>
+                          {/* Footer Edit Button */}
+                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              onClick={() => {
+                                setLeaveYearToEdit(item);
+                                setIsLeaveYearModalOpen(true);
+                              }}
+                              className="h-8 px-3 text-xs font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                              <span>Edit</span>
+                            </Button>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
-                        <div className="pt-2 flex items-center flex-wrap gap-4">
-                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Encashment on Prorata Basis</span>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, encashmentOnProrataBasis: true }
-                              })}
-                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                formData.allocation.encashmentOnProrataBasis
-                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              Yes
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, encashmentOnProrataBasis: false }
-                              })}
-                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                !formData.allocation.encashmentOnProrataBasis
-                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                              }`}
-                            >
-                              No
-                            </button>
-                          </div>
-                        </div>
-                      </>
+            {/* VIEW 3: 3-TAB MASTER CONFIGURATION WORKSPACE */}
+            {viewMode === 'configure' && (
+              <form onSubmit={handleSaveDetails} className="w-full max-w-4xl mx-auto px-5 py-6 space-y-6">
+                {/* Header Banner */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-900/90 via-slate-900 to-indigo-950 text-white shadow-sm border border-indigo-800/40">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-base font-extrabold tracking-tight">
+                        {formData.leave_name || 'Configure Leave'}
+                      </h1>
+                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                        {formData.leave_code || 'POLICY'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-indigo-200/80">
+                      Configure accrual formulas, application constraints, sandwich rules, and encashment caps.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setViewMode('edit')}
+                      className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-bold h-8 px-3 rounded-xl gap-1 cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit Identity</span>
+                    </Button>
+
+                    {selectedLeaveType?.id && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsAuditModalOpen(true);
+                          fetchAuditLogs();
+                        }}
+                        className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-bold h-8 px-3 rounded-xl gap-1 cursor-pointer"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                        <span>Audit Log</span>
+                      </Button>
                     )}
                   </div>
                 </div>
-              </div>
-            </div>
 
-              {/* ACCORDION 2: Leave Application Setting */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedAccordion(expandedAccordion === 'application' ? null : 'application')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-800/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
-                >
-                  <span className="flex items-center gap-3 text-left">
-                    <FileText className="h-5 w-5 text-indigo-500" />
-                    <span>Leave Application Setting</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'application' ? 'rotate-180' : ''}`} />
-                </button>
+                {/* 3 Main Segmented Configuration Tabs */}
+                <div className="flex items-center gap-2 p-1.5 bg-slate-200/60 dark:bg-slate-900/80 rounded-2xl border border-slate-300/60 dark:border-slate-800 shadow-2xs w-full sm:w-fit overflow-x-auto">
+                  <button
+                    type="button"
+                    onClick={() => setConfigureTab('allocation')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+                      configureTab === 'allocation'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>1. Allocation Rules</span>
+                  </button>
 
-                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'application' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                  <div className="overflow-hidden">
-                    <div className="p-6 space-y-6">
-                    
-                    <div className="flex items-center flex-wrap gap-6">
-                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Category *</span>
-                      <div className="flex items-center flex-wrap gap-6">
-                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="category"
-                            value="planned"
-                            checked={formData.application.category === 'planned'}
-                            onChange={() => setFormData({
-                              ...formData,
-                              application: { ...formData.application, category: 'planned' }
-                            })}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          Planned
-                        </label>
-                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="category"
-                            value="unplanned"
-                            checked={formData.application.category === 'unplanned'}
-                            onChange={() => setFormData({
-                              ...formData,
-                              application: { ...formData.application, category: 'unplanned' }
-                            })}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          Unplanned
-                        </label>
-                      </div>
-                    </div>
+                  <button
+                    type="button"
+                    onClick={() => setConfigureTab('application')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+                      configureTab === 'application'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>2. Application Rules</span>
+                  </button>
 
-                    {/* Category Conditional Field */}
-                    <div className="flex items-center flex-wrap gap-3">
-                      {formData.application.category === 'planned' ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfigureTab('encashment')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
+                      configureTab === 'encashment'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>3. Carry Forward & Encashment</span>
+                  </button>
+                </div>
+
+                {/* Render Configuration Tab Content */}
+                {configureTab === 'allocation' && (
+                  <LeaveAllocationTab
+                    formData={formData}
+                    setFormData={setFormData}
+                    companies={companiesList || []}
+                    departments={departmentsList && departmentsList.length > 0 ? departmentsList : (departments || [])}
+                    locations={locationsList && locationsList.length > 0 ? locationsList : (locations || [])}
+                    gradeOptions={gradeOptions}
+                    employeeTypeOptions={employeeTypeOptions}
+                    leaveTypes={leaveTypes}
+                  />
+                )}
+
+                {configureTab === 'application' && (
+                  <LeaveApplicationTab
+                    formData={formData}
+                    setFormData={setFormData}
+                    departments={departments}
+                    locations={locations}
+                    gradeOptions={gradeOptions}
+                    employeeTypeOptions={employeeTypeOptions}
+                    leaveTypes={leaveTypes}
+                  />
+                )}
+
+                {configureTab === 'encashment' && (
+                  <LeaveEncashmentTab
+                    formData={formData}
+                    setFormData={setFormData}
+                    departments={departments}
+                    locations={locations}
+                    gradeOptions={gradeOptions}
+                  />
+                )}
+
+                {/* Sticky Action Footer Bar */}
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                  <div
+                    onClick={() => setFormData((prev: any) => ({ ...prev, status: prev.status === 'active' ? 'inactive' : 'active' }))}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer select-none"
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${formData.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Policy Status: <span className={formData.status === 'active' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}>{formData.status === 'active' ? 'Active' : 'Disabled'}</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <Button
+                      type="button"
+                      onClick={handleTriggerCron}
+                      disabled={isExecutingCron}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200 font-bold text-xs h-9 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {isExecutingCron ? (
                         <>
-                          <span className="text-xs font-semibold text-gray-750 dark:text-gray-355 min-w-48">Days in advance *</span>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 7"
-                            value={formData.application.daysInAdvance}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, daysInAdvance: e.target.value }
-                            })}
-                            className="w-full max-w-[400px] h-9"
-                          />
-                          <select
-                            value={formData.application.daysInAdvanceUnit}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, daysInAdvanceUnit: e.target.value }
-                            })}
-                            className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                          >
-                            <option value="Days">Days</option>
-                            <option value="Weeks">Weeks</option>
-                            <option value="Months">Months</option>
-                          </select>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Syncing...</span>
                         </>
                       ) : (
                         <>
-                          <span className="text-xs font-semibold text-gray-750 dark:text-gray-355 min-w-48">Grace period for leave application</span>
-                          <Input
-                            type="number"
-                            placeholder="e.g. 7"
-                            value={formData.application.gracePeriod}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, gracePeriod: e.target.value }
-                            })}
-                            className="w-full max-w-[400px] h-9"
-                          />
-                          <select
-                            value={formData.application.gracePeriodUnit}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, gracePeriodUnit: e.target.value }
-                            })}
-                            className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                          >
-                            <option value="Days">Days</option>
-                            <option value="Weeks">Weeks</option>
-                            <option value="Months">Months</option>
-                          </select>
+                          <Zap className="w-3.5 h-3.5 text-amber-500" />
+                          <span>Sync Balances</span>
                         </>
                       )}
-                    </div>
+                    </Button>
 
-                    {/* Days Allowed at a Time Sub-Box */}
-                    <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Days Allowed at a Time</p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center flex-wrap gap-3">
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-20">Minimum</span>
-                          <Input
-                            type="number"
-                            placeholder="Min"
-                            value={formData.application.minDaysAllowed}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, minDaysAllowed: e.target.value }
-                            })}
-                            className="w-full h-9"
-                          />
-                        </div>
-                        <div className="flex items-center flex-wrap gap-3">
-                          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 min-w-20">Maximum</span>
-                          <Input
-                            type="number"
-                            placeholder="Max"
-                            value={formData.application.maxDaysAllowed}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, maxDaysAllowed: e.target.value }
-                            })}
-                            className="w-full h-9"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Remaining Fields */}
-                    <div className="space-y-4 pt-2">
-                      <div className="flex items-center flex-wrap gap-3">
-                        <span className="text-xs font-semibold text-gray-750 dark:text-gray-355 min-w-48">Gap between leave application</span>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          value={formData.application.gapBetweenApplication}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, gapBetweenApplication: e.target.value }
-                          })}
-                          className="w-full max-w-[200px] h-9"
-                        />
-                        <select
-                          value={formData.application.gapBetweenApplicationUnit}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, gapBetweenApplicationUnit: e.target.value }
-                          })}
-                          className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                        >
-                          <option value="Days">Days</option>
-                          <option value="Weeks">Weeks</option>
-                          <option value="Months">Months</option>
-                        </select>
-                        <select
-                          value={formData.application.gapBetweenApplicationWindow}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, gapBetweenApplicationWindow: e.target.value }
-                          })}
-                          className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                        >
-                          <option value="This">This</option>
-                          <option value="Previous">Previous</option>
-                        </select>
-                      </div>
-
-                      <div className="flex items-center flex-wrap gap-3">
-                        <span className="text-xs font-semibold text-gray-755 dark:text-gray-355 min-w-48">Number of times employee can apply</span>
-                        <Input
-                          type="number"
-                          value={formData.application.numTimesEmployeeCanApply}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, numTimesEmployeeCanApply: e.target.value }
-                          })}
-                          className="w-full max-w-[200px] h-9"
-                        />
-                        <select
-                          value={formData.application.numTimesEmployeeCanApplyUnit}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, numTimesEmployeeCanApplyUnit: e.target.value }
-                          })}
-                          className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600 w-full max-w-[200px]"
-                        >
-                          <option value="Select">Select</option>
-                          <option value="Month">Per Month</option>
-                          <option value="Year">Per Year</option>
-                        </select>
-                      </div>
-
-                      <div className="flex items-center flex-wrap gap-3">
-                        <span className="text-xs font-semibold text-gray-755 dark:text-gray-355 min-w-48">Number of leaves employee can apply</span>
-                        <Input
-                          type="number"
-                          value={formData.application.numLeavesEmployeeCanApply}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, numLeavesEmployeeCanApply: e.target.value }
-                          })}
-                          className="w-full max-w-[200px] h-9"
-                        />
-                        <select
-                          value={formData.application.numLeavesEmployeeCanApplyUnit}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, numLeavesEmployeeCanApplyUnit: e.target.value }
-                          })}
-                          className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600 w-full max-w-[200px]"
-                        >
-                          <option value="Select">Select</option>
-                          <option value="Month">Per Month</option>
-                          <option value="Year">Per Year</option>
-                        </select>
-                      </div>
-
-                      <div className="flex items-center flex-wrap gap-3">
-                        <span className="text-xs font-semibold text-gray-755 dark:text-gray-355 min-w-48">
-                          Valid Upto<br/><span className="text-[10px] text-gray-400 font-normal">(From date of leave credit)</span>
-                        </span>
-                        <Input
-                          type="number"
-                          value={formData.application.validUpto}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, validUpto: e.target.value }
-                          })}
-                          className="w-full max-w-[200px] h-9"
-                        />
-                        <select
-                          value={formData.application.validUptoUnit}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, validUptoUnit: e.target.value }
-                          })}
-                          className="h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600 w-full max-w-[200px]"
-                        >
-                          <option value="Select">Select</option>
-                          <option value="Months">Months</option>
-                          <option value="Years">Years</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center gap-6">
-                      <div className="flex items-center flex-wrap gap-3">
-                        <input
-                          type="checkbox"
-                          id="chk-docs"
-                          checked={formData.application.supportingDocumentsRequired}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, supportingDocumentsRequired: e.target.checked }
-                          })}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <Label htmlFor="chk-docs" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          Supporting documents required
-                        </Label>
-                      </div>
-
-                      <div className="flex items-center flex-wrap gap-3">
-                        <input
-                          type="checkbox"
-                          id="chk-ticket"
-                          checked={formData.application.allowBookTicket}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, allowBookTicket: e.target.checked }
-                          })}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <Label htmlFor="chk-ticket" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          Allow to book ticket
-                        </Label>
-                      </div>
-                    </div>
-
-                    {/* Sub-Box: Exclude Weekend & Holiday */}
-                    <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Exclude Weekend & Holiday In Leave Application</p>
-                      
-                      <div className="flex items-center flex-wrap gap-3">
-                        <input
-                          type="checkbox"
-                          id="chk-ex-weekend"
-                          checked={formData.application.excludeWeekend}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, excludeWeekend: e.target.checked }
-                          })}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <Label htmlFor="chk-ex-weekend" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          Exclude Weekend in Leave Application
-                        </Label>
-                      </div>
-
-                      <div className="flex items-center flex-wrap gap-3">
-                        <input
-                          type="checkbox"
-                          id="chk-ex-holiday"
-                          checked={formData.application.excludeHoliday}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, excludeHoliday: e.target.checked }
-                          })}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <Label htmlFor="chk-ex-holiday" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          Exclude Holiday in Leave Application
-                        </Label>
-                      </div>
-                    </div>
-
-                    {/* Sub-Box: Restrict leave applying */}
-                    <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Restrict leave applying</p>
-                      
-                      {[
-                        { key: 'restrictBeforeAfterHoliday', label: 'Before or after holiday' },
-                        { key: 'restrictBeforeAfterWeekend', label: 'Before or after weekend' },
-                        { key: 'restrictBeforeConfirmation', label: 'Before Confirmation' },
-                        { key: 'applyLeaveFromThisDate', label: 'Apply Leave from this date' },
-                        { key: 'applyInMultipleOfOne', label: 'Apply In Multiple of One' },
-                        { key: 'applyLeaveBeforeConfirmationDate', label: 'Apply Leave Before Confirmation Date' },
-                        { key: 'applyRestrictionForWeekoffHoliday', label: 'Apply Restriction for WeekOff and Holiday' },
-                      ].map((rest) => (
-                        <div key={rest.key} className="flex items-center flex-wrap gap-3">
-                          <input
-                            type="checkbox"
-                            id={`chk-rest-${rest.key}`}
-                            checked={!!(formData.application as any)[rest.key]}
-                            onChange={(e) => setFormData({
-                              ...formData,
-                              application: { ...formData.application, [rest.key]: e.target.checked }
-                            })}
-                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                          />
-                          <Label htmlFor={`chk-rest-${rest.key}`} className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                            {rest.label}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Sub-Box: Leave Cancellation */}
-                    <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-3">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Leave Cancellation</p>
-                      <div className="flex items-center flex-wrap gap-3">
-                        <input
-                          type="checkbox"
-                          id="chk-cancel-resignation"
-                          checked={formData.application.cancelFutureAppliedLeaveOnResignation}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            application: { ...formData.application, cancelFutureAppliedLeaveOnResignation: e.target.checked }
-                          })}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <Label htmlFor="chk-cancel-resignation" className="text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                          Cancel future applied leave on resignation request
-                        </Label>
-                      </div>
-                    </div>
-
-                    {/* Custom Hook */}
-                    <div className="space-y-2">
-                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Custom Hook</Label>
-                      <textarea
-                        value={formData.application.customHook}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          application: { ...formData.application, customHook: e.target.value }
-                        })}
-                        placeholder="Write custom validation hooks/functions here..."
-                        className="w-full min-h-24 p-3 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-              {/* ACCORDION 3: Leave Payroll Condition Setting */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedAccordion(expandedAccordion === 'payroll' ? null : 'payroll')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
-                >
-                  <span className="flex items-center gap-3 text-left">
-                    <Clock className="h-5 w-5 text-rose-500" />
-                    <span>Leave Payroll Condition Setting</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'payroll' ? 'rotate-180' : ''}`} />
-                </button>
-
-                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'payroll' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                  <div className="overflow-hidden">
-                    <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Condition On</Label>
-                        <select
-                          value={formData.payroll.conditionOn}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            payroll: { ...formData.payroll, conditionOn: e.target.value }
-                          })}
-                          className="w-full h-10 px-3 bg-gray-50 border rounded-xl text-xs font-semibold text-gray-600"
-                        >
-                          <option value="Choose">Choose</option>
-                          <option value="attendance_days">Attendance Days</option>
-                          <option value="total_lop_days">Total LOP Days</option>
-                          <option value="leave_balance">Current Leave Balance</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Operator</Label>
-                        <select
-                          value={formData.payroll.operator}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            payroll: { ...formData.payroll, operator: e.target.value }
-                          })}
-                          className="w-full h-10 px-3 bg-gray-50 border rounded-xl text-xs font-semibold text-gray-600"
-                        >
-                          <option value="Choose">Choose</option>
-                          <option value="greater_than">Greater Than (&gt;)</option>
-                          <option value="less_than">Less Than (&lt;)</option>
-                          <option value="equal_to">Equal To (=)</option>
-                          <option value="not_equal_to">Not Equal To (!=)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Value1</Label>
-                        <Input
-                          type="number"
-                          value={formData.payroll.value1}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            payroll: { ...formData.payroll, value1: e.target.value }
-                          })}
-                          className="h-10 rounded-xl"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Value2</Label>
-                        <Input
-                          type="number"
-                          value={formData.payroll.value2}
-                          onChange={(e) => setFormData({
-                            ...formData,
-                            payroll: { ...formData.payroll, value2: e.target.value }
-                          })}
-                          className="h-10 rounded-xl"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center flex-wrap gap-3 pt-2">
-                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Consider above condition for</span>
-                      <Input
-                        type="number"
-                        value={formData.payroll.considerMonths}
-                        onChange={(e) => setFormData({
-                          ...formData,
-                          payroll: { ...formData.payroll, considerMonths: e.target.value }
-                        })}
-                        className="w-20 text-center h-9"
-                      />
-                      <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">months.</span>
-                    </div>
-
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center flex-wrap gap-4">
-                      <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Reverse above condition</span>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setFormData({
-                            ...formData,
-                            payroll: { ...formData.payroll, reverseCondition: true }
-                          })}
-                          className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                            formData.payroll.reverseCondition
-                              ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                              : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          Yes
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData({
-                            ...formData,
-                            payroll: { ...formData.payroll, reverseCondition: false }
-                          })}
-                          className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
-                            !formData.payroll.reverseCondition
-                              ? 'bg-rose-600 border-transparent text-white shadow-sm'
-                              : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          No
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-              {/* ACCORDION 4: Employment Setting For Leave Allocation */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-850 rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedAccordion(expandedAccordion === 'employment_alloc' ? null : 'employment_alloc')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
-                >
-                  <span className="flex items-center gap-3 text-left">
-                    <ShieldCheck className="h-5 w-5 text-teal-600" />
-                    <span>Employment Setting For Leave Allocation</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'employment_alloc' ? 'rotate-180' : ''}`} />
-                </button>
-                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'employment_alloc' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                  <div className="overflow-hidden">
-                    <div className="p-6 space-y-4">
-                    {/* Employment Sub-Accordions */}
-                    {[
-                      { key: 'locations', label: 'Company - Location', info: true },
-                      { key: 'departments', label: 'Department' },
-                      { key: 'grades', label: 'Grade' },
-                      { key: 'employeeTypes', label: 'Employee Type' },
-                      { key: 'employeeStatuses', label: 'Employee Status' }
-                    ].map((sub) => {
-                      const isSubExpanded = expandedAllocSub === sub.key;
-                      return (
-                        <div key={sub.key} className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedAllocSub(isSubExpanded ? null : sub.key)}
-                            className="w-full flex items-center justify-between p-3.5 bg-gray-50/40 dark:bg-gray-850/20 text-xs font-semibold text-gray-700 dark:text-gray-300"
-                          >
-                            <span className="flex items-center flex-wrap gap-2">
-                              {sub.label}
-                              {sub.info && <Info className="h-3 w-3 text-indigo-500" />}
-                            </span>
-                            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isSubExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                            <div className="overflow-hidden">
-                              <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-50 dark:border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
-                              {sub.key === 'locations' && locations.map(loc => (
-                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_allocation.locations.includes(loc.id)}
-                                    onChange={() => handleToggleEmploymentTarget('allocation', 'locations', loc.id)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {loc.locationName || loc.location_name || loc.name}
-                                </label>
-                              ))}
-                              
-                              {sub.key === 'departments' && departments.map(dept => (
-                                <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_allocation.departments.includes(dept.id)}
-                                    onChange={() => handleToggleEmploymentTarget('allocation', 'departments', dept.id)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {dept.name}
-                                </label>
-                              ))}
-
-                              {sub.key === 'grades' && gradeOptions.map(grd => (
-                                <label key={grd} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_allocation.grades.includes(grd)}
-                                    onChange={() => handleToggleEmploymentTarget('allocation', 'grades', grd)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {grd}
-                                </label>
-                              ))}
-
-                              {sub.key === 'employeeTypes' && employeeTypeOptions.map(typ => (
-                                <label key={typ} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer capitalize">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_allocation.employeeTypes.includes(typ)}
-                                    onChange={() => handleToggleEmploymentTarget('allocation', 'employeeTypes', typ)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {typ.replace('_', ' ')}
-                                </label>
-                              ))}
-
-                              {sub.key === 'employeeStatuses' && employeeStatusOptions.map(stat => (
-                                <label key={stat} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer capitalize">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_allocation.employeeStatuses.includes(stat)}
-                                    onChange={() => handleToggleEmploymentTarget('allocation', 'employeeStatuses', stat)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {stat}
-                                </label>
-                              ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-              {/* ACCORDION 5: Employment Setting For Leave Application */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedAccordion(expandedAccordion === 'employment_app' ? null : 'employment_app')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
-                >
-                  <span className="flex items-center gap-3 text-left">
-                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
-                    <span>Employment Setting For Leave Application</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'employment_app' ? 'rotate-180' : ''}`} />
-                </button>
-                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'employment_app' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                  <div className="overflow-hidden">
-                    <div className="p-6 space-y-4">
-                    {/* Employment Sub-Accordions */}
-                    {[
-                      { key: 'locations', label: 'Company - Location', info: true },
-                      { key: 'departments', label: 'Department' },
-                      { key: 'grades', label: 'Grade' },
-                      { key: 'employeeTypes', label: 'Employee Type' },
-                      { key: 'employeeStatuses', label: 'Employee Status' }
-                    ].map((sub) => {
-                      const isSubExpanded = expandedAppSub === sub.key;
-                      return (
-                        <div key={sub.key} className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedAppSub(isSubExpanded ? null : sub.key)}
-                            className="w-full flex items-center justify-between p-3.5 bg-gray-50/40 dark:bg-gray-855/20 text-xs font-semibold text-gray-700 dark:text-gray-300"
-                          >
-                            <span className="flex items-center flex-wrap gap-2">
-                              {sub.label}
-                              {sub.info && <Info className="h-3 w-3 text-indigo-500" />}
-                            </span>
-                            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isSubExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                            <div className="overflow-hidden">
-                              <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-50 dark:border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
-                              {sub.key === 'locations' && locations.map(loc => (
-                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_application.locations.includes(loc.id)}
-                                    onChange={() => handleToggleEmploymentTarget('application', 'locations', loc.id)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {loc.locationName || loc.location_name || loc.name}
-                                </label>
-                              ))}
-                              
-                              {sub.key === 'departments' && departments.map(dept => (
-                                <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_application.departments.includes(dept.id)}
-                                    onChange={() => handleToggleEmploymentTarget('application', 'departments', dept.id)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {dept.name}
-                                </label>
-                              ))}
-
-                              {sub.key === 'grades' && gradeOptions.map(grd => (
-                                <label key={grd} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_application.grades.includes(grd)}
-                                    onChange={() => handleToggleEmploymentTarget('application', 'grades', grd)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {grd}
-                                </label>
-                              ))}
-
-                              {sub.key === 'employeeTypes' && employeeTypeOptions.map(typ => (
-                                <label key={typ} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer capitalize">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_application.employeeTypes.includes(typ)}
-                                    onChange={() => handleToggleEmploymentTarget('application', 'employeeTypes', typ)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {typ.replace('_', ' ')}
-                                </label>
-                              ))}
-
-                              {sub.key === 'employeeStatuses' && employeeStatusOptions.map(stat => (
-                                <label key={stat} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer capitalize">
-                                  <input
-                                    type="checkbox"
-                                    checked={formData.employment_application.employeeStatuses.includes(stat)}
-                                    onChange={() => handleToggleEmploymentTarget('application', 'employeeStatuses', stat)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                  />
-                                  {stat}
-                                </label>
-                              ))}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-              {/* ACCORDION 6: Leave Encashment / Carry Forward */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setExpandedAccordion(expandedAccordion === 'encashment_settings' ? null : 'encashment_settings')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
-                >
-                  <span className="flex items-center gap-3 text-left">
-                    <Calendar className="h-5 w-5 text-indigo-500" />
-                    <span>Leave Encashment / Carry Forward</span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'encashment_settings' ? 'rotate-180' : ''}`} />
-                </button>
-
-                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'encashment_settings' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                  <div className="overflow-hidden">
-                    <div className="p-6 space-y-6">
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex items-center flex-wrap gap-3">
-                        <Button
-                          type="button"
-                          onClick={handleOpenAddRule}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 rounded-lg flex items-center gap-1.5 shadow-sm"
-                        >
-                          <Plus className="h-3.5 w-3.5" /> Add
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={handleOpenDisbursementSettings}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 px-4 rounded-lg flex items-center gap-1.5 shadow-sm"
-                        >
-                          Disbursement Setting
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Rules Table */}
-                    <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
-                      <div className="w-full overflow-x-auto">
-                        <Table>
-                          <TableHeader className="bg-gray-50/70 dark:bg-gray-850/40">
-                            <TableRow>
-                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Filter</TableHead>
-                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Carry Fwd Unit</TableHead>
-                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Encash Unit</TableHead>
-                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Max Limit</TableHead>
-                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Expire After</TableHead>
-                              <TableHead className="text-xs font-bold text-gray-750 dark:text-gray-355 text-right">Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {(!formData.encashment?.rules || formData.encashment.rules.length === 0) ? (
-                              <TableRow>
-                                <TableCell colSpan={6} className="text-center text-xs text-gray-400 py-6">
-                                  No encashment/carry forward rules configured. Click Add to create one.
-                                </TableCell>
-                              </TableRow>
-                            ) : (
-                              formData.encashment.rules.map((rule, idx) => {
-                                // Build a filter description based on locations/departments length
-                                const locCount = rule.employment?.locations?.length || 0;
-                                const deptCount = rule.employment?.departments?.length || 0;
-                                const filterText = locCount > 0 || deptCount > 0 
-                                  ? `${locCount} Locs, ${deptCount} Depts` 
-                                  : '-';
-                                  
-                                return (
-                                  <TableRow key={idx}>
-                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{filterText}</TableCell>
-                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxCarryForward || '0'}</TableCell>
-                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxEncash || '0'}</TableCell>
-                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxLimit || '0'}</TableCell>
-                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                                      {rule.expireAfterDays ? `${rule.expireAfterDays} Days` : '-'}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleOpenEditRule(idx)}
-                                          className="p-1.5 text-gray-400 hover:text-indigo-650 hover:bg-gray-50 rounded-lg transition-colors"
-                                          title="Edit Rule"
-                                        >
-                                          <Edit2 className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteRule(idx)}
-                                          className="p-1.5 text-gray-400 hover:text-rose-650 hover:bg-gray-50 rounded-lg transition-colors"
-                                          title="Delete Rule"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-              {/* FOOTER ACTIONS */}
-              <div className="pt-6 border-t border-gray-200 dark:border-gray-800 flex items-start justify-between">
-                <div className="flex flex-col gap-4">
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Active</span>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, status: formData.status === 'active' ? 'inactive' : 'active' })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                        formData.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
+                    <Button
+                      type="submit"
+                      className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-extrabold text-xs h-9 px-5 rounded-xl flex items-center gap-1.5 shadow-md shadow-indigo-500/20 cursor-pointer"
                     >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
-                          formData.status === 'active' ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
+                      <Check className="w-4 h-4" />
+                      <span>Save Policy Configuration</span>
+                    </Button>
                   </div>
-
-                  {/* Update Button */}
-                  <Button
-                    type="submit"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-[0.98] transition-all duration-200 w-fit cursor-pointer"
-                  >
-                    + Update
-                  </Button>
                 </div>
-
-                <div className="pt-5">
-                  <Button
-                    type="button"
-                    onClick={handleTriggerCron}
-                    className="bg-[#3c8dbc] hover:bg-[#357ca5] text-white font-bold text-xs h-8 px-4 rounded shadow-sm flex items-center gap-1"
-                  >
-                    ▶Run Allocate Leave Cron
-                  </Button>
-                </div>
-              </div>
-
-            </form>
+              </form>
+            )}
           </div>
-        </>
+        </div>
       )}
 
       {/* POLICY VIEWS (ORIGINAL TABLES IN LEAVE POLICY TAB) */}
@@ -3956,7 +2703,7 @@ export function LeavePoliciesPage() {
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Leave Policy Configurations</h1>
               <p className="text-xs text-gray-500 mt-1">Manage leave policy mapping rules, blackout periods, and custom assignments.</p>
             </div>
-            
+
             <div className="flex items-center flex-wrap gap-3">
               <Link to="/settings/org-leave-settings">
                 <Button variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-850 font-extrabold text-xs h-9 rounded-xl gap-1.5 shadow-sm">
@@ -3972,6 +2719,12 @@ export function LeavePoliciesPage() {
               <div>
                 <CardTitle className="text-base font-extrabold flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-blue-600" /> Bulk Leave Policy Mappings
+                  <HelpHint
+                    title="Bulk Policy Mappings"
+                    titleHi="स्वचालित लीव पॉलिसी मैपिंग"
+                    description="Automatically assign specific leave policies to new employees based on their Department, Designation, or Employment Type."
+                    descriptionHi="विभाग, पद या रोजगार प्रकार के आधार पर कर्मचारियों को स्वचालित रूप से छुट्टी नीतियां आवंटित करें।"
+                  />
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground mt-0.5">
                   Configure automatic mapping rules to assign leave policies to employees based on their Department, Designation, or Employment Type.
@@ -4066,6 +2819,12 @@ export function LeavePoliciesPage() {
               <div>
                 <CardTitle className="text-base font-extrabold flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-rose-600" /> Blackout Periods
+                  <HelpHint
+                    title="Blackout Periods"
+                    titleHi="लीव बैन अवधि"
+                    description="Block leave applications during critical business events or financial audit periods."
+                    descriptionHi="महत्वपूर्ण व्यावसायिक आयोजनों या वित्तीय ऑडिट अवधि के दौरान कर्मचारियों द्वारा छुट्टी के आवेदन पर प्रतिबंध लगाएं।"
+                  />
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground mt-0.5">
                   Prevent employees from applying for leaves during critical periods. Apply rules globally or restrict them to a specific department or location.
@@ -4154,7 +2913,7 @@ export function LeavePoliciesPage() {
           {/* LEFT SIDEBAR: Encashment List */}
           <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0">
             <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1.5 bg-white dark:bg-gray-900">
-              <select 
+              <select
                 value={encashmentStatusFilter}
                 onChange={(e) => setEncashmentStatusFilter(e.target.value as any)}
                 className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20"
@@ -4172,14 +2931,14 @@ export function LeavePoliciesPage() {
                   className="h-8 pl-8 text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 w-full rounded-lg"
                 />
               </div>
-              <select 
+              <select
                 className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
             </div>
-            
+
             <div className="flex items-center justify-between text-xs font-bold text-gray-700 px-3 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
               <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200">
                 <CreditCard className="h-4 w-4 text-gray-500" /> Leave Encashment
@@ -4198,7 +2957,7 @@ export function LeavePoliciesPage() {
                 </button>
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-gray-950/20">
               {encashmentsList.map(enc => {
                 const isActive = selectedEncashmentId && enc.id && String(selectedEncashmentId) === String(enc.id);
@@ -4206,11 +2965,10 @@ export function LeavePoliciesPage() {
                   <button
                     key={enc.id}
                     onClick={() => setSelectedEncashmentId(enc.id)}
-                    className={`w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all text-xs font-bold shadow-xs ${
-                      isActive 
-                        ? 'bg-[#26c6da] text-white' 
-                        : 'bg-white border border-gray-100 hover:border-[#26c6da]/50 text-gray-700 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-250'
-                    }`}
+                    className={`w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all text-xs font-bold shadow-xs ${isActive
+                      ? 'bg-[#26c6da] text-white'
+                      : 'bg-white border border-gray-100 hover:border-[#26c6da]/50 text-gray-700 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-250'
+                      }`}
                   >
                     <CreditCard className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
                     <span className="truncate">{enc.name}</span>
@@ -4219,11 +2977,11 @@ export function LeavePoliciesPage() {
               })}
             </div>
           </div>
-          
+
           {/* RIGHT SIDE: Encashment Form */}
           <div className="flex-1 bg-gray-50/30 dark:bg-gray-950/10 overflow-y-auto">
             <div className="max-w-4xl mx-auto p-8 space-y-6">
-              
+
               <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-850">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <span className="text-3xl font-light text-gray-500">{selectedEncashmentId ? '✎' : '+'}</span>
@@ -4232,7 +2990,7 @@ export function LeavePoliciesPage() {
               </div>
 
               <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl shadow-sm p-8 space-y-6">
-                
+
                 {/* Form fields in a key-value grid with Labels on the left and Inputs on the right */}
                 <div className="space-y-6">
                   {/* Leave Encashment Name */}
@@ -4243,9 +3001,9 @@ export function LeavePoliciesPage() {
                       </Label>
                     </div>
                     <div className="md:col-span-2">
-                      <Input 
-                        value={encashmentTabForm.name} 
-                        onChange={e => setEncashmentTabForm({...encashmentTabForm, name: e.target.value})}
+                      <Input
+                        value={encashmentTabForm.name}
+                        onChange={e => setEncashmentTabForm({ ...encashmentTabForm, name: e.target.value })}
                         className="h-10 text-xs font-semibold rounded-lg bg-white border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-[#3c8dbc]"
                         placeholder=""
                       />
@@ -4260,9 +3018,9 @@ export function LeavePoliciesPage() {
                       </Label>
                     </div>
                     <div className="md:col-span-2">
-                      <textarea 
+                      <textarea
                         value={encashmentTabForm.formula}
-                        onChange={e => setEncashmentTabForm({...encashmentTabForm, formula: e.target.value})}
+                        onChange={e => setEncashmentTabForm({ ...encashmentTabForm, formula: e.target.value })}
                         className="w-full h-24 p-3 text-xs font-semibold bg-white border border-gray-250 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#3c8dbc] dark:bg-gray-800"
                         placeholder="Comp1 + Comp2"
                       />
@@ -4277,9 +3035,9 @@ export function LeavePoliciesPage() {
                       </Label>
                     </div>
                     <div className="md:col-span-2">
-                      <Input 
-                        value={encashmentTabForm.limit} 
-                        onChange={e => setEncashmentTabForm({...encashmentTabForm, limit: e.target.value})}
+                      <Input
+                        value={encashmentTabForm.limit}
+                        onChange={e => setEncashmentTabForm({ ...encashmentTabForm, limit: e.target.value })}
                         className="h-10 text-xs font-semibold rounded-lg bg-white border border-gray-205 dark:border-gray-700 focus:ring-1 focus:ring-[#3c8dbc]"
                         placeholder="Only number (e.g. 100 or 99.99)"
                       />
@@ -4296,7 +3054,7 @@ export function LeavePoliciesPage() {
                     <div className="md:col-span-2">
                       <select
                         value={encashmentTabForm.daysBasis}
-                        onChange={e => setEncashmentTabForm({...encashmentTabForm, daysBasis: parseInt(e.target.value, 10)})}
+                        onChange={e => setEncashmentTabForm({ ...encashmentTabForm, daysBasis: parseInt(e.target.value, 10) })}
                         className="w-full h-10 px-3 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#3c8dbc] dark:bg-gray-850 dark:border-gray-700 text-foreground font-semibold"
                       >
                         <option value={30}>30 Days</option>
@@ -4324,7 +3082,7 @@ export function LeavePoliciesPage() {
                         >
                           <span>{isSubExpanded ? '[-]' : '[+]'} {sub.label}</span>
                         </button>
-                        
+
                         <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
                             <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-250 dark:border-gray-700 grid grid-cols-2 gap-3">
@@ -4339,7 +3097,7 @@ export function LeavePoliciesPage() {
                                   {loc.locationName || loc.location_name || loc.name}
                                 </label>
                               ))}
-                              
+
                               {sub.key === 'departments' && departments.map(dept => (
                                 <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
                                   <input
@@ -4389,21 +3147,19 @@ export function LeavePoliciesPage() {
                   <div>
                     <button
                       type="button"
-                      onClick={() => setEncashmentTabForm({...encashmentTabForm, isActive: !encashmentTabForm.isActive})}
+                      onClick={() => setEncashmentTabForm({ ...encashmentTabForm, isActive: !encashmentTabForm.isActive })}
                       className="relative inline-flex items-center h-8 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden cursor-pointer"
                     >
-                      <span className={`flex items-center justify-center text-xs font-bold px-4 h-full transition-all ${
-                        encashmentTabForm.isActive 
-                          ? 'bg-[#1e88e5] text-white' 
-                          : 'bg-gray-150 text-gray-500'
-                      }`}>
+                      <span className={`flex items-center justify-center text-xs font-bold px-4 h-full transition-all ${encashmentTabForm.isActive
+                        ? 'bg-[#1e88e5] text-white'
+                        : 'bg-gray-150 text-gray-500'
+                        }`}>
                         Yes
                       </span>
-                      <span className={`flex items-center justify-center text-xs font-bold px-4 h-full transition-all ${
-                        !encashmentTabForm.isActive 
-                          ? 'bg-red-600 text-white' 
-                          : 'bg-white text-gray-350'
-                      }`}>
+                      <span className={`flex items-center justify-center text-xs font-bold px-4 h-full transition-all ${!encashmentTabForm.isActive
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white text-gray-350'
+                        }`}>
                         No
                       </span>
                     </button>
@@ -4414,9 +3170,9 @@ export function LeavePoliciesPage() {
                 <div className="flex flex-wrap justify-between items-center gap-4 pt-6 border-t border-gray-100 dark:border-gray-800 w-full">
                   <div>
                     {selectedEncashmentId && (
-                      <Button 
-                        onClick={handleDeleteEncashmentSetting} 
-                        type="button" 
+                      <Button
+                        onClick={handleDeleteEncashmentSetting}
+                        type="button"
                         className="bg-red-600 hover:bg-red-750 text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none animate-fade-in"
                       >
                         <Trash2 className="h-4 w-4" /> Delete
@@ -4424,18 +3180,18 @@ export function LeavePoliciesPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <Button 
+                    <Button
                       onClick={() => {
                         setSelectedEncashmentId(encashmentsList.length > 0 ? encashmentsList[0].id : null);
-                      }} 
-                      type="button" 
+                      }}
+                      type="button"
                       className="bg-[#dd4b39] hover:bg-[#d73925] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
                     >
                       <X className="h-4 w-4" /> Cancel
                     </Button>
-                    <Button 
-                      onClick={handleSaveEncashmentTabForm} 
-                      type="button" 
+                    <Button
+                      onClick={handleSaveEncashmentTabForm}
+                      type="button"
                       className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
                     >
                       {selectedEncashmentId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -4508,9 +3264,9 @@ export function LeavePoliciesPage() {
                       <TableHeader>
                         <TableRow className="bg-gray-50/50 dark:bg-gray-900/40">
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500">Policy Name</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">First Deduction</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Buffer Allowed</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deduct Type</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">First Deduction Threshold</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Buffer Allowed (Mins)</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deduction Type</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deduction Unit</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Status</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right">Actions</TableHead>
@@ -4530,9 +3286,8 @@ export function LeavePoliciesPage() {
                             <TableCell className="text-xs font-semibold text-center text-indigo-650">{p.deduct_type}</TableCell>
                             <TableCell className="text-xs font-semibold text-center text-rose-600">-{p.deduction_unit} Day(s)</TableCell>
                             <TableCell className="text-center">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                                (p.status === 'active' || p.is_active === 1 || p.is_active === true) ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
-                              }`}>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${(p.status === 'active' || p.is_active === 1 || p.is_active === true) ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
+                                }`}>
                                 {(p.status === 'active' || p.is_active === 1 || p.is_active === true) ? 'Active' : 'Inactive'}
                               </span>
                             </TableCell>
@@ -4800,7 +3555,7 @@ export function LeavePoliciesPage() {
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Eligibility Settings</Label>
               <div className="border rounded-xl overflow-hidden divide-y">
-                
+
                 {/* Location Accordion */}
                 <div>
                   <button
@@ -5034,14 +3789,12 @@ export function LeavePoliciesPage() {
               <button
                 type="button"
                 onClick={() => setLatePolicyForm({ ...latePolicyForm, status: latePolicyForm.status === 'active' ? 'inactive' : 'active' })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                  latePolicyForm.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${latePolicyForm.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
-                    latePolicyForm.status === 'active' ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${latePolicyForm.status === 'active' ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
               </button>
             </div>
@@ -5150,7 +3903,7 @@ export function LeavePoliciesPage() {
             <div className="space-y-2 border-t pt-3.5">
               <Label className="text-xs font-extrabold text-gray-800 dark:text-gray-200">Target Eligibility</Label>
               <div className="border rounded-xl overflow-hidden divide-y">
-                
+
                 {/* Location Accordion */}
                 <div>
                   <button
@@ -5384,14 +4137,12 @@ export function LeavePoliciesPage() {
               <button
                 type="button"
                 onClick={() => setLateUpdationForm({ ...lateUpdationForm, status: lateUpdationForm.status === 'active' ? 'inactive' : 'active' })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                  lateUpdationForm.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${lateUpdationForm.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
-                    lateUpdationForm.status === 'active' ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${lateUpdationForm.status === 'active' ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
               </button>
             </div>
@@ -5468,9 +4219,9 @@ export function LeavePoliciesPage() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-gray-50/50 dark:bg-gray-900/40">
-                          <TableHead className="text-[10px] font-bold uppercase text-gray-500">Name</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Late Coming After</TableHead>
-                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Update For</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500">Rule Name</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Late Coming Threshold</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Attendance Update Type</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Auto Apply Leave</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Status</TableHead>
                           <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right pr-6">Actions</TableHead>
@@ -5658,7 +4409,7 @@ export function LeavePoliciesPage() {
                   value={blackoutForm.start_date}
                   onChange={(e) => setBlackoutForm({ ...blackoutForm, start_date: e.target.value })}
                   onClick={(e) => {
-                    try { e.currentTarget.showPicker(); } catch (err) {}
+                    try { e.currentTarget.showPicker(); } catch (err) { }
                   }}
                   className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold cursor-pointer"
                   required
@@ -5671,7 +4422,7 @@ export function LeavePoliciesPage() {
                   value={blackoutForm.end_date}
                   onChange={(e) => setBlackoutForm({ ...blackoutForm, end_date: e.target.value })}
                   onClick={(e) => {
-                    try { e.currentTarget.showPicker(); } catch (err) {}
+                    try { e.currentTarget.showPicker(); } catch (err) { }
                   }}
                   className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold cursor-pointer"
                   required
@@ -5841,7 +4592,7 @@ export function LeavePoliciesPage() {
                 <FileText className="h-4 w-4 text-gray-500" />
                 <span className="text-xs font-bold text-gray-700">Leave</span>
               </div>
-              
+
               <div className="p-4 space-y-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold text-gray-700">Encash CarryForward Periodicity</Label>
@@ -5899,7 +4650,7 @@ export function LeavePoliciesPage() {
                 <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3 relative">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Carry Forward and Encashment</p>
                   <span className="absolute top-3 right-4 text-xs text-gray-400">↑↓</span>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-gray-755">Max carry forward unit</Label>
@@ -5986,7 +4737,7 @@ export function LeavePoliciesPage() {
                         >
                           <span>{isSubExpanded ? '[-]' : '[+]'} {sub.label}</span>
                         </button>
-                        
+
                         {isSubExpanded && (
                           <div className="p-3 bg-white border-t grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto">
                             {sub.key === 'locations' && locations.map(loc => (
@@ -6000,7 +4751,7 @@ export function LeavePoliciesPage() {
                                 {loc.locationName || loc.location_name || loc.name}
                               </label>
                             ))}
-                            
+
                             {sub.key === 'departments' && departments.map(dept => (
                               <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
                                 <input
@@ -6213,9 +4964,9 @@ export function LeavePoliciesPage() {
                   <TableHeader>
                     <TableRow className="bg-gray-50/50 dark:bg-gray-900/40">
                       <TableHead className="text-[10px] font-bold uppercase text-gray-500">Employee Name</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Late Count</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deducted Leaves</TableHead>
-                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right">Details</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Late Arrivals Count</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Leaves Deducted</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right">Deduction Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -6256,6 +5007,293 @@ export function LeavePoliciesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* 🛡️ Add New Policy Mapping Modal */}
+      <Dialog open={isMappingModalOpen} onOpenChange={setIsMappingModalOpen}>
+        <DialogContent className="sm:max-w-[500px] p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl">
+          <DialogHeader className="border-b pb-3 mb-4">
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              Add Bulk Policy Mapping
+              <HelpHint
+                title="Add Bulk Mapping Rule"
+                titleHi="नया मैपिंग नियम जोड़ें"
+                description="Target employees by criteria and automatically grant the selected leave policy."
+                descriptionHi="मापदंडों के आधार पर कर्मचारियों को स्वचालित रूप से चुनी गई लीव पॉलिसी दें।"
+              />
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Create an automatic mapping rule for leave policy assignment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveMapping} className="space-y-4">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Select Leave Policy <span className="text-rose-500">*</span>
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatePolicyOpen(!isCreatePolicyOpen)}
+                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>{isCreatePolicyOpen ? 'Cancel' : '+ Create New Policy Name'}</span>
+                </button>
+              </div>
+
+              {isCreatePolicyOpen ? (
+                <div className="flex items-center gap-2 pt-1 pb-1">
+                  <Input
+                    type="text"
+                    placeholder="e.g. IT Department Policy / Executive Policy"
+                    value={newPolicyName}
+                    onChange={(e) => setNewPolicyName(e.target.value)}
+                    required
+                    className="h-8 text-xs font-medium"
+                  />
+                </div>
+              ) : (
+                <select
+                  value={mappingForm.leavePolicyId}
+                  onChange={(e) => {
+                    if (e.target.value === 'custom') {
+                      setIsCreatePolicyOpen(true);
+                    } else {
+                      setMappingForm({ ...mappingForm, leavePolicyId: e.target.value });
+                    }
+                  }}
+                  required
+                  className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="">-- Select Policy --</option>
+                  {policies.map((p: any) => (
+                    <option key={`p-${p.id}`} value={p.id}>{p.name || p.policy_name}</option>
+                  ))}
+                  {leaveTypes.length > 0 && (
+                    <optgroup label="Leave Categories / Types">
+                      {leaveTypes.map((lt: any) => (
+                        <option key={`lt-${lt.id}`} value={lt.id}>{lt.leaveName || lt.leave_name || lt.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <option value="custom" className="font-bold text-indigo-600">+ Create Custom Named Policy...</option>
+                </select>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Department</Label>
+                <select
+                  value={mappingForm.departmentId}
+                  onChange={(e) => setMappingForm({ ...mappingForm, departmentId: e.target.value })}
+                  className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="">All Departments (Global)</option>
+                  {departments.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name || d.department_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Designation</Label>
+                <select
+                  value={mappingForm.designationId}
+                  onChange={(e) => setMappingForm({ ...mappingForm, designationId: e.target.value })}
+                  className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="">All Designations (Global)</option>
+                  {designations.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name || d.designation_name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Employment Type</Label>
+                <select
+                  value={mappingForm.employmentType}
+                  onChange={(e) => setMappingForm({ ...mappingForm, employmentType: e.target.value })}
+                  className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="">All Employment Types</option>
+                  <option value="full_time">Full Time</option>
+                  <option value="part_time">Part Time</option>
+                  <option value="contract">Contract</option>
+                  <option value="probation">Probation</option>
+                  <option value="internship">Internship</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Rule Priority</Label>
+                <Input
+                  type="number"
+                  value={mappingForm.priority}
+                  onChange={(e) => setMappingForm({ ...mappingForm, priority: parseInt(e.target.value) || 10 })}
+                  placeholder="e.g. 10"
+                  className="h-9 text-xs font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsMappingModalOpen(false)} className="h-8 text-xs rounded-lg cursor-pointer">
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-8 text-xs px-4 rounded-lg flex items-center gap-1.5 cursor-pointer">
+                <Plus className="w-3.5 h-3.5" /> Save Mapping Rule
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 📅 Add Blackout Period Modal */}
+      <Dialog open={isBlackoutModalOpen} onOpenChange={setIsBlackoutModalOpen}>
+        <DialogContent className="sm:max-w-[500px] p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl">
+          <DialogHeader className="border-b pb-3 mb-4">
+            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-rose-600" />
+              Add Blackout Period
+              <HelpHint
+                title="Add Blackout Period"
+                titleHi="लीव बैन अवधि जोड़ें"
+                description="Set start/end dates and reason to restrict leave booking."
+                descriptionHi="छुट्टी की बुकिंग रोकने के लिए तारीखें और कारण दर्ज करें।"
+              />
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Prevent employees from taking leaves during critical business dates.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveBlackout} className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Reason / Event Name <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                type="text"
+                value={blackoutForm.reason}
+                onChange={(e) => setBlackoutForm({ ...blackoutForm, reason: e.target.value })}
+                placeholder="e.g. Annual Financial Audit / Product Launch"
+                required
+                className="h-9 text-xs font-medium"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Start Date <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={blackoutForm.start_date}
+                  onChange={(e) => setBlackoutForm({ ...blackoutForm, start_date: e.target.value })}
+                  required
+                  className="h-9 text-xs font-medium"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  End Date <span className="text-rose-500">*</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={blackoutForm.end_date}
+                  onChange={(e) => setBlackoutForm({ ...blackoutForm, end_date: e.target.value })}
+                  required
+                  className="h-9 text-xs font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Department (Optional)</Label>
+                <select
+                  value={blackoutForm.applicable_department_id}
+                  onChange={(e) => setBlackoutForm({ ...blackoutForm, applicable_department_id: e.target.value })}
+                  className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="">Global (All Departments)</option>
+                  {departments.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name || d.department_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Target Location (Optional)</Label>
+                <select
+                  value={blackoutForm.applicable_location_id}
+                  onChange={(e) => setBlackoutForm({ ...blackoutForm, applicable_location_id: e.target.value })}
+                  className="w-full h-9 px-3 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="">Global (All Locations)</option>
+                  {locations.map((l: any) => (
+                    <option key={l.id || l.uuid} value={l.id}>{l.name || l.location_name || l.locationName}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t">
+              <Button type="button" variant="outline" onClick={() => setIsBlackoutModalOpen(false)} className="h-8 text-xs rounded-lg cursor-pointer">
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white font-bold h-8 text-xs px-4 rounded-lg flex items-center gap-1.5 cursor-pointer">
+                <Plus className="w-3.5 h-3.5" /> Save Blackout Period
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* AUDIT TRAIL MODAL */}
+      <AuditTrailModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
+        title="Audit Trail"
+        subtitle={selectedLeaveType ? `Leave Category: ${selectedLeaveType.leaveName || selectedLeaveType.leave_name} (${selectedLeaveType.leaveCode || selectedLeaveType.leave_code || ''})` : 'Leave Type Settings'}
+        logs={auditLogs}
+        isLoading={isLoadingAudit}
+        onRefresh={fetchAuditLogs}
+      />
+
+      {/* ADD LEAVE TYPE MODAL DIALOG */}
+      <AddLeaveTypeModal
+        isOpen={isAddLeaveModalOpen}
+        onClose={() => setIsAddLeaveModalOpen(false)}
+        onCreateApi={handleCreateLeaveTypeApi}
+        onSuccess={(newLeaveType) => {
+          setSelectedLeaveType(newLeaveType);
+          setViewMode('configure');
+        }}
+      />
+
+      {/* LEAVE YEAR SETTINGS MODAL DIALOG */}
+      <LeaveYearSettingsModal
+        isOpen={isLeaveYearModalOpen}
+        onClose={() => setIsLeaveYearModalOpen(false)}
+        settingToEdit={leaveYearToEdit}
+        onSaved={fetchLeaveYearSettings}
+        locationsList={locationsList}
+        departmentsList={departmentsList}
+        gradesList={gradesList}
+        companiesList={companiesList}
+        subDepartmentsList={subDepartmentsList}
+        designationsList={designationsList}
+        employmentTypesList={employmentTypesList}
+        employmentStatusesList={employmentStatusesList}
+      />
     </div>
   );
 }

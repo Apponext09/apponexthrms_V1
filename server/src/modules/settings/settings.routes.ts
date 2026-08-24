@@ -54,6 +54,259 @@ router.put('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCt
 router.patch('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.update(req, res)));
 router.delete('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.delete(req, res)));
 
+// ─── Scope Masters for Leave Year & Policy Filters ──────────────────────────
+router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) => {
+  const db = getKnex();
+
+  const safeQueryTable = async (table: string) => {
+    try {
+      const hasTable = await db.schema.hasTable(table);
+      if (!hasTable) return [];
+
+      const hasDeletedAt = await db.schema.hasColumn(table, 'deleted_at');
+      let builder = db(table);
+      if (hasDeletedAt) {
+        builder = builder.whereNull('deleted_at');
+      }
+
+      // Dynamically detect existing ID column
+      const hasCompanyId = await db.schema.hasColumn(table, 'company_id');
+      const hasBranchId = await db.schema.hasColumn(table, 'branch_id');
+      const hasId = await db.schema.hasColumn(table, 'id');
+      const idCol = hasCompanyId ? 'company_id' : (hasBranchId ? 'branch_id' : (hasId ? 'id' : '1'));
+
+      // Dynamically detect existing Name column
+      const hasCompanyName = await db.schema.hasColumn(table, 'company_name');
+      const hasLocationName = await db.schema.hasColumn(table, 'location_name');
+      const hasBranchName = await db.schema.hasColumn(table, 'branch_name');
+      const hasDeptName = await db.schema.hasColumn(table, 'department_name');
+      const hasName = await db.schema.hasColumn(table, 'name');
+      const hasLegalName = await db.schema.hasColumn(table, 'legal_name');
+
+      let nameCol = 'name';
+      if (hasCompanyName) nameCol = 'company_name';
+      else if (hasName) nameCol = 'name';
+      else if (hasLocationName) nameCol = 'location_name';
+      else if (hasBranchName) nameCol = 'branch_name';
+      else if (hasDeptName) nameCol = 'department_name';
+      else if (hasLegalName) nameCol = 'legal_name';
+
+      const rows = await builder.select(`${idCol} as rawId`, `${nameCol} as rawName`);
+      return rows
+        .filter((r: any) => r.rawName && String(r.rawName).trim() !== '')
+        .map((r: any) => ({ id: r.rawId, name: String(r.rawName).trim() }));
+    } catch (e) {
+      console.error(`Error querying master table ${table}:`, e);
+      return [];
+    }
+  };
+
+  // 1. Companies (Robust query across company, companies, and organizations tables)
+  let companies: any[] = [];
+  try {
+    const targetTable = (await db.schema.hasTable('company'))
+      ? 'company'
+      : ((await db.schema.hasTable('companies')) ? 'companies' : ((await db.schema.hasTable('organizations')) ? 'organizations' : ''));
+
+    if (targetTable) {
+      let q = db(targetTable);
+      if (await db.schema.hasColumn(targetTable, 'deleted_at')) {
+        q = q.whereNull('deleted_at');
+      }
+      const rows = await q.select('*');
+      companies = rows
+        .map((r: any) => ({
+          id: r.company_id || r.id,
+          name: String(r.name || r.company_name || r.employer_name || r.legal_name || `Company #${r.company_id || r.id}`).trim(),
+          code: r.code || r.company_code || ''
+        }))
+        .filter((r: any) => r.name && r.name !== 'null' && r.name !== 'undefined');
+    }
+  } catch (e) {
+    console.error('Error fetching companies in scope-masters:', e);
+  }
+
+  // 2. Locations (Queries `branches` table first, fallback to `locations`)
+  let locations = await safeQueryTable('branches');
+  if (locations.length === 0) {
+    locations = await safeQueryTable('locations');
+  }
+
+  // 3. Departments
+  let departments = await safeQueryTable('departments');
+
+  // 4. Sub Departments
+  let subDepartments = await safeQuery('sub_departments', 'name');
+  if (subDepartments.length === 0) {
+    try {
+      const hasParentDept = await db.schema.hasColumn('departments', 'parent_department_id');
+      if (hasParentDept) {
+        const rows = await db('departments')
+          .whereNotNull('parent_department_id')
+          .whereNull('deleted_at')
+          .select('id', db.raw('COALESCE(department_name, name) as rawName'));
+        subDepartments = rows.map((r: any) => ({ id: r.id, name: formatLabel(r.rawName) }));
+      }
+    } catch (e) {}
+  }
+
+  // 5. Designations
+  let designations = await safeQuery('designations', 'COALESCE(designation_name, name)');
+
+  // 6. Grades
+  let grades = await safeQuery('grades', 'COALESCE(grade_name, name, grade_code)');
+  if (grades.length === 0) {
+    grades = await safeQuery('pay_grades', 'COALESCE(grade_name, name)');
+  }
+  if (grades.length === 0) {
+    try {
+      const empGrades = await db('employees')
+        .whereNotNull('grade')
+        .distinct('grade as name');
+      grades = empGrades.map((g: any, idx: number) => ({ id: g.name || idx + 1, name: formatLabel(g.name) }));
+    } catch (e) {}
+  }
+  if (grades.length === 0) {
+    grades = [
+      { id: 'Grade 1', name: 'Grade 1' },
+      { id: 'Grade 2', name: 'Grade 2' },
+      { id: 'Grade 3', name: 'Grade 3' },
+      { id: 'Grade 4', name: 'Grade 4' },
+      { id: 'Grade 5', name: 'Grade 5' },
+    ];
+  }
+
+  // 7. Employment Types
+  let employmentTypes = await safeQuery('employee_types', 'COALESCE(type_name, name)');
+  if (employmentTypes.length === 0) {
+    employmentTypes = await safeQuery('employment_types', 'COALESCE(type_name, name)');
+  }
+  if (employmentTypes.length === 0) {
+    try {
+      const empTypes = await db('employees')
+        .whereNotNull('employment_type')
+        .distinct('employment_type as name');
+      employmentTypes = empTypes.map((et: any, idx: number) => ({ id: et.name || idx + 1, name: formatLabel(et.name) }));
+    } catch (e) {}
+  }
+  if (employmentTypes.length === 0) {
+    employmentTypes = [
+      { id: 'full_time', name: 'Full Time' },
+      { id: 'part_time', name: 'Part Time' },
+      { id: 'contract', name: 'Contract' },
+      { id: 'internship', name: 'Internship' },
+      { id: 'probation', name: 'Probation' },
+    ];
+  }
+
+  // 8. Employment Statuses
+  let employmentStatuses = await safeQuery('employee_statuses', 'COALESCE(status_name, name)');
+  if (employmentStatuses.length === 0) {
+    employmentStatuses = await safeQuery('employment_statuses', 'COALESCE(status_name, name)');
+  }
+  if (employmentStatuses.length === 0) {
+    try {
+      const empStatuses = await db('employees')
+        .whereNotNull('status')
+        .distinct('status as name');
+      employmentStatuses = empStatuses.map((es: any, idx: number) => ({ id: es.name || idx + 1, name: formatLabel(es.name) }));
+    } catch (e) {}
+  }
+  if (employmentStatuses.length === 0) {
+    employmentStatuses = [
+      { id: 'active', name: 'Active' },
+      { id: 'probation', name: 'Probation' },
+      { id: 'notice', name: 'Notice' },
+      { id: 'onboarding', name: 'Onboarding' },
+      { id: 'candidate', name: 'Candidate' },
+    ];
+  }
+
+  // Count employees safely for each master
+  const hasEmployeesTable = await db.schema.hasTable('employees');
+
+  if (hasEmployeesTable) {
+    // Companies count
+    for (const c of companies) {
+      try {
+        const row = await db('employees').where('organization_id', c.id).whereNull('deleted_at').count('id as total').first();
+        c.count = row ? Number(row.total) : 0;
+      } catch (e) { c.count = 0; }
+    }
+    // Locations count
+    for (const l of locations) {
+      try {
+        const row = await db('employees').where(function() {
+          this.where('current_location_id', l.id).orWhere('current_branch_id', l.id);
+        }).whereNull('deleted_at').count('id as total').first();
+        l.count = row ? Number(row.total) : 0;
+      } catch (e) { l.count = 0; }
+    }
+    // Departments count
+    for (const d of departments) {
+      try {
+        const row = await db('employees').where('current_department_id', d.id).whereNull('deleted_at').count('id as total').first();
+        d.count = row ? Number(row.total) : 0;
+      } catch (e) { d.count = 0; }
+    }
+    // Sub Departments count
+    for (const sd of subDepartments) {
+      try {
+        const row = await db('employees').where('sub_department_id', sd.id).whereNull('deleted_at').count('id as total').first();
+        sd.count = row ? Number(row.total) : 0;
+      } catch (e) { sd.count = 0; }
+    }
+    // Designations count
+    for (const des of designations) {
+      try {
+        const row = await db('employees').where('current_designation_id', des.id).whereNull('deleted_at').count('id as total').first();
+        des.count = row ? Number(row.total) : 0;
+      } catch (e) { des.count = 0; }
+    }
+    // Grades count
+    for (const g of grades) {
+      try {
+        const row = await db('employees').where(function() {
+          this.where('grade', g.name).orWhere('grade_id', g.id);
+        }).whereNull('deleted_at').count('id as total').first();
+        g.count = row ? Number(row.total) : 0;
+      } catch (e) { g.count = 0; }
+    }
+    // Employment Types count
+    for (const et of employmentTypes) {
+      try {
+        const row = await db('employees').where(function() {
+          this.where('employment_type', et.id).orWhere('employment_type', et.name);
+        }).whereNull('deleted_at').count('id as total').first();
+        et.count = row ? Number(row.total) : 0;
+      } catch (e) { et.count = 0; }
+    }
+    // Employment Statuses count
+    for (const es of employmentStatuses) {
+      try {
+        const row = await db('employees').where(function() {
+          this.where('status', es.id).orWhere('status', es.name);
+        }).whereNull('deleted_at').count('id as total').first();
+        es.count = row ? Number(row.total) : 0;
+      } catch (e) { es.count = 0; }
+    }
+  }
+
+  res.json({
+    success: true,
+    data: {
+      companies,
+      locations,
+      departments,
+      subDepartments,
+      designations,
+      grades,
+      employmentTypes,
+      employmentStatuses,
+    },
+  });
+}));
+
 // ─── Offer Letter Templates Master Routes ──────────────────────────────────────
 const DEFAULT_PRESEEDED_OFFER_TEMPLATES = [
   {
@@ -1449,14 +1702,17 @@ router.delete('/holidays/:id', asyncHandler(async (req: Request, res: Response) 
 // ==========================================
 
 router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
+  const ctx = req.ctx;
   const db = getKnex();
 
-  const types = await db('leave_types')
-    .where('organization_id', ctx.organizationId)
-    .orWhereNull('organization_id')
-    .orderBy('id', 'asc');
+  let query = db('leave_types').whereNull('deleted_at');
+  if (ctx?.organizationId) {
+    query = query.where(function (this: any) {
+      this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+    });
+  }
 
+  const types = await query.orderBy('id', 'asc');
   res.json({ success: true, data: types });
 }));
 
@@ -1718,35 +1974,50 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
 
   const stringifyJson = (val: any) => val ? (typeof val === 'string' ? val : JSON.stringify(val)) : null;
 
-  // 1. Update leave type
+  const updateData: Record<string, any> = {
+    updated_by: ctx.userId,
+    updated_at: new Date()
+  };
+
+  if (leave_name !== undefined) updateData.leave_name = leave_name;
+  if (leave_code !== undefined) updateData.leave_code = leave_code.toUpperCase();
+  if (paid_type !== undefined) updateData.paid_type = paid_type;
+  if (leave_classification !== undefined) updateData.leave_classification = leave_classification;
+  if (status !== undefined) updateData.status = status;
+  if (description !== undefined) updateData.description = description;
+  if (gender_applicable !== undefined) updateData.gender_applicable = gender_applicable;
+  if (sandwich_rule_enabled !== undefined) updateData.sandwich_rule_enabled = Boolean(sandwich_rule_enabled);
+  if (allow_negative_balance !== undefined) updateData.allow_negative_balance = isAllowNeg;
+  if (negative_balance_action !== undefined) updateData.negative_balance_action = action;
+  if (pool_from_leave_type_id !== undefined) updateData.pool_from_leave_type_id = poolId;
+
+  if (annual_quota !== undefined || allocEntitlement !== undefined) {
+    updateData.annual_quota = newQuota > 0 ? newQuota : (currentType.annual_quota || currentType.annualQuota || 0);
+  }
+
+  if (allocation_settings !== undefined && allocation_settings !== null) {
+    updateData.allocation_settings = stringifyJson(allocation_settings);
+  }
+  if (application_settings !== undefined && application_settings !== null) {
+    updateData.application_settings = stringifyJson(application_settings);
+  }
+  if (payroll_settings !== undefined && payroll_settings !== null) {
+    updateData.payroll_settings = stringifyJson(payroll_settings);
+  }
+  if (employment_allocation_settings !== undefined && employment_allocation_settings !== null) {
+    updateData.employment_allocation_settings = stringifyJson(employment_allocation_settings);
+  }
+  if (employment_application_settings !== undefined && employment_application_settings !== null) {
+    updateData.employment_application_settings = stringifyJson(employment_application_settings);
+  }
+  if (encashment_settings !== undefined && encashment_settings !== null) {
+    updateData.encashment_settings = stringifyJson(encashment_settings);
+  }
+
+  // 1. Update leave type safely without wiping unpassed settings
   await db('leave_types')
     .where({ id })
-    .update({
-      leave_name,
-      leave_code: leave_code.toUpperCase(),
-      annual_quota: newQuota,
-      carry_forward_enabled: Boolean(carry_forward_enabled),
-      carry_forward_limit: parseInt(carry_forward_limit, 10) || null,
-      encashment_enabled: Boolean(encashment_enabled),
-      encashment_limit: parseInt(encashment_limit, 10) || null,
-      sandwich_rule_enabled: Boolean(sandwich_rule_enabled),
-      gender_applicable: gender_applicable || 'all',
-      description: description || null,
-      status: status || 'active',
-      paid_type: paid_type || 'paid',
-      allow_negative_balance: isAllowNeg,
-      negative_balance_action: action,
-      pool_from_leave_type_id: poolId,
-      leave_classification: leave_classification || 'uncategorized',
-      allocation_settings: stringifyJson(allocation_settings),
-      application_settings: stringifyJson(application_settings),
-      payroll_settings: stringifyJson(payroll_settings),
-      employment_allocation_settings: stringifyJson(employment_allocation_settings),
-      employment_application_settings: stringifyJson(employment_application_settings),
-      encashment_settings: stringifyJson(encashment_settings),
-      updated_by: ctx.userId,
-      updated_at: new Date()
-    });
+    .update(updateData);
 
   // 2. Update all active policy assignments for this type in this organization
   await db('leave_policy_assignments')
@@ -1840,37 +2111,218 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
 router.get('/leave-types/:id/audit-logs', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-  const id = Number(req.params.id);
+  const idStr = String(req.params.id);
 
-  const logs = await db('audit_logs')
-    .where({
-      organization_id: ctx.organizationId,
-      entity_type: 'leave_type',
-      entity_id: String(id)
-    })
-    .orderBy('created_at', 'desc')
-    .limit(100);
+  try {
+    const logs = await db('audit_logs')
+      .where({ organization_id: ctx.organizationId, entity_type: 'leave_type' })
+      .andWhere((builder: any) => {
+        builder.where('entity_id', idStr).orWhere('entity_id', Number(req.params.id) || 0);
+      })
+      .orderBy('created_at', 'desc')
+      .limit(100)
+      .catch((err) => {
+        console.warn('Could not query audit_logs table:', err.message);
+        return [];
+      });
 
-  const userIds = logs.map(l => l.actorUserId || l.actor_user_id).filter(Boolean);
-  let usersMap: Record<number, string> = {};
-  if (userIds.length > 0) {
-    const users = await db('users').whereIn('id', userIds).select('id', 'name', 'email');
-    users.forEach(u => {
-      usersMap[u.id] = u.name || u.email || `User #${u.id}`;
+    const userIds = (logs || []).map((l: any) => l.actorUserId || l.actor_user_id || l.user_id).filter(Boolean);
+    let usersMap: Record<number, string> = {};
+    if (userIds.length > 0) {
+      try {
+        const users = await db('users').whereIn('id', userIds).select('id', 'name', 'email');
+        users.forEach((u: any) => {
+          usersMap[u.id] = u.name || u.email || `User #${u.id}`;
+        });
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const safeParse = (val: any) => {
+      if (!val) return {};
+      if (typeof val === 'object') return val;
+      try {
+        return JSON.parse(val);
+      } catch (e) {
+        return {};
+      }
+    };
+
+    const formattedLogs = (logs || []).map((log: any) => ({
+      id: log.id,
+      action: log.action || 'UPDATE_LEAVE_TYPE',
+      actorName: usersMap[log.actorUserId || log.actor_user_id || log.user_id] || 'System Admin',
+      beforeState: safeParse(log.beforeState || log.before_state),
+      afterState: safeParse(log.afterState || log.after_state),
+      ipAddress: log.ipAddress || log.ip_address || '127.0.0.1',
+      createdAt: log.createdAt || log.created_at || new Date().toISOString()
+    }));
+
+    res.status(200).json({ success: true, data: formattedLogs });
+  } catch (err: any) {
+    console.error('Audit logs query error:', err);
+    res.status(200).json({ success: true, data: [] });
+  }
+}));
+
+// LEAVE YEAR SETTINGS ENDPOINTS
+const ensureLeaveYearSettingsTable = async (db: any) => {
+  const hasTable = await db.schema.hasTable('leave_year_settings');
+  if (!hasTable) {
+    await db.schema.createTable('leave_year_settings', (table: any) => {
+      table.increments('id').primary();
+      table.integer('organization_id').notNullable();
+      table.integer('company_id').nullable();
+      table.integer('start_day').notNullable().defaultTo(1);
+      table.string('start_month', 20).notNullable().defaultTo('April');
+      table.string('status', 20).notNullable().defaultTo('active');
+      table.boolean('is_default').notNullable().defaultTo(false);
+      table.json('locations').nullable();
+      table.json('departments').nullable();
+      table.json('grades').nullable();
+      table.json('companies').nullable();
+      table.integer('created_by').nullable();
+      table.integer('updated_by').nullable();
+      table.timestamps(true, true);
     });
   }
+};
 
-  const formattedLogs = logs.map(log => ({
-    id: log.id,
-    action: log.action,
-    actorName: usersMap[log.actorUserId || log.actor_user_id] || 'System',
-    beforeState: typeof log.beforeState === 'string' ? JSON.parse(log.beforeState) : log.beforeState || log.before_state,
-    afterState: typeof log.afterState === 'string' ? JSON.parse(log.afterState) : log.afterState || log.after_state,
-    ipAddress: log.ipAddress || log.ip_address,
-    createdAt: log.createdAt || log.created_at
+router.get('/leave-year-settings', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLeaveYearSettingsTable(db);
+
+  let settings = await db('leave_year_settings')
+    .where({ organization_id: ctx.organizationId })
+    .orderBy('is_default', 'asc')
+    .orderBy('id', 'desc');
+
+  if (settings.length === 0) {
+    await db('leave_year_settings').insert({
+      organization_id: ctx.organizationId,
+      company_id: ctx.companyId || null,
+      start_day: 1,
+      start_month: 'April',
+      status: 'active',
+      is_default: true,
+      locations: JSON.stringify([]),
+      departments: JSON.stringify([]),
+      grades: JSON.stringify([]),
+      companies: JSON.stringify([]),
+      created_by: ctx.userId,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+    settings = await db('leave_year_settings').where({ organization_id: ctx.organizationId });
+  }
+
+  const parseJson = (val: any) => {
+    if (!val) return [];
+    if (typeof val === 'object') return val;
+    try { return JSON.parse(val); } catch (e) { return []; }
+  };
+
+  const formatted = settings.map((s: any) => ({
+    id: s.id,
+    organization_id: s.organization_id,
+    company_id: s.company_id,
+    start_day: s.start_day || s.startDay || 1,
+    start_month: s.start_month || s.startMonth || 'April',
+    status: s.status || 'active',
+    is_default: Boolean(s.is_default || s.isDefault),
+    locations: parseJson(s.locations),
+    departments: parseJson(s.departments),
+    grades: parseJson(s.grades),
+    companies: parseJson(s.companies)
   }));
 
-  res.status(200).json({ success: true, data: formattedLogs });
+  res.json({ success: true, data: formatted });
+}));
+
+router.post('/leave-year-settings', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLeaveYearSettingsTable(db);
+
+  const { start_day, start_month, status, locations, departments, grades, companies } = req.body;
+
+  const [id] = await db('leave_year_settings').insert({
+    organization_id: ctx.organizationId,
+    company_id: ctx.companyId || null,
+    start_day: Number(start_day) || 1,
+    start_month: start_month || 'April',
+    status: status || 'active',
+    is_default: false,
+    locations: JSON.stringify(locations || []),
+    departments: JSON.stringify(departments || []),
+    grades: JSON.stringify(grades || []),
+    companies: JSON.stringify(companies || []),
+    created_by: ctx.userId,
+    created_at: new Date(),
+    updated_at: new Date()
+  });
+
+  res.json({ success: true, data: { id, message: 'Leave year setting created successfully' } });
+}));
+
+router.put('/leave-year-settings/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLeaveYearSettingsTable(db);
+  const id = Number(req.params.id);
+
+  const { start_day, start_month, status, locations, departments, grades, companies } = req.body;
+
+  await db('leave_year_settings')
+    .where({ id, organization_id: ctx.organizationId })
+    .update({
+      start_day: Number(start_day) || 1,
+      start_month: start_month || 'April',
+      status: status || 'active',
+      locations: JSON.stringify(locations || []),
+      departments: JSON.stringify(departments || []),
+      grades: JSON.stringify(grades || []),
+      companies: JSON.stringify(companies || []),
+      updated_by: ctx.userId,
+      updated_at: new Date()
+    });
+
+  res.json({ success: true, message: 'Leave year setting updated successfully' });
+}));
+
+router.patch('/leave-year-settings/:id/status', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLeaveYearSettingsTable(db);
+  const id = Number(req.params.id);
+
+  const current = await db('leave_year_settings').where({ id, organization_id: ctx.organizationId }).first();
+  if (!current) {
+    res.status(404).json({ success: false, message: 'Setting not found' });
+    return;
+  }
+
+  const newStatus = current.status === 'active' ? 'inactive' : 'active';
+  await db('leave_year_settings')
+    .where({ id })
+    .update({ status: newStatus, updated_at: new Date() });
+
+  res.json({ success: true, message: `Status updated to ${newStatus}` });
+}));
+
+router.delete('/leave-year-settings/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLeaveYearSettingsTable(db);
+  const id = Number(req.params.id);
+
+  await db('leave_year_settings')
+    .where({ id, organization_id: ctx.organizationId, is_default: false })
+    .del();
+
+  res.json({ success: true, message: 'Leave year setting deleted successfully' });
 }));
 
 router.delete('/leave-types/:id', asyncHandler(async (req: Request, res: Response) => {
