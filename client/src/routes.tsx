@@ -215,6 +215,10 @@ import NotificationsPage from './features/employee/portal-pages/NotificationsPag
 import ApprovalsPage from './features/employee/portal-pages/ApprovalsPage';
 import SettingsSecurityPage from './features/employee/portal-pages/SettingsSecurityPage';
 
+// Policy Pages
+import { PolicyAcceptancePage } from './features/policy/pages/PolicyAcceptancePage';
+import { PolicyManagementPage } from './features/policy/pages/PolicyManagementPage';
+
 // Intern & Consultant Portal Pages
 import { InternDashboardPage } from './features/intern/pages/InternDashboardPage';
 import { ConsultantDashboardPage } from './features/consultant/pages/ConsultantDashboardPage';
@@ -276,6 +280,7 @@ export function AppRoutes() {
       <Route path="/public/offers/review/:uuid" element={<PublicOfferPage />} />
       <Route path="/public/assessments/take/:uuid" element={<TakeAssessmentPage />} />
       <Route path="/careers" element={<JobReferencePage />} />
+      <Route path="/policy-acceptance" element={<PolicyAcceptancePage />} />
       <Route path="/" element={<RootRedirect />} />
 
       {/* ─────────────────────────────────────────────────
@@ -368,6 +373,8 @@ export function AppRoutes() {
 
         {/* Operations */}
         <Route path="/hr/masters" element={<MastersHubPage />} />
+        <Route path="/hr/policies" element={<PolicyManagementPage />} />
+        <Route path="/hr/company-policies" element={<PolicyManagementPage />} />
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
         <Route path="/hr/workflows" element={<WorkflowListPage />} />
         <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
@@ -432,6 +439,7 @@ export function AppRoutes() {
         <Route path="/manager/leaves" element={<LeavePage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/manager/policies" element={<PoliciesPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -463,6 +471,7 @@ export function AppRoutes() {
         <Route path="/team-lead/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/team-lead/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/team-lead/policies" element={<PoliciesPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -633,6 +642,9 @@ export function AppRoutes() {
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
+        <Route path="/settings/policies" element={<PolicyManagementPage />} />
+        <Route path="/settings/company-policies" element={<PolicyManagementPage />} />
+        <Route path="/policies" element={<PolicyManagementPage />} />
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
         <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
@@ -762,6 +774,7 @@ export function AppRoutes() {
         <Route path="/intern/announcements"    element={<AnnouncementsPage />} />
         <Route path="/intern/id-card"          element={<IDCardPage />} />
         <Route path="/intern/org-chart"        element={<OrgChartPage />} />
+        <Route path="/intern/policies"         element={<PoliciesPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -788,6 +801,7 @@ export function AppRoutes() {
         <Route path="/consultant/announcements"    element={<AnnouncementsPage />} />
         <Route path="/consultant/id-card"          element={<IDCardPage />} />
         <Route path="/consultant/org-chart"        element={<OrgChartPage />} />
+        <Route path="/consultant/policies"         element={<PoliciesPage />} />
       </Route>
 
       {/* 404 */}

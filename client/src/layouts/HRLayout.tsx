@@ -170,6 +170,7 @@ const HR_NAV = [
   {
     label: 'OPERATIONS',
     items: [
+      { name: 'Company Policies', href: '/hr/policies', icon: ShieldCheck },
       { name: 'Workflows', href: '/hr/workflow', icon: GitBranch },
       { name: 'Settings', href: '/hr/settings', icon: Settings },
     ],

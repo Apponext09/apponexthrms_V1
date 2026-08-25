@@ -55,6 +55,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
+      {
+        name: 'Company Policies',
+        href: '/settings/policies',
+        icon: 'ShieldCheck',
+        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+      },
     ],
   },
 
@@ -413,6 +419,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     items: [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
+      {
+        name: 'Company Policies',
+        href: '/settings/policies',
+        icon: 'ShieldCheck',
+        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+      },
       {
         name: 'Career Portal Customization',
         href: '/settings/career-customization',
