@@ -2,6 +2,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 
+export interface PolicyCategory {
+  id: number;
+  uuid: string;
+  organizationId: number;
+  companyId?: number | null;
+  name: string;
+  description?: string | null;
+  createdBy?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PolicyDocument {
   id: number;
   uuid: string;
@@ -113,6 +125,51 @@ export function usePolicies() {
       return res.data?.data || [];
     },
     staleTime: 30000,
+  });
+}
+
+export function usePolicyCategories() {
+  return useQuery<PolicyCategory[]>({
+    queryKey: ['policies', 'categories'],
+    queryFn: async () => {
+      const res = await apiClient.get('/policies/categories');
+      return res.data?.data || [];
+    },
+    staleTime: 30000,
+  });
+}
+
+export function useCreatePolicyCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { name: string; description?: string }) => {
+      const res = await apiClient.post('/policies/categories', payload);
+      return res.data?.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['policies', 'categories'] });
+      toast.success('Category created successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error?.message || 'Failed to create category');
+    },
+  });
+}
+
+export function useDeletePolicyCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiClient.delete(`/policies/categories/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['policies', 'categories'] });
+      toast.success('Category deleted successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error?.message || 'Failed to delete category');
+    },
   });
 }
 

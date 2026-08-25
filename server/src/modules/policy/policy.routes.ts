@@ -11,6 +11,12 @@ router.use(authenticate, resolveTenant);
 // User-facing policy endpoints (Must be accessible by all authenticated roles)
 router.get('/my-policies', policyController.getMyPolicies);
 router.get('/pending', policyController.getPendingPolicies);
+
+// Category Management endpoints (Before /:id to avoid route collisions)
+router.get('/categories', policyController.listCategories);
+router.post('/categories', policyController.createCategory);
+router.delete('/categories/:id', policyController.deleteCategory);
+
 router.post('/:id/accept', policyController.acceptPolicy);
 
 // Admin & HR management endpoints

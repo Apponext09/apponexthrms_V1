@@ -1,4 +1,5 @@
 import { PolicyRepository } from '../repositories/PolicyRepository';
+import { PolicyCategoryRepository, PolicyCategory } from '../repositories/PolicyCategoryRepository';
 import type { TenantContext } from '../../../db/types';
 import type {
   CreatePolicyDTO,
@@ -12,9 +13,11 @@ import { getKnex } from '../../../db/knex';
 
 export class PolicyService {
   private policyRepo: PolicyRepository;
+  private categoryRepo: PolicyCategoryRepository;
 
   constructor() {
     this.policyRepo = new PolicyRepository();
+    this.categoryRepo = new PolicyCategoryRepository();
   }
 
   /**
@@ -74,6 +77,27 @@ export class PolicyService {
     const success = await this.policyRepo.delete(ctx, id);
     if (!success) {
       throw new NotFoundError('Policy document not found');
+    }
+  }
+
+  /**
+   * Dynamic Category Management
+   */
+  async listCategories(ctx: TenantContext): Promise<PolicyCategory[]> {
+    return this.categoryRepo.listAll(ctx);
+  }
+
+  async createCategory(ctx: TenantContext, name: string, description?: string): Promise<PolicyCategory> {
+    if (!name || !name.trim()) {
+      throw new ValidationError('Category name is required');
+    }
+    return this.categoryRepo.create(ctx, name, description);
+  }
+
+  async deleteCategory(ctx: TenantContext, id: number): Promise<void> {
+    const success = await this.categoryRepo.delete(ctx, id);
+    if (!success) {
+      throw new NotFoundError('Category not found');
     }
   }
 
