@@ -112,7 +112,7 @@ export function HRDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={Users}
-          label="Total Headcount"
+          label="Total Employee Count"
           value={isLoading ? '...' : String(totalEmployees)}
         />
         <StatCard
@@ -136,14 +136,14 @@ export function HRDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (2 Cols) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Headcount Trend Chart */}
+          {/* Employee Growth Trend Chart */}
           <Card className="shadow-xs border border-border">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
                     <TrendingUp className="w-4.5 h-4.5 text-primary" />
-                    Headcount Growth Trend
+                    Employee Growth Trend
                   </CardTitle>
                   <CardDescription className="text-xs">Live organizational workforce trajectory</CardDescription>
                 </div>
@@ -179,7 +179,7 @@ export function HRDashboardPage() {
                       stroke="hsl(var(--primary))"
                       strokeWidth={2.5}
                       fill="url(#colorEmpGrowthHR)"
-                      name="Headcount"
+                      name="Total Employees"
                     />
                   </AreaChart>
                 </ResponsiveContainer>

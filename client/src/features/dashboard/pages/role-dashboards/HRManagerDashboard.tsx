@@ -134,7 +134,7 @@ export function HRManagerDashboard() {
           {/* Department Summary */}
           <Card>
             <CardHeader>
-              <CardTitle>Department Headcount</CardTitle>
+              <CardTitle>Department Employee Count</CardTitle>
               <CardDescription>Employees by department</CardDescription>
             </CardHeader>
             <CardContent>

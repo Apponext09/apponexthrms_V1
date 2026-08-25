@@ -27,7 +27,7 @@ export interface QuickActionOption {
 }
 
 export const ALL_AVAILABLE_KPIS: KPIOption[] = [
-  { id: 'totalHeadcount', label: 'Total Headcount', category: 'Core HR', iconName: 'Users', defaultEnabled: true, color: 'text-primary' },
+  { id: 'totalHeadcount', label: 'Total Employee Count', category: 'Core HR', iconName: 'Users', defaultEnabled: true, color: 'text-primary' },
   { id: 'activeDepartments', label: 'Active Departments', category: 'Core HR', iconName: 'Building2', defaultEnabled: true, color: 'text-blue-500' },
   { id: 'officeLocations', label: 'Office Locations', category: 'Core HR', iconName: 'MapPin', defaultEnabled: true, color: 'text-emerald-500' },
   { id: 'reportingOfficers', label: 'Reporting Officers', category: 'Core HR', iconName: 'ShieldCheck', defaultEnabled: true, color: 'text-violet-500' },

@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('admin@apponexthrms.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
@@ -254,11 +254,14 @@ export function LoginPage() {
 
 
           {/* Footer */}
-          <div className="mt-8 pt-8 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              ApponextHRMS v1.0.0 • {new Date().getFullYear()} All rights reserved
+          <div className="mt-8 pt-6 border-t border-border/60 text-center space-y-1.5">
+            <p className="text-xs font-semibold text-foreground/80">
+              © {new Date().getFullYear()} ApponextHRMS
             </p>
-            <div className="flex gap-4 justify-center mt-4 text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground font-medium">
+              All rights reserved
+            </p>
+            <div className="flex gap-4 justify-center pt-2 text-xs text-muted-foreground">
               <a href="#" className="hover:text-foreground transition">
                 Privacy
               </a>

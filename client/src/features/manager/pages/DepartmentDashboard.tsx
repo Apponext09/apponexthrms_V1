@@ -108,7 +108,7 @@ export function DepartmentDashboard() {
         <Card className="border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-500/10 shadow-none">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Headcount</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Total Employee Count</span>
               <p className="text-2xl font-black text-foreground mt-1">
                 {isDashboardLoading ? '—' : dashboard.headcount}
               </p>
