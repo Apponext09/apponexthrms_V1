@@ -38,8 +38,19 @@ export function PlatformAdminSidebar({ open, onOpenChange }: PlatformAdminSideba
     navigate('/login');
   };
 
+  const getFullName = () => {
+    const fName = user?.firstName || (user as any)?.first_name || '';
+    const lName = user?.lastName || (user as any)?.last_name || '';
+    const combined = `${fName} ${lName}`.trim();
+    if (combined) return combined;
+    if ((user as any)?.name) return (user as any).name;
+    return 'User';
+  };
+
   const getInitials = () => {
-    return `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+    const fName = user?.firstName || (user as any)?.first_name || '';
+    const lName = user?.lastName || (user as any)?.last_name || '';
+    return `${fName?.[0] || ''}${lName?.[0] || ''}`.toUpperCase() || 'US';
   };
 
   return (
@@ -130,7 +141,7 @@ export function PlatformAdminSidebar({ open, onOpenChange }: PlatformAdminSideba
             {open && (
               <div className="overflow-hidden text-left leading-tight">
                 <p className="text-[12px] font-semibold text-foreground truncate group-hover:text-accent transition-colors">
-                  {user?.firstName || 'Admin'} {user?.lastName || 'User'}
+                  {getFullName()}
                 </p>
               </div>
             )}

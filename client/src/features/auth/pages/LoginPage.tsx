@@ -251,39 +251,7 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Demo credentials */}
-          <div className="mt-8 p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-              Quick Demo Login Presets
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@apponexthrms.com');
-                  setPassword('Admin@123');
-                }}
-                className="p-2 text-left rounded-lg bg-background hover:bg-muted border border-border transition text-xs"
-              >
-                <div className="font-bold text-foreground">CEO (Admin)</div>
-                <div className="text-[10px] text-muted-foreground truncate">admin@apponexthrms.com</div>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('superadmin@apponext.com');
-                  setPassword('SuperAdmin@2026!Secure');
-                }}
-                className="p-2 text-left rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition text-xs"
-              >
-                <div className="font-bold text-amber-500 flex items-center gap-1">
-                  ⚡ Super Admin
-                </div>
-                <div className="text-[10px] text-muted-foreground truncate">superadmin@apponext.com</div>
-              </button>
-            </div>
-          </div>
 
           {/* Footer */}
           <div className="mt-8 pt-8 border-t border-border">

@@ -79,8 +79,20 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     // Don't close sidebar on desktop
   };
 
+  const getFullName = () => {
+    const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+    let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+    if (lName.toLowerCase() === 'user') lName = '';
+    const combined = `${fName} ${lName}`.trim();
+    if (combined) return combined;
+    if ((user as any)?.name && (user as any).name.toLowerCase() !== 'user') return (user as any).name;
+    return fName || 'User';
+  };
+
   const getInitials = () => {
-    return `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+    const fName = user?.firstName || (user as any)?.first_name || '';
+    const lName = user?.lastName || (user as any)?.last_name || '';
+    return `${fName?.[0] || ''}${lName?.[0] || ''}`.toUpperCase() || 'US';
   };
 
   // Get icon component by name
@@ -395,7 +407,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     {open && (
                       <div className="overflow-hidden text-left leading-tight min-w-0">
                         <p className="text-[12px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                          {user?.firstName || 'Admin'} {user?.lastName || 'User'}
+                          {getFullName()}
                         </p>
                         <p className="text-[10px] font-semibold text-primary truncate">
                           {roleInfo.roleTitle}
