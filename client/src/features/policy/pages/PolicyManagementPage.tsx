@@ -82,7 +82,10 @@ const AVAILABLE_ROLES = [
 export function PolicyManagementPage() {
   const { data: policies = [], isLoading } = usePolicies();
   const { data: categories = [], isLoading: categoriesLoading } = usePolicyCategories();
-  const { data: departments = [] } = useDepartments();
+  const { data: deptsQueryResult } = useDepartments(1, 100);
+  const departments: Array<{ id: number; name: string }> = Array.isArray(deptsQueryResult)
+    ? deptsQueryResult
+    : (deptsQueryResult?.items || deptsQueryResult?.data || []);
 
   const createPolicyMutation = useCreatePolicy();
   const updatePolicyMutation = useUpdatePolicy();
@@ -969,6 +972,20 @@ export function PolicyManagementPage() {
                     onValueChange={(val) => {
                       if (val === 'all') {
                         setFormData({ ...formData, applicableDepartmentIds: [] });
+                      } else if (val.startsWith('dept_')) {
+                        const deptId = Number(val.replace('dept_', ''));
+                        const current = formData.applicableDepartmentIds;
+                        if (current.includes(deptId)) {
+                          setFormData({
+                            ...formData,
+                            applicableDepartmentIds: current.filter((id) => id !== deptId),
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            applicableDepartmentIds: [...current, deptId],
+                          });
+                        }
                       }
                     }}
                   >
@@ -976,15 +993,27 @@ export function PolicyManagementPage() {
                       <SelectValue
                         placeholder={
                           formData.applicableDepartmentIds.length === 0
-                            ? '🏢 All Departments'
+                            ? '🏢 All Departments (Company-wide)'
                             : `🏢 ${formData.applicableDepartmentIds.length} Selected Dept(s)`
                         }
-                      />
+                      >
+                        {formData.applicableDepartmentIds.length === 0
+                          ? '🏢 All Departments (Company-wide)'
+                          : `🏢 ${formData.applicableDepartmentIds.length} Selected Dept(s)`}
+                      </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-xs font-medium">
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="all" className="text-xs font-bold text-primary">
                         🏢 All Departments (Company-wide)
                       </SelectItem>
+                      {departments.map((dept) => {
+                        const isSelected = formData.applicableDepartmentIds.includes(dept.id);
+                        return (
+                          <SelectItem key={dept.id} value={`dept_${dept.id}`} className="text-xs font-medium">
+                            {isSelected ? '✓ ' : ''}{dept.name}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                   <p className="text-[10px] text-muted-foreground">
