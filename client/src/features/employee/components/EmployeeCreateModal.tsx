@@ -649,6 +649,8 @@ export function EmployeeCreateModal({
                         <option value="team_lead">Team Lead (Team Portal View)</option>
                         <option value="department_head">Department Head / Manager</option>
                         <option value="hr_manager">HR Manager (HR Portal View)</option>
+                        <option value="intern">Intern (Intern Portal View)</option>
+                        <option value="consultant">Consultant (Consultant Portal View)</option>
                         <option value="admin">System Administrator</option>
                       </select>
                       <p className="text-xs text-muted-foreground mt-1">

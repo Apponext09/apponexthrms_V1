@@ -1401,5 +1401,37 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   cursor: nwse-resize;
 }
+/* Solid Toast Notification styling */
+[data-sonner-toast] {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
+[data-sonner-toast][data-type="success"] {
+  background-color: #064e3b !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
 
+[data-sonner-toast][data-type="error"] {
+  background-color: #881337 !important;
+  border-color: #e11d48 !important;
+  color: #ffffff !important;
+}
+
+[data-sonner-toast][data-type="warning"] {
+  background-color: #78350f !important;
+  border-color: #d97706 !important;
+  color: #ffffff !important;
+}
+
+[data-sonner-toast][data-type="info"] {
+  background-color: #1e3a8a !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}

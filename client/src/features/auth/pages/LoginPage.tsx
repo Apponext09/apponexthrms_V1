@@ -38,10 +38,14 @@ export function LoginPage() {
         navigate('/hr/dashboard');
       } else if (roles.includes('team_lead')) {
         navigate('/team-lead/dashboard');
+      } else if (roles.includes('intern')) {
+        navigate('/intern/dashboard');
+      } else if (roles.includes('consultant')) {
+        navigate('/consultant/dashboard');
       } else if (roles.includes('employee')) {
         navigate('/employee/dashboard');
       } else {
-        navigate('/manager/dashboard');
+        navigate('/employee/dashboard');
       }
     } catch (err) {
       setError('Invalid email or password');
