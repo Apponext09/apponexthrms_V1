@@ -11,6 +11,17 @@ import type {
 } from '../policy.types';
 import { v4 as uuidv4 } from 'uuid';
 
+function parseDeptIds(val: any): number[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(Number);
+  try {
+    const parsed = JSON.parse(val);
+    return Array.isArray(parsed) ? parsed.map(Number) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 export class PolicyRepository {
   private get db() {
     return getKnex();
@@ -104,6 +115,8 @@ export class PolicyRepository {
         fileType: policy.fileType || policy.file_type,
         version: policy.version,
         isActive: Boolean(policy.isActive !== undefined ? policy.isActive : policy.is_active),
+        applicableGender: policy.applicableGender || policy.applicable_gender || 'all',
+        applicableDepartmentIds: parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids),
         createdBy: policy.createdBy || policy.created_by,
         updatedBy: policy.updatedBy || policy.updated_by,
         createdAt: policy.createdAt || policy.created_at,
@@ -154,6 +167,8 @@ export class PolicyRepository {
       fileType: policy.fileType || policy.file_type,
       version: policy.version,
       isActive: Boolean(policy.isActive !== undefined ? policy.isActive : policy.is_active),
+      applicableGender: policy.applicableGender || policy.applicable_gender || 'all',
+      applicableDepartmentIds: parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids),
       createdBy: policy.createdBy || policy.created_by,
       updatedBy: policy.updatedBy || policy.updated_by,
       createdAt: policy.createdAt || policy.created_at,
@@ -185,6 +200,10 @@ export class PolicyRepository {
         file_type: input.fileType || null,
         version: input.version || '1.0',
         is_active: input.isActive !== undefined ? input.isActive : true,
+        applicable_gender: input.applicableGender || 'all',
+        applicable_department_ids: input.applicableDepartmentIds && input.applicableDepartmentIds.length > 0
+          ? JSON.stringify(input.applicableDepartmentIds)
+          : null,
         created_by: ctx.userId,
         updated_by: ctx.userId,
         created_at: new Date(),
@@ -226,6 +245,8 @@ export class PolicyRepository {
         fileType: policy.fileType || policy.file_type,
         version: policy.version,
         isActive: Boolean(policy.isActive !== undefined ? policy.isActive : policy.is_active),
+        applicableGender: policy.applicableGender || policy.applicable_gender || 'all',
+        applicableDepartmentIds: parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids),
         createdBy: policy.createdBy || policy.created_by,
         updatedBy: policy.updatedBy || policy.updated_by,
         createdAt: policy.createdAt || policy.created_at,
@@ -266,6 +287,12 @@ export class PolicyRepository {
       if (input.fileType !== undefined) updateData.file_type = input.fileType;
       if (input.version !== undefined) updateData.version = input.version;
       if (input.isActive !== undefined) updateData.is_active = input.isActive;
+      if (input.applicableGender !== undefined) updateData.applicable_gender = input.applicableGender;
+      if (input.applicableDepartmentIds !== undefined) {
+        updateData.applicable_department_ids = input.applicableDepartmentIds && input.applicableDepartmentIds.length > 0
+          ? JSON.stringify(input.applicableDepartmentIds)
+          : null;
+      }
 
       await trx('policy_documents').where('id', id).update(updateData);
 
@@ -312,6 +339,8 @@ export class PolicyRepository {
         fileType: policy.fileType || policy.file_type,
         version: policy.version,
         isActive: Boolean(policy.isActive !== undefined ? policy.isActive : policy.is_active),
+        applicableGender: policy.applicableGender || policy.applicable_gender || 'all',
+        applicableDepartmentIds: parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids),
         createdBy: policy.createdBy || policy.created_by,
         updatedBy: policy.updatedBy || policy.updated_by,
         createdAt: policy.createdAt || policy.created_at,
@@ -343,7 +372,7 @@ export class PolicyRepository {
   }
 
   /**
-   * Get all policies applicable to the given user based on their roles
+   * Get all policies applicable to the given user based on their roles, gender, and department
    */
   async getUserPoliciesWithAcceptance(
     ctx: TenantContext,
@@ -354,6 +383,16 @@ export class PolicyRepository {
     if (!roles.includes('all')) {
       roles.push('all');
     }
+
+    // Fetch user's gender and department from linked employee profile
+    const userEmployee = await this.db('users as u')
+      .leftJoin('employees as e', 'u.employee_id', 'e.id')
+      .where('u.id', userId)
+      .select('e.gender', 'e.current_department_id as currentDepartmentId')
+      .first();
+
+    const userGender = String(userEmployee?.gender || '').toLowerCase().trim();
+    const userDeptId = userEmployee?.currentDepartmentId ? Number(userEmployee.currentDepartmentId) : null;
 
     // Query active policies
     const activePolicies = await this.db('policy_documents')
@@ -374,11 +413,29 @@ export class PolicyRepository {
     const applicablePolicies: any[] = [];
 
     for (const policy of activePolicies) {
+      // 1. Gender Filter Check
+      const pGender = String(policy.applicableGender || policy.applicable_gender || 'all').toLowerCase().trim();
+      if (pGender !== 'all') {
+        if (userGender && userGender !== pGender) {
+          // Policy is gender-restricted (e.g. 'female' POSH) and user gender does not match -> Skip
+          continue;
+        }
+      }
+
+      // 2. Department Filter Check
+      const pDepts = parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids);
+      if (pDepts.length > 0) {
+        if (userDeptId && !pDepts.includes(userDeptId)) {
+          // Policy is department-restricted and user's department is not in the list -> Skip
+          continue;
+        }
+      }
+
+      // 3. Role Mapping Check
       const pMappings = matchingMappings.filter(
         (m) => (m.policyDocumentId || m.policy_document_id) === policy.id
       );
 
-      // Check if any mapping matches user's roles or 'all'
       const matchedMapping = pMappings.find((m) => {
         const code = String(m.roleCode || m.role_code || '').toLowerCase().trim();
         return roles.includes(code);
@@ -443,6 +500,8 @@ export class PolicyRepository {
         fileType: p.fileType || p.file_type,
         version: p.version,
         isActive: Boolean(p.isActive !== undefined ? p.isActive : p.is_active),
+        applicableGender: p.applicableGender || p.applicable_gender || 'all',
+        applicableDepartmentIds: parseDeptIds(p.applicableDepartmentIds || p.applicable_department_ids),
         createdBy: p.createdBy || p.created_by,
         updatedBy: p.updatedBy || p.updated_by,
         createdAt: p.createdAt || p.created_at,
@@ -489,7 +548,6 @@ export class PolicyRepository {
       throw new Error('Policy not found');
     }
 
-    // Get employee_id if linked
     const user = await this.db('users').where('id', userId).first();
     const employeeId = user?.employeeId || user?.employee_id || null;
 
@@ -564,6 +622,9 @@ export class PolicyRepository {
 
     if (!policy) return null;
 
+    const pGender = String(policy.applicableGender || policy.applicable_gender || 'all').toLowerCase().trim();
+    const pDepts = parseDeptIds(policy.applicableDepartmentIds || policy.applicable_department_ids);
+
     const mappings = await this.db('policy_document_role_mappings')
       .where('organization_id', ctx.organizationId)
       .where('policy_document_id', policyId)
@@ -571,7 +632,6 @@ export class PolicyRepository {
 
     const mappedRoles = mappings.map((m) => String(m.roleCode || m.role_code).toLowerCase().trim());
 
-    // Get all users who belong to mapped roles
     let targetUsersQuery = this.db('users as u')
       .leftJoin('employees as e', 'u.employee_id', 'e.id')
       .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
@@ -582,6 +642,14 @@ export class PolicyRepository {
 
     if (!mappedRoles.includes('all')) {
       targetUsersQuery = targetUsersQuery.whereIn(this.db.raw('LOWER(r.code)'), mappedRoles);
+    }
+
+    if (pGender !== 'all') {
+      targetUsersQuery = targetUsersQuery.where(this.db.raw('LOWER(e.gender)'), pGender);
+    }
+
+    if (pDepts.length > 0) {
+      targetUsersQuery = targetUsersQuery.whereIn('e.current_department_id', pDepts);
     }
 
     const targetUsers = await targetUsersQuery.select(
@@ -595,7 +663,6 @@ export class PolicyRepository {
       'r.code as role_code'
     );
 
-    // Deduplicate target users
     const userMap = new Map<number, any>();
     for (const u of targetUsers) {
       const uId = u.userId || u.user_id;
@@ -624,7 +691,6 @@ export class PolicyRepository {
       }
     }
 
-    // Get acceptances for this policy
     const acceptances = await this.db('employee_policy_acceptances')
       .where('organization_id', ctx.organizationId)
       .where('policy_document_id', policyId);

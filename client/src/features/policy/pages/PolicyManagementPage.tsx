@@ -1,26 +1,22 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ShieldCheck,
+  Shield,
+  FileText,
+  Upload,
   Plus,
   Search,
-  Filter,
-  FileText,
-  Download,
-  Edit2,
-  Trash2,
-  Users,
-  Eye,
   CheckCircle2,
   Clock,
-  AlertTriangle,
-  Upload,
-  Layers,
-  Sparkles,
-  BarChart3,
-  Globe,
-  Lock,
-  ArrowUpDown,
+  Users,
+  Eye,
+  Edit2,
+  Trash2,
+  ShieldCheck,
+  AlertCircle,
+  FileSpreadsheet,
+  Download,
+  Filter,
+  UserCheck,
 } from 'lucide-react';
 import {
   usePolicies,
@@ -30,21 +26,22 @@ import {
   usePolicyAudit,
   PolicyDocument,
 } from '../api/usePolicies';
+import { useDepartments } from '@/features/settings/hooks/useDepartments';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -53,32 +50,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 const CATEGORIES = [
   'General',
   'Code of Conduct',
-  'Information Security',
-  'Leaves & Attendance',
-  'Health & Safety',
-  'Finance & Expenses',
-  'Compliance & POSH',
-  'Remote Work',
+  'Cybersecurity & InfoSec',
+  'POSH & Workplace Safety',
+  'Leave & Attendance',
+  'Payroll & Compensation',
+  'Asset & Data Usage',
+  'Executive Guidelines',
 ];
 
 const AVAILABLE_ROLES = [
   { code: 'employee', label: 'Employee' },
   { code: 'team_lead', label: 'Team Lead' },
-  { code: 'department_head', label: 'Department Head / Manager' },
-  { code: 'hr_manager', label: 'HR Manager / Support' },
-  { code: 'hr_admin', label: 'HR Admin' },
+  { code: 'department_head', label: 'Department Manager' },
+  { code: 'hr_manager', label: 'HR / Support Manager' },
   { code: 'intern', label: 'Intern' },
   { code: 'consultant', label: 'Consultant' },
+  { code: 'ceo', label: 'CEO / Executive' },
 ];
 
 export function PolicyManagementPage() {
   const { data: policies = [], isLoading } = usePolicies();
+  const { data: departments = [] } = useDepartments();
   const createPolicyMutation = useCreatePolicy();
   const updatePolicyMutation = useUpdatePolicy();
   const deletePolicyMutation = useDeletePolicy();
@@ -100,6 +97,8 @@ export function PolicyManagementPage() {
     description: '',
     version: '1.0',
     isActive: true,
+    applicableGender: 'all' as 'all' | 'male' | 'female' | 'other',
+    applicableDepartmentIds: [] as number[],
     fileUrl: '',
     fileName: '',
     fileSize: 0,
@@ -135,6 +134,8 @@ export function PolicyManagementPage() {
       description: '',
       version: '1.0',
       isActive: true,
+      applicableGender: 'all',
+      applicableDepartmentIds: [],
       fileUrl: '',
       fileName: '',
       fileSize: 0,
@@ -156,14 +157,14 @@ export function PolicyManagementPage() {
       description: policy.description || '',
       version: policy.version || '1.0',
       isActive: policy.isActive,
+      applicableGender: policy.applicableGender || 'all',
+      applicableDepartmentIds: policy.applicableDepartmentIds || [],
       fileUrl: policy.fileUrl || '',
       fileName: policy.fileName || '',
       fileSize: policy.fileSize || 0,
       fileType: policy.fileType || '',
       isMandatory,
-      selectedRoles: roleCodes.includes('all')
-        ? AVAILABLE_ROLES.map((r) => r.code)
-        : roleCodes,
+      selectedRoles: roleCodes,
     });
     setCreateModalOpen(true);
   };
@@ -172,338 +173,311 @@ export function PolicyManagementPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('File size exceeds 15MB limit.');
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
       setFormData((prev) => ({
         ...prev,
-        fileUrl: reader.result as string,
+        fileUrl: base64,
         fileName: file.name,
         fileSize: file.size,
-        fileType: file.type,
+        fileType: file.type || 'application/pdf',
       }));
+      toast.success(`Attached file: ${file.name}`);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleToggleRole = (roleCode: string, explicitChecked?: boolean) => {
-    setFormData((prev) => {
-      const exists = prev.selectedRoles.includes(roleCode);
-      const shouldInclude = explicitChecked !== undefined ? explicitChecked : !exists;
-      const nextRoles = shouldInclude
-        ? exists ? prev.selectedRoles : [...prev.selectedRoles, roleCode]
-        : prev.selectedRoles.filter((r) => r !== roleCode);
-      return { ...prev, selectedRoles: nextRoles };
-    });
+  const handleSavePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim()) {
+      toast.error('Policy title is required');
+      return;
+    }
+    if (!formData.fileUrl) {
+      toast.error('Please attach a policy document (PDF/file).');
+      return;
+    }
+    if (formData.selectedRoles.length === 0) {
+      toast.error('Please select at least one applicable role.');
+      return;
+    }
+
+    const payload = {
+      title: formData.title,
+      category: formData.category,
+      description: formData.description,
+      version: formData.version,
+      isActive: formData.isActive,
+      applicableGender: formData.applicableGender,
+      applicableDepartmentIds: formData.applicableDepartmentIds,
+      fileUrl: formData.fileUrl,
+      fileName: formData.fileName,
+      fileSize: formData.fileSize,
+      fileType: formData.fileType,
+      roleMappings: formData.selectedRoles.map((roleCode) => ({
+        roleCode,
+        isMandatory: formData.isMandatory,
+      })),
+    };
+
+    if (editingPolicy) {
+      await updatePolicyMutation.mutateAsync({ id: editingPolicy.id, payload });
+    } else {
+      await createPolicyMutation.mutateAsync(payload);
+    }
+    setCreateModalOpen(false);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (confirm('Are you sure you want to delete this policy document?')) {
+      await deletePolicyMutation.mutateAsync(id);
+    }
   };
 
   const handleSelectAllRoles = () => {
     if (formData.selectedRoles.length === AVAILABLE_ROLES.length) {
       setFormData((prev) => ({ ...prev, selectedRoles: [] }));
     } else {
-      setFormData((prev) => ({ ...prev, selectedRoles: AVAILABLE_ROLES.map((r) => r.code) }));
-    }
-  };
-
-  const handleSavePolicy = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.title.trim()) {
-      toast.error('Please enter a policy title');
-      return;
-    }
-    if (!formData.fileUrl) {
-      toast.error('Please upload a policy document file or PDF');
-      return;
-    }
-    if (formData.selectedRoles.length === 0) {
-      toast.error('Please map the policy to at least one role');
-      return;
-    }
-
-    const roleMappings = formData.selectedRoles.map((roleCode) => ({
-      roleCode,
-      isMandatory: formData.isMandatory,
-    }));
-
-    try {
-      if (editingPolicy) {
-        await updatePolicyMutation.mutateAsync({
-          id: editingPolicy.id,
-          payload: {
-            title: formData.title,
-            category: formData.category,
-            description: formData.description,
-            version: formData.version,
-            isActive: formData.isActive,
-            fileUrl: formData.fileUrl,
-            fileName: formData.fileName,
-            fileSize: formData.fileSize,
-            fileType: formData.fileType,
-            roleMappings,
-          },
-        });
-      } else {
-        await createPolicyMutation.mutateAsync({
-          title: formData.title,
-          category: formData.category,
-          description: formData.description,
-          version: formData.version,
-          isActive: formData.isActive,
-          fileUrl: formData.fileUrl,
-          fileName: formData.fileName,
-          fileSize: formData.fileSize,
-          fileType: formData.fileType,
-          roleMappings,
-        });
-      }
-      setCreateModalOpen(false);
-    } catch (err) {
-      // Error handled by mutation
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this policy? This action will remove the policy document from the library.')) {
-      await deletePolicyMutation.mutateAsync(id);
-    }
-  };
-
-  const handleDownload = (policy: any) => {
-    if (!policy.fileUrl) return;
-    if (policy.fileUrl.startsWith('data:')) {
-      const link = document.createElement('a');
-      link.href = policy.fileUrl;
-      link.download = policy.fileName || `${policy.title.replace(/\s+/g, '_')}_v${policy.version}.pdf`;
-      link.click();
-    } else {
-      window.open(policy.fileUrl, '_blank');
+      setFormData((prev) => ({
+        ...prev,
+        selectedRoles: AVAILABLE_ROLES.map((r) => r.code),
+      }));
     }
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 rounded-2xl p-5 shadow-2xs">
-        <div className="flex items-center gap-3.5">
-          <div className="size-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 ring-1 ring-primary/20">
-            <ShieldCheck className="w-6 h-6" />
+    <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto font-sans antialiased text-foreground">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 p-6 rounded-2xl text-white shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-7 h-7 text-blue-400" />
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight">Policy & Governance Master</h1>
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-foreground tracking-tight">Company Policy Management</h1>
-              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 text-[10px] font-bold">
-                Governance & Compliance
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Maintain the organization's policy library, enforce role-based mandatory sign-offs, and track real-time audit logs.
-            </p>
-          </div>
+          <p className="text-xs text-slate-300 max-w-2xl">
+            Upload organizational compliance policies, target by gender & department, set mandatory sign-offs, and monitor real-time audit trails.
+          </p>
         </div>
 
         <Button
           onClick={handleOpenCreateModal}
-          className="font-bold text-xs gap-1.5 h-9 rounded-xl shadow-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
+          className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 h-10 rounded-xl shadow-lg shadow-blue-600/30 gap-2 cursor-pointer transition-all"
         >
-          <Plus className="w-4 h-4" /> Create Policy Document
+          <Plus className="w-4 h-4" /> Create Policy
         </Button>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-border/80 bg-card p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Policies</span>
-            <FileText className="w-4 h-4 text-primary" />
-          </div>
-          <p className="text-2xl font-black text-foreground mt-2">{totalPolicies}</p>
-          <span className="text-[10px] text-muted-foreground">In organization library</span>
+      {/* Metric Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <Card className="border-border/80 bg-card rounded-xl p-4 shadow-2xs">
+          <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Library</div>
+          <div className="text-2xl font-black text-foreground mt-1">{totalPolicies}</div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{activePolicies} active enforcement</p>
         </Card>
 
-        <Card className="border-border/80 bg-card p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Active Published</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-          </div>
-          <p className="text-2xl font-black text-foreground mt-2">{activePolicies}</p>
-          <span className="text-[10px] text-emerald-600 font-semibold">Enforcing compliance</span>
+        <Card className="border-border/80 bg-card rounded-xl p-4 shadow-2xs">
+          <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Target Signers</div>
+          <div className="text-2xl font-black text-foreground mt-1">{totalTargetUsers}</div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Across active roles</p>
         </Card>
 
-        <Card className="border-border/80 bg-card p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Target Sign-offs</span>
-            <Users className="w-4 h-4 text-violet-500" />
-          </div>
-          <p className="text-2xl font-black text-foreground mt-2">{totalAcceptedUsers} / {totalTargetUsers}</p>
-          <span className="text-[10px] text-muted-foreground">Completed / Total required</span>
+        <Card className="border-border/80 bg-card rounded-xl p-4 shadow-2xs">
+          <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Accepted Logins</div>
+          <div className="text-2xl font-black text-emerald-600 mt-1">{totalAcceptedUsers}</div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Verified sign-offs</p>
         </Card>
 
-        <Card className="border-border/80 bg-card p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Compliance Rate</span>
-            <BarChart3 className="w-4 h-4 text-amber-500" />
-          </div>
-          <p className="text-2xl font-black text-foreground mt-2">{overallCompliance}%</p>
-          <span className="text-[10px] text-muted-foreground">Organization-wide avg</span>
+        <Card className="border-border/80 bg-card rounded-xl p-4 shadow-2xs">
+          <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Overall Compliance</div>
+          <div className="text-2xl font-black text-blue-600 mt-1">{overallCompliance}%</div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Organization rate</p>
         </Card>
       </div>
 
-      {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)}>
-        <TabsList className="bg-muted/60 p-1 border border-border/80 rounded-xl h-10">
-          <TabsTrigger value="library" className="rounded-lg text-xs font-bold gap-1.5 data-[state=active]:bg-card cursor-pointer">
-            <Layers className="w-3.5 h-3.5" /> Policy Library ({policies.length})
-          </TabsTrigger>
-          <TabsTrigger value="audits" className="rounded-lg text-xs font-bold gap-1.5 data-[state=active]:bg-card cursor-pointer">
-            <ShieldCheck className="w-3.5 h-3.5" /> Compliance & Audit Logs
-          </TabsTrigger>
-        </TabsList>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as any)} className="w-full">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border pb-3">
+          <TabsList className="bg-muted/50 p-1 rounded-xl">
+            <TabsTrigger value="library" className="text-xs font-bold px-4 py-1.5 rounded-lg cursor-pointer">
+              <FileText className="w-3.5 h-3.5 mr-1.5" /> Policy Library ({policies.length})
+            </TabsTrigger>
+            <TabsTrigger value="audits" className="text-xs font-bold px-4 py-1.5 rounded-lg cursor-pointer">
+              <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Compliance Audits
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Tab 1: Library */}
+          {/* Search & Category Filter */}
+          {activeTab === 'library' && (
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-64">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search policies..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-9 text-xs rounded-xl bg-card border-border/80"
+                />
+              </div>
+
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="h-9 text-xs rounded-xl w-40 bg-card border-border/80">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Categories</SelectItem>
+                  {CATEGORIES.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        {/* Tab 1: Policy Library */}
         <TabsContent value="library" className="space-y-4 mt-4">
-          {/* Controls Bar */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search policy name or details..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs rounded-xl bg-card border-border/80"
-              />
+          {isLoading ? (
+            <div className="text-center py-12 text-xs text-muted-foreground font-medium">
+              Loading policy library...
             </div>
-
-            {/* Categories */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <Button
-                variant={selectedCategory === 'All' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedCategory('All')}
-                className="h-8 text-xs font-bold rounded-lg border-border cursor-pointer"
-              >
-                All
-              </Button>
-              {CATEGORIES.map((cat) => (
-                <Button
-                  key={cat}
-                  variant={selectedCategory === cat ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setSelectedCategory(cat)}
-                  className="h-8 text-xs font-semibold rounded-lg whitespace-nowrap border-border cursor-pointer"
-                >
-                  {cat}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Policy Cards Grid */}
-          {filteredPolicies.length === 0 ? (
-            <div className="text-center py-12 bg-card border border-border/80 rounded-2xl p-8">
-              <FileText className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+          ) : filteredPolicies.length === 0 ? (
+            <div className="text-center py-16 bg-card border border-border/80 rounded-2xl p-8">
+              <FileText className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
               <h3 className="text-sm font-bold text-foreground">No Policies Found</h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                No policy documents match the current filter. Create a new document to start managing compliance.
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto mb-4">
+                No policy documents match your criteria. Click below to add a new policy.
               </p>
-              <Button onClick={handleOpenCreateModal} size="sm" className="mt-4 font-bold text-xs gap-1.5 cursor-pointer">
-                <Plus className="w-3.5 h-3.5" /> Add First Policy
+              <Button onClick={handleOpenCreateModal} size="sm" className="bg-primary text-primary-foreground font-bold text-xs">
+                <Plus className="w-3.5 h-3.5 mr-1" /> Create Policy
               </Button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredPolicies.map((policy) => {
-                const compliance = policy.stats?.compliancePercentage ?? 100;
+                const stats = policy.stats || {
+                  totalTargetUsers: 0,
+                  acceptedUsers: 0,
+                  compliancePercentage: 100,
+                };
+                const mappedRoles = policy.roleMappings?.map((rm) => rm.roleCode) || [];
+
                 return (
                   <Card
                     key={policy.id}
-                    className="border border-border/80 bg-card hover:border-primary/40 transition-all rounded-xl shadow-2xs flex flex-col justify-between"
+                    className="border-border/80 bg-card rounded-2xl shadow-2xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden"
                   >
-                    <CardHeader className="p-4 pb-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-muted/50 border-border">
-                          {policy.category}
+                    <CardHeader className="p-5 pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <Badge
+                          variant="secondary"
+                          className="bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-md"
+                        >
+                          {policy.category || 'General'}
                         </Badge>
                         <div className="flex items-center gap-1.5">
-                          <Badge
-                            className={`text-[9px] font-bold ${
-                              policy.isActive
-                                ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            {policy.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                          <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                            v{policy.version}
-                          </span>
-                        </div>
-                      </div>
-
-                      <CardTitle className="text-sm font-bold text-foreground mt-2 line-clamp-1">
-                        {policy.title}
-                      </CardTitle>
-                      {policy.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                          {policy.description}
-                        </p>
-                      )}
-                    </CardHeader>
-
-                    <CardContent className="p-4 pt-0 space-y-3">
-                      {/* Mapped Roles */}
-                      <div>
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block mb-1">
-                          Mapped Roles:
-                        </span>
-                        <div className="flex flex-wrap gap-1">
-                          {policy.roleMappings && policy.roleMappings.length > 0 ? (
-                            policy.roleMappings.map((rm, i) => (
-                              <span
-                                key={i}
-                                className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20"
-                              >
-                                {AVAILABLE_ROLES.find((r) => r.code === rm.roleCode)?.label || rm.roleCode}
-                              </span>
-                            ))
+                          <span className="text-[10px] font-bold text-muted-foreground">v{policy.version}</span>
+                          {policy.isActive ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold">
+                              Active
+                            </Badge>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground">All Employees</span>
+                            <Badge variant="outline" className="text-muted-foreground text-[10px]">
+                              Inactive
+                            </Badge>
                           )}
                         </div>
                       </div>
 
-                      {/* Compliance Progress */}
-                      <div className="pt-2 border-t border-border/60">
-                        <div className="flex items-center justify-between text-[11px] mb-1">
-                          <span className="text-muted-foreground font-semibold">Compliance</span>
-                          <span className="font-bold text-foreground">
-                            {policy.stats?.acceptedUsers || 0} / {policy.stats?.totalTargetUsers || 0} ({compliance}%)
-                          </span>
+                      <CardTitle className="text-base font-bold text-foreground mt-2 line-clamp-1">
+                        {policy.title}
+                      </CardTitle>
+                      {policy.description && (
+                        <CardDescription className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                          {policy.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+
+                    <CardContent className="p-5 pt-0 space-y-4">
+                      {/* Targeting Badges: Gender & Department */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {policy.applicableGender === 'female' ? (
+                          <Badge className="bg-pink-50 text-pink-700 border-pink-200 text-[10px] font-bold">
+                            👩 Female Only (POSH)
+                          </Badge>
+                        ) : policy.applicableGender === 'male' ? (
+                          <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold">
+                            👨 Male Only
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            👥 All Genders
+                          </Badge>
+                        )}
+
+                        {policy.applicableDepartmentIds && policy.applicableDepartmentIds.length > 0 ? (
+                          <Badge className="bg-amber-50 text-amber-800 border-amber-200 text-[10px] font-bold">
+                            🏢 {policy.applicableDepartmentIds.length} Depts
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                            🏢 All Depts
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Compliance Stats Bar */}
+                      <div className="bg-muted/40 p-3 rounded-xl space-y-1.5 border border-border/60">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[11px] font-semibold text-muted-foreground">Sign-off Compliance</span>
+                          <span className="font-bold text-foreground">{stats.compliancePercentage}%</span>
                         </div>
-                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                        <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${
-                              compliance >= 90
-                                ? 'bg-emerald-500'
-                                : compliance >= 60
-                                ? 'bg-amber-500'
-                                : 'bg-primary'
-                            }`}
-                            style={{ width: `${compliance}%` }}
+                            className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${stats.compliancePercentage}%` }}
                           />
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-0.5">
+                          <span>Accepted: {stats.acceptedUsers}</span>
+                          <span>Target: {stats.totalTargetUsers}</span>
                         </div>
                       </div>
 
-                      {/* Card Actions */}
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/60">
+                      {/* Role Chips */}
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                          Applicable Roles:
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {mappedRoles.includes('all') ? (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
+                              All Roles
+                            </span>
+                          ) : (
+                            mappedRoles.map((r) => (
+                              <span
+                                key={r}
+                                className="text-[10px] font-medium px-2 py-0.5 rounded bg-muted text-muted-foreground"
+                              >
+                                {r}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="pt-2 flex items-center justify-between border-t border-border/60">
                         <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setPreviewPolicy(policy)}
-                            className="h-7 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" /> View
-                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -513,7 +487,7 @@ export function PolicyManagementPage() {
                             }}
                             className="h-7 px-2 text-[11px] font-semibold text-primary hover:bg-primary/10 cursor-pointer"
                           >
-                            <Users className="w-3.5 h-3.5 mr-1" /> Audit
+                            <Users className="w-3.5 h-3.5 mr-1" /> Audit Log
                           </Button>
                         </div>
 
@@ -554,7 +528,6 @@ export function PolicyManagementPage() {
               </p>
             </div>
 
-            {/* Policy Selector */}
             <div className="w-full sm:w-72">
               <Select
                 value={selectedAuditPolicyId ? String(selectedAuditPolicyId) : ''}
@@ -574,7 +547,6 @@ export function PolicyManagementPage() {
             </div>
           </div>
 
-          {/* Audit List Table */}
           {selectedAuditPolicyId && auditData ? (
             <Card className="border-border/80 bg-card rounded-xl shadow-2xs overflow-hidden">
               <CardHeader className="p-4 border-b border-border/60 flex flex-row items-center justify-between">
@@ -604,7 +576,7 @@ export function PolicyManagementPage() {
                     {auditData.auditList.length === 0 ? (
                       <tr>
                         <td colSpan={7} className="text-center py-8 text-muted-foreground text-xs">
-                          No employees mapped to this policy.
+                          No target employees mapped to this policy rule.
                         </td>
                       </tr>
                     ) : (
@@ -668,7 +640,7 @@ export function PolicyManagementPage() {
               {editingPolicy ? 'Edit Policy Document' : 'Create New Policy Document'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Upload compliance documents, configure versioning, and assign mandatory role mappings.
+              Upload compliance documents, set gender & department applicability rules, and assign mandatory role mappings.
             </DialogDescription>
           </DialogHeader>
 
@@ -679,7 +651,7 @@ export function PolicyManagementPage() {
                 <Label htmlFor="title" className="text-xs font-bold">Policy Title *</Label>
                 <Input
                   id="title"
-                  placeholder="e.g. Information Security & AI Usage Policy"
+                  placeholder="e.g. POSH & Workplace Conduct Policy"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="h-9 text-xs rounded-xl"
@@ -754,28 +726,190 @@ export function PolicyManagementPage() {
             {/* Document Upload */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold">Policy Document Attachment (PDF or File) *</Label>
-              <div className="border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-4 text-center bg-muted/20 transition-colors">
-                <input
-                  type="file"
-                  id="policy-file"
-                  onChange={handleFileUpload}
-                  accept=".pdf,.doc,.docx,.png,.jpg"
-                  className="hidden"
-                />
-                <label htmlFor="policy-file" className="cursor-pointer block space-y-1">
-                  <Upload className="w-6 h-6 text-primary mx-auto opacity-80" />
-                  <span className="text-xs font-bold text-foreground block">
-                    {formData.fileName ? formData.fileName : 'Click to upload or drag & drop document'}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground block">
-                    Supports PDF, DOCX, Images (Max 15MB)
-                  </span>
-                </label>
+              <input
+                type="file"
+                id="policy-file"
+                onChange={handleFileUpload}
+                accept=".pdf,.doc,.docx,.png,.jpg"
+                className="hidden"
+              />
+
+              {formData.fileUrl ? (
+                <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="size-9 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-foreground block truncate">
+                        {formData.fileName || 'Policy Document Attached'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 block">
+                        ✓ Document Uploaded & Attached ({formData.fileSize ? `${(formData.fileSize / (1024 * 1024)).toFixed(2)} MB` : 'Ready to Publish'})
+                      </span>
+                    </div>
+                  </div>
+                  <label
+                    htmlFor="policy-file"
+                    className="cursor-pointer text-xs font-bold text-primary hover:underline px-3 py-1.5 bg-card border border-border rounded-lg shadow-2xs shrink-0"
+                  >
+                    Change File
+                  </label>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-4 text-center bg-muted/20 transition-colors">
+                  <label htmlFor="policy-file" className="cursor-pointer block space-y-1">
+                    <Upload className="w-6 h-6 text-primary mx-auto opacity-80" />
+                    <span className="text-xs font-bold text-foreground block">
+                      Click to upload or drag & drop document
+                    </span>
+                    <span className="text-[10px] text-muted-foreground block">
+                      Supports PDF, DOCX, Images (Max 15MB)
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Gender & Department Targeting Rules */}
+            <div className="space-y-3 pt-3 border-t border-border/80">
+              <div>
+                <Label className="text-xs font-bold flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-primary" />
+                  Target Audience & Applicability Rules
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Customize which employee demographics (gender & department) are required to sign this policy.
+                </p>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/20 p-3 rounded-xl border border-border/70">
+                {/* Gender Applicability */}
+                <div className="space-y-1.5">
+                  <Label htmlFor="applicableGender" className="text-xs font-bold text-foreground">
+                    Gender Applicability
+                  </Label>
+                  <Select
+                    value={formData.applicableGender}
+                    onValueChange={(val: any) => setFormData({ ...formData, applicableGender: val })}
+                  >
+                    <SelectTrigger id="applicableGender" className="h-9 text-xs rounded-xl bg-card">
+                      <SelectValue placeholder="Select Gender Applicability" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs font-medium">
+                        👥 All Genders (Everyone)
+                      </SelectItem>
+                      <SelectItem value="female" className="text-xs font-medium text-pink-600">
+                        👩 Female Employees Only (e.g. POSH)
+                      </SelectItem>
+                      <SelectItem value="male" className="text-xs font-medium text-blue-600">
+                        👨 Male Employees Only
+                      </SelectItem>
+                      <SelectItem value="other" className="text-xs font-medium">
+                        🧑 Other / Non-Binary Only
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formData.applicableGender === 'female'
+                      ? 'Notice: Male employees will NOT be prompted for this policy.'
+                      : formData.applicableGender === 'male'
+                      ? 'Notice: Female employees will NOT be prompted for this policy.'
+                      : 'Applies to all employees regardless of gender.'}
+                  </p>
+                </div>
+
+                {/* Department Applicability */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">
+                    Department Scope
+                  </Label>
+                  <Select
+                    value={formData.applicableDepartmentIds.length === 0 ? 'all' : 'custom'}
+                    onValueChange={(val) => {
+                      if (val === 'all') {
+                        setFormData({ ...formData, applicableDepartmentIds: [] });
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs rounded-xl bg-card">
+                      <SelectValue
+                        placeholder={
+                          formData.applicableDepartmentIds.length === 0
+                            ? '🏢 All Departments'
+                            : `🏢 ${formData.applicableDepartmentIds.length} Selected Dept(s)`
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs font-medium">
+                        🏢 All Departments (Company-wide)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formData.applicableDepartmentIds.length === 0
+                      ? 'Applies company-wide across all departments.'
+                      : `Applies specifically to ${formData.applicableDepartmentIds.length} designated department(s).`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Department Multiselect Buttons */}
+              {departments.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase">
+                      Select Target Departments (leave empty for All):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, applicableDepartmentIds: [] })}
+                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Reset to All Departments
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 bg-card rounded-lg border border-border/70">
+                    {departments.map((dept) => {
+                      const isSelected = formData.applicableDepartmentIds.includes(dept.id);
+                      return (
+                        <button
+                          key={dept.id}
+                          type="button"
+                          onClick={() => {
+                            const current = formData.applicableDepartmentIds;
+                            if (isSelected) {
+                              setFormData({
+                                ...formData,
+                                applicableDepartmentIds: current.filter((id) => id !== dept.id),
+                              });
+                            } else {
+                              setFormData({
+                                ...formData,
+                                applicableDepartmentIds: [...current, dept.id],
+                              });
+                            }
+                          }}
+                          className={`text-xs px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground shadow-2xs'
+                              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+                          }`}
+                        >
+                          {isSelected ? '✓ ' : '+ '}
+                          {dept.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Role-Mapping Matrix */}
-            <div className="space-y-2 pt-2 border-t border-border/80">
+            <div className="space-y-2 pt-3 border-t border-border/80">
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-xs font-bold">Role Assignment Matrix</Label>
@@ -803,110 +937,84 @@ export function PolicyManagementPage() {
                   return (
                     <div
                       key={role.code}
-                      onClick={() => handleToggleRole(role.code)}
-                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer select-none transition-colors ${
-                        isChecked
-                          ? 'bg-primary/10 border-primary/30 text-foreground'
-                          : 'bg-card border-border/60 hover:bg-muted/60 text-muted-foreground'
-                      }`}
+                      onClick={() => {
+                        if (isChecked) {
+                          setFormData({
+                            ...formData,
+                            selectedRoles: formData.selectedRoles.filter((r) => r !== role.code),
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            selectedRoles: [...formData.selectedRoles, role.code],
+                          });
+                        }
+                      }}
+                      className="flex items-center space-x-2 cursor-pointer select-none p-1 rounded hover:bg-muted/50 transition-colors"
                     >
                       <Checkbox
+                        id={`role-${role.code}`}
                         checked={isChecked}
-                        onCheckedChange={(checked) => handleToggleRole(role.code, Boolean(checked))}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setFormData({
+                              ...formData,
+                              selectedRoles: [...formData.selectedRoles, role.code],
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              selectedRoles: formData.selectedRoles.filter((r) => r !== role.code),
+                            });
+                          }
+                        }}
                         onClick={(e) => e.stopPropagation()}
                       />
-                      <span className="text-xs font-semibold">{role.label}</span>
+                      <label htmlFor={`role-${role.code}`} className="text-xs font-semibold cursor-pointer">
+                        {role.label}
+                      </label>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Mandatory Sign-off Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
-                <div>
-                  <span className="font-bold text-amber-700 dark:text-amber-400 block">Mandatory Acceptance Gate</span>
-                  <span className="text-[10px] text-amber-600/80 dark:text-amber-300/80">
-                    Blocks user dashboard until accepted upon login.
-                  </span>
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="mandatory"
+                    checked={formData.isMandatory}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isMandatory: Boolean(checked) })}
+                  />
+                  <label htmlFor="mandatory" className="text-xs font-bold cursor-pointer">
+                    Mandatory Policy (Blocks dashboard access until signed)
+                  </label>
                 </div>
-                <Switch
-                  checked={formData.isMandatory}
-                  onCheckedChange={(checked) => setFormData({ ...formData, isMandatory: checked })}
-                />
               </div>
             </div>
 
-            <DialogFooter className="pt-3 border-t border-border flex-shrink-0">
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border flex-shrink-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setCreateModalOpen(false)}
-                className="h-9 text-xs rounded-xl cursor-pointer"
+                className="text-xs font-bold h-9"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
-                className="h-9 text-xs font-bold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
+                disabled={createPolicyMutation.isPending || updatePolicyMutation.isPending}
+                className="bg-primary text-primary-foreground font-bold text-xs h-9"
               >
-                {editingPolicy ? 'Save Changes' : 'Publish Policy Document'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Preview Dialog */}
-      <Dialog open={!!previewPolicy} onOpenChange={() => setPreviewPolicy(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
-          <DialogHeader className="pb-3 border-b border-border flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle className="text-base font-bold flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-primary" /> {previewPolicy?.title}
-                </DialogTitle>
-                <DialogDescription className="text-xs mt-0.5">
-                  Version {previewPolicy?.version} • {previewPolicy?.category}
-                </DialogDescription>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDownload(previewPolicy)}
-                className="h-8 text-xs font-semibold gap-1.5 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" /> Download
+                {createPolicyMutation.isPending || updatePolicyMutation.isPending
+                  ? 'Saving...'
+                  : editingPolicy
+                  ? 'Update Policy'
+                  : 'Publish Policy'}
               </Button>
             </div>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto my-4 rounded-xl border border-border bg-muted/20 min-h-[350px] flex items-center justify-center">
-            {previewPolicy?.fileUrl ? (
-              previewPolicy.fileUrl.startsWith('data:application/pdf') || previewPolicy.fileUrl.endsWith('.pdf') ? (
-                <iframe
-                  src={previewPolicy.fileUrl}
-                  title={previewPolicy.title}
-                  className="w-full h-full min-h-[450px] rounded-lg"
-                />
-              ) : previewPolicy.fileUrl.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)$/i.test(previewPolicy.fileUrl) ? (
-                <img
-                  src={previewPolicy.fileUrl}
-                  alt={previewPolicy.title}
-                  className="max-h-[450px] object-contain mx-auto"
-                />
-              ) : (
-                <div className="p-8 text-center space-y-3">
-                  <FileText className="w-10 h-10 text-primary mx-auto opacity-70" />
-                  <p className="text-xs text-muted-foreground">{previewPolicy.description || 'Document attached.'}</p>
-                  <Button onClick={() => handleDownload(previewPolicy)} size="sm" className="font-bold text-xs gap-1.5 cursor-pointer">
-                    <Download className="w-4 h-4" /> Download Document
-                  </Button>
-                </div>
-              )
-            ) : (
-              <p className="text-xs text-muted-foreground">No file attached.</p>
-            )}
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

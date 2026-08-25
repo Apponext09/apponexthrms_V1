@@ -10,6 +10,8 @@ import {
   Lock,
   FileText,
   Check,
+  ArrowRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { usePendingPolicies, useAcceptPolicy } from '../api/usePolicies';
@@ -23,11 +25,11 @@ export function PolicyAcceptancePage() {
   const { data: pendingPolicies = [], isLoading, refetch } = usePendingPolicies();
   const acceptPolicyMutation = useAcceptPolicy();
 
-  // Scroll to bottom tracker state
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
-  const [isAgreed, setIsAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  // Sequential policy step state
   const [activePolicyIndex, setActivePolicyIndex] = useState(0);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [agreedPolicyIds, setAgreedPolicyIds] = useState<number[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
   // Blob URL cache for PDF clean rendering
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string>('');
@@ -37,6 +39,8 @@ export function PolicyAcceptancePage() {
 
   const totalPending = pendingPolicies.length;
   const currentPolicy = pendingPolicies[activePolicyIndex] || pendingPolicies[0];
+  const isCurrentAgreed = currentPolicy ? agreedPolicyIds.includes(currentPolicy.id) : false;
+  const isLastPolicy = activePolicyIndex === totalPending - 1;
 
   // Derive human-readable primary role label
   const primaryRoleCode = (user?.roles?.[0] || 'employee').toLowerCase();
@@ -134,10 +138,9 @@ export function PolicyAcceptancePage() {
     }
   };
 
-  // Reset scroll and check content fit when policy changes
+  // Reset scroll state when moving between policy steps
   useEffect(() => {
     setHasScrolledToBottom(false);
-    setIsAgreed(false);
 
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
@@ -154,7 +157,7 @@ export function PolicyAcceptancePage() {
     checkFit();
     const timer = setTimeout(checkFit, 250);
     return () => clearTimeout(timer);
-  }, [pendingPolicies, activePolicyIndex]);
+  }, [activePolicyIndex, pendingPolicies]);
 
   // IntersectionObserver on bottom marker for scroll detection
   useEffect(() => {
@@ -175,31 +178,51 @@ export function PolicyAcceptancePage() {
 
     observer.observe(marker);
     return () => observer.disconnect();
-  }, [pendingPolicies, activePolicyIndex]);
+  }, [activePolicyIndex, pendingPolicies]);
 
-  const handleAcceptAndContinue = async () => {
+  const handleToggleCurrentAgreement = () => {
+    if (!hasScrolledToBottom) {
+      toast.info('Please scroll down to the bottom of this document to unlock agreement.');
+      return;
+    }
+    if (!currentPolicy) return;
+
+    if (isCurrentAgreed) {
+      setAgreedPolicyIds((prev) => prev.filter((id) => id !== currentPolicy.id));
+    } else {
+      setAgreedPolicyIds((prev) => [...prev, currentPolicy.id]);
+    }
+  };
+
+  const handleNextOrFinish = async () => {
+    if (!currentPolicy) return;
+
     if (!hasScrolledToBottom) {
       toast.error('Please scroll to the bottom of the document first.');
       return;
     }
-    if (!isAgreed) {
-      toast.error('Please check the agreement box before continuing.');
+
+    if (!isCurrentAgreed) {
+      toast.error('Please check the agreement box for this policy before proceeding.');
       return;
     }
 
+    // Save acceptance for current policy
     setSubmitting(true);
     try {
-      for (const policy of pendingPolicies) {
-        await acceptPolicyMutation.mutateAsync(policy.id);
+      await acceptPolicyMutation.mutateAsync(currentPolicy.id);
+
+      if (!isLastPolicy) {
+        toast.success(`Policy ${activePolicyIndex + 1} of ${totalPending} agreed. Proceeding to next policy...`);
+        setActivePolicyIndex((prev) => prev + 1);
+      } else {
+        toast.success('All mandatory policies acknowledged successfully!');
+        await refetch();
+        const targetDashboard = getDestinationDashboard();
+        navigate(targetDashboard);
       }
-
-      toast.success('All mandatory policies acknowledged successfully!');
-      await refetch();
-
-      const targetDashboard = getDestinationDashboard();
-      navigate(targetDashboard);
     } catch (err: any) {
-      toast.error(err.message || 'Failed to submit acceptance. Please try again.');
+      toast.error(err.message || 'Failed to record acceptance. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -264,7 +287,7 @@ export function PolicyAcceptancePage() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Official HR Document for <span className="text-slate-700 font-semibold">{user?.email?.split('@')[0] || formatRoleLabel(primaryRoleCode)}</span>
+                Step <span className="text-blue-600 font-bold">{activePolicyIndex + 1} of {totalPending}</span>: Accept all policies to unlock system access
               </p>
             </div>
           </div>
@@ -276,28 +299,37 @@ export function PolicyAcceptancePage() {
           </div>
         </div>
 
-        {/* Multiple Policies Tab Pills (if more than 1 pending) */}
+        {/* Sequential Step Progress Bar (Multiple Policies) */}
         {totalPending > 1 && (
           <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap mr-1">
-              Policies ({totalPending}):
+              Required Sign-Offs ({totalPending}):
             </span>
-            {pendingPolicies.map((p, idx) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  setActivePolicyIndex(idx);
-                }}
-                className={`text-xs font-bold px-3 py-1 rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
-                  activePolicyIndex === idx
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-              >
-                {idx + 1}. {p.title} (v{p.version})
-              </button>
-            ))}
+            {pendingPolicies.map((p, idx) => {
+              const isAgreed = agreedPolicyIds.includes(p.id);
+              const isActive = activePolicyIndex === idx;
+
+              return (
+                <div
+                  key={p.id}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap flex items-center gap-1.5 select-none ${
+                    isAgreed
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : isActive
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200'
+                  }`}
+                >
+                  {isAgreed ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <span>{idx + 1}.</span>
+                  )}
+                  <span>{p.title}</span>
+                  <span className="text-[10px] opacity-80">(v{p.version})</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -328,12 +360,12 @@ export function PolicyAcceptancePage() {
                   />
                 </div>
               ) : (
-                <div className="p-6 text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                <div className="p-6 text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal">
                   {currentPolicy.description}
                 </div>
               )
             ) : (
-              <div className="p-6 text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+              <div className="p-6 text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-line font-normal">
                 {currentPolicy?.description || 'No document file attached.'}
               </div>
             )}
@@ -349,14 +381,14 @@ export function PolicyAcceptancePage() {
               animate={{ opacity: 1, y: 0 }}
               className="mt-2.5 flex items-center gap-1.5 text-xs text-amber-600 font-bold bg-amber-50 border border-amber-200 px-3 py-1 rounded-full shadow-2xs animate-pulse"
             >
-              <ChevronDown className="w-4 h-4" /> Scroll to the bottom of the document to unlock agreement
+              <ChevronDown className="w-4 h-4" /> Scroll to the bottom of this document to unlock agreement
             </motion.div>
           )}
         </div>
 
         {/* Bottom Acceptance Footer */}
         <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4">
-          {/* Checkbox Section: ONLY visible when scrolled to bottom */}
+          {/* Checkbox Section: ONLY visible when scrolled to bottom of current policy */}
           <div className="w-full sm:w-auto flex-1">
             <AnimatePresence>
               {hasScrolledToBottom ? (
@@ -365,13 +397,13 @@ export function PolicyAcceptancePage() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  onClick={() => setIsAgreed(!isAgreed)}
+                  onClick={handleToggleCurrentAgreement}
                   className="flex items-center gap-3 select-none cursor-pointer"
                 >
                   <Checkbox
                     id="policy-agree-checkbox"
-                    checked={isAgreed}
-                    onCheckedChange={(val) => setIsAgreed(Boolean(val))}
+                    checked={isCurrentAgreed}
+                    onCheckedChange={handleToggleCurrentAgreement}
                     onClick={(e) => e.stopPropagation()}
                     className="size-4 border-slate-400 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 cursor-pointer ring-offset-2 ring-blue-500/20"
                   />
@@ -379,13 +411,13 @@ export function PolicyAcceptancePage() {
                     htmlFor="policy-agree-checkbox"
                     className="text-xs font-bold text-slate-900 cursor-pointer hover:text-blue-600 transition-colors"
                   >
-                    I have read, understood, and accept the above policies.
+                    I have read, understood, and accept policy ({activePolicyIndex + 1}/{totalPending}): <span className="text-blue-600 font-bold">{currentPolicy?.title}</span>
                   </label>
                 </motion.div>
               ) : (
-                <div className="flex items-center gap-2 text-xs text-slate-500">
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
                   <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>Please scroll down through the document to enable acknowledgement.</span>
+                  <span>Please scroll down through policy #{activePolicyIndex + 1} to enable acknowledgement.</span>
                 </div>
               )}
             </AnimatePresence>
@@ -404,17 +436,21 @@ export function PolicyAcceptancePage() {
 
             <Button
               type="button"
-              disabled={!hasScrolledToBottom || !isAgreed || submitting}
-              onClick={handleAcceptAndContinue}
+              disabled={!hasScrolledToBottom || !isCurrentAgreed || submitting}
+              onClick={handleNextOrFinish}
               className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg px-5 h-9 gap-1.5 shadow-sm shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
             >
               {submitting ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recording...
                 </>
+              ) : isLastPolicy ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" /> Complete All & Proceed
+                </>
               ) : (
                 <>
-                  <Check className="w-3.5 h-3.5 stroke-[3]" /> Accept & Continue
+                  Next Policy <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </Button>
