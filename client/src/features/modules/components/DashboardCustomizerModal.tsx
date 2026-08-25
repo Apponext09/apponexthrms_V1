@@ -229,7 +229,7 @@ export function DashboardCustomizerModal({ open, onOpenChange }: DashboardCustom
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="space-y-0.5 min-w-0 pr-3">
                       <p className="text-xs font-bold text-foreground truncate">Top KPI Metric Cards</p>
-                      <p className="text-[11px] text-muted-foreground">Grid of active headcount, depts & presence stats</p>
+                      <p className="text-[11px] text-muted-foreground">Grid of active employee count, depts & presence stats</p>
                     </div>
                     <Switch
                       checked={config.showKpiSection}
@@ -238,11 +238,11 @@ export function DashboardCustomizerModal({ open, onOpenChange }: DashboardCustom
                   </CardContent>
                 </Card>
 
-                {/* Headcount Growth Trend */}
+                {/* Employee Growth Trend */}
                 <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="space-y-0.5 min-w-0 pr-3">
-                      <p className="text-xs font-bold text-foreground truncate">Headcount Growth Trend</p>
+                      <p className="text-xs font-bold text-foreground truncate">Employee Growth Trend</p>
                       <p className="text-[11px] text-muted-foreground">Area trajectory chart for month-on-month growth</p>
                     </div>
                     <Switch

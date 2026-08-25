@@ -184,7 +184,13 @@ export function InternSidebar({ open, onOpenChange }: InternSidebarProps) {
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-foreground">
-                    {user?.firstName} {user?.lastName}
+                    {(() => {
+                      const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+                      let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+                      if (lName.toLowerCase() === 'user') lName = '';
+                      const full = `${fName} ${lName}`.trim();
+                      return full || fName || 'User';
+                    })()}
                   </p>
                   <p className="truncate text-[10px] text-muted-foreground">Intern</p>
                 </div>

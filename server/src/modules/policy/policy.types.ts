@@ -12,6 +12,8 @@ export interface PolicyDocument {
   fileType?: string | null;
   version: string;
   isActive: boolean;
+  applicableGender?: 'all' | 'male' | 'female' | 'other';
+  applicableDepartmentIds?: number[];
   createdBy: number;
   updatedBy?: number | null;
   createdAt: Date;
@@ -60,6 +62,8 @@ export interface CreatePolicyDTO {
   fileType?: string;
   version?: string;
   isActive?: boolean;
+  applicableGender?: 'all' | 'male' | 'female' | 'other';
+  applicableDepartmentIds?: number[];
   roleMappings: Array<{
     roleCode: string;
     isMandatory?: boolean;
@@ -76,6 +80,8 @@ export interface UpdatePolicyDTO {
   fileType?: string;
   version?: string;
   isActive?: boolean;
+  applicableGender?: 'all' | 'male' | 'female' | 'other';
+  applicableDepartmentIds?: number[];
   roleMappings?: Array<{
     roleCode: string;
     isMandatory?: boolean;

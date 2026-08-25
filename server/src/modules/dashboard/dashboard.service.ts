@@ -87,16 +87,13 @@ export class AdminDashboardService {
     const targetCompanyId = companyId || companyIdVal;
 
     // 2. Query KPIs
-    // Total Employees
-    let empQuery = db('employees').whereNull('deleted_at').where('status', '!=', 'terminated');
+    // Total Active Employees
+    let empQuery = db('employees')
+      .whereNull('deleted_at')
+      .whereIn('status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+
     if (targetCompanyId) {
-      empQuery = empQuery.where((b) => {
-        if (isParent) {
-          b.where('company_id', targetCompanyId).orWhereNull('company_id');
-        } else {
-          b.where('company_id', targetCompanyId);
-        }
-      });
+      empQuery = empQuery.where('company_id', targetCompanyId);
     } else {
       empQuery = empQuery.where('organization_id', organizationId);
     }
@@ -164,6 +161,7 @@ export class AdminDashboardService {
 
       let trendQuery = db('employees')
         .whereNull('deleted_at')
+        .whereIn('status', ['active', 'probation', 'confirmed', 'onboarding', 'Active'])
         .where(function () {
           this.where('date_of_joining', '<=', cutoffIso)
             .orWhere(function () {
@@ -189,7 +187,7 @@ export class AdminDashboardService {
       .leftJoin('employees', function () {
         this.on('departments.id', '=', 'employees.current_department_id')
           .andOnNull('employees.deleted_at')
-          .andOn('employees.status', '!=', db.raw('?', ['terminated']));
+          .andOnIn('employees.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
       })
       .select('departments.id', 'departments.name')
       .count('employees.id as emp_count')

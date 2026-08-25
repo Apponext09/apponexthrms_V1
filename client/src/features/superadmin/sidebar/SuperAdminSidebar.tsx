@@ -32,6 +32,21 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
     navigate('/login');
   };
 
+  const getFullName = () => {
+    const fName = user?.firstName || (user as any)?.first_name || '';
+    const lName = user?.lastName || (user as any)?.last_name || '';
+    const combined = `${fName} ${lName}`.trim();
+    if (combined) return combined;
+    if ((user as any)?.name) return (user as any).name;
+    return 'Super Admin';
+  };
+
+  const getInitials = () => {
+    const fName = user?.firstName || (user as any)?.first_name || '';
+    const lName = user?.lastName || (user as any)?.last_name || '';
+    return `${fName?.[0] || ''}${lName?.[0] || ''}`.toUpperCase() || 'SA';
+  };
+
   const navItems = [
     {
       name: 'Dashboard',
@@ -63,9 +78,7 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
     },
   ];
 
-  const getInitials = () => {
-    return `${user?.firstName?.[0] || 'S'}${user?.lastName?.[0] || 'A'}`.toUpperCase();
-  };
+
 
   return (
     <motion.div
@@ -198,7 +211,7 @@ export function SuperAdminSidebar({ open, onOpenChange }: SuperAdminSidebarProps
                       className="overflow-hidden text-left leading-tight"
                     >
                       <p className="text-[12px] font-semibold text-foreground truncate group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-                        {user?.firstName || 'Super'} {user?.lastName || 'Admin'}
+                        {getFullName()}
                       </p>
                     </motion.div>
                   )}
