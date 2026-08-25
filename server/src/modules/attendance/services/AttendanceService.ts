@@ -1216,6 +1216,9 @@ export class AttendanceService {
           this.where('company_id', companyId).orWhereNull('company_id');
         });
       }
+      if (departmentIds && departmentIds.length > 0) {
+        employeeQuery = employeeQuery.whereIn('current_department_id', departmentIds);
+      }
       const employeeRows = await employeeQuery.select('id', 'first_name', 'last_name', 'employee_code').orderBy('first_name', 'asc').catch(() => []);
       const formattedEmployees = employeeRows.map((e: any) => ({
         id: String(e.id),

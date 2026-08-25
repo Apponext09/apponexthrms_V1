@@ -227,8 +227,8 @@ export class RolePolicyService {
     }
 
     const assignments = await this.db('policy_assignments').where({ policy_id: policy.id }).select('role_code');
-    const assignedRoles = assignments.length > 0 
-      ? assignments.map((a: any) => a.roleCode || a.role_code) 
+    const assignedRoles = assignments.length > 0
+      ? assignments.map((a: any) => a.roleCode || a.role_code)
       : [policy.roleCode || policy.role_code || roleCode];
 
     return {
@@ -307,7 +307,7 @@ export class RolePolicyService {
       const assignments = await this.db('policy_assignments')
         .whereIn('policy_id', policyIds)
         .select('policy_id', 'role_code');
-      
+
       assignments.forEach((a: any) => {
         const polId = a.policyId || a.policy_id;
         const rCode = a.roleCode || a.role_code;
@@ -465,13 +465,13 @@ export class RolePolicyService {
       policy_accepted: 1,
       policy_accepted_at: now,
       updated_at: now,
-    }).catch(() => {});
+    }).catch(() => { });
 
     await this.db('super_admins').where({ id: userId }).orWhere({ user_id: userId }).update({
       policy_accepted: 1,
       policy_accepted_at: now,
       updated_at: now,
-    }).catch(() => {});
+    }).catch(() => { });
 
     return {
       success: true,

@@ -170,7 +170,9 @@ const HR_NAV = [
   {
     label: 'OPERATIONS',
     items: [
-      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
+      { name: 'Policy Management', href: '/policies/manage', icon: Shield },
+      { name: 'My Policies', href: '/employee/policies', icon: FileText },
+
       { name: 'Workflows', href: '/hr/workflow', icon: GitBranch },
       { name: 'Settings', href: '/hr/settings', icon: Settings },
     ],

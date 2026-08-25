@@ -21,7 +21,7 @@ export async function up(knex: Knex): Promise<void> {
     });
   }
 
-  // 2. Modify status enum to VARCHAR(50)
+  // 2. Modify status enum to VARCHAR(50) to support all status variations without truncation
   await knex.raw(`
     ALTER TABLE leave_applications 
     MODIFY COLUMN status VARCHAR(50) DEFAULT 'draft'
@@ -29,23 +29,28 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.schema.alterTable('leave_applications', (table) => {
-    table.dropForeign(['pool_leave_type_id']);
-    table.dropForeign(['l1_approved_by']);
-    table.dropForeign(['l2_approved_by']);
-    
-    table.dropColumn('pool_leave_type_id');
-    table.dropColumn('l1_approved_by');
-    table.dropColumn('l1_approval_date');
-    table.dropColumn('l2_approved_by');
-    table.dropColumn('l2_approval_date');
-    table.dropColumn('lop_days');
-  });
+  const hasTable = await knex.schema.hasTable('leave_applications');
+  if (!hasTable) return;
+
+  const hasLop = await knex.schema.hasColumn('leave_applications', 'lop_days');
+  if (hasLop) {
+    await knex.schema.alterTable('leave_applications', (table) => {
+      table.dropForeign(['pool_leave_type_id']);
+      table.dropForeign(['l1_approved_by']);
+      table.dropForeign(['l2_approved_by']);
+      
+      table.dropColumn('pool_leave_type_id');
+      table.dropColumn('l1_approved_by');
+      table.dropColumn('l1_approval_date');
+      table.dropColumn('l2_approved_by');
+      table.dropColumn('l2_approval_date');
+      table.dropColumn('lop_days');
+    });
+  }
 
   // Revert enum
   await knex.raw(`
     ALTER TABLE leave_applications 
-    MODIFY COLUMN status ENUM('draft', 'submitted', 'pending', 'approved', 'rejected', 'cancelled', 'withdrawn') 
-    DEFAULT 'draft'
+    MODIFY COLUMN status VARCHAR(50) DEFAULT 'draft'
   `);
 }

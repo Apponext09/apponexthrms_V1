@@ -17,11 +17,12 @@ import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useLocations } from '../../settings/hooks/useLocations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
-import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { useEmployeeCustomizationStore } from '../store/employeeCustomizationStore';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
+import { usePolicies } from '@/features/policy/api/usePolicies';
 
 export const createEmployeeCode = (nextNum: number = 1) =>
   `EMP${String(nextNum % 1000).padStart(3, '0')}`;
@@ -43,6 +44,7 @@ export function EmployeeCreateModal({
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { employeeTypes } = useEmployeeTypes();
   const { employeeStatuses } = useEmployeeStatuses();
+  const { data: allOrgPolicies = [] } = usePolicies();
   const nextCodeNum = (allEmployees?.length || 0) + 1;
 
   const [formData, setFormData] = useState({
@@ -657,6 +659,40 @@ export function EmployeeCreateModal({
                         Controls which portal they log into.{' '}
                         <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
                       </p>
+
+                      {/* Mapped Policy Preview */}
+                      {(() => {
+                        const targetRole = formData.accessRole || 'employee';
+                        const mappedPolicies = allOrgPolicies.filter((p) => {
+                          if (!p.isActive) return false;
+                          const roleCodes = p.roleMappings?.map((rm) => rm.roleCode.toLowerCase()) || [];
+                          return roleCodes.includes('all') || roleCodes.includes(targetRole.toLowerCase());
+                        });
+
+                        if (mappedPolicies.length === 0) return null;
+
+                        return (
+                          <div className="mt-2.5 p-3 rounded-xl bg-primary/5 border border-primary/20 text-xs space-y-1.5">
+                            <div className="flex items-center gap-1.5 font-bold text-primary">
+                              <ShieldCheck className="w-4 h-4" />
+                              <span>Applicable Mandatory Policies ({mappedPolicies.length}):</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                              {mappedPolicies.map((p) => (
+                                <span
+                                  key={p.id}
+                                  className="text-[10px] px-2 py-0.5 rounded-md bg-card border border-primary/25 text-foreground font-semibold flex items-center gap-1 shadow-2xs"
+                                >
+                                  {p.title} <span className="text-muted-foreground font-normal">v{p.version}</span>
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">
+                              * The new employee will be prompted to acknowledge these policies upon first login.
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Reporting Manager */}

@@ -17,7 +17,14 @@ interface ApprovalItem {
   category: 'regularization' | 'leave' | 'swap';
 }
 
-export default function ApprovalsPage() {
+interface ApprovalsPageProps {
+  // When false, HR-stage regularization requests are excluded — used on the manager's
+  // own approvals inbox so a request the manager just approved (which advances to
+  // pending_hr) doesn't immediately reappear as if nothing happened.
+  includeHrQueue?: boolean;
+}
+
+export default function ApprovalsPage({ includeHrQueue = true }: ApprovalsPageProps) {
   const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,10 +53,11 @@ export default function ApprovalsPage() {
 
     // 2. Attendance Regularizations
     try {
-      const [mgrRes, hrRes] = await Promise.allSettled([
-        apiClient.get('/attendance/regularization/manager-pending'),
-        apiClient.get('/attendance/regularization/hr-pending'),
-      ]);
+      const requests = [apiClient.get('/attendance/regularization/manager-pending')];
+      if (includeHrQueue) {
+        requests.push(apiClient.get('/attendance/regularization/hr-pending'));
+      }
+      const [mgrRes, hrRes] = await Promise.allSettled(requests);
 
       const seenRegIds = new Set<number>();
       const addRegItems = (items: any[]) => {
@@ -77,7 +85,7 @@ export default function ApprovalsPage() {
       if (mgrRes.status === 'fulfilled' && Array.isArray(mgrRes.value.data?.data)) {
         addRegItems(mgrRes.value.data.data);
       }
-      if (hrRes.status === 'fulfilled' && Array.isArray(hrRes.value.data?.data)) {
+      if (hrRes && hrRes.status === 'fulfilled' && Array.isArray(hrRes.value.data?.data)) {
         addRegItems(hrRes.value.data.data);
       }
     } catch (err) {

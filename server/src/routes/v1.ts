@@ -12,6 +12,7 @@ import notificationRoutes from '../modules/notifications/notification.routes';
 import settingsRoutes from '../modules/settings/settings.routes';
 import assetRoutes from '../modules/asset/asset.routes';
 import recruitmentRoutes from '../modules/recruitment/recruitment.routes';
+import policyRoutes from '../modules/policy/policy.routes';
 import workflowRoutes from '../modules/workflow/workflow.routes';
 import marketplaceRoutes from '../modules/marketplace/marketplace.routes';
 import licensingRoutes from '../modules/licensing/licensing.routes';
@@ -61,6 +62,7 @@ router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
+router.use('/policies', policyRoutes);
 
 /**
  * Public Job Reference Routes (no auth required)

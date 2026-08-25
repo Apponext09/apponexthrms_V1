@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Filter, RotateCcw, ChevronDown, Check, Building2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,10 +41,10 @@ export function AttendanceReportFilter({
   const [isTabularView, setIsTabularView] = useState<boolean>(true);
   const [workType, setWorkType] = useState<'choose' | 'full_day' | 'half_day' | 'both'>('choose');
   const [statusFilters, setStatusFilters] = useState({
-    present: true,
-    leave: true,
-    absent: true,
-    expected: true,
+    present: false,
+    leave: false,
+    absent: false,
+    expected: false,
     lateMark: false,
     shortWorkingHour: false,
     breakLog: false,
@@ -52,10 +52,22 @@ export function AttendanceReportFilter({
   });
 
   const { data: optionsData, isLoading: isLoadingOptions } = useReportFilterOptions(
-    selectedCompany || null
+    selectedCompany || null,
+    selectedDepartments
   );
 
   const isCompanySelected = !!selectedCompany;
+
+  // Narrow the Employee list to the selected department(s); drop any
+  // previously selected employee who no longer belongs to that department.
+  const isFirstDeptRender = useRef(true);
+  useEffect(() => {
+    if (isFirstDeptRender.current) {
+      isFirstDeptRender.current = false;
+      return;
+    }
+    setSelectedEmployees([]);
+  }, [selectedDepartments]);
 
   const handleSelectCompany = (id: string, name: string) => {
     if (selectedCompany === id) {
@@ -100,14 +112,14 @@ export function AttendanceReportFilter({
     setIsTabularView(true);
     setWorkType('choose');
     setStatusFilters({
-      present: true,
-      leave: true,
-      absent: true,
-      expected: true,
+      present: false,
+      leave: false,
+      absent: false,
+      expected: false,
       lateMark: false,
       shortWorkingHour: false,
-      breakLog: true,
-      halfDay: true,
+      breakLog: false,
+      halfDay: false,
     });
   };
 
