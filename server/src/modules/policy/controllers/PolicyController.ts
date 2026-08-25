@@ -27,6 +27,56 @@ export class PolicyController {
   };
 
   /**
+   * GET /policies/categories
+   */
+  listCategories = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const categories = await this.policyService.listCategories(req.ctx);
+      res.json({
+        success: true,
+        data: categories,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /policies/categories
+   */
+  createCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const { name, description } = req.body;
+      const category = await this.policyService.createCategory(req.ctx, name, description);
+      res.status(201).json({
+        success: true,
+        data: category,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * DELETE /policies/categories/:id
+   */
+  deleteCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const id = parseInt(req.params.id, 10);
+      await this.policyService.deleteCategory(req.ctx, id);
+      res.json({
+        success: true,
+        message: 'Policy category deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
    * GET /policies/:id
    */
   getPolicy = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

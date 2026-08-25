@@ -17,14 +17,20 @@ import {
   Download,
   Filter,
   UserCheck,
+  FolderPlus,
+  Tag,
 } from 'lucide-react';
 import {
   usePolicies,
+  usePolicyCategories,
+  useCreatePolicyCategory,
+  useDeletePolicyCategory,
   useCreatePolicy,
   useUpdatePolicy,
   useDeletePolicy,
   usePolicyAudit,
   PolicyDocument,
+  PolicyCategory,
 } from '../api/usePolicies';
 import { useDepartments } from '@/features/settings/hooks/useDepartments';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -52,7 +58,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-const CATEGORIES = [
+const DEFAULT_FALLBACK_CATEGORIES = [
   'General',
   'Code of Conduct',
   'Cybersecurity & InfoSec',
@@ -75,10 +81,15 @@ const AVAILABLE_ROLES = [
 
 export function PolicyManagementPage() {
   const { data: policies = [], isLoading } = usePolicies();
+  const { data: categories = [], isLoading: categoriesLoading } = usePolicyCategories();
   const { data: departments = [] } = useDepartments();
+
   const createPolicyMutation = useCreatePolicy();
   const updatePolicyMutation = useUpdatePolicy();
   const deletePolicyMutation = useDeletePolicy();
+
+  const createCategoryMutation = useCreatePolicyCategory();
+  const deleteCategoryMutation = useDeletePolicyCategory();
 
   const [activeTab, setActiveTab] = useState<'library' | 'audits'>('library');
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,9 +97,17 @@ export function PolicyManagementPage() {
 
   // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
   const [editingPolicy, setEditingPolicy] = useState<PolicyDocument | null>(null);
   const [selectedAuditPolicyId, setSelectedAuditPolicyId] = useState<number | null>(null);
-  const [previewPolicy, setPreviewPolicy] = useState<PolicyDocument | null>(null);
+
+  // Combine dynamic categories with fallback if empty
+  const categoryList: Array<{ id?: number; name: string }> =
+    categories.length > 0
+      ? categories
+      : DEFAULT_FALLBACK_CATEGORIES.map((name) => ({ name }));
 
   // Form state
   const [formData, setFormData] = useState({
@@ -130,7 +149,7 @@ export function PolicyManagementPage() {
     setEditingPolicy(null);
     setFormData({
       title: '',
-      category: 'General',
+      category: categoryList[0]?.name || 'General',
       description: '',
       version: '1.0',
       isActive: true,
@@ -153,7 +172,7 @@ export function PolicyManagementPage() {
 
     setFormData({
       title: policy.title,
-      category: policy.category || 'General',
+      category: policy.category || categoryList[0]?.name || 'General',
       description: policy.description || '',
       version: policy.version || '1.0',
       isActive: policy.isActive,
@@ -240,6 +259,34 @@ export function PolicyManagementPage() {
     }
   };
 
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Please enter a category name.');
+      return;
+    }
+    try {
+      await createCategoryMutation.mutateAsync({ name: newCategoryName.trim() });
+      setFormData((prev) => ({ ...prev, category: newCategoryName.trim() }));
+      setNewCategoryName('');
+      toast.success(`Category "${newCategoryName.trim()}" created!`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create category');
+    }
+  };
+
+  const handleDeleteCategory = async (id: number, name: string) => {
+    if (confirm(`Are you sure you want to delete category "${name}"?`)) {
+      try {
+        await deleteCategoryMutation.mutateAsync(id);
+        if (formData.category === name) {
+          setFormData((prev) => ({ ...prev, category: categoryList[0]?.name || 'General' }));
+        }
+      } catch (e: any) {
+        toast.error(e.message || 'Failed to delete category');
+      }
+    }
+  };
+
   const handleSelectAllRoles = () => {
     if (formData.selectedRoles.length === AVAILABLE_ROLES.length) {
       setFormData((prev) => ({ ...prev, selectedRoles: [] }));
@@ -265,12 +312,22 @@ export function PolicyManagementPage() {
           </p>
         </div>
 
-        <Button
-          onClick={handleOpenCreateModal}
-          className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 h-10 rounded-xl shadow-lg shadow-blue-600/30 gap-2 cursor-pointer transition-all"
-        >
-          <Plus className="w-4 h-4" /> Create Policy
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setCategoryManagerOpen(true)}
+            variant="outline"
+            className="border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-white font-bold text-xs px-3 h-10 rounded-xl gap-1.5 cursor-pointer"
+          >
+            <Tag className="w-4 h-4 text-blue-400" /> Categories
+          </Button>
+
+          <Button
+            onClick={handleOpenCreateModal}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 h-10 rounded-xl shadow-lg shadow-blue-600/30 gap-2 cursor-pointer transition-all"
+          >
+            <Plus className="w-4 h-4" /> Create Policy
+          </Button>
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -326,14 +383,14 @@ export function PolicyManagementPage() {
               </div>
 
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="h-9 text-xs rounded-xl w-40 bg-card border-border/80">
+                <SelectTrigger className="h-9 text-xs rounded-xl w-44 bg-card border-border/80">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="All">All Categories</SelectItem>
-                  {CATEGORIES.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                  {categoryList.map((cat) => (
+                    <SelectItem key={cat.id || cat.name} value={cat.name}>
+                      {cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -631,6 +688,69 @@ export function PolicyManagementPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Dynamic Category Manager Modal */}
+      <Dialog open={categoryManagerOpen} onOpenChange={setCategoryManagerOpen}>
+        <DialogContent className="max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <FolderPlus className="w-5 h-5 text-primary" /> Manage Policy Categories
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Create custom policy categories or delete existing ones.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Create New Category */}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="New Category Name (e.g. Remote Work)"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                className="h-9 text-xs rounded-xl"
+              />
+              <Button
+                type="button"
+                onClick={handleCreateCategory}
+                disabled={createCategoryMutation.isPending || !newCategoryName.trim()}
+                className="h-9 text-xs font-bold bg-primary text-primary-foreground shrink-0 cursor-pointer"
+              >
+                Add
+              </Button>
+            </div>
+
+            {/* Category List with Delete Button */}
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                Dynamic Categories ({categoryList.length}):
+              </span>
+              {categoryList.map((cat) => (
+                <div
+                  key={cat.id || cat.name}
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-muted/30 border border-border/60 hover:bg-muted/50 transition-colors text-xs font-semibold"
+                >
+                  <span className="text-foreground">{cat.name}</span>
+                  {cat.id ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteCategory(cat.id!, cat.name)}
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive cursor-pointer"
+                      title={`Delete category ${cat.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground italic px-2 py-0.5 bg-muted rounded">Default</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Create / Edit Policy Modal */}
       <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
         <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col p-6 overflow-hidden">
@@ -659,21 +779,40 @@ export function PolicyManagementPage() {
                 />
               </div>
 
+              {/* Dynamic Category Selector */}
               <div className="space-y-1.5">
-                <Label htmlFor="category" className="text-xs font-bold">Category</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="category" className="text-xs font-bold">Category</Label>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryManagerOpen(true)}
+                    className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" /> Manage Categories
+                  </button>
+                </div>
                 <Select
                   value={formData.category}
-                  onValueChange={(val) => setFormData({ ...formData, category: val })}
+                  onValueChange={(val) => {
+                    if (val === '__ADD_NEW__') {
+                      setCategoryManagerOpen(true);
+                    } else {
+                      setFormData({ ...formData, category: val });
+                    }
+                  }}
                 >
                   <SelectTrigger id="category" className="h-9 text-xs rounded-xl">
                     <SelectValue placeholder="Select Category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs">
-                        {c}
+                    {categoryList.map((c) => (
+                      <SelectItem key={c.id || c.name} value={c.name} className="text-xs font-medium">
+                        {c.name}
                       </SelectItem>
                     ))}
+                    <SelectItem value="__ADD_NEW__" className="text-xs font-bold text-primary border-t border-border mt-1 pt-1">
+                      + Create New Category...
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
