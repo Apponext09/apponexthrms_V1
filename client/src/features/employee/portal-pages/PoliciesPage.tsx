@@ -1,3 +1,4 @@
-import { EmployeeMyPoliciesPage } from '@/features/policies/pages/EmployeeMyPoliciesPage';
+import { EmployeeMyPoliciesPage } from '../../policies/pages/EmployeeMyPoliciesPage';
 
 export default EmployeeMyPoliciesPage;
+

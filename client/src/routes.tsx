@@ -203,6 +203,8 @@ import FeedbackPage from './features/employee/portal-pages/FeedbackPage';
 import LearningPage from './features/employee/portal-pages/LearningPage';
 import TrainingPage from './features/employee/portal-pages/TrainingPage';
 import PoliciesPage from './features/employee/portal-pages/PoliciesPage';
+import { EmployeeMyPoliciesPage } from './features/policies/pages/EmployeeMyPoliciesPage';
+
 import AnnouncementsPage from './features/employee/portal-pages/AnnouncementsPage';
 import SurveysPage from './features/employee/portal-pages/SurveysPage';
 import HelpdeskPage from './features/employee/portal-pages/HelpdeskPage';
