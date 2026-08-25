@@ -38,7 +38,7 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
     ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
   );
 
-  const isEmployeePortal = location.pathname.startsWith('/employee') && !isAdminOrHR;
+  const isEmployeePortal = !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const { consumePermission } = useConsumeEditPermission();
 
@@ -84,24 +84,18 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
           </div>
           {/* --- Header action button --- */}
           {!isEditing ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className={isEmployeePortal && !editUnlocked
-              ? "h-7 text-xs font-bold gap-1.5 px-3 bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
-              : "h-7 text-xs font-bold gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"}
-            onClick={() => {
-              if (isEmployeePortal && !editUnlocked) {
-                setIsRequestModalOpen(true);
-              } else {
-                setIsEditing(true);
-              }
-            }}
-          >
-            {isEmployeePortal && !editUnlocked ? <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> : <Edit className="w-3.5 h-3.5" />}
-            {isEmployeePortal && !editUnlocked ? 'Request Edit' : 'Edit Personal Info'}
-          </Button>
-        ) : (
+            (!isEmployeePortal || editUnlocked) && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs font-bold gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                onClick={() => setIsEditing(true)}
+              >
+                <Edit className="w-3.5 h-3.5" />
+                Edit Personal Info
+              </Button>
+            )
+          ) : (
           <div className="flex gap-2">
             <Button
               variant="outline"

@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
-import { apiClient } from '@/lib/api';
+import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
+import { useProfileEditPermission } from '../hooks/useProfileEditPermission';
+import { apiClient } from '@/config/api';
+
 import {
   User,
   Mail,
@@ -12,6 +15,7 @@ import {
   MapPin,
   Building,
   Lock,
+  Unlock,
   Camera,
   HeartHandshake,
   Home,
@@ -33,17 +37,21 @@ import {
   Edit2,
   DollarSign,
   Layers,
-  Lock as LockIcon,
   FileEdit,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
+
 import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 import { ProfileEditRequestModal } from '../components/ProfileEditRequestModal';
+import { EmployeeDetailsCombined } from '../components/EmployeeDetailsCombined';
 import { EmployeePayrollDetail } from '../components/EmployeePayrollDetail';
 import { EmployeeCheckInSetting } from '../components/EmployeeCheckInSetting';
 import { EmployeeRolesInfo } from '../components/EmployeeRolesInfo';
 import { EmployeeDocuments } from '../components/EmployeeDocuments';
 import { EmployeeStatutoryDetails } from '../components/EmployeeStatutoryDetails';
 import { MyProfileRequestsView } from '../components/MyProfileRequestsView';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,7 +59,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { showToast, toast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 // ── Role Color Theme Presets (4 Themes Per Role) ──────────────────────────────
@@ -300,45 +308,19 @@ const ROLE_THEMES: Record<string, ThemePreset[]> = {
   ],
 };
 
-interface PersonalFormState {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  mobile: string;
-  currentAddress: string;
-  permanentAddress: string;
-  city: string;
-  state: string;
-  postalCode: string;
-}
-
-interface EmergencyFormState {
-  fatherName: string;
-  motherName: string;
-  spouseName: string;
-  emergencyContactName: string;
-  emergencyContactRelation: string;
-  emergencyContactPhone: string;
-}
-
 export default function ProfilePage() {
-  const { user, updateUser } = useAuthStore();
-  const employeeId = user?.employeeId || user?.id || 0;
-  const { employee, isLoading, refetch } = useEmployee(employeeId);
+  const { user } = useAuthStore();
+  const resolvedEmpId = Number(user?.employeeId || user?.id || 0);
+  const { employee, isLoading, refetch } = useEmployee(resolvedEmpId || 'me');
+  const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
 
   const [activeTab, setActiveTab] = useState<
-    'personal' | 'job' | 'emergency' | 'payroll' | 'documents' | 'statutory' | 'checkin' | 'roles' | 'security' | 'requests'
-  >('personal');
+    'details' | 'payroll' | 'documents' | 'statutory' | 'checkin' | 'roles'
+  >('details');
 
-  const [avatar, setAvatar] = useState<string | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Success Modal Popup State
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successModalMessage, setSuccessModalMessage] = useState('');
+  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   // HR Profile Face Photo Update Request State
   const [hrRequestOpen, setHrRequestOpen] = useState(false);
@@ -346,7 +328,13 @@ export default function ProfilePage() {
   const [hrRequestSending, setHrRequestSending] = useState(false);
   const [hrRequestSent, setHrRequestSent] = useState(false);
 
-  const cacheKeySuffix = user?.id || user?.employeeId || 'me';
+  // Password Security Form State
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   // Role Determination & Theme Switcher
   const roleCode = (user?.accessRole || user?.role || user?.roles?.[0] || 'employee').toLowerCase();
@@ -372,223 +360,29 @@ export default function ProfilePage() {
 
   const theme = availableThemes[selectedThemeIndex] || availableThemes[0];
 
-  const [personalForm, setPersonalForm] = useState<PersonalFormState>(() => {
-    const cached = localStorage.getItem(`emp_personal_info_${cacheKeySuffix}`);
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {}
-    }
-    return {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      mobile: '',
-      currentAddress: '',
-      permanentAddress: '',
-      city: '',
-      state: '',
-      postalCode: '',
-    };
-  });
+  // Check user roles to determine if user is Admin/HR
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = user?.role || user?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
 
-  const [emergencyForm, setEmergencyForm] = useState<EmergencyFormState>(() => {
-    const cached = localStorage.getItem(`emp_emergency_info_${cacheKeySuffix}`);
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {}
-    }
-    return {
-      fatherName: '',
-      motherName: '',
-      spouseName: '',
-      emergencyContactName: '',
-      emergencyContactRelation: '',
-      emergencyContactPhone: '',
-    };
-  });
+  // Employee portal edit lock applies ONLY to non-admin users in self-service portal
+  const isEmployeePortal = !isAdminOrHR;
 
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
+  // ── Profile Edit Permission Hook (Locks Profile Until HR Approval) ──
+  const { editUnlocked, approvedRequestId, unlockedSection, refetch: refetchPermissions } = useProfileEditPermission(resolvedEmpId);
 
-  const [isSaving, setIsSaving] = useState(false);
+  // Lock status definitions:
+  // Admin/HR always unlocked; Employees locked by default until editUnlocked is true via approved HR edit request.
+  const isPhotoUnlocked = !isEmployeePortal || editUnlocked;
+  const isBasicUnlocked = !isEmployeePortal || editUnlocked;
+  const isPersonalUnlocked = !isEmployeePortal || editUnlocked;
+  const isProfessionalUnlocked = !isEmployeePortal || editUnlocked;
+  const isStatutoryUnlocked = !isEmployeePortal || editUnlocked;
 
-  // Sync Base Employee Data from DB
-  useEffect(() => {
-    if (employee) {
-      setPersonalForm((prev: PersonalFormState) => {
-        const updated = {
-          ...prev,
-          firstName: employee.firstName || prev.firstName || user?.firstName || '',
-          lastName: employee.lastName || prev.lastName || user?.lastName || '',
-          email: employee.email || prev.email || user?.email || '',
-          phone: employee.phone || prev.phone || '',
-          mobile: employee.mobile || prev.mobile || '',
-        };
-        try {
-          localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated));
-        } catch (e) {}
-        return updated;
-      });
-
-      const storedAvatar = employee.avatarUrl || (employee as any).avatar_url;
-      if (storedAvatar) {
-        setAvatar(storedAvatar);
-      } else {
-        const cached = localStorage.getItem(`emp_avatar_${cacheKeySuffix}`);
-        if (cached) setAvatar(cached);
-      }
-    }
-  }, [employee, user, cacheKeySuffix]);
-
-  // Fetch Additional Personal Info from DB API
-  const fetchPersonalInfo = async () => {
-    if (!employeeId) return;
-    try {
-      const res = await apiClient.get(`/employees/${employeeId}/personal-info`);
-      if (res.data?.data) {
-        const info = res.data.data;
-
-        const fetchedFather = info.fatherName ?? info.father_name ?? '';
-        const fetchedMother = info.motherName ?? info.mother_name ?? '';
-        const fetchedSpouse = info.spouseName ?? info.spouse_name ?? '';
-        const fetchedCurrentAddr = info.currentAddress ?? info.current_address ?? '';
-        const fetchedPermAddr = info.permanentAddress ?? info.permanent_address ?? '';
-        const fetchedCity = info.city ?? '';
-        const fetchedState = info.state ?? '';
-        const fetchedPostalCode = info.postalCode ?? info.postal_code ?? '';
-
-        setEmergencyForm((prev: EmergencyFormState) => {
-          const updated = {
-            ...prev,
-            fatherName: fetchedFather || prev.fatherName,
-            motherName: fetchedMother || prev.motherName,
-            spouseName: fetchedSpouse || prev.spouseName,
-          };
-          try {
-            localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(updated));
-          } catch (e) {}
-          return updated;
-        });
-
-        setPersonalForm((prev: PersonalFormState) => {
-          const updated = {
-            ...prev,
-            currentAddress: fetchedCurrentAddr || prev.currentAddress,
-            permanentAddress: fetchedPermAddr || prev.permanentAddress,
-            city: fetchedCity || prev.city,
-            state: fetchedState || prev.state,
-            postalCode: fetchedPostalCode || prev.postalCode,
-          };
-          try {
-            localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated));
-          } catch (e) {}
-          return updated;
-        });
-      }
-    } catch (err) {}
-  };
-
-  useEffect(() => {
-    fetchPersonalInfo();
-  }, [employeeId]);
-
-  const handleAvatarClick = () => {
-    setIsPhotoModalOpen(true);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
-        setAvatar(base64);
-
-        try {
-          localStorage.setItem(`emp_avatar_${user?.id || 'me'}`, base64);
-          if (employeeId) {
-            await apiClient.put(`/employees/${employeeId}`, { avatarUrl: base64, avatar_url: base64 });
-          }
-          updateUser({ avatarUrl: base64 });
-          toast.success('Profile photo saved to database!');
-        } catch (err) {
-          toast.success('Profile photo updated!');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Save Personal Contact & Address Details to DB
-  const handleSavePersonal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    try {
-      if (employeeId) {
-        await apiClient.put(`/employees/${employeeId}`, {
-          firstName: personalForm.firstName,
-          lastName: personalForm.lastName,
-          phone: personalForm.phone,
-          mobile: personalForm.mobile,
-        });
-
-        await apiClient.put(`/employees/${employeeId}/personal-info`, {
-          currentAddress: personalForm.currentAddress,
-          permanentAddress: personalForm.permanentAddress,
-          city: personalForm.city,
-          state: personalForm.state,
-          postalCode: personalForm.postalCode,
-        });
-
-        localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(personalForm));
-
-        updateUser({
-          firstName: personalForm.firstName,
-          lastName: personalForm.lastName,
-        });
-
-        setSuccessModalMessage('Your personal contact & residential address details have been updated in the database.');
-        setShowSuccessModal(true);
-        refetch();
-      }
-    } catch (err: any) {
-      toast.success('Personal details saved!');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Save Emergency Details to DB
-  const handleSaveEmergency = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    try {
-      if (employeeId) {
-        await apiClient.put(`/employees/${employeeId}/personal-info`, {
-          fatherName: emergencyForm.fatherName,
-          motherName: emergencyForm.motherName,
-          spouseName: emergencyForm.spouseName,
-        });
-
-        localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(emergencyForm));
-
-        setSuccessModalMessage('Your family & emergency contact details have been updated in the database.');
-        setShowSuccessModal(true);
-      }
-    } catch (err: any) {
-      toast.success('Emergency details saved!');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Change Account Password
+  // Change Account Password handler
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordForm.currentPassword) {
@@ -604,19 +398,19 @@ export default function ProfilePage() {
       return;
     }
 
-    setIsSaving(true);
+    setIsSavingPassword(true);
     try {
-      if (employeeId) {
-        await apiClient.put(`/employees/${employeeId}`, {
+      if (resolvedEmpId) {
+        await apiClient.put(`/employees/${resolvedEmpId}`, {
           password: passwordForm.newPassword,
         });
-        toast.success('Password updated in database! Use your new password on next login.');
+        toast.success('Password updated successfully! Use your new password on next login.');
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to update password.');
     } finally {
-      setIsSaving(false);
+      setIsSavingPassword(false);
     }
   };
 
@@ -629,7 +423,7 @@ export default function ProfilePage() {
         message: `Employee ${empName} (${empCode}) requested biometric profile photo update approval for face recognition. ${
           hrRequestNote ? `Note: ${hrRequestNote}` : ''
         }`,
-        employeeId,
+        employeeId: resolvedEmpId,
         priority: 'normal',
       }).catch(() => {});
 
@@ -637,12 +431,12 @@ export default function ProfilePage() {
       setHrRequestNote('');
       toast.success('Request submitted to HR / Admin for approval!', {
         description: 'HR will review your request and update your biometric profile photo.',
-        duration: 7000,
+        duration: 6000,
       });
       setTimeout(() => {
         setHrRequestSent(false);
         setHrRequestOpen(false);
-      }, 3500);
+      }, 3000);
     } catch (err: any) {
       toast.error('Failed to submit request to HR. Please try again.');
     } finally {
@@ -650,28 +444,48 @@ export default function ProfilePage() {
     }
   };
 
-  // Clean real DB values
-  const empName = employee
-    ? `${employee.firstName} ${employee.lastName}`.trim()
-    : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`.trim();
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-3">
+        <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-muted-foreground font-medium">Loading employee profile...</p>
+      </div>
+    );
+  }
 
-  const empCode = employee?.employeeCode
-    || (employee as any)?.emp_code
-    || (employee?.id ? `EMP-${String(employee.id).padStart(4, '0')}` : 'EMP-0001');
+  const activeEmp = employee || ({
+    id: resolvedEmpId,
+    firstName: user?.firstName || 'Employee',
+    lastName: user?.lastName || '',
+    email: user?.email || '',
+    employeeCode: user?.employeeCode || `EMP-${resolvedEmpId}`,
+    status: 'active',
+  } as any);
 
-  const designation = employee?.designation || (employee as any)?.designation_name || 'Software Engineer & Technical Executive';
-  const department = employee?.department || (employee as any)?.department_name || 'Engineering & Product Development';
-  const employmentType = employee?.employmentType || (employee as any)?.emp_type || (employee as any)?.employment_type || 'Full-Time Permanent';
-  const joiningDate = employee?.dateOfJoining || (employee as any)?.date_of_joining || '2024-01-15';
-  const initials = empName.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
+  const empName = [activeEmp.firstName, activeEmp.middleName, activeEmp.lastName].filter(Boolean).join(' ');
+  const empCode = activeEmp.employeeCode || `EMP-${activeEmp.id}`;
+  const initials = `${activeEmp.firstName?.[0] || ''}${activeEmp.lastName?.[0] || ''}`.toUpperCase() || 'EMP';
+  const status = (activeEmp.status || 'active').toLowerCase();
 
-  const reportingManager = (employee as any)?.reportingManagerName
-    || (employee as any)?.manager_name
-    || 'Harsh Vardhan (Engineering Manager)';
+  const roleLabel =
+    activeEmp.accessRole === 'hr_manager'
+      ? 'HR Manager'
+      : activeEmp.accessRole === 'department_head'
+      ? 'Department Manager'
+      : activeEmp.accessRole === 'team_lead'
+      ? 'Team Lead'
+      : activeEmp.accessRole === 'intern'
+      ? 'Intern'
+      : activeEmp.accessRole === 'consultant'
+      ? 'Consultant'
+      : 'Employee';
+
+  const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (activeEmp as any)?.jobTitle || roleLabel;
+  const department = activeEmp.department || (activeEmp as any)?.department_name || (user as any)?.departmentName || 'Engineering & Product';
+  const employmentType = activeEmp.employmentType || (activeEmp as any)?.emp_type || 'Full-Time Permanent';
 
   return (
-    <div className="max-w-6xl mx-auto py-4 px-3 sm:px-6 space-y-6 font-sans">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+    <div className="max-w-7xl mx-auto py-4 px-3 sm:px-6 space-y-6 font-sans">
 
       {/* ─────────────────────────────────────────────────────────────
           HERO BANNER CARD (EXACT SKETCH LAYOUT: LEFT AVATAR OVERLAP)
@@ -681,8 +495,8 @@ export default function ProfilePage() {
         <div className={cn("h-32 sm:h-36 w-full bg-gradient-to-r relative overflow-hidden transition-all duration-500", theme.gradient)}>
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.15),transparent_60%)]" />
 
-          {/* Top Right Controls: 4-Color Theme Selector + Status Badge */}
-          <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+          {/* Top Right Controls: 4-Color Theme Selector + Lock Status Badge */}
+          <div className="absolute top-3 right-3 flex flex-wrap items-center gap-2 z-10">
             {/* Color Theme Selector Pill */}
             <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md border border-white/20 p-1 rounded-full text-white text-xs">
               <Palette className="w-3.5 h-3.5 ml-1.5 mr-0.5 text-white/80" />
@@ -705,10 +519,8 @@ export default function ProfilePage() {
               ))}
             </div>
 
-            <Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-[11px] px-2.5 py-0.5 font-semibold backdrop-blur-md flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              {employee?.status || 'Active Employee'}
-            </Badge>
+           
+            
           </div>
         </div>
 
@@ -716,10 +528,23 @@ export default function ProfilePage() {
         <div className="px-6 pb-6 pt-0 relative flex flex-col sm:flex-row items-start sm:items-end gap-5">
           
           {/* Left Large Avatar Overlapping Banner */}
-          <div className="-mt-14 sm:-mt-16 relative group cursor-pointer shrink-0" onClick={handleAvatarClick}>
+          <div
+            className={cn(
+              "-mt-14 sm:-mt-16 relative group shrink-0",
+              isPhotoUnlocked ? "cursor-pointer" : "cursor-not-allowed"
+            )}
+            onClick={() => {
+              if (isPhotoUnlocked) {
+                setIsPhotoModalOpen(true);
+              } else {
+                setIsEditRequestModalOpen(true);
+              }
+            }}
+            title={isPhotoUnlocked ? 'Click to upload/change photo' : 'Profile photo is locked. Request edit approval from HR to change.'}
+          >
             <div className="p-1 rounded-full bg-card shadow-xl inline-block relative">
               <Avatar className="h-24 w-24 sm:h-28 sm:w-28 border-4 border-card rounded-full overflow-hidden shadow-inner">
-                <AvatarImage src={avatar || undefined} className="object-cover" />
+                <AvatarImage src={activeEmp.avatarUrl || (activeEmp as any).avatar_url || undefined} alt={empName} className="object-cover" />
                 <AvatarFallback className={cn("text-white font-black text-2xl bg-gradient-to-br", theme.gradient)}>
                   {initials}
                 </AvatarFallback>
@@ -728,17 +553,17 @@ export default function ProfilePage() {
               {/* Upload Hover Overlay */}
               <div className="absolute inset-1 rounded-full bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-0.5 backdrop-blur-xs">
                 <Camera className="w-4 h-4" />
-                <span>Upload</span>
+                <span>{isPhotoUnlocked ? 'Upload' : 'Request Lock'}</span>
               </div>
 
               {/* Camera Trigger Icon */}
               <div className={cn("absolute bottom-1 right-1 h-6.5 w-6.5 rounded-full text-white border-2 border-card shadow-sm flex items-center justify-center transition-transform group-hover:scale-110", theme.buttonBg)}>
-                <Camera className="w-3.5 h-3.5" />
+                {isPhotoUnlocked ? <Camera className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
               </div>
             </div>
           </div>
 
-          {/* Profile Basic Information on Right of Avatar */}
+          {/* Profile Information Beside Avatar */}
           <div className="flex-1 min-w-0 space-y-1 sm:mb-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
@@ -752,7 +577,7 @@ export default function ProfilePage() {
 
             <p className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
               <Briefcase className={cn("w-3.5 h-3.5 shrink-0", theme.textAccent)} />
-              <span>{designation}</span>
+              <span>{jobTitle}</span>
             </p>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium pt-0.5">
@@ -761,26 +586,33 @@ export default function ProfilePage() {
               </span>
               <span className="text-border">•</span>
               <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0" /> {personalForm.city || 'India'}
+                <Shield className={cn("w-3.5 h-3.5 shrink-0", theme.textAccent)} /> Role: <strong>{roleLabel}</strong>
               </span>
-              <span className="text-border">•</span>
-              <span className={cn("flex items-center gap-1 font-semibold", theme.textAccent)}>
-                <Mail className="w-3.5 h-3.5 shrink-0" /> {personalForm.email || employee?.email}
-              </span>
+              {activeEmp.email && (
+                <>
+                  <span className="text-border">•</span>
+                  <span className={cn("flex items-center gap-1 font-semibold", theme.textAccent)}>
+                    <Mail className="w-3.5 h-3.5 shrink-0" /> {activeEmp.email}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Header Action Buttons */}
+          {/* Action Buttons: Request Profile Edit & HR Photo Request */}
           <div className="flex flex-wrap items-center gap-2 sm:mb-1 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsEditRequestModalOpen(true)}
-              className={cn("text-xs font-bold h-8.5 px-3.5 rounded-xl border gap-1.5 shadow-xs cursor-pointer", theme.borderAccent, theme.textAccent, theme.bgAccent)}
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-              Request Profile Edit
-            </Button>
+            {isEmployeePortal && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsEditRequestModalOpen(true)}
+                className={cn("text-xs font-bold h-8.5 px-3.5 rounded-xl border gap-1.5 shadow-xs cursor-pointer", theme.borderAccent, theme.textAccent, theme.bgAccent)}
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                Request Profile Edit
+              </Button>
+            )}
+
             <Button
               size="sm"
               variant="outline"
@@ -796,6 +628,10 @@ export default function ProfilePage() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
+          PROFILE LOCK STATUS NOTICE BANNER (when in Employee Portal)
+      ───────────────────────────────────────────────────────────── */}
+      
+      {/* ─────────────────────────────────────────────────────────────
           MAIN CONTENT SPLIT LAYOUT (EXACT SKETCH STRUCTURE)
           LEFT SIDEBAR NAVIGATION TABS (Stacked with Chevrons >)
           RIGHT MAIN DATA PANEL
@@ -810,16 +646,12 @@ export default function ProfilePage() {
             </h3>
 
             {[
-              { id: 'personal',  label: 'Personal Details',      icon: User,           desc: 'Contact info & address' },
-              { id: 'job',       label: 'Professional Details',  icon: Briefcase,      desc: 'Official HR parameters (Locked 🔒)' },
-              { id: 'emergency', label: 'Family & Emergency',    icon: HeartHandshake, desc: 'Next of kin & contacts' },
+              { id: 'details',   label: 'Combined Details',      icon: User,           desc: 'Basic, Contact & Emergency info' },
               { id: 'payroll',   label: 'Payroll & Salary',     icon: DollarSign,     desc: 'Salary structure & revisions' },
               { id: 'documents', label: 'Documents',            icon: Layers,         desc: 'KYC & Employee certificates' },
-              { id: 'statutory', label: 'Statutory Details',    icon: LockIcon,       desc: 'PF, ESI, PAN & Tax parameters' },
+              { id: 'statutory', label: 'Statutory Details',    icon: Lock,           desc: 'PF, ESI, PAN & Tax parameters' },
               { id: 'checkin',   label: 'Check-In Mode',        icon: MapPin,         desc: 'Geo & Attendance settings' },
               { id: 'roles',     label: 'Roles & Permissions',  icon: Shield,         desc: 'Access roles & permissions' },
-              { id: 'security',  label: 'Account Security',      icon: ShieldCheck,    desc: 'Password & credentials' },
-              { id: 'requests',  label: 'My Edit Requests',     icon: FileEdit,       desc: 'Profile edit request history' },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -856,7 +688,7 @@ export default function ProfilePage() {
           {/* Employment Summary Sidebar Card */}
           <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm text-xs space-y-2.5">
             <h4 className="font-bold text-foreground flex items-center gap-1.5">
-              <Shield className={cn("w-4 h-4", theme.textAccent)} /> Employment Parameters
+              <Shield className={cn("w-4 h-4", theme.textAccent)} /> Employment Summary
             </h4>
             <div className="space-y-2 text-muted-foreground text-[11px]">
               <div className="flex justify-between py-1 border-b border-border/40">
@@ -868,12 +700,10 @@ export default function ProfilePage() {
                 <span className="font-semibold text-foreground truncate max-w-[110px]">{employmentType}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-border/40">
-                <span>Joined Date:</span>
-                <span className="font-semibold text-foreground">{joiningDate}</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span>Reporting Manager:</span>
-                <span className="font-semibold text-foreground truncate max-w-[120px]">{reportingManager}</span>
+                <span>Profile Lock:</span>
+                <span className={cn("font-bold", editUnlocked ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                  {editUnlocked ? 'Unlocked 🔓' : 'Locked 🔒'}
+                </span>
               </div>
             </div>
           </div>
@@ -882,389 +712,55 @@ export default function ProfilePage() {
         {/* RIGHT MAIN DATA PANEL */}
         <div className="flex-1 min-w-0">
 
-          {/* TAB 1: PERSONAL INFORMATION */}
-          {activeTab === 'personal' && (
-            <Card className="bg-card border-border/80 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="border-b border-border/60 py-3.5 px-5 bg-muted/20">
-                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <User className={cn("w-4 h-4", theme.textAccent)} /> Personal Contact & Address Details
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Update your contact phone numbers and current residential address stored in the database.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="p-5">
-                <form onSubmit={handleSavePersonal} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">First Name *</Label>
-                      <Input
-                        required
-                        value={personalForm.firstName}
-                        onChange={(e) => setPersonalForm({ ...personalForm, firstName: e.target.value })}
-                        className="bg-background border-border text-foreground text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Last Name *</Label>
-                      <Input
-                        required
-                        value={personalForm.lastName}
-                        onChange={(e) => setPersonalForm({ ...personalForm, lastName: e.target.value })}
-                        className="bg-background border-border text-foreground text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    {/* READ ONLY LOCKED EMAIL */}
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1">
-                        Work Email Address <Lock className="w-3 h-3 text-amber-500" /> (Read-Only)
-                      </Label>
-                      <Input
-                        disabled
-                        value={personalForm.email || employee?.email || ''}
-                        className="bg-muted border-border text-muted-foreground text-xs font-mono rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Mobile Phone Number</Label>
-                      <Input
-                        value={personalForm.mobile}
-                        onChange={(e) => setPersonalForm({ ...personalForm, mobile: e.target.value })}
-                        className="bg-background border-border text-foreground text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Secondary Phone Number</Label>
-                      <Input
-                        value={personalForm.phone}
-                        onChange={(e) => setPersonalForm({ ...personalForm, phone: e.target.value })}
-                        className="bg-background border-border text-foreground text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">City</Label>
-                      <Input
-                        value={personalForm.city}
-                        onChange={(e) => setPersonalForm({ ...personalForm, city: e.target.value })}
-                        className="bg-background border-border text-foreground text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1 sm:col-span-2">
-                      <Label className="text-xs font-bold text-foreground">Current Residential Address</Label>
-                      <Input
-                        value={personalForm.currentAddress}
-                        onChange={(e) => setPersonalForm({ ...personalForm, currentAddress: e.target.value })}
-                        className="bg-background border-border text-foreground text-xs rounded-xl h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-3 border-t border-border/60">
-                    <Button
-                      type="submit"
-                      disabled={isSaving}
-                      className={cn("font-bold text-xs h-8.5 px-5 rounded-full shadow-xs gap-1.5 cursor-pointer", theme.buttonBg)}
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      {isSaving ? 'Saving...' : 'Save Personal Details'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* TAB 2: JOB & ORG PARAMETERS */}
-          {activeTab === 'job' && (
-            <Card className="bg-card border-border/80 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="border-b border-border/60 py-3.5 px-5 bg-muted/20">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Briefcase className={cn("w-4 h-4", theme.textAccent)} /> Official Job & Employment Parameters
-                  </CardTitle>
-                  <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold gap-1">
-                    <Lock className="w-3 h-3" /> Read-Only Admin Data
-                  </Badge>
-                </div>
-                <CardDescription className="text-xs text-muted-foreground">
-                  These fields are set by HR Administration in the database and cannot be modified directly.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="p-5 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-muted/20 p-4 rounded-xl border border-border/40 text-xs">
-                  
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Employee Code <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={empCode} className="bg-muted text-foreground font-mono font-bold text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Official Email <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={employee?.email || user?.email || ''} className="bg-muted text-foreground font-mono text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Designation / Title <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={designation} className="bg-muted text-foreground font-semibold text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Department <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={department} className="bg-muted text-foreground font-semibold text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Employment Type <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={employmentType} className="bg-muted text-foreground font-semibold text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Date of Joining <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={joiningDate} className="bg-muted text-foreground font-semibold text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Reporting Manager <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={reportingManager} className="bg-muted text-foreground font-semibold text-xs h-9 border-border" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <span className="text-muted-foreground block text-[10px] font-bold uppercase flex items-center gap-1">
-                      Organization / Tenant <Lock className="w-2.5 h-2.5 text-amber-500" />
-                    </span>
-                    <Input disabled value={user?.organizationName || 'Apponext HRMS'} className="bg-muted text-foreground font-semibold text-xs h-9 border-border" />
-                  </div>
-
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* TAB 3: FAMILY & EMERGENCY CONTACTS */}
-          {activeTab === 'emergency' && (
-            <Card className="bg-card border-border/80 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="border-b border-border/60 py-3.5 px-5 bg-muted/20">
-                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <HeartHandshake className="w-4 h-4 text-rose-500" /> Family & Emergency Contacts
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Provide family member names and emergency contact details for official records.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="p-5">
-                <form onSubmit={handleSaveEmergency} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Father's Name</Label>
-                      <Input
-                        value={emergencyForm.fatherName}
-                        onChange={(e) => setEmergencyForm({ ...emergencyForm, fatherName: e.target.value })}
-                        className="bg-background border-border text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Mother's Name</Label>
-                      <Input
-                        value={emergencyForm.motherName}
-                        onChange={(e) => setEmergencyForm({ ...emergencyForm, motherName: e.target.value })}
-                        className="bg-background border-border text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Spouse's Name</Label>
-                      <Input
-                        value={emergencyForm.spouseName}
-                        onChange={(e) => setEmergencyForm({ ...emergencyForm, spouseName: e.target.value })}
-                        className="bg-background border-border text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Emergency Contact Name</Label>
-                      <Input
-                        value={emergencyForm.emergencyContactName}
-                        onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactName: e.target.value })}
-                        className="bg-background border-border text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Emergency Contact Relation</Label>
-                      <Input
-                        value={emergencyForm.emergencyContactRelation}
-                        onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactRelation: e.target.value })}
-                        className="bg-background border-border text-xs rounded-xl h-9"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs font-bold text-foreground">Emergency Phone Number</Label>
-                      <Input
-                        value={emergencyForm.emergencyContactPhone}
-                        onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactPhone: e.target.value })}
-                        className="bg-background border-border text-xs rounded-xl h-9"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-3 border-t border-border/60">
-                    <Button
-                      type="submit"
-                      disabled={isSaving}
-                      className={cn("font-bold text-xs h-8.5 px-5 rounded-full shadow-xs gap-1.5 cursor-pointer", theme.buttonBg)}
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      {isSaving ? 'Saving...' : 'Save Emergency Details'}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* TAB 4: PAYROLL & SALARY DETAILS */}
-          {activeTab === 'payroll' && (
-            <EmployeePayrollDetail employee={employee || ({ id: employeeId } as any)} />
-          )}
-
-          {/* TAB 5: DOCUMENTS & CERTIFICATES */}
-          {activeTab === 'documents' && (
-            <EmployeeDocuments employeeId={Number(employeeId)} readOnly={true} />
-          )}
-
-          {/* TAB 6: STATUTORY DETAILS (PF / ESI / PAN) */}
-          {activeTab === 'statutory' && (
-            <EmployeeStatutoryDetails
-              employee={employee || ({ id: employeeId } as any)}
-              onUpdate={() => refetch()}
-              editUnlocked={false}
+          {/* TAB 1: COMBINED DETAILS (WITH FULL EDIT LOCK LOGIC) */}
+          {activeTab === 'details' && (
+            <EmployeeDetailsCombined
+              employee={activeEmp}
+              isEditingBasicInfo={isEditingBasicInfo}
+              onEditBasicInfoToggle={setIsEditingBasicInfo}
+              editUnlocked={isPersonalUnlocked}
+              isBasicUnlocked={isBasicUnlocked}
+              isPersonalUnlocked={isPersonalUnlocked}
+              isProfessionalUnlocked={isProfessionalUnlocked}
+              isStatutoryUnlocked={isStatutoryUnlocked}
+              approvedRequestId={approvedRequestId}
             />
           )}
 
-          {/* TAB 7: ATTENDANCE & CHECK-IN MODE */}
+          {/* TAB 2: PAYROLL & SALARY DETAILS */}
+          {activeTab === 'payroll' && (
+            <EmployeePayrollDetail employee={activeEmp} />
+          )}
+
+          {/* TAB 3: DOCUMENTS & CERTIFICATES */}
+          {activeTab === 'documents' && (
+            <EmployeeDocuments employeeId={resolvedEmpId} readOnly={isEmployeePortal} />
+          )}
+
+          {/* TAB 4: STATUTORY DETAILS */}
+          {activeTab === 'statutory' && (
+            <EmployeeStatutoryDetails
+              employee={activeEmp}
+              onUpdate={() => refetch()}
+              editUnlocked={isStatutoryUnlocked}
+              approvedRequestId={approvedRequestId}
+            />
+          )}
+
+          {/* TAB 5: ATTENDANCE & CHECK-IN MODE */}
           {activeTab === 'checkin' && (
-            <EmployeeCheckInSetting employee={employee || ({ id: employeeId } as any)} readOnly={true} />
+            <EmployeeCheckInSetting employee={activeEmp} readOnly={isEmployeePortal} />
           )}
 
-          {/* TAB 8: ROLES & SYSTEM PERMISSIONS */}
+          {/* TAB 6: ROLES & PERMISSIONS */}
           {activeTab === 'roles' && (
-            <EmployeeRolesInfo employee={employee || ({ id: employeeId } as any)} onRoleUpdate={() => refetch()} readOnly={true} />
+            <EmployeeRolesInfo employee={activeEmp} onRoleUpdate={() => refetch()} readOnly={isEmployeePortal} />
           )}
 
-          {/* TAB 9: ACCOUNT SECURITY & PASSWORD */}
-          {activeTab === 'security' && (
-            <Card className="bg-card border-border/80 shadow-sm rounded-2xl overflow-hidden">
-              <CardHeader className="border-b border-border/60 py-3.5 px-5 bg-muted/20">
-                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" /> Account Security & Credentials
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Update your account password stored in the database.
-                </CardDescription>
-              </CardHeader>
 
-              <CardContent className="p-5">
-                <form onSubmit={handlePasswordSubmit} className="max-w-sm space-y-3.5">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">Current Password</Label>
-                    <Input
-                      type="password"
-                      required
-                      value={passwordForm.currentPassword}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                      className="bg-background border-border text-xs rounded-xl h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">New Password</Label>
-                    <Input
-                      type="password"
-                      required
-                      value={passwordForm.newPassword}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                      className="bg-background border-border text-xs rounded-xl h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold">Confirm New Password</Label>
-                    <Input
-                      type="password"
-                      required
-                      value={passwordForm.confirmPassword}
-                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                      className="bg-background border-border text-xs rounded-xl h-9"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    disabled={isSaving}
-                    className={cn("font-bold text-xs h-8.5 px-5 rounded-full shadow-xs gap-1.5 cursor-pointer", theme.buttonBg)}
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                    {isSaving ? 'Updating...' : 'Update Password'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* TAB 10: MY PROFILE EDIT REQUESTS & APPROVALS */}
-          {activeTab === 'requests' && (
-            <MyProfileRequestsView employeeId={Number(employeeId)} />
-          )}
 
         </div>
       </div>
-
-      {/* SUCCESS CONFIRMATION MODAL */}
-      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
-        <DialogContent className="sm:max-w-xs rounded-2xl p-5 bg-card border-border">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle className="w-5 h-5 text-emerald-500" /> Database Profile Saved
-            </DialogTitle>
-          </DialogHeader>
-
-          <p className="text-xs text-muted-foreground pt-1">{successModalMessage}</p>
-
-          <div className="flex justify-end pt-3">
-            <Button
-              onClick={() => setShowSuccessModal(false)}
-              className={cn("text-xs font-bold h-8 px-4 rounded-full cursor-pointer", theme.buttonBg)}
-            >
-              OK
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* HR / ADMIN BIOMETRIC PROFILE UPDATE REQUEST MODAL */}
       <Dialog open={hrRequestOpen} onOpenChange={setHrRequestOpen}>
@@ -1324,22 +820,23 @@ export default function ProfilePage() {
       </Dialog>
 
       {/* REQUEST PROFILE EDIT MODAL */}
-      {employee && (
+      {activeEmp && (
         <ProfileEditRequestModal
           open={isEditRequestModalOpen}
           onOpenChange={setIsEditRequestModalOpen}
-          employee={employee as any}
+          employee={activeEmp}
         />
       )}
 
       {/* ── LIVE CAMERA PHOTO CAPTURE MODAL ────────────────────────────── */}
-      {employee && (
+      {activeEmp && (
         <ProfilePhotoUploadModal
           open={isPhotoModalOpen}
           onOpenChange={setIsPhotoModalOpen}
-          employee={employee as any}
+          employee={activeEmp}
           onSuccess={() => {
             refetch();
+            refetchPermissions();
           }}
         />
       )}

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Lock, Send, AlertCircle, ShieldAlert, FileText } from 'lucide-react';
+import { Lock, Send, AlertCircle, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Employee } from '@/types';
 
@@ -27,7 +27,6 @@ export function ProfileEditRequestModal({
 }: ProfileEditRequestModalProps) {
   const queryClient = useQueryClient();
 
-  const [targetArea, setTargetArea] = useState('Personal Details & Address');
   const [reason, setReason] = useState('');
 
   const submitMutation = useMutation({
@@ -39,14 +38,15 @@ export function ProfileEditRequestModal({
       const res = await apiClient.post('/employees/profile-update-requests', {
         employeeId: employee.id,
         requestType: 'personal_info',
-        targetArea,
+        targetArea: 'Complete Profile (All Sections)',
         reason: reason.trim(),
       });
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Profile edit request submitted successfully! Sent to CEO & HR for approval.');
+      toast.success('Profile edit request submitted to HR! Once approved, your entire profile will unlock for editing.');
       queryClient.invalidateQueries({ queryKey: ['employee-all-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['my-edit-permission'] });
       setReason('');
       onOpenChange(false);
     },
@@ -70,34 +70,24 @@ export function ProfileEditRequestModal({
               <Lock className="w-5 h-5" />
             </span>
             <DialogTitle className="text-base font-black text-foreground">
-              Request Profile Edit
+              Request Full Profile Edit Approval
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs font-medium text-muted-foreground">
-            Direct editing is locked to preserve official record integrity. Submit your requested updates along with your reason for CEO & HR review.
+            Submit a single request to HR for approval to unlock your entire profile for editing.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2 text-xs">
-          {/* Target Section Dropdown */}
-          <div className="space-y-1.5">
-            <label className="font-bold text-foreground block">Profile Section / Category</label>
-            <select
-              value={targetArea}
-              onChange={(e) => setTargetArea(e.target.value)}
-              className="w-full h-9 rounded-xl bg-background border border-border px-3 font-semibold text-xs text-foreground focus:ring-2 focus:ring-primary/20 outline-none"
-            >
-              <option value="Basic Information">Basic Information</option>
-              <option value="Personal Details & Address">Personal Details & Address</option>
-              <option value="Professional & Education Info">Professional & Education Info</option>
-              <option value="Statutory & Banking Details">Statutory & Banking Details</option>
-              <option value="Profile Photo">Profile Photo</option>
-            </select>
+          {/* Information Banner explaining Whole Profile Unlock */}
+          <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-start gap-2.5 text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+            <FileText className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <span>
+              This request asks HR for approval to unlock your <strong>Complete Profile</strong> (Personal Info, Address, Emergency Contacts, Statutory Parameters & Profile Photo). Upon HR approval, your whole profile can be edited.
+            </span>
           </div>
 
-
-
-          {/* Reason for Edit */}
+          {/* Reason for Request */}
           <div className="space-y-1.5">
             <label className="font-bold text-foreground block">
               Reason for Request <span className="text-rose-500">*</span>
@@ -107,16 +97,16 @@ export function ProfileEditRequestModal({
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Provide the official reason for requesting this edit (e.g. Relocation to new house, new SIM card, typo correction)..."
+              placeholder="Provide the reason for requesting profile edit (e.g. Relocation, updated phone number, address change, typo correction)..."
               className="w-full rounded-xl bg-background border border-border p-3 text-xs text-foreground font-medium placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/20 outline-none resize-none"
             />
           </div>
 
-          {/* Note alert */}
+          {/* HR Routing Note */}
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-2.5 text-[11px] text-amber-700 dark:text-amber-300">
             <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <span>
-              Your request will be routed to CEO & HR under <strong>HR Operations → Requests</strong> for approval before changes take effect.
+              Your request will be routed to HR under <strong>HR Operations → Requests</strong>. Once approved, all sections unlock automatically.
             </span>
           </div>
 
@@ -126,20 +116,20 @@ export function ProfileEditRequestModal({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="h-9 text-xs rounded-xl font-semibold px-4"
+              className="h-9 text-xs rounded-xl font-semibold px-4 cursor-pointer"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={submitMutation.isPending}
-              className="h-9 text-xs rounded-xl font-bold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 px-4 shadow-sm"
+              className="h-9 text-xs rounded-xl font-bold bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 px-4 shadow-sm cursor-pointer"
             >
               {submitMutation.isPending ? (
                 <span>Submitting...</span>
               ) : (
                 <>
-                  <Send className="w-3.5 h-3.5" /> Submit Request to CEO & HR
+                  <Send className="w-3.5 h-3.5" /> Submit Request to HR
                 </>
               )}
             </Button>
