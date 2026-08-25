@@ -89,6 +89,7 @@ export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGroup, setActiveGroup] = useState<ColumnDef['group'] | 'all'>('all');
   const dragSrcRef = useRef<number | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Sync local state whenever columns prop changes
   React.useEffect(() => {

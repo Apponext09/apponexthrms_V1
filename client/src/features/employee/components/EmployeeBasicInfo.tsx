@@ -80,6 +80,8 @@ const roleColors: Record<string, string> = {
   hr_manager: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300',
   department_head: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300',
   team_lead: 'bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300',
+  intern: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  consultant: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
   employee: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
 };
 
@@ -463,6 +465,8 @@ export function EmployeeBasicInfo({
                 <option value="team_lead">Team Lead</option>
                 <option value="department_head">Manager</option>
                 <option value="hr_manager">HR</option>
+                <option value="intern">Intern</option>
+                <option value="consultant">Consultant</option>
               </select>
             </div>
             <div>

@@ -435,7 +435,7 @@ export function ManagerLayout() {
       </div>
 
       <NotificationDrawer />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

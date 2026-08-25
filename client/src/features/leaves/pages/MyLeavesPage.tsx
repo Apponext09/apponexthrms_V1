@@ -5,6 +5,7 @@ import {
   AlertCircle, Ban, Palmtree, Trophy, Flame, Briefcase, Info, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { isLeaveTypeApplicableForGender } from '@/utils/genderFilter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -584,13 +585,7 @@ export function MyLeavesPage() {
               >
                 <option value="">Select Leave Category...</option>
                 {leaveTypes
-                  .filter((t) => {
-                    const leaveGender = (t.gender_applicable || t.genderApplicable || 'all').toLowerCase();
-                    if (leaveGender === 'all') return true;
-                    const empGender = (employeeGender || '').toLowerCase();
-                    if (!empGender) return true;
-                    return empGender === leaveGender;
-                  })
+                  .filter((t) => isLeaveTypeApplicableForGender(t, employeeGender))
                   .map((t) => {
                     const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
                     const avail = balanceItem ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0) : 0;

@@ -336,6 +336,8 @@ export function EmployeeEditPage() {
                     <option value="team_lead">Team Lead</option>
                     <option value="department_head">Manager</option>
                     <option value="hr_manager">HR</option>
+                    <option value="intern">Intern</option>
+                    <option value="consultant">Consultant</option>
                   </select>
                 </div>
                 <div>

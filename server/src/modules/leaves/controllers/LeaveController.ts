@@ -12,6 +12,7 @@ import { NotFoundError, ValidationError, UnauthorizedError, ForbiddenError } fro
 import { logger } from '../../../common/lib/logger';
 import { calculateFinancialYearStart, toLocalYYYYMMDD } from '../utils/dateUtils';
 import { db } from '../../../db/knex';
+import { evaluateConditionGroup } from '../utils/ruleEngine';
 
 export class LeaveController {
   private leaveService: LeaveService;
@@ -53,11 +54,91 @@ export class LeaveController {
   }
 
   /**
+   * Evaluates if a leave type is eligible for the given employee
+   */
+  private filterEligibleLeaveTypes(types: any[], employee: any): any[] {
+    if (!employee) return types;
+
+    return types.filter((t: any) => {
+      // 1. Gender applicability check
+      const genderApplicable = (t.gender_applicable || t.genderApplicable || 'all').toLowerCase();
+      if (genderApplicable !== 'all' && employee.gender) {
+        if (employee.gender.toLowerCase() !== genderApplicable) {
+          return false;
+        }
+      }
+
+      // 2. Allocation Settings: onlyWhen rule tree
+      let allocSettings: any = {};
+      if (t.allocation_settings) {
+        try {
+          allocSettings = typeof t.allocation_settings === 'string'
+            ? JSON.parse(t.allocation_settings)
+            : t.allocation_settings;
+        } catch (e) {}
+      }
+      if (allocSettings.onlyWhen || allocSettings.only_when) {
+        const isEligible = evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, employee);
+        if (!isEligible) {
+          return false;
+        }
+      }
+
+      // 3. Application Settings: onlyWhen rule tree
+      let appSettings: any = {};
+      if (t.application_settings) {
+        try {
+          appSettings = typeof t.application_settings === 'string'
+            ? JSON.parse(t.application_settings)
+            : t.application_settings;
+        } catch (e) {}
+      }
+      if (appSettings.onlyWhen || appSettings.only_when) {
+        const isEligible = evaluateConditionGroup(appSettings.onlyWhen || appSettings.only_when, employee);
+        if (!isEligible) {
+          return false;
+        }
+      }
+
+      // 4. Employment Allocation Settings (Scope filter: Departments, Locations, Grades, Employee Types)
+      let empSettings: any = {};
+      const rawEmpSettings = t.employment_allocation_settings || t.employmentAllocationSettings;
+      if (rawEmpSettings) {
+        try {
+          empSettings = typeof rawEmpSettings === 'string' ? JSON.parse(rawEmpSettings) : rawEmpSettings;
+        } catch (e) {}
+      }
+      if (empSettings && Object.keys(empSettings).length > 0) {
+        const hasOverlap = (employeeVal: any, ruleArray: any[]) => {
+          if (!ruleArray || !Array.isArray(ruleArray) || ruleArray.length === 0) return true;
+          if (!employeeVal) return false;
+          const eArray = Array.isArray(employeeVal) ? employeeVal : [employeeVal];
+          return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
+        };
+
+        if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId, empSettings.departments)) return false;
+        if (!hasOverlap(employee.current_location_id || employee.currentLocationId, empSettings.locations)) return false;
+        if (!hasOverlap(employee.employment_type || employee.employmentType, empSettings.employeeTypes)) return false;
+        if (!hasOverlap(employee.current_grade_id || employee.currentGradeId, empSettings.grades)) return false;
+      }
+
+      return true;
+    });
+  }
+
+  /**
    * Get leave types
    */
   async getLeaveTypes(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+      const employee = await (this.applicationRepo as any).db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('id', empId)
+        .whereNull('deleted_at')
+        .first();
+
       const types = await (this.applicationRepo as any).db('leave_types')
         .where(function (this: any) {
           this.where('organization_id', ctx.organizationId)
@@ -67,7 +148,9 @@ export class LeaveController {
         .whereNull('deleted_at')
         .orderBy('id', 'asc');
 
-      res.json({ success: true, data: types });
+      const eligibleTypes = this.filterEligibleLeaveTypes(types, employee);
+
+      res.json({ success: true, data: eligibleTypes });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -374,9 +457,13 @@ export class LeaveController {
         .first();
 
       // Fetch all active leave types for this organization
-      const types = await (this.applicationRepo as any).db('leave_types')
+      const rawTypes = await (this.applicationRepo as any).db('leave_types')
         .where('organization_id', ctx.organizationId)
-        .orWhereNull('organization_id');
+        .orWhereNull('organization_id')
+        .where('status', 'active')
+        .whereNull('deleted_at');
+
+      const types = this.filterEligibleLeaveTypes(rawTypes, employee);
 
       // Fetch existing balances (filtered by current financial year cycle)
       const existingBalances = await (this.applicationRepo as any).db('leave_balances as lb')
@@ -427,21 +514,27 @@ export class LeaveController {
               currentQuota = parseFloat(parsedAlloc?.entitlementDays) || 0;
             } catch (e) {}
           }
-          const matchAllocated = match.allocatedBalance !== undefined ? parseFloat(match.allocatedBalance) : parseFloat(match.allocated_balance) || 0;
-          const quotaDiff = (currentQuota > 0 && matchAllocated > 0 && currentQuota > matchAllocated) ? (currentQuota - matchAllocated) : 0;
 
-          const effectiveAllocated = matchAllocated + quotaDiff;
-          const matchAvailable = match.availableBalance !== undefined ? parseFloat(match.availableBalance) : parseFloat(match.available_balance) || 0;
-          const effectiveAvailable = matchAvailable + quotaDiff;
+          const consumed = match.consumedBalance !== undefined ? parseFloat(match.consumedBalance) : parseFloat(match.consumed_balance) || 0;
+          const pending = match.pendingApprovalBalance !== undefined ? parseFloat(match.pendingApprovalBalance) : parseFloat(match.pending_approval_balance) || 0;
+          const carryForward = match.carryForwardBalance !== undefined ? parseFloat(match.carryForwardBalance) : parseFloat(match.carry_forward_balance) || 0;
+          const matchAllocated = match.allocatedBalance !== undefined ? parseFloat(match.allocatedBalance) : parseFloat(match.allocated_balance) || 0;
+
+          // Base quota comes from current active Leave Settings
+          const baseAllocated = currentQuota > 0 ? currentQuota : matchAllocated;
+          // Effective allocated includes any carry-forward from previous years
+          const effectiveAllocated = baseAllocated + carryForward;
+          const effectiveAvailable = Math.max(0, effectiveAllocated - consumed - pending);
 
           return {
             id: match.id,
             employee_id: empId,
             leave_type_id: t.id,
             allocated_balance: effectiveAllocated,
-            consumed_balance: match.consumedBalance !== undefined ? parseFloat(match.consumedBalance) : parseFloat(match.consumed_balance) || 0,
-            pending_approval_balance: match.pendingApprovalBalance !== undefined ? parseFloat(match.pendingApprovalBalance) : parseFloat(match.pending_approval_balance) || 0,
+            consumed_balance: consumed,
+            pending_approval_balance: pending,
             available_balance: effectiveAvailable,
+            carry_forward_balance: carryForward,
             expired_balance: match.expired_balance !== undefined ? parseFloat(match.expired_balance) : parseFloat(match.expired_balance) || 0,
             leave_name: t.leaveName || t.leave_name,
             leave_code: t.leaveCode || t.leave_code,
@@ -1190,6 +1283,125 @@ export class LeaveController {
   }
 
   /**
+   * Create a new custom named leave policy
+   */
+  async createPolicy(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const { name, code } = req.body;
+
+      if (!name || !name.trim()) {
+        throw new ValidationError('Policy name is required');
+      }
+
+      const uuid = uuidv4();
+      const policyCode = (code || name).toUpperCase().replace(/[^A-Z0-9]/g, '_').slice(0, 30);
+      const userId = ctx.userId || 1;
+
+      const [id] = await db('leave_policies').insert({
+        uuid,
+        organization_id: ctx.organizationId,
+        name: name.trim(),
+        code: policyCode,
+        status: 'active',
+        created_by: userId,
+        updated_by: userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      res.status(201).json({ success: true, message: 'Leave policy created successfully', data: { id, uuid, name: name.trim(), code: policyCode } });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Sync and recalculate leave balances for all active employees in the organization
+   * based on current leave_types annual_quota
+   */
+  async syncBalances(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+
+      // 1. Fetch all active leave_types for org
+      const leaveTypes = await db('leave_types')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+
+      // 2. Fetch all active employees
+      const employees = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+
+      let updatedCount = 0;
+
+      for (const lt of leaveTypes) {
+        let quota = parseFloat(String(lt.annual_quota || lt.annualQuota || 0));
+        if (!quota && lt.allocation_settings) {
+          try {
+            const parsedAlloc = typeof lt.allocation_settings === 'string' ? JSON.parse(lt.allocation_settings) : lt.allocation_settings;
+            quota = parseFloat(parsedAlloc?.entitlementDays) || 0;
+          } catch (e) {}
+        }
+
+        for (const emp of employees) {
+          const existingBal = await db('leave_balances')
+            .where({
+              organization_id: ctx.organizationId,
+              employee_id: emp.id,
+              leave_type_id: lt.id,
+            })
+            .whereNull('deleted_at')
+            .first();
+
+          if (existingBal) {
+            const consumed = parseFloat(String(existingBal.consumed_balance || 0));
+            const newAvail = Math.max(0, quota - consumed);
+
+            await db('leave_balances')
+              .where('id', existingBal.id)
+              .update({
+                credited_balance: quota,
+                available_balance: newAvail,
+                updated_at: new Date(),
+              });
+            updatedCount++;
+          } else {
+            const uuid = uuidv4();
+            const year = new Date().getFullYear();
+            const userId = ctx.userId || 1;
+            await db('leave_balances').insert({
+              uuid,
+              organization_id: ctx.organizationId,
+              employee_id: emp.id,
+              leave_type_id: lt.id,
+              financial_year_start: `${year}-01-01`,
+              financial_year_end: `${year}-12-31`,
+              opening_balance: quota,
+              credited_balance: quota,
+              consumed_balance: 0,
+              available_balance: quota,
+              created_by: userId,
+              updated_by: userId,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            updatedCount++;
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Successfully synchronized leave balances across ${employees.length} employees and ${leaveTypes.length} leave categories!`,
+      });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
    * Update active leave policy metadata
    */
   async updatePolicy(req: Request, res: Response): Promise<void> {
@@ -1354,14 +1566,14 @@ export class LeaveController {
       const ctx = req.ctx!;
       const accrualService = new LeaveAccrualService();
 
-      await accrualService.accrueMonthlyLeaves(ctx, ctx.organizationId);
-      await accrualService.accrueQuarterlyLeaves(ctx);
-      await accrualService.accrueYearlyLeaves(ctx);
-      await accrualService.accrueAnniversaryLeaves(ctx);
-      await accrualService.reconcileHoursWorkedAccruals(ctx);
-      await accrualService.reconcileNonCalendarRulesAccruals(ctx);
+      try { await accrualService.accrueMonthlyLeaves(ctx, ctx.organizationId); } catch (e) { logger.error('Error during accrueMonthlyLeaves', { error: e }); }
+      try { await accrualService.accrueQuarterlyLeaves(ctx); } catch (e) { logger.error('Error during accrueQuarterlyLeaves', { error: e }); }
+      try { await accrualService.accrueYearlyLeaves(ctx); } catch (e) { logger.error('Error during accrueYearlyLeaves', { error: e }); }
+      try { await accrualService.accrueAnniversaryLeaves(ctx); } catch (e) { logger.error('Error during accrueAnniversaryLeaves', { error: e }); }
+      try { await accrualService.reconcileHoursWorkedAccruals(ctx); } catch (e) { logger.error('Error during reconcileHoursWorkedAccruals', { error: e }); }
+      try { await accrualService.reconcileNonCalendarRulesAccruals(ctx); } catch (e) { logger.error('Error during reconcileNonCalendarRulesAccruals', { error: e }); }
 
-      res.json({ success: true, message: 'Leave allocation cron executed successfully!' });
+      res.json({ success: true, message: 'Leave allocation and balances synced successfully for all employees!' });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -1777,6 +1989,21 @@ export class LeaveController {
         throw new ForbiddenError('You can only request leave encashment for yourself.');
       }
 
+      // Check if self-service encashment is enabled for this leave type
+      if (!isAdminOrHR) {
+        const lt = await db('leave_types').where({ id: Number(leaveTypeId), organization_id: ctx.organizationId }).first();
+        if (lt && lt.encashment_settings) {
+          try {
+            const encSettings = typeof lt.encashment_settings === 'string' ? JSON.parse(lt.encashment_settings) : lt.encashment_settings;
+            if (encSettings.employeesCanRequestEncashment === false || encSettings.allow_employee_encashment_request === false) {
+              throw new ValidationError('Self-service encashment requests are disabled for this leave type. Encashment occurs automatically during cycle reset.');
+            }
+          } catch (err: any) {
+            if (err instanceof ValidationError) throw err;
+          }
+        }
+      }
+
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -2054,20 +2281,21 @@ export class LeaveController {
    * Helper: Handle errors
    */
   private handleError(error: any, res: Response): void {
+    const msg = error instanceof Error ? error.message : String(error);
     if (error instanceof NotFoundError) {
-      res.status(404).json({ success: false, error: { message: error.message } });
+      res.status(404).json({ success: false, message: msg, error: { message: msg } });
     } else if (error instanceof ValidationError) {
-      res.status(400).json({ success: false, error: { message: error.message } });
+      res.status(400).json({ success: false, message: msg, error: { message: msg } });
     } else if (error instanceof UnauthorizedError) {
-      res.status(401).json({ success: false, error: { message: error.message } });
+      res.status(401).json({ success: false, message: msg, error: { message: msg } });
     } else if (error instanceof ForbiddenError) {
-      res.status(403).json({ success: false, error: { message: error.message } });
+      res.status(403).json({ success: false, message: msg, error: { message: msg } });
     } else {
       logger.error('Unhandled error in LeaveController', {
-        message: error instanceof Error ? error.message : String(error),
+        message: msg,
         stack: error instanceof Error ? error.stack : undefined,
       });
-      res.status(500).json({ success: false, error: { message: 'Internal server error' } });
+      res.status(500).json({ success: false, message: msg || 'Internal server error', error: { message: msg || 'Internal server error' } });
     }
   }
 }

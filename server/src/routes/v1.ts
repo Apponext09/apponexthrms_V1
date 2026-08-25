@@ -23,6 +23,7 @@ import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
 import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
 import dashboardRoutes from '../modules/dashboard/dashboard.routes';
+import reportRoutes from '../modules/reports/reports.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
 
@@ -91,6 +92,9 @@ router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOff
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
+
+// ── Report Engine (isolated module) ─────────────────────────────────────────
+router.use('/reports', reportRoutes);
 
 // Generic reports options dropdown route
 router.get('/reports/options', async (req: Request, res: Response) => {
