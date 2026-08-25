@@ -28,6 +28,12 @@ interface LeaveType {
   allowNegativeBalance?: boolean;
   gender_applicable?: string;
   genderApplicable?: string;
+  allocation_settings?: any;
+  allocationSettings?: any;
+  allocation?: any;
+  only_when?: any;
+  onlyWhen?: any;
+  [key: string]: any;
 }
 
 interface LeaveBalanceItem {
@@ -48,6 +54,16 @@ interface LeaveBalanceItem {
   availableBalance?: number | string;
   allow_negative_balance?: boolean;
   allowNegativeBalance?: boolean;
+  gender_applicable?: string;
+  genderApplicable?: string;
+  allocation_settings?: any;
+  allocationSettings?: any;
+  allocation?: any;
+  only_when?: any;
+  onlyWhen?: any;
+  annual_quota?: number | string;
+  annualQuota?: number | string;
+  [key: string]: any;
 }
 
 interface LeaveApplicationItem {
@@ -321,52 +337,45 @@ export default function LeavePage() {
     return (bal as any)[keySnake] || (bal as any)[keyCamel] || fallback;
   };
 
-  const isWeekendOrHoliday = (date: Date): { isWorking: boolean; reason: string } => {
+  const isWeekendOrHoliday = (date: Date): { isWorking: boolean; reason: string; isHalfDay?: boolean } => {
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     const dateStr = `${yyyy}-${mm}-${dd}`;
 
-    // Helper to get local YYYY-MM-DD from any date string / ISO timestamp
-    const getLocalHolidayDateStr = (raw: any): string => {
+    // Helper to get exact local YYYY-MM-DD from any date format/ISO timestamp
+    const normalizeToDateStr = (raw: any): string => {
       if (!raw) return '';
-      const d = new Date(raw);
-      if (isNaN(d.getTime())) {
-        return typeof raw === 'string' ? raw.split('T')[0] : '';
+      if (typeof raw === 'string') {
+        // If it's a pure YYYY-MM-DD string (e.g. "2026-09-14")
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+          return raw.trim();
+        }
+        // If it's DD-MM-YYYY (e.g. "14-09-2026")
+        if (/^\d{2}-\d{2}-\d{4}$/.test(raw.trim())) {
+          const [d, m, y] = raw.trim().split('-');
+          return `${y}-${m}-${d}`;
+        }
       }
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const dNum = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${dNum}`;
+
+      // If it's an ISO timestamp or Date object (e.g. "2026-09-13T18:30:00.000Z")
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
+      return '';
     };
 
-    // 1. Check against dynamic published holidays from Holiday Calendar
+    // 1. Check against dynamic published holidays from Holiday Calendar (Exact single-date match)
     if (holidaysList && holidaysList.length > 0) {
       const matched = holidaysList.find((h: any) => {
         const raw = h.holiday_date || h.holidayDate || h.date;
         if (!raw) return false;
-
-        // A. Local Date string
-        if (getLocalHolidayDateStr(raw) === dateStr) return true;
-
-        // B. String split / startsWith
-        if (typeof raw === 'string') {
-          const clean = raw.trim();
-          if (clean.startsWith(dateStr)) return true;
-          const [yr, mo, da] = dateStr.split('-');
-          if (clean === `${da}-${mo}-${yr}` || clean.startsWith(`${da}-${mo}-${yr}`)) return true;
-        }
-
-        // C. UTC Date string
-        const dObj = new Date(raw);
-        if (!isNaN(dObj.getTime())) {
-          const uy = dObj.getUTCFullYear();
-          const um = String(dObj.getUTCMonth() + 1).padStart(2, '0');
-          const ud = String(dObj.getUTCDate()).padStart(2, '0');
-          if (`${uy}-${um}-${ud}` === dateStr) return true;
-        }
-
-        return false;
+        return normalizeToDateStr(raw) === dateStr;
       });
 
       if (matched) {
@@ -479,9 +488,9 @@ export default function LeavePage() {
         date: dateStr,
         isWorkingDay: check.isWorking,
         reason: check.reason,
-        dayType: 'FULL',
+        dayType: check.isHalfDay ? 'FIRST_HALF' : 'FULL',
         quarterType: 'Q1',
-        val: check.isWorking ? 1.0 : 0.0,
+        val: check.isWorking ? (check.isHalfDay ? 0.5 : 1.0) : 0.0,
       });
       current.setDate(current.getDate() + 1);
     }
@@ -768,7 +777,7 @@ export default function LeavePage() {
 
     return isLeaveTypeApplicableForGender(mergedItem, currentEmpGender);
   }).map(b => {
-    const quotaFallback = parseFloat((b as any).annual_quota ?? (b as any).annualQuota ?? 0) || 0;
+    const quotaFallback = parseFloat(String((b as any).annual_quota ?? (b as any).annualQuota ?? 0)) || 0;
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
@@ -788,8 +797,8 @@ export default function LeavePage() {
   });
 
   // Stats Calculations
-  const totalAvailableDays = displayBalances.reduce((acc, b) => acc + b.available_balance, 0);
-  const totalConsumedDays = displayBalances.reduce((acc, b) => acc + b.consumed_balance, 0);
+  const totalAvailableDays = displayBalances.reduce((acc, b) => acc + Number(b.available_balance || 0), 0);
+  const totalConsumedDays = displayBalances.reduce((acc, b) => acc + Number(b.consumed_balance || 0), 0);
   const pendingCount = applications.filter(a => ['pending', 'submitted', 'pending_manager', 'pending_hr'].includes(a.status?.toLowerCase())).length;
 
   const filteredApplications = selectedStatus === 'all'

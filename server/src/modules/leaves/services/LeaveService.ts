@@ -418,6 +418,9 @@ export class LeaveService {
       const todayZero = new Date();
       todayZero.setHours(0, 0, 0, 0);
 
+      const startD = new Date(input.startDate);
+      startD.setHours(0, 0, 0, 0);
+
       if (applicationSettings.pastDates === false && startD < todayZero) {
         throw new ValidationError('Past dates cannot be requested for this leave type.');
       }
