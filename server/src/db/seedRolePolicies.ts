@@ -1,71 +1,43 @@
-import { Knex } from 'knex';
+import { getKnex } from './knex';
 
-export async function up(knex: Knex): Promise<void> {
-  // 1. Create role_policies table if it does not exist
-  const hasRolePolicies = await knex.schema.hasTable('role_policies');
-  if (!hasRolePolicies) {
-    await knex.schema.createTable('role_policies', (table) => {
-      table.increments('id').primary();
-      table.string('role_code', 100).notNullable();
-      table.bigInteger('organization_id').unsigned().nullable();
-      table.string('document_ref', 50).defaultTo('POL-001');
-      table.string('title', 255).notNullable();
-      table.text('description').nullable();
-      table.text('sections').notNullable(); // JSON stringified [{ id, title, content }]
-      table.string('status', 20).defaultTo('published');
-      table.timestamp('effective_date').nullable();
-      table.bigInteger('created_by').unsigned().nullable();
-      table.timestamps(true, true);
-    });
-  } else {
-    // Add missing columns to existing role_policies table
-    const hasOrgId = await knex.schema.hasColumn('role_policies', 'organization_id');
-    if (!hasOrgId) {
-      await knex.schema.alterTable('role_policies', (table) => {
-        table.bigInteger('organization_id').unsigned().nullable();
-      });
-    }
+export async function seedAllRolePolicies() {
+  const knex = getKnex();
 
-    const hasDocRef = await knex.schema.hasColumn('role_policies', 'document_ref');
-    if (!hasDocRef) {
-      await knex.schema.alterTable('role_policies', (table) => {
-        table.string('document_ref', 50).defaultTo('POL-001');
-      });
-    }
-
-    const hasStatus = await knex.schema.hasColumn('role_policies', 'status');
-    if (!hasStatus) {
-      await knex.schema.alterTable('role_policies', (table) => {
-        table.string('status', 20).defaultTo('published');
-      });
-    }
-
-    const hasEffectiveDate = await knex.schema.hasColumn('role_policies', 'effective_date');
-    if (!hasEffectiveDate) {
-      await knex.schema.alterTable('role_policies', (table) => {
-        table.timestamp('effective_date').nullable();
-      });
-    }
-
-    const hasCreatedBy = await knex.schema.hasColumn('role_policies', 'created_by');
-    if (!hasCreatedBy) {
-      await knex.schema.alterTable('role_policies', (table) => {
-        table.bigInteger('created_by').unsigned().nullable();
-      });
-    }
-  }
-
-  // 2. Add policy_accepted and policy_accepted_at to users table if missing
-  const hasPolicyAccepted = await knex.schema.hasColumn('users', 'policy_accepted');
-  if (!hasPolicyAccepted) {
-    await knex.schema.alterTable('users', (table) => {
-      table.boolean('policy_accepted').defaultTo(false).notNullable();
-      table.timestamp('policy_accepted_at').nullable();
-    });
-  }
-
-  // 3. Seed formal, role-specific HR policy documents matching practical ApponextHRMS modules
   const formalPolicies = [
+    {
+      role_code: 'super_admin',
+      document_ref: 'POL-000',
+      status: 'published',
+      title: 'SUPER ADMINISTRATOR PLATFORM GOVERNANCE & MULTI-TENANT SECURITY POLICY',
+      description: 'System-level policy governing platform-wide administration, tenant onboarding, system-level credentials, infrastructure security, and data protection in ApponextHRMS.',
+      sections: JSON.stringify([
+        {
+          id: 'sa_sec_1',
+          title: '1. POLICY STATEMENT',
+          content: 'Super Administrators hold ultimate system authority for the ApponextHRMS multi-tenant environment and must execute platform management, tenant provisioning, system security, and infrastructure configuration with maximum responsibility and diligence.'
+        },
+        {
+          id: 'sa_sec_2',
+          title: '2. PURPOSE AND SCOPE',
+          content: 'Applies exclusively to platform Super Administrators, Global Technical Leads, and authorized Infrastructure System Engineers managing ApponextHRMS.'
+        },
+        {
+          id: 'sa_sec_3',
+          title: '3. ROLE RESPONSIBILITIES & PLATFORM GOVERNANCE',
+          content: '• Multi-Tenant Isolation Security: Enforce strict database and logical boundary separation between tenant organizations.\n• Credential & Access Key Safeguards: Protect root database credentials, encryption keys, and third-party API integration keys.\n• Infrastructure Monitoring & Uptime: Maintain platform health, audit trail persistence, and emergency disaster recovery readiness.'
+        },
+        {
+          id: 'sa_sec_4',
+          title: '4. CONFIDENTIALITY & DATA PROTECTION',
+          content: 'Super Administrators must never inspect, manipulate, or disclose tenant data, employee profiles, or business records without explicit written authorization or legal compliance mandates.'
+        },
+        {
+          id: 'sa_sec_5',
+          title: '5. COMPLIANCE',
+          content: 'Unapproved system configuration changes, tenant data leakage, or credential mismanagement will lead to immediate privilege revocation and legal enforcement.'
+        }
+      ])
+    },
     {
       role_code: 'organization_admin',
       document_ref: 'POL-001',
@@ -90,13 +62,18 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'admin_sec_4',
-          title: '4. AUTHORIZED USE & SYSTEM RESTRICTIONS',
+          title: '4. RULES AND GUIDELINES',
           content: '• Unauthorized Data Extraction Prohibited: Administrators must not inspect, export, or share confidential employee databases, compensation tables, or personal files unless explicitly authorized for official system maintenance or security audits.\n• Administrative Credential Security: Multi-Factor Authentication (MFA) and strong credentials are mandatory. Sharing administrative passwords or API access tokens is strictly forbidden.'
         },
         {
           id: 'admin_sec_5',
-          title: '5. DATA RESPONSIBILITY & COMPLIANCE',
+          title: '5. CONFIDENTIALITY & DATA RESPONSIBILITY',
           content: 'All system logs, user tables, and database schemas remain strictly confidential. Misuse of administrative access, unapproved data deletion, or security rule tampering will result in immediate privilege revocation and formal disciplinary proceedings.'
+        },
+        {
+          id: 'admin_sec_6',
+          title: '6. COMPLIANCE',
+          content: 'Full compliance with administrative security policies is mandatory. Non-compliance will be subject to executive review.'
         }
       ])
     },
@@ -119,17 +96,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'hr_sec_3',
-          title: '3. HR OPERATIONAL RESPONSIBILITIES',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Employee Profile & Document Management: Accurately create and maintain digital employee profiles, document verifications, designation assignments, and department mappings.\n• Attendance & Leave Quota Administration: Review attendance regularization requests, manage annual leave quotas, and validate monthly payroll inputs with exact attendance records.\n• Recruitment & Offer Processing: Issue MRFs, candidate assessments, and job offer letters based strictly on qualifications and approved compensation bands without bias.\n• Grievance & Disciplinary Redressal: Investigate employee complaints, workplace conflicts, and harassment reports impartially within established SLA timelines.'
         },
         {
           id: 'hr_sec_4',
-          title: '4. DATA PRIVACY & COMPENSATION CONFIDENTIALITY',
-          content: '• Salary & PII Security: Employee compensation structures, bank account details, medical records, and performance ratings must be kept strictly confidential.\n• Unauthorized Alterations Prohibited: HR personnel must not modify employee salary data, designation tiers, or leave balances without formal approval from executive management.'
+          title: '4. RULES AND GUIDELINES',
+          content: 'HR staff must maintain complete impartiality during recruitment, appraisals, and employee grievance investigations.'
         },
         {
           id: 'hr_sec_5',
-          title: '5. COMPLIANCE & ETHICAL RESPONSIBILITY',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: '• Salary & PII Security: Employee compensation structures, bank account details, medical records, and performance ratings must be kept strictly confidential.\n• Unauthorized Alterations Prohibited: HR personnel must not modify employee salary data, designation tiers, or leave balances without formal approval from executive management.'
+        },
+        {
+          id: 'hr_sec_6',
+          title: '6. COMPLIANCE',
           content: 'HR professionals must act as ethical custodians of company values. Violations of data privacy regulations, unauthorized compensation edits, or biased HR decisions will result in immediate employment review.'
         }
       ])
@@ -153,17 +135,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'mgr_sec_3',
-          title: '3. SUPERVISORY RESPONSIBILITIES & APPROVAL SLA',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Timely Workflow Approvals: Review and process team leave applications, attendance regularization requests, shift swaps, and expense reimbursements within 24–48 hours.\n• Objective Performance Appraisals: Conduct transparent, unbiased performance evaluations based on documented deliverables, project KPIs, and measurable outcomes.\n• Shift Roster & Capacity Planning: Approve shift schedules and ensure balanced departmental headcount to prevent operational bottlenecks.'
         },
         {
           id: 'mgr_sec_4',
-          title: '4. AUTHORIZED USE & RESTRICTIONS',
-          content: '• Confidentiality of Ratings & Salaries: Keep team appraisal ratings, promotion recommendations, and compensation details strictly confidential.\n• Non-Interference with HR Policies: Managers must not grant informal leave or override attendance policies outside the ApponextHRMS approval engine.'
+          title: '4. RULES AND GUIDELINES',
+          content: 'Managers must not override attendance rules outside the system engine.'
         },
         {
           id: 'mgr_sec_5',
-          title: '5. COMPLIANCE & MANAGEMENT SLA',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'Keep team appraisal ratings, promotion recommendations, and compensation details strictly confidential.'
+        },
+        {
+          id: 'mgr_sec_6',
+          title: '6. COMPLIANCE',
           content: 'Failure to process approval workflows within SLA timelines, chronic approval delays, or biased supervisory practices will be subject to executive management review.'
         }
       ])
@@ -187,17 +174,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'tl_sec_3',
-          title: '3. OPERATIONAL RESPONSIBILITIES & TASK GUIDANCE',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Equitable Task Distribution: Allocate daily tasks fairly based on individual skill sets, capacity, and project milestone commitments.\n• Daily Technical Guidance: Conduct regular standups, assist team members with technical blockers, and guide junior staff.\n• Progress Logging & Status Accuracy: Ensure task status updates, shift check-in logs, and project milestone completion dates are accurately maintained in ApponextHRMS.\n• Attendance Anomaly Reporting: Identify and report unexcused absences, shift mismatches, or project delays to the Department Manager.'
         },
         {
           id: 'tl_sec_4',
-          title: '4. DATA PROTECTION & REPOSITORY SECURITY',
-          content: '• Source Code & IP Security: Protect project repositories, client specifications, and technical architecture documents against unauthorized external sharing.\n• Credential Integrity: Never share developer access keys or system credentials.'
+          title: '4. RULES AND GUIDELINES',
+          content: 'Support team members effectively and report project blockers early.'
         },
         {
           id: 'tl_sec_5',
-          title: '5. COMPLIANCE & EXECUTION REVIEW',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'Protect project repositories, client specifications, and technical architecture documents against unauthorized external sharing.'
+        },
+        {
+          id: 'tl_sec_6',
+          title: '6. COMPLIANCE',
           content: 'Adherence to project guidelines and confidentiality is strictly enforced. Unverified task reporting or data leakage will result in supervisory review.'
         }
       ])
@@ -221,18 +213,23 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'emp_sec_3',
-          title: '3. ATTENDANCE & SELF-SERVICE RESPONSIBILITIES',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Biometric & GPS Attendance Punch: Employees must record check-in/check-out accurately using designated biometric terminals or approved GPS location bounds.\n• Proxy Attendance Strictly Prohibited: Attempting to punch attendance for another employee or utilizing location-spoofing software is grounds for immediate termination.\n• Advance Leave Applications: Submit leave requests in advance via the HRMS portal. Unexcused absences without approval will be marked as Loss of Pay (LOP).\n• Accurate Reimbursements & Claims: Expense reimbursements and claim receipts submitted via HRMS must be genuine and accurate.'
         },
         {
           id: 'emp_sec_4',
-          title: '4. WORKPLACE ETHICS & IT ASSETS',
+          title: '4. RULES AND GUIDELINES',
           content: '• Professional Interaction: Maintain courteous, respectful communication with colleagues. Harassment or discrimination is strictly prohibited.\n• IT Asset Protection: Safeguard company laptops, software credentials, and digital tools. Company resources must be used strictly for authorized business.'
         },
         {
           id: 'emp_sec_5',
-          title: '5. CONFIDENTIALITY & ENFORCEMENT',
-          content: 'Safeguard company proprietary data, trade secrets, employee details, and client information. Failure to comply with this Code of Conduct will result in formal disciplinary action.'
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'Safeguard company proprietary data, trade secrets, employee details, and client information.'
+        },
+        {
+          id: 'emp_sec_6',
+          title: '6. COMPLIANCE',
+          content: 'Failure to comply with this Code of Conduct will result in formal disciplinary action.'
         }
       ])
     },
@@ -255,51 +252,23 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'int_sec_3',
-          title: '3. LEARNING RESPONSIBILITIES & TIME TRACKING',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Training Engagement: Actively participate in assigned learning modules and complete tasks under mentor direction.\n• Daily Work Log & Time Tracking: Record daily working hours, task completion status, and attendance in ApponextHRMS accurately.\n• Proactive Communication: Seek guidance when encountering technical blockers and incorporate mentor feedback.'
         },
         {
           id: 'int_sec_4',
-          title: '4. SYSTEM RESTRICTIONS & STRICT CONFIDENTIALITY',
-          content: '• Authorized System Use: Access company repositories, software tools, and project documents strictly for authorized learning tasks.\n• Proprietary Data Non-Disclosure: All source code, technical documentation, research materials, and internal data remain strictly confidential.\n• Unauthorized System Changes Prohibited: Interns must not modify system settings or delete project files.'
+          title: '4. RULES AND GUIDELINES',
+          content: 'Demonstrate punctuality, professional curiosity, and respectful collaboration with mentors.'
         },
         {
           id: 'int_sec_5',
-          title: '5. COMPLIANCE & AGREEMENT TERMINATION',
-          content: 'Demonstrate punctuality, professional conduct, and respect for company policies. Unexcused absences or confidentiality breaches will result in immediate termination of the internship agreement.'
-        }
-      ])
-    {
-      role_code: 'super_admin',
-      document_ref: 'POL-000',
-      status: 'published',
-      title: 'SUPER ADMINISTRATOR PLATFORM GOVERNANCE & MULTI-TENANT SECURITY POLICY',
-      description: 'System-level policy governing platform-wide administration, tenant onboarding, system-level credentials, infrastructure security, and data protection in ApponextHRMS.',
-      sections: JSON.stringify([
-        {
-          id: 'sa_sec_1',
-          title: '1. POLICY STATEMENT',
-          content: 'Super Administrators hold ultimate system authority for the ApponextHRMS multi-tenant environment and must execute platform management, tenant provisioning, system security, and infrastructure configuration with maximum responsibility and diligence.'
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: '• Authorized System Use: Access company repositories, software tools, and project documents strictly for authorized learning tasks.\n• Proprietary Data Non-Disclosure: All source code, technical documentation, research materials, and internal data remain strictly confidential.'
         },
         {
-          id: 'sa_sec_2',
-          title: '2. PURPOSE AND SCOPE',
-          content: 'Applies exclusively to platform Super Administrators, Global Technical Lead, and authorized Infrastructure System Engineers managing ApponextHRMS.'
-        },
-        {
-          id: 'sa_sec_3',
-          title: '3. PLATFORM GOVERNANCE & TENANT MANAGEMENT',
-          content: '• Multi-Tenant Isolation Security: Enforce strict database and logical boundary separation between tenant organizations.\n• Credential & Access Key Safeguards: Protect root database credentials, encryption keys, and third-party API integration keys.\n• Infrastructure Monitoring & Uptime: Maintain platform health, audit trail persistence, and emergency disaster recovery readiness.'
-        },
-        {
-          id: 'sa_sec_4',
-          title: '4. CONFIDENTIALITY & DATA PROTECTION',
-          content: 'Super Administrators must never inspect, manipulate, or disclose tenant data, employee profiles, or business records without explicit written authorization or legal compliance mandates.'
-        },
-        {
-          id: 'sa_sec_5',
-          title: '5. COMPLIANCE',
-          content: 'Unapproved system configuration changes, tenant data leakage, or credential mismanagement will lead to immediate privilege revocation and legal enforcement.'
+          id: 'int_sec_6',
+          title: '6. COMPLIANCE',
+          content: 'Unexcused absences or confidentiality breaches will result in immediate termination of the internship agreement.'
         }
       ])
     },
@@ -322,12 +291,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'fin_sec_3',
-          title: '3. PAYROLL & FINANCIAL RESPONSIBILITIES',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Exact Calculation & Verification: Process monthly payroll runs based on verified attendance, leave ledger calculations, and authorized salary structures.\n• Statutory Deductions & Filings: Calculate tax deductions, PF/ESI contributions, and loan repayments accurately according to statutory regulations.\n• Confidential Disbursal & Bank Data Security: Maintain strict confidentiality of employee bank accounts, payslips, and salary structures.'
         },
         {
           id: 'fin_sec_4',
-          title: '4. RULES & COMPLIANCE',
+          title: '4. RULES AND GUIDELINES',
+          content: 'Verify all payroll inputs against verified HR attendance data before executing disbursement.'
+        },
+        {
+          id: 'fin_sec_5',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'Keep all salary registers, bank account details, and tax declarations completely confidential.'
+        },
+        {
+          id: 'fin_sec_6',
+          title: '6. COMPLIANCE',
           content: 'Unauthorized salary adjustments, unapproved manual payouts, or disclosure of compensation tables will result in immediate termination of access and disciplinary action.'
         }
       ])
@@ -351,12 +330,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'rec_sec_3',
-          title: '3. RECRUITMENT RESPONSIBILITIES',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Fair & Unbiased Screening: Evaluate candidates strictly based on merit, skills, and approved MRF job specifications.\n• Applicant Data Protection: Safeguard resume screening data, candidate contact details, and assessment scorecards against external sharing.\n• Offer Integrity: Issue formal offer letters strictly in alignment with approved compensation grids and HR guidelines.'
         },
         {
           id: 'rec_sec_4',
-          title: '4. COMPLIANCE',
+          title: '4. RULES AND GUIDELINES',
+          content: 'Maintain objective candidate evaluations and structured interview records.'
+        },
+        {
+          id: 'rec_sec_5',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'Applicant PII, salary expectations, and interview notes remain strictly confidential.'
+        },
+        {
+          id: 'rec_sec_6',
+          title: '6. COMPLIANCE',
           content: 'Misuse of candidate data, unauthorized offer issuance, or biased hiring decisions will result in formal recruitment privilege review.'
         }
       ])
@@ -380,12 +369,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'con_sec_3',
-          title: '3. DELIVERABLES & CONFIDENTIALITY',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Contractual Deliverable Execution: Complete project scope deliverables within agreed timelines and submit accurate work status logs.\n• Intellectual Property Ownership: All work product, technical architecture, and project output created during the engagement belong exclusively to the organization.\n• Non-Disclosure Obligations: Never share internal company data or source code with external third parties.'
         },
         {
           id: 'con_sec_4',
-          title: '4. COMPLIANCE',
+          title: '4. RULES AND GUIDELINES',
+          content: 'Adhere to contractual SLAs and client confidentiality standards.'
+        },
+        {
+          id: 'con_sec_5',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'All source code, project specifications, and internal data remain strictly confidential.'
+        },
+        {
+          id: 'con_sec_6',
+          title: '6. COMPLIANCE',
           content: 'Breaches of non-disclosure agreements or IP infringement will result in contract termination and legal claim.'
         }
       ])
@@ -409,12 +408,22 @@ export async function up(knex: Knex): Promise<void> {
         },
         {
           id: 'aud_sec_3',
-          title: '3. AUDIT RESPONSIBILITIES',
+          title: '3. ROLE RESPONSIBILITIES',
           content: '• Independent Inspection: Review compliance logs, statutory filings, and attendance records impartially.\n• Audit Report Integrity: Document findings accurately based on empirical log evidence.\n• Strict Confidentiality: Maintain complete confidentiality regarding audit observations and organizational data.'
         },
         {
           id: 'aud_sec_4',
-          title: '4. COMPLIANCE',
+          title: '4. RULES AND GUIDELINES',
+          content: 'Execute read-only verification without modifying live operational data.'
+        },
+        {
+          id: 'aud_sec_5',
+          title: '5. CONFIDENTIALITY AND DATA RESPONSIBILITY',
+          content: 'Audit findings and system reports remain strictly confidential.'
+        },
+        {
+          id: 'aud_sec_6',
+          title: '6. COMPLIANCE',
           content: 'Unapproved data extraction or misuse of audit access privileges is strictly prohibited.'
         }
       ])
@@ -443,7 +452,6 @@ export async function up(knex: Knex): Promise<void> {
       policyId = insertedId;
     }
 
-    // Ensure policy_assignments table has mapping for policyId -> policy.role_code
     const hasAssignments = await knex.schema.hasTable('policy_assignments');
     if (hasAssignments && policyId) {
       const assignExists = await knex('policy_assignments').where({ policy_id: policyId, role_code: policy.role_code }).first();
@@ -458,15 +466,10 @@ export async function up(knex: Knex): Promise<void> {
       }
     }
   }
+
+  console.log('✅ Seeded role policies for all system roles successfully.');
 }
 
-export async function down(knex: Knex): Promise<void> {
-  await knex.schema.dropTableIfExists('role_policies');
-  const hasPolicyAccepted = await knex.schema.hasColumn('users', 'policy_accepted');
-  if (hasPolicyAccepted) {
-    await knex.schema.alterTable('users', (table) => {
-      table.dropColumn('policy_accepted');
-      table.dropColumn('policy_accepted_at');
-    });
-  }
+if (process.argv[1] && process.argv[1].includes('seedRolePolicies')) {
+  seedAllRolePolicies().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });
 }

@@ -240,7 +240,7 @@ export const PolicyAcceptanceModal: React.FC = () => {
               htmlFor="accept-policy-check"
               className="text-xs font-semibold text-slate-200 cursor-pointer select-none leading-tight"
             >
-              I have read, understood, and agree to comply with the above policies and responsibilities.
+              I have read, understood, and accept the above policies.
             </label>
           </div>
 

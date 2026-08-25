@@ -4,7 +4,7 @@ import { apiClient } from '@/config/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ShieldCheck, FileText, Shield, Plus, Eye, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, FileText, Shield, Plus, Eye, CheckCircle2, AlertCircle, RefreshCw, Calendar, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PolicySection {
@@ -16,6 +16,7 @@ interface PolicySection {
 interface RolePolicyItem {
   id: number;
   roleCode: string;
+  assignedRoles?: string[];
   documentRef?: string;
   title: string;
   description?: string;
@@ -25,6 +26,16 @@ interface RolePolicyItem {
   policyAccepted?: boolean;
   createdAt?: string;
 }
+
+const AVAILABLE_ROLE_OPTIONS = [
+  { code: 'employee', label: 'Employee' },
+  { code: 'hr_manager', label: 'HR Manager' },
+  { code: 'department_head', label: 'Department Head' },
+  { code: 'team_lead', label: 'Team Lead' },
+  { code: 'organization_admin', label: 'Organization Admin' },
+  { code: 'super_admin', label: 'Super Admin' },
+  { code: 'intern', label: 'Intern' },
+];
 
 export default function PoliciesPage() {
   const { user, acceptPolicy } = useAuthStore();
@@ -37,14 +48,14 @@ export default function PoliciesPage() {
   // Management state for Admin / Super Admin
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newRoleCode, setNewRoleCode] = useState('employee');
+  const [selectedAssignedRoles, setSelectedAssignedRoles] = useState<string[]>(['employee']);
   const [newRef, setNewRef] = useState('POL-007');
   const [newDesc, setNewDesc] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const rolesArray = Array.isArray(user?.roles) ? user.roles : (user?.role ? [user.role] : []);
+  const rolesArray = Array.isArray(user?.roles) ? user.roles : ((user as any)?.role ? [(user as any).role] : []);
   const isSuperAdmin = rolesArray.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase()));
-  const isOrgAdmin = rolesArray.some((r) => ['organization_admin', 'admin'].includes(String(r).toLowerCase())) || (user?.designation || '').toLowerCase().includes('admin');
+  const isOrgAdmin = rolesArray.some((r) => ['organization_admin', 'admin', 'ceo'].includes(String(r).toLowerCase())) || (user?.designation || '').toLowerCase().includes('admin');
   const canManage = isSuperAdmin || isOrgAdmin;
 
   const fetchPolicies = async () => {
@@ -56,7 +67,7 @@ export default function PoliciesPage() {
       try {
         const res = await apiClient.get('/auth/role-policies');
         const data = res.data?.data || res.data?.policies || res.data;
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           loaded = data;
         }
       } catch (err) {
@@ -109,17 +120,30 @@ export default function PoliciesPage() {
     }
   };
 
+  const toggleRoleSelection = (roleCode: string) => {
+    setSelectedAssignedRoles((prev) =>
+      prev.includes(roleCode)
+        ? prev.filter((r) => r !== roleCode)
+        : [...prev, roleCode]
+    );
+  };
+
   const handleCreatePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) {
       toast.error('Please enter a policy title');
       return;
     }
+    if (selectedAssignedRoles.length === 0) {
+      toast.error('Please select at least one assigned role');
+      return;
+    }
     try {
       setSubmitting(true);
       const payload = {
         title: newTitle,
-        roleCode: newRoleCode,
+        roleCode: selectedAssignedRoles[0] || 'employee',
+        assignedRoles: selectedAssignedRoles,
         documentRef: newRef,
         description: newDesc,
         status: 'published',
@@ -132,7 +156,7 @@ export default function PoliciesPage() {
           {
             id: 'sec_2',
             title: '2. ROLE RESPONSIBILITIES',
-            content: `Core operational guidelines and responsibilities assigned to ${newRoleCode.replace('_', ' ').toUpperCase()}.`,
+            content: `Core operational guidelines and responsibilities assigned to ${selectedAssignedRoles.map((r) => r.replace('_', ' ').toUpperCase()).join(', ')}.`,
           },
         ],
       };
@@ -141,6 +165,7 @@ export default function PoliciesPage() {
       setShowCreateModal(false);
       setNewTitle('');
       setNewDesc('');
+      setSelectedAssignedRoles(['employee']);
       fetchPolicies();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to create policy');
@@ -168,9 +193,14 @@ export default function PoliciesPage() {
     const descMatch = (p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     const refMatch = (p.documentRef || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSearch = titleMatch || descMatch || refMatch;
-    const matchesRole = filterRole === 'all' || p.roleCode === filterRole;
+
+    const assigned = p.assignedRoles || [p.roleCode];
+    const matchesRole = filterRole === 'all' || assigned.includes(filterRole) || p.roleCode === filterRole;
+
     return matchesSearch && matchesRole;
   });
+
+  const currentRoleTitle = (rolesArray[0] || 'Employee').replace('_', ' ').toUpperCase();
 
   return (
     <div className="space-y-6">
@@ -182,7 +212,7 @@ export default function PoliciesPage() {
               <Shield className="w-5 h-5 text-primary" /> Role-Based Company Policies
             </h2>
             <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-extrabold uppercase">
-              {(rolesArray[0] || 'Employee').replace('_', ' ')} Scope
+              {currentRoleTitle} Scope
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -262,6 +292,8 @@ export default function PoliciesPage() {
           <div className="lg:col-span-5 space-y-3">
             {filteredPolicies.map((p) => {
               const isSelected = selectedPolicy?.id === p.id;
+              const assigned = p.assignedRoles || [p.roleCode];
+
               return (
                 <Card
                   key={p.id}
@@ -274,15 +306,17 @@ export default function PoliciesPage() {
                 >
                   <CardHeader className="p-4 pb-2 flex flex-row justify-between items-start space-y-0">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
                           {p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}
                         </span>
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                          {(p.roleCode || 'Role').replace('_', ' ')}
-                        </span>
+                        {assigned.map((r) => (
+                          <span key={r} className="text-[9px] font-bold text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded border border-border">
+                            {r.replace('_', ' ')}
+                          </span>
+                        ))}
                       </div>
-                      <CardTitle className="text-sm font-bold text-foreground leading-tight">
+                      <CardTitle className="text-sm font-bold text-foreground leading-tight pt-1">
                         {p.title}
                       </CardTitle>
                     </div>
@@ -325,7 +359,9 @@ export default function PoliciesPage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[10px] uppercase font-bold">Role Scope</span>
-                    <span className="font-bold text-foreground uppercase">{(selectedPolicy.roleCode || '').replace('_', ' ')}</span>
+                    <span className="font-bold text-foreground uppercase">
+                      {(selectedPolicy.assignedRoles || [selectedPolicy.roleCode]).map((r) => r.replace('_', ' ')).join(', ')}
+                    </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[10px] uppercase font-bold">Status</span>
@@ -420,22 +456,27 @@ export default function PoliciesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-muted-foreground font-bold mb-1">Target Role</label>
-                  <select
-                    value={newRoleCode}
-                    onChange={(e) => setNewRoleCode(e.target.value)}
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
-                  >
-                    <option value="organization_admin">Organization Admin</option>
-                    <option value="hr_manager">HR Manager</option>
-                    <option value="department_head">Department Head</option>
-                    <option value="team_lead">Team Lead</option>
-                    <option value="employee">Employee</option>
-                    <option value="intern">Intern</option>
-                  </select>
+              <div>
+                <label className="block text-muted-foreground font-bold mb-1.5">Assigned Target Roles</label>
+                <div className="grid grid-cols-2 gap-2 p-3 border border-border rounded-lg bg-muted/30">
+                  {AVAILABLE_ROLE_OPTIONS.map((opt) => {
+                    const checked = selectedAssignedRoles.includes(opt.code);
+                    return (
+                      <label key={opt.code} className="flex items-center gap-2 text-xs text-foreground cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleRoleSelection(opt.code)}
+                          className="rounded border-input text-primary focus:ring-primary h-3.5 w-3.5"
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-muted-foreground font-bold mb-1">Document Ref</label>
                   <Input
@@ -443,6 +484,16 @@ export default function PoliciesPage() {
                     onChange={(e) => setNewRef(e.target.value)}
                     placeholder="POL-007"
                   />
+                </div>
+                <div>
+                  <label className="block text-muted-foreground font-bold mb-1">Status</label>
+                  <select
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
+                    defaultValue="published"
+                  >
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                  </select>
                 </div>
               </div>
 

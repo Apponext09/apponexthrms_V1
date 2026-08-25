@@ -350,7 +350,16 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
-  // ── 15. Masters ───────────────────────────────────────────────────────────
+  // ── 15. Company Policies ──────────────────────────────────────────────────
+  {
+    id: 'company_policies',
+    label: 'POLICIES',
+    items: [
+      { name: 'Company Policies', href: '/employee/policies', icon: 'Shield' },
+    ],
+  },
+
+  // ── 16. Masters ───────────────────────────────────────────────────────────
   {
     id: 'masters',
     label: 'MASTERS',

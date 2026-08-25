@@ -101,6 +101,14 @@ router.get(
   asyncHandler((req, res) => rolePolicyController.getAllPolicies(req, res))
 );
 
+// GET /api/v1/auth/role-policies/:id
+router.get(
+  '/role-policies/:id',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => rolePolicyController.getPolicyById(req, res))
+);
+
 // POST /api/v1/auth/role-policies
 router.post(
   '/role-policies',

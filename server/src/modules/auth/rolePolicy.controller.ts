@@ -80,6 +80,48 @@ export class RolePolicyController {
   };
 
   /**
+   * GET /api/v1/auth/role-policies/:id
+   * Get specific policy by ID with strict role-policy authorization check
+   */
+  getPolicyById = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userAny = req.user as any;
+      const ctxAny = req.ctx as any;
+      const userId = userAny?.id || userAny?.userId || req.userId || ctxAny?.userId;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
+
+      let roles: string[] = userAny?.roles || ctxAny?.roles || req.userRoles || [];
+      if (typeof roles === 'string') roles = [roles];
+      if (userAny?.role) roles.push(userAny.role);
+      if (userAny?.access_level) roles.push(userAny.access_level);
+      if (userAny?.designation) roles.push(userAny.designation);
+
+      const orgId = userAny?.organizationId || ctxAny?.organizationId || req.organizationId;
+      const policyId = Number(req.params.id);
+
+      const policy = await this.service.getPolicyByIdForUser(policyId, Number(userId), roles, orgId ? Number(orgId) : undefined);
+      if (!policy) {
+        res.status(403).json({ success: false, message: 'Forbidden: You do not have access to this policy or it does not exist.' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: policy,
+      });
+    } catch (error: any) {
+      console.error('[RolePolicyController] getPolicyById error:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to fetch policy detail',
+      });
+    }
+  };
+
+  /**
    * POST /api/v1/auth/role-policies
    * Create a new role policy (Admin & Super Admin only)
    */
@@ -93,7 +135,7 @@ export class RolePolicyController {
       if (userAny?.role) roles.push(userAny.role);
 
       const primaryRole = this.service.resolveRoleCode(roles, userAny);
-      const isSuperAdmin = roles.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase()));
+      const isSuperAdmin = roles.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase())) || primaryRole === 'super_admin';
       const isOrgAdmin = primaryRole === 'organization_admin';
 
       if (!isSuperAdmin && !isOrgAdmin) {
@@ -101,7 +143,8 @@ export class RolePolicyController {
         return;
       }
 
-      const result = await this.service.createPolicy(req.body, Number(userId));
+      const orgId = userAny?.organizationId || ctxAny?.organizationId || req.organizationId;
+      const result = await this.service.createPolicy(req.body, Number(userId), orgId ? Number(orgId) : undefined);
       res.json(result);
     } catch (error: any) {
       console.error('[RolePolicyController] createPolicy error:', error);
@@ -125,7 +168,7 @@ export class RolePolicyController {
       if (userAny?.role) roles.push(userAny.role);
 
       const primaryRole = this.service.resolveRoleCode(roles, userAny);
-      const isSuperAdmin = roles.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase()));
+      const isSuperAdmin = roles.some((r) => ['super_admin', 'superadmin', 'owner'].includes(String(r).toLowerCase())) || primaryRole === 'super_admin';
       const isOrgAdmin = primaryRole === 'organization_admin';
 
       if (!isSuperAdmin && !isOrgAdmin) {
@@ -134,7 +177,8 @@ export class RolePolicyController {
       }
 
       const id = Number(req.params.id);
-      const result = await this.service.updatePolicy(id, req.body);
+      const orgId = userAny?.organizationId || ctxAny?.organizationId || req.organizationId;
+      const result = await this.service.updatePolicy(id, req.body, orgId ? Number(orgId) : undefined);
       res.json(result);
     } catch (error: any) {
       console.error('[RolePolicyController] updatePolicy error:', error);

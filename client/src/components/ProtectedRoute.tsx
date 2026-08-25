@@ -26,7 +26,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   return (
     <>
       <PolicyAcceptanceModal />
-      {children}
+      {user?.policyAccepted ? children : null}
     </>
   );
 }
