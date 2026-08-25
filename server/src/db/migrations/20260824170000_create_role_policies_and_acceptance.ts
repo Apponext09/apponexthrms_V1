@@ -269,6 +269,7 @@ export async function up(knex: Knex): Promise<void> {
           content: 'Demonstrate punctuality, professional conduct, and respect for company policies. Unexcused absences or confidentiality breaches will result in immediate termination of the internship agreement.'
         }
       ])
+    },
     {
       role_code: 'super_admin',
       document_ref: 'POL-000',
