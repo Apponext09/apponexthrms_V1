@@ -15,6 +15,8 @@ export const SYSTEM_ROLES = {
   TEAM_LEAD: 'team_lead',
   EMPLOYEE: 'employee',
   MANAGER: 'manager',
+  INTERN: 'intern',          // Internship portal — /intern/*
+  CONSULTANT: 'consultant',  // Consultant portal — /consultant/*
 } as const;
 
 export type Role = typeof SYSTEM_ROLES[keyof typeof SYSTEM_ROLES];
@@ -32,6 +34,8 @@ export const ROLE_LABELS: Record<string, string> = {
   manager: 'Manager',
   team_lead: 'Team Lead',
   employee: 'Employee',
+  intern: 'Intern',
+  consultant: 'Consultant',
 };
 
 export const ROLE_HIERARCHY: Record<string, number> = {
@@ -46,6 +50,8 @@ export const ROLE_HIERARCHY: Record<string, number> = {
   manager: 2,
   team_lead: 2,
   employee: 1,
+  consultant: 1,  // same tier as employee
+  intern: 0,      // lowest tier
 };
 
 /**

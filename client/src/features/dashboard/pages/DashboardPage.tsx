@@ -40,6 +40,14 @@ export function DashboardPage() {
       navigate('/team-lead/dashboard', { replace: true });
       return;
     }
+    if (hasRole('intern') || roles.includes('intern')) {
+      navigate('/intern/dashboard', { replace: true });
+      return;
+    }
+    if (hasRole('consultant') || roles.includes('consultant')) {
+      navigate('/consultant/dashboard', { replace: true });
+      return;
+    }
     navigate('/employee/dashboard', { replace: true });
   }, []);
 

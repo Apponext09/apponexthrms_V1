@@ -334,6 +334,13 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'UserCheck',
         minRoles: ['organization_admin'],
       },
+      {
+        name: 'Report Engine',
+        href: '/analytics/report-engine',
+        icon: 'Sparkles',
+        badge: 'New',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
     ],
   },
 

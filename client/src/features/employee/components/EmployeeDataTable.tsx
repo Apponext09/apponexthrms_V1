@@ -231,6 +231,10 @@ export function EmployeeDataTable({
                           ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
                           : employee.accessRole === 'team_lead'
                           ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
+                          : employee.accessRole === 'intern'
+                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                          : employee.accessRole === 'consultant'
+                          ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
                           : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
                       }`}
                     >
@@ -246,6 +250,10 @@ export function EmployeeDataTable({
                         'Manager'
                       ) : employee.accessRole === 'team_lead' ? (
                         'Team Lead'
+                      ) : employee.accessRole === 'intern' ? (
+                        'Intern'
+                      ) : employee.accessRole === 'consultant' ? (
+                        'Consultant'
                       ) : (
                         'Employee'
                       )}
