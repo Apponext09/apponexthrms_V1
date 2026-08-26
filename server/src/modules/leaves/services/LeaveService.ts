@@ -230,11 +230,20 @@ export class LeaveService {
       return match;
     };
 
+    const compVal = employee.organization_id || employee.organizationId || employee.company_id || employee.companyId;
+    if (!hasOverlap('companies', compVal, settings.companies || settings.organizations)) return false;
+
     const deptVal = employee.current_department_id || employee.currentDepartmentId || employee.department_id || employee.departmentId;
     if (!hasOverlap('departments', deptVal, settings.departments)) return false;
 
+    const subDeptVal = employee.sub_department_id || employee.subDepartmentId;
+    if (!hasOverlap('subDepartments', subDeptVal, settings.subDepartments || settings.sub_departments)) return false;
+
     const locVal = employee.current_location_id || employee.currentLocationId || employee.location_id || employee.locationId || employee.branch_id || employee.branchId;
     if (!hasOverlap('locations', locVal, settings.locations)) return false;
+
+    const desigVal = employee.current_designation_id || employee.currentDesignationId || employee.designation_id || employee.designationId;
+    if (!hasOverlap('designations', desigVal, settings.designations)) return false;
 
     const empTypeVal = employee.employment_type || employee.employmentType || (employee as any).employee_type || (employee as any).employeeType;
     if (!hasOverlap('employeeTypes', empTypeVal, settings.employeeTypes)) return false;

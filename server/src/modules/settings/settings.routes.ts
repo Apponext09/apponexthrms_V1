@@ -372,7 +372,15 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
           this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
         });
       }
-      const rows = await q.select('id', db.raw('COALESCE(component_name, name) as compName'), db.raw('COALESCE(component_code, code) as compCode'));
+      const hasCompName = await db.schema.hasColumn('salary_components', 'component_name');
+      const hasName = await db.schema.hasColumn('salary_components', 'name');
+      const nameCol = hasCompName ? 'component_name' : (hasName ? 'name' : 'id');
+
+      const hasCompCode = await db.schema.hasColumn('salary_components', 'component_code');
+      const hasCode = await db.schema.hasColumn('salary_components', 'code');
+      const codeCol = hasCompCode ? 'component_code' : (hasCode ? 'code' : nameCol);
+
+      const rows = await q.select('id', `${nameCol} as compName`, `${codeCol} as compCode`);
       const seen = new Set<string>();
       for (const r of rows) {
         const name = String(r.compName || r.compCode || '').trim();
@@ -1828,16 +1836,23 @@ router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
 
   const types = await query.orderBy('id', 'asc');
   const parsedTypes = types.map((t: any) => {
-    let alloc: any = {};
-    const rawAlloc = t.allocationSettings || t.allocation_settings;
-    try {
-      alloc = typeof rawAlloc === 'string' ? JSON.parse(rawAlloc) : (rawAlloc || {});
-      if (typeof alloc === 'string') {
-        alloc = JSON.parse(alloc);
+    const parseJsonField = (fieldVal: any) => {
+      if (!fieldVal) return {};
+      try {
+        const parsed = typeof fieldVal === 'string' ? JSON.parse(fieldVal) : fieldVal;
+        return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
+      } catch (e) {
+        return {};
       }
-    } catch (e) {
-      alloc = {};
-    }
+    };
+
+    const alloc = parseJsonField(t.allocationSettings || t.allocation_settings);
+    const app = parseJsonField(t.applicationSettings || t.application_settings);
+    const payroll = parseJsonField(t.payrollSettings || t.payroll_settings);
+    const empAlloc = parseJsonField(t.employmentAllocationSettings || t.employment_allocation_settings);
+    const empApp = parseJsonField(t.employmentApplicationSettings || t.employment_application_settings);
+    const enc = parseJsonField(t.encashmentSettings || t.encashment_settings);
+
     const color = t.color || alloc?.color || 'Sky';
     const icon = t.icon || alloc?.icon || 'Sun';
     const effective_from = t.effectiveFrom || t.effective_from || alloc?.effective_from || alloc?.effectiveFrom || null;
@@ -1856,6 +1871,16 @@ router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
       effectiveTo: effective_to,
       allocation_settings: alloc,
       allocationSettings: alloc,
+      application_settings: app,
+      applicationSettings: app,
+      payroll_settings: payroll,
+      payrollSettings: payroll,
+      employment_allocation_settings: empAlloc,
+      employmentAllocationSettings: empAlloc,
+      employment_application_settings: empApp,
+      employmentApplicationSettings: empApp,
+      encashment_settings: enc,
+      encashmentSettings: enc,
     };
   });
   res.json({ success: true, data: parsedTypes });

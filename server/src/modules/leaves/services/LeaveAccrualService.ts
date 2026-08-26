@@ -326,7 +326,13 @@ export class LeaveAccrualService {
     if (!leaveType || !employee) return true;
 
     let settings: any = {};
-    const rawAlloc = leaveType.employmentAllocationSettings || leaveType.employment_allocation_settings;
+    const rawAlloc =
+      leaveType.employmentAllocationSettings ||
+      leaveType.employment_allocation_settings ||
+      (leaveType.departments || leaveType.locations || leaveType.companies || leaveType.designations || leaveType.subDepartments || leaveType.grades || leaveType.employeeTypes || leaveType.employeeStatuses
+        ? leaveType
+        : null);
+
     if (rawAlloc) {
       try {
         let parsed = rawAlloc;
@@ -348,11 +354,26 @@ export class LeaveAccrualService {
       return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
     };
 
-    const deptMatch = hasOverlap(employee.current_department_id || employee.currentDepartmentId, settings.departments);
+    const compMatch = hasOverlap(
+      employee.organization_id || employee.organizationId || employee.company_id || employee.companyId,
+      settings.companies || settings.organizations
+    );
+    if (!compMatch) return false;
+
+    const deptMatch = hasOverlap(employee.current_department_id || employee.currentDepartmentId || employee.department_id, settings.departments);
     if (!deptMatch) return false;
 
-    const locMatch = hasOverlap(employee.current_location_id || employee.currentLocationId, settings.locations);
+    const subDeptMatch = hasOverlap(employee.sub_department_id || employee.subDepartmentId, settings.subDepartments || settings.sub_departments);
+    if (!subDeptMatch) return false;
+
+    const locMatch = hasOverlap(employee.current_location_id || employee.currentLocationId || employee.location_id, settings.locations);
     if (!locMatch) return false;
+
+    const desigMatch = hasOverlap(
+      employee.current_designation_id || employee.currentDesignationId || employee.designation_id || employee.designationId,
+      settings.designations
+    );
+    if (!desigMatch) return false;
 
     const typeMatch = hasOverlap(employee.employment_type || employee.employmentType || (employee as any).employee_type, settings.employeeTypes);
     if (!typeMatch) return false;
@@ -360,7 +381,7 @@ export class LeaveAccrualService {
     const statusMatch = hasOverlap(employee.status, settings.employeeStatuses);
     if (!statusMatch) return false;
 
-    const gradeMatch = hasOverlap(employee.current_grade_id || employee.currentGradeId, settings.grades);
+    const gradeMatch = hasOverlap(employee.current_grade_id || employee.currentGradeId || employee.grade, settings.grades);
     if (!gradeMatch) return false;
 
     return true;

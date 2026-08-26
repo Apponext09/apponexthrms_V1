@@ -1383,6 +1383,28 @@ export function LeavePoliciesPage() {
     return result;
   };
 
+  const getUniqueSubDepartments = () => {
+    const list = subDepartmentsList || [];
+    const seen = new Set<string>();
+    return list.filter((item: any) => {
+      const name = item.name || item.sub_department_name || item.subDepartmentName;
+      if (!name || seen.has(String(name).toLowerCase())) return false;
+      seen.add(String(name).toLowerCase());
+      return true;
+    });
+  };
+
+  const getUniqueDesignations = () => {
+    const list = designationsList || [];
+    const seen = new Set<string>();
+    return list.filter((item: any) => {
+      const name = item.name || item.designation_name || item.designationName;
+      if (!name || seen.has(String(name).toLowerCase())) return false;
+      seen.add(String(name).toLowerCase());
+      return true;
+    });
+  };
+
   // Fit LeavePoliciesPage inside AppShellLayout without outer overflow
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -1557,21 +1579,27 @@ export function LeavePoliciesPage() {
         },
 
         employment_allocation: {
-          ...empAlloc,
+          companies: empAlloc.companies || [],
           locations: empAlloc.locations || [],
           departments: empAlloc.departments || [],
+          subDepartments: empAlloc.subDepartments || [],
+          designations: empAlloc.designations || [],
           grades: empAlloc.grades || [],
           employeeTypes: empAlloc.employeeTypes || [],
           employeeStatuses: empAlloc.employeeStatuses || [],
+          ...empAlloc,
         },
 
         employment_application: {
-          ...empApp,
+          companies: empApp.companies || [],
           locations: empApp.locations || [],
           departments: empApp.departments || [],
+          subDepartments: empApp.subDepartments || [],
+          designations: empApp.designations || [],
           grades: empApp.grades || [],
           employeeTypes: empApp.employeeTypes || [],
           employeeStatuses: empApp.employeeStatuses || [],
+          ...empApp,
         },
 
         encashment: {
@@ -1688,15 +1716,21 @@ export function LeavePoliciesPage() {
           reverseCondition: false,
         },
         employment_allocation: {
+          companies: [],
           locations: [],
           departments: [],
+          subDepartments: [],
+          designations: [],
           grades: [],
           employeeTypes: [],
           employeeStatuses: [],
         },
         employment_application: {
+          companies: [],
           locations: [],
           departments: [],
+          subDepartments: [],
+          designations: [],
           grades: [],
           employeeTypes: [],
           employeeStatuses: [],
@@ -3213,8 +3247,11 @@ export function LeavePoliciesPage() {
                     companies={companiesList || []}
                     departments={getUniqueDepartments()}
                     locations={getUniqueLocations()}
+                    subDepartments={getUniqueSubDepartments()}
+                    designations={getUniqueDesignations()}
                     gradeOptions={getUniqueGrades()}
                     employeeTypeOptions={getUniqueEmployeeTypes()}
+                    employeeStatusOptions={getUniqueEmployeeStatuses()}
                     leaveTypes={leaveTypes}
                   />
                 )}
@@ -3226,8 +3263,11 @@ export function LeavePoliciesPage() {
                     companies={companiesList || []}
                     departments={getUniqueDepartments()}
                     locations={getUniqueLocations()}
+                    subDepartments={getUniqueSubDepartments()}
+                    designations={getUniqueDesignations()}
                     gradeOptions={getUniqueGrades()}
                     employeeTypeOptions={getUniqueEmployeeTypes()}
+                    employeeStatusOptions={getUniqueEmployeeStatuses()}
                     leaveTypes={leaveTypes}
                   />
                 )}
@@ -3239,7 +3279,11 @@ export function LeavePoliciesPage() {
                     companies={companiesList || []}
                     departments={getUniqueDepartments()}
                     locations={getUniqueLocations()}
+                    subDepartments={getUniqueSubDepartments()}
+                    designations={getUniqueDesignations()}
                     gradeOptions={getUniqueGrades()}
+                    employeeTypeOptions={getUniqueEmployeeTypes()}
+                    employeeStatusOptions={getUniqueEmployeeStatuses()}
                   />
                 )}
 
