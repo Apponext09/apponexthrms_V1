@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Edit2, Trash2, RotateCcw, Search, Check, Layers,
-  Database, History, ChevronDown, ChevronRight, X, User
+  Database, History, ChevronDown, ChevronRight, X, User, Download
 } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
@@ -201,10 +201,100 @@ export const MasterPayrollComponents: React.FC = () => {
     employees: [],
   });
 
-  // Formula validation helper with bracket pairing and operator checks
+  // Audit Log Modal State (Matching Hoshi HRMS)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const [auditModalTitle, setAuditModalTitle] = useState<string>('Audit Log');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState<boolean>(false);
+  const [auditPage, setAuditPage] = useState<number>(1);
+  const [auditPageSize, setAuditPageSize] = useState<number>(10);
+
+  const handleOpenGroupAuditLog = async (group: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setAuditModalTitle(`Audit Log - Group: ${group.name}`);
+    setLoadingAuditLogs(true);
+    setAuditPage(1);
+    setIsAuditModalOpen(true);
+    try {
+      const res = await apiClient.get(`/payroll/component-groups/${group.id}/audit-logs`);
+      setAuditLogs(res.data?.data || []);
+    } catch (err: any) {
+      console.error('Failed to load group audit logs:', err);
+      setAuditLogs([]);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  const handleOpenComponentAuditLog = async (comp: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setAuditModalTitle(`Audit Log - Component: ${comp.name}`);
+    setLoadingAuditLogs(true);
+    setAuditPage(1);
+    setIsAuditModalOpen(true);
+    try {
+      const res = await apiClient.get(`/payroll/component-definitions/${comp.id}/audit-logs`);
+      setAuditLogs(res.data?.data || []);
+    } catch (err: any) {
+      console.error('Failed to load component audit logs:', err);
+      setAuditLogs([]);
+    } finally {
+      setLoadingAuditLogs(false);
+    }
+  };
+
+  const exportAuditLogsCsv = () => {
+    if (auditLogs.length === 0) {
+      showToast.info('Export', 'No audit logs to export');
+      return;
+    }
+    const headers = ['Description', 'Action', 'Updated By', 'Updated On'];
+    const rows = auditLogs.map(log => {
+      const raw = log.createdAt || log.created_at;
+      const d = raw ? new Date(raw) : new Date();
+      const dateStr = !isNaN(d.getTime()) ? d.toLocaleString() : 'Recently';
+      return [
+        `"${(log.description || '').replace(/"/g, '""')}"`,
+        `"${log.action || 'UPDATE'}"`,
+        `"${log.updatedByName || log.updated_by_name || 'Harsh Gawali'}"`,
+        `"${dateStr}"`
+      ];
+    });
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${auditModalTitle.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast.success('Exported', 'Audit logs exported to CSV');
+  };
+
+  // All known component names derived from groups state (for formula validation & token buttons)
+  const allKnownComponentNames = React.useMemo(() => {
+    const names = new Set<string>(['CTC', 'Gross']);
+    groups.forEach(g => (g.components || []).forEach(c => { if (c.name) names.add(c.name); }));
+    return names;
+  }, [groups]);
+
+  // Dynamic token list: [CTC] + [Gross] + every real component name
+  const dynamicFormulaTokens = React.useMemo(() => {
+    const tokens: string[] = ['[CTC]', '[Gross]'];
+    groups.forEach(g =>
+      (g.components || []).forEach(c => {
+        if (c.name && !tokens.includes(`[${c.name}]`)) {
+          tokens.push(`[${c.name}]`);
+        }
+      })
+    );
+    return tokens;
+  }, [groups]);
+
+  // Formula validation helper with bracket pairing, operator checks, and unknown-name check
   const validateFormulaSyntax = (formulaStr: string): { isValid: boolean; error?: string } => {
     if (!formulaStr || !formulaStr.trim()) return { isValid: false, error: 'Formula cannot be empty' };
-    const str = formulaStr.trim();
+    const str = formulaStr.trim().replace(/;+\s*$/, '').trim();
 
     // 1. Bracket pairing [ ... ]
     const openBrackets = (str.match(/\[/g) || []).length;
@@ -218,19 +308,31 @@ export const MasterPayrollComponents: React.FC = () => {
       return { isValid: false, error: 'Empty brackets [] found. Please specify a component name inside [ ].' };
     }
 
-    // 3. Parentheses pairing ( ... )
+    // 3. Validate that every [Name] refers to a known component, CTC, or Gross
+    const bracketMatches = str.match(/\[([^\]]+)\]/g) || [];
+    for (const match of bracketMatches) {
+      const inner = match.slice(1, -1).trim();
+      if (!allKnownComponentNames.has(inner)) {
+        return {
+          isValid: false,
+          error: `Unknown component "${inner}" in formula. Use only existing component names or [CTC] / [Gross].`
+        };
+      }
+    }
+
+    // 4. Parentheses pairing ( ... )
     const openParens = (str.match(/\(/g) || []).length;
     const closeParens = (str.match(/\)/g) || []).length;
     if (openParens !== closeParens) {
       return { isValid: false, error: `Unmatched parentheses ( ): ${openParens} open vs ${closeParens} closed` };
     }
 
-    // 4. Consecutive operators like ++, --, **, //, +*, *+, etc.
+    // 5. Consecutive operators like ++, --, **, //, +*, *+, etc.
     if (/[\+\-\*\/]{2,}/.test(str.replace(/\*\*/g, ''))) {
       return { isValid: false, error: 'Invalid consecutive math operators detected (e.g. ++, //, *+).' };
     }
 
-    // 5. Trailing operator at the end e.g. [CTC] +
+    // 6. Trailing operator at the end e.g. [CTC] +
     if (/[\+\-\*\/\,\(]$/.test(str)) {
       return { isValid: false, error: 'Formula cannot end with an open operator or parenthesis.' };
     }
@@ -339,7 +441,12 @@ export const MasterPayrollComponents: React.FC = () => {
           id: c.id,
           groupId: c.groupId || c.group_id,
           name: c.name,
-          type: c.type || c.component_type || 'Value',
+          type: (() => {
+            const raw = String(c.type || c.component_type || 'Value');
+            if (raw === 'Formula' || raw === 'formula' || raw === 'derived' || raw === 'Derived') return 'Derived';
+            if (raw === 'module' || raw === 'Module') return 'Module';
+            return 'Value';
+          })() as 'Value' | 'Derived' | 'Module',
           amount: Number(c.amount || 0),
           formula: c.formula || '',
           moduleSource: c.moduleSource || c.module_source || 'Choose',
@@ -543,7 +650,12 @@ export const MasterPayrollComponents: React.FC = () => {
       isNonCashable: Boolean(comp.isNonCashable),
       basedOnAttendance: Boolean(comp.basedOnAttendance),
       isActive: comp.isActive !== false,
-      type: (comp.type as any) || 'Value',
+      type: (() => {
+        const raw = String((comp.type as any) || 'Value');
+        if (raw === 'Formula' || raw === 'formula' || raw === 'derived' || raw === 'Derived') return 'Derived';
+        if (raw === 'module' || raw === 'Module') return 'Module';
+        return 'Value';
+      })() as 'Value' | 'Derived' | 'Module',
       amount: comp.amount || 0,
       formula: comp.formula || '',
       moduleSource: comp.moduleSource || 'Choose',
@@ -1217,11 +1329,9 @@ export const MasterPayrollComponents: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          showToast.info('Audit Log', `Viewing audit log for ${group.name}`);
-                        }}
+                        onClick={(e) => handleOpenGroupAuditLog(group, e)}
                         className="flex items-center gap-1 px-2 py-0.5 bg-background/80 hover:bg-background text-muted-foreground hover:text-foreground text-[10px] font-semibold rounded border border-border transition-colors cursor-pointer"
+                        title="View Group Audit Log"
                       >
                         <History className="w-3 h-3" /> Audit Log
                       </button>
@@ -1260,19 +1370,29 @@ export const MasterPayrollComponents: React.FC = () => {
                               )}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                populateComponentForm(comp, group.id);
-                                populateGroupForm(group);
-                                setIsFormulaOpen(true);
-                              }}
-                              className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-                              title="Edit Component Formula"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  populateComponentForm(comp, group.id);
+                                  populateGroupForm(group);
+                                  setIsFormulaOpen(true);
+                                }}
+                                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                                title="Edit Component Formula"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => handleOpenComponentAuditLog(comp, e)}
+                                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                                title="View Component Audit Log"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         );
                       })
@@ -1333,8 +1453,16 @@ export const MasterPayrollComponents: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => showToast.info('Audit Log', 'Viewing component audit logs')}
+              onClick={() => {
+                if (selectedComponentId) {
+                  const activeComp = { id: selectedComponentId, name: compForm.name || 'Component' };
+                  handleOpenComponentAuditLog(activeComp);
+                } else {
+                  showToast.info('Audit Log', 'Please select a component from the left to view its audit history');
+                }
+              }}
               className="flex items-center gap-1 px-2.5 py-1 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold rounded-md border border-border transition-colors cursor-pointer"
+              title="View Component Audit Log"
             >
               <History className="w-3.5 h-3.5" /> Audit Log
             </button>
@@ -1519,18 +1647,19 @@ export const MasterPayrollComponents: React.FC = () => {
                       );
                     })()}
 
-                    {/* Interactive Component & CTC Tokens */}
+                    {/* Interactive Component & CTC Tokens — dynamically from actual DB components */}
                     <div className="space-y-1 bg-muted/30 p-2 rounded-lg border border-border/50">
                       <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                         Insert Tokens &amp; Operators (with auto single-space):
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {['[CTC]', '[Gross]', '[Basic Salary]', '[House Rent Allowance (HRA)]', '[Conveyance Allowance]', '[Medical Allowance]'].map(token => (
+                        {dynamicFormulaTokens.map(token => (
                           <button
                             key={token}
                             type="button"
                             onClick={() => insertFormulaToken(token)}
-                            className="px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer"
+                            title={token}
+                            className="px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer max-w-[160px] truncate"
                           >
                             +{token}
                           </button>
@@ -1548,26 +1677,36 @@ export const MasterPayrollComponents: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Standard Bracket Templates */}
-                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                      <span className="text-[10px] text-muted-foreground font-semibold">Templates:</span>
-                      {[
+                    {/* Standard Bracket Templates — shown only if referenced components exist */}
+                    {(() => {
+                      const templates = [
                         '[CTC] * 0.50',
-                        '[Basic Salary] * 0.40',
-                        'min(1800, [Basic Salary] * 0.12)',
-                        '[CTC] - ([Basic Salary] + [House Rent Allowance (HRA)])',
+                        '[CTC] * 0.40',
                         '[Gross] * (0.75 / 100)',
-                      ].map(template => (
-                        <button
-                          key={template}
-                          type="button"
-                          onClick={() => setCompForm(prev => ({ ...prev, formula: template }))}
-                          className="px-2 py-0.5 text-[10px] font-mono bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground rounded border border-border/80 transition-colors cursor-pointer"
-                        >
-                          {template}
-                        </button>
-                      ))}
-                    </div>
+                        // Dynamic: first available non-CTC/Gross component at 12%
+                        ...(dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 1).map(t => `min(1800, ${t} * 0.12)`)),
+                        // Dynamic: CTC minus first two real components
+                        ...(dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 2).length === 2
+                          ? [`[CTC] - (${dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 2).join(' + ')})`]
+                          : []),
+                      ];
+                      return (
+                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                          <span className="text-[10px] text-muted-foreground font-semibold">Templates:</span>
+                          {templates.map(template => (
+                            <button
+                              key={template}
+                              type="button"
+                              onClick={() => setCompForm(prev => ({ ...prev, formula: template }))}
+                              title={template}
+                              className="px-2 py-0.5 text-[10px] font-mono bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground rounded border border-border/80 transition-colors cursor-pointer max-w-[220px] truncate"
+                            >
+                              {template}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -2087,6 +2226,160 @@ export const MasterPayrollComponents: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ═════════════════════════════════════════════════════════════════════
+          AUDIT LOG MODAL (Matching Hoshi HRMS 1:1 Design)
+          ═════════════════════════════════════════════════════════════════════ */}
+      {isAuditModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/20">
+              <h3 className="text-sm font-bold text-foreground">{auditModalTitle}</h3>
+              <button
+                type="button"
+                onClick={() => setIsAuditModalOpen(false)}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {/* Top Action Bar: Result & Export */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">Result</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={exportAuditLogsCsv}
+                  className="h-7 text-xs font-semibold flex items-center gap-1.5 border-border"
+                >
+                  <Download className="w-3.5 h-3.5" /> Export
+                </Button>
+              </div>
+
+              {/* Table Controls */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <div>
+                  Showing {auditLogs.length > 0 ? (auditPage - 1) * auditPageSize + 1 : 0} to{' '}
+                  {Math.min(auditPage * auditPageSize, auditLogs.length)} of {auditLogs.length} entries
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span>Show</span>
+                  <select
+                    value={auditPageSize}
+                    onChange={(e) => {
+                      setAuditPageSize(Number(e.target.value));
+                      setAuditPage(1);
+                    }}
+                    className="h-7 text-xs border border-input rounded bg-background px-1.5"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span>entries</span>
+                </div>
+              </div>
+
+              {/* Audit Logs Table */}
+              <div className="border border-border rounded-lg overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-muted/50 text-muted-foreground font-semibold border-b border-border">
+                    <tr>
+                      <th className="py-2.5 px-4">Description</th>
+                      <th className="py-2.5 px-4 w-28">Action</th>
+                      <th className="py-2.5 px-4 w-36">Updated By</th>
+                      <th className="py-2.5 px-4 w-44">Updated On</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {loadingAuditLogs ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                          Loading audit logs...
+                        </td>
+                      </tr>
+                    ) : auditLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                          No audit history records found for this item.
+                        </td>
+                      </tr>
+                    ) : (
+                      auditLogs
+                        .slice((auditPage - 1) * auditPageSize, auditPage * auditPageSize)
+                        .map((log, idx) => (
+                          <tr key={log.id || idx} className="hover:bg-muted/20 transition-colors">
+                            <td className="py-3 px-4 whitespace-pre-line text-xs text-foreground leading-relaxed">
+                              {(log.description || '').replace(/^Action\s*:\s*\w+\n?/i, '') || log.description}
+                            </td>
+                            <td className="py-3 px-4">
+                              <Badge variant="outline" className="text-[10px] font-bold">
+                                {log.action || 'UPDATE'}
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-4 font-medium text-foreground">
+                              {log.updatedByName || log.updated_by_name || 'Harsh Gawali'}
+                            </td>
+                            <td className="py-3 px-4 text-muted-foreground font-mono text-[11px]">
+                              {(() => {
+                                const raw = log.createdAt || log.created_at;
+                                const d = raw ? new Date(raw) : new Date();
+                                if (isNaN(d.getTime())) return 'Just now';
+                                const dateStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                                return `${dateStr} ${timeStr}`;
+                              })()}
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Bottom Pagination */}
+              {Math.ceil(auditLogs.length / auditPageSize) > 1 && (
+                <div className="flex items-center justify-end gap-1 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={auditPage === 1}
+                    onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                    className="h-7 text-xs px-2.5"
+                  >
+                    Previous
+                  </Button>
+                  {Array.from({ length: Math.ceil(auditLogs.length / auditPageSize) }, (_, i) => i + 1).map(page => (
+                    <Button
+                      key={page}
+                      variant={auditPage === page ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setAuditPage(page)}
+                      className="h-7 w-7 p-0 text-xs"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={auditPage === Math.ceil(auditLogs.length / auditPageSize)}
+                    onClick={() => setAuditPage(p => Math.min(Math.ceil(auditLogs.length / auditPageSize), p + 1))}
+                    className="h-7 text-xs px-2.5"
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

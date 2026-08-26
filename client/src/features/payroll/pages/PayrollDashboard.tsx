@@ -87,6 +87,7 @@ export const PayrollDashboard: React.FC = () => {
   const [realSlabs, setRealSlabs] = useState<any[]>([]);
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [recentRuns, setRecentRuns] = useState<any[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<number>(0);
   const [trendViewRange, setTrendViewRange] = useState<'6m' | '12m'>('6m');
   const [loading, setLoading] = useState(true);
 
@@ -100,17 +101,22 @@ export const PayrollDashboard: React.FC = () => {
       apiClient.get('/payroll/slabs').catch(() => ({ data: null })),
       apiClient.get('/payroll/cycles').catch(() => ({ data: null })),
       apiClient.get('/payroll/runs').catch(() => ({ data: null })),
-    ]).then(([empRes, deptRes, slabRes, cycleRes, runRes]) => {
+      apiClient.get('/payroll').catch(() => ({ data: null })),
+    ]).then(([empRes, deptRes, slabRes, cycleRes, runRes, allRunsRes]) => {
       const emps = empRes?.data?.data || empRes?.data?.items || empRes?.data || [];
       const depts = deptRes?.data?.data || deptRes?.data || [];
       const slabs = slabRes?.data?.data || slabRes?.data || [];
       const cycles: any[] = cycleRes?.data?.data || cycleRes?.data || [];
       const runs: any[] = runRes?.data?.data || runRes?.data || [];
+      const allRuns: any[] = allRunsRes?.data?.data || allRunsRes?.data || [];
 
       if (Array.isArray(emps)) setRealEmployees(emps);
       if (Array.isArray(depts)) setRealDepartments(depts);
       if (Array.isArray(slabs)) setRealSlabs(slabs);
       if (Array.isArray(runs)) setRecentRuns(runs.slice(0, 6));
+      if (Array.isArray(allRuns)) {
+        setPendingApprovals(allRuns.filter((r: any) => String(r.status || '').toLowerCase() === 'locked').length);
+      }
 
       const open = cycles.find((c: any) => c.status === 'open') || cycles[0] || null;
       setActiveCycle(open);
@@ -213,6 +219,15 @@ export const PayrollDashboard: React.FC = () => {
       route: isHRPath ? '/hr/payroll-processing' : '/payroll/processing',
     },
     {
+      title: 'Payroll Approvals',
+      desc: pendingApprovals > 0 ? `${pendingApprovals} run(s) locked & awaiting your approval` : 'Review and approve locked payroll runs',
+      icon: ShieldCheck,
+      color: pendingApprovals > 0 ? 'from-rose-600 to-pink-600 text-white' : 'from-purple-600 to-violet-600 text-white',
+      badge: pendingApprovals > 0 ? `${pendingApprovals} Pending` : 'Approvals',
+      route: isHRPath ? '/hr/payroll-processing?tab=payroll_requests' : '/payroll/processing?tab=payroll_requests',
+      highlight: pendingApprovals > 0,
+    },
+    {
       title: 'Mass Salary Upload',
       desc: 'Bulk update slabs & CTC via CSV upload',
       icon: UploadCloud,
@@ -289,7 +304,7 @@ export const PayrollDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <Button
             variant="outline"
             onClick={() => navigate(isHRPath ? '/hr/payroll/mass-salary-upload' : '/payroll/mass-salary-upload')}
@@ -298,6 +313,15 @@ export const PayrollDashboard: React.FC = () => {
             <UploadCloud className="w-3.5 h-3.5" />
             Mass Upload CSV
           </Button>
+          {pendingApprovals > 0 && (
+            <Button
+              onClick={() => navigate(isHRPath ? '/hr/payroll-processing?tab=payroll_requests' : '/payroll/processing?tab=payroll_requests')}
+              className="h-9 text-xs font-bold gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-xs animate-pulse"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Approve Payroll ({pendingApprovals})
+            </Button>
+          )}
           <Button
             onClick={() => navigate(isHRPath ? '/hr/payroll-processing' : '/payroll/processing')}
             className="h-9 text-xs font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs"
@@ -307,6 +331,29 @@ export const PayrollDashboard: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* ── PENDING APPROVAL ALERT BANNER ── */}
+      {pendingApprovals > 0 && (
+        <div
+          onClick={() => navigate(isHRPath ? '/hr/payroll-processing?tab=payroll_requests' : '/payroll/processing?tab=payroll_requests')}
+          className="flex items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                {pendingApprovals} Payroll Run{pendingApprovals > 1 ? 's' : ''} Awaiting Your Approval
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                HR has locked the payroll — click here to review and approve before publishing payslips.
+              </p>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+        </div>
+      )}
 
       {/* ── 2. EXECUTIVE KPI CARDS (5 METRICS) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">

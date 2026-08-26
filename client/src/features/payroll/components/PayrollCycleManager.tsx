@@ -6,6 +6,7 @@ import { Plus, Edit2, Trash2, Calendar, Save, X } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface PayrollCycleItem {
   id: string;
@@ -31,6 +32,7 @@ export interface PayrollCycleItem {
 
 export const PayrollCycleManager: React.FC = () => {
   const queryClient = useQueryClient();
+  const selectedCompanyId = useCompanyStore((s) => s.selectedCompanyId);
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
   const [selectedCycleId, setSelectedCycleId] = useState<string>('');
 
@@ -110,6 +112,8 @@ export const PayrollCycleManager: React.FC = () => {
     const payload = {
       cycle_name: cycleForm.name,
       name: cycleForm.name,
+      company_id: selectedCompanyId || null,
+      companyId: selectedCompanyId || null,
       is_daily_wages: cycleForm.isDailyWages,
       frequency: cycleForm.frequency,
       start_date: cycleForm.startDate,

@@ -90,9 +90,23 @@ export class PayrollRunController {
   }
 
   async processPayroll(req: Request, res: Response) {
-    const { id } = req.params;
-    const run = await this.payrollService.processPayroll(req.ctx, parseInt(id));
-    res.json({ success: true, data: run });
+    try {
+      const { id } = req.params;
+      const run = await this.payrollService.processPayroll(req.ctx, parseInt(id));
+      res.json({ success: true, data: run });
+    } catch (e: any) {
+      console.error('processPayroll error:', e);
+      // Reset a permanently-stuck 'processing' run back to 'draft' so HR can retry
+      try {
+        const db = getKnex();
+        await db('payroll_runs')
+          .where('id', parseInt(req.params.id))
+          .where('organization_id', req.ctx.organizationId)
+          .where('status', 'processing')
+          .update({ status: 'draft', updated_at: new Date() });
+      } catch { /* ignore reset error */ }
+      res.status(500).json({ success: false, message: e.message || 'Error processing payroll run' });
+    }
   }
 
   async lockPayroll(req: Request, res: Response) {

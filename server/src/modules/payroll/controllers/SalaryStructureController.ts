@@ -20,7 +20,7 @@ export class SalaryStructureController {
     try {
       const db = getKnex();
       const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
       const employeeId = req.query.employee_id || req.query.employeeId;
 
       let query = db('salary_structures')
@@ -133,10 +133,11 @@ export class SalaryStructureController {
     try {
       const db = getKnex();
       const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
       const { id } = req.params;
 
-      const row = await db('salary_structures')
+      // 1. Try finding by salary_structures.id
+      let row = await db('salary_structures')
         .leftJoin('payroll_slabs', 'salary_structures.slab_id', 'payroll_slabs.id')
         .select(
           'salary_structures.*',
@@ -144,9 +145,25 @@ export class SalaryStructureController {
           'payroll_slabs.selected_component_ids as slab_component_ids'
         )
         .where('salary_structures.id', id)
-        .where('salary_structures.organization_id', orgId)
         .whereNull('salary_structures.deleted_at')
-        .first();
+        .first()
+        .catch(() => null);
+
+      // 2. If not found by structure id, fallback to employee_id
+      if (!row) {
+        row = await db('salary_structures')
+          .leftJoin('payroll_slabs', 'salary_structures.slab_id', 'payroll_slabs.id')
+          .select(
+            'salary_structures.*',
+            'payroll_slabs.name as slab_name',
+            'payroll_slabs.selected_component_ids as slab_component_ids'
+          )
+          .where('salary_structures.employee_id', id)
+          .whereNull('salary_structures.deleted_at')
+          .orderBy('salary_structures.id', 'desc')
+          .first()
+          .catch(() => null);
+      }
 
       if (!row) {
         return res.status(404).json({ success: false, message: 'Salary structure not found' });
@@ -159,6 +176,18 @@ export class SalaryStructureController {
         customComponents = typeof rawCC === 'string'
           ? JSON.parse(rawCC)
           : (rawCC || []);
+      } catch { }
+
+      let earningsBreakup = [];
+      try {
+        const rawEB = s.earnings_breakup || s.earningsBreakup;
+        earningsBreakup = typeof rawEB === 'string' ? JSON.parse(rawEB) : (rawEB || []);
+      } catch { }
+
+      let deductionsBreakup = [];
+      try {
+        const rawDB = s.deductions_breakup || s.deductionsBreakup;
+        deductionsBreakup = typeof rawDB === 'string' ? JSON.parse(rawDB) : (rawDB || []);
       } catch { }
 
       const slabName = s.slab_name || s.slabName || s.structure_name || s.structureName || 'Standard Pay Slab';
@@ -191,6 +220,8 @@ export class SalaryStructureController {
           pfDeduction: Number(s.pf_deduction ?? s.pfDeduction ?? 0),
           esiDeduction: Number(s.esi_deduction ?? s.esiDeduction ?? 0),
           tdsDeduction: Number(s.tds_deduction ?? s.tdsDeduction ?? 0),
+          totalDeductions: Number(s.total_deductions ?? s.totalDeductions ?? 0),
+          total_deductions: Number(s.total_deductions ?? s.totalDeductions ?? 0),
           netTakeHome: netVal,
           net_take_home: netVal,
           netSalary: netVal,
@@ -198,6 +229,10 @@ export class SalaryStructureController {
           salary_input: annualCtcVal,
           customComponents,
           custom_components: customComponents,
+          earningsBreakup,
+          earnings_breakup: earningsBreakup,
+          deductionsBreakup,
+          deductions_breakup: deductionsBreakup,
           effectiveFrom: s.effective_from || s.effectiveFrom || new Date().toISOString().slice(0, 10),
           status: s.status === 'inactive' ? 'Deleted' : 'Active'
         }
@@ -212,12 +247,20 @@ export class SalaryStructureController {
     try {
       const db = getKnex();
       const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
       const { id } = req.params;
 
       await db('salary_structures')
-        .where({ id, organization_id: orgId })
+        .where(function (this: any) {
+          this.where('id', id).orWhere('employee_id', id);
+        })
         .update({ deleted_at: new Date(), status: 'inactive' });
+
+      await db('employee_salary_structures')
+        .where('salary_structure_id', id)
+        .orWhere('employee_id', id)
+        .update({ is_current: false, effective_to: new Date() })
+        .catch(() => { });
 
       res.json({ success: true, message: 'Salary structure deleted successfully' });
     } catch (e: any) {
@@ -263,12 +306,12 @@ export class SalaryStructureController {
     const effectiveFromDate = req.body.effectiveFrom || req.body.effective_from || new Date().toISOString().slice(0, 10);
 
     const firstOrg = await db('organizations').first().catch(() => null);
-    const orgId = req.ctx.organizationId || (firstOrg?.id || 68);
+    const orgId = req.ctx.organizationId || firstOrg?.id || null;
     const sName = structureName || 'Standard Salary Structure';
     const sCode = req.body.structureCode || `STR-${sName.slice(0, 3).toUpperCase()}-${Date.now()}`;
 
     const firstUser = await db('users').orderBy('id', 'asc').first().catch(() => null);
-    const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? 47);
+    const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? null);
 
     const emp = employeeId ? await db('employees').where('id', employeeId).first().catch(() => null) : null;
     const resolvedCompanyId = req.body.companyId || req.body.company_id || emp?.company_id || req.ctx?.companyId || null;
@@ -276,14 +319,34 @@ export class SalaryStructureController {
       ? Number(resolvedCompanyId)
       : null;
 
-    let finalCycleId = cycleIdFromBody;
-    if (!finalCycleId && slabIdFromBody) {
-      const slabRow = await db('payroll_slabs').where('id', slabIdFromBody).first().catch(() => null);
-      if (slabRow?.cycle_id) finalCycleId = slabRow.cycle_id;
+    // Validate cycleId against database to ensure foreign key integrity
+    let finalCycleId: number | null = null;
+    const candidateCycle = cycleIdFromBody || (slabIdFromBody ? (await db('payroll_slabs').where('id', slabIdFromBody).first().catch(() => null))?.cycle_id : null);
+    if (candidateCycle) {
+      const cycleRow = await db('payroll_cycles').where('id', candidateCycle).first().catch(() => null);
+      if (cycleRow) finalCycleId = Number(candidateCycle);
     }
     if (!finalCycleId && numericCompanyId) {
       const compCycle = await db('payroll_cycles').where('company_id', numericCompanyId).whereNull('deleted_at').first().catch(() => null);
       if (compCycle) finalCycleId = compCycle.id;
+    }
+    if (!finalCycleId) {
+      const activeCycle = await db('payroll_cycles')
+        .where(function (this: any) {
+          if (orgId) this.where('organization_id', orgId);
+        })
+        .whereNull('deleted_at')
+        .orderBy('is_current_cycle', 'desc')
+        .first()
+        .catch(() => null);
+      if (activeCycle) finalCycleId = activeCycle.id;
+    }
+
+    // Validate slabId against database
+    let finalSlabId: number | null = null;
+    if (slabIdFromBody) {
+      const slabRow = await db('payroll_slabs').where('id', slabIdFromBody).first().catch(() => null);
+      if (slabRow) finalSlabId = Number(slabIdFromBody);
     }
 
     const existing = employeeId
@@ -306,7 +369,7 @@ export class SalaryStructureController {
         structure_code: sCode,
         employee_id: employeeId || existing.employee_id || null,
         cycle_id: finalCycleId !== null ? finalCycleId : existing.cycle_id,
-        slab_id: slabIdFromBody !== null ? slabIdFromBody : existing.slab_id,
+        slab_id: finalSlabId !== null ? finalSlabId : existing.slab_id,
         effective_from: effectiveFromDate,
         annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : existing.annual_ctc),
         basic_monthly: baseSalary !== undefined ? baseSalary : existing.basic_monthly,
@@ -318,7 +381,6 @@ export class SalaryStructureController {
         esi_deduction: esiDeduction !== undefined ? esiDeduction : existing.esi_deduction,
         tds_deduction: tdsDeduction !== undefined ? tdsDeduction : existing.tds_deduction,
         net_take_home: netSalary !== undefined ? netSalary : existing.net_take_home,
-        custom_components: customComponentsJson !== undefined ? customComponentsJson : (existing.custom_components || null),
         earnings_breakup: earningsBreakupJson !== null ? earningsBreakupJson : existing.earnings_breakup,
         deductions_breakup: deductionsBreakupJson !== null ? deductionsBreakupJson : existing.deductions_breakup,
         updated_by: validUserId,
@@ -352,7 +414,6 @@ export class SalaryStructureController {
         esi_deduction: esiDeduction !== undefined ? esiDeduction : 0,
         tds_deduction: tdsDeduction !== undefined ? tdsDeduction : 0,
         net_take_home: netSalary !== undefined ? netSalary : 0,
-        custom_components: customComponentsJson || null,
         earnings_breakup: earningsBreakupJson,
         deductions_breakup: deductionsBreakupJson,
         status: 'active',
@@ -391,28 +452,18 @@ export class SalaryStructureController {
     if (insertedId) {
       try {
         const salComp = await db('salary_components').first().catch(() => null);
-        const compId = salComp?.id || 101;
-
-        await db('salary_structure_components').insert({
-          uuid: uuidv4(),
-          organization_id: orgId,
-          structure_id: insertedId,
-          component_id: compId,
-          sort_order: 1,
-          employee_id: employeeId || null,
-          annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : 0),
-          basic_monthly: baseSalary !== undefined ? baseSalary : 0,
-          hra_monthly: hraMonthly !== undefined ? hraMonthly : 0,
-          special_allowance_monthly: specialAllowanceMonthly !== undefined ? specialAllowanceMonthly : 0,
-          gross_monthly: grossSalary !== undefined ? grossSalary : 0,
-          pf_deduction: pfDeduction !== undefined ? pfDeduction : 0,
-          esi_deduction: esiDeduction !== undefined ? esiDeduction : 0,
-          tds_deduction: tdsDeduction !== undefined ? tdsDeduction : 0,
-          net_take_home: netSalary !== undefined ? netSalary : 0,
-          grade_code: sCode,
-          created_by: validUserId,
-          updated_by: validUserId
-        });
+        if (salComp?.id) {
+          await db('salary_structure_components').insert({
+            uuid: uuidv4(),
+            organization_id: orgId,
+            company_id: numericCompanyId,
+            structure_id: insertedId,
+            component_id: salComp.id,
+            sort_order: 1,
+            created_by: validUserId,
+            updated_by: validUserId
+          });
+        }
       } catch (e) { }
     }
 
@@ -439,7 +490,7 @@ export class SalaryStructureController {
     try {
       const db = getKnex();
       const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
       const { ctc, grossMonthly, slabId, cycleId, companyId, employeeId, effectiveFrom } = req.body;
 
       if (!this.payrollService) {
@@ -468,43 +519,63 @@ export class SalaryStructureController {
     const db = getKnex();
     const { id } = req.params;
     const firstOrg = await db('organizations').first().catch(() => null);
-    const orgId = req.ctx.organizationId || (firstOrg?.id || 68);
+    const orgId = req.ctx.organizationId || firstOrg?.id || null;
 
     const employeeId = req.body.employeeId ?? req.body.employee_id;
-    const structureName = req.body.structureName || req.body.slab || req.body.name;
-    const baseSalary = req.body.baseSalary ?? req.body.basic_monthly;
-    const grossSalary = req.body.grossSalary ?? req.body.gross_monthly;
-    const netSalary = req.body.netSalary ?? req.body.net_salary_monthly ?? req.body.net_take_home;
+    const structureName = req.body.structureName || req.body.slab || req.body.name || req.body.structure_name;
+    const baseSalary = req.body.baseSalary ?? req.body.basic_monthly ?? req.body.basicMonthly;
+    const grossSalary = req.body.grossSalary ?? req.body.gross_monthly ?? req.body.grossMonthly;
+    const netSalary = req.body.netSalary ?? req.body.net_salary_monthly ?? req.body.net_take_home ?? req.body.netTakeHome;
     const annualCtc = req.body.annualCtc ?? req.body.annual_ctc;
     const hraMonthly = req.body.hraMonthly ?? req.body.hra_monthly;
     const specialAllowanceMonthly = req.body.specialAllowanceMonthly ?? req.body.standard_allowance_monthly ?? req.body.special_allowance_monthly;
     const pfDeduction = req.body.pfDeduction ?? req.body.pf_deduction;
     const esiDeduction = req.body.esiDeduction ?? req.body.esic_deduction ?? req.body.esi_deduction;
     const tdsDeduction = req.body.tdsDeduction ?? req.body.tds_deduction;
-    const customComponents = req.body.customComponents;
+    const totalDeductions = req.body.totalDeductions ?? req.body.total_deductions;
+    const customComponents = req.body.customComponents ?? req.body.custom_components;
+    const earningsBreakup = req.body.earningsBreakup ?? req.body.earnings_breakup;
+    const deductionsBreakup = req.body.deductionsBreakup ?? req.body.deductions_breakup;
     const cycleId = req.body.cycleId ?? req.body.cycle_id;
     const slabId = req.body.slabId ?? req.body.slab_id;
+    const companyId = req.body.companyId ?? req.body.company_id;
+    const effectiveFrom = req.body.effectiveFrom ?? req.body.effective_from;
 
-    const cycleIdVal = cycleId || null;
-    const slabIdVal = slabId || null;
+    const cycleIdVal = cycleId ? Number(cycleId) : null;
+    const slabIdVal = slabId ? Number(slabId) : null;
 
     const customComponentsJson = customComponents
       ? (typeof customComponents === 'string' ? customComponents : JSON.stringify(customComponents))
       : undefined;
 
-    const sName = structureName || 'Standard Salary Structure';
-    const sCode = req.body.structureCode || req.body.gradeCode || sName;
+    const earningsBreakupJson = earningsBreakup
+      ? (typeof earningsBreakup === 'string' ? earningsBreakup : JSON.stringify(earningsBreakup))
+      : undefined;
+
+    const deductionsBreakupJson = deductionsBreakup
+      ? (typeof deductionsBreakup === 'string' ? deductionsBreakup : JSON.stringify(deductionsBreakup))
+      : undefined;
+
     const firstUser = await db('users').first().catch(() => null);
-    const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id || 1);
+    const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id || null);
 
     let targetStruct = await db('salary_structures')
       .where('id', id)
       .first()
       .catch(() => null);
 
-    if (!targetStruct && sName) {
+    if (!targetStruct) {
       targetStruct = await db('salary_structures')
-        .where({ structure_name: sName })
+        .where('employee_id', id)
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
+        .first()
+        .catch(() => null);
+    }
+
+    if (!targetStruct && structureName) {
+      targetStruct = await db('salary_structures')
+        .where({ structure_name: structureName })
         .whereNull('deleted_at')
         .first()
         .catch(() => null);
@@ -513,28 +584,65 @@ export class SalaryStructureController {
     let actualStructId: any = targetStruct ? targetStruct.id : null;
     const ts: any = withSnakeAliases(targetStruct) || {};
 
+    const sName = structureName || ts.structure_name || 'Standard Salary Structure';
+    const sCode = req.body.structureCode || req.body.structure_code || ts.structure_code || `STR-${sName.slice(0, 3).toUpperCase()}-${Date.now()}`;
+
+    // Validate cycleId against database to ensure foreign key integrity
+    let finalCycleId: number | null = null;
+    const candidateCycle = cycleIdVal || ts.cycle_id || (slabIdVal ? (await db('payroll_slabs').where('id', slabIdVal).first().catch(() => null))?.cycle_id : null);
+    if (candidateCycle) {
+      const cycleRow = await db('payroll_cycles').where('id', candidateCycle).first().catch(() => null);
+      if (cycleRow) finalCycleId = Number(candidateCycle);
+    }
+    if (!finalCycleId && (companyId || ts.company_id)) {
+      const targetComp = companyId ? Number(companyId) : ts.company_id;
+      const compCycle = await db('payroll_cycles').where('company_id', targetComp).whereNull('deleted_at').first().catch(() => null);
+      if (compCycle) finalCycleId = compCycle.id;
+    }
+    if (!finalCycleId) {
+      const activeCycle = await db('payroll_cycles')
+        .where(function (this: any) {
+          if (orgId) this.where('organization_id', orgId);
+        })
+        .whereNull('deleted_at')
+        .orderBy('is_current_cycle', 'desc')
+        .first()
+        .catch(() => null);
+      if (activeCycle) finalCycleId = activeCycle.id;
+    }
+
+    // Validate slabId against database
+    let finalSlabId: number | null = null;
+    const candidateSlab = slabIdVal || ts.slab_id;
+    if (candidateSlab) {
+      const slabRow = await db('payroll_slabs').where('id', candidateSlab).first().catch(() => null);
+      if (slabRow) finalSlabId = Number(candidateSlab);
+    }
+
     if (!actualStructId) {
       try {
         const [insertedId] = await db('salary_structures').insert({
           uuid: uuidv4(),
           organization_id: orgId,
+          company_id: companyId ? Number(companyId) : null,
           employee_id: employeeId || null,
-          cycle_id: cycleIdVal,
-          slab_id: slabIdVal,
+          cycle_id: finalCycleId,
+          slab_id: finalSlabId,
           structure_name: sName,
           structure_code: sCode,
-          grade_code: sCode,
-          effective_from: new Date().toISOString().slice(0, 10),
+          effective_from: effectiveFrom || new Date().toISOString().slice(0, 10),
           annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : 0),
           basic_monthly: baseSalary !== undefined ? baseSalary : 0,
           hra_monthly: hraMonthly !== undefined ? hraMonthly : 0,
           special_allowance_monthly: specialAllowanceMonthly !== undefined ? specialAllowanceMonthly : 0,
           gross_monthly: grossSalary !== undefined ? grossSalary : 0,
+          total_deductions: totalDeductions !== undefined ? totalDeductions : 0,
           pf_deduction: pfDeduction !== undefined ? pfDeduction : 0,
           esi_deduction: esiDeduction !== undefined ? esiDeduction : 0,
           tds_deduction: tdsDeduction !== undefined ? tdsDeduction : 0,
           net_take_home: netSalary !== undefined ? netSalary : 0,
-          custom_components: customComponentsJson || null,
+          earnings_breakup: earningsBreakupJson || null,
+          deductions_breakup: deductionsBreakupJson || null,
           status: 'active',
           created_by: validUserId,
           updated_by: validUserId
@@ -545,38 +653,44 @@ export class SalaryStructureController {
           uuid: uuidv4(),
           organization_id: orgId,
           structure_name: sName,
-          cycle_id: cycleIdVal,
-          slab_id: slabIdVal,
-          effective_from: new Date().toISOString().slice(0, 10)
+          structure_code: sCode,
+          cycle_id: finalCycleId,
+          slab_id: finalSlabId,
+          effective_from: effectiveFrom || new Date().toISOString().slice(0, 10)
         });
         actualStructId = insertedId;
       }
     } else {
       try {
+        const updatePayload: any = {
+          structure_name: sName,
+          structure_code: sCode,
+          updated_by: validUserId,
+          updated_at: new Date()
+        };
+
+        if (finalCycleId !== null) updatePayload.cycle_id = finalCycleId;
+        if (finalSlabId !== null) updatePayload.slab_id = finalSlabId;
+        if (employeeId !== undefined) updatePayload.employee_id = employeeId;
+        if (companyId !== undefined && companyId !== null) updatePayload.company_id = Number(companyId);
+        if (effectiveFrom !== undefined) updatePayload.effective_from = effectiveFrom;
+        if (annualCtc !== undefined) updatePayload.annual_ctc = annualCtc;
+        else if (grossSalary !== undefined) updatePayload.annual_ctc = Number(grossSalary) * 12;
+        if (baseSalary !== undefined) updatePayload.basic_monthly = baseSalary;
+        if (hraMonthly !== undefined) updatePayload.hra_monthly = hraMonthly;
+        if (specialAllowanceMonthly !== undefined) updatePayload.special_allowance_monthly = specialAllowanceMonthly;
+        if (grossSalary !== undefined) updatePayload.gross_monthly = grossSalary;
+        if (totalDeductions !== undefined) updatePayload.total_deductions = totalDeductions;
+        if (pfDeduction !== undefined) updatePayload.pf_deduction = pfDeduction;
+        if (esiDeduction !== undefined) updatePayload.esi_deduction = esiDeduction;
+        if (tdsDeduction !== undefined) updatePayload.tds_deduction = tdsDeduction;
+        if (netSalary !== undefined) updatePayload.net_take_home = netSalary;
+        if (earningsBreakupJson !== undefined) updatePayload.earnings_breakup = earningsBreakupJson;
+        if (deductionsBreakupJson !== undefined) updatePayload.deductions_breakup = deductionsBreakupJson;
+
         await db('salary_structures')
           .where('id', actualStructId)
-          .update({
-            structure_name: sName,
-            ...(req.body.structureCode || req.body.gradeCode ? {
-              structure_code: req.body.structureCode || req.body.gradeCode,
-              grade_code: req.body.structureCode || req.body.gradeCode
-            } : {}),
-            cycle_id: cycleIdVal !== null ? cycleIdVal : ts.cycle_id,
-            slab_id: slabIdVal !== null ? slabIdVal : ts.slab_id,
-            employee_id: employeeId !== undefined ? employeeId : ts.employee_id,
-            annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : ts.annual_ctc),
-            basic_monthly: baseSalary !== undefined ? baseSalary : ts.basic_monthly,
-            hra_monthly: hraMonthly !== undefined ? hraMonthly : ts.hra_monthly,
-            special_allowance_monthly: specialAllowanceMonthly !== undefined ? specialAllowanceMonthly : ts.special_allowance_monthly,
-            gross_monthly: grossSalary !== undefined ? grossSalary : ts.gross_monthly,
-            pf_deduction: pfDeduction !== undefined ? pfDeduction : ts.pf_deduction,
-            esi_deduction: esiDeduction !== undefined ? esiDeduction : ts.esi_deduction,
-            tds_deduction: tdsDeduction !== undefined ? tdsDeduction : ts.tds_deduction,
-            net_take_home: netSalary !== undefined ? netSalary : ts.net_take_home,
-            custom_components: customComponentsJson !== undefined ? customComponentsJson : (ts.custom_components || null),
-            updated_by: validUserId,
-            updated_at: new Date()
-          });
+          .update(updatePayload);
       } catch (err: any) {
         console.error('[updateStructure] Update failed:', err.message);
         res.status(400).json({ success: false, message: 'Failed to update salary structure: ' + err.message });
@@ -604,6 +718,7 @@ export class SalaryStructureController {
             await db('salary_structure_components').insert({
               uuid: uuidv4(),
               organization_id: targetOrgId,
+              company_id: companyId ? Number(companyId) : null,
               structure_id: actualStructId,
               component_id: salComp.id,
               sort_order: 1,
@@ -727,10 +842,10 @@ export class SalaryStructureController {
 
     const firstOrg = await db('organizations').first().catch(() => null);
     const empRow = employeeId ? await db('employees').where('id', employeeId).first().catch(() => null) : null;
-    const targetOrgId = empRow?.organization_id || req.ctx.organizationId || (firstOrg?.id || 68);
+    const targetOrgId = empRow?.organization_id || req.ctx.organizationId || firstOrg?.id || null;
 
     const firstUser = await db('users').orderBy('id', 'asc').first().catch(() => null);
-    const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? 47);
+    const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? null);
 
     let structRow = null;
     if (employeeId) {
@@ -775,7 +890,6 @@ export class SalaryStructureController {
           employee_id: employeeId || null,
           structure_name: resolvedStructureName,
           structure_code: sCode,
-          grade_code: sCode,
           slab_id: slabIdFromBody,
           annual_ctc: reqCtc !== undefined ? reqCtc : 0,
           basic_monthly: reqBasic !== undefined ? reqBasic : 0,
@@ -879,7 +993,7 @@ export class SalaryStructureController {
     const db = getKnex();
     const ctx = req.ctx;
     const orgId = ctx.organizationId;
-    const validUserId = ctx.userId || 1;
+    const validUserId = ctx.userId || null;
 
     const items: any[] = Array.isArray(req.body.assignments)
       ? req.body.assignments

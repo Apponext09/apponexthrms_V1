@@ -26,6 +26,7 @@ router.delete('/cycles/:id', requirePermission('payroll:generate'), asyncHandler
 
 // Component Groups
 router.get('/component-groups', asyncHandler((req, res) => controller.listComponentGroups(req, res)));
+router.get('/component-groups/:id/audit-logs', asyncHandler((req, res) => controller.getComponentGroupAuditLogs(req, res)));
 router.post('/component-groups', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponentGroup(req, res)));
 router.put('/component-groups/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateComponentGroup(req, res)));
 router.delete('/component-groups/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteComponentGroup(req, res)));
@@ -35,6 +36,7 @@ router.get('/components', asyncHandler((req, res) => controller.getComponents(re
 router.post('/components', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponent(req, res)));
 router.delete('/components/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteComponentDefinition(req, res)));
 router.get('/component-definitions', asyncHandler((req, res) => controller.listComponentDefinitions(req, res)));
+router.get('/component-definitions/:id/audit-logs', asyncHandler((req, res) => controller.getComponentAuditLogs(req, res)));
 router.post('/component-definitions', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponentDefinition(req, res)));
 router.put('/component-definitions/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateComponentDefinition(req, res)));
 router.delete('/component-definitions/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteComponentDefinition(req, res)));

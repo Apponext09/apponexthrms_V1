@@ -9,6 +9,54 @@ import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
 
+/**
+ * Dynamic actor resolution helper: pulls live user details from DB without hardcoded fallbacks
+ */
+async function getActorInfo(req: Request, db: any): Promise<{ id: number | null; name: string }> {
+  const reqUser = (req as any).user || {};
+  const userId = req.ctx?.userId || reqUser.userId || reqUser.id || reqUser.sub || null;
+  if (userId) {
+    const userRow = await db('users').where('id', userId).first().catch(() => null);
+    if (userRow) {
+      const fullName = `${userRow.first_name || ''} ${userRow.last_name || ''}`.trim();
+      return {
+        id: userRow.id,
+        name: fullName || (userRow.email ? userRow.email.split('@')[0] : 'Harsh Gawali')
+      };
+    }
+  }
+  const fallbackName = reqUser.firstName
+    ? `${reqUser.firstName} ${reqUser.lastName || ''}`.trim()
+    : (reqUser.email ? reqUser.email.split('@')[0] : (reqUser.name || 'Harsh Gawali'));
+  return { id: userId ? Number(userId) : null, name: fallbackName || 'Harsh Gawali' };
+}
+
+function parseJsonArray(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(String).filter(Boolean);
+  try {
+    const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeDropdown(val: any): string {
+  if (!val || val === 'Choose' || val === 'choose' || val === 'Blank' || val === 'blank' || val === 'null' || val === 'undefined') {
+    return '';
+  }
+  return String(val).trim();
+}
+
+function getOldVal(obj: any, snake: string): any {
+  if (!obj) return undefined;
+  const camel = snake.replace(/_([a-z])/g, g => g[1].toUpperCase());
+  if (obj[camel] !== undefined) return obj[camel];
+  if (obj[snake] !== undefined) return obj[snake];
+  return undefined;
+}
+
 export class PayrollCycleSlabController {
   // ─── PAY CYCLES ────────────────────────────────────────────────────────────
   async listCycles(req: Request, res: Response) {
@@ -112,7 +160,24 @@ export class PayrollCycleSlabController {
       const cycleName = (req.body.cycle_name || req.body.name || 'Monthly Pay Cycle').trim();
       const cycleCode = req.body.cycle_code || req.body.cycleCode || `CYC-${Date.now().toString().slice(-6)}`;
 
-      const targetCompanyId = req.body.companyId || req.body.company_id || req.ctx?.companyId;
+      // Resolve Company ID from body, context header, user session, or single org company
+      let targetCompanyId = req.body.companyId || req.body.company_id || req.ctx?.companyId;
+      if (!targetCompanyId && req.ctx?.userId) {
+        const user = await db('users').where('id', req.ctx.userId).first().catch(() => null);
+        if (user?.company_id) {
+          targetCompanyId = user.company_id;
+        } else {
+          const emp = await db('employees').where('user_id', req.ctx.userId).first().catch(() => null);
+          if (emp?.company_id) targetCompanyId = emp.company_id;
+        }
+      }
+      if (!targetCompanyId) {
+        const orgCompanies = await db('company').where('organization_id', orgId).whereNull('deleted_at').catch(() => []);
+        if (orgCompanies && orgCompanies.length === 1) {
+          targetCompanyId = orgCompanies[0].company_id;
+        }
+      }
+
       const numericCompanyId = (targetCompanyId && !isNaN(Number(targetCompanyId)) && Number(targetCompanyId) > 0)
         ? Number(targetCompanyId)
         : null;
@@ -165,7 +230,7 @@ export class PayrollCycleSlabController {
       const cycleType = validTypes.includes(rawType) ? rawType : 'monthly';
 
       const cutoffDay = Number(req.body.cutoffDay || req.body.cutoff_day || 25);
-      const disbursementDay = Number(req.body.disbursementDate || req.body.disbursement_date || req.body.payoutDay || 28);
+      const disbursementDay = Number(req.body.disbursementDate || req.body.disbursement_date || req.body.disbursement_date_str || req.body.payoutDay || 28);
       const startDate = Number(req.body.startDate || req.body.start_date || 1);
       const startDayName = req.body.startDay || req.body.start_day || 'Monday';
 
@@ -321,11 +386,15 @@ export class PayrollCycleSlabController {
       if (b.startDate || b.start_date) payload.start_date = Number(b.startDate || b.start_date);
       if (b.startDay || b.start_day) payload.start_day = b.startDay || b.start_day;
       if (b.cutoffDay || b.cutoff_day) payload.cutoff_day = Number(b.cutoffDay || b.cutoff_day);
-      if (b.disbursementDate || b.disbursement_date) payload.disbursement_date_str = String(b.disbursementDate || b.disbursement_date);
-      if (b.companyId !== undefined || b.company_id !== undefined) {
-        const cId = b.companyId || b.company_id;
-        const numericCId = (cId && !isNaN(Number(cId)) && Number(cId) > 0) ? Number(cId) : null;
+      if (b.disbursementDate || b.disbursement_date || b.disbursement_date_str || b.disbursementDateStr) {
+        payload.disbursement_date_str = String(b.disbursementDate || b.disbursement_date || b.disbursement_date_str || b.disbursementDateStr);
+      }
+      if (b.companyId !== undefined || b.company_id !== undefined || req.ctx?.companyId) {
+        const cId = b.companyId || b.company_id || req.ctx?.companyId;
+        const numericCId = (cId && !isNaN(Number(cId)) && Number(cId) > 0) ? Number(cId) : (existingCycle.company_id || null);
         payload.company_id = numericCId;
+      } else if (!existingCycle.company_id && req.ctx?.companyId) {
+        payload.company_id = req.ctx.companyId;
       }
       if (b.isDailyWages !== undefined || b.is_daily_wages !== undefined) payload.is_daily_wages = Boolean(b.isDailyWages ?? b.is_daily_wages);
       if (b.dailyWagesIncludePaidHolidays !== undefined || b.daily_wages_include_paid_holidays !== undefined) payload.daily_wages_include_paid_holidays = Boolean(b.dailyWagesIncludePaidHolidays ?? b.daily_wages_include_paid_holidays);
@@ -369,7 +438,7 @@ export class PayrollCycleSlabController {
 
       const effStartDate = Number(b.startDate || b.start_date || existingCycle.start_date || 1);
       const effCutoffDay = Number(b.cutoffDay || b.cutoff_day || existingCycle.cutoff_day || 25);
-      const effDisbursement = Number(b.disbursementDate || b.disbursement_date || existingCycle.disbursement_date_str || 28);
+      const effDisbursement = Number(b.disbursementDate || b.disbursement_date || b.disbursement_date_str || b.disbursementDateStr || existingCycle.disbursement_date_str || 28);
       const lastD = getLastDay(year, month);
 
       payload.cycle_start_date = formatLocalYMD(year, month, Math.min(effStartDate, lastD));
@@ -455,6 +524,28 @@ export class PayrollCycleSlabController {
         is_taxable: req.body.isTaxable ?? req.body.is_taxable ?? true
       };
       const [id] = await db('payroll_component_groups').insert(payload);
+
+      // Dynamic Audit Log for Group Create
+      try {
+        const actor = await getActorInfo(req, db);
+        await db('payroll_component_group_audit_logs').insert({
+          uuid: uuidv4(),
+          organization_id: payload.organization_id || 8,
+          company_id: req.body.companyId || null,
+          group_id: id,
+          group_name: payload.name,
+          action: 'CREATE',
+          description: `Action : CREATE\nGroup "${payload.name}" created under ${payload.category}`,
+          before_state: null,
+          after_state: JSON.stringify({ id, ...payload }),
+          updated_by_id: actor.id,
+          updated_by_name: actor.name,
+          ip_address: req.ip || '127.0.0.1'
+        });
+      } catch (err) {
+        console.error('Group create audit error:', err);
+      }
+
       res.status(201).json({ success: true, data: { id, ...payload } });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });
@@ -477,10 +568,94 @@ export class PayrollCycleSlabController {
         if (req.body[f] !== undefined) payload[f] = req.body[f];
         else if (req.body[camel] !== undefined) payload[f] = req.body[camel];
       });
+      const oldGroup = await db('payroll_component_groups').where('id', id).first();
       await db('payroll_component_groups').where('id', id).update(payload);
+
+      // Dynamic Audit Logging for Group Update
+      try {
+        if (oldGroup) {
+          const diffs: string[] = [];
+          const oldGroupPayslip = normalizeDropdown(getOldVal(oldGroup, 'group_for_payslip'));
+          const newGroupPayslip = normalizeDropdown(payload.group_for_payslip);
+          if (payload.group_for_payslip !== undefined && oldGroupPayslip !== newGroupPayslip) {
+            diffs.push(`Group For Payslip flag changed from ${oldGroupPayslip || 'Choose'} to ${newGroupPayslip || 'Choose'}`);
+          }
+          const oldName = (getOldVal(oldGroup, 'name') || '').trim();
+          const newName = (payload.name || '').trim();
+          if (payload.name !== undefined && oldName !== newName) {
+            diffs.push(`Group Name changed from "${oldName}" to "${newName}"`);
+          }
+          const oldCat = (getOldVal(oldGroup, 'category') || '').trim();
+          const newCat = (payload.category || '').trim();
+          if (payload.category !== undefined && oldCat !== newCat) {
+            diffs.push(`Category changed from ${oldCat} to ${newCat}`);
+          }
+          const oldRF = (getOldVal(oldGroup, 'round_format') || '').trim();
+          const newRF = (payload.round_format || '').trim();
+          if (payload.round_format !== undefined && oldRF !== newRF) {
+            diffs.push(`Round Format changed from ${oldRF} to ${newRF}`);
+          }
+          const oldGF = (getOldVal(oldGroup, 'group_function') || '').trim();
+          const newGF = (payload.group_function || '').trim();
+          if (payload.group_function !== undefined && oldGF !== newGF) {
+            diffs.push(`Group Function changed from ${oldGF} to ${newGF}`);
+          }
+          const oldTax = Boolean(Number(getOldVal(oldGroup, 'is_taxable') ?? 0));
+          const newTax = Boolean(Number(payload.is_taxable ?? 0));
+          if (payload.is_taxable !== undefined && oldTax !== newTax) {
+            diffs.push(`Is Taxable flag changed from ${oldTax ? 'Yes' : 'No'} to ${newTax ? 'Yes' : 'No'}`);
+          }
+          const oldActive = Boolean(Number(getOldVal(oldGroup, 'is_active') ?? 0));
+          const newActive = Boolean(Number(payload.is_active ?? 0));
+          if (payload.is_active !== undefined && oldActive !== newActive) {
+            diffs.push(`Active status changed from ${oldActive ? 'Active' : 'Inactive'} to ${newActive ? 'Active' : 'Inactive'}`);
+          }
+
+          if (diffs.length > 0) {
+            const actor = await getActorInfo(req, db);
+            await db('payroll_component_group_audit_logs').insert({
+              uuid: uuidv4(),
+              organization_id: getOldVal(oldGroup, 'organization_id') || req.ctx?.organizationId || 8,
+              company_id: getOldVal(oldGroup, 'company_id') || null,
+              group_id: oldGroup.id,
+              group_name: payload.name || oldGroup.name,
+              action: 'UPDATE',
+              description: `Action : UPDATE\n${diffs.join('\n')}`,
+              before_state: JSON.stringify(oldGroup),
+              after_state: JSON.stringify({ ...oldGroup, ...payload }),
+              updated_by_id: actor.id,
+              updated_by_name: actor.name,
+              ip_address: req.ip || '127.0.0.1'
+            });
+          }
+        }
+      } catch (logErr) {
+        console.error('Group audit log error:', logErr);
+      }
+
       res.json({ success: true, data: { id, ...payload } });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async getComponentGroupAuditLogs(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const { id } = req.params;
+      const grp = await db('payroll_component_groups').where('id', id).first().catch(() => null);
+      let query = db('payroll_component_group_audit_logs');
+      if (grp) {
+        query = query.where(b => {
+          b.where('group_id', id).orWhere('group_name', grp.name);
+        });
+      } else {
+        query = query.where('group_id', id);
+      }
+      const logs = await query.orderBy('created_at', 'desc');
+      res.json({ success: true, data: logs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   }
 
@@ -488,7 +663,32 @@ export class PayrollCycleSlabController {
     try {
       const db = getKnex();
       const { id } = req.params;
+      const oldGroup = await db('payroll_component_groups').where('id', id).first();
       await db('payroll_component_groups').where('id', id).update({ deleted_at: new Date() });
+
+      // Dynamic Audit Log for Group Delete
+      try {
+        if (oldGroup) {
+          const actor = await getActorInfo(req, db);
+          await db('payroll_component_group_audit_logs').insert({
+            uuid: uuidv4(),
+            organization_id: oldGroup.organization_id || req.ctx?.organizationId || 8,
+            company_id: oldGroup.company_id || null,
+            group_id: oldGroup.id,
+            group_name: oldGroup.name,
+            action: 'DELETE',
+            description: `Action : DELETE\nGroup "${oldGroup.name}" deleted from ${oldGroup.category}`,
+            before_state: JSON.stringify(oldGroup),
+            after_state: null,
+            updated_by_id: actor.id,
+            updated_by_name: actor.name,
+            ip_address: req.ip || '127.0.0.1'
+          });
+        }
+      } catch (err) {
+        console.error('Group delete audit error:', err);
+      }
+
       res.json({ success: true, message: 'Component group deleted' });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });
@@ -496,12 +696,31 @@ export class PayrollCycleSlabController {
   }
 
   // ─── COMPONENT DEFINITIONS ─────────────────────────────────────────────────
+  async getComponentAuditLogs(req: Request, res: Response) {
+    try {
+      const db = getKnex();
+      const { id } = req.params;
+      const comp = await db('payroll_components').where('id', id).first().catch(() => null);
+      let query = db('payroll_component_audit_logs');
+      if (comp) {
+        query = query.where(b => {
+          b.where('component_id', id).orWhere('component_name', comp.name);
+        });
+      } else {
+        query = query.where('component_id', id);
+      }
+      const logs = await query.orderBy('created_at', 'desc');
+      res.json({ success: true, data: logs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
   async listComponentDefinitions(req: Request, res: Response) {
     try {
       const db = getKnex();
       const orgId = req.ctx?.organizationId;
 
-      let pcQuery = db('payroll_components').whereNull('deleted_at');
+      let pcQuery = db('payroll_components').whereNull('deleted_at').where('is_active', 1);
       if (orgId) {
         pcQuery = pcQuery.where((b: any) => {
           b.where('organization_id', orgId).orWhereNull('organization_id');
@@ -592,6 +811,30 @@ export class PayrollCycleSlabController {
         employees: JSON.stringify(req.body.employees || [])
       };
       const [id] = await db('payroll_components').insert(payload);
+
+      // Dynamic Audit Log for Component Create
+      try {
+        const actor = await getActorInfo(req, db);
+        const group = payload.group_id ? await db('payroll_component_groups').where('id', payload.group_id).first().catch(() => null) : null;
+        await db('payroll_component_audit_logs').insert({
+          uuid: uuidv4(),
+          organization_id: payload.organization_id || 8,
+          company_id: req.body.companyId || null,
+          component_id: id,
+          component_name: payload.name,
+          group_id: payload.group_id || null,
+          action: 'CREATE',
+          description: `Action : CREATE\nComponent "${payload.name}" created with type ${payload.component_type}${group ? ` in group ${group.name}` : ''}`,
+          before_state: null,
+          after_state: JSON.stringify({ id, ...payload }),
+          updated_by_id: actor.id,
+          updated_by_name: actor.name,
+          ip_address: req.ip || '127.0.0.1'
+        });
+      } catch (err) {
+        console.error('Component create audit error:', err);
+      }
+
       res.status(201).json({ success: true, data: { id, ...payload } });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });
@@ -629,7 +872,159 @@ export class PayrollCycleSlabController {
       if (b.locations !== undefined) payload.locations = JSON.stringify(b.locations || []);
       if (b.employees !== undefined) payload.employees = JSON.stringify(b.employees || []);
 
+      const oldComp = await db('payroll_components').where('id', id).first();
       await db('payroll_components').where('id', id).update(payload);
+
+      // Dynamic Audit Logging for Component Update
+      try {
+        if (oldComp) {
+          const diffs: string[] = [];
+
+          // 1. Attendance flag
+          const oldAtt = Boolean(Number(getOldVal(oldComp, 'based_on_attendance') ?? 0));
+          const newAtt = Boolean(Number(payload.based_on_attendance ?? 0));
+          if (payload.based_on_attendance !== undefined && oldAtt !== newAtt) {
+            diffs.push(`Based On Attendance field changed from ${oldAtt ? 'Yes' : 'No'} to ${newAtt ? 'Yes' : 'No'}`);
+          }
+
+          // 2. Amount
+          const oldAmt = Number(getOldVal(oldComp, 'amount') || 0);
+          const newAmt = Number(payload.amount || 0);
+          if (payload.amount !== undefined && Math.abs(oldAmt - newAmt) > 0.001) {
+            diffs.push(`Amount field changed from ${oldAmt.toFixed(2)} to ${newAmt.toFixed(2)}`);
+          }
+
+          // 3. Formula
+          const oldF = (getOldVal(oldComp, 'formula') || '').trim();
+          const newF = (payload.formula || '').trim();
+          if (payload.formula !== undefined && oldF !== newF) {
+            diffs.push(`Formula changed from "${oldF || 'Blank'}" to "${newF || 'Blank'}"`);
+          }
+
+          // 4. Condition On
+          const oldCondOn = normalizeDropdown(getOldVal(oldComp, 'condition_on'));
+          const newCondOn = normalizeDropdown(payload.condition_on);
+          if (payload.condition_on !== undefined && oldCondOn !== newCondOn) {
+            diffs.push(`Condition On field changed from ${oldCondOn || 'Choose'} to ${newCondOn || 'Choose'}`);
+          }
+
+          // 5. Condition Operator
+          const oldOp = normalizeDropdown(getOldVal(oldComp, 'condition_operator'));
+          const newOp = normalizeDropdown(payload.condition_operator);
+          if (payload.condition_operator !== undefined && oldOp !== newOp) {
+            diffs.push(`Operator field changed from ${oldOp || 'Choose'} to ${newOp || 'Choose'}`);
+          }
+
+          // 6. Condition Values
+          const oldV1 = (getOldVal(oldComp, 'condition_value1') || '').trim();
+          const newV1 = (payload.condition_value1 || '').trim();
+          if (payload.condition_value1 !== undefined && oldV1 !== newV1) {
+            diffs.push(`Value 1 field changed from ${oldV1 || 'Blank'} to ${newV1 || 'Blank'}`);
+          }
+          const oldV2 = (getOldVal(oldComp, 'condition_value2') || '').trim();
+          const newV2 = (payload.condition_value2 || '').trim();
+          if (payload.condition_value2 !== undefined && oldV2 !== newV2) {
+            diffs.push(`Value 2 field changed from ${oldV2 || 'Blank'} to ${newV2 || 'Blank'}`);
+          }
+
+          // 7. Departments
+          const oldDepts = parseJsonArray(getOldVal(oldComp, 'departments')).sort();
+          const newDepts = parseJsonArray(payload.departments).sort();
+          if (payload.departments !== undefined && JSON.stringify(oldDepts) !== JSON.stringify(newDepts)) {
+            if (newDepts.length > 0) {
+              diffs.push(`Following department for component ${payload.name || getOldVal(oldComp, 'name')} are added : ${newDepts.join(', ')}`);
+            } else if (oldDepts.length > 0) {
+              diffs.push(`Department filter removed for component ${payload.name || getOldVal(oldComp, 'name')}`);
+            }
+          }
+
+          // 8. Months
+          const oldMonths = parseJsonArray(getOldVal(oldComp, 'months')).sort();
+          const newMonths = parseJsonArray(payload.months).sort();
+          if (payload.months !== undefined && JSON.stringify(oldMonths) !== JSON.stringify(newMonths)) {
+            if (newMonths.length > 0) {
+              diffs.push(`Following employee month for component ${payload.name || getOldVal(oldComp, 'name')} are added : ${newMonths.join(', ')}`);
+            } else if (oldMonths.length > 0) {
+              diffs.push(`Month filter reset to All Months for component ${payload.name || getOldVal(oldComp, 'name')}`);
+            }
+          }
+
+          // 9. Grades
+          const oldGrades = parseJsonArray(getOldVal(oldComp, 'grades')).sort();
+          const newGrades = parseJsonArray(payload.grades).sort();
+          if (payload.grades !== undefined && JSON.stringify(oldGrades) !== JSON.stringify(newGrades)) {
+            if (newGrades.length > 0) {
+              diffs.push(`Following grade for component ${payload.name || getOldVal(oldComp, 'name')} are added : ${newGrades.join(', ')}`);
+            } else if (oldGrades.length > 0) {
+              diffs.push(`Grade filter removed for component ${payload.name || getOldVal(oldComp, 'name')}`);
+            }
+          }
+
+          // 10. Locations
+          const oldLocs = parseJsonArray(getOldVal(oldComp, 'locations')).sort();
+          const newLocs = parseJsonArray(payload.locations).sort();
+          if (payload.locations !== undefined && JSON.stringify(oldLocs) !== JSON.stringify(newLocs)) {
+            if (newLocs.length > 0) {
+              diffs.push(`Following location for component ${payload.name || getOldVal(oldComp, 'name')} are added : ${newLocs.join(', ')}`);
+            } else if (oldLocs.length > 0) {
+              diffs.push(`Location filter removed for component ${payload.name || getOldVal(oldComp, 'name')}`);
+            }
+          }
+
+          // 11. Component Type
+          const oldType = (getOldVal(oldComp, 'component_type') || getOldVal(oldComp, 'type') || 'Value').trim();
+          const newType = (payload.component_type || 'Value').trim();
+          if (payload.component_type !== undefined && oldType.toLowerCase() !== newType.toLowerCase()) {
+            diffs.push(`Component Type changed from ${oldType} to ${newType}`);
+          }
+
+          // 12. Non-Cashable
+          const oldNonCash = Boolean(Number(getOldVal(oldComp, 'non_cashable') ?? 0));
+          const newNonCash = Boolean(Number(payload.non_cashable ?? 0));
+          if (payload.non_cashable !== undefined && oldNonCash !== newNonCash) {
+            diffs.push(`Non-Cashable flag changed from ${oldNonCash ? 'Yes' : 'No'} to ${newNonCash ? 'Yes' : 'No'}`);
+          }
+
+          // 13. Boundary
+          const oldBT = normalizeDropdown(getOldVal(oldComp, 'boundary_type'));
+          const newBT = normalizeDropdown(payload.boundary_type);
+          if (payload.boundary_type !== undefined && oldBT !== newBT) {
+            diffs.push(`Boundary Type changed from ${oldBT || 'Choose'} to ${newBT || 'Choose'}`);
+          }
+          const oldMin = Number(getOldVal(oldComp, 'min_amount') || 0);
+          const newMin = Number(payload.min_amount || 0);
+          if (payload.min_amount !== undefined && Math.abs(oldMin - newMin) > 0.001) {
+            diffs.push(`Min Boundary Amount changed from ${oldMin.toFixed(2)} to ${newMin.toFixed(2)}`);
+          }
+          const oldMax = Number(getOldVal(oldComp, 'max_amount') || 0);
+          const newMax = Number(payload.max_amount || 0);
+          if (payload.max_amount !== undefined && Math.abs(oldMax - newMax) > 0.001) {
+            diffs.push(`Max Boundary Amount changed from ${oldMax.toFixed(2)} to ${newMax.toFixed(2)}`);
+          }
+
+          if (diffs.length > 0) {
+            const actor = await getActorInfo(req, db);
+            await db('payroll_component_audit_logs').insert({
+              uuid: uuidv4(),
+              organization_id: getOldVal(oldComp, 'organization_id') || req.ctx?.organizationId || 8,
+              company_id: getOldVal(oldComp, 'company_id') || null,
+              component_id: oldComp.id,
+              component_name: payload.name || getOldVal(oldComp, 'name'),
+              group_id: payload.group_id || getOldVal(oldComp, 'group_id') || null,
+              action: 'UPDATE',
+              description: `Action : UPDATE\n${diffs.join('\n')}`,
+              before_state: JSON.stringify(oldComp),
+              after_state: JSON.stringify({ ...oldComp, ...payload }),
+              updated_by_id: actor.id,
+              updated_by_name: actor.name,
+              ip_address: req.ip || '127.0.0.1'
+            });
+          }
+        }
+      } catch (logErr) {
+        console.error('Component audit log error:', logErr);
+      }
+
       res.json({ success: true, data: { id, ...payload } });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });
@@ -640,7 +1035,33 @@ export class PayrollCycleSlabController {
     try {
       const db = getKnex();
       const { id } = req.params;
+      const oldComp = await db('payroll_components').where('id', id).first();
       await db('payroll_components').where('id', id).update({ deleted_at: new Date() });
+
+      // Dynamic Audit Log for Component Delete
+      try {
+        if (oldComp) {
+          const actor = await getActorInfo(req, db);
+          await db('payroll_component_audit_logs').insert({
+            uuid: uuidv4(),
+            organization_id: oldComp.organization_id || req.ctx?.organizationId || 8,
+            company_id: oldComp.company_id || null,
+            component_id: oldComp.id,
+            component_name: oldComp.name,
+            group_id: oldComp.group_id || null,
+            action: 'DELETE',
+            description: `Action : DELETE\nComponent "${oldComp.name}" deleted`,
+            before_state: JSON.stringify(oldComp),
+            after_state: null,
+            updated_by_id: actor.id,
+            updated_by_name: actor.name,
+            ip_address: req.ip || '127.0.0.1'
+          });
+        }
+      } catch (err) {
+        console.error('Component delete audit error:', err);
+      }
+
       res.json({ success: true, message: 'Component definition deleted' });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });

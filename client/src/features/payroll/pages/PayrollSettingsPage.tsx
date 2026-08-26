@@ -512,7 +512,7 @@ export const PayrollSettingsPage: React.FC = () => {
           setGroupForm(mappedGroups[0]);
           if (mappedGroups[0].components.length > 0) {
             setSelectedComponentId(mappedGroups[0].components[0].id);
-            setCompForm(mappedGroups[0].components[0]);
+            setCompForm(normalizeComp(mappedGroups[0].components[0]));
           }
         }
       } catch (err) {
@@ -523,13 +523,23 @@ export const PayrollSettingsPage: React.FC = () => {
   }, []);
 
 
-  // Sync selected group form
+  // Normalize component type from raw DB value to UI-expected casing
+  const normalizeComp = (c: ComponentItem): ComponentItem => {
+    const raw = (c.type || 'Value').toString();
+    const type: 'Value' | 'Derived' | 'Module' =
+      raw === 'Formula' || raw === 'formula' || raw === 'derived' ? 'Derived'
+      : raw === 'module' ? 'Module'
+      : 'Value';
+    return { ...c, type };
+  };
+
+  // Sync selected group form — auto-selects first component
   const handleSelectGroup = (g: ComponentGroup) => {
     setSelectedGroupId(g.id);
     setGroupForm(g);
     if (g.components.length > 0) {
       setSelectedComponentId(g.components[0].id);
-      setCompForm(g.components[0]);
+      setCompForm(normalizeComp(g.components[0]));
     }
   };
 
@@ -542,7 +552,7 @@ export const PayrollSettingsPage: React.FC = () => {
   // Sync selected component form
   const handleSelectComponent = (c: ComponentItem) => {
     setSelectedComponentId(c.id);
-    setCompForm(c);
+    setCompForm(normalizeComp(c));
   };
 
   // Sync selected slab form
@@ -604,17 +614,23 @@ export const PayrollSettingsPage: React.FC = () => {
       }
     }
 
-    const targetName = cycleForm.name.trim();
+    const targetName = (cycleForm.name || "").trim();
+    const effectiveCompanyId = cycleForm.companyId
+      ? Number(cycleForm.companyId)
+      : (selectedCompanyId ? Number(selectedCompanyId) : null);
+
     const payload = {
       cycle_name: targetName,
       name: targetName,
+      company_id: effectiveCompanyId,
+      companyId: effectiveCompanyId,
       is_daily_wages: cycleForm.isDailyWages,
       daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
       daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
-      frequency: cycleForm.frequency || 'Monthly',
+      frequency: cycleForm.frequency || "Monthly",
       start_date: cycleForm.startDate || 1,
       cutoff_day: cycleForm.cutoffDay || 25,
-      month_offset: cycleForm.monthOffset || 'Current',
+      month_offset: cycleForm.monthOffset || "Current",
       disbursement_date: cycleForm.disbursementDate || 1,
       cap_amount: cycleForm.capAmount || 1000000,
       tolerance_enabled: cycleForm.toleranceEnabled,
@@ -875,7 +891,7 @@ export const PayrollSettingsPage: React.FC = () => {
           return g;
         }));
         setSelectedComponentId(newComp.id);
-        setCompForm(newComp);
+        setCompForm(normalizeComp(newComp));
         showToast.success('Component Created', `Component "${newComp.name}" created successfully.`);
       }
       setIsEditingComponent(false);

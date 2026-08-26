@@ -685,7 +685,9 @@ export class EmployeeService {
     if (input.aadharNumber !== undefined) payload.aadhar_number = input.aadharNumber;
     if (input.uidaiNumber !== undefined) payload.aadhar_number = input.uidaiNumber;
     if (input.company_bank !== undefined) payload.company_bank = input.company_bank;
-    if (input.companyBank !== undefined) payload.company_bank = input.companyBank;
+    if (input.pan_number !== undefined) payload.pan_number = input.pan_number;
+    if (input.panNumber !== undefined) payload.pan_number = input.panNumber;
+    if (input.pan !== undefined) payload.pan_number = input.pan;
     if (input.pan_status !== undefined) payload.pan_status = input.pan_status;
     if (input.panStatus !== undefined) payload.pan_status = input.panStatus;
     if (input.user_band !== undefined) payload.user_band = input.user_band;

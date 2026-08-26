@@ -420,24 +420,45 @@ export const PayrollReportsPage: React.FC = () => {
         r.net_salary || 0
       ]);
     } else if (reportType === 'statutory') {
-      headers = ['Emp Code', 'Employee Name', 'Gross Pay (₹)', 'EPF Wages (₹)', 'Employee PF 12% (₹)', 'Employer PF 3.67% (₹)', 'EPS 8.33% (₹)', 'PT (₹)', 'TDS (₹)', 'ESIC (₹)'];
+      headers = [
+        'Emp Code',
+        'Employee Name',
+        'Gross Wages (₹)',
+        'EPF Wages (₹)',
+        'EE PF 12% (₹)',
+        'ER EPF 3.67% (₹)',
+        'ER EPS 8.33% (₹)',
+        'EE ESIC 0.75% (₹)',
+        'ER ESIC 3.25% (₹)',
+        'PT (₹)',
+        'TDS (₹)',
+        'Total Govt Remittance (₹)'
+      ];
       csvRows = filteredRows.map(r => {
         const gross = Number(r.gross_earned || r.gross || 0);
         const epfWages = Math.min(15000, Number(r.basic_earned || r.basic || gross * 0.5));
         const empPf = Number(r.pf || Math.round(epfWages * 0.12));
         const eps = Math.round(epfWages * 0.0833);
-        const erPf = empPf - eps;
+        const erEpf = Math.max(0, empPf - eps);
+        const empEsic = Number(r.esic || (gross <= 21000 ? Math.ceil(gross * 0.0075) : 0));
+        const erEsic = gross <= 21000 ? Math.ceil(gross * 0.0325) : 0;
+        const pt = Number(r.pt || 0);
+        const tds = Number(r.tds || 0);
+        const totalRemittance = empPf + erEpf + eps + empEsic + erEsic + pt + tds;
+
         return [
           r.employee_code || `EMP-${r.id}`,
           `${r.first_name || ''} ${r.last_name || ''}`.trim(),
           gross,
           epfWages,
           empPf,
-          erPf,
+          erEpf,
           eps,
-          r.pt || 0,
-          r.tds || 0,
-          r.esic || 0
+          empEsic,
+          erEsic,
+          pt,
+          tds,
+          totalRemittance
         ];
       });
     } else if (reportType === 'bank') {
@@ -883,13 +904,15 @@ export const PayrollReportsPage: React.FC = () => {
 
                     {reportType === 'statutory' && (
                       <>
-                        <th className="py-3 px-4 text-right">Gross Pay</th>
+                        <th className="py-3 px-4 text-right">Gross Wages</th>
                         <th className="py-3 px-4 text-right">EPF Wages</th>
-                        <th className="py-3 px-4 text-right">PF Emp (12%)</th>
-                        <th className="py-3 px-4 text-right">EPS (8.33%)</th>
-                        <th className="py-3 px-4 text-right">PT Deduction</th>
-                        <th className="py-3 px-4 text-right">TDS Withholding</th>
-                        <th className="py-3 px-4 text-right">ESIC</th>
+                        <th className="py-3 px-4 text-right text-rose-600 font-bold">EE PF (12%)</th>
+                        <th className="py-3 px-4 text-right text-cyan-600 font-bold">ER EPF (3.67%)</th>
+                        <th className="py-3 px-4 text-right text-blue-600 font-bold">ER EPS (8.33%)</th>
+                        <th className="py-3 px-4 text-right text-purple-600 font-bold">ER ESIC (3.25%)</th>
+                        <th className="py-3 px-4 text-right text-amber-600 font-bold">PT</th>
+                        <th className="py-3 px-4 text-right text-rose-600 font-bold">TDS</th>
+                        <th className="py-3 px-4 text-right font-black text-emerald-600">Total Govt Remit</th>
                       </>
                     )}
 
@@ -989,6 +1012,13 @@ export const PayrollReportsPage: React.FC = () => {
                       const empPf = Number(r.pf || Math.round(epfWages * 0.12));
                       const eps = Math.round(epfWages * 0.0833);
 
+                      const erEpf = Math.max(0, empPf - eps);
+                      const empEsic = Number(r.esic || (gross <= 21000 ? Math.ceil(gross * 0.0075) : 0));
+                      const erEsic = gross <= 21000 ? Math.ceil(gross * 0.0325) : 0;
+                      const pt = Number(r.pt || 0);
+                      const tds = Number(r.tds || 0);
+                      const totalRemit = empPf + erEpf + eps + empEsic + erEsic + pt + tds;
+
                       const bankNameVal = r.bank_name || (r as any).bankName || null;
                       const accNoVal = r.account_no || (r as any).accountNo || (r as any).account_number || (r as any).accountNumber || null;
                       const ifscVal = r.ifsc_code || (r as any).ifscCode || (r as any).ifsc || null;
@@ -1036,10 +1066,14 @@ export const PayrollReportsPage: React.FC = () => {
                               <td className="py-3 px-4 text-right font-mono font-semibold">₹{gross.toLocaleString('en-IN')}</td>
                               <td className="py-3 px-4 text-right font-mono text-muted-foreground">₹{epfWages.toLocaleString('en-IN')}</td>
                               <td className="py-3 px-4 text-right font-mono text-rose-600 font-semibold">₹{empPf.toLocaleString('en-IN')}</td>
+                              <td className="py-3 px-4 text-right font-mono text-cyan-600 font-semibold">₹{erEpf.toLocaleString('en-IN')}</td>
                               <td className="py-3 px-4 text-right font-mono text-blue-600 font-semibold">₹{eps.toLocaleString('en-IN')}</td>
-                              <td className="py-3 px-4 text-right font-mono text-rose-600 font-semibold">₹{(r.pt || 0).toLocaleString('en-IN')}</td>
-                              <td className="py-3 px-4 text-right font-mono text-rose-600 font-semibold">₹{(r.tds || 0).toLocaleString('en-IN')}</td>
-                              <td className="py-3 px-4 text-right font-mono text-rose-600 font-semibold">₹{(r.esic || 0).toLocaleString('en-IN')}</td>
+                              <td className="py-3 px-4 text-right font-mono text-purple-600 font-semibold">₹{erEsic.toLocaleString('en-IN')}</td>
+                              <td className="py-3 px-4 text-right font-mono text-amber-600 font-semibold">₹{pt.toLocaleString('en-IN')}</td>
+                              <td className="py-3 px-4 text-right font-mono text-rose-600 font-semibold">₹{tds.toLocaleString('en-IN')}</td>
+                              <td className="py-3 px-4 text-right font-mono font-black text-emerald-600 dark:text-emerald-400">
+                                ₹{totalRemit.toLocaleString('en-IN')}
+                              </td>
                             </>
                           )}
 

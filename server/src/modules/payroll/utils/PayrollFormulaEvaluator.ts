@@ -51,7 +51,7 @@ export class PayrollFormulaEvaluator {
       return 0;
     }
 
-    let expr = formula.trim();
+    let expr = formula.trim().replace(/;+\s*$/, '').trim();
 
     // 0. Handle inline conditionals: e.g. "0.75% of Gross (if Gross <= 21000)" or "if gross <= 21000"
     if (expr.toLowerCase().includes('if')) {

@@ -53,7 +53,6 @@ export class PayrollRegisterController {
         .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
         .leftJoin('locations as l', 'e.current_location_id', 'l.id')
         .leftJoin('employees as mgr', 'e.reporting_manager_id', 'mgr.id')
-        .leftJoin('employee_compensation as ec', 'e.id', 'ec.employee_id')
         .whereNull('e.deleted_at')
         .where('e.organization_id', targetOrgId);
 
@@ -112,9 +111,15 @@ export class PayrollRegisterController {
         'd.name as department_name',
         'des.name as designation_name',
         'l.name as location_name',
-        db.raw("COALESCE(NULLIF(TRIM(e.bank_name), ''), NULLIF(TRIM(ec.bank_name), '')) as bank_name"),
-        db.raw("COALESCE(NULLIF(TRIM(e.account_no), ''), NULLIF(TRIM(ec.account_number), '')) as account_number"),
-        db.raw("COALESCE(NULLIF(TRIM(e.ifsc_code), ''), NULLIF(TRIM(ec.ifsc_code), '')) as ifsc_code"),
+        'e.bank_name',
+        'e.account_no as account_number',
+        'e.account_no',
+        'e.ifsc_code',
+        'e.pan_number as pan',
+        'e.pan_number',
+        'e.uan_no',
+        'e.pf_no',
+        'e.esic_no',
         db.raw(
           "TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager"
         )
@@ -165,6 +170,8 @@ export class PayrollRegisterController {
         : (fromDate ? String(fromDate).slice(0, 7) : new Date().toISOString().slice(0, 7));
 
       const [tYear, tMon] = targetMonth.split('-').map(Number);
+      const targetYear = tYear;
+      const targetMonthNum = tMon;
       const calendarDays = new Date(tYear, tMon, 0).getDate();
 
       // Cycle days override
@@ -302,15 +309,17 @@ export class PayrollRegisterController {
         } catch { /* silent */ }
 
         // 3. Dynamic Slab Resolution
+        const empCtcFromRecord = positiveNum(emp.annual_ctc, positiveNum(emp.annualCtc, positiveNum(emp.gross_salary ? emp.gross_salary * 12 : 0, 0)));
+        const structCtc = positiveNum(sStruct.annual_ctc, positiveNum(sStruct.gross_monthly ? sStruct.gross_monthly * 12 : 0, empCtcFromRecord));
+
         let matchedSlab: any = null;
-        const slabIdToTry = sStruct.slab_id || sStruct.slabId;
+        const slabIdToTry = sStruct.slab_id || sStruct.slabId || emp.salary_slab_id || emp.salarySlabId;
         if (slabIdToTry) {
           matchedSlab = allSlabs.find((s: any) => Number(s.id) === Number(slabIdToTry));
         }
 
         // If no slab linked on structure, find best matching slab by CTC or fallback to default slab
         if (!matchedSlab) {
-          const structCtc = positiveNum(sStruct.annual_ctc, positiveNum(sStruct.gross_monthly ? sStruct.gross_monthly * 12 : 0, 0));
           if (structCtc > 0) {
             matchedSlab = allSlabs.find((s: any) => {
               const sSlab = withSnakeAliases(s) || s;
@@ -319,18 +328,24 @@ export class PayrollRegisterController {
               return structCtc >= minCtc && structCtc <= maxCtc;
             });
           }
+          // Final fallback: use first active slab
+          if (!matchedSlab && allSlabs.length > 0) {
+            matchedSlab = allSlabs[0];
+          }
         }
 
-        if (!matchedSlab && allSlabs.length > 0) {
-          matchedSlab = allSlabs[0];
-        }
+        // Check if employee has a valid assigned salary structure or dynamic fallback
+        const hasAssignedStructure = Boolean(struct && (sStruct.gross_monthly || sStruct.annual_ctc || sStruct.salary_slab_id || sStruct.slab_id)) || (structCtc > 0) || (allSlabs.length > 0);
 
-        const slabRow = withSnakeAliases(matchedSlab) || {};
-        const slabName = slabRow.name || (sStruct.structure_name && sStruct.structure_name !== 'hiii' ? sStruct.structure_name : 'Monthly');
+        const slabRow = matchedSlab ? (withSnakeAliases(matchedSlab) || {}) : {};
+        const slabName = slabRow.name || sStruct.structure_name || (allSlabs[0]?.name || 'Standard Pay Slab');
+
         let selectedCompIds: number[] = [];
         try {
           const rawIds = slabRow.selected_component_ids;
-          selectedCompIds = Array.isArray(rawIds) ? rawIds.map(Number) : JSON.parse(rawIds || '[]').map(Number);
+          if (rawIds) {
+            selectedCompIds = Array.isArray(rawIds) ? rawIds.map(Number) : JSON.parse(rawIds).map(Number);
+          }
         } catch {
           selectedCompIds = [];
         }
@@ -338,12 +353,9 @@ export class PayrollRegisterController {
         // 4. Resolve Gross & CTC
         const grossMonthly = positiveNum(
           sStruct.gross_monthly,
-          positiveNum(
-            sStruct.annual_ctc ? Math.round(Number(sStruct.annual_ctc) / 12) : 0,
-            slabRow.min_ctc ? Math.round(Number(slabRow.min_ctc) / 12) : 40000
-          )
+          structCtc > 0 ? Math.round(structCtc / 12) : (slabRow.min_ctc ? Math.round(Number(slabRow.min_ctc) / 12) : (emp.gross_salary ? Number(emp.gross_salary) : 0))
         );
-        const annualCTC = positiveNum(sStruct.annual_ctc, grossMonthly * 12);
+        const annualCTC = positiveNum(sStruct.annual_ctc, structCtc > 0 ? structCtc : grossMonthly * 12);
 
         // 5. Parse Custom Components JSON
         let customComps: Record<string, number> = {};
@@ -409,8 +421,8 @@ export class PayrollRegisterController {
           if (!isNaN(dojDate.getTime())) {
             const dojY = dojDate.getFullYear();
             const dojM = dojDate.getMonth() + 1;
-            const currentY = Number(targetYear);
-            const currentM = Number(targetMonth);
+            const currentY = targetYear;
+            const currentM = targetMonthNum;
             if (dojY === currentY && dojM === currentM) {
               activeStartDay = Math.max(1, dojDate.getDate());
             } else if (dojY > currentY || (dojY === currentY && dojM > currentM)) {
@@ -425,8 +437,8 @@ export class PayrollRegisterController {
           if (!isNaN(exitDate.getTime())) {
             const exitY = exitDate.getFullYear();
             const exitM = exitDate.getMonth() + 1;
-            const currentY = Number(targetYear);
-            const currentM = Number(targetMonth);
+            const currentY = targetYear;
+            const currentM = targetMonthNum;
             if (exitY === currentY && exitM === currentM) {
               activeEndDay = Math.min(totalDays, exitDate.getDate());
             } else if (exitY < currentY || (exitY === currentY && exitM < currentM)) {
@@ -435,22 +447,43 @@ export class PayrollRegisterController {
           }
         }
 
-        const maxEligibleDays = Math.max(0, activeEndDay - activeStartDay + 1);
+        // Check Salary Structure / Slab Effective Date
+        if (sStruct.effective_from) {
+          const effDate = new Date(sStruct.effective_from);
+          if (!isNaN(effDate.getTime())) {
+            const effY = effDate.getFullYear();
+            const effM = effDate.getMonth() + 1;
+            const currentY = targetYear;
+            const currentM = targetMonthNum;
+            if (effY === currentY && effM === currentM) {
+              activeStartDay = Math.max(activeStartDay, effDate.getDate());
+            } else if (effY > currentY || (effY === currentY && effM > currentM)) {
+              activeStartDay = totalDays + 1; // Future slab effective date -> No payroll for this month
+            }
+          }
+        }
+
+        const maxEligibleDays = hasAssignedStructure ? Math.max(0, activeEndDay - activeStartDay + 1) : 0;
 
         // Compute paid/unpaid days from real attendance and effective active dates
         let paidDays: number, unpaidDays: number;
-        const hasAttendance =
-          presentDays + halfDayCount + absentDays + weeklyOffDays + holidayDays > 0;
-        if (hasAttendance) {
-          paidDays = Math.round(
-            presentDays + halfDayCount * 0.5 + weeklyOffDays + holidayDays
-          );
-          paidDays = Math.max(0, Math.min(maxEligibleDays, paidDays - unpaidLeaveDays));
+        if (!hasAssignedStructure || maxEligibleDays === 0) {
+          paidDays = 0;
+          unpaidDays = totalDays;
         } else {
-          paidDays = Math.max(0, maxEligibleDays - unpaidLeaveDays);
+          const hasAttendance =
+            presentDays + halfDayCount + absentDays + weeklyOffDays + holidayDays > 0;
+          if (hasAttendance) {
+            paidDays = Math.round(
+              presentDays + halfDayCount * 0.5 + weeklyOffDays + holidayDays
+            );
+            paidDays = Math.max(0, Math.min(maxEligibleDays, paidDays - unpaidLeaveDays));
+          } else {
+            paidDays = Math.max(0, maxEligibleDays - unpaidLeaveDays);
+          }
+          unpaidDays = Math.max(0, totalDays - paidDays);
         }
-        unpaidDays = Math.max(0, totalDays - paidDays);
-        const ratio = totalDays > 0 ? paidDays / totalDays : 1;
+        const ratio = (totalDays > 0 && hasAssignedStructure) ? paidDays / totalDays : 0;
 
         // 8. Dynamic Component Evaluation — primary source: salary_structure earnings/deductions breakup
         //    These are stored when the salary structure is assigned per-employee via SalaryCalculationService.
@@ -489,30 +522,55 @@ export class PayrollRegisterController {
 
           // Build base context — basic starts at 0, set dynamically by component loop
           const formulaCtx: Record<string, number> = {
+            // Core salary
             ctc: grossMonthly,
             monthly_ctc: grossMonthly,
             annual_ctc: annualCTC,
             gross: grossMonthly,
             gross_salary: grossMonthly,
+            salary_input: grossMonthly,        // [SALARY_INPUT]
+            gross_earned: Math.round(grossMonthly * ratio),
+            // Basic — set dynamically during component loop, start at 0
             basic: 0,
             basic_salary: 0,
+            basic_earned: 0,                   // [BASIC_EARNED] — updated after basic component runs
+            // Attendance
             present_days: paidDays,
             total_days: totalDays,
             lop_days: unpaidDays,
             paid_days: paidDays,
             attendance_factor: ratio,
+            system_calc_days: totalDays,       // [SYSTEM_CALC_DAYS]
+            system_extra_paid_days: 0,         // [SYSTEM_EXTRA_PAID_DAYS] — set if OT extra days apply
+            // Statutory pre-fills (will be overwritten as components compute)
+            epf_eps_wages: 0,                  // [EPF_EPS_WAGES] — from EPF EPS Wages component
+            eps_wages: 0,                      // [EPS_WAGES]
+            esi_wages: 0,                      // [ESI_WAGES]
+            pf_employee: 0,                    // [PF_EMPLOYEE]
+            eps_component: 0,                  // [EPS_COMPONENT]
+            edli_wages: 0,                     // [EDLI_WAGES]
           };
+
 
           // Determine which component IDs this employee's slab includes
           const slabCompIds = new Set(selectedCompIds);
 
-          // Sort: fixed-amount components first, formula-based next (so formulas can reference prior results)
+          // Sort by group display_order (critical for dependency resolution):
+          //   order 1 = Basic, 2 = HRA, 3 = Conveyance, 5 = Professional Allowance, 10 = others
+          //   order 50 = Earned (pass-through), 90 = Special Allowance
+          //   order 100+ = Deductions (EPF wages first, then ESIC, PF, EPS diff, etc.)
           const orderedComps = [...allComponents].sort((a: any, b: any) => {
-            const aIsFormula = (a.component_type || '').toLowerCase().includes('formula') || (a.component_type || '').toLowerCase().includes('percent');
-            const bIsFormula = (b.component_type || '').toLowerCase().includes('formula') || (b.component_type || '').toLowerCase().includes('percent');
-            if (aIsFormula && !bIsFormula) return 1;
-            if (!aIsFormula && bIsFormula) return -1;
-            return 0;
+            const aGroup = groupMap.get(Number(a.group_id));
+            const bGroup = groupMap.get(Number(b.group_id));
+            const aOrder = Number(aGroup?.display_order ?? 999);
+            const bOrder = Number(bGroup?.display_order ?? 999);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            // Within same group order: Value/fixed first, Derived second
+            const aIsDerived = (a.component_type || '').toLowerCase().includes('derived');
+            const bIsDerived = (b.component_type || '').toLowerCase().includes('derived');
+            if (aIsDerived && !bIsDerived) return 1;
+            if (!aIsDerived && bIsDerived) return -1;
+            return Number(a.id) - Number(b.id);
           });
 
           let totalEarningsAllocated = 0;
@@ -534,7 +592,9 @@ export class PayrollRegisterController {
 
             const group = groupMap.get(Number(comp.group_id));
             const groupCat = (group?.category || '').toLowerCase();
-            const isDeduction = groupCat.includes('deduct') || ['pf', 'provident', 'esic', 'esi', 'tax', 'tds', 'pt', 'professional'].some(k => cName.includes(k));
+            // Use ONLY group category for deduction detection — never name-based (avoids wrongly
+            // tagging "Professional Allowance Earned" as a deduction because name contains 'professional')
+            const isDeduction = groupCat.includes('deduct');
 
             // Evaluate formula
             let monthlyVal = 0;
@@ -570,23 +630,79 @@ export class PayrollRegisterController {
               : !isDeduction;
             const earnedVal = isDeduction ? monthlyVal : (isAttendanceBased ? Math.round(monthlyVal * ratio) : monthlyVal);
 
-            // Register named shortcuts
-            if (cName.includes('basic')) { basic = monthlyVal; formulaCtx.basic = monthlyVal; formulaCtx.basic_salary = monthlyVal; }
+            // Register named shortcuts — update formulaCtx so downstream formulas can reference them
+            // GUARD: only the "Basic" salary component itself should set formulaCtx.basic
+            // Exclude: "PF 12% on Basic", "Basic Earned", "EPF EPS Wages" etc.
+            const isBasicSalaryComp = cName.includes('basic')
+              && !cName.includes('earned')
+              && !cName.includes('eps')
+              && !cName.includes('epf')
+              && !cName.includes('pf')          // excludes "PF 12% on Basic"
+              && !cName.includes('%')            // excludes "Basic 50%"
+              && !cName.includes('12')           // extra safety
+              && isDeduction === false;
+
+            if (isBasicSalaryComp) {
+              basic = monthlyVal;
+              formulaCtx.basic = monthlyVal;
+              formulaCtx.basic_salary = monthlyVal;
+              formulaCtx.basic_earned = Math.round(monthlyVal * ratio);
+            }
+            else if ((cName === 'basic 50%' || (cName.includes('basic') && cName.includes('%')))
+              && !cName.includes('pf') && !cName.includes('provident') && !isDeduction) {
+              // e.g. "Basic 50%", "Basic 40%" — these SET the basic from CTC%
+              basic = monthlyVal;
+              formulaCtx.basic = monthlyVal;
+              formulaCtx.basic_salary = monthlyVal;
+              formulaCtx.basic_earned = Math.round(monthlyVal * ratio);
+            }
             else if (cName.includes('hra') || cName.includes('house rent')) { hra = monthlyVal; formulaCtx.hra = monthlyVal; }
             else if (cName.includes('meal') || cName.includes('food')) mealAllowance = monthlyVal;
-            else if (cName.includes('comm')) commAllowance = monthlyVal;
+            else if (cName.includes('comm') && !cName.includes('deduct')) commAllowance = monthlyVal;
             else if (cName.includes('child') || cName.includes('education')) ceaAllowance = monthlyVal;
             else if (cName.includes('lta') || (cName.includes('leave') && cName.includes('travel'))) ltaAllowance = monthlyVal;
-            else if (cName.includes('pf') || cName.includes('provident')) pfMonthly = monthlyVal;
-            else if (cName.includes('esic') || cName.includes('esi')) esicMonthly = monthlyVal;
-            else if (cName.includes('pt') || cName.includes('professional tax')) ptMonthly = monthlyVal;
+            // PF Employee (e.g. "PF 12% on Basic")
+            else if ((cName.includes('pf') || cName.includes('provident'))
+              && !cName.includes('employer') && !cName.includes('eps') && isDeduction) {
+              pfMonthly = monthlyVal;
+              formulaCtx.pf_employee = monthlyVal;   // [PF_EMPLOYEE]
+            }
+            // ESIC Employee
+            else if ((cName.includes('esic') || cName.includes('esi'))
+              && !cName.includes('employer') && !cName.includes('wages') && isDeduction) {
+              esicMonthly = monthlyVal;
+              formulaCtx.esic_employee = monthlyVal;
+            }
+            // PT / TDS
+            else if (cName.includes('professional tax') || (cName.includes('pt') && isDeduction && !cName.includes('pta'))) {
+              ptMonthly = monthlyVal;
+            }
             else if (cName.includes('tds') || cName.includes('income tax')) tdsMonthly = monthlyVal;
+            // EPF/EPS statutory basis tokens — must run in order (set by group display_order)
+            else if (cName.includes('epf') && cName.includes('eps') && cName.includes('wages')) {
+              formulaCtx.epf_eps_wages = monthlyVal;   // [EPF_EPS_WAGES]
+            }
+            else if (cName.includes('eps') && cName.includes('component')) {
+              formulaCtx.eps_component = monthlyVal;   // [EPS_COMPONENT]
+            }
+            else if (cName.includes('eps') && cName.includes('wages') && !cName.includes('epf')) {
+              formulaCtx.eps_wages = monthlyVal;        // [EPS_WAGES]
+            }
+            else if (cName.includes('esi') && cName.includes('wages')) {
+              formulaCtx.esi_wages = monthlyVal;        // [ESI_WAGES]
+            }
+            else if (cName.includes('edli') && cName.includes('wages')) {
+              formulaCtx.edli_wages = monthlyVal;       // [EDLI_WAGES]
+            }
 
             // Register in formula context for cascading (e.g. HRA = 40% of basic)
             const normKey = PayrollFormulaEvaluator.normalizeKey(comp.name || '');
             formulaCtx[normKey] = monthlyVal;
-
-            if (!isDeduction) totalEarningsAllocated += monthlyVal;
+            // Also update gross_earned dynamically after each earning
+            if (!isDeduction) {
+              totalEarningsAllocated += monthlyVal;
+              formulaCtx.gross_earned = Math.round(grossMonthly * ratio);
+            }
 
             componentValues[cId] = {
               id: cId,
@@ -620,7 +736,7 @@ export class PayrollRegisterController {
           // If basic was not computed by formula, use basicMonthly from structure
           if (!basic && struct) { basic = Number(struct.basic_monthly || 0); formulaCtx.basic = basic; }
 
-        // ── Statutory deductions: use stored per-employee amounts if available ─
+        // ── Statutory deductions: use stored per-employee amounts or dynamic statutory rules ─
         if (storedDeductionsBreakup.length > 0) {
           for (const d of storedDeductionsBreakup) {
             const code = (d.code || '').toUpperCase();
@@ -635,9 +751,15 @@ export class PayrollRegisterController {
               componentValues[cid] = { id: cid, name: d.name || code, type: d.type || 'Formula', group_id: group?.id ?? null, group_name: group?.name || 'Deductions', category: 'Deduction', monthly: amt, earned: Math.round(amt * ratio) };
             }
           }
-        } else {
-          // No stored deductions breakup — component loop above handles deductions dynamically.
-          // No hardcoded PF/ESIC/PT fallback: HR must configure deduction components in Settings → Components.
+        }
+
+        // Dynamic PF & PT fallback if not provided in stored breakup
+        const effectiveBasic = basic > 0 ? basic : Math.round(grossMonthly * 0.5);
+        if (pfMonthly === 0 && effectiveBasic > 0) {
+          pfMonthly = Math.min(1800, Math.round(effectiveBasic * 0.12));
+        }
+        if (ptMonthly === 0 && grossMonthly > 15000) {
+          ptMonthly = 200;
         }
 
         // 9. Loans deductions
@@ -706,6 +828,9 @@ export class PayrollRegisterController {
           job_title: designation,
           slab_name: slabName,
           slabName: slabName,
+          effective_from: sStruct.effective_from || null,
+          effectiveFrom: sStruct.effective_from || null,
+          slab_effective_from: sStruct.effective_from || null,
           cycle_id: empCycleId,
           cycleId: empCycleId,
           cycle_name: empCycleName,
@@ -770,9 +895,9 @@ export class PayrollRegisterController {
           net_salary: override ? Number(override.net_salary) : netSalary,
           netSalary: override ? Number(override.net_salary) : netSalary,
           ctc: annualCTC,
-          notes: override ? override.notes : '',
-          payment_status: override ? override.payment_status : 'Freeze',
-          status: 'PROCESSED',
+          notes: override ? override.notes : (!hasAssignedStructure ? 'No Pay Slab Assigned' : ''),
+          payment_status: !hasAssignedStructure ? 'Unassigned' : (override ? override.payment_status : 'Freeze'),
+          status: hasAssignedStructure ? 'PROCESSED' : 'UNASSIGNED_SLAB',
           is_overridden: Boolean(override),
           component_values: componentValues,
         });

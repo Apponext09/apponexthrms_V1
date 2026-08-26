@@ -902,7 +902,7 @@ export const PayslipViewer: React.FC = () => {
       data.jobTitle || 
       data.job_title || 
       data.designation || 
-      'Product Manager';
+      '';
     
     // Department resolution
     const department = 
@@ -912,69 +912,57 @@ export const PayslipViewer: React.FC = () => {
       data.departmentName || 
       data.department_name || 
       data.department || 
-      'Cloud';
+      '';
     
-    // Bank name resolution
+    // Bank name resolution (reads employee bank directly)
     const bankName = 
-      matchedProfile?.bankName || 
       matchedProfile?.bank_name || 
-      matchedProfile?.salaryBankName || 
-      matchedProfile?.salary_bank_name || 
-      data.bankName || 
+      matchedProfile?.bankName || 
       data.bank_name || 
-      'KOTAK MAHINDRA BANK';
+      data.bankName || 
+      '';
     
-    // Account number resolution
+    // Account number resolution (reads employee account_no directly)
     const accNo = 
-      matchedProfile?.accountNo || 
       matchedProfile?.account_no || 
-      matchedProfile?.bankAccountNo || 
-      matchedProfile?.bank_account_no || 
-      data.accountNo || 
+      matchedProfile?.accountNo || 
       data.account_no || 
+      data.accountNo || 
+      data.account_number || 
       '';
     
     // UAN number resolution
     const uanNo = 
-      matchedProfile?.uanNo || 
       matchedProfile?.uan_no || 
-      matchedProfile?.uan || 
-      data.uanNo || 
+      matchedProfile?.uanNo || 
       data.uan_no || 
-      data.uan || 
+      data.uanNo || 
       '';
     
     // ESIC number resolution
     const esicNo = 
-      matchedProfile?.esicNo || 
       matchedProfile?.esic_no || 
-      matchedProfile?.esic || 
-      matchedProfile?.esiNo || 
-      data.esicNo || 
+      matchedProfile?.esicNo || 
       data.esic_no || 
-      data.esic || 
+      data.esicNo || 
       '';
     
     // PAN resolution
     const pan = 
-      matchedProfile?.panNumber || 
       matchedProfile?.pan_number || 
+      matchedProfile?.panNumber || 
       matchedProfile?.pan || 
-      data.panNumber || 
       data.pan_number || 
+      data.panNumber || 
       data.pan || 
       '';
     
     // PF number resolution
     const pfNo = 
-      matchedProfile?.pfNo || 
       matchedProfile?.pf_no || 
-      matchedProfile?.pfNumber || 
-      matchedProfile?.pf_number || 
-      data.pfNo || 
+      matchedProfile?.pfNo || 
       data.pf_no || 
-      data.pfNumber || 
-      data.pf_number || 
+      data.pfNo || 
       '';
     
     // Date of Joining resolution (handles dateOfJoining, date_of_joining, doj, joiningDate)

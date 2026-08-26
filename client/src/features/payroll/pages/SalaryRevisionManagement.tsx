@@ -508,7 +508,7 @@ export const SalaryRevisionManagement: React.FC = () => {
           className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 shadow-xs cursor-pointer"
         >
           {showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? 'Close Revision Builder' : '+ Create Salary Revision'}
+          {showForm ? 'Close Revision Builder' : 'Create Salary Revision'}
         </Button>
       </div>
 

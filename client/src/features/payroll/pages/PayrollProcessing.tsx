@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
@@ -1394,8 +1395,33 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
     const [yr, mo] = (payrollMonth || new Date().toISOString().slice(0, 7)).split('-').map(Number);
     const maxDaysInMonth = new Date(yr, mo, 0).getDate();
 
-    const cycleStartDay = Math.max(1, Math.min(maxDaysInMonth, Number(row.cycle_start_day || row.cycle_start_date_num || selectedCycleObj?.start_date || selectedCycleObj?.startDate || 1)));
+    let cycleStartDay = Math.max(1, Math.min(maxDaysInMonth, Number(row.cycle_start_day || row.cycle_start_date_num || selectedCycleObj?.start_date || selectedCycleObj?.startDate || 1)));
     const cycleCutoffDay = Math.max(1, Math.min(maxDaysInMonth, Number(row.cycle_cutoff_day || selectedCycleObj?.cutoff_day || selectedCycleObj?.cutoffDay || maxDaysInMonth)));
+
+    // Dynamic from Slab / Structure Effective Date or Date of Joining
+    const effRaw = row.effective_from || row.effectiveFrom || row.slab_effective_from || row.slabEffectiveFrom;
+    if (effRaw) {
+      const eff = new Date(effRaw);
+      if (!isNaN(eff.getTime())) {
+        const effY = eff.getFullYear();
+        const effM = eff.getMonth() + 1;
+        if (effY === yr && effM === mo) {
+          cycleStartDay = Math.max(cycleStartDay, eff.getDate());
+        }
+      }
+    }
+
+    const dojRaw = row.date_of_joining || row.dateOfJoining || row.doj;
+    if (dojRaw) {
+      const doj = new Date(dojRaw);
+      if (!isNaN(doj.getTime())) {
+        const dojY = doj.getFullYear();
+        const dojM = doj.getMonth() + 1;
+        if (dojY === yr && dojM === mo) {
+          cycleStartDay = Math.max(cycleStartDay, doj.getDate());
+        }
+      }
+    }
 
     const pad = (n: number) => String(n).padStart(2, '0');
     const monthStart = `${payrollMonth}-${pad(cycleStartDay)}`;
@@ -1846,7 +1872,10 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
 
     const totalDeduction = pt + pf + tds + esic + loanDeduction;
     const netSalary = Math.max(0, totalGrossEarned - totalDeduction);
-    const ctc = Math.round(gross * 12);
+    // CTC = the fixed annual value set in the employee's salary structure.
+    // Never recompute from gross × 12 — that inflates when employer contributions
+    // (PF, ESIC) are included. Fall back to gross × 12 only if no CTC is stored.
+    const ctc = Number(merged.ctc ?? merged.annual_ctc ?? 0) || Math.round(gross * 12);
 
     return {
       ...merged,
@@ -2704,7 +2733,11 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
               </thead>
               <tbody className="divide-y divide-border/50">
                 {uniqueRows.map((r: any) => {
-                  const curr = computeRowValues(r);
+                  // Prefer live edits from editMap (set by handleFieldChange) so that
+                  // changing Paid Days, Adjustment, OT etc. instantly recalculates all
+                  // earned columns, deductions and Net Salary without a page refresh.
+                  // Falls back to fresh compute from server data for unedited rows.
+                  const curr = editMap[r.id] ?? computeRowValues(r);
                   const isChecked = selectedRowIds.has(r.id);
                   const isFrozen = ['locked', 'approved', 'published'].includes(activeRunStatus);
 
@@ -3233,8 +3266,18 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
 
 // ── Main Component ─────────────────────────────────────────────────────────
 export const PayrollProcessing: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<MainTab>('process');
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as MainTab) || 'process';
+  const [activeTab, setActiveTab] = useState<MainTab>(initialTab);
   const { selectedCompanyId } = useCompanyStore();
+
+  // Auto-switch tab if URL param changes (e.g. deep-link from dashboard)
+  useEffect(() => {
+    const tabParam = searchParams.get('tab') as MainTab;
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
   // Fetch cycles scoped strictly to the active Topbar company
   const { data: cycles = [] } = useQuery<PayrollCycle[]>({

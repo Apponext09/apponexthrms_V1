@@ -59,9 +59,15 @@ export class PayrollCycleService {
       else totalDaysCalc = String(lastDayNum);
     }
 
+    const targetCompanyId = data.company_id || data.companyId || ctx.companyId;
+    const numericCompanyId = (targetCompanyId && !isNaN(Number(targetCompanyId)) && Number(targetCompanyId) > 0)
+      ? Number(targetCompanyId)
+      : null;
+
     const cycle: any = {
       uuid: uuidv4(),
       organization_id: ctx.organizationId || 1,
+      company_id: numericCompanyId,
       cycle_name: cycleName,
       cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
       cycle_type: cycleType,
@@ -148,8 +154,8 @@ export class PayrollCycleService {
     if (data.monthOffset !== undefined || data.month_offset !== undefined) {
       updateData.month_offset = data.monthOffset ?? data.month_offset;
     }
-    if (data.disbursementDate !== undefined || data.disbursement_date !== undefined) {
-      updateData.disbursement_date = data.disbursementDate ?? data.disbursement_date;
+    if (data.disbursementDate !== undefined || data.disbursement_date !== undefined || data.disbursement_date_str !== undefined) {
+      updateData.disbursement_date_str = String(data.disbursement_date_str ?? data.disbursementDate ?? data.disbursement_date);
     }
     if (data.capAmount !== undefined || data.cap_amount !== undefined) {
       updateData.cap_amount = data.capAmount ?? data.cap_amount;
@@ -163,6 +169,12 @@ export class PayrollCycleService {
     if (data.isActive !== undefined || data.is_active !== undefined) {
       const active = data.isActive ?? data.is_active;
       updateData.status = active ? 'open' : 'closed';
+    }
+    if (data.company_id !== undefined || data.companyId !== undefined || ctx.companyId) {
+      const cid = data.company_id || data.companyId || ctx.companyId;
+      if (cid && !isNaN(Number(cid)) && Number(cid) > 0) {
+        updateData.company_id = Number(cid);
+      }
     }
 
     try {

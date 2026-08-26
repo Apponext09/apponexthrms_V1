@@ -103,17 +103,31 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
     if (!matches) return false;
   }
 
-  // 6. Effective Date Range filter — only apply if component is active on current date
+  // 6. Effective Date Range filter — compare against the PAYROLL RUN PERIOD, not today
+  // runMonthStr format: 'YYYY-MM'. Compare effective_from against end of run month,
+  // and effective_to against start of run month so past-month processing works correctly.
   const effFrom = comp.effective_from_date || comp.effectiveFromDate || comp.effective_from;
   const effTo = comp.effective_to_date || comp.effectiveToDate || comp.effective_to;
-  const now = new Date();
+  // Build period reference dates from runMonthStr (e.g. '2026-07')
+  let periodStart: Date;
+  let periodEnd: Date;
+  if (runMonthStr && /^\d{4}-\d{2}$/.test(runMonthStr)) {
+    const [y, m] = runMonthStr.split('-').map(Number);
+    periodStart = new Date(y, m - 1, 1);          // 1st of run month
+    periodEnd   = new Date(y, m, 0);               // last day of run month
+  } else {
+    periodStart = new Date();
+    periodEnd   = new Date();
+  }
   if (effFrom) {
     const fromDate = new Date(effFrom);
-    if (!isNaN(fromDate.getTime()) && fromDate > now) return false;
+    // Component not yet effective at the END of the run period
+    if (!isNaN(fromDate.getTime()) && fromDate > periodEnd) return false;
   }
   if (effTo) {
     const toDate = new Date(effTo);
-    if (!isNaN(toDate.getTime()) && toDate < now) return false;
+    // Component already expired BEFORE the START of the run period
+    if (!isNaN(toDate.getTime()) && toDate < periodStart) return false;
   }
 
   // 7. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)
@@ -634,7 +648,7 @@ export class PayrollService {
         }
 
         const maxEligibleDays = Math.max(0, activeEndDay - activeStartDay + 1);
-        const unadjustedLopDays = Number((unpaidLeaveResult as any)?.lopDays || attendanceLopDays || 0);
+        const unadjustedLopDays = Number((unpaidLeaveResult as any)?.lopDays ?? 0);
         const payableDays = Math.max(0, maxEligibleDays - unadjustedLopDays);
         const lopDays = Math.max(0, totalCycleDays - payableDays);
         const lopRatio = totalCycleDays > 0 ? Math.max(0, Math.min(1, payableDays / totalCycleDays)) : 1;
@@ -761,15 +775,18 @@ export class PayrollService {
           const compType = (comp.component_type || comp.componentType || comp.type || 'Value');
           const compNameLower = (comp.name || '').toLowerCase();
 
-          // ── GATE 1: Effective date range ────────────────────────────────────
-          const today = new Date();
+          // ── GATE 1: Effective date range — compare against PAYROLL RUN PERIOD not today ─
+          // runMonthStr = 'YYYY-MM'. Component is included only if it was active
+          // at any point during the run month (from >= period start AND to <= period end)
           if (comp.effective_from_date) {
             const fd = new Date(comp.effective_from_date);
-            if (!isNaN(fd.getTime()) && fd > today) continue;
+            // Not yet effective at end of run month → skip
+            if (!isNaN(fd.getTime()) && fd > new Date(`${runMonthStr}-28`)) continue;
           }
           if (comp.effective_to_date) {
             const td = new Date(comp.effective_to_date);
-            if (!isNaN(td.getTime()) && td < today) continue;
+            // Already expired before start of run month → skip
+            if (!isNaN(td.getTime()) && td < new Date(`${runMonthStr}-01`)) continue;
           }
 
           // ── GATE 2: Employment filters (gender/grade/dept/location/months) ──
@@ -1001,15 +1018,19 @@ export class PayrollService {
 
         // ── Update payroll_run_employees ──────────────────────────────────────
         await this.runEmployeeRepo.update(ctx, empRun.id, {
-          working_days: paidDays,
+          working_days:      paidDays,
+          leave_days:        Number((unadjustedLopDays + attendanceLopDays).toFixed(2)),
+          paid_leave_days:   Math.max(0, paidDays),
           unpaid_leave_days: unpaidDays,
-          total_earnings: totalEarnings,
-          total_deductions: totalDeductions,
-          net_salary: netSalary,
-          status: 'processed',
-          processed_at: mysqlNow(),
-          processing_notes: processingNotes,
-          updated_by: ctx.userId
+          overtime_hours:    0,
+          tax_deducted:      tdsDeduction,
+          total_earnings:    totalEarnings,
+          total_deductions:  totalDeductions,
+          net_salary:        netSalary,
+          status:            'processed',
+          processed_at:      mysqlNow(),
+          processing_notes:  processingNotes,
+          updated_by:        ctx.userId
         });
 
         // ── Write payroll_earnings rows ───────────────────────────────────────
@@ -1082,6 +1103,8 @@ export class PayrollService {
             await db('payslips').where('id', existing.id).update({
               payroll_run_id: payrollRunId,
               company_id: existing.company_id || (empCompanyId ? Number(empCompanyId) : null),
+              // Always keep CTC from the salary structure — never recompute from earnings
+              ctc: resolvedAnnualCtc || existing.ctc || 0,
               basic_salary: basicEarned,
               gross_salary: totalEarnings,
               total_deductions: totalDeductions,
@@ -1098,7 +1121,9 @@ export class PayrollService {
               payroll_run_id: payrollRunId,
               payslip_month: payslipMonthDate,
               payslip_number: payslipNum,
-              ctc: (totalEarnings + pfEmployer + esicEmployer) * 12,
+              // CTC = annual CTC from salary structure (source of truth)
+              // Never compute as (earnings + employer contributions) × 12 — that inflates CTC
+              ctc: resolvedAnnualCtc || 0,
               basic_salary: basicEarned,
               gross_salary: totalEarnings,
               total_deductions: totalDeductions,
@@ -1517,25 +1542,28 @@ export class PayrollService {
 
   async getComplianceReport(ctx: TenantContext, payrollRunId: number) {
     const db = getKnex();
-    // payroll_run_employees has no basic_salary/gross_salary columns — the
-    // real earned-basic breakdown lives in payroll_earnings (written per
-    // run), and total_earnings is the closest equivalent to gross.
-    const rows: any[] = await db('payroll_run_employees')
-      .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
-      .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
-      .leftJoin('payroll_earnings', function () {
-        this.on('payroll_earnings.payroll_run_employee_id', '=', 'payroll_run_employees.id')
-          .andOn('payroll_earnings.formula_used', '=', db.raw('?', ['Basic Salary']));
-      })
-      .where('payroll_run_employees.payroll_run_id', payrollRunId)
-      .where('payroll_run_employees.organization_id', ctx.organizationId)
+    // For the compliance report we need one row per employee with their Basic Salary.
+    // We use a subquery to get only the Basic Salary earning row per run-employee.
+    const rows: any[] = await db('payroll_run_employees as pre')
+      .join('employees as e', 'pre.employee_id', 'e.id')
+      .leftJoin('employee_compensation as ec', 'e.id', 'ec.employee_id')
+      .leftJoin(
+        db('payroll_earnings')
+          .whereRaw("LOWER(component_name) LIKE '%basic%'")
+          .select('payroll_run_employee_id', db.raw('MAX(actual_value) as basic_earned'))
+          .groupBy('payroll_run_employee_id')
+          .as('be'),
+        'be.payroll_run_employee_id', 'pre.id'
+      )
+      .where('pre.payroll_run_id', payrollRunId)
+      .where('pre.organization_id', ctx.organizationId)
       .select(
-        'employees.first_name',
-        'employees.last_name',
-        db.raw('COALESCE(employees.uan_no, employee_compensation.uan_number) as uan_number'),
-        db.raw('COALESCE(employees.esic_no, employee_compensation.esic_number) as esic_number'),
-        'payroll_earnings.actual_value as basic_salary',
-        'payroll_run_employees.total_earnings as gross_salary'
+        'e.first_name',
+        'e.last_name',
+        db.raw('COALESCE(e.uan_no, ec.uan_number) as uan_number'),
+        db.raw('COALESCE(e.esic_no, ec.esic_number) as esic_number'),
+        db.raw('COALESCE(be.basic_earned, 0) as basic_salary'),
+        'pre.total_earnings as gross_salary'
       );
 
     let csv = 'Employee Name,UAN,ESIC Number,Basic Salary,PF Employee (12%),Gross Salary,ESI Employee (0.75%)\n';
@@ -1552,251 +1580,35 @@ export class PayrollService {
     return csv;
   }
 
+  // getCycles defined below (delegating to PayrollCycleService)
+
+  // ── Cycle CRUD — delegates to PayrollCycleService (single source of truth) ──────────────────
+  // Duplicate implementations previously lived here AND in PayrollCycleService.
+  // All calls now go through PayrollCycleService to avoid double-maintenance bugs.
+
   async getCycles(ctx: TenantContext) {
-    const db = getKnex();
-    const orgId = ctx.organizationId || 1;
-
-    const cycles = await db('payroll_cycles')
-      .where(b => {
-        b.where('organization_id', orgId).orWhereNull('organization_id');
-      })
-      .whereNull('deleted_at')
-      .orderBy('id', 'asc');
-
-    return cycles || [];
+    const { PayrollCycleService } = await import('./PayrollCycleService');
+    return new PayrollCycleService().getCycles(ctx);
   }
 
   async createCycle(ctx: TenantContext, data: any) {
-    const db = getKnex();
-
-    let userId = ctx.userId;
-    if (!userId) {
-      const user = await db('users').where('organization_id', ctx.organizationId).first('id');
-      userId = user?.id || 1;
-    }
-
-    // Derive cycle dates from frequency/start_date if not explicitly provided
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
-    const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
-
-    const cycleName = data.cycle_name || data.name || 'Monthly';
-    const frequency = data.frequency || 'Monthly';
-    const startDate = Number(data.start_date ?? 1);
-    const cutoffDay = Number(data.cutoff_day ?? 25);
-    const disbursementDate = Number(data.disbursement_date ?? data.salary_credit_date ?? 27);
-
-    const rawType = frequency.toLowerCase().replace(/[^a-z]/g, '');
-    const validEnumTypes = ['monthly', 'biweekly', 'weekly', 'fortnightly'];
-    const cycleType = validEnumTypes.includes(rawType) ? rawType : 'monthly';
-
-    const cycle: any = {
-      uuid: uuidv4(),
-      organization_id: ctx.organizationId || 1,
-      cycle_name: cycleName,
-      cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
-      cycle_type: cycleType,
-      // New Hoshi-style fields
-      frequency,
-      start_date: startDate,
-      start_date_2: data.start_date_2 ? Number(data.start_date_2) : null,
-      start_day: data.start_day || null,
-      cutoff_day: cutoffDay,
-      cutoff_day_name: data.cutoff_day_name || null,
-      month_offset: data.month_offset || 'Current',
-      total_days_calc: data.total_days_calc || '30',
-      cap_amount: Number(data.cap_amount ?? 1000000),
-      is_daily_wages: Boolean(data.is_daily_wages),
-      daily_wages_include_paid_holidays: Boolean(data.daily_wages_include_paid_holidays),
-      daily_wages_include_week_off: Boolean(data.daily_wages_include_week_off),
-      tolerance_enabled: Boolean(data.tolerance_enabled),
-      tolerance_minutes: Number(data.tolerance_minutes ?? 15),
-      is_active: data.is_active !== false,
-      // Legacy date fields
-      cycle_start_date: data.cycle_start_date || firstDay,
-      cycle_end_date: data.cycle_end_date || lastDay,
-      payroll_run_date: data.payroll_run_date || lastDay,
-      salary_credit_date: (data.salary_credit_date && String(data.salary_credit_date).includes('-'))
-        ? data.salary_credit_date
-        : `${year}-${String(month + 1).padStart(2, '0')}-${String(disbursementDate).padStart(2, '0')}`,
-      is_current_cycle: data.is_current_cycle ?? true,
-      status: data.is_active === false ? 'closed' : 'open',
-      created_by: userId || 1,
-      updated_by: userId || 1
-    };
-
-    const [id] = await db('payroll_cycles').insert(cycle);
-    return { id, ...cycle };
+    const { PayrollCycleService } = await import('./PayrollCycleService');
+    return new PayrollCycleService().createCycle(ctx, data);
   }
 
   async getCycle(ctx: TenantContext, id: number | string) {
-    const db = getKnex();
-    return db('payroll_cycles').where({ id, organization_id: ctx.organizationId }).first();
+    const { PayrollCycleService } = await import('./PayrollCycleService');
+    return new PayrollCycleService().getCycle(ctx, id);
   }
 
   async updateCycle(ctx: TenantContext, id: number | string, data: any) {
-    const db = getKnex();
-    const strId = String(id);
-    const numId = parseInt(strId, 10);
-    const cycleName = data.cycle_name || data.name;
-
-    const updateData: any = {
-      updated_at: new Date()
-    };
-    if (ctx.userId) updateData.updated_by = ctx.userId;
-
-    if (cycleName) {
-      updateData.cycle_name = cycleName;
-    }
-    if (data.isDailyWages !== undefined || data.is_daily_wages !== undefined) {
-      updateData.is_daily_wages = (data.isDailyWages ?? data.is_daily_wages) ? 1 : 0;
-    }
-    if (data.dailyWagesIncludePaidHolidays !== undefined || data.daily_wages_include_paid_holidays !== undefined) {
-      updateData.daily_wages_include_paid_holidays = (data.dailyWagesIncludePaidHolidays ?? data.daily_wages_include_paid_holidays) ? 1 : 0;
-    }
-    if (data.dailyWagesIncludeWeekOff !== undefined || data.daily_wages_include_week_off !== undefined) {
-      updateData.daily_wages_include_week_off = (data.dailyWagesIncludeWeekOff ?? data.daily_wages_include_week_off) ? 1 : 0;
-    }
-    if (data.frequency !== undefined) {
-      updateData.frequency = data.frequency;
-      updateData.cycle_type = String(data.frequency).toLowerCase().replace('-', '');
-    }
-    if (data.startDate !== undefined || data.start_date !== undefined) {
-      updateData.start_date = data.startDate ?? data.start_date;
-    }
-    if (data.cutoffDay !== undefined || data.cutoff_day !== undefined) {
-      updateData.cutoff_day = data.cutoffDay ?? data.cutoff_day;
-    }
-    if (data.monthOffset !== undefined || data.month_offset !== undefined) {
-      updateData.month_offset = data.monthOffset ?? data.month_offset;
-    }
-    if (data.disbursementDate !== undefined || data.disbursement_date !== undefined) {
-      updateData.disbursement_date = data.disbursementDate ?? data.disbursement_date;
-    }
-    if (data.capAmount !== undefined || data.cap_amount !== undefined) {
-      updateData.cap_amount = data.capAmount ?? data.cap_amount;
-    }
-    if (data.toleranceEnabled !== undefined || data.tolerance_enabled !== undefined) {
-      updateData.tolerance_enabled = (data.toleranceEnabled ?? data.tolerance_enabled) ? 1 : 0;
-    }
-    if (data.toleranceMinutes !== undefined || data.tolerance_minutes !== undefined) {
-      updateData.tolerance_minutes = data.toleranceMinutes ?? data.tolerance_minutes;
-    }
-    if (data.isActive !== undefined || data.is_active !== undefined) {
-      const active = data.isActive ?? data.is_active;
-      updateData.status = active ? 'open' : 'closed';
-    }
-
-    try {
-      let query = db('payroll_cycles');
-      if (ctx?.organizationId) {
-        query = query.where('organization_id', ctx.organizationId);
-      }
-
-      if (!isNaN(numId)) {
-        await query.where(function() {
-          this.where('id', numId).orWhere('uuid', strId);
-        }).update(updateData);
-      } else {
-        await query.where('uuid', strId).update(updateData);
-      }
-    } catch (err) {
-      console.error('Error updating cycle in DB:', err);
-    }
-
-    let fetchQuery = db('payroll_cycles');
-    const updated = await fetchQuery
-      .where(function() {
-        if (!isNaN(numId)) this.where('id', numId).orWhere('uuid', strId);
-        else this.where('uuid', strId);
-      })
-      .first();
-
-    if (!updated) {
-      return { id: strId, ...data, ...updateData, name: cycleName || data.name };
-    }
-
-    const nameVal = updated.cycleName || updated.cycle_name || updated.name || '';
-    const isDaily = Boolean(updated.isDailyWages ?? updated.is_daily_wages);
-    const incHolidays = Boolean(updated.dailyWagesIncludePaidHolidays ?? updated.daily_wages_include_paid_holidays);
-    const incWeekOff = Boolean(updated.dailyWagesIncludeWeekOff ?? updated.daily_wages_include_week_off);
-    const start = updated.startDate ?? updated.start_date ?? 1;
-    const cutoff = updated.cutoffDay ?? updated.cutoff_day ?? 25;
-    const offset = updated.monthOffset || updated.month_offset || 'Current';
-    const disbursement = updated.disbursementDate ?? updated.disbursement_date ?? 1;
-    const cap = updated.capAmount ?? updated.cap_amount ?? 1000000;
-    const tolEnabled = Boolean(updated.toleranceEnabled ?? updated.tolerance_enabled);
-    const tolMinutes = updated.toleranceMinutes ?? updated.tolerance_minutes ?? 15;
-    const active = updated.status !== 'closed' && updated.isActive !== false && updated.is_active !== false;
-
-    return {
-      ...updated,
-      id: String(updated.id || updated.uuid),
-      name: nameVal,
-      cycle_name: nameVal,
-      cycleName: nameVal,
-      is_daily_wages: isDaily,
-      isDailyWages: isDaily,
-      daily_wages_include_paid_holidays: incHolidays,
-      dailyWagesIncludePaidHolidays: incHolidays,
-      daily_wages_include_week_off: incWeekOff,
-      dailyWagesIncludeWeekOff: incWeekOff,
-      frequency: updated.frequency || 'Monthly',
-      start_date: start,
-      startDate: start,
-      cutoff_day: cutoff,
-      cutoffDay: cutoff,
-      month_offset: offset,
-      monthOffset: offset,
-      disbursement_date: disbursement,
-      disbursementDate: disbursement,
-      cap_amount: cap,
-      capAmount: cap,
-      tolerance_enabled: tolEnabled,
-      toleranceEnabled: tolEnabled,
-      tolerance_minutes: tolMinutes,
-      toleranceMinutes: tolMinutes,
-      is_active: active,
-      isActive: active
-    };
+    const { PayrollCycleService } = await import('./PayrollCycleService');
+    return new PayrollCycleService().updateCycle(ctx, id, data);
   }
 
   async deleteCycle(ctx: TenantContext, id: number | string) {
-    const db = getKnex();
-    const strId = String(id);
-    const numId = parseInt(strId, 10);
-    const orgId = ctx.organizationId || 1;
-
-    try {
-      // 1. Unlink salary structures associated with this cycle to prevent foreign key errors
-      if (!isNaN(numId)) {
-        await db('salary_structures').where('cycle_id', numId).update({ cycle_id: null }).catch(() => {});
-      }
-
-      // 2. Soft-delete in payroll_cycles
-      let updated = 0;
-      if (!isNaN(numId)) {
-        updated = await db('payroll_cycles')
-          .where('id', numId)
-          .where('organization_id', orgId)
-          .update({ deleted_at: new Date(), status: 'closed', is_active: false })
-          .catch(() => 0);
-      }
-      if (!updated) {
-        updated = await db('payroll_cycles')
-          .where('uuid', strId)
-          .update({ deleted_at: new Date(), status: 'closed', is_active: false })
-          .catch(() => 0);
-      }
-      if (!updated && !isNaN(numId)) {
-        await db('payroll_cycles').where('id', numId).update({ deleted_at: new Date(), status: 'closed', is_active: false }).catch(() => {});
-      }
-    } catch (err) {
-      console.error('Failed to delete payroll cycle:', err);
-    }
-    return { success: true };
+    const { PayrollCycleService } = await import('./PayrollCycleService');
+    return new PayrollCycleService().deleteCycle(ctx, id);
   }
 
   /**

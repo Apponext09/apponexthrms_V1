@@ -252,6 +252,7 @@ export class PayrollController {
   listComponentGroups = (req: Request, res: Response) => this.cycleSlabController.listComponentGroups(req, res);
   createComponentGroup = (req: Request, res: Response) => this.cycleSlabController.createComponentGroup(req, res);
   updateComponentGroup = (req: Request, res: Response) => this.cycleSlabController.updateComponentGroup(req, res);
+  getComponentGroupAuditLogs = (req: Request, res: Response) => this.cycleSlabController.getComponentGroupAuditLogs(req, res);
   deleteComponentGroup = (req: Request, res: Response) => this.cycleSlabController.deleteComponentGroup(req, res);
 
   listComponentDefinitions = (req: Request, res: Response) => this.cycleSlabController.listComponentDefinitions(req, res);
@@ -259,6 +260,7 @@ export class PayrollController {
   getComponents = (req: Request, res: Response) => this.cycleSlabController.getComponents(req, res);
   createComponentDefinition = (req: Request, res: Response) => this.cycleSlabController.createComponentDefinition(req, res);
   updateComponentDefinition = (req: Request, res: Response) => this.cycleSlabController.updateComponentDefinition(req, res);
+  getComponentAuditLogs = (req: Request, res: Response) => this.cycleSlabController.getComponentAuditLogs(req, res);
   deleteComponentDefinition = (req: Request, res: Response) => this.cycleSlabController.deleteComponentDefinition(req, res);
 
   listSlabs = (req: Request, res: Response) => this.cycleSlabController.listSlabs(req, res);

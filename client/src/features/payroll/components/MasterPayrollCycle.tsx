@@ -65,6 +65,31 @@ export const MasterPayrollCycle: React.FC = () => {
     isActive: true
   });
 
+  // ── Dynamic cycle validation helpers ─────────────────────────────────────
+  const isMonthlyLike = !['Weekly', 'Bi-Weekly'].includes(cycleForm.frequency || 'Monthly');
+  const cutoffNum = Number(cycleForm.cutoffDay) || 25;
+  const disbNum = Number(cycleForm.disbursementDate) || 28;
+  const startNum = Number(cycleForm.startDate) || 1;
+  const cycleConflict = isMonthlyLike && disbNum <= cutoffNum;
+  const auditWindowDays = cycleConflict ? 0 : disbNum - cutoffNum;
+
+  // When cutoff changes, auto-adjust disbursement to cutoff + 3 (if current disbursement is invalid)
+  const handleCutoffChange = (val: string) => {
+    const newCutoff = Number(val);
+    const currentDisb = Number(cycleForm.disbursementDate) || 28;
+    let newDisb = currentDisb;
+    if (isMonthlyLike && currentDisb <= newCutoff) {
+      newDisb = Math.min(31, newCutoff + 3);
+    }
+    setCycleForm({ ...cycleForm, cutoffDay: val as any, disbursementDate: newDisb });
+  };
+
+  // Pay period preview text
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const now = new Date();
+  const previewMonth = monthNames[now.getMonth()];
+  const previewYear = now.getFullYear();
+
   const fetchCompanies = async () => {
     try {
       const res = await apiClient.get('/settings/companies');
@@ -198,12 +223,24 @@ export const MasterPayrollCycle: React.FC = () => {
       showToast.error('Validation Error', 'Payroll Cycle name is required.');
       return;
     }
+    // Dynamic validation: disbursement must be after cutoff for monthly cycles
+    if (isMonthlyLike && disbNum <= cutoffNum) {
+      showToast.error(
+        'Invalid Cycle Configuration',
+        `Payroll Disbursement Date (${disbNum}) must be after the CutOff Day (${cutoffNum}). Please fix before saving.`
+      );
+      return;
+    }
+
+    const effectiveCompanyId = cycleForm.companyId
+      ? Number(cycleForm.companyId)
+      : (selectedCompanyId ? Number(selectedCompanyId) : (selectedCompanyFilter !== 'all' ? Number(selectedCompanyFilter) : null));
 
     const payload = {
       cycle_name: cycleForm.name.trim(),
       name: cycleForm.name.trim(),
-      company_id: cycleForm.companyId ? Number(cycleForm.companyId) : null,
-      companyId: cycleForm.companyId ? Number(cycleForm.companyId) : null,
+      company_id: effectiveCompanyId,
+      companyId: effectiveCompanyId,
       frequency: cycleForm.frequency || 'Monthly',
       cycle_type: (cycleForm.frequency || 'Monthly').toLowerCase(),
       is_daily_wages: Boolean(cycleForm.isDailyWages),
@@ -215,6 +252,8 @@ export const MasterPayrollCycle: React.FC = () => {
       cutoff_day: Number(cycleForm.cutoffDay) || 0,
       cutoff_day_name: cycleForm.cutoffDayName || null,
       month_offset: cycleForm.monthOffset || 'Current',
+      disbursement_date: Number(cycleForm.disbursementDate || 28),
+      disbursementDate: Number(cycleForm.disbursementDate || 28),
       disbursement_date_str: String(cycleForm.disbursementDate || 28),
       total_days_calc: cycleForm.totalDaysCalc || '30',
       cap_amount: cycleForm.capAmount !== undefined && cycleForm.capAmount !== '' ? Number(cycleForm.capAmount) : 1000000,
@@ -743,15 +782,21 @@ export const MasterPayrollCycle: React.FC = () => {
                       <option value="Sunday">Sunday</option>
                     </select>
                   ) : (
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={cycleForm.cutoffDay !== undefined && cycleForm.cutoffDay !== null ? String(cycleForm.cutoffDay) : ''}
-                      onChange={e => setCycleForm({ ...cycleForm, cutoffDay: e.target.value as any })}
-                      className="h-9 w-28 text-xs font-medium border-input bg-background"
-                      placeholder="25"
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={cycleForm.cutoffDay !== undefined && cycleForm.cutoffDay !== null ? String(cycleForm.cutoffDay) : ''}
+                        onChange={e => handleCutoffChange(e.target.value)}
+                        className={`h-9 w-28 text-xs font-medium border-input bg-background ${cycleConflict ? 'border-destructive ring-1 ring-destructive' : ''}`}
+                        placeholder="25"
+                      />
+                      <span className="text-xs text-muted-foreground">of every month</span>
+                    </div>
                   )}
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Attendance is frozen on this day. Keep <strong>2–5 days</strong> gap before Disbursement Date for audit time.
+                  </p>
                 </div>
               </div>
 
@@ -814,15 +859,54 @@ export const MasterPayrollCycle: React.FC = () => {
                 <label className="md:col-span-4 text-xs font-medium text-foreground">
                   Payroll Disbursement Date <span className="text-destructive">*</span>
                 </label>
-                <div className="md:col-span-8">
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={cycleForm.disbursementDate !== undefined && cycleForm.disbursementDate !== null ? String(cycleForm.disbursementDate) : ''}
-                    onChange={e => setCycleForm({ ...cycleForm, disbursementDate: e.target.value as any })}
-                    className="h-9 w-28 text-xs font-medium border-input bg-background"
-                    placeholder="28"
-                  />
+                <div className="md:col-span-8 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={cycleForm.disbursementDate !== undefined && cycleForm.disbursementDate !== null ? String(cycleForm.disbursementDate) : ''}
+                      onChange={e => setCycleForm({ ...cycleForm, disbursementDate: e.target.value as any })}
+                      className={`h-9 w-28 text-xs font-medium border-input bg-background ${
+                        cycleConflict ? 'border-destructive ring-1 ring-destructive' : 'border-green-500/60'
+                      }`}
+                      placeholder="28"
+                    />
+                    <span className="text-xs text-muted-foreground">of the month</span>
+                    {!cycleConflict && isMonthlyLike && disbNum > 0 && (
+                      <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                        ✓ {auditWindowDays} day{auditWindowDays !== 1 ? 's' : ''} audit window
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Conflict Warning */}
+                  {cycleConflict && isMonthlyLike && (
+                    <div className="flex items-start gap-2 rounded-md bg-destructive/8 border border-destructive/30 px-3 py-2">
+                      <span className="text-destructive text-xs mt-0.5">⚠</span>
+                      <p className="text-[11px] text-destructive font-medium">
+                        Disbursement date ({disbNum}) must be <strong>after</strong> the Cutoff day ({cutoffNum}).
+                        Salary cannot be paid before attendance is finalized.
+                        {disbNum <= cutoffNum && ` Auto-suggested: ${Math.min(31, cutoffNum + 3)}`}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Live Pay Period Preview Banner */}
+                  {!cycleConflict && isMonthlyLike && startNum > 0 && cutoffNum > 0 && disbNum > 0 && (
+                    <div className="flex items-center gap-2 rounded-md bg-primary/5 border border-primary/20 px-3 py-2">
+                      <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <div className="text-[11px] text-primary font-medium">
+                        <span className="font-semibold">Pay Period Preview: </span>
+                        <span>{startNum} {previewMonth} {previewYear}</span>
+                        <span className="mx-1 opacity-60">→</span>
+                        <span>{cutoffNum} {previewMonth} {previewYear}</span>
+                        <span className="mx-2 opacity-40">|</span>
+                        <span>Salary Credit: <strong>{disbNum} {previewMonth}</strong></span>
+                        <span className="mx-2 opacity-40">|</span>
+                        <span className="text-muted-foreground">Audit Window: <strong className="text-primary">{auditWindowDays} days</strong></span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
