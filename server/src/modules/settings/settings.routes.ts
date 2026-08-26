@@ -4133,11 +4133,23 @@ router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
 import { EventController } from './controllers/EventController';
 const eventCtrl = new EventController();
 
-router.get('/events', asyncHandler((req, res) => eventCtrl.list(req, res)));
-router.get('/events/:id', asyncHandler((req, res) => eventCtrl.getById(req, res)));
-router.post('/events', asyncHandler((req, res) => eventCtrl.create(req, res)));
-router.put('/events/:id', asyncHandler((req, res) => eventCtrl.update(req, res)));
-router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
+// ==========================================
+// ID CARD DESIGNER & TEMPLATE CRUD ROUTES
+// ==========================================
+import { IdCardTemplateController } from './controllers/IdCardTemplateController';
+const idCardCtrl = new IdCardTemplateController();
+
+router.get('/id-card/templates', asyncHandler((req, res) => idCardCtrl.list(req, res)));
+router.post('/id-card/templates', asyncHandler((req, res) => idCardCtrl.create(req, res)));
+router.get('/id-card/templates/:id', asyncHandler((req, res) => idCardCtrl.getById(req, res)));
+router.put('/id-card/templates/:id', asyncHandler((req, res) => idCardCtrl.update(req, res)));
+router.delete('/id-card/templates/:id', asyncHandler((req, res) => idCardCtrl.delete(req, res)));
+router.post('/id-card/templates/:id/publish', asyncHandler((req, res) => idCardCtrl.publish(req, res)));
+router.post('/id-card/templates/:id/duplicate', asyncHandler((req, res) => idCardCtrl.duplicate(req, res)));
+router.get('/id-card/templates/:id/versions', asyncHandler((req, res) => idCardCtrl.getVersions(req, res)));
+router.post('/id-card/templates/:id/rollback/:versionId', asyncHandler((req, res) => idCardCtrl.rollback(req, res)));
+router.get('/id-card/active-template', asyncHandler((req, res) => idCardCtrl.resolveActive(req, res)));
+router.post('/id-card/upload-asset', asyncHandler((req, res) => idCardCtrl.uploadAsset(req, res)));
 
 export default router;
 

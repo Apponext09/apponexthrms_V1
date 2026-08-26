@@ -1204,6 +1204,15 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       logger.error('Error upgrading master holiday calendar tables schema:', err.message);
     }
 
+    // Ensure ID card templates submodule schema is created
+    try {
+      const { up: upIdCardTemplates } = await import('../db/migrations/20260825000001_create_id_card_templates');
+      await upIdCardTemplates(db);
+      logger.info('ID Card templates schema verified and applied.');
+    } catch (err: any) {
+      logger.error('Error upgrading ID card templates tables schema:', err.message);
+    }
+
   } catch (error: any) {
     logger.error('Error in setupProfileSchemaAndSeed:', error);
     try {

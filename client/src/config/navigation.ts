@@ -425,6 +425,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {
+        name: 'ID Card Designer',
+        href: '/settings/id-card-designer',
+        icon: 'CreditCard',
+        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+      },
+      {
         name: 'Career Portal Customization',
         href: '/settings/career-customization',
         icon: 'Palette',

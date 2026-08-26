@@ -664,75 +664,95 @@ export const ResumeBankPage: React.FC = () => {
   const paginatedLogs = logsData;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-slate-50/50 dark:bg-slate-950 min-h-screen">
-      {/* Top Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/60 text-indigo-600 dark:text-indigo-400 shadow-2xs">
-              <Briefcase className="w-5 h-5" />
-            </div>
-            Resume Source Screen & ATS Bank
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            Scan candidates, bulk import PDF/ZIP/Word resumes, run AI ATS skill matching, and shortlist top talent.
-          </p>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <Briefcase className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Resume Bank & ATS Screening
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Centralized talent pool repository, AI-driven keyword matching, batch resume parser, and candidate scoring.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
+          <Button 
+            size="sm" 
+            onClick={() => setIsAddModalOpen(true)} 
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Add Candidate
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportResumes} 
+            className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground cursor-pointer whitespace-nowrap"
+          >
+            <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+          </Button>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-6 bg-slate-100/80 dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-wrap gap-1">
-          <TabsTrigger value="source" className="rounded-xl text-xs font-semibold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs">
-            <FileText className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
+        <TabsList className="mb-6 bg-muted/70 p-1.5 rounded-2xl border border-border/80 flex flex-wrap gap-1">
+          <TabsTrigger value="source" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+            <FileText className="w-3.5 h-3.5 mr-1.5 text-primary" />
             Resume Source Screen
           </TabsTrigger>
-          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs text-amber-700 dark:text-amber-400">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-400 animate-pulse" />
+          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs text-amber-600 dark:text-amber-400">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-500 animate-pulse" />
             AI ATS Screening & Top-N Rank
           </TabsTrigger>
-          <TabsTrigger value="upload" className="rounded-xl text-xs font-semibold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs">
+          <TabsTrigger value="upload" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
             <FileUp className="w-3.5 h-3.5 mr-1.5 text-purple-500" />
             Bulk Upload (PDF / ZIP / Word)
           </TabsTrigger>
-          <TabsTrigger value="logs" className="rounded-xl text-xs font-semibold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs">
+          <TabsTrigger value="logs" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
             <History className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
-            Bulk Uploaded Log
+            Bulk Upload Logs
           </TabsTrigger>
         </TabsList>
 
         {/* TAB 1: RESUME SOURCE SCREEN */}
         <TabsContent value="source" className="space-y-6">
-          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-visible relative z-30">
-            <CardHeader className="py-3 px-5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900 rounded-t-2xl">
-              <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">Resume Bank Search & Filters</CardTitle>
+          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-visible relative z-30">
+            <CardHeader className="py-4 px-6 border-b border-border/60 bg-muted/30 rounded-t-2xl">
+              <CardTitle className="text-sm font-extrabold text-foreground">Resume Bank Search & Filters</CardTitle>
             </CardHeader>
-            <CardContent className="p-5 space-y-4 overflow-visible relative z-30">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-5 gap-y-4">
+            <CardContent className="p-6 space-y-4 overflow-visible relative z-30">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-4">
                 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Candidate Tracker ID</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Tracker ID</label>
                   <Input 
-                    placeholder="Search By Tracker ID..."
+                    placeholder="Search Tracker ID..."
                     value={filters.trackerId} 
                     onChange={(e) => handleFilterChange('trackerId', e.target.value)} 
-                    className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl"
+                    className="h-9 text-xs bg-background border-border rounded-xl font-mono"
                   />
                 </div>
 
                 <div className="space-y-1.5 lg:col-span-2">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Search</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate / Skill Search</label>
                   <Input 
-                    placeholder="Candidate Name / Email / Skills..."
+                    placeholder="Candidate Name, Email, or Skill Keywords..."
                     value={filters.search} 
                     onChange={(e) => handleFilterChange('search', e.target.value)} 
-                    className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl"
+                    className="h-9 text-xs bg-background border-border rounded-xl"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Application From</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Application Source</label>
                   <Select value={filters.source} onValueChange={(val) => handleFilterChange('source', val)}>
-                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Select Source" />
                     </SelectTrigger>
                     <SelectContent>
@@ -752,9 +772,9 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Position Title</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Position Title</label>
                   <Select value={filters.position} onValueChange={(val) => handleFilterChange('position', val)}>
-                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Choose Position" />
                     </SelectTrigger>
                     <SelectContent>
@@ -769,9 +789,9 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Candidate Status</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate Status</label>
                   <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
-                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Choose Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -785,11 +805,11 @@ export const ResumeBankPage: React.FC = () => {
                   </Select>
                 </div>
                 
-                <div className="flex items-end gap-2 pt-1 lg:col-span-4 mt-2">
-                  <Button onClick={handleSearch} className="h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs">
-                    Search
+                <div className="flex items-center gap-2 pt-2 lg:col-span-4">
+                  <Button onClick={handleSearch} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs cursor-pointer">
+                    Apply Search Filters
                   </Button>
-                  <Button onClick={handleReset} variant="outline" className="h-9 px-5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-none">
+                  <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground cursor-pointer">
                     Reset Filter
                   </Button>
                 </div>
@@ -799,29 +819,20 @@ export const ResumeBankPage: React.FC = () => {
           </Card>
 
           {/* TABLE CONTAINER */}
-          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between py-4 px-5 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">Candidates Database ({totalEntries})</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="h-8 px-3.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs">
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Candidate
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleExportResumes} className="h-8 px-3.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-700">
-                  <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
-                  Export
-                </Button>
-              </div>
+          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b border-border/60">
+              <CardTitle className="text-sm font-extrabold text-foreground">Candidates Database ({totalEntries})</CardTitle>
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="p-3 bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-600 dark:text-slate-400 font-medium">
+              <div className="p-3.5 bg-muted/30 border-b border-border/60 flex justify-between items-center text-xs text-muted-foreground font-medium">
                 <div>
                   Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
                 </div>
                 <div className="flex items-center gap-1.5">
-                  Show 
+                  <span>Show</span>
                   <Select value={pageSize} onValueChange={(val) => { setPageSize(val); setCurrentPage(1); }}>
-                    <SelectTrigger className="h-7 w-16 px-1.5 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg">
+                    <SelectTrigger className="h-7 w-16 px-1.5 text-xs bg-background border-border rounded-lg font-bold">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -831,84 +842,98 @@ export const ResumeBankPage: React.FC = () => {
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
-                  per page
+                  <span>per page</span>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <Table className="min-w-[1200px]">
-                  <TableHeader className="bg-slate-50 dark:bg-slate-900">
-                    <TableRow className="border-slate-100 dark:border-slate-800">
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Tracker ID</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Candidate Name & Email</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Source</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Position</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Experience</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Contact</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Status</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Resume File</TableHead>
-                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap text-right">Action</TableHead>
+              <div className="w-full overflow-x-auto">
+                <Table className="min-w-[1200px] border-collapse">
+                  <TableHeader className="bg-muted/50 border-b border-border/60">
+                    <TableRow className="border-border/60">
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground whitespace-nowrap">Tracker ID</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Candidate Name & Email</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Source</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Position</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Experience</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Contact</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap text-center">Status</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap text-center">Resume File</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground whitespace-nowrap text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="divide-y divide-border/60">
                     {isLoadingResumes ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-28 text-center text-xs text-slate-500 bg-white dark:bg-slate-900">
-                          Loading candidate resumes...
+                        <TableCell colSpan={9} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                            <span>Loading candidate resumes...</span>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : paginatedData.length > 0 ? (
-                      paginatedData.map((item) => (
-                        <TableRow key={item.id} className="border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                          <TableCell className="text-xs py-3 font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{item.trackerId}</TableCell>
-                          <TableCell className="text-xs py-3 font-medium whitespace-nowrap">
-                            <div className="font-bold text-slate-900 dark:text-slate-100">{item.name}</div>
-                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{item.email}</div>
-                          </TableCell>
-                          <TableCell className="text-xs py-3 whitespace-nowrap">
-                            <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 rounded-lg capitalize px-2 py-0.5 font-semibold">
-                              {item.source === 'bulk_import' ? 'Bulk Import' : item.source}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs py-3 font-medium whitespace-nowrap">{item.position}</TableCell>
-                          <TableCell className="text-xs py-3 whitespace-nowrap">{item.experience}</TableCell>
-                          <TableCell className="text-xs py-3 whitespace-nowrap">{item.contact}</TableCell>
-                          <TableCell className="text-xs py-3 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                              item.status === 'Screening' || item.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
-                            }`}>
-                              {item.status}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-xs py-3 whitespace-nowrap">
-                            {item.resumeUrl ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => window.open(getResumeViewUrl(item.resumeUrl), '_blank')}
-                                className="h-7 px-2.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg"
+                      paginatedData.map((item) => {
+                        const initials = (item.name || 'CA').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+
+                        return (
+                          <TableRow key={item.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                            <TableCell className="text-xs py-3 px-5 font-bold font-mono text-primary whitespace-nowrap">{item.trackerId}</TableCell>
+                            <TableCell className="text-xs py-3 px-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] shrink-0 border border-primary/20">
+                                  {initials}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-foreground text-xs">{item.name}</div>
+                                  <div className="text-[11px] text-muted-foreground font-mono">{item.email}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs py-3 px-4 whitespace-nowrap">
+                              <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border rounded-lg capitalize px-2 py-0.5 font-bold">
+                                {item.source === 'bulk_import' ? 'Bulk Import' : item.source}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs py-3 px-4 font-semibold text-foreground whitespace-nowrap">{item.position}</TableCell>
+                            <TableCell className="text-xs py-3 px-4 text-muted-foreground font-mono whitespace-nowrap">{item.experience}</TableCell>
+                            <TableCell className="text-xs py-3 px-4 text-muted-foreground font-mono whitespace-nowrap">{item.contact}</TableCell>
+                            <TableCell className="text-xs py-3 px-4 whitespace-nowrap text-center">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                item.status === 'Screening' || item.status === 'Shortlisted' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                              }`}>
+                                {item.status}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs py-3 px-4 whitespace-nowrap text-center">
+                              {item.resumeUrl ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => window.open(getResumeViewUrl(item.resumeUrl), '_blank')}
+                                  className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer"
+                                >
+                                  <FileText className="w-3.5 h-3.5 mr-1" /> View CV
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground italic">No file</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs py-3 px-5 whitespace-nowrap text-right">
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleShortlist(item.id, item.jobId)}
+                                disabled={shortlistingId === item.id || item.status === 'Screening'}
+                                className="h-7 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg font-bold shadow-xs cursor-pointer"
                               >
-                                <FileText className="w-3.5 h-3.5 mr-1" /> View Resume 📄
+                                {item.status === 'Screening' ? 'Shortlisted' : 'Shortlist →'}
                               </Button>
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">No file attached</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs py-3 whitespace-nowrap text-right">
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleShortlist(item.id, item.jobId)}
-                              disabled={shortlistingId === item.id || item.status === 'Screening'}
-                              className="h-7 px-3 text-[11px] bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white rounded-lg font-semibold shadow-xs"
-                            >
-                              {item.status === 'Screening' ? 'Shortlisted' : 'Shortlist →'}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={9} className="h-28 text-center text-xs text-slate-500 bg-white dark:bg-slate-900">
+                        <TableCell colSpan={9} className="h-32 text-center text-xs text-muted-foreground bg-background">
                           No candidate records found matching criteria.
                         </TableCell>
                       </TableRow>
@@ -918,13 +943,13 @@ export const ResumeBankPage: React.FC = () => {
               </div>
 
               {totalEntries > 0 && (
-                <div className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-3.5 flex justify-between items-center text-xs">
-                  <div className="text-slate-500 font-medium">
-                    Page {currentPage} of {totalPages}
+                <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+                  <div className="font-medium">
+                    Page <span className="font-bold text-foreground">{currentPage}</span> of <span className="font-bold text-foreground">{totalPages}</span>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
-                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
+                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
+                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
                   </div>
                 </div>
               )}

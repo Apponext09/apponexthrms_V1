@@ -148,6 +148,7 @@ import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
 import { OrgLeaveSettings } from './features/settings/pages/OrgLeaveSettings';
 import { AttendanceModulePage } from './features/settings/pages/AttendanceModulePage';
 import { MastersHubPage } from './features/settings/pages/MastersHubPage';
+import { IdCardDesignerPage } from './features/settings/pages/IdCardDesignerPage';
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
 import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
@@ -626,6 +627,8 @@ export function AppRoutes() {
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
+        <Route path="/settings/id-card-designer" element={<IdCardDesignerPage />} />
+        <Route path="/settings/id-card-templates" element={<IdCardDesignerPage />} />
         <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
@@ -649,6 +652,7 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="id-card-designer" element={<IdCardDesignerPage />} />
           <Route path="modules" element={<ModuleManagementPage />} />
           <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>

@@ -92,6 +92,7 @@ router.post('/public/offers/:uuid/accept', recruitmentController.acceptPublicOff
 router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOffer);
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/autosave', recruitmentController.autosavePublicAssessmentAttempt);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 // Generic reports options dropdown route

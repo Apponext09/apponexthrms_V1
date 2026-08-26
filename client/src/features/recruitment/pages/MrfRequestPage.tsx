@@ -12,7 +12,7 @@ import {
   Search, RefreshCw, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, User, Settings, Briefcase, Eye, Clipboard,
   Grid, GraduationCap, FileText, X, Minus, ChevronDown, UserCheck, Layers,
-  Calendar, Mail, UserX, CheckCircle, Code2, Star
+  Calendar, Mail, UserX, CheckCircle, Code2, Star, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
@@ -2178,191 +2178,139 @@ export const MrfRequestPage: React.FC = () => {
       {/* Main Content Area (Spans full page width, making elements more compact) */}
       <div className="flex-1">
         
-        {/* Top Header Bar (Has pl-20 to leave space for the floating settings button) */}
-        <div className={cn("relative flex items-center justify-between mb-6 bg-white border border-slate-100 p-4 rounded-xl shadow-sm z-30", isHrPortal && "pl-20")}>
-          
-          {/* Floating Left Vertical Action Sidebar — HR only */}
-          {isHrPortal && (
-          <div className={cn(
-            "absolute left-4 top-3 w-12 z-40 transition-all duration-250 overflow-visible",
-            showQuickSettings 
-              ? "bg-[#374151] border border-slate-650 rounded-lg shadow-lg flex flex-col gap-0.5" 
-              : "flex flex-col"
-          )}>
-            
-            {/* Gear Settings Button (Click toggles the menu open/closed) */}
-            <button
-              type="button"
-              onClick={() => setShowQuickSettings(!showQuickSettings)}
-              className={cn(
-                "w-12 h-12 bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer shadow-sm",
-                showQuickSettings ? "rounded-t-lg" : "rounded-lg"
-              )}
-              title="Settings Menu"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-
-            {/* Collapsible Options List (Smooth transition, overflow-visible when open to prevent tooltip clipping) */}
-            <div className={cn(
-              "flex flex-col gap-0.5 bg-[#374151] rounded-b-lg border-t border-slate-600/20 transition-all duration-300 ease-in-out",
-              showQuickSettings 
-                ? "max-h-[200px] opacity-100 overflow-visible" 
-                : "max-h-0 opacity-0 overflow-hidden pointer-events-none"
-            )}>
-              
-              {/* Grid / Recruitment Fields Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'grid' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFieldsModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
-                >
-                  <Grid className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'grid' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      Recruitment Fields
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Graduation Cap / Candidate Fields Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'cap' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCandidateModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
-                >
-                  <GraduationCap className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'cap' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      Candidate Fields
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Profile / User Creation Fields Mapping Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'user' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMappingModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
-                >
-                  <User className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'user' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      User Creation Fields Mapping
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Plus / Candidate Form Field Keywords Map Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'plus' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsKeywordsModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20 rounded-b-lg"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'plus' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      Candidate Form Field Keywords Map
-                    </div>
-                  </div>
-                )}
-              </div>
-
+        {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible mb-6">
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <div className="space-y-0.5">
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                Manpower Requisition (MRF)
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Create, approve and manage departmental hiring requests with multi-tier approval chains.
+              </p>
             </div>
           </div>
-          )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
+            {isHrPortal && (
+              <Popover open={showQuickSettings} onOpenChange={setShowQuickSettings}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 px-3 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted text-foreground cursor-pointer shadow-2xs"
+                    title="Field & Mapping Configurations"
+                  >
+                    <Settings className="w-4 h-4 text-muted-foreground" />
+                    <span className="hidden sm:inline">Settings</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
+                  </Button>
+                </PopoverTrigger>
+
+                <PopoverContent align="end" className="w-64 p-1.5 rounded-xl shadow-2xl z-50 bg-card border border-border">
+                  <div className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground border-b border-border/60">
+                    Form & Field Configurations
+                  </div>
+                  <div className="py-1 space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFieldsModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <Grid className="w-4 h-4 text-primary" />
+                      <span>Recruitment Fields</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCandidateModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <GraduationCap className="w-4 h-4 text-primary" />
+                      <span>Candidate Fields</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMappingModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <User className="w-4 h-4 text-primary" />
+                      <span>User Creation Fields Mapping</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsKeywordsModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-primary" />
+                      <span>Candidate Form Field Keywords</span>
+                    </button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
             <Button 
               onClick={handleOpenCreateModal}
-              className="bg-[#1e73be] hover:bg-[#1a62a3] text-white font-semibold flex items-center gap-2 rounded px-4 py-2 shadow-sm transition-all hover:translate-y-[-1px] active:translate-y-[0px] cursor-pointer"
+              className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" /> Recruitment Request
+              <Plus className="w-3.5 h-3.5" /> Raise MRF Requisition
             </Button>
-          </div>
-          <div className="text-sm font-semibold text-slate-500 flex items-center gap-2">
-            <Briefcase className="w-4 h-4 text-slate-400" />
-            Recruitment &gt; MRF Request
           </div>
         </div>
 
-      {/* Top Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      {/* ── Top Schedule Cards Section ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
         
         {/* Card 1: Today's Schedule */}
-        <Card className="border-t-4 border-t-green-500 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-bold text-slate-700">Today's Schedule</CardTitle>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Today's Interviews</CardTitle>
+            </div>
             <RefreshCw 
               onClick={() => handleRefreshSchedule('today')}
-              className={`h-4 w-4 text-slate-400 hover:text-slate-600 cursor-pointer transition-transform duration-500 ${
-                isRefreshingToday ? 'animate-spin text-green-500' : ''
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingToday ? 'animate-spin text-emerald-500' : ''
               }`} 
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {todaySchedule.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-                No schedule found
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                No interviews scheduled for today
               </div>
             ) : (
-              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {todaySchedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-primary font-bold uppercase tracking-wider">{item.interviewType}</div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <div className="text-[11px] font-bold text-green-600">
+                    <div className="text-right space-y-1 shrink-0">
+                      <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                         {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </div>
                       {item.meetingUrl && (
@@ -2370,7 +2318,7 @@ export const MrfRequestPage: React.FC = () => {
                           href={item.meetingUrl} 
                           target="_blank" 
                           rel="noreferrer" 
-                          className="inline-block text-[9px] bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 font-bold px-2 py-0.5 rounded transition-all"
+                          className="inline-block text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-md transition-all"
                         >
                           Join
                         </a>
@@ -2384,35 +2332,40 @@ export const MrfRequestPage: React.FC = () => {
         </Card>
 
         {/* Card 2: Upcoming Schedule */}
-        <Card className="border-t-4 border-t-amber-500 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-bold text-slate-700">Upcoming Schedule</CardTitle>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Upcoming Schedule</CardTitle>
+            </div>
             <RefreshCw 
               onClick={() => handleRefreshSchedule('upcoming')}
-              className={`h-4 w-4 text-slate-400 hover:text-slate-600 cursor-pointer transition-transform duration-500 ${
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
                 isRefreshingUpcoming ? 'animate-spin text-amber-500' : ''
               }`} 
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {upcomingSchedule.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-                No schedule found
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                No upcoming interviews
               </div>
             ) : (
-              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {upcomingSchedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase">{item.interviewType}</div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <div className="text-[11px] font-bold text-amber-600">
+                    <div className="text-right space-y-0.5 shrink-0">
+                      <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 font-mono">
                         {item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
                       </div>
-                      <div className="text-[9px] text-slate-500 font-medium">
+                      <div className="text-[10px] text-muted-foreground font-mono">
                         {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </div>
                     </div>
@@ -2424,34 +2377,39 @@ export const MrfRequestPage: React.FC = () => {
         </Card>
 
         {/* Card 3: Pending Feedback */}
-        <Card className="border-t-4 border-t-red-500 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-bold text-slate-700">Pending Feedback (Last 5 day's)</CardTitle>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                <Star className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Pending Feedback</CardTitle>
+            </div>
             <RefreshCw 
               onClick={() => handleRefreshSchedule('pending')}
-              className={`h-4 w-4 text-slate-400 hover:text-slate-600 cursor-pointer transition-transform duration-500 ${
-                isRefreshingPending ? 'animate-spin text-red-500' : ''
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingPending ? 'animate-spin text-rose-500' : ''
               }`} 
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {pendingFeedback.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-                No schedule found
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                All interview feedback submitted
               </div>
             ) : (
-              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {pendingFeedback.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">{item.interviewType}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <Button
                         size="sm"
-                        className="text-[9px] bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 font-bold px-2 py-1 h-auto rounded transition-all"
+                        className="text-[10px] font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-2.5 py-1 h-auto rounded-lg transition-all"
                         onClick={() => {
                           toast.info(`Submit feedback for ${item.candidateName || 'Candidate'}`);
                         }}
@@ -2467,124 +2425,111 @@ export const MrfRequestPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Filter Section */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="mr-number" className="text-xs font-bold text-slate-500 uppercase tracking-wider">MR-Number</Label>
-            <Input
-              id="mr-number"
-              placeholder="1, 2, 3, ......."
-              value={searchMrNumber}
-              onChange={(e) => setSearchMrNumber(e.target.value)}
-              className="h-10 text-sm focus-visible:ring-1 focus-visible:ring-blue-500"
-            />
-          </div>
-          
-          <div className="space-y-1.5">
-            <Label htmlFor="position" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Position</Label>
-            <Select value={selectedPosition} onValueChange={handlePositionFilterChange}>
-              <SelectTrigger className="h-10 text-sm bg-slate-50 border-slate-200 text-slate-600">
-                <SelectValue placeholder="Position (0)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Position (All)</SelectItem>
-                {uniquePositions.map((pos) => (
-                  <SelectItem key={pos} value={pos}>{pos}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* ── Filter Section ────────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden mb-6">
+        <CardContent className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="mr-number" className="text-xs font-bold text-foreground uppercase tracking-wider">MR-Number</Label>
+              <Input
+                id="mr-number"
+                placeholder="1, 2, 3, ..."
+                value={searchMrNumber}
+                onChange={(e) => setSearchMrNumber(e.target.value)}
+                className="h-9 text-xs bg-background border-border rounded-xl"
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label htmlFor="position" className="text-xs font-bold text-foreground uppercase tracking-wider">Position</Label>
+              <Select value={selectedPosition} onValueChange={handlePositionFilterChange}>
+                <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+                  <SelectValue placeholder="All Positions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Positions</SelectItem>
+                  {uniquePositions.map((pos) => (
+                    <SelectItem key={pos} value={pos}>{pos}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="requested-by" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Requested By</Label>
-            <Select value={selectedRequestedBy} onValueChange={handleRequestedByFilterChange}>
-              <SelectTrigger className="h-10 text-sm bg-slate-50 border-slate-200 text-slate-600">
-                <SelectValue placeholder="Employees (0)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Employees (All)</SelectItem>
-                {uniqueRequestedBy.map((emp) => (
-                  <SelectItem key={emp} value={emp}>{emp}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="requested-by" className="text-xs font-bold text-foreground uppercase tracking-wider">Requested By</Label>
+              <Select value={selectedRequestedBy} onValueChange={handleRequestedByFilterChange}>
+                <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+                  <SelectValue placeholder="All Requesters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Requesters</SelectItem>
+                  {uniqueRequestedBy.map((emp) => (
+                    <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Button 
-            onClick={handleSearch}
-            className="bg-[#1e73be] hover:bg-[#1a62a3] text-white h-10 w-full md:w-auto font-semibold shadow-sm transition-all flex items-center justify-center gap-2"
-          >
-            <Search className="w-4 h-4" /> Search
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs Row */}
-      <div className="flex items-center gap-1 mb-[-1px]">
-        <button
-          onClick={() => setActiveTab('open')}
-          className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-            activeTab === 'open'
-              ? 'bg-white text-slate-800 border-t-green-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-              : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-          }`}
-        >
-          Open Request
-        </button>
-        <button
-          onClick={() => setActiveTab('closed')}
-          className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-            activeTab === 'closed'
-              ? 'bg-white text-slate-800 border-t-red-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-              : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-          }`}
-        >
-          Closed Request
-        </button>
-      </div>
-
-      {/* Result Card Wrapper */}
-      <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-        
-        {/* Result Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Result
-          </h3>
-          <Button
-            onClick={handleExport}
-            variant="outline"
-            size="sm"
-            className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
-          >
-            <Download className="w-4 h-4" /> Export
-          </Button>
-        </div>
-
-        {/* Show Entries & Quick Text */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
-          <div className="font-medium">
-            Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries
-          </div>
-          <div className="flex items-center gap-2">
-            <span>Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => {
-                setEntriesPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
+            <Button 
+              onClick={handleSearch}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
             >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-            <span>entries</span>
+              <Search className="w-3.5 h-3.5" /> Search Requests
+            </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Segmented Tabs & Results Card ─────────────────────────────────────── */}
+      <div className="space-y-0">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setActiveTab('open')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'open'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-card text-muted-foreground hover:bg-muted border border-border/80'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            Open Requests ({data.filter(d => (d.status || '').toLowerCase() === 'open').length})
+          </button>
+          <button
+            onClick={() => setActiveTab('closed')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'closed'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-card text-muted-foreground hover:bg-muted border border-border/80'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+            Closed Requests ({data.filter(d => (d.status || '').toLowerCase() === 'closed').length})
+          </button>
         </div>
+
+        {/* Result Card Wrapper */}
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          
+          {/* Result Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
+            <div>
+              <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-primary" /> Requisition Roster
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleExport}
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground"
+              >
+                <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+              </Button>
+            </div>
+          </div>
 
         {/* Table Container */}
         <div className="overflow-x-auto border border-slate-200 rounded-lg w-full">
@@ -2808,15 +2753,15 @@ export const MrfRequestPage: React.FC = () => {
 
         {/* Footer controls */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-end gap-1.5 pt-4">
+          <div className="flex items-center justify-end gap-1.5 p-4 border-t border-border/60">
             <Button
               variant="outline"
               size="sm"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              className="h-8 px-2 text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="h-8 px-2.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground"
             >
-              <ChevronLeft className="w-4 h-4 mr-0.5" /> Previous
+              <ChevronLeft className="w-3.5 h-3.5 mr-0.5" /> Previous
             </Button>
             {Array.from({ length: totalPages }).map((_, idx) => (
               <Button
@@ -2824,10 +2769,10 @@ export const MrfRequestPage: React.FC = () => {
                 variant={currentPage === idx + 1 ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setCurrentPage(idx + 1)}
-                className={`h-8 w-8 p-0 ${
+                className={`h-8 w-8 p-0 text-xs font-bold rounded-xl ${
                   currentPage === idx + 1 
-                    ? 'bg-[#1e73be] hover:bg-[#1a62a3] text-white' 
-                    : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                    ? 'bg-primary text-primary-foreground shadow-xs' 
+                    : 'border-border hover:bg-muted text-foreground'
                 }`}
               >
                 {idx + 1}
@@ -2838,12 +2783,13 @@ export const MrfRequestPage: React.FC = () => {
               size="sm"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              className="h-8 px-2 text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="h-8 px-2.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground"
             >
-              Next <ChevronRight className="w-4 h-4 ml-0.5" />
+              Next <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
             </Button>
           </div>
         )}
+        </Card>
       </div>
 
       {/* Add / Edit Recruitment Form Dialog */}
