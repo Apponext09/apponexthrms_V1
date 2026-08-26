@@ -1838,6 +1838,9 @@ export function LeavePoliciesPage() {
         annual_quota: formData.annual_quota ?? 12,
         allocation_settings: allocPayload,
         application_settings: formData.application,
+        payroll_settings: formData.payroll,
+        employment_allocation_settings: formData.employment_allocation,
+        employment_application_settings: formData.employment_application,
         encashment_settings: formData.encashment,
       };
       await apiClient.put(`/settings/leave-types/${selectedLeaveType.id}`, payload);
@@ -1855,7 +1858,13 @@ export function LeavePoliciesPage() {
         effective_to,
         description,
         allocation_settings: allocPayload,
-        allocationSettings: allocPayload
+        allocationSettings: allocPayload,
+        employment_allocation_settings: payload.employment_allocation_settings,
+        employmentAllocationSettings: payload.employment_allocation_settings,
+        employment_application_settings: payload.employment_application_settings,
+        employmentApplicationSettings: payload.employment_application_settings,
+        payroll_settings: payload.payroll_settings,
+        payrollSettings: payload.payroll_settings,
       };
       setSelectedLeaveType(updatedType);
       setLeaveTypes((prev) => prev.map(t => t.id === selectedLeaveType.id ? updatedType : t));
@@ -1932,7 +1941,7 @@ export function LeavePoliciesPage() {
         // Update
         const res = await apiClient.put(`/settings/leave-types/${selectedLeaveType.id}`, payload);
         if (res.data?.success) {
-          toast.success('Leave settings updated successfully!');
+          toast.success('Leave settings updated successfully!', { id: 'leave-settings-save' });
           const updatedType: any = {
             ...selectedLeaveType,
             ...payload,
@@ -3065,31 +3074,43 @@ export function LeavePoliciesPage() {
                       return (
                         <div
                           key={item.id}
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                          className="group relative w-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-800/60 transition-all duration-300"
                         >
-                          {/* Card Header Row */}
-                          <div className="flex items-start justify-between gap-3 w-full border-b border-slate-100 dark:border-slate-800/80 pb-3">
-                            <div className="flex-1 min-w-0 pr-1">
-                              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                                APPLIES TO
-                              </span>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                <span className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
-                                  {scopeLabel}
-                                </span>
-                                {isDefault && (
-                                  <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800 rounded-full shrink-0">
-                                    Default
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                          {/* Accent Gradient Bar */}
+                          <div className={`h-1.5 w-full ${item.status !== 'inactive' ? 'bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500' : 'bg-gradient-to-r from-slate-300 to-slate-400 dark:from-slate-700 dark:to-slate-600'}`} />
 
-                            {/* Active Switch Box */}
-                            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                                {item.status === 'inactive' ? 'Inactive' : 'Active'}
-                              </span>
+                          <div className="p-5 space-y-4">
+                            {/* Header: Scope + Status */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {scopeParts.length > 0 ? scopeParts.map((part, idx) => {
+                                    const [label, countStr] = part.split(' (');
+                                    const count = countStr?.replace(')', '') || '0';
+                                    return (
+                                      <span
+                                        key={idx}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[10.5px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/60"
+                                      >
+                                        <span>{label}</span>
+                                        <span className="w-4 h-4 flex items-center justify-center text-[9px] font-black bg-indigo-600 text-white rounded-md">{count}</span>
+                                      </span>
+                                    );
+                                  }) : (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/60">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      All Employees
+                                    </span>
+                                  )}
+                                  {isDefault && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 uppercase tracking-wide">
+                                      ★ Default
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Status Toggle */}
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -3101,46 +3122,48 @@ export function LeavePoliciesPage() {
                                     toast.error('Failed to toggle status');
                                   }
                                 }}
-                                className={`relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer ${
-                                  item.status !== 'inactive' ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                                className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer border ${
+                                  item.status !== 'inactive'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                                 }`}
                               >
-                                <span
-                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
-                                    item.status !== 'inactive' ? 'translate-x-[15px]' : 'translate-x-[2px]'
-                                  }`}
-                                />
+                                <span className={`w-1.5 h-1.5 rounded-full ${item.status !== 'inactive' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                                {item.status !== 'inactive' ? 'Active' : 'Inactive'}
                               </button>
                             </div>
-                          </div>
 
-                          {/* Start Date Body */}
-                          <div className="py-1">
-                            <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                              LEAVE YEAR STARTS
-                            </span>
-                            <div className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 mt-2">
-                              <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                                <Calendar className="w-5 h-5" />
+                            {/* Hero: Start Date */}
+                            <div className="flex items-center gap-4 py-3 px-4 rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50/50 dark:from-slate-800/60 dark:to-indigo-950/30 border border-slate-100 dark:border-slate-800/80">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shrink-0">
+                                <Calendar className="w-6 h-6" />
                               </div>
-                              <span>{item.start_day} {item.start_month}</span>
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Leave Year Starts</span>
+                                <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
+                                  {item.start_day} <span className="text-indigo-600 dark:text-indigo-400">{item.start_month}</span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Footer Edit Button */}
-                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => {
-                                setLeaveYearToEdit(item);
-                                setIsLeaveYearModalOpen(true);
-                              }}
-                              className="h-8 px-3 text-xs font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </Button>
+                            {/* Footer Actions */}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                ID: {item.id}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => {
+                                  setLeaveYearToEdit(item);
+                                  setIsLeaveYearModalOpen(true);
+                                }}
+                                className="h-7 px-3 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-950/50 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Edit</span>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );

@@ -354,6 +354,30 @@ export class LeaveService {
       const employmentAllocSettings = parseDoubleJson(leaveType.employmentAllocationSettings || leaveType.employment_allocation_settings);
       const employmentAppSettings = parseDoubleJson(leaveType.employmentApplicationSettings || leaveType.employment_application_settings);
 
+      // ── Normalise UI array-format fields into the boolean flags the engine checks ──
+      // The UI now saves excludeDayTypes / blockNextToDayTypes as arrays and whichDayType as a string.
+      // The engine historically checks excludeWeekend, excludeHoliday, restrictBeforeOrAfterWeekend, etc.
+      if (Array.isArray(applicationSettings.excludeDayTypes) && applicationSettings.excludeDayTypes.length > 0) {
+        if (!applicationSettings.excludeWeekend) {
+          applicationSettings.excludeWeekend = applicationSettings.excludeDayTypes.some((d: string) => String(d).includes('weekend'));
+        }
+        if (!applicationSettings.excludeHoliday) {
+          applicationSettings.excludeHoliday = applicationSettings.excludeDayTypes.some((d: string) => String(d).includes('holiday') || String(d).includes('public'));
+        }
+      }
+      if (Array.isArray(applicationSettings.blockNextToDayTypes) && applicationSettings.blockNextToDayTypes.length > 0) {
+        if (!applicationSettings.restrictBeforeOrAfterWeekend && !applicationSettings.restrictBeforeAfterWeekend) {
+          applicationSettings.restrictBeforeOrAfterWeekend = applicationSettings.blockNextToDayTypes.some((d: string) => String(d).includes('weekend'));
+        }
+        if (!applicationSettings.restrictBeforeOrAfterHoliday && !applicationSettings.restrictBeforeAfterHoliday) {
+          applicationSettings.restrictBeforeOrAfterHoliday = applicationSettings.blockNextToDayTypes.some((d: string) => String(d).includes('holiday') || String(d).includes('public'));
+        }
+      }
+      if ((!Array.isArray(applicationSettings.whichDaysAllowed) || applicationSettings.whichDaysAllowed.length === 0)
+        && applicationSettings.whichDayType && applicationSettings.whichDayType !== 'Select') {
+        applicationSettings.whichDaysAllowed = [applicationSettings.whichDayType];
+      }
+
       // EMPLOYMENT ELIGIBILITY VALIDATION
       if (!this.checkEmploymentEligibility(employee, employmentAppSettings)) {
         throw new ValidationError('You are not eligible to apply for this leave type based on your current employment configuration (Department, Grade, Location, etc).');
@@ -369,12 +393,8 @@ export class LeaveService {
         throw new ValidationError(`This leave category is only valid until ${effTo}. The requested end date (${input.endDate}) is after the validity period.`);
       }
 
-      // SUPPORTING DOCUMENTS VALIDATION
-      if (applicationSettings.supportingDocumentsRequired) {
-        if (!input.documentUrl && (!input.attachments || input.attachments.length === 0)) {
-          throw new ValidationError('Supporting documents are required for this leave category.');
-        }
-      }
+      // NOTE: Supporting document validation is performed AFTER totalDays is computed (see below)
+      // to support the docRequiredIfLongerThanDays threshold.
 
       // UNCATEGORIZED CONFIRMATION RULE
       if (allocationSettings.allocateLeaveIfConfirmationDatePresent) {
@@ -435,6 +455,17 @@ export class LeaveService {
       }
       if (applicationSettings.futureDates === false && startD > todayZero) {
         throw new ValidationError('Future dates cannot be requested for this leave type.');
+      }
+
+      // PER-LEAVE-TYPE PAST DAYS LIMIT (from application_settings.pastDaysLimit)
+      if (applicationSettings.pastDates !== false && applicationSettings.pastDaysLimit) {
+        const pastLimitVal = parseInt(applicationSettings.pastDaysLimit, 10);
+        if (!isNaN(pastLimitVal) && pastLimitVal > 0 && startD < todayZero) {
+          const pastDiff = Math.ceil((todayZero.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+          if (pastDiff > pastLimitVal) {
+            throw new ValidationError(`Past leave requests for this type cannot exceed ${pastLimitVal} calendar days.`);
+          }
+        }
       }
 
       // ADVANCE NOTICE / GRACE PERIOD VALIDATION
@@ -576,6 +607,18 @@ export class LeaveService {
 
       if (totalDays <= 0) {
         throw new ValidationError('Leave duration must be greater than 0 days (all requested days are weekends/holidays).');
+      }
+
+      // SUPPORTING DOCUMENTS VALIDATION (moved here so totalDays is available for threshold)
+      if (applicationSettings.supportingDocumentsRequired) {
+        const docThreshold = applicationSettings.docRequiredIfLongerThanDays
+          ? parseFloat(applicationSettings.docRequiredIfLongerThanDays)
+          : null;
+        const requiresDoc = docThreshold === null || isNaN(docThreshold) || totalDays > docThreshold;
+        if (requiresDoc && !input.documentUrl && (!input.attachments || input.attachments.length === 0)) {
+          const threshMsg = (docThreshold !== null && !isNaN(docThreshold)) ? ` (required when leave exceeds ${docThreshold} days)` : '';
+          throw new ValidationError(`Supporting documents are required for this leave category${threshMsg}.`);
+        }
       }
 
       // GRANULARITY / ALLOWED UNITS VALIDATION (Full day / Half day / Quarter day)

@@ -55,72 +55,147 @@ export class LeaveController {
   }
 
   /**
-   * Evaluates if a leave type is eligible for the given employee
+   * Evaluates if a leave type is eligible/visible for the given employee.
+   * This must mirror every check that LeaveService.checkEmploymentEligibility
+   * performs at application time so that ineligible leave types are never shown.
    */
   private filterEligibleLeaveTypes(types: any[], employee: any): any[] {
     if (!employee) return types;
 
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+
+    // Robust overlap helper — matches the logic in LeaveService.checkEmploymentEligibility
+    const hasOverlap = (employeeVal: any, ruleArray: any[]): boolean => {
+      const cleanRules = (ruleArray || []).filter(
+        (r: any) => r !== null && r !== undefined && r !== '' && String(r).toLowerCase() !== 'select' && String(r).toLowerCase() !== 'all'
+      );
+      if (cleanRules.length === 0) return true; // No restriction configured → everyone eligible
+      if (employeeVal === undefined || employeeVal === null || employeeVal === '') return true; // Employee field not set → don't block
+      const eArray = Array.isArray(employeeVal) ? employeeVal : [employeeVal];
+      return eArray.some(e =>
+        cleanRules.includes(e) ||
+        cleanRules.includes(String(e)) ||
+        (typeof e === 'number' && cleanRules.includes(Number(e)))
+      );
+    };
+
+    const parseJson = (raw: any): any => {
+      if (!raw) return {};
+      try {
+        let parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed); // double-stringified
+        return (typeof parsed === 'object' && parsed !== null) ? parsed : {};
+      } catch (e) { return {}; }
+    };
+
     return types.filter((t: any) => {
-      // 1. Gender applicability check
-      const genderApplicable = (t.gender_applicable || t.genderApplicable || 'all').toLowerCase();
-      if (genderApplicable !== 'all' && employee.gender) {
-        if (employee.gender.toLowerCase() !== genderApplicable) {
-          return false;
-        }
+      const allocSettings = parseJson(t.allocation_settings || t.allocationSettings);
+      const appSettings = parseJson(t.application_settings || t.applicationSettings);
+      const empAllocSettings = parseJson(t.employment_allocation_settings || t.employmentAllocationSettings);
+      const empAppSettings = parseJson(t.employment_application_settings || t.employmentApplicationSettings);
+
+      // ── 1. Effective date window ──
+      const effFrom = t.effective_from || t.effectiveFrom || allocSettings.effective_from || allocSettings.effectiveFrom;
+      const effTo = t.effective_to || t.effectiveTo || allocSettings.effective_to || allocSettings.effectiveTo;
+      if (effFrom && todayStr < effFrom) return false; // Not yet active
+      if (effTo && todayStr > effTo) return false;     // Expired
+
+      // ── 2. Gender applicability (leave-type level + allocation settings) ──
+      const genderApplicable = (
+        t.gender_applicable || t.genderApplicable || allocSettings.gender || 'all'
+      ).toString().toLowerCase();
+      if (genderApplicable !== 'all' && genderApplicable !== 'both') {
+        const empGender = (employee.gender || '').toLowerCase();
+        if (empGender && empGender !== genderApplicable) return false;
       }
 
-      // 2. Allocation Settings: onlyWhen rule tree
-      let allocSettings: any = {};
-      if (t.allocation_settings) {
-        try {
-          allocSettings = typeof t.allocation_settings === 'string'
-            ? JSON.parse(t.allocation_settings)
-            : t.allocation_settings;
-        } catch (e) {}
+      // ── 3. Marital status ──
+      const maritalReq = (allocSettings.maritalStatus || '').toLowerCase();
+      if (maritalReq && maritalReq !== 'all') {
+        const empMarital = (employee.marital_status || employee.maritalStatus || '').toLowerCase();
+        if (empMarital && empMarital !== maritalReq) return false;
       }
+
+      // ── 4. onlyWhen rule trees (allocation + application) ──
       if (allocSettings.onlyWhen || allocSettings.only_when) {
-        const isEligible = evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, employee);
-        if (!isEligible) {
-          return false;
-        }
-      }
-
-      // 3. Application Settings: onlyWhen rule tree
-      let appSettings: any = {};
-      if (t.application_settings) {
-        try {
-          appSettings = typeof t.application_settings === 'string'
-            ? JSON.parse(t.application_settings)
-            : t.application_settings;
-        } catch (e) {}
+        if (!evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, employee)) return false;
       }
       if (appSettings.onlyWhen || appSettings.only_when) {
-        const isEligible = evaluateConditionGroup(appSettings.onlyWhen || appSettings.only_when, employee);
-        if (!isEligible) {
-          return false;
+        if (!evaluateConditionGroup(appSettings.onlyWhen || appSettings.only_when, employee)) return false;
+      }
+
+      // ── 5. Employment Allocation scope (comprehensive) ──
+      if (empAllocSettings && Object.keys(empAllocSettings).length > 0) {
+        const compVal = employee.company_id || employee.companyId || employee.organization_id || employee.organizationId;
+        if (!hasOverlap(compVal, empAllocSettings.companies || empAllocSettings.organizations)) return false;
+
+        const deptVal = employee.current_department_id || employee.currentDepartmentId || employee.department_id || employee.departmentId;
+        if (!hasOverlap(deptVal, empAllocSettings.departments)) return false;
+
+        const subDeptVal = employee.sub_department_id || employee.subDepartmentId;
+        if (!hasOverlap(subDeptVal, empAllocSettings.subDepartments || empAllocSettings.sub_departments)) return false;
+
+        const locVal = employee.current_location_id || employee.currentLocationId || employee.location_id || employee.locationId || employee.branch_id || employee.branchId;
+        if (!hasOverlap(locVal, empAllocSettings.locations)) return false;
+
+        const desigVal = employee.current_designation_id || employee.currentDesignationId || employee.designation_id || employee.designationId;
+        if (!hasOverlap(desigVal, empAllocSettings.designations)) return false;
+
+        const empTypeVal = employee.employment_type || employee.employmentType || employee.employee_type || employee.employeeType;
+        if (!hasOverlap(empTypeVal, empAllocSettings.employeeTypes)) return false;
+
+        const statusVal = employee.status;
+        if (!hasOverlap(statusVal, empAllocSettings.employeeStatuses)) return false;
+
+        const gradeVal = employee.current_grade_id || employee.currentGradeId || employee.grade_id || employee.gradeId || employee.grade || employee.grade_band;
+        if (!hasOverlap(gradeVal, empAllocSettings.grades)) return false;
+      }
+
+      // ── 6. Employment Application scope (comprehensive) ──
+      if (empAppSettings && Object.keys(empAppSettings).length > 0) {
+        const compVal = employee.company_id || employee.companyId || employee.organization_id || employee.organizationId;
+        if (!hasOverlap(compVal, empAppSettings.companies || empAppSettings.organizations)) return false;
+
+        const deptVal = employee.current_department_id || employee.currentDepartmentId || employee.department_id || employee.departmentId;
+        if (!hasOverlap(deptVal, empAppSettings.departments)) return false;
+
+        const subDeptVal = employee.sub_department_id || employee.subDepartmentId;
+        if (!hasOverlap(subDeptVal, empAppSettings.subDepartments || empAppSettings.sub_departments)) return false;
+
+        const locVal = employee.current_location_id || employee.currentLocationId || employee.location_id || employee.locationId || employee.branch_id || employee.branchId;
+        if (!hasOverlap(locVal, empAppSettings.locations)) return false;
+
+        const desigVal = employee.current_designation_id || employee.currentDesignationId || employee.designation_id || employee.designationId;
+        if (!hasOverlap(desigVal, empAppSettings.designations)) return false;
+
+        const empTypeVal = employee.employment_type || employee.employmentType || employee.employee_type || employee.employeeType;
+        if (!hasOverlap(empTypeVal, empAppSettings.employeeTypes)) return false;
+
+        const statusVal = employee.status;
+        if (!hasOverlap(statusVal, empAppSettings.employeeStatuses)) return false;
+
+        const gradeVal = employee.current_grade_id || employee.currentGradeId || employee.grade_id || employee.gradeId || employee.grade || employee.grade_band;
+        if (!hasOverlap(gradeVal, empAppSettings.grades)) return false;
+      }
+
+      // ── 7. Min service required ──
+      const minService = allocSettings.minServiceRequired;
+      const minServiceUnit = (allocSettings.minServiceRequiredUnit || '').toLowerCase();
+      if (minService && minServiceUnit && minServiceUnit !== 'select') {
+        const joiningDate = employee.date_of_joining || employee.dateOfJoining || employee.joining_date || employee.joiningDate;
+        if (joiningDate) {
+          const joinD = new Date(joiningDate);
+          const diffMs = today.getTime() - joinD.getTime();
+          const diffDays = diffMs / (1000 * 60 * 60 * 24);
+          const minVal = parseFloat(minService);
+          if (!isNaN(minVal) && minVal > 0) {
+            let requiredDays = minVal;
+            if (minServiceUnit.includes('month')) requiredDays = minVal * 30;
+            else if (minServiceUnit.includes('year')) requiredDays = minVal * 365;
+            if (diffDays < requiredDays) return false;
+          }
         }
-      }
-
-      // 4. Employment Allocation Settings (Scope filter: Departments, Locations, Grades, Employee Types)
-      let empSettings: any = {};
-      const rawEmpSettings = t.employment_allocation_settings || t.employmentAllocationSettings;
-      if (rawEmpSettings) {
-        try {
-          empSettings = typeof rawEmpSettings === 'string' ? JSON.parse(rawEmpSettings) : rawEmpSettings;
-        } catch (e) {}
-      }
-      if (empSettings && Object.keys(empSettings).length > 0) {
-        const hasOverlap = (employeeVal: any, ruleArray: any[]) => {
-          if (!ruleArray || !Array.isArray(ruleArray) || ruleArray.length === 0) return true;
-          if (!employeeVal) return false;
-          const eArray = Array.isArray(employeeVal) ? employeeVal : [employeeVal];
-          return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
-        };
-
-        if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId, empSettings.departments)) return false;
-        if (!hasOverlap(employee.current_location_id || employee.currentLocationId, empSettings.locations)) return false;
-        if (!hasOverlap(employee.employment_type || employee.employmentType, empSettings.employeeTypes)) return false;
-        if (!hasOverlap(employee.current_grade_id || employee.currentGradeId, empSettings.grades)) return false;
       }
 
       return true;
