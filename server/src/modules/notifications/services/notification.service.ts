@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '@/common/lib/logger';
+import { logger } from '../../../common/lib/logger';
 import { getKnex } from '../../../db/knex';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';

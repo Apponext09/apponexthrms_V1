@@ -484,7 +484,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
-    this.stripSensitiveListFields(result.items);
+    // Sensitive aadhar / passport can be omitted if needed, but preserve pan, bank, pf, uan, esic
+    // this.stripSensitiveListFields(result.items);
 
     return result;
   }

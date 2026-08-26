@@ -60,6 +60,15 @@ async function start() {
     // Auto check-out service disabled as requested
     // startAutoCheckOutCron();
 
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`Port ${env.PORT} is already in use. Exiting process so supervisor can restart cleanly...`);
+        setTimeout(() => process.exit(1), 1000);
+      } else {
+        logger.error('Server error:', err);
+      }
+    });
+
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0)`, {
