@@ -426,6 +426,17 @@ export default function EmployeeLifecyclePage() {
     setEmpTypeFilter('all');
   };
 
+  const formatDate = (dStr?: string | null) => {
+    if (!dStr || dStr === 'N/A') return '—';
+    try {
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return String(dStr);
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return String(dStr);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'onboarding':
@@ -724,7 +735,7 @@ export default function EmployeeLifecyclePage() {
               </div>
 
               {/* Body */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              <div className="flex-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden p-5 space-y-5">
                 {/* Company Filter */}
                 {filters.companyFilter && (
                   <div className="space-y-2">
@@ -863,7 +874,7 @@ export default function EmployeeLifecyclePage() {
               </h2>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
@@ -1030,7 +1041,7 @@ export default function EmployeeLifecyclePage() {
               </h2>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
@@ -1094,21 +1105,25 @@ export default function EmployeeLifecyclePage() {
                         )}
 
                         {onbCols.interviewer && (
-                          <td className="px-5 py-3.5">
-                            <span className="font-bold text-foreground block">By: {emp.onboarding?.interviewerName || 'HR Team'}</span>
-                            <span className="text-[11px] text-muted-foreground">Onboarder: {emp.onboarding?.onboardedByName || 'HR Admin'}</span>
+                          <td className="px-5 py-3.5 text-xs">
+                            <span className="font-bold text-foreground block">
+                              By: {emp.onboarding?.interviewerName || '—'}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              Onboarder: {emp.onboarding?.onboardedByName || '—'}
+                            </span>
                           </td>
                         )}
 
                         {onbCols.joiningDate && (
-                          <td className="px-5 py-3.5 font-bold text-foreground">
-                            {emp.joiningDate || 'N/A'}
+                          <td className="px-5 py-3.5 font-bold text-foreground text-xs">
+                            {formatDate(emp.joiningDate)}
                           </td>
                         )}
 
                         {onbCols.probationEndDate && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                            {emp.onboarding?.probationEndDate || '6 Months Standard'}
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
+                            {formatDate(emp.onboarding?.probationEndDate)}
                           </td>
                         )}
 
@@ -1122,23 +1137,23 @@ export default function EmployeeLifecyclePage() {
 
                         {onbCols.welcomeKitStatus && (
                           <td className="px-5 py-3.5">
-                            <Badge variant="outline" className="text-[10px] font-semibold bg-sky-500/5 text-sky-600 border-sky-500/20">
-                              Issued &amp; Logged
+                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.welcomeKitIssued ? 'bg-sky-500/10 text-sky-600 border-sky-500/30' : 'bg-muted text-muted-foreground border-border'}`}>
+                              {emp.onboarding?.welcomeKitIssued ? 'Issued & Logged' : 'Pending'}
                             </Badge>
                           </td>
                         )}
 
                         {onbCols.documentsStatus && (
                           <td className="px-5 py-3.5">
-                            <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-                              Verified
+                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.documentsVerified ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
+                              {emp.onboarding?.documentsVerified ? 'Verified' : 'Pending'}
                             </Badge>
                           </td>
                         )}
 
                         {onbCols.interviewScore && (
-                          <td className="px-5 py-3.5 font-black text-amber-600 dark:text-amber-400">
-                            ★ 4.8 / 5.0
+                          <td className="px-5 py-3.5 font-black text-amber-600 dark:text-amber-400 text-xs">
+                            {emp.onboarding?.interviewRating ? `★ ${emp.onboarding.interviewRating}` : '—'}
                           </td>
                         )}
 
@@ -1182,7 +1197,7 @@ export default function EmployeeLifecyclePage() {
               </h2>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
@@ -1272,14 +1287,14 @@ export default function EmployeeLifecyclePage() {
                         )}
 
                         {trfCols.lastTransferDate && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                            {new Date().toISOString().split('T')[0]}
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
+                            {formatDate(emp.lastTransferDate)}
                           </td>
                         )}
 
                         {trfCols.transferReason && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                            Department Realignment
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
+                            {emp.transferReason || '—'}
                           </td>
                         )}
 
@@ -1332,7 +1347,7 @@ export default function EmployeeLifecyclePage() {
               </h2>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[650px] custom-scrollbar pb-2">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
@@ -1411,20 +1426,20 @@ export default function EmployeeLifecyclePage() {
                         )}
 
                         {offbCols.noticePeriodDays && (
-                          <td className="px-5 py-3.5 font-bold text-muted-foreground">
-                            {emp.offboarding?.noticePeriodDays ? `${emp.offboarding.noticePeriodDays} Days` : '30 Days'}
+                          <td className="px-5 py-3.5 font-bold text-muted-foreground text-xs">
+                            {emp.offboarding?.noticePeriodDays ? `${emp.offboarding.noticePeriodDays} Days` : '—'}
                           </td>
                         )}
 
                         {offbCols.exitReason && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-[11px] max-w-[180px] truncate">
-                            {emp.offboarding?.exitReason || 'Better Opportunity'}
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs max-w-[180px] truncate">
+                            {emp.offboarding?.exitReason || '—'}
                           </td>
                         )}
 
                         {offbCols.exitInterviewer && (
-                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
-                            {emp.offboarding?.exitInterviewerName || 'HR Lead'}
+                          <td className="px-5 py-3.5 text-muted-foreground text-xs">
+                            {emp.offboarding?.exitInterviewerName || '—'}
                           </td>
                         )}
 
@@ -1478,7 +1493,7 @@ export default function EmployeeLifecyclePage() {
 
       {/* EMPLOYEE LIFECYCLE DETAILS DIALOG / MODAL */}
       <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-3xl p-6">
           {detailsLoading || !empDetails ? (
             <div className="py-16 text-center text-muted-foreground text-xs">
               <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-indigo-500" />
@@ -1934,19 +1949,21 @@ export default function EmployeeLifecyclePage() {
 
           <form onSubmit={handleSaveOnboarding} className="space-y-3 mt-2 text-xs">
             <div className="space-y-1">
-              <label className="font-bold text-foreground block">Interviewer Name (Manager Only)</label>
-              <select
+              <label className="font-bold text-foreground block">Interviewer Name (Manager / Lead)</label>
+              <Input
                 value={onboardingForm.interviewerName}
                 onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewerName: e.target.value })}
-                className="w-full h-9 rounded-xl bg-background text-xs border border-border px-3 font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-              >
-                <option value="">Select Interviewer Manager</option>
+                placeholder="e.g. Harsh Gawali / Select manager below"
+                className="h-9 rounded-xl bg-background text-xs"
+                list="interviewer-managers-list"
+              />
+              <datalist id="interviewer-managers-list">
                 {managers.map((m) => (
                   <option key={m.id} value={m.name}>
-                    {m.name} {m.designation ? `(${m.designation})` : ''} {m.department ? `- ${m.department}` : ''}
+                    {m.designation ? `(${m.designation})` : ''} {m.department ? `- ${m.department}` : ''}
                   </option>
                 ))}
-              </select>
+              </datalist>
             </div>
             <div className="space-y-1">
               <label className="font-bold text-foreground block">Onboarded By (HR Lead)</label>

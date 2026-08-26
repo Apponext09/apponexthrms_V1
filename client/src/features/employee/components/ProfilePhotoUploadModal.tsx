@@ -251,54 +251,15 @@ export function ProfilePhotoUploadModal({
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-            Capture a live selfie or pick a photo to register face biometric attendance.
+            Align face inside camera guide to capture live profile photo.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Hidden File Input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileSelect}
-        />
-
         <div className="flex flex-col items-center space-y-3 my-1">
-          {/* Mode Switcher Tabs */}
-          {!capturedImage && (
-            <div className="w-full flex rounded-xl p-1 bg-muted/60 border border-border/60 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => { setMode('camera'); startCamera(selectedDeviceId); }}
-                className={cn(
-                  'flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all text-xs font-bold',
-                  mode === 'camera'
-                    ? 'bg-card text-foreground shadow-2xs border border-border/40'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <Video className="w-3.5 h-3.5" /> Live Camera
-              </button>
-              <button
-                type="button"
-                onClick={() => { stopCamera(); setMode('upload'); fileInputRef.current?.click(); }}
-                className={cn(
-                  'flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all text-xs font-bold',
-                  mode === 'upload'
-                    ? 'bg-card text-foreground shadow-2xs border border-border/40'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <Upload className="w-3.5 h-3.5" /> Upload File
-              </button>
-            </div>
-          )}
-
           {/* Camera Viewport or Snapshot Preview */}
           <div className="relative w-full aspect-[4/3] max-h-[280px] bg-black rounded-2xl overflow-hidden shadow-inner flex items-center justify-center border border-border/80">
             {capturedImage ? (
-              // Captured / Uploaded Snapshot Preview
+              // Captured Snapshot Preview
               <div className="relative w-full h-full flex items-center justify-center bg-black">
                 <img
                   src={capturedImage}
@@ -306,10 +267,10 @@ export function ProfilePhotoUploadModal({
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute top-2.5 right-2.5 bg-black/75 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 border border-white/20">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Photo Ready
+                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Live Capture Ready
                 </div>
               </div>
-            ) : mode === 'camera' && isCameraActive ? (
+            ) : isCameraActive ? (
               // Live Video Stream View
               <div className="relative w-full h-full">
                 <video
@@ -330,49 +291,22 @@ export function ProfilePhotoUploadModal({
                 {/* Live Camera Badge */}
                 <div className="absolute top-2.5 left-2.5 bg-black/75 backdrop-blur-md text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <Video className="w-3 h-3 text-emerald-400" /> LIVE
+                  <Video className="w-3 h-3 text-emerald-400" /> LIVE CAMERA
                 </div>
-              </div>
-            ) : mode === 'upload' ? (
-              // Upload File Dropzone
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="p-6 text-center flex flex-col items-center justify-center text-zinc-300 space-y-2 cursor-pointer hover:bg-zinc-900/60 transition-colors w-full h-full"
-              >
-                <div className="p-3 rounded-full bg-primary/20 text-primary">
-                  <ImageIcon className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white">Click to Choose Photo File</p>
-                  <p className="text-[10px] text-zinc-400 mt-0.5">JPG, PNG, WEBP up to 10MB</p>
-                </div>
-                <Button size="sm" variant="outline" className="h-7 text-[11px] font-bold gap-1 mt-1 border-white/20 text-white">
-                  <Upload className="w-3 h-3" /> Select File
-                </Button>
               </div>
             ) : cameraError ? (
               // Camera Error Message
               <div className="p-4 text-center flex flex-col items-center justify-center text-white space-y-2">
                 <AlertCircle className="w-8 h-8 text-rose-400" />
                 <p className="text-xs font-medium text-rose-200">{cameraError}</p>
-                <div className="flex gap-2 mt-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => startCamera(selectedDeviceId)}
-                    className="h-7 text-[11px] font-bold gap-1"
-                  >
-                    <RefreshCw className="w-3 h-3" /> Retry
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setMode('upload'); fileInputRef.current?.click(); }}
-                    className="h-7 text-[11px] font-bold gap-1 text-white border-white/30"
-                  >
-                    <Upload className="w-3 h-3" /> Upload File
-                  </Button>
-                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => startCamera(selectedDeviceId)}
+                  className="h-7 text-[11px] font-bold gap-1 mt-1"
+                >
+                  <RefreshCw className="w-3 h-3" /> Retry Live Camera
+                </Button>
               </div>
             ) : (
               // Loading Spinner

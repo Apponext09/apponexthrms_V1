@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import { AttendanceService } from './AttendanceService';
@@ -250,6 +251,23 @@ export class BiometricService {
     };
   }
 
+  /**
+   * After saving a biometric profile, mark is_ceo_face=true if the employee is the org CEO/Admin.
+   */
+  private async setCeoFaceFlag(ctx: TenantContext, employeeId: number): Promise<void> {
+    const emp = await db('employees')
+      .where({ id: employeeId, organization_id: ctx.organizationId })
+      .select('is_ceo')
+      .first()
+      .catch(() => null);
+    if (emp?.is_ceo) {
+      await db(PROFILE_TABLE)
+        .where({ organization_id: ctx.organizationId, employee_id: employeeId })
+        .update({ is_ceo_face: true, updated_at: db.fn.now() });
+    }
+  }
+
+
   async getEmployeesList(ctx: TenantContext) {
     const rows = (await db('employees')
       .select(
@@ -278,7 +296,10 @@ export class BiometricService {
     imageOrImages: string | string[]
   ) {
     const employee = await this.resolveEmployee(ctx, employeeIdentifier);
-    return this.saveEnrollment(ctx, employee, this.normalizeImages(imageOrImages));
+    const result = await this.saveEnrollment(ctx, employee, this.normalizeImages(imageOrImages));
+    // Mark is_ceo_face if this employee is the org CEO/Admin
+    await this.setCeoFaceFlag(ctx, employee.id);
+    return result;
   }
 
   async getEnrollmentStatus(
@@ -598,5 +619,286 @@ export class BiometricService {
       },
     };
 
+  }
+
+  /**
+   * Resolves the CEO employee row for the current logged-in org admin user.
+   *
+   * Resolution order:
+   *   1. Look for an employees row with is_ceo = true in this org (most reliable)
+   *   2. Look for a row with user_id = ctx.userId
+   *   3. Auto-provision a brand-new dedicated CEO employee row (is_ceo=1,
+   *      is_ceo_profile_hidden=1) — NEVER touches or reuses any existing employee
+   *      such as EMP978, because those are regular-employee personas.
+   */
+  private async resolveCeoEmployee(ctx: TenantContext): Promise<EmployeeRow & { isCeo: boolean }> {
+    // Get the current user so we can use their name + email for provisioning
+    const adminUser = await db('users')
+      .where({ id: ctx.userId })
+      .select('id', 'email', 'first_name as firstName', 'last_name as lastName')
+      .first()
+      .catch(() => null);
+
+    if (!adminUser) {
+      throw new Error('Authenticated user not found.');
+    }
+
+    // 1. Find existing dedicated CEO employee row
+    let ceoEmp = await db('employees')
+      .where({ organization_id: ctx.organizationId, is_ceo: true })
+      .whereNull('deleted_at')
+      .select(
+        'id', 'employee_code as employeeCode',
+        'first_name as firstName', 'last_name as lastName',
+        'email', 'avatar_url as avatarUrl', 'status', 'is_ceo as isCeo'
+      )
+      .first()
+      .catch(() => null);
+
+    if (ceoEmp) return ceoEmp;
+
+    // 2. Find by user_id link (only if explicitly set, and only if is_ceo=true guard)
+    if (ctx.userId) {
+      const adminEmail = adminUser.email?.toLowerCase().trim();
+      if (adminEmail) {
+        ceoEmp = await db('employees')
+          .where({ organization_id: ctx.organizationId, is_ceo: true })
+          .whereRaw('LOWER(email) = ?', [adminEmail])
+          .whereNull('deleted_at')
+          .select(
+            'id', 'employee_code as employeeCode',
+            'first_name as firstName', 'last_name as lastName',
+            'email', 'avatar_url as avatarUrl', 'status', 'is_ceo as isCeo'
+          )
+          .first()
+          .catch(() => null);
+
+        if (ceoEmp) return ceoEmp;
+      }
+    }
+
+    // 3. Auto-provision a fresh CEO employee row — completely isolated from any regular employees
+    const fName = adminUser.firstName || 'CEO';
+    const lName = adminUser.lastName || '';
+    const empCode = `CEO-${ctx.organizationId}-${ctx.userId}`;
+    const empEmail = adminUser.email || '';
+
+    const [newEmpId] = await db('employees').insert({
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      employee_code: empCode,
+      first_name: fName,
+      last_name: lName,
+      email: empEmail,
+      status: 'active',
+      is_ceo: true,
+      is_ceo_profile_hidden: true,
+      date_of_joining: new Date().toISOString().slice(0, 10),
+      created_by: ctx.userId || 1,
+      updated_by: ctx.userId || 1,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    });
+
+    // Link user record back
+    await db('users')
+      .where({ id: ctx.userId })
+      .update({ employee_id: newEmpId, updated_at: db.fn.now() })
+      .catch(() => {});
+
+    return {
+      id: newEmpId,
+      organizationId: ctx.organizationId,
+      employeeCode: empCode,
+      firstName: fName,
+      lastName: lName,
+      email: empEmail,
+      avatarUrl: null,
+      status: 'active',
+      isCeo: true,
+    } as EmployeeRow & { isCeo: boolean };
+  }
+
+  /**
+   * Returns CEO enrollment & attendance status for the current session user.
+   * The frontend calls this instead of using auth-store employeeId.
+   */
+  async getCeoStatus(ctx: TenantContext) {
+    await this.requireProfileTable();
+    const ceoEmp = await this.resolveCeoEmployee(ctx);
+
+    const biometricProfile = await db(PROFILE_TABLE)
+      .where({ organization_id: ctx.organizationId, employee_id: ceoEmp.id, is_active: true })
+      .select('id', 'enrolled_at as enrolledAt', 'quality_score as qualityScore', 'profile_photo as profilePhoto')
+      .first()
+      .catch(() => null);
+
+    const todayRecord = await this.attendanceService.getTodayRecord(ctx, ceoEmp.id)
+      .catch(() => null);
+
+    const name = this.employeeName(ceoEmp as unknown as EmployeeRow);
+
+    return {
+      ceoEmployee: {
+        id: ceoEmp.id,
+        employeeCode: ceoEmp.employeeCode,
+        name,
+        profilePhoto: biometricProfile?.profilePhoto || ceoEmp.avatarUrl || null,
+      },
+      isEnrolled: Boolean(biometricProfile),
+      enrolledAt: biometricProfile?.enrolledAt || null,
+      today: {
+        isCheckedIn: Boolean(todayRecord?.checkInTime),
+        isCheckedOut: Boolean(todayRecord?.checkOutTime),
+        checkInTime: todayRecord?.checkInTime || null,
+        checkOutTime: todayRecord?.checkOutTime || null,
+      },
+    };
+  }
+
+  /**
+   * CEO-isolated biometric punch (check-in or check-out).
+   * Uses resolveCeoEmployee — NEVER touches regular employee rows like EMP978.
+   * Loads ONLY the CEO face profile as the biometric candidate.
+   */
+  async ceoPunch(
+    ctx: TenantContext,
+    imageOrImages: string | string[],
+    action: 'check_in' | 'check_out'
+  ) {
+    await this.requireProfileTable();
+    const images = this.normalizeImages(imageOrImages);
+
+    // 1. Get (or auto-provision) the dedicated CEO employee row
+    const ceoEmployee = await this.resolveCeoEmployee(ctx);
+
+    // 2. Load ONLY the CEO face profile as biometric candidate
+    const ceoBiometricProfile = await db(PROFILE_TABLE)
+      .where({
+        organization_id: ctx.organizationId,
+        employee_id: ceoEmployee.id,
+        is_active: true,
+        embedding_model: EMBEDDING_MODEL,
+      })
+      .select(
+        'employee_id as employeeId',
+        'employee_code as employeeCode',
+        'employee_name as employeeName',
+        'face_vector as faceVector',
+        'embedding_model as embeddingModel',
+        'profile_photo as profilePhoto'
+      )
+      .first()
+      .catch(() => null);
+
+    if (!ceoBiometricProfile) {
+      throw new Error('CEO face biometric not enrolled. Please enroll your face first from the sidebar profile.');
+    }
+
+    const faceVector = this.parseVector(ceoBiometricProfile.faceVector);
+    if (!faceVector) {
+      throw new Error('CEO face template is corrupted. Please re-enroll your face.');
+    }
+
+    // 3. Run identification against CEO-only candidate pool (1 candidate)
+    let identification: IdentificationResponse;
+    try {
+      const response = await axios.post<IdentificationResponse>(
+        `${BIOMETRIC_SERVICE_URL}/v1/faces/identify`,
+        {
+          images,
+          candidates: [{
+            employee_id: String(ceoEmployee.id),
+            employee_name: ceoBiometricProfile.employeeName,
+            face_vector: faceVector,
+            model_version: ceoBiometricProfile.embeddingModel,
+          }],
+        },
+        {
+          timeout: REQUEST_TIMEOUT_MS,
+          headers: this.serviceHeaders,
+          maxBodyLength: 25 * 1024 * 1024,
+        }
+      );
+      identification = response.data;
+    } catch (error) {
+      throw this.biometricError(error, 'CEO face identification failed.');
+    }
+
+    if (!identification.success || !identification.matched) {
+      throw new Error(identification.message || 'CEO face did not match enrolled biometric.');
+    }
+
+    // 4. Validate action state
+    const todayRecord = await this.attendanceService.getTodayRecord(ctx, ceoEmployee.id);
+    if (action === 'check_in' && todayRecord?.checkInTime) {
+      throw new Error(
+        todayRecord.checkOutTime
+          ? 'CEO attendance is already completed for today.'
+          : 'CEO is already checked in. Use Punch Out to complete attendance.'
+      );
+    }
+    if (action === 'check_out' && (!todayRecord?.checkInTime || todayRecord?.checkOutTime)) {
+      throw new Error(
+        todayRecord?.checkOutTime
+          ? 'CEO is already checked out for today.'
+          : 'CEO must punch in before punching out.'
+      );
+    }
+
+    // 5. Write attendance record with is_ceo_punch = true
+    let attendanceRecord: any;
+    if (action === 'check_in') {
+      attendanceRecord = await this.attendanceService.checkIn(ctx, {
+        employeeId: ceoEmployee.id,
+        method: 'face_recognition',
+      });
+      if (attendanceRecord?.id) {
+        await db('attendance_records')
+          .where({ id: attendanceRecord.id })
+          .update({ is_ceo_punch: true, updated_at: db.fn.now() });
+      }
+    } else {
+      attendanceRecord = await this.attendanceService.checkOut(ctx, {
+        employeeId: ceoEmployee.id,
+        method: 'face_recognition',
+      });
+      // Also ensure the checked-out record is tagged
+      await db('attendance_records')
+        .where({ organization_id: ctx.organizationId, employee_id: ceoEmployee.id })
+        .whereRaw('DATE(created_at) = CURDATE()')
+        .update({ is_ceo_punch: true, updated_at: db.fn.now() })
+        .catch(() => {});
+    }
+
+    // 6. Update last_verified_at on biometric profile
+    await db(PROFILE_TABLE)
+      .where({ organization_id: ctx.organizationId, employee_id: ceoEmployee.id })
+      .update({ last_verified_at: db.fn.now(), updated_at: db.fn.now() });
+
+    const name = this.employeeName(ceoEmployee as unknown as EmployeeRow);
+    const markedAt =
+      action === 'check_in'
+        ? attendanceRecord?.checkInTime ?? attendanceRecord?.check_in_time
+        : attendanceRecord?.checkOutTime ?? attendanceRecord?.check_out_time;
+
+    return {
+      success: true,
+      message: `${name} has checked ${action === 'check_in' ? 'in' : 'out'} successfully.`,
+      action,
+      matchedEmployee: {
+        id: ceoEmployee.id,
+        employeeCode: ceoEmployee.employeeCode,
+        name,
+        profilePhoto: ceoBiometricProfile.profilePhoto || ceoEmployee.avatarUrl || null,
+      },
+      matchScore: identification.match_score ?? null,
+      distance: identification.distance ?? null,
+      attendance: {
+        id: attendanceRecord?.id,
+        status: action === 'check_in' ? 'checked_in' : 'checked_out',
+        markedAt,
+      },
+    };
   }
 }

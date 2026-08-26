@@ -170,7 +170,7 @@ export function EmployeeLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

@@ -67,6 +67,9 @@ export class LifecycleService {
       .leftJoin('attendance_locations as loc', 'employees.current_location_id', 'loc.id')
       .where('employees.organization_id', ctx.organizationId)
       .whereNull('employees.deleted_at')
+      .where(function () {
+        this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
+      })
       .select(
         'employees.id',
         'employees.uuid',
@@ -98,10 +101,21 @@ export class LifecycleService {
         'onboarding.interviewer_name',
         'onboarding.onboarded_by_name',
         'onboarding.interview_date',
+        'onboarding.interview_rating',
+        'onboarding.interview_notes',
+        'onboarding.probation_end_date',
         'onboarding.orientation_completed',
+        'onboarding.documents_verified',
+        'onboarding.welcome_kit_issued',
+        'onboarding.notes as onboarding_notes',
         'offboarding.exit_type',
         'offboarding.resignation_date',
         'offboarding.relieving_date',
+        'offboarding.last_working_day',
+        'offboarding.notice_period_days',
+        'offboarding.exit_reason',
+        'offboarding.exit_interviewer_name',
+        'offboarding.assets_returned',
         'offboarding.fnf_status'
       );
 
@@ -138,15 +152,25 @@ export class LifecycleService {
 
     const employees = await query.orderBy('employees.id', 'desc');
 
-    // Query transfer counts for each employee
-    const transferCounts = await db('employee_transfers')
+    // Query transfer counts and latest transfer info for each employee
+    const transfers = await db('employee_transfers')
       .where('organization_id', ctx.organizationId)
-      .groupBy('employee_id')
-      .select('employee_id', db.raw('count(*) as count'));
+      .orderBy('id', 'desc');
 
-    const transferCountMap = new Map<number, number>();
-    for (const tc of transferCounts) {
-      transferCountMap.set(Number(tc.employee_id), Number(tc.count));
+    const transferMap = new Map<number, { count: number; lastTransferDate?: string; transferReason?: string; transferType?: string }>();
+    for (const trf of transfers) {
+      const empId = Number(trf.employee_id);
+      if (!transferMap.has(empId)) {
+        transferMap.set(empId, {
+          count: 1,
+          lastTransferDate: trf.effective_date ? String(trf.effective_date).split('T')[0] : undefined,
+          transferReason: trf.transfer_reason || trf.notes || 'Department Transfer',
+          transferType: trf.transfer_type || 'department_change',
+        });
+      } else {
+        const item = transferMap.get(empId)!;
+        item.count += 1;
+      }
     }
 
     const adminUser = await db('users')
@@ -181,6 +205,8 @@ export class LifecycleService {
       const resolvedCompanyId = emp.companyId || emp.company_id || emp.userCompanyId || emp.user_company_id || null;
       const resolvedCompanyName = emp.companyName || emp.company_name || 'Main Company';
 
+      const trfData = transferMap.get(empId);
+
       return {
         id: empId,
         uuid: emp.uuid,
@@ -203,18 +229,31 @@ export class LifecycleService {
         reportingManager,
         currentLocationId: (emp.currentLocationId || emp.current_location_id) ? Number(emp.currentLocationId || emp.current_location_id) : null,
         locationName: emp.locationName || emp.location_name || 'Primary Office',
-        transfersCount: transferCountMap.get(empId) || 0,
+        transfersCount: trfData?.count || 0,
+        lastTransferDate: trfData?.lastTransferDate || null,
+        transferReason: trfData?.transferReason || null,
+        transferType: trfData?.transferType || null,
         onboarding: {
-          interviewerName: emp.interviewer_name || 'HR Team',
-          onboardedByName: emp.onboarded_by_name || 'HR Admin',
-          interviewDate: emp.interview_date ? String(emp.interview_date).split('T')[0] : null,
-          orientationCompleted: Boolean(emp.orientation_completed),
+          interviewerName: emp.interviewerName || emp.interviewer_name || null,
+          onboardedByName: emp.onboardedByName || emp.onboarded_by_name || null,
+          interviewDate: (emp.interviewDate || emp.interview_date) ? String(emp.interviewDate || emp.interview_date).split('T')[0] : null,
+          interviewRating: emp.interviewRating || emp.interview_rating || null,
+          probationEndDate: (emp.probationEndDate || emp.probation_end_date) ? String(emp.probationEndDate || emp.probation_end_date).split('T')[0] : null,
+          orientationCompleted: Boolean(emp.orientationCompleted ?? emp.orientation_completed),
+          documentsVerified: Boolean(emp.documentsVerified ?? emp.documents_verified),
+          welcomeKitIssued: Boolean(emp.welcomeKitIssued ?? emp.welcome_kit_issued),
+          notes: emp.onboardingNotes || emp.onboarding_notes || '',
         },
         offboarding: {
-          exitType: emp.exit_type || null,
-          resignationDate: emp.resignation_date ? String(emp.resignation_date).split('T')[0] : null,
-          relievingDate: emp.relieving_date ? String(emp.relieving_date).split('T')[0] : null,
-          fnfStatus: emp.fnf_status || 'pending',
+          exitType: emp.exitType || emp.exit_type || null,
+          resignationDate: (emp.resignationDate || emp.resignation_date) ? String(emp.resignationDate || emp.resignation_date).split('T')[0] : null,
+          relievingDate: (emp.relievingDate || emp.relieving_date) ? String(emp.relievingDate || emp.relieving_date).split('T')[0] : null,
+          lastWorkingDay: (emp.lastWorkingDay || emp.last_working_day) ? String(emp.lastWorkingDay || emp.last_working_day).split('T')[0] : null,
+          noticePeriodDays: (emp.noticePeriodDays || emp.notice_period_days) ? Number(emp.noticePeriodDays || emp.notice_period_days) : null,
+          exitReason: emp.exitReason || emp.exit_reason || null,
+          exitInterviewerName: emp.exitInterviewerName || emp.exit_interviewer_name || null,
+          assetsReturned: Boolean(emp.assetsReturned ?? emp.assets_returned),
+          fnfStatus: emp.fnfStatus || emp.fnf_status || 'pending',
         },
       };
     });

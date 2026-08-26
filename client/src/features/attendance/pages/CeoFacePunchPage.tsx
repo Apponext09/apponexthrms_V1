@@ -24,7 +24,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/config/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
-import { useEmployee } from '@/features/employee/hooks/useEmployees';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -46,8 +45,6 @@ const friendlyBiometricError = (error: any, fallback: string): string => {
 export default function CeoFacePunchPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const employeeId = user?.employeeId || user?.id || 0;
-  const { employee } = useEmployee(employeeId);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -63,36 +60,47 @@ export default function CeoFacePunchPage() {
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  // Today's status
+  // CEO-specific status (from /biometric/ceo-status — NOT from auth store employeeId)
+  const [ceoStatusLoading, setCeoStatusLoading] = useState(true);
+  const [enrollmentStatus, setEnrollmentStatus] = useState<'loading' | 'enrolled' | 'not_enrolled'>('loading');
   const [checkInStatus, setCheckInStatus] = useState<'not_started' | 'checked_in' | 'completed'>('not_started');
   const [checkInTime, setCheckInTime] = useState<string>('--');
   const [checkOutTime, setCheckOutTime] = useState<string>('--');
-
-  // Biometric enrollment
-  const [enrollmentStatus, setEnrollmentStatus] = useState<'loading' | 'enrolled' | 'not_enrolled'>('loading');
-
-  const empName = employee
-    ? `${employee.firstName} ${employee.lastName}`.trim()
-    : `${user?.firstName || 'CEO'} ${user?.lastName || ''}`.trim();
-  const empCode = employee?.employeeCode || (employeeId ? `EMP-${String(employeeId).padStart(4, '0')}` : 'CEO-0001');
+  const [empName, setEmpName] = useState<string>(`${user?.firstName || 'CEO'} ${user?.lastName || ''}`.trim());
+  const [empCode, setEmpCode] = useState<string>('CEO');
 
   const formatTime = (d: Date) =>
     d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-  // ── Fetch today's attendance status ──────────────────────────────────────
-  const fetchTodayStatus = async () => {
+  // ── Fetch CEO status (enrollment + today's attendance) ───────────────────
+  // Uses the dedicated /biometric/ceo-status endpoint which resolves the
+  // CEO employee row (is_ceo=true) — completely isolated from EMP978 or
+  // any other regular employee record.
+  const fetchCeoStatus = async () => {
+    setCeoStatusLoading(true);
     try {
-      const res = await apiClient.get('/attendance/status');
-      const st = res.data?.data;
-      if (!st) return;
-      if (st.isCheckedOut) {
+      const res = await apiClient.get('/attendance/biometric/ceo-status');
+      const data = res.data?.data;
+      if (!data) return;
+
+      // CEO employee info
+      if (data.ceoEmployee?.name) setEmpName(data.ceoEmployee.name);
+      if (data.ceoEmployee?.employeeCode) setEmpCode(data.ceoEmployee.employeeCode);
+      if (data.ceoEmployee?.profilePhoto) setSavedProfilePhoto(data.ceoEmployee.profilePhoto);
+
+      // Enrollment status
+      setEnrollmentStatus(data.isEnrolled ? 'enrolled' : 'not_enrolled');
+
+      // Today's attendance status
+      const today = data.today;
+      if (today?.isCheckedOut) {
         setCheckInStatus('completed');
-        setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
-        setCheckOutTime(st.checkOutTime ? formatTime(new Date(st.checkOutTime)) : '--');
+        setCheckInTime(today.checkInTime ? formatTime(new Date(today.checkInTime)) : '--');
+        setCheckOutTime(today.checkOutTime ? formatTime(new Date(today.checkOutTime)) : '--');
         setPunchAction('check_out');
-      } else if (st.isCheckedIn) {
+      } else if (today?.isCheckedIn) {
         setCheckInStatus('checked_in');
-        setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
+        setCheckInTime(today.checkInTime ? formatTime(new Date(today.checkInTime)) : '--');
         setPunchAction('check_out');
       } else {
         setCheckInStatus('not_started');
@@ -101,27 +109,15 @@ export default function CeoFacePunchPage() {
         setPunchAction('check_in');
       }
     } catch (err) {
-      console.warn('CEO face punch: fetch status failed', err);
-    }
-  };
-
-  // ── Enrollment check ──────────────────────────────────────────────────────
-  const fetchEnrollmentStatus = async () => {
-    if (!employeeId) return;
-    try {
-      const res = await apiClient.get('/attendance/biometric/status', {
-        params: { employeeId: String(employeeId) },
-      });
-      const data = res.data?.data;
-      setEnrollmentStatus(data?.isEnrolled ? 'enrolled' : 'not_enrolled');
-    } catch {
+      console.warn('CEO status fetch failed', err);
       setEnrollmentStatus('not_enrolled');
+    } finally {
+      setCeoStatusLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTodayStatus();
-    fetchEnrollmentStatus();
+    fetchCeoStatus();
   }, []);
 
   // ── Camera ────────────────────────────────────────────────────────────────
@@ -237,11 +233,10 @@ export default function CeoFacePunchPage() {
       setBiometricLoading(true);
       setSuccessMsg(null);
 
-      // We omit latitude/longitude in location object so backend geofence rule is not triggered
-      const res = await apiClient.post('/attendance/biometric/verify-punch', {
+      // CEO-dedicated endpoint — passes only the CEO face as candidate, no geofence/shift checks
+      const res = await apiClient.post('/attendance/biometric/ceo-punch', {
         images,
         action: punchAction,
-        employeeId: String(employeeId), // Lock to CEO's own employee record
       });
 
       if (res.data?.success) {
@@ -263,7 +258,7 @@ export default function CeoFacePunchPage() {
         });
 
         speak(`${msg}. Executive attendance marked.`);
-        fetchTodayStatus();
+        fetchCeoStatus();
       } else {
         const errText = res.data?.message || 'Face recognition failed.';
         toast.error(errText);

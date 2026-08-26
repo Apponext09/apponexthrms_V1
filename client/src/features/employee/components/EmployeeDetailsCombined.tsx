@@ -2,7 +2,6 @@ import React from 'react';
 import { EmployeeBasicInfo } from './EmployeeBasicInfo';
 import { EmployeePersonalInfo } from './EmployeePersonalInfo';
 import { EmployeeProfessionalInfo } from './EmployeeProfessionalInfo';
-import { EmployeeStatutoryDetails } from './EmployeeStatutoryDetails';
 import type { Employee } from '@/types';
 
 interface EmployeeDetailsCombinedProps {
@@ -42,21 +41,14 @@ export function EmployeeDetailsCombined({
         approvedRequestId={approvedRequestId}
       />
 
-      {/* 2. Statutory & Banking Details (Matches screenshot reference) */}
-      <EmployeeStatutoryDetails
-        employee={employee}
-        editUnlocked={isStatutoryUnlocked}
-        approvedRequestId={approvedRequestId}
-      />
-
-      {/* 3. Personal Information */}
+      {/* 2. Personal Information */}
       <EmployeePersonalInfo
         employeeId={employee.id as number}
         editUnlocked={isPersonalUnlocked}
         approvedRequestId={approvedRequestId}
       />
 
-      {/* 4. Professional & Education Information */}
+      {/* 3. Professional & Education Information */}
       <EmployeeProfessionalInfo
         employeeId={employee.id as number}
         editUnlocked={isProfessionalUnlocked}

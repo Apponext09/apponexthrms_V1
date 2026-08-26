@@ -47,7 +47,7 @@ export function AttendanceReportFilter({
     expected: true,
     lateMark: false,
     shortWorkingHour: false,
-    breakLog: true,
+    breakLog: false,
     halfDay: true,
   });
 
@@ -114,7 +114,7 @@ export function AttendanceReportFilter({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onFilterSubmit({
-      companies: selectedCompany ? [selectedCompany] : [],
+      companies: selectedCompany ? [selectedCompany] : ['all'],
       locations: selectedLocations,
       departments: selectedDepartments,
       reportingOfficers: selectedReportingOfficers,
@@ -130,14 +130,13 @@ export function AttendanceReportFilter({
 
   const renderCompanyDropdown = () => {
     const companies = optionsData?.companies || [];
-    const label = selectedCompanyName ? selectedCompanyName : 'Select Company';
+    const label = selectedCompanyName ? selectedCompanyName : 'All Companies';
 
     return (
       <div className="flex flex-col space-y-1">
         <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
           <Building2 className="w-3 h-3" />
           Company
-          <span className="text-rose-500 font-bold">*</span>
         </Label>
         <Popover open={companyDropdownOpen} onOpenChange={setCompanyDropdownOpen}>
           <PopoverTrigger asChild>
@@ -157,15 +156,13 @@ export function AttendanceReportFilter({
             <div className="space-y-1 max-h-60 overflow-y-auto no-scrollbar">
               {isLoadingOptions ? (
                 <p className="text-xs text-muted-foreground p-2 animate-pulse">Loading companies...</p>
-              ) : companies.length === 0 ? (
-                <p className="text-xs text-muted-foreground p-2">No companies found</p>
               ) : (
                 <>
                   <div
                     onClick={() => handleSelectCompany('', '')}
                     className={cn(
-                      'flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-700 mb-1 pb-1.5 italic text-muted-foreground',
-                      !selectedCompany && 'bg-slate-100 dark:bg-slate-800 font-semibold text-foreground not-italic'
+                      'flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-700 mb-1 pb-1.5 font-bold',
+                      !selectedCompany && 'bg-primary/10 text-primary'
                     )}
                   >
                     <div className={cn(
@@ -174,7 +171,7 @@ export function AttendanceReportFilter({
                     )}>
                       {!selectedCompany && <div className="w-2 h-2 rounded-full bg-white" />}
                     </div>
-                    <span>None (All Companies)</span>
+                    <span>All Companies (Select All)</span>
                   </div>
                   {companies.map((company: { id: string | number; name: string }) => {
                     const isSelected = selectedCompany === String(company.id);

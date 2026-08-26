@@ -299,6 +299,8 @@ export const JobReferencePage: React.FC = () => {
     else if (roles.includes('hr_manager')) navigate('/hr/dashboard');
     else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard');
     else if (roles.includes('team_lead')) navigate('/team-lead/dashboard');
+    else if (roles.includes('intern')) navigate('/intern/dashboard');
+    else if (roles.includes('consultant')) navigate('/consultant/dashboard');
     else if (roles.includes('organization_admin')) navigate('/dashboard');
     else navigate('/employee/dashboard');
   };

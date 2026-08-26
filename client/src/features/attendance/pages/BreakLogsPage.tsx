@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
+import { useCompanies } from '@/features/settings/hooks/useCompanies';
+
 interface BreakLogRow {
   date: string;
   employeeId?: number;
@@ -74,14 +76,13 @@ const breakTypeEmoji = (name?: string | null) => {
 
 export const BreakLogsPage: React.FC = () => {
   const { getBreakTypes } = useAttendance();
+  const { data: companies = [] } = useCompanies();
   const [rows, setRows] = useState<BreakLogRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [breakTypes, setBreakTypes] = useState<BreakTypeOption[]>([]);
   const [loadedTypes, setLoadedTypes] = useState(false);
 
   // Master Filter Options
-  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
-  const [locations, setLocations] = useState<{ id: number; name: string }[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [employees, setEmployees] = useState<{ id: number; name: string; code?: string; reportingManagerId?: number }[]>([]);
 
@@ -89,9 +90,7 @@ export const BreakLogsPage: React.FC = () => {
   const [startDate, setStartDate] = useState(get30DaysAgoStr());
   const [endDate, setEndDate] = useState(getTodayStr());
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [selectedLocationId, setSelectedLocationId] = useState('');
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
-  const [selectedReportingManagerId, setSelectedReportingManagerId] = useState('');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [selectedBreakType, setSelectedBreakType] = useState('');
   const [search, setSearch] = useState('');
@@ -99,22 +98,10 @@ export const BreakLogsPage: React.FC = () => {
   // Load master data dropdown lists
   const loadMasterFilters = useCallback(async () => {
     try {
-      const [compRes, locRes, deptRes, empRes] = await Promise.all([
-        apiClient.get('/settings/companies?pageSize=100').catch(() => ({ data: { data: [] } })),
-        apiClient.get('/settings/locations?pageSize=100').catch(() => ({ data: { data: [] } })),
+      const [deptRes, empRes] = await Promise.all([
         apiClient.get('/settings/departments?pageSize=100').catch(() => ({ data: { data: [] } })),
         apiClient.get('/employees?pageSize=200').catch(() => ({ data: { data: [] } })),
       ]);
-
-      const compList = (compRes.data?.data || compRes.data?.items || []).map((c: any) => ({
-        id: c.company_id ?? c.id,
-        name: c.name || c.company_name || c.companyName || `Company #${c.company_id || c.id}`,
-      })).filter((c: any) => c.id != null);
-
-      const locList = (locRes.data?.data || locRes.data?.items || []).map((l: any) => ({
-        id: l.location_id ?? l.id,
-        name: l.name || l.location_name || l.locationName || `Location #${l.location_id || l.id}`,
-      })).filter((l: any) => l.id != null);
 
       const deptList = (deptRes.data?.data || deptRes.data?.items || []).map((d: any) => ({
         id: d.department_id ?? d.id,
@@ -127,23 +114,14 @@ export const BreakLogsPage: React.FC = () => {
           ? `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim()
           : (e.name || `Employee #${e.employee_id || e.id}`),
         code: e.employee_code || e.employeeCode,
-        reportingManagerId: e.reporting_manager_id || e.reportingManagerId,
       })).filter((e: any) => e.id != null);
 
-      setCompanies(compList);
-      setLocations(locList);
       setDepartments(deptList);
       setEmployees(empList);
     } catch (err) {
       console.warn('Failed to load master filters:', err);
     }
   }, []);
-
-  // Compute distinct Reporting Officers from employee list
-  const reportingOfficers = React.useMemo(() => {
-    const managerIds = new Set(employees.map((e) => e.reportingManagerId).filter(Boolean));
-    return employees.filter((e) => managerIds.has(e.id));
-  }, [employees]);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -152,9 +130,7 @@ export const BreakLogsPage: React.FC = () => {
         startDate,
         endDate,
         ...(selectedCompanyId ? { companyId: selectedCompanyId } : {}),
-        ...(selectedLocationId ? { locationId: selectedLocationId } : {}),
         ...(selectedDepartmentId ? { departmentId: selectedDepartmentId } : {}),
-        ...(selectedReportingManagerId ? { reportingManagerId: selectedReportingManagerId } : {}),
         ...(selectedEmployeeId ? { employeeId: selectedEmployeeId } : {}),
         ...(selectedBreakType ? { breakTypeName: selectedBreakType } : {}),
       });
@@ -165,7 +141,7 @@ export const BreakLogsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, selectedCompanyId, selectedLocationId, selectedDepartmentId, selectedReportingManagerId, selectedEmployeeId, selectedBreakType]);
+  }, [startDate, endDate, selectedCompanyId, selectedDepartmentId, selectedEmployeeId, selectedBreakType]);
 
   const loadBreakTypes = useCallback(async () => {
     if (loadedTypes) return;
@@ -209,9 +185,7 @@ export const BreakLogsPage: React.FC = () => {
   // Reset all filters
   const handleResetFilters = () => {
     setSelectedCompanyId('');
-    setSelectedLocationId('');
     setSelectedDepartmentId('');
-    setSelectedReportingManagerId('');
     setSelectedEmployeeId('');
     setSelectedBreakType('');
     setSearch('');
@@ -335,7 +309,7 @@ export const BreakLogsPage: React.FC = () => {
         </div>
 
         {/* Master Dropdowns Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Company Filter */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold text-muted-foreground block">Company</label>
@@ -347,21 +321,6 @@ export const BreakLogsPage: React.FC = () => {
               <option value="">All Companies</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Location Filter */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-muted-foreground block">Location</label>
-            <select
-              value={selectedLocationId}
-              onChange={(e) => setSelectedLocationId(e.target.value)}
-              className="w-full h-9 text-xs rounded-lg border border-input bg-background px-2.5 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
-            >
-              <option value="">All Locations</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
           </div>
@@ -378,25 +337,6 @@ export const BreakLogsPage: React.FC = () => {
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
-            </select>
-          </div>
-
-          {/* Reporting Officer Filter */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-bold text-muted-foreground block">Reporting Officer</label>
-            <select
-              value={selectedReportingManagerId}
-              onChange={(e) => setSelectedReportingManagerId(e.target.value)}
-              className="w-full h-9 text-xs rounded-lg border border-input bg-background px-2.5 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
-            >
-              <option value="">All Officers</option>
-              {reportingOfficers.length > 0
-                ? reportingOfficers.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name}</option>
-                  ))
-                : employees.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
             </select>
           </div>
 

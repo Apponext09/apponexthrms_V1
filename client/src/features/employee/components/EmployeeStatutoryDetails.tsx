@@ -6,6 +6,7 @@ import type { Employee } from '@/types';
 import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck, Lock, Eye, EyeOff } from 'lucide-react';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 // Helper functions to mask sensitive statutory & banking fields
 function maskAccountNumber(val: string): string {
@@ -86,7 +87,15 @@ interface EmployeeStatutoryDetailsProps {
 
 export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = false, approvedRequestId }: EmployeeStatutoryDetailsProps) {
   const location = useLocation();
-  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const { user } = useAuthStore();
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user as any)?.role || (user as any)?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
+
+  const isEmployeePortal = !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const { consumePermission } = useConsumeEditPermission();
 
@@ -337,19 +346,15 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
           </button>
 
           {!isEditing ? (
-            <button
-              onClick={() => {
-                if (isEmployeePortal && !editUnlocked) {
-                  setIsRequestModalOpen(true);
-                } else {
-                  setIsEditing(true);
-                }
-              }}
-              className={isEmployeePortal && !editUnlocked ? "h-8 px-4 text-xs font-bold rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 flex items-center gap-1.5 transition-all shadow-xs" : "h-8 px-4 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-sm"}
-            >
-              {isEmployeePortal && !editUnlocked ? <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> : <Edit2 className="w-3.5 h-3.5" />}
-              {isEmployeePortal && !editUnlocked ? 'Request Edit' : 'Edit Statutory Details'}
-            </button>
+            (!isEmployeePortal || editUnlocked) && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="h-8 px-4 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                Edit Statutory Details
+              </button>
+            )
           ) : (
             <div className="flex items-center gap-2">
               <button

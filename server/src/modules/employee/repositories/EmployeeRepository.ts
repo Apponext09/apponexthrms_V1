@@ -83,6 +83,10 @@ export interface Employee {
   hrManager?: string | null;
   hrManagerEmail?: string | null;
   custom_id_card?: string | null;
+  document_policy_accepted?: boolean;
+  documentPolicyAccepted?: boolean;
+  document_policy_accepted_at?: string | null;
+  documentPolicyAcceptedAt?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {
@@ -188,13 +192,15 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .join('roles', 'user_roles.role_id', 'roles.id')
         .where('user_roles.organization_id', ctx.organizationId)
         .where('user_roles.user_id', user.id)
-        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head'])
+        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'intern', 'consultant'])
         .select('roles.code');
       if (userRoles.length > 0) {
         const rolePriority: Record<string, number> = {
-          hr_manager: 4,
-          department_head: 3,
-          team_lead: 2,
+          hr_manager: 5,
+          department_head: 4,
+          team_lead: 3,
+          intern: 2,
+          consultant: 2,
           employee: 1,
         };
         let highestRole = 'employee';
@@ -442,13 +448,15 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           .join('roles', 'user_roles.role_id', 'roles.id')
           .where('user_roles.organization_id', ctx.organizationId)
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head'])
+          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'intern', 'consultant'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
-          hr_manager: 4,
-          department_head: 3,
-          team_lead: 2,
+          hr_manager: 5,
+          department_head: 4,
+          team_lead: 3,
+          intern: 2,
+          consultant: 2,
           employee: 1,
         };
         for (const ur of userRoles) {

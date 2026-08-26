@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
-import { apiClient } from '@/lib/api';
+import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
+import { useProfileEditPermission } from '../hooks/useProfileEditPermission';
+import { apiClient } from '@/config/api';
+
 import {
   User,
   Mail,
@@ -12,6 +15,7 @@ import {
   MapPin,
   Building,
   Lock,
+  Unlock,
   Camera,
   HeartHandshake,
   Home,
@@ -27,7 +31,27 @@ import {
   Globe,
   ShieldCheck,
   Key,
+  ChevronRight,
+  Palette,
+  Check,
+  Edit2,
+  DollarSign,
+  Layers,
+  FileEdit,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
+
+import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
+import { ProfileEditRequestModal } from '../components/ProfileEditRequestModal';
+import { EmployeeDetailsCombined } from '../components/EmployeeDetailsCombined';
+import { EmployeePayrollDetail } from '../components/EmployeePayrollDetail';
+import { EmployeeCheckInSetting } from '../components/EmployeeCheckInSetting';
+import { EmployeeRolesInfo } from '../components/EmployeeRolesInfo';
+import { EmployeeDocuments } from '../components/EmployeeDocuments';
+import { EmployeeStatutoryDetails } from '../components/EmployeeStatutoryDetails';
+import { MyProfileRequestsView } from '../components/MyProfileRequestsView';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,43 +59,268 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { showToast, toast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-interface PersonalFormState {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  mobile: string;
-  currentAddress: string;
-  permanentAddress: string;
-  city: string;
-  state: string;
-  postalCode: string;
+// ── Role Color Theme Presets (4 Themes Per Role) ──────────────────────────────
+export interface ThemePreset {
+  id: string;
+  name: string;
+  gradient: string;
+  bgAccent: string;
+  borderAccent: string;
+  textAccent: string;
+  badgeBg: string;
+  buttonBg: string;
+  ringColor: string;
 }
 
-interface EmergencyFormState {
-  fatherName: string;
-  motherName: string;
-  spouseName: string;
-  emergencyContactName: string;
-  emergencyContactRelation: string;
-  emergencyContactPhone: string;
-}
+const ROLE_THEMES: Record<string, ThemePreset[]> = {
+  intern: [
+    {
+      id: 'amber-sunset',
+      name: 'Amber Sunset',
+      gradient: 'from-amber-600 via-orange-500 to-amber-700',
+      bgAccent: 'bg-amber-500/10 dark:bg-amber-950/40',
+      borderAccent: 'border-amber-300 dark:border-amber-800',
+      textAccent: 'text-amber-600 dark:text-amber-400',
+      badgeBg: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
+      buttonBg: 'bg-amber-600 hover:bg-amber-700 text-white',
+      ringColor: 'ring-amber-500/50',
+    },
+    {
+      id: 'golden-sand',
+      name: 'Golden Sand',
+      gradient: 'from-yellow-600 via-amber-600 to-yellow-700',
+      bgAccent: 'bg-yellow-500/10 dark:bg-yellow-950/40',
+      borderAccent: 'border-yellow-300 dark:border-yellow-800',
+      textAccent: 'text-yellow-600 dark:text-yellow-400',
+      badgeBg: 'bg-yellow-500/15 text-yellow-800 dark:text-yellow-300 border-yellow-500/30',
+      buttonBg: 'bg-yellow-600 hover:bg-yellow-700 text-white',
+      ringColor: 'ring-yellow-500/50',
+    },
+    {
+      id: 'coral-rose',
+      name: 'Coral Rose',
+      gradient: 'from-rose-600 via-orange-500 to-pink-700',
+      bgAccent: 'bg-rose-500/10 dark:bg-rose-950/40',
+      borderAccent: 'border-rose-300 dark:border-rose-800',
+      textAccent: 'text-rose-600 dark:text-rose-400',
+      badgeBg: 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30',
+      buttonBg: 'bg-rose-600 hover:bg-rose-700 text-white',
+      ringColor: 'ring-rose-500/50',
+    },
+    {
+      id: 'tangerine-flare',
+      name: 'Tangerine Flare',
+      gradient: 'from-orange-600 via-amber-500 to-red-600',
+      bgAccent: 'bg-orange-500/10 dark:bg-orange-950/40',
+      borderAccent: 'border-orange-300 dark:border-orange-800',
+      textAccent: 'text-orange-600 dark:text-orange-400',
+      badgeBg: 'bg-orange-500/15 text-orange-800 dark:text-orange-300 border-orange-500/30',
+      buttonBg: 'bg-orange-600 hover:bg-orange-700 text-white',
+      ringColor: 'ring-orange-500/50',
+    },
+  ],
+  consultant: [
+    {
+      id: 'royal-violet',
+      name: 'Royal Violet',
+      gradient: 'from-violet-700 via-purple-700 to-indigo-800',
+      bgAccent: 'bg-violet-500/10 dark:bg-violet-950/40',
+      borderAccent: 'border-violet-300 dark:border-violet-800',
+      textAccent: 'text-violet-600 dark:text-violet-400',
+      badgeBg: 'bg-violet-500/15 text-violet-800 dark:text-violet-300 border-violet-500/30',
+      buttonBg: 'bg-violet-600 hover:bg-violet-700 text-white',
+      ringColor: 'ring-violet-500/50',
+    },
+    {
+      id: 'electric-purple',
+      name: 'Electric Purple',
+      gradient: 'from-purple-700 via-fuchsia-700 to-violet-800',
+      bgAccent: 'bg-purple-500/10 dark:bg-purple-950/40',
+      borderAccent: 'border-purple-300 dark:border-purple-800',
+      textAccent: 'text-purple-600 dark:text-purple-400',
+      badgeBg: 'bg-purple-500/15 text-purple-800 dark:text-purple-300 border-purple-500/30',
+      buttonBg: 'bg-purple-600 hover:bg-purple-700 text-white',
+      ringColor: 'ring-purple-500/50',
+    },
+    {
+      id: 'midnight-indigo',
+      name: 'Midnight Indigo',
+      gradient: 'from-indigo-800 via-slate-900 to-purple-900',
+      bgAccent: 'bg-indigo-500/10 dark:bg-indigo-950/40',
+      borderAccent: 'border-indigo-300 dark:border-indigo-800',
+      textAccent: 'text-indigo-600 dark:text-indigo-400',
+      badgeBg: 'bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border-indigo-500/30',
+      buttonBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+      ringColor: 'ring-indigo-500/50',
+    },
+    {
+      id: 'slate-steel',
+      name: 'Slate Steel',
+      gradient: 'from-slate-800 via-cyan-900 to-slate-950',
+      bgAccent: 'bg-slate-500/10 dark:bg-slate-950/40',
+      borderAccent: 'border-slate-300 dark:border-slate-800',
+      textAccent: 'text-slate-600 dark:text-slate-400',
+      badgeBg: 'bg-slate-500/15 text-slate-800 dark:text-slate-300 border-slate-500/30',
+      buttonBg: 'bg-slate-700 hover:bg-slate-800 text-white',
+      ringColor: 'ring-slate-500/50',
+    },
+  ],
+  manager: [
+    {
+      id: 'crimson-executive',
+      name: 'Crimson Executive',
+      gradient: 'from-rose-700 via-red-700 to-amber-800',
+      bgAccent: 'bg-rose-500/10 dark:bg-rose-950/40',
+      borderAccent: 'border-rose-300 dark:border-rose-800',
+      textAccent: 'text-rose-600 dark:text-rose-400',
+      badgeBg: 'bg-rose-500/15 text-rose-800 dark:text-rose-300 border-rose-500/30',
+      buttonBg: 'bg-rose-600 hover:bg-rose-700 text-white',
+      ringColor: 'ring-rose-500/50',
+    },
+    {
+      id: 'deep-indigo',
+      name: 'Deep Indigo',
+      gradient: 'from-indigo-800 via-blue-900 to-purple-900',
+      bgAccent: 'bg-indigo-500/10 dark:bg-indigo-950/40',
+      borderAccent: 'border-indigo-300 dark:border-indigo-800',
+      textAccent: 'text-indigo-600 dark:text-indigo-400',
+      badgeBg: 'bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border-indigo-500/30',
+      buttonBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+      ringColor: 'ring-indigo-500/50',
+    },
+    {
+      id: 'midnight-sapphire',
+      name: 'Midnight Sapphire',
+      gradient: 'from-slate-900 via-blue-950 to-indigo-950',
+      bgAccent: 'bg-blue-500/10 dark:bg-blue-950/40',
+      borderAccent: 'border-blue-300 dark:border-blue-800',
+      textAccent: 'text-blue-600 dark:text-blue-400',
+      badgeBg: 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30',
+      buttonBg: 'bg-blue-600 hover:bg-blue-700 text-white',
+      ringColor: 'ring-blue-500/50',
+    },
+    {
+      id: 'forest-emerald',
+      name: 'Forest Emerald',
+      gradient: 'from-emerald-800 via-teal-900 to-emerald-950',
+      bgAccent: 'bg-emerald-500/10 dark:bg-emerald-950/40',
+      borderAccent: 'border-emerald-300 dark:border-emerald-800',
+      textAccent: 'text-emerald-600 dark:text-emerald-400',
+      badgeBg: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30',
+      buttonBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+      ringColor: 'ring-emerald-500/50',
+    },
+  ],
+  team_lead: [
+    {
+      id: 'teal-command',
+      name: 'Teal Command',
+      gradient: 'from-teal-700 via-emerald-700 to-cyan-800',
+      bgAccent: 'bg-teal-500/10 dark:bg-teal-950/40',
+      borderAccent: 'border-teal-300 dark:border-teal-800',
+      textAccent: 'text-teal-600 dark:text-teal-400',
+      badgeBg: 'bg-teal-500/15 text-teal-800 dark:text-teal-300 border-teal-500/30',
+      buttonBg: 'bg-teal-600 hover:bg-teal-700 text-white',
+      ringColor: 'ring-teal-500/50',
+    },
+    {
+      id: 'cyan-breeze',
+      name: 'Cyan Breeze',
+      gradient: 'from-cyan-600 via-sky-600 to-blue-700',
+      bgAccent: 'bg-cyan-500/10 dark:bg-cyan-950/40',
+      borderAccent: 'border-cyan-300 dark:border-cyan-800',
+      textAccent: 'text-cyan-600 dark:text-cyan-400',
+      badgeBg: 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30',
+      buttonBg: 'bg-cyan-600 hover:bg-cyan-700 text-white',
+      ringColor: 'ring-cyan-500/50',
+    },
+    {
+      id: 'royal-blue',
+      name: 'Royal Blue',
+      gradient: 'from-blue-700 via-indigo-700 to-sky-800',
+      bgAccent: 'bg-blue-500/10 dark:bg-blue-950/40',
+      borderAccent: 'border-blue-300 dark:border-blue-800',
+      textAccent: 'text-blue-600 dark:text-blue-400',
+      badgeBg: 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30',
+      buttonBg: 'bg-blue-600 hover:bg-blue-700 text-white',
+      ringColor: 'ring-blue-500/50',
+    },
+    {
+      id: 'amber-blaze',
+      name: 'Amber Blaze',
+      gradient: 'from-amber-600 via-orange-600 to-red-700',
+      bgAccent: 'bg-amber-500/10 dark:bg-amber-950/40',
+      borderAccent: 'border-amber-300 dark:border-amber-800',
+      textAccent: 'text-amber-600 dark:text-amber-400',
+      badgeBg: 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30',
+      buttonBg: 'bg-amber-600 hover:bg-amber-700 text-white',
+      ringColor: 'ring-amber-500/50',
+    },
+  ],
+  employee: [
+    {
+      id: 'ocean-blue',
+      name: 'Ocean Blue',
+      gradient: 'from-blue-700 via-indigo-700 to-slate-900',
+      bgAccent: 'bg-blue-500/10 dark:bg-blue-950/40',
+      borderAccent: 'border-blue-300 dark:border-blue-800',
+      textAccent: 'text-blue-600 dark:text-blue-400',
+      badgeBg: 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30',
+      buttonBg: 'bg-blue-600 hover:bg-blue-700 text-white',
+      ringColor: 'ring-blue-500/50',
+    },
+    {
+      id: 'emerald-green',
+      name: 'Emerald Green',
+      gradient: 'from-emerald-700 via-teal-700 to-slate-900',
+      bgAccent: 'bg-emerald-500/10 dark:bg-emerald-950/40',
+      borderAccent: 'border-emerald-300 dark:border-emerald-800',
+      textAccent: 'text-emerald-600 dark:text-emerald-400',
+      badgeBg: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30',
+      buttonBg: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+      ringColor: 'ring-emerald-500/50',
+    },
+    {
+      id: 'sapphire-indigo',
+      name: 'Sapphire Indigo',
+      gradient: 'from-indigo-700 via-violet-800 to-slate-950',
+      bgAccent: 'bg-indigo-500/10 dark:bg-indigo-950/40',
+      borderAccent: 'border-indigo-300 dark:border-indigo-800',
+      textAccent: 'text-indigo-600 dark:text-indigo-400',
+      badgeBg: 'bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border-indigo-500/30',
+      buttonBg: 'bg-indigo-600 hover:bg-indigo-700 text-white',
+      ringColor: 'ring-indigo-500/50',
+    },
+    {
+      id: 'amethyst-orchid',
+      name: 'Amethyst Orchid',
+      gradient: 'from-purple-700 via-pink-700 to-slate-900',
+      bgAccent: 'bg-purple-500/10 dark:bg-purple-950/40',
+      borderAccent: 'border-purple-300 dark:border-purple-800',
+      textAccent: 'text-purple-600 dark:text-purple-400',
+      badgeBg: 'bg-purple-500/15 text-purple-800 dark:text-purple-300 border-purple-500/30',
+      buttonBg: 'bg-purple-600 hover:bg-purple-700 text-white',
+      ringColor: 'ring-purple-500/50',
+    },
+  ],
+};
 
 export default function ProfilePage() {
-  const { user, updateUser } = useAuthStore();
-  const employeeId = user?.employeeId || user?.id || 0;
-  const { employee, isLoading, refetch } = useEmployee(employeeId);
+  const { user } = useAuthStore();
+  const resolvedEmpId = Number(user?.employeeId || user?.id || 0);
+  const { employee, isLoading, refetch } = useEmployee(resolvedEmpId || 'me');
+  const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
 
-  const [activeTab, setActiveTab] = useState<'personal' | 'job' | 'emergency' | 'security'>('personal');
-  const [avatar, setAvatar] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<
+    'details' | 'payroll' | 'documents' | 'statutory' | 'checkin' | 'roles'
+  >('details');
 
-  // Success Modal Popup State
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successModalMessage, setSuccessModalMessage] = useState('');
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
+  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   // HR Profile Face Photo Update Request State
   const [hrRequestOpen, setHrRequestOpen] = useState(false);
@@ -79,234 +328,61 @@ export default function ProfilePage() {
   const [hrRequestSending, setHrRequestSending] = useState(false);
   const [hrRequestSent, setHrRequestSent] = useState(false);
 
-  const cacheKeySuffix = user?.id || user?.employeeId || 'me';
-
-  const [personalForm, setPersonalForm] = useState<PersonalFormState>(() => {
-    const cached = localStorage.getItem(`emp_personal_info_${cacheKeySuffix}`);
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {}
-    }
-    return {
-      firstName: '',
-      lastName: '',
-      email: '',
-      phone: '',
-      mobile: '',
-      currentAddress: '',
-      permanentAddress: '',
-      city: '',
-      state: '',
-      postalCode: '',
-    };
-  });
-
-  const [emergencyForm, setEmergencyForm] = useState<EmergencyFormState>(() => {
-    const cached = localStorage.getItem(`emp_emergency_info_${cacheKeySuffix}`);
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {}
-    }
-    return {
-      fatherName: '',
-      motherName: '',
-      spouseName: '',
-      emergencyContactName: '',
-      emergencyContactRelation: '',
-      emergencyContactPhone: '',
-    };
-  });
-
+  // Password Security Form State
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [isFetchingInfo, setIsFetchingInfo] = useState(true);
+  // Role Determination & Theme Switcher
+  const roleCode = (user?.accessRole || user?.role || user?.roles?.[0] || 'employee').toLowerCase();
+  const normalizedRole = roleCode.includes('intern')
+    ? 'intern'
+    : roleCode.includes('consultant')
+    ? 'consultant'
+    : roleCode.includes('manager') || roleCode.includes('department_head')
+    ? 'manager'
+    : roleCode.includes('team_lead')
+    ? 'team_lead'
+    : 'employee';
 
-  // Sync Base Employee Data from DB
-  useEffect(() => {
-    if (employee) {
-      setPersonalForm((prev: PersonalFormState) => {
-        const updated = {
-          ...prev,
-          firstName: employee.firstName || prev.firstName || user?.firstName || '',
-          lastName: employee.lastName || prev.lastName || user?.lastName || '',
-          email: employee.email || prev.email || user?.email || '',
-          phone: employee.phone || prev.phone || '',
-          mobile: employee.mobile || prev.mobile || '',
-        };
-        try {
-          localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated));
-        } catch (e) {}
-        return updated;
-      });
-
-      const storedAvatar = employee.avatarUrl || (employee as any).avatar_url;
-      if (storedAvatar) {
-        setAvatar(storedAvatar);
-      } else {
-        const cached = localStorage.getItem(`emp_avatar_${cacheKeySuffix}`);
-        if (cached) setAvatar(cached);
-      }
+  const availableThemes = ROLE_THEMES[normalizedRole] || ROLE_THEMES.employee;
+  const [selectedThemeIndex, setSelectedThemeIndex] = useState<number>(() => {
+    const saved = localStorage.getItem(`emp_profile_theme_idx_${normalizedRole}`);
+    if (saved !== null) {
+      const idx = parseInt(saved, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < availableThemes.length) return idx;
     }
-  }, [employee, user, cacheKeySuffix]);
+    return 0;
+  });
 
-  // Fetch Additional Personal Info from DB API
-  const fetchPersonalInfo = async () => {
-    if (!employeeId) {
-      setIsFetchingInfo(false);
-      return;
-    }
-    setIsFetchingInfo(true);
-    try {
-      const res = await apiClient.get(`/employees/${employeeId}/personal-info`);
-      if (res.data?.data) {
-        const info = res.data.data;
+  const theme = availableThemes[selectedThemeIndex] || availableThemes[0];
 
-        const fetchedFather = info.fatherName ?? info.father_name ?? '';
-        const fetchedMother = info.motherName ?? info.mother_name ?? '';
-        const fetchedSpouse = info.spouseName ?? info.spouse_name ?? '';
-        const fetchedCurrentAddr = info.currentAddress ?? info.current_address ?? '';
-        const fetchedPermAddr = info.permanentAddress ?? info.permanent_address ?? '';
-        const fetchedCity = info.city ?? '';
-        const fetchedState = info.state ?? '';
-        const fetchedPostalCode = info.postalCode ?? info.postal_code ?? '';
+  // Check user roles to determine if user is Admin/HR
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = user?.role || user?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
 
-        setEmergencyForm((prev: EmergencyFormState) => {
-          const updated = {
-            ...prev,
-            fatherName: fetchedFather || prev.fatherName,
-            motherName: fetchedMother || prev.motherName,
-            spouseName: fetchedSpouse || prev.spouseName,
-          };
-          try {
-            localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(updated));
-          } catch (e) {}
-          return updated;
-        });
+  // Employee portal edit lock applies ONLY to non-admin users in self-service portal
+  const isEmployeePortal = !isAdminOrHR;
 
-        setPersonalForm((prev: PersonalFormState) => {
-          const updated = {
-            ...prev,
-            currentAddress: fetchedCurrentAddr || prev.currentAddress,
-            permanentAddress: fetchedPermAddr || prev.permanentAddress,
-            city: fetchedCity || prev.city,
-            state: fetchedState || prev.state,
-            postalCode: fetchedPostalCode || prev.postalCode,
-          };
-          try {
-            localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated));
-          } catch (e) {}
-          return updated;
-        });
-      }
-    } catch (err) {
-      console.log('Personal info database fetch ready.');
-    } font: {
-      setIsFetchingInfo(false);
-    }
-  };
+  // ── Profile Edit Permission Hook (Locks Profile Until HR Approval) ──
+  const { editUnlocked, approvedRequestId, unlockedSection, refetch: refetchPermissions } = useProfileEditPermission(resolvedEmpId);
 
-  useEffect(() => {
-    fetchPersonalInfo();
-  }, [employeeId]);
+  // Lock status definitions:
+  // Admin/HR always unlocked; Employees locked by default until editUnlocked is true via approved HR edit request.
+  const isPhotoUnlocked = !isEmployeePortal || editUnlocked;
+  const isBasicUnlocked = !isEmployeePortal || editUnlocked;
+  const isPersonalUnlocked = !isEmployeePortal || editUnlocked;
+  const isProfessionalUnlocked = !isEmployeePortal || editUnlocked;
+  const isStatutoryUnlocked = !isEmployeePortal || editUnlocked;
 
-  const handleAvatarClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = reader.result as string;
-        setAvatar(base64);
-
-        try {
-          localStorage.setItem(`emp_avatar_${user?.id || 'me'}`, base64);
-          if (employeeId) {
-            await apiClient.put(`/employees/${employeeId}`, { avatarUrl: base64, avatar_url: base64 });
-          }
-          updateUser({ avatarUrl: base64 });
-          toast.success('Profile photo saved to database!');
-        } catch (err) {
-          toast.success('Profile photo updated!');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Save Personal Contact & Address Details to DB
-  const handleSavePersonal = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    try {
-      if (employeeId) {
-        await apiClient.put(`/employees/${employeeId}`, {
-          firstName: personalForm.firstName,
-          lastName: personalForm.lastName,
-          phone: personalForm.phone,
-          mobile: personalForm.mobile,
-        });
-
-        await apiClient.put(`/employees/${employeeId}/personal-info`, {
-          currentAddress: personalForm.currentAddress,
-          permanentAddress: personalForm.permanentAddress,
-          city: personalForm.city,
-          state: personalForm.state,
-          postalCode: personalForm.postalCode,
-        });
-
-        localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(personalForm));
-
-        updateUser({
-          firstName: personalForm.firstName,
-          lastName: personalForm.lastName,
-        });
-
-        setSuccessModalMessage('Your personal contact & residential address details have been updated in the database.');
-        setShowSuccessModal(true);
-        refetch();
-      }
-    } catch (err: any) {
-      toast.success('Personal details saved!');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Save Emergency Details to DB
-  const handleSaveEmergency = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    try {
-      if (employeeId) {
-        await apiClient.put(`/employees/${employeeId}/personal-info`, {
-          fatherName: emergencyForm.fatherName,
-          motherName: emergencyForm.motherName,
-          spouseName: emergencyForm.spouseName,
-        });
-
-        localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(emergencyForm));
-
-        setSuccessModalMessage('Your family & emergency contact details have been updated in the database.');
-        setShowSuccessModal(true);
-      }
-    } catch (err: any) {
-      toast.success('Emergency details saved!');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Change Account Password
+  // Change Account Password handler
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!passwordForm.currentPassword) {
@@ -322,19 +398,19 @@ export default function ProfilePage() {
       return;
     }
 
-    setIsSaving(true);
+    setIsSavingPassword(true);
     try {
-      if (employeeId) {
-        await apiClient.put(`/employees/${employeeId}`, {
+      if (resolvedEmpId) {
+        await apiClient.put(`/employees/${resolvedEmpId}`, {
           password: passwordForm.newPassword,
         });
-        toast.success('Password updated in database! Use your new password on next login.');
+        toast.success('Password updated successfully! Use your new password on next login.');
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to update password.');
     } finally {
-      setIsSaving(false);
+      setIsSavingPassword(false);
     }
   };
 
@@ -347,7 +423,7 @@ export default function ProfilePage() {
         message: `Employee ${empName} (${empCode}) requested biometric profile photo update approval for face recognition. ${
           hrRequestNote ? `Note: ${hrRequestNote}` : ''
         }`,
-        employeeId,
+        employeeId: resolvedEmpId,
         priority: 'normal',
       }).catch(() => {});
 
@@ -355,12 +431,12 @@ export default function ProfilePage() {
       setHrRequestNote('');
       toast.success('Request submitted to HR / Admin for approval!', {
         description: 'HR will review your request and update your biometric profile photo.',
-        duration: 7000,
+        duration: 6000,
       });
       setTimeout(() => {
         setHrRequestSent(false);
         setHrRequestOpen(false);
-      }, 3500);
+      }, 3000);
     } catch (err: any) {
       toast.error('Failed to submit request to HR. Please try again.');
     } finally {
@@ -368,557 +444,330 @@ export default function ProfilePage() {
     }
   };
 
-  // Clean real DB values
-  const empName = employee
-    ? `${employee.firstName} ${employee.lastName}`.trim()
-    : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`.trim();
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-3">
+        <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-muted-foreground font-medium">Loading employee profile...</p>
+      </div>
+    );
+  }
 
-  const empCode = employee?.employeeCode
-    || (employee as any)?.emp_code
-    || (employee?.id ? `EMP-${String(employee.id).padStart(4, '0')}` : 'EMP-0001');
+  const activeEmp = employee || ({
+    id: resolvedEmpId,
+    firstName: user?.firstName || 'Employee',
+    lastName: user?.lastName || '',
+    email: user?.email || '',
+    employeeCode: user?.employeeCode || `EMP-${resolvedEmpId}`,
+    status: 'active',
+  } as any);
 
-  const designation = employee?.designation || (employee as any)?.designation_name || 'Software Engineer & Technical Executive';
-  const department = employee?.department || (employee as any)?.department_name || 'Engineering & Product Development';
-  const employmentType = employee?.employmentType || (employee as any)?.emp_type || (employee as any)?.employment_type || 'Full-Time Permanent';
-  const joiningDate = employee?.dateOfJoining || (employee as any)?.date_of_joining || '2024-01-15';
-  const initials = empName.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
+  const empName = [activeEmp.firstName, activeEmp.middleName, activeEmp.lastName].filter(Boolean).join(' ');
+  const empCode = activeEmp.employeeCode || `EMP-${activeEmp.id}`;
+  const initials = `${activeEmp.firstName?.[0] || ''}${activeEmp.lastName?.[0] || ''}`.toUpperCase() || 'EMP';
+  const status = (activeEmp.status || 'active').toLowerCase();
 
-  const reportingManager = (employee as any)?.reportingManagerName
-    || (employee as any)?.manager_name
-    || 'Harsh Vardhan (Engineering Manager)';
+  const roleLabel =
+    activeEmp.accessRole === 'hr_manager'
+      ? 'HR Manager'
+      : activeEmp.accessRole === 'department_head'
+      ? 'Department Manager'
+      : activeEmp.accessRole === 'team_lead'
+      ? 'Team Lead'
+      : activeEmp.accessRole === 'intern'
+      ? 'Intern'
+      : activeEmp.accessRole === 'consultant'
+      ? 'Consultant'
+      : 'Employee';
+
+  const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (activeEmp as any)?.jobTitle || roleLabel;
+  const department = activeEmp.department || (activeEmp as any)?.department_name || (user as any)?.departmentName || 'Engineering & Product';
+  const employmentType = activeEmp.employmentType || (activeEmp as any)?.emp_type || 'Full-Time Permanent';
 
   return (
-    <div className="max-w-4xl mx-auto py-3 px-2 sm:px-4 space-y-4 select-none font-sans">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+    <div className="max-w-7xl mx-auto py-4 px-3 sm:px-6 space-y-6 font-sans">
 
       {/* ─────────────────────────────────────────────────────────────
-          LINKEDIN STYLE HERO CARD (SMALL CONCISE CENTERED AVATAR)
+          HERO BANNER CARD (EXACT SKETCH LAYOUT: LEFT AVATAR OVERLAP)
       ───────────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-border/80 rounded-2xl shadow-sm overflow-hidden relative">
-        
-        {/* Compact Cover Banner */}
-        <div className="h-24 sm:h-28 w-full bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(99,102,241,0.25),transparent_60%)]" />
-          <div className="absolute top-2 right-2.5">
-            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] px-2 py-0 font-semibold backdrop-blur-md flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              {employee?.status || 'Active Employee'}
-            </Badge>
+      <div className="bg-card border border-border/80 rounded-3xl shadow-sm overflow-hidden relative">
+        {/* Cover Banner with Dynamic Theme Gradient */}
+        <div className={cn("h-32 sm:h-36 w-full bg-gradient-to-r relative overflow-hidden transition-all duration-500", theme.gradient)}>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.15),transparent_60%)]" />
+
+          {/* Top Right Controls: 4-Color Theme Selector + Lock Status Badge */}
+          <div className="absolute top-3 right-3 flex flex-wrap items-center gap-2 z-10">
+            {/* Color Theme Selector Pill */}
+            <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md border border-white/20 p-1 rounded-full text-white text-xs">
+              <Palette className="w-3.5 h-3.5 ml-1.5 mr-0.5 text-white/80" />
+              {availableThemes.map((t, idx) => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setSelectedThemeIndex(idx);
+                    localStorage.setItem(`emp_profile_theme_idx_${normalizedRole}`, String(idx));
+                  }}
+                  title={t.name}
+                  className={cn(
+                    "w-5 h-5 rounded-full border border-white/40 transition-all flex items-center justify-center cursor-pointer",
+                    t.buttonBg,
+                    selectedThemeIndex === idx && "ring-2 ring-white scale-110 shadow-md font-bold"
+                  )}
+                >
+                  {selectedThemeIndex === idx && <Check className="w-3 h-3 text-white stroke-[3]" />}
+                </button>
+              ))}
+            </div>
+
+           
+            
           </div>
         </div>
 
-        {/* Centered Profile Content */}
-        <div className="px-4 pb-3 pt-0 relative flex flex-col items-center text-center">
+        {/* Header Content with Left-Aligned Overlapping Avatar */}
+        <div className="px-6 pb-6 pt-0 relative flex flex-col sm:flex-row items-start sm:items-end gap-5">
           
-          {/* CENTERED CONCISE AVATAR WITH 1-CLICK UPLOAD */}
-          <div className="-mt-8 sm:-mt-9 mb-2 relative group cursor-pointer" onClick={handleAvatarClick}>
-            <div className="p-0.5 rounded-full bg-background shadow-md inline-block relative">
-              <div className="p-0.5 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-amber-500">
-                <Avatar className="h-16 w-16 sm:h-18 sm:w-18 border border-background rounded-full overflow-hidden">
-                  <AvatarImage src={avatar || undefined} className="object-cover" />
-                  <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-slate-900 text-white font-black text-lg">
-                    {initials}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
+          {/* Left Large Avatar Overlapping Banner */}
+          <div
+            className={cn(
+              "-mt-14 sm:-mt-16 relative group shrink-0",
+              isPhotoUnlocked ? "cursor-pointer" : "cursor-not-allowed"
+            )}
+            onClick={() => {
+              if (isPhotoUnlocked) {
+                setIsPhotoModalOpen(true);
+              } else {
+                setIsEditRequestModalOpen(true);
+              }
+            }}
+            title={isPhotoUnlocked ? 'Click to upload/change photo' : 'Profile photo is locked. Request edit approval from HR to change.'}
+          >
+            <div className="p-1 rounded-full bg-card shadow-xl inline-block relative">
+              <Avatar className="h-24 w-24 sm:h-28 sm:w-28 border-4 border-card rounded-full overflow-hidden shadow-inner">
+                <AvatarImage src={activeEmp.avatarUrl || (activeEmp as any).avatar_url || undefined} alt={empName} className="object-cover" />
+                <AvatarFallback className={cn("text-white font-black text-2xl bg-gradient-to-br", theme.gradient)}>
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
 
               {/* Upload Hover Overlay */}
-              <div className="absolute inset-0.5 rounded-full bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[9px] font-bold gap-0.5 rounded-full backdrop-blur-xs">
-                <Camera className="w-3.5 h-3.5 text-amber-400" />
-                <span>Upload</span>
+              <div className="absolute inset-1 rounded-full bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold gap-0.5 backdrop-blur-xs">
+                <Camera className="w-4 h-4" />
+                <span>{isPhotoUnlocked ? 'Upload' : 'Request Lock'}</span>
               </div>
 
               {/* Camera Trigger Icon */}
-              <div className="absolute bottom-0.5 right-0.5 h-4.5 w-4.5 rounded-full bg-indigo-600 text-white border border-background shadow-xs flex items-center justify-center hover:bg-indigo-700 transition" title="Change Profile Photo">
-                <Camera className="w-2.5 h-2.5" />
+              <div className={cn("absolute bottom-1 right-1 h-6.5 w-6.5 rounded-full text-white border-2 border-card shadow-sm flex items-center justify-center transition-transform group-hover:scale-110", theme.buttonBg)}>
+                {isPhotoUnlocked ? <Camera className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
               </div>
             </div>
           </div>
 
-          {/* NAME & TITLE */}
-          <div className="max-w-lg space-y-0.5">
-            <div className="flex items-center justify-center gap-1.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+          {/* Profile Information Beside Avatar */}
+          <div className="flex-1 min-w-0 space-y-1 sm:mb-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
                 {empName}
               </h1>
-              <BadgeCheck className="w-4.5 h-4.5 text-indigo-500 fill-indigo-500/10 shrink-0" />
-              <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 text-[10px] px-1.5 py-0 font-mono font-bold">
+              <BadgeCheck className={cn("w-5 h-5 fill-current/10 shrink-0", theme.textAccent)} />
+              <Badge className={cn("text-xs font-mono font-bold px-2 py-0.5 rounded-md border", theme.badgeBg)}>
                 {empCode}
               </Badge>
             </div>
 
-            <p className="text-[11px] font-medium text-foreground/80">
-              {designation}
+            <p className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
+              <Briefcase className={cn("w-3.5 h-3.5 shrink-0", theme.textAccent)} />
+              <span>{jobTitle}</span>
             </p>
 
-            <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground font-medium pt-0.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium pt-0.5">
               <span className="flex items-center gap-1">
-                <Building2 className="w-3 h-3 text-indigo-500 shrink-0" /> {department}
+                <Building2 className={cn("w-3.5 h-3.5 shrink-0", theme.textAccent)} /> {department}
               </span>
               <span className="text-border">•</span>
               <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-rose-500 shrink-0" /> {personalForm.city || 'India'}
+                <Shield className={cn("w-3.5 h-3.5 shrink-0", theme.textAccent)} /> Role: <strong>{roleLabel}</strong>
               </span>
-              <span className="text-border">•</span>
-              <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
-                <Mail className="w-3 h-3 shrink-0" /> {personalForm.email || employee?.email}
-              </span>
+              {activeEmp.email && (
+                <>
+                  <span className="text-border">•</span>
+                  <span className={cn("flex items-center gap-1 font-semibold", theme.textAccent)}>
+                    <Mail className="w-3.5 h-3.5 shrink-0" /> {activeEmp.email}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
-          {/* COMPACT METRICS BAR (LOCKED DB READ-ONLY METRICS) */}
-          <div className="grid grid-cols-4 gap-1.5 w-full mt-3 pt-2.5 border-t border-border/60 text-center">
-            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
-              <span className="text-[9px] font-medium text-muted-foreground block">Employee ID</span>
-              <p className="text-xs font-mono font-bold text-foreground truncate mt-0.5">{empCode}</p>
-            </div>
-            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
-              <span className="text-[9px] font-medium text-muted-foreground block">Employment Type</span>
-              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 truncate mt-0.5">{employmentType}</p>
-            </div>
-            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
-              <span className="text-[9px] font-medium text-muted-foreground block">Joining Date</span>
-              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate mt-0.5">{joiningDate}</p>
-            </div>
-            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
-              <span className="text-[9px] font-medium text-muted-foreground block">Reporting Manager</span>
-              <p className="text-xs font-bold text-purple-600 dark:text-purple-400 truncate mt-0.5">{reportingManager}</p>
-            </div>
-          </div>
-
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setHrRequestOpen(true)}
-            className="mt-3 text-[11px] font-bold h-7.5 px-3 rounded-xl border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 gap-1.5"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-            Request HR / Admin Face Photo Update
-          </Button>
-
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          COMPACT TABS NAV
-      ───────────────────────────────────────────────────────────── */}
-      <div className="bg-card border border-border/80 rounded-lg p-0.5 shadow-2xs">
-        <div className="flex justify-center sm:justify-start gap-1 text-[10px] font-semibold">
-          <button
-            onClick={() => setActiveTab('personal')}
-            className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
-              activeTab === 'personal'
-                ? 'bg-indigo-600 text-white font-bold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-            )}
-          >
-            <User className="w-3 h-3" />
-            <span>Personal Information</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('job')}
-            className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
-              activeTab === 'job'
-                ? 'bg-indigo-600 text-white font-bold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-            )}
-          >
-            <Briefcase className="w-3 h-3" />
-            <span>Job & Org (Locked 🔒)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('emergency')}
-            className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
-              activeTab === 'emergency'
-                ? 'bg-indigo-600 text-white font-bold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-            )}
-          >
-            <HeartHandshake className="w-3 h-3" />
-            <span>Family & Emergency</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('security')}
-            className={cn(
-              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
-              activeTab === 'security'
-                ? 'bg-indigo-600 text-white font-bold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-            )}
-          >
-            <ShieldCheck className="w-3 h-3" />
-            <span>Account Security</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 1: PERSONAL INFORMATION (EDITABLE CONTACT & ADDRESS)
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'personal' && (
-        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
-          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
-            <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-indigo-500" /> Personal Contact & Address Details
-            </CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground">
-              Update your contact phone numbers and current residential address stored in the database.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="p-3.5">
-            <form onSubmit={handleSavePersonal} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">First Name *</Label>
-                  <Input
-                    required
-                    value={personalForm.firstName}
-                    onChange={(e) => setPersonalForm({ ...personalForm, firstName: e.target.value })}
-                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Last Name *</Label>
-                  <Input
-                    required
-                    value={personalForm.lastName}
-                    onChange={(e) => setPersonalForm({ ...personalForm, lastName: e.target.value })}
-                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                {/* READ ONLY LOCKED FIELD: Email */}
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
-                    Work Email Address <Lock className="w-3 h-3 text-amber-500" /> (Read-Only)
-                  </Label>
-                  <Input
-                    disabled
-                    value={personalForm.email || employee?.email || ''}
-                    className="bg-muted border-border text-muted-foreground text-xs font-mono rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Mobile Phone Number</Label>
-                  <Input
-                    value={personalForm.mobile}
-                    onChange={(e) => setPersonalForm({ ...personalForm, mobile: e.target.value })}
-                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Secondary Phone Number</Label>
-                  <Input
-                    value={personalForm.phone}
-                    onChange={(e) => setPersonalForm({ ...personalForm, phone: e.target.value })}
-                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">City</Label>
-                  <Input
-                    value={personalForm.city}
-                    onChange={(e) => setPersonalForm({ ...personalForm, city: e.target.value })}
-                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5 sm:col-span-2">
-                  <Label className="text-[10px] font-bold text-foreground">Current Residential Address</Label>
-                  <Input
-                    value={personalForm.currentAddress}
-                    onChange={(e) => setPersonalForm({ ...personalForm, currentAddress: e.target.value })}
-                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2 border-t border-border/60">
-                <Button
-                  type="submit"
-                  disabled={isSaving}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] h-7 px-4 rounded-full shadow-2xs gap-1"
-                >
-                  <Save className="w-3 h-3" />
-                  {isSaving ? 'Saving...' : 'Save Personal Details'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 2: JOB & ORG DETAILS (STRICTLY READ-ONLY & BLOCKED FOR EMPLOYEE)
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'job' && (
-        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
-          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
-                <Briefcase className="w-3.5 h-3.5 text-indigo-500" /> Official Job & Employment Parameters
-              </CardTitle>
-              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[9px] font-bold gap-1">
-                <Lock className="w-2.5 h-2.5" /> Read-Only Admin Data
-              </Badge>
-            </div>
-            <CardDescription className="text-[10px] text-muted-foreground">
-              These fields are set by HR Administration in the database and cannot be modified directly.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="p-3.5 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-muted/20 p-3 rounded-lg border border-border/40 text-xs">
-              
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Employee Code <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={empCode} className="bg-muted text-foreground font-mono font-bold text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Official Email <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={employee?.email || user?.email || ''} className="bg-muted text-foreground font-mono text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Designation / Title <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={designation} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Department <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={department} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Employment Type <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={employmentType} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Date of Joining <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={joiningDate} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Reporting Manager <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={reportingManager} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
-              </div>
-
-              <div className="space-y-0.5">
-                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
-                  Organization / Tenant <Lock className="w-2.5 h-2.5 text-amber-500" />
-                </span>
-                <Input disabled value={user?.organizationName || 'Apponext HRMS'} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
-              </div>
-
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 3: FAMILY & EMERGENCY CONTACTS (EDITABLE)
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'emergency' && (
-        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
-          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
-            <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
-              <HeartHandshake className="w-3.5 h-3.5 text-rose-500" /> Family & Emergency Contacts
-            </CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground">
-              Provide family member names and emergency contact details for official records.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="p-3.5">
-            <form onSubmit={handleSaveEmergency} className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Father's Name</Label>
-                  <Input
-                    value={emergencyForm.fatherName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, fatherName: e.target.value })}
-                    className="bg-background border-border text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Mother's Name</Label>
-                  <Input
-                    value={emergencyForm.motherName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, motherName: e.target.value })}
-                    className="bg-background border-border text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Spouse's Name</Label>
-                  <Input
-                    value={emergencyForm.spouseName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, spouseName: e.target.value })}
-                    className="bg-background border-border text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Emergency Contact Name</Label>
-                  <Input
-                    value={emergencyForm.emergencyContactName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactName: e.target.value })}
-                    className="bg-background border-border text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Emergency Contact Relation</Label>
-                  <Input
-                    value={emergencyForm.emergencyContactRelation}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactRelation: e.target.value })}
-                    className="bg-background border-border text-xs rounded-md h-7.5"
-                  />
-                </div>
-
-                <div className="space-y-0.5">
-                  <Label className="text-[10px] font-bold text-foreground">Emergency Phone Number</Label>
-                  <Input
-                    value={emergencyForm.emergencyContactPhone}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactPhone: e.target.value })}
-                    className="bg-background border-border text-xs rounded-md h-7.5"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2 border-t border-border/60">
-                <Button
-                  type="submit"
-                  disabled={isSaving}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] h-7 px-4 rounded-full shadow-2xs gap-1"
-                >
-                  <Save className="w-3 h-3" />
-                  {isSaving ? 'Saving...' : 'Save Emergency Details'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 4: ACCOUNT SECURITY & PASSWORD
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'security' && (
-        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
-          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
-            <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Account Security & Credentials
-            </CardTitle>
-            <CardDescription className="text-[10px] text-muted-foreground">
-              Update your account password stored in the database.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="p-3.5">
-            <form onSubmit={handlePasswordSubmit} className="max-w-xs space-y-2.5">
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-bold">Current Password</Label>
-                <Input
-                  type="password"
-                  required
-                  value={passwordForm.currentPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                  className="bg-background border-border text-xs rounded-md h-7.5"
-                />
-              </div>
-
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-bold">New Password</Label>
-                <Input
-                  type="password"
-                  required
-                  value={passwordForm.newPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                  className="bg-background border-border text-xs rounded-md h-7.5"
-                />
-              </div>
-
-              <div className="space-y-0.5">
-                <Label className="text-[10px] font-bold">Confirm New Password</Label>
-                <Input
-                  type="password"
-                  required
-                  value={passwordForm.confirmPassword}
-                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                  className="bg-background border-border text-xs rounded-md h-7.5"
-                />
-              </div>
-
+          {/* Action Buttons: Request Profile Edit & HR Photo Request */}
+          <div className="flex flex-wrap items-center gap-2 sm:mb-1 shrink-0">
+            {isEmployeePortal && (
               <Button
-                type="submit"
-                disabled={isSaving}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] h-7 px-4 rounded-full shadow-2xs gap-1"
+                size="sm"
+                variant="outline"
+                onClick={() => setIsEditRequestModalOpen(true)}
+                className={cn("text-xs font-bold h-8.5 px-3.5 rounded-xl border gap-1.5 shadow-xs cursor-pointer", theme.borderAccent, theme.textAccent, theme.bgAccent)}
               >
-                <Key className="w-3 h-3" />
-                {isSaving ? 'Updating...' : 'Update Password'}
+                <Edit2 className="w-3.5 h-3.5" />
+                Request Profile Edit
               </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+            )}
 
-      {/* SUCCESS CONFIRMATION MODAL */}
-      <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
-        <DialogContent className="sm:max-w-xs rounded-xl p-4 bg-card border-border">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle className="w-5 h-5 text-emerald-500" /> Database Profile Saved
-            </DialogTitle>
-          </DialogHeader>
-
-          <p className="text-xs text-muted-foreground pt-1">{successModalMessage}</p>
-
-          <div className="flex justify-end pt-3">
             <Button
-              onClick={() => setShowSuccessModal(false)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold h-7 px-4 rounded-full"
+              size="sm"
+              variant="outline"
+              onClick={() => setHrRequestOpen(true)}
+              className={cn("text-xs font-bold h-8.5 px-3.5 rounded-xl border gap-1.5 shadow-xs cursor-pointer", theme.borderAccent, theme.textAccent, theme.bgAccent)}
             >
-              OK
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Request Photo Update
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
+
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          PROFILE LOCK STATUS NOTICE BANNER (when in Employee Portal)
+      ───────────────────────────────────────────────────────────── */}
+      
+      {/* ─────────────────────────────────────────────────────────────
+          MAIN CONTENT SPLIT LAYOUT (EXACT SKETCH STRUCTURE)
+          LEFT SIDEBAR NAVIGATION TABS (Stacked with Chevrons >)
+          RIGHT MAIN DATA PANEL
+      ───────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row gap-6">
+
+        {/* LEFT SIDEBAR NAVIGATION MENU */}
+        <div className="w-full md:w-64 lg:w-72 shrink-0 space-y-3">
+          <div className="bg-card border border-border/80 rounded-2xl p-2.5 shadow-sm space-y-1.5">
+            <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-3 py-1">
+              Profile Sections
+            </h3>
+
+            {[
+              { id: 'details',   label: 'Combined Details',      icon: User,           desc: 'Basic, Contact & Emergency info' },
+              { id: 'payroll',   label: 'Payroll & Salary',     icon: DollarSign,     desc: 'Salary structure & revisions' },
+              { id: 'documents', label: 'Documents',            icon: Layers,         desc: 'KYC & Employee certificates' },
+              { id: 'statutory', label: 'Statutory Details',    icon: Lock,           desc: 'PF, ESI, PAN & Tax parameters' },
+              { id: 'checkin',   label: 'Check-In Mode',        icon: MapPin,         desc: 'Geo & Attendance settings' },
+              { id: 'roles',     label: 'Roles & Permissions',  icon: Shield,         desc: 'Access roles & permissions' },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={cn(
+                    "w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left group cursor-pointer",
+                    isActive
+                      ? cn("bg-card shadow-sm border-2 font-bold", theme.borderAccent, theme.bgAccent)
+                      : "border-transparent hover:bg-muted/50 text-foreground/80 hover:text-foreground"
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn("p-2 rounded-lg transition-colors", isActive ? theme.badgeBg : "bg-muted text-muted-foreground group-hover:bg-muted/80")}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="truncate">
+                      <p className={cn("text-xs font-semibold leading-snug", isActive && theme.textAccent)}>
+                        {tab.label}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate font-normal">
+                        {tab.desc}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className={cn("w-4 h-4 shrink-0 transition-transform", isActive ? cn("transform translate-x-0.5", theme.textAccent) : "text-muted-foreground/50 group-hover:text-muted-foreground")} />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Employment Summary Sidebar Card */}
+          <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-sm text-xs space-y-2.5">
+            <h4 className="font-bold text-foreground flex items-center gap-1.5">
+              <Shield className={cn("w-4 h-4", theme.textAccent)} /> Employment Summary
+            </h4>
+            <div className="space-y-2 text-muted-foreground text-[11px]">
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span>Role Type:</span>
+                <span className="font-semibold text-foreground capitalize">{normalizedRole.replace('_', ' ')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span>Employment:</span>
+                <span className="font-semibold text-foreground truncate max-w-[110px]">{employmentType}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-border/40">
+                <span>Profile Lock:</span>
+                <span className={cn("font-bold", editUnlocked ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                  {editUnlocked ? 'Unlocked 🔓' : 'Locked 🔒'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT MAIN DATA PANEL */}
+        <div className="flex-1 min-w-0">
+
+          {/* TAB 1: COMBINED DETAILS (WITH FULL EDIT LOCK LOGIC) */}
+          {activeTab === 'details' && (
+            <EmployeeDetailsCombined
+              employee={activeEmp}
+              isEditingBasicInfo={isEditingBasicInfo}
+              onEditBasicInfoToggle={setIsEditingBasicInfo}
+              editUnlocked={isPersonalUnlocked}
+              isBasicUnlocked={isBasicUnlocked}
+              isPersonalUnlocked={isPersonalUnlocked}
+              isProfessionalUnlocked={isProfessionalUnlocked}
+              isStatutoryUnlocked={isStatutoryUnlocked}
+              approvedRequestId={approvedRequestId}
+            />
+          )}
+
+          {/* TAB 2: PAYROLL & SALARY DETAILS */}
+          {activeTab === 'payroll' && (
+            <EmployeePayrollDetail employee={activeEmp} />
+          )}
+
+          {/* TAB 3: DOCUMENTS & CERTIFICATES */}
+          {activeTab === 'documents' && (
+            <EmployeeDocuments employeeId={resolvedEmpId} readOnly={isEmployeePortal} />
+          )}
+
+          {/* TAB 4: STATUTORY DETAILS */}
+          {activeTab === 'statutory' && (
+            <EmployeeStatutoryDetails
+              employee={activeEmp}
+              onUpdate={() => refetch()}
+              editUnlocked={isStatutoryUnlocked}
+              approvedRequestId={approvedRequestId}
+            />
+          )}
+
+          {/* TAB 5: ATTENDANCE & CHECK-IN MODE */}
+          {activeTab === 'checkin' && (
+            <EmployeeCheckInSetting employee={activeEmp} readOnly={isEmployeePortal} />
+          )}
+
+          {/* TAB 6: ROLES & PERMISSIONS */}
+          {activeTab === 'roles' && (
+            <EmployeeRolesInfo employee={activeEmp} onRoleUpdate={() => refetch()} readOnly={isEmployeePortal} />
+          )}
+
+
+
+        </div>
+      </div>
 
       {/* HR / ADMIN BIOMETRIC PROFILE UPDATE REQUEST MODAL */}
       <Dialog open={hrRequestOpen} onOpenChange={setHrRequestOpen}>
         <DialogContent className="sm:max-w-md rounded-3xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              <ShieldCheck className={cn("w-5 h-5", theme.textAccent)} />
               Request Biometric Face Photo Update
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
@@ -950,7 +799,7 @@ export default function ProfilePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setHrRequestOpen(false)}
-                  className="text-xs font-bold rounded-xl"
+                  className="text-xs font-bold rounded-xl cursor-pointer"
                 >
                   Cancel
                 </Button>
@@ -959,7 +808,7 @@ export default function ProfilePage() {
                   size="sm"
                   disabled={hrRequestSending}
                   onClick={handleSendHRProfileRequest}
-                  className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-1.5"
+                  className={cn("text-xs font-bold rounded-xl gap-1.5 cursor-pointer", theme.buttonBg)}
                 >
                   {hrRequestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                   Submit Request to HR
@@ -969,6 +818,28 @@ export default function ProfilePage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* REQUEST PROFILE EDIT MODAL */}
+      {activeEmp && (
+        <ProfileEditRequestModal
+          open={isEditRequestModalOpen}
+          onOpenChange={setIsEditRequestModalOpen}
+          employee={activeEmp}
+        />
+      )}
+
+      {/* ── LIVE CAMERA PHOTO CAPTURE MODAL ────────────────────────────── */}
+      {activeEmp && (
+        <ProfilePhotoUploadModal
+          open={isPhotoModalOpen}
+          onOpenChange={setIsPhotoModalOpen}
+          employee={activeEmp}
+          onSuccess={() => {
+            refetch();
+            refetchPermissions();
+          }}
+        />
+      )}
     </div>
   );
 }
