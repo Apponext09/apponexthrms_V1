@@ -38,9 +38,10 @@ export function PolicyAcceptancePage() {
   const bottomMarkerRef = useRef<HTMLDivElement>(null);
 
   const totalPending = pendingPolicies.length;
-  const currentPolicy = pendingPolicies[activePolicyIndex] || pendingPolicies[0];
+  const safeActiveIndex = Math.min(activePolicyIndex, Math.max(0, totalPending - 1));
+  const currentPolicy = pendingPolicies[safeActiveIndex] || pendingPolicies[0];
   const isCurrentAgreed = currentPolicy ? agreedPolicyIds.includes(currentPolicy.id) : false;
-  const isLastPolicy = activePolicyIndex === totalPending - 1;
+  const isLastPolicy = safeActiveIndex === totalPending - 1;
 
   // Derive human-readable primary role label
   const primaryRoleCode = (user?.roles?.[0] || 'employee').toLowerCase();
@@ -212,14 +213,16 @@ export function PolicyAcceptancePage() {
     try {
       await acceptPolicyMutation.mutateAsync(currentPolicy.id);
 
-      if (!isLastPolicy) {
-        toast.success(`Policy ${activePolicyIndex + 1} of ${totalPending} agreed. Proceeding to next policy...`);
-        setActivePolicyIndex((prev) => prev + 1);
+      const refetchRes = await refetch();
+      const remainingPolicies = refetchRes.data || [];
+
+      if (remainingPolicies.length > 0) {
+        toast.success(`Policy acknowledged. Proceeding to next policy...`);
+        setActivePolicyIndex(0);
       } else {
         toast.success('All mandatory policies acknowledged successfully!');
-        await refetch();
         const targetDashboard = getDestinationDashboard();
-        navigate(targetDashboard);
+        navigate(targetDashboard, { replace: true });
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to record acceptance. Please try again.');
@@ -233,31 +236,21 @@ export function PolicyAcceptancePage() {
     navigate('/login');
   };
 
-  if (isLoading) {
+  // Automatically redirect to destination dashboard if no policies are pending
+  useEffect(() => {
+    if (!isLoading && totalPending === 0) {
+      const targetDashboard = getDestinationDashboard();
+      navigate(targetDashboard, { replace: true });
+    }
+  }, [isLoading, totalPending, user, navigate]);
+
+  if (isLoading || totalPending === 0) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4">
         <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-        <p className="text-sm font-medium text-slate-500">Loading compliance policies...</p>
-      </div>
-    );
-  }
-
-  if (totalPending === 0) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4 text-center">
-        <div className="size-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4 ring-8 ring-emerald-50">
-          <ShieldCheck className="w-8 h-8" />
-        </div>
-        <h2 className="text-xl font-bold text-slate-900 mb-1">Compliance Verified</h2>
-        <p className="text-sm text-slate-500 max-w-sm mb-6">
-          All mandatory organizational policies have been acknowledged for your account.
+        <p className="text-sm font-medium text-slate-500">
+          {isLoading ? 'Loading compliance policies...' : 'Redirecting to Dashboard...'}
         </p>
-        <Button
-          onClick={() => navigate(getDestinationDashboard())}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 h-10 rounded-xl gap-2 shadow-md shadow-blue-500/20 cursor-pointer"
-        >
-          Proceed to Dashboard
-        </Button>
       </div>
     );
   }
@@ -287,7 +280,7 @@ export function PolicyAcceptancePage() {
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Step <span className="text-blue-600 font-bold">{activePolicyIndex + 1} of {totalPending}</span>: Accept all policies to unlock system access
+                Step <span className="text-blue-600 font-bold">{safeActiveIndex + 1} of {totalPending}</span>: Accept all policies to unlock system access
               </p>
             </div>
           </div>
@@ -307,7 +300,7 @@ export function PolicyAcceptancePage() {
             </span>
             {pendingPolicies.map((p, idx) => {
               const isAgreed = agreedPolicyIds.includes(p.id);
-              const isActive = activePolicyIndex === idx;
+              const isActive = safeActiveIndex === idx;
 
               return (
                 <div
@@ -411,13 +404,13 @@ export function PolicyAcceptancePage() {
                     htmlFor="policy-agree-checkbox"
                     className="text-xs font-bold text-slate-900 cursor-pointer hover:text-blue-600 transition-colors"
                   >
-                    I have read, understood, and accept policy ({activePolicyIndex + 1}/{totalPending}): <span className="text-blue-600 font-bold">{currentPolicy?.title}</span>
+                    I have read, understood, and accept policy ({safeActiveIndex + 1}/{totalPending}): <span className="text-blue-600 font-bold">{currentPolicy?.title}</span>
                   </label>
                 </motion.div>
               ) : (
                 <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
                   <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                  <span>Please scroll down through policy #{activePolicyIndex + 1} to enable acknowledgement.</span>
+                  <span>Please scroll down through policy #{safeActiveIndex + 1} to enable acknowledgement.</span>
                 </div>
               )}
             </AnimatePresence>
@@ -438,19 +431,15 @@ export function PolicyAcceptancePage() {
               type="button"
               disabled={!hasScrolledToBottom || !isCurrentAgreed || submitting}
               onClick={handleNextOrFinish}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg px-5 h-9 gap-1.5 shadow-sm shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg px-5 h-9 gap-1.5 shadow-sm shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer font-medium"
             >
               {submitting ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recording...
-                </>
-              ) : isLastPolicy ? (
-                <>
-                  <Check className="w-3.5 h-3.5 stroke-[3]" /> Complete All & Proceed
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing...
                 </>
               ) : (
                 <>
-                  Next Policy <ArrowRight className="w-3.5 h-3.5" />
+                  Proceed <ArrowRight className="w-3.5 h-3.5" />
                 </>
               )}
             </Button>
