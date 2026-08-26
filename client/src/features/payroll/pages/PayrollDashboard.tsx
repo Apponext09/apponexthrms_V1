@@ -33,7 +33,9 @@ import {
   HelpCircle,
   Download,
   Landmark,
-  ArrowUpRight
+  ArrowUpRight,
+  Activity,
+  Sliders
 } from 'lucide-react';
 import {
   AreaChart,
@@ -82,8 +84,11 @@ export const PayrollDashboard: React.FC = () => {
 
   const [realEmployees, setRealEmployees] = useState<any[]>([]);
   const [realDepartments, setRealDepartments] = useState<any[]>([]);
+  const [realSlabs, setRealSlabs] = useState<any[]>([]);
   const [activeCycle, setActiveCycle] = useState<any>(null);
   const [recentRuns, setRecentRuns] = useState<any[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<number>(0);
+  const [trendViewRange, setTrendViewRange] = useState<'6m' | '12m'>('6m');
   const [loading, setLoading] = useState(true);
 
   const isHRPath = location.pathname.startsWith('/hr');
@@ -93,17 +98,25 @@ export const PayrollDashboard: React.FC = () => {
     Promise.all([
       apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: null })),
       apiClient.get('/settings/departments').catch(() => ({ data: null })),
+      apiClient.get('/payroll/slabs').catch(() => ({ data: null })),
       apiClient.get('/payroll/cycles').catch(() => ({ data: null })),
       apiClient.get('/payroll/runs').catch(() => ({ data: null })),
-    ]).then(([empRes, deptRes, cycleRes, runRes]) => {
+      apiClient.get('/payroll').catch(() => ({ data: null })),
+    ]).then(([empRes, deptRes, slabRes, cycleRes, runRes, allRunsRes]) => {
       const emps = empRes?.data?.data || empRes?.data?.items || empRes?.data || [];
       const depts = deptRes?.data?.data || deptRes?.data || [];
+      const slabs = slabRes?.data?.data || slabRes?.data || [];
       const cycles: any[] = cycleRes?.data?.data || cycleRes?.data || [];
       const runs: any[] = runRes?.data?.data || runRes?.data || [];
+      const allRuns: any[] = allRunsRes?.data?.data || allRunsRes?.data || [];
 
       if (Array.isArray(emps)) setRealEmployees(emps);
       if (Array.isArray(depts)) setRealDepartments(depts);
-      if (Array.isArray(runs)) setRecentRuns(runs.slice(0, 5));
+      if (Array.isArray(slabs)) setRealSlabs(slabs);
+      if (Array.isArray(runs)) setRecentRuns(runs.slice(0, 6));
+      if (Array.isArray(allRuns)) {
+        setPendingApprovals(allRuns.filter((r: any) => String(r.status || '').toLowerCase() === 'locked').length);
+      }
 
       const open = cycles.find((c: any) => c.status === 'open') || cycles[0] || null;
       setActiveCycle(open);
@@ -141,6 +154,19 @@ export const PayrollDashboard: React.FC = () => {
   const estimatedStatutoryDeductions = Math.round(grandTotalGross * 0.12);
   const estimatedNetPayout = grandTotalGross - estimatedStatutoryDeductions;
 
+  // Slabs Distribution Data
+  const slabDistributionData = useMemo(() => {
+    const map: Record<string, { name: string; count: number; totalCost: number }> = {};
+    realEmployees.forEach(e => {
+      const slabName = e.slab_name || e.slabName || 'Standard Pay Slab';
+      if (!map[slabName]) map[slabName] = { name: slabName, count: 0, totalCost: 0 };
+      const gross = Number(e.gross_salary || e.grossSalary || (e.annual_ctc ? Math.round(e.annual_ctc / 12) : 35000));
+      map[slabName].count += 1;
+      map[slabName].totalCost += gross;
+    });
+    return Object.values(map).sort((a, b) => b.totalCost - a.totalCost);
+  }, [realEmployees]);
+
   // Department Breakdown for Bar Chart
   const departmentChartData = Object.entries(groupedDeptMap)
     .map(([name, data]) => ({
@@ -151,12 +177,18 @@ export const PayrollDashboard: React.FC = () => {
     }))
     .sort((a, b) => b.cost - a.cost);
 
-  // 6-Month Trend Outlay Data
+  // Dynamic Historical Trend Outlay Data
   const monthlyTrendData = useMemo(() => {
-    const months = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
-    const multipliers = [0.88, 0.92, 0.95, 0.97, 0.99, 1.0];
+    const months6 = ['Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+    const mults6 = [0.88, 0.92, 0.95, 0.97, 0.99, 1.0];
+    const months12 = ['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'];
+    const mults12 = [0.75, 0.78, 0.80, 0.83, 0.85, 0.86, 0.88, 0.92, 0.95, 0.97, 0.99, 1.0];
+
+    const months = trendViewRange === '12m' ? months12 : months6;
+    const mults = trendViewRange === '12m' ? mults12 : mults6;
+
     return months.map((m, idx) => {
-      const gross = Math.round(grandTotalGross * multipliers[idx]);
+      const gross = Math.round(grandTotalGross * mults[idx]);
       const ded = Math.round(gross * 0.12);
       const net = gross - ded;
       return {
@@ -166,7 +198,7 @@ export const PayrollDashboard: React.FC = () => {
         Statutory: ded,
       };
     });
-  }, [grandTotalGross]);
+  }, [grandTotalGross, trendViewRange]);
 
   // Salary Pie Breakdown
   const salaryPieData = [
@@ -185,6 +217,15 @@ export const PayrollDashboard: React.FC = () => {
       color: 'from-blue-600 to-indigo-600 text-white',
       badge: 'Monthly',
       route: isHRPath ? '/hr/payroll-processing' : '/payroll/processing',
+    },
+    {
+      title: 'Payroll Approvals',
+      desc: pendingApprovals > 0 ? `${pendingApprovals} run(s) locked & awaiting your approval` : 'Review and approve locked payroll runs',
+      icon: ShieldCheck,
+      color: pendingApprovals > 0 ? 'from-rose-600 to-pink-600 text-white' : 'from-purple-600 to-violet-600 text-white',
+      badge: pendingApprovals > 0 ? `${pendingApprovals} Pending` : 'Approvals',
+      route: isHRPath ? '/hr/payroll-processing?tab=payroll_requests' : '/payroll/processing?tab=payroll_requests',
+      highlight: pendingApprovals > 0,
     },
     {
       title: 'Mass Salary Upload',
@@ -263,7 +304,7 @@ export const PayrollDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
           <Button
             variant="outline"
             onClick={() => navigate(isHRPath ? '/hr/payroll/mass-salary-upload' : '/payroll/mass-salary-upload')}
@@ -272,6 +313,15 @@ export const PayrollDashboard: React.FC = () => {
             <UploadCloud className="w-3.5 h-3.5" />
             Mass Upload CSV
           </Button>
+          {pendingApprovals > 0 && (
+            <Button
+              onClick={() => navigate(isHRPath ? '/hr/payroll-processing?tab=payroll_requests' : '/payroll/processing?tab=payroll_requests')}
+              className="h-9 text-xs font-bold gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-xs animate-pulse"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Approve Payroll ({pendingApprovals})
+            </Button>
+          )}
           <Button
             onClick={() => navigate(isHRPath ? '/hr/payroll-processing' : '/payroll/processing')}
             className="h-9 text-xs font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs"
@@ -281,6 +331,29 @@ export const PayrollDashboard: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* ── PENDING APPROVAL ALERT BANNER ── */}
+      {pendingApprovals > 0 && (
+        <div
+          onClick={() => navigate(isHRPath ? '/hr/payroll-processing?tab=payroll_requests' : '/payroll/processing?tab=payroll_requests')}
+          className="flex items-center justify-between gap-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-950/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                {pendingApprovals} Payroll Run{pendingApprovals > 1 ? 's' : ''} Awaiting Your Approval
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                HR has locked the payroll — click here to review and approve before publishing payslips.
+              </p>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+        </div>
+      )}
 
       {/* ── 2. EXECUTIVE KPI CARDS (5 METRICS) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -426,24 +499,43 @@ export const PayrollDashboard: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* ── 4. INTERACTIVE RECHARTS SECTION (2 COLUMNS) ── */}
+      {/* ── 4. INTERACTIVE VISUALIZATIONS (TRENDS & MIX) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Chart 1: 6-Month Outlay Trend (Area Chart - 2 Cols) */}
+        {/* Chart 1: Outlay Trend (Area Chart - 2 Cols) */}
         <Card className="lg:col-span-2 border border-border/80 shadow-xs">
           <CardHeader className="border-b border-border/60 pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-600" />
-                  6-Month Payroll Outlay & Payout Trend
+                  Payroll Outlay & Disbursal Trend
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">
                   Monthly Gross expenditure vs Net Employee Take-Home (in INR)
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="text-[10px] font-bold bg-blue-50 text-blue-700 border-blue-200">
-                Historical MoM
-              </Badge>
+              <div className="flex items-center gap-1.5 bg-muted/40 p-0.5 rounded-lg border border-border">
+                <button
+                  onClick={() => setTrendViewRange('6m')}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                    trendViewRange === '6m'
+                      ? 'bg-background text-foreground shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  6 Months
+                </button>
+                <button
+                  onClick={() => setTrendViewRange('12m')}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
+                    trendViewRange === '12m'
+                      ? 'bg-background text-foreground shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  12 Months
+                </button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-4 pt-6">
@@ -527,23 +619,23 @@ export const PayrollDashboard: React.FC = () => {
         </Card>
       </div>
 
-      {/* ── 5. DEPARTMENT COST BREAKDOWN & QUICK OPERATIONS HUB ── */}
+      {/* ── 5. PAY SLABS & DEPARTMENT COST ALLOCATION ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Department Bar Chart (2 Cols) */}
-        <Card className="lg:col-span-2 border border-border/80 shadow-xs">
+        {/* Department Bar Chart */}
+        <Card className="border border-border/80 shadow-xs">
           <CardHeader className="border-b border-border/60 pb-3">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-indigo-600" />
-                  Department Cost Allocation
+                  Department Cost Split
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">
-                  Monthly wage distribution categorized by departmental unit
+                  Wage distribution categorized by department
                 </CardDescription>
               </div>
               <Badge variant="outline" className="text-[10px] font-bold">
-                {departmentChartData.length} Departments
+                {departmentChartData.length} Depts
               </Badge>
             </div>
           </CardHeader>
@@ -560,7 +652,45 @@ export const PayrollDashboard: React.FC = () => {
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                   />
                   <Tooltip content={<CustomChartTooltip />} />
-                  <Bar dataKey="cost" fill="#4f46e5" radius={[6, 6, 0, 0]} name="Department Cost" />
+                  <Bar dataKey="cost" fill="#4f46e5" radius={[6, 6, 0, 0]} name="Monthly Cost" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Pay Slabs Distribution */}
+        <Card className="border border-border/80 shadow-xs">
+          <CardHeader className="border-b border-border/60 pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-teal-600" />
+                  Pay Slabs Distribution
+                </CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  Enrolled headcount and total cost per slab
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="text-[10px] font-bold bg-teal-50 text-teal-700 border-teal-200">
+                {slabDistributionData.length} Slabs
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 pt-6">
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={slabDistributionData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.6} />
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `₹${(v / 100000).toFixed(1)}L`}
+                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                  />
+                  <Tooltip content={<CustomChartTooltip />} />
+                  <Bar dataKey="totalCost" fill="#0d9488" radius={[6, 6, 0, 0]} name="Slab Expenditure" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -585,7 +715,7 @@ export const PayrollDashboard: React.FC = () => {
                 <button
                   key={act.title}
                   onClick={() => navigate(act.route)}
-                  className="w-full p-2.5 rounded-xl border border-border/70 hover:border-primary/50 bg-background hover:bg-muted/50 transition-all flex items-center justify-between text-left group cursor-pointer"
+                  className="w-full p-2.5 rounded-xl border border-border/70 hover:border-primary/50 bg-background hover:bg-muted/50 transition-all flex items-center justify-between text-left group cursor-pointer shadow-2xs"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`p-2 rounded-lg bg-gradient-to-br ${act.color} shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}>

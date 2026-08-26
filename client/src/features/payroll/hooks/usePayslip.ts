@@ -2,12 +2,15 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { queryClient } from '@/config/query';
 
-export const usePayslip = (employeeId?: number) => {
+export const usePayslip = (employeeId?: number, companyId?: string | number) => {
   const payslipsQuery = useQuery({
-    queryKey: ['payslips', employeeId],
+    queryKey: ['payslips', employeeId, companyId],
     queryFn: () =>
       apiClient.get('/payroll/payslips', {
-        params: { employeeId }
+        params: {
+          employeeId,
+          companyId: companyId && companyId !== 'all' ? companyId : undefined
+        }
       })
   });
 
