@@ -585,39 +585,7 @@ export function ModuleManagementPage(): JSX.Element {
       </Card>
 
 
-      {/* Role Selection Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {(['hr', 'manager', 'tl', 'emp'] as RoleType[]).map((role) => {
-          const info = ROLE_LABELS[role];
-          const isActive = activeRole === role;
-          const roleModules = ROLE_MODULES[role] || [];
-          const activeModules = roleModules.filter((m) => (modulesState[role] || {})[m.id] !== false).length;
-
-          return (
-            <button
-              key={role}
-              onClick={() => setActiveRole(role)}
-              className={`flex flex-col text-left p-3.5 rounded-xl border transition-all text-xs relative ${
-                isActive
-                  ? 'bg-card border-primary/80 ring-2 ring-primary/15 shadow-2xs'
-                  : 'bg-card/70 border-border/80 hover:border-border hover:bg-card text-muted-foreground'
-              }`}
-            >
-              <div className="flex items-center justify-between w-full mb-1.5">
-                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded tracking-wider ${info.color}`}>
-                  {info.title}
-                </span>
-                <span className="text-[10px] font-mono font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/50">
-                  {activeModules}/{roleModules.length} Modules
-                </span>
-              </div>
-              <p className="font-bold text-xs text-foreground mt-0.5 line-clamp-1">{info.title} Workspace</p>
-              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{info.subtitle}</p>
-            </button>
-          );
-        })}
-      </div>
-
+      
       {/* 2-Column Master-Detail Module Configuration Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         {/* ─── LEFT COLUMN: Module Selector List (4 cols) ─── */}

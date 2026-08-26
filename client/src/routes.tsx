@@ -1,3 +1,4 @@
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppShellLayout } from './layouts/AppShellLayout';
@@ -6,218 +7,196 @@ import { ManagerLayout } from './layouts/ManagerLayout';
 import { TeamLeadLayout } from './layouts/TeamLeadLayout';
 import { InternLayout } from './layouts/InternLayout';
 import { ConsultantLayout } from './layouts/ConsultantLayout';
-import { LoginPage } from './features/auth/pages/LoginPage';
-import { DashboardPage } from './features/dashboard/pages/DashboardPage';
-import { ApprovalsDashboardPage } from './features/leaves/pages/ApprovalsDashboardPage';
-
-// Employee Pages
-import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
-import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
-import { EmployeeEditPage } from './features/employee/pages/EmployeeEditPage';
-import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDashboardPage';
-import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDashboardPage';
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
-import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
-import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
-import { MyLifecyclePage } from './features/employee/pages/MyLifecyclePage';
-
-// Attendance Pages
-import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
-import { AttendancePoliciesPage } from './features/attendance/pages/AttendancePoliciesPage';
-import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
-import { HRAttendanceLocationPage } from './features/HR/Attendance';
-import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
-import { BreakLogsPage } from './features/attendance/pages/BreakLogsPage';
-import { ManagerHRRegularizationApprovals } from './features/attendance/components/ManagerHRRegularizationApprovals';
-import AdminRegularizationLogsPage from './features/attendance/pages/AdminRegularizationLogsPage';
-
-// Live Tracking
-import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livetracking';
-
-// Leaves Pages
-import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
-import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
-import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
-import { LeaveEncashmentPage } from './features/leaves/pages/LeaveEncashmentPage';
-import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
-
-import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
-import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
-import { EmployeeRequestsPage } from './features/HR/requests/EmployeeRequestsPage';
-
-// Payroll Pages
-import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
-import { PayslipViewer } from './features/payroll/pages/PayslipViewer';
-import { SalaryStructureManagement } from './features/payroll/pages/SalaryStructureManagement';
-import { PayrollSettingsPage } from './features/payroll/pages/PayrollSettingsPage';
-import { TaxDeclaration } from './features/payroll/pages/TaxDeclaration';
-import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
-import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
-import { LoanManagement } from './features/payroll/pages/LoanManagement';
-import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
-import { GratuityPolicyPage } from './features/payroll/pages/GratuityPolicyPage';
-import { PayrollReportsPage } from './features/payroll/pages/PayrollReportsPage';
-import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
-import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
-import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
-import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
-import { MassSalaryStructureUploadPage } from './features/payroll/pages/MassSalaryStructureUploadPage';
-import { EmployeeLoanRequest } from './features/payroll/components/EmployeeLoanRequest';
-import { AdminExpenseClaims } from './features/payroll/pages/AdminExpenseClaims';
-import { AdminTravelRequests } from './features/payroll/pages/AdminTravelRequests';
-import {
-  EmployeePayrollPortal,
-  TeamLeadPayrollPortal,
-  ManagerPayrollPortal,
-  HRPayrollPortal,
-  AdminPayrollPortal
-} from './features/payroll/pages';
-
-// Recruitment Pages
-import { RecruitmentDashboard } from './features/recruitment/pages/RecruitmentDashboard';
-import { MrfRequestPage } from './features/recruitment/pages/MrfRequestPage';
-import { CandidateReportPage } from './features/recruitment/pages/CandidateReportPage';
-import { JobReferencePage } from './features/recruitment/pages/JobReferencePage';
-import { PublicOfferPage } from './features/recruitment/pages/PublicOfferPage';
-import { TakeAssessmentPage } from './features/recruitment/pages/TakeAssessmentPage';
-import { ResumeBankPage } from './features/recruitment/pages/ResumeBankPage';
-import { CareerPortalCustomizationPage } from './features/recruitment/pages/CareerPortalCustomizationPage';
-import { ApplicantTrackerPage } from './features/recruitment/pages/ApplicantTrackerPage';
-import { InterviewerRatingPage } from './features/recruitment/pages/InterviewerRatingPage';
-import { JobManagement } from './features/recruitment/pages/JobManagement';
-import { CandidateManagement } from './features/recruitment/pages/CandidateManagement';
-import { AssessmentManagementPage } from './features/recruitment/pages/AssessmentManagementPage';
-import { OfferManagementPage } from './features/recruitment/pages/OfferManagementPage';
-import { InterviewCalendarPage } from './features/recruitment/pages/InterviewCalendarPage';
-import { ReferralManagementPage } from './features/recruitment/pages/ReferralManagementPage';
-import { CareersPortalPage } from './features/recruitment/pages/CareersPortalPage';
-
-
-// Asset Management Pages
-import { AssetDashboard } from './features/asset/pages/AssetDashboard';
-import { AssetList } from './features/asset/pages/AssetList';
-import { AssetDetails } from './features/asset/pages/AssetDetails';
-import { AssignAsset } from './features/asset/pages/AssignAsset';
-import { TransferAsset } from './features/asset/pages/TransferAsset';
-import { ReturnAsset } from './features/asset/pages/ReturnAsset';
-import { Maintenance } from './features/asset/pages/Maintenance';
-import { Licenses } from './features/asset/pages/Licenses';
-import { Reports } from './features/asset/pages/Reports';
-import { Analytics } from './features/asset/pages/Analytics';
-import { MyAssetsPage } from './features/asset/pages/MyAssetsPage';
-
-// Analytics & Reports Pages
-import { AnalyticsDashboard } from './features/analytics/pages/AnalyticsDashboard';
-import { AttendanceReportsPage } from './features/analytics/pages/AttendanceReportsPage';
-import { TimelogReportPage } from './features/analytics/pages/TimelogReportPage';
-import { CeoAttendanceReportPage } from './features/analytics/pages/CeoAttendanceReportPage';
-import { ReportEnginePage } from './features/analytics/pages/ReportEnginePage';
-import CeoFacePunchPage from './features/attendance/pages/CeoFacePunchPage';
-
-// Performance Pages
-import { PerformanceDashboard } from './features/performance/pages/PerformanceDashboard';
-import { GoalManagementPage } from './features/performance/pages/GoalManagementPage';
-import { OKRManagementPage } from './features/performance/pages/OKRManagementPage';
-import { ReviewCyclesPage } from './features/performance/pages/ReviewCyclesPage';
-import { PerformanceReviewPage } from './features/performance/pages/PerformanceReviewPage';
-import { AppraisalDashboardPage } from './features/performance/pages/AppraisalDashboardPage';
-import { CompetencyDashboardPage } from './features/performance/pages/CompetencyDashboardPage';
-import { PIPDashboardPage } from './features/performance/pages/PIPDashboardPage';
-import { SuccessionPlanningPage } from './features/performance/pages/SuccessionPlanningPage';
-import { RecognitionDashboardPage } from './features/performance/pages/RecognitionDashboardPage';
-import { PerformanceAnalyticsPage } from './features/performance/pages/PerformanceAnalyticsPage';
-
-// Workflow Pages
-import { WorkflowListPage } from './features/workflow/pages/WorkflowListPage';
-import { WorkflowBuilderPage } from './features/workflow/pages/WorkflowBuilderPage';
-// import { ApprovalInboxPage } from './features/workflow/pages/ApprovalInboxPage';
-
-// Notifications Pages
-import { NotificationCenterPage } from './features/notifications/pages/NotificationCenterPage';
-import { NotificationPreferencesPage } from './features/notifications/pages/NotificationPreferencesPage';
-
-// Settings Pages
 import { SettingsLayout } from './features/settings/pages/SettingsLayout';
-import { GeneralSettingsPage } from './features/settings/pages/GeneralSettingsPage';
-import { CompanyProfilePage } from './features/settings/pages/CompanyProfilePage';
-import { BranchesPage } from './features/settings/pages/BranchesPage';
-import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
-import { DesignationsPage } from './features/settings/pages/DesignationsPage';
-import { LocationsPage } from './features/settings/pages/LocationsPage';
-import { BrandingPage } from './features/settings/pages/BrandingPage';
-import { ModuleManagementPage } from './features/modules/modules';
-import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
-import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
-import { OrgLeaveSettings } from './features/settings/pages/OrgLeaveSettings';
-import { AttendanceModulePage } from './features/settings/pages/AttendanceModulePage';
-import { MastersHubPage } from './features/settings/pages/MastersHubPage';
-// Employee Lifecycle Pages
-import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
-import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
-import { OffboardingPage } from './features/employee-lifecycle/pages/OffboardingPage';
-
-// Common Pages
-import { NotFoundPage } from './features/common/pages/NotFoundPage';
-import { UnauthorizedPage } from './features/common/pages/UnauthorizedPage';
+import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
 import { useAuthStore } from './features/auth/store/authStore';
 
-// Role-specific portal pages
-import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
-import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
-import { HRDashboardPage } from './features/HR/Dashboard/HRDashboardPage';
-import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardPage';
-import { MyTeamPage } from './features/manager/pages/MyTeamPage';
-import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
-import { TeamMembersPage } from './features/team-lead/pages/TeamMembersPage';
-import { TeamLeadProfilePage } from './features/team-lead/pages/TeamLeadProfilePage';
+// ── Lazy Loaded Page Components ──────────────────────────────────────────
+const LoginPage = lazy(() => import('./features/auth/pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const DashboardPage = lazy(() => import('./features/dashboard/pages/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const ApprovalsDashboardPage = lazy(() => import('./features/leaves/pages/ApprovalsDashboardPage').then(m => ({ default: m.ApprovalsDashboardPage })));
+const EmployeeListPage = lazy(() => import('./features/employee/pages/EmployeeListPage').then(m => ({ default: m.EmployeeListPage })));
+const EmployeeProfilePage = lazy(() => import('./features/employee/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
+const EmployeeEditPage = lazy(() => import('./features/employee/pages/EmployeeEditPage').then(m => ({ default: m.EmployeeEditPage })));
+const OnboardingDashboardPage = lazy(() => import('./features/employee/pages/OnboardingDashboardPage').then(m => ({ default: m.OnboardingDashboardPage })));
+const EmployeeDashboardPage = lazy(() => import('./features/employee/Dashboard/EmployeeDashboardPage').then(m => ({ default: m.EmployeeDashboardPage })));
+const OrgStructurePage = lazy(() => import('./features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
+const EmployeeLifecyclePage = lazy(() => import('./features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
+const MyLifecyclePage = lazy(() => import('./features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
+const AttendanceDashboard = lazy(() => import('./features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
+const AttendancePoliciesPage = lazy(() => import('./features/attendance/pages/AttendancePoliciesPage').then(m => ({ default: m.AttendancePoliciesPage })));
+const LocationManagementPage = lazy(() => import('./features/attendance/pages/LocationManagementPage').then(m => ({ default: m.LocationManagementPage })));
+const HRAttendanceLocationPage = lazy(() => import('./features/HR/Attendance').then(m => ({ default: m.HRAttendanceLocationPage })));
+const ShiftManagementPage = lazy(() => import('./features/attendance/pages/ShiftManagementPage').then(m => ({ default: m.ShiftManagementPage })));
+const BreakLogsPage = lazy(() => import('./features/attendance/pages/BreakLogsPage').then(m => ({ default: m.BreakLogsPage })));
+const ManagerHRRegularizationApprovals = lazy(() => import('./features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
+const AdminRegularizationLogsPage = lazy(() => import('./features/attendance/pages/AdminRegularizationLogsPage'));
+const CeoFacePunchPage = lazy(() => import('./features/attendance/pages/CeoFacePunchPage'));
+const LiveTrackingDashboardPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
+const TrackingHistoryPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
+const MyLeavesPage = lazy(() => import('./features/leaves/pages/MyLeavesPage').then(m => ({ default: m.MyLeavesPage })));
+const ApplyLeavePage = lazy(() => import('./features/leaves/pages/ApplyLeavePage').then(m => ({ default: m.ApplyLeavePage })));
+const LeaveBalancePage = lazy(() => import('./features/leaves/pages/LeaveBalancePage').then(m => ({ default: m.LeaveBalancePage })));
+const LeaveEncashmentPage = lazy(() => import('./features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
+const ApprovalInboxPage = lazy(() => import('./features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
+const CustomReportBuilder = lazy(() => import('./features/leaves/pages/CustomReportBuilder').then(m => ({ default: m.CustomReportBuilder })));
+const BurnoutRiskDashboard = lazy(() => import('./features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
+const EmployeeRequestsPage = lazy(() => import('./features/HR/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
+const PayrollDashboard = lazy(() => import('./features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
+const PayslipViewer = lazy(() => import('./features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
+const SalaryStructureManagement = lazy(() => import('./features/payroll/pages/SalaryStructureManagement').then(m => ({ default: m.SalaryStructureManagement })));
+const PayrollSettingsPage = lazy(() => import('./features/payroll/pages/PayrollSettingsPage').then(m => ({ default: m.PayrollSettingsPage })));
+const TaxDeclaration = lazy(() => import('./features/payroll/pages/TaxDeclaration').then(m => ({ default: m.TaxDeclaration })));
+const PayrollProcessing = lazy(() => import('./features/payroll/pages/PayrollProcessing').then(m => ({ default: m.PayrollProcessing })));
+const SalaryRevisionManagement = lazy(() => import('./features/payroll/pages/SalaryRevisionManagement').then(m => ({ default: m.SalaryRevisionManagement })));
+const LoanManagement = lazy(() => import('./features/payroll/pages/LoanManagement').then(m => ({ default: m.LoanManagement })));
+const FullFinalSettlement = lazy(() => import('./features/payroll/pages/FullFinalSettlement').then(m => ({ default: m.FullFinalSettlement })));
+const GratuityPolicyPage = lazy(() => import('./features/payroll/pages/GratuityPolicyPage').then(m => ({ default: m.GratuityPolicyPage })));
+const PayrollReportsPage = lazy(() => import('./features/payroll/pages/PayrollReportsPage').then(m => ({ default: m.PayrollReportsPage })));
+const PayrollPoliciesPage = lazy(() => import('./features/payroll/pages/PayrollPoliciesPage').then(m => ({ default: m.PayrollPoliciesPage })));
+const MySettlementPage = lazy(() => import('./features/payroll/pages/MySettlementPage').then(m => ({ default: m.MySettlementPage })));
+const TeamSettlementsPage = lazy(() => import('./features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
+const AdminDashboard = lazy(() => import('./features/payroll/pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const MassSalaryStructureUploadPage = lazy(() => import('./features/payroll/pages/MassSalaryStructureUploadPage').then(m => ({ default: m.MassSalaryStructureUploadPage })));
+const EmployeeLoanRequest = lazy(() => import('./features/payroll/components/EmployeeLoanRequest').then(m => ({ default: m.EmployeeLoanRequest })));
+const AdminExpenseClaims = lazy(() => import('./features/payroll/pages/AdminExpenseClaims').then(m => ({ default: m.AdminExpenseClaims })));
+const AdminTravelRequests = lazy(() => import('./features/payroll/pages/AdminTravelRequests').then(m => ({ default: m.AdminTravelRequests })));
+const EmployeePayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.EmployeePayrollPortal })));
+const TeamLeadPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.TeamLeadPayrollPortal })));
+const ManagerPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.ManagerPayrollPortal })));
+const HRPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.HRPayrollPortal })));
+const AdminPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.AdminPayrollPortal })));
+const RecruitmentDashboard = lazy(() => import('./features/recruitment/pages/RecruitmentDashboard').then(m => ({ default: m.RecruitmentDashboard })));
+const MrfRequestPage = lazy(() => import('./features/recruitment/pages/MrfRequestPage').then(m => ({ default: m.MrfRequestPage })));
+const CandidateReportPage = lazy(() => import('./features/recruitment/pages/CandidateReportPage').then(m => ({ default: m.CandidateReportPage })));
+const JobReferencePage = lazy(() => import('./features/recruitment/pages/JobReferencePage').then(m => ({ default: m.JobReferencePage })));
+const PublicOfferPage = lazy(() => import('./features/recruitment/pages/PublicOfferPage').then(m => ({ default: m.PublicOfferPage })));
+const TakeAssessmentPage = lazy(() => import('./features/recruitment/pages/TakeAssessmentPage').then(m => ({ default: m.TakeAssessmentPage })));
+const ResumeBankPage = lazy(() => import('./features/recruitment/pages/ResumeBankPage').then(m => ({ default: m.ResumeBankPage })));
+const CareerPortalCustomizationPage = lazy(() => import('./features/recruitment/pages/CareerPortalCustomizationPage').then(m => ({ default: m.CareerPortalCustomizationPage })));
+const ApplicantTrackerPage = lazy(() => import('./features/recruitment/pages/ApplicantTrackerPage').then(m => ({ default: m.ApplicantTrackerPage })));
+const InterviewerRatingPage = lazy(() => import('./features/recruitment/pages/InterviewerRatingPage').then(m => ({ default: m.InterviewerRatingPage })));
+const JobManagement = lazy(() => import('./features/recruitment/pages/JobManagement').then(m => ({ default: m.JobManagement })));
+const CandidateManagement = lazy(() => import('./features/recruitment/pages/CandidateManagement').then(m => ({ default: m.CandidateManagement })));
+const AssessmentManagementPage = lazy(() => import('./features/recruitment/pages/AssessmentManagementPage').then(m => ({ default: m.AssessmentManagementPage })));
+const OfferManagementPage = lazy(() => import('./features/recruitment/pages/OfferManagementPage').then(m => ({ default: m.OfferManagementPage })));
+const InterviewCalendarPage = lazy(() => import('./features/recruitment/pages/InterviewCalendarPage').then(m => ({ default: m.InterviewCalendarPage })));
+const ReferralManagementPage = lazy(() => import('./features/recruitment/pages/ReferralManagementPage').then(m => ({ default: m.ReferralManagementPage })));
+const CareersPortalPage = lazy(() => import('./features/recruitment/pages/CareersPortalPage').then(m => ({ default: m.CareersPortalPage })));
+const AssetDashboard = lazy(() => import('./features/asset/pages/AssetDashboard').then(m => ({ default: m.AssetDashboard })));
+const AssetList = lazy(() => import('./features/asset/pages/AssetList').then(m => ({ default: m.AssetList })));
+const AssetDetails = lazy(() => import('./features/asset/pages/AssetDetails').then(m => ({ default: m.AssetDetails })));
+const AssignAsset = lazy(() => import('./features/asset/pages/AssignAsset').then(m => ({ default: m.AssignAsset })));
+const TransferAsset = lazy(() => import('./features/asset/pages/TransferAsset').then(m => ({ default: m.TransferAsset })));
+const ReturnAsset = lazy(() => import('./features/asset/pages/ReturnAsset').then(m => ({ default: m.ReturnAsset })));
+const Maintenance = lazy(() => import('./features/asset/pages/Maintenance').then(m => ({ default: m.Maintenance })));
+const Licenses = lazy(() => import('./features/asset/pages/Licenses').then(m => ({ default: m.Licenses })));
+const Reports = lazy(() => import('./features/asset/pages/Reports').then(m => ({ default: m.Reports })));
+const Analytics = lazy(() => import('./features/asset/pages/Analytics').then(m => ({ default: m.Analytics })));
+const MyAssetsPage = lazy(() => import('./features/asset/pages/MyAssetsPage').then(m => ({ default: m.MyAssetsPage })));
+const AnalyticsDashboard = lazy(() => import('./features/analytics/pages/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
+const AttendanceReportsPage = lazy(() => import('./features/analytics/pages/AttendanceReportsPage').then(m => ({ default: m.AttendanceReportsPage })));
+const TimelogReportPage = lazy(() => import('./features/analytics/pages/TimelogReportPage').then(m => ({ default: m.TimelogReportPage })));
+const CeoAttendanceReportPage = lazy(() => import('./features/analytics/pages/CeoAttendanceReportPage').then(m => ({ default: m.CeoAttendanceReportPage })));
+const ReportEnginePage = lazy(() => import('./features/analytics/pages/ReportEnginePage').then(m => ({ default: m.ReportEnginePage })));
+const PerformanceDashboard = lazy(() => import('./features/performance/pages/PerformanceDashboard').then(m => ({ default: m.PerformanceDashboard })));
+const GoalManagementPage = lazy(() => import('./features/performance/pages/GoalManagementPage').then(m => ({ default: m.GoalManagementPage })));
+const OKRManagementPage = lazy(() => import('./features/performance/pages/OKRManagementPage').then(m => ({ default: m.OKRManagementPage })));
+const ReviewCyclesPage = lazy(() => import('./features/performance/pages/ReviewCyclesPage').then(m => ({ default: m.ReviewCyclesPage })));
+const PerformanceReviewPage = lazy(() => import('./features/performance/pages/PerformanceReviewPage').then(m => ({ default: m.PerformanceReviewPage })));
+const AppraisalDashboardPage = lazy(() => import('./features/performance/pages/AppraisalDashboardPage').then(m => ({ default: m.AppraisalDashboardPage })));
+const CompetencyDashboardPage = lazy(() => import('./features/performance/pages/CompetencyDashboardPage').then(m => ({ default: m.CompetencyDashboardPage })));
+const PIPDashboardPage = lazy(() => import('./features/performance/pages/PIPDashboardPage').then(m => ({ default: m.PIPDashboardPage })));
+const SuccessionPlanningPage = lazy(() => import('./features/performance/pages/SuccessionPlanningPage').then(m => ({ default: m.SuccessionPlanningPage })));
+const RecognitionDashboardPage = lazy(() => import('./features/performance/pages/RecognitionDashboardPage').then(m => ({ default: m.RecognitionDashboardPage })));
+const PerformanceAnalyticsPage = lazy(() => import('./features/performance/pages/PerformanceAnalyticsPage').then(m => ({ default: m.PerformanceAnalyticsPage })));
+const WorkflowListPage = lazy(() => import('./features/workflow/pages/WorkflowListPage').then(m => ({ default: m.WorkflowListPage })));
+const WorkflowBuilderPage = lazy(() => import('./features/workflow/pages/WorkflowBuilderPage').then(m => ({ default: m.WorkflowBuilderPage })));
+const WorkflowDetailPage = lazy(() => import('./features/workflow/pages/WorkflowDetailPage').then(m => ({ default: m.WorkflowDetailPage })));
+const WorkflowSettingsPage = lazy(() => import('./features/workflow/pages/WorkflowSettingsPage').then(m => ({ default: m.WorkflowSettingsPage })));
+const NotificationCenterPage = lazy(() => import('./features/notifications/pages/NotificationCenterPage').then(m => ({ default: m.NotificationCenterPage })));
+const NotificationPreferencesPage = lazy(() => import('./features/notifications/pages/NotificationPreferencesPage').then(m => ({ default: m.NotificationPreferencesPage })));
+const GeneralSettingsPage = lazy(() => import('./features/settings/pages/GeneralSettingsPage').then(m => ({ default: m.GeneralSettingsPage })));
+const CompanyProfilePage = lazy(() => import('./features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
+const BranchesPage = lazy(() => import('./features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
+const DepartmentsPage = lazy(() => import('./features/settings/pages/DepartmentsPage').then(m => ({ default: m.DepartmentsPage })));
+const DesignationsPage = lazy(() => import('./features/settings/pages/DesignationsPage').then(m => ({ default: m.DesignationsPage })));
+const LocationsPage = lazy(() => import('./features/settings/pages/LocationsPage').then(m => ({ default: m.LocationsPage })));
+const BrandingPage = lazy(() => import('./features/settings/pages/BrandingPage').then(m => ({ default: m.BrandingPage })));
+const ModuleManagementPage = lazy(() => import('./features/modules/modules').then(m => ({ default: m.ModuleManagementPage })));
+const HolidayCalendarsPage = lazy(() => import('./features/settings/pages/HolidayCalendarsPage').then(m => ({ default: m.HolidayCalendarsPage })));
+const LeavePoliciesPage = lazy(() => import('./features/settings/pages/LeavePoliciesPage').then(m => ({ default: m.LeavePoliciesPage })));
+const OrgLeaveSettings = lazy(() => import('./features/settings/pages/OrgLeaveSettings').then(m => ({ default: m.OrgLeaveSettings })));
+const AttendanceModulePage = lazy(() => import('./features/settings/pages/AttendanceModulePage').then(m => ({ default: m.AttendanceModulePage })));
+const MastersHubPage = lazy(() => import('./features/settings/pages/MastersHubPage').then(m => ({ default: m.MastersHubPage })));
+const AdminConfigurationPage = lazy(() => import('./features/settings/pages/AdminConfigurationPage').then(m => ({ default: m.AdminConfigurationPage })));
+const OnboardingPage = lazy(() => import('./features/employee-lifecycle/pages/OnboardingPage').then(m => ({ default: m.OnboardingPage })));
+const TransfersPage = lazy(() => import('./features/employee-lifecycle/pages/TransfersPage').then(m => ({ default: m.TransfersPage })));
+const OffboardingPage = lazy(() => import('./features/employee-lifecycle/pages/OffboardingPage').then(m => ({ default: m.OffboardingPage })));
+const NotFoundPage = lazy(() => import('./features/common/pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
+const UnauthorizedPage = lazy(() => import('./features/common/pages/UnauthorizedPage').then(m => ({ default: m.UnauthorizedPage })));
+const TeamDashboard = lazy(() => import('./features/team-lead/pages/TeamDashboard').then(m => ({ default: m.TeamDashboard })));
+const DepartmentDashboard = lazy(() => import('./features/manager/pages/DepartmentDashboard').then(m => ({ default: m.DepartmentDashboard })));
+const HRDashboardPage = lazy(() => import('./features/HR/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
+const ManagerDashboardPage = lazy(() => import('./features/manager/pages/ManagerDashboardPage').then(m => ({ default: m.ManagerDashboardPage })));
+const MyTeamPage = lazy(() => import('./features/manager/pages/MyTeamPage').then(m => ({ default: m.MyTeamPage })));
+const TeamLeadDashboardPage = lazy(() => import('./features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
+const TeamMembersPage = lazy(() => import('./features/team-lead/pages/TeamMembersPage').then(m => ({ default: m.TeamMembersPage })));
+const TeamLeadProfilePage = lazy(() => import('./features/team-lead/pages/TeamLeadProfilePage').then(m => ({ default: m.TeamLeadProfilePage })));
+const SuperAdminDashboardPage = lazy(() => import('./features/superadmin/Dashboard/SuperAdminDashboardPage').then(m => ({ default: m.SuperAdminDashboardPage })));
+const SuperAdminOrganizationPage = lazy(() => import('./features/superadmin/Organization/SuperAdminOrganizationPage').then(m => ({ default: m.SuperAdminOrganizationPage })));
+const SuperAdminSubscriptionPage = lazy(() => import('./features/superadmin/Subcription/SuperAdminSubscriptionPage').then(m => ({ default: m.SuperAdminSubscriptionPage })));
+const SuperAdminHelpDeskPage = lazy(() => import('./features/superadmin/HelpDesk/SuperAdminHelpDeskPage').then(m => ({ default: m.SuperAdminHelpDeskPage })));
+const SuperAdminProfilePage = lazy(() => import('./features/superadmin/Profile/SuperAdminProfilePage').then(m => ({ default: m.SuperAdminProfilePage })));
+const ProfilePage = lazy(() => import('./features/employee/portal-pages/ProfilePage'));
+const AttendancePage = lazy(() => import('./features/employee/portal-pages/AttendancePage'));
+const LeavePage = lazy(() => import('./features/employee/portal-pages/LeavePage'));
+const RegularizationPage = lazy(() => import('./features/employee/portal-pages/RegularizationPage'));
+const FaceAttendancePage = lazy(() => import('./features/employee/portal-pages/FaceAttendancePage'));
+const ShiftRosterPage = lazy(() => import('./features/employee/portal-pages/ShiftRosterPage'));
+const HolidayCalendarPage = lazy(() => import('./features/employee/portal-pages/HolidayCalendarPage'));
+const TimesheetPage = lazy(() => import('./features/employee/portal-pages/TimesheetPage'));
+const PayrollPage = lazy(() => import('./features/employee/portal-pages/PayrollPage'));
+const TaxDeclarationPage = lazy(() => import('./features/employee/portal-pages/TaxDeclarationPage'));
+const ExpensePage = lazy(() => import('./features/employee/portal-pages/ExpensePage'));
+const TravelPage = lazy(() => import('./features/employee/portal-pages/TravelPage'));
+const AssetPage = lazy(() => import('./features/employee/portal-pages/AssetPage'));
+const DocumentsPage = lazy(() => import('./features/employee/portal-pages/DocumentsPage'));
+const IDCardPage = lazy(() => import('./features/employee/portal-pages/IDCardPage'));
+const OrgChartPage = lazy(() => import('./features/employee/portal-pages/OrgChartPage'));
+const TeamDirectoryPage = lazy(() => import('./features/employee/portal-pages/TeamDirectoryPage'));
+const PerformancePage = lazy(() => import('./features/employee/portal-pages/PerformancePage'));
+const GoalsPage = lazy(() => import('./features/employee/portal-pages/GoalsPage'));
+const FeedbackPage = lazy(() => import('./features/employee/portal-pages/FeedbackPage'));
+const LearningPage = lazy(() => import('./features/employee/portal-pages/LearningPage'));
+const TrainingPage = lazy(() => import('./features/employee/portal-pages/TrainingPage'));
+const PoliciesPage = lazy(() => import('./features/employee/portal-pages/PoliciesPage'));
+const AnnouncementsPage = lazy(() => import('./features/employee/portal-pages/AnnouncementsPage'));
+const SurveysPage = lazy(() => import('./features/employee/portal-pages/SurveysPage'));
+const HelpdeskPage = lazy(() => import('./features/employee/portal-pages/HelpdeskPage'));
+const ReferralPage = lazy(() => import('./features/employee/portal-pages/ReferralPage'));
+const JobOpeningsPage = lazy(() => import('./features/employee/portal-pages/JobOpeningsPage'));
+const HealthWellnessPage = lazy(() => import('./features/employee/portal-pages/HealthWellnessPage'));
+const LoanRequestPage = lazy(() => import('./features/employee/portal-pages/LoanRequestPage'));
+const AIAssistantPage = lazy(() => import('./features/employee/portal-pages/AIAssistantPage'));
+const NotificationsPage = lazy(() => import('./features/employee/portal-pages/NotificationsPage'));
+const ApprovalsPage = lazy(() => import('./features/employee/portal-pages/ApprovalsPage'));
+const SettingsSecurityPage = lazy(() => import('./features/employee/portal-pages/SettingsSecurityPage'));
+const InternDashboardPage = lazy(() => import('./features/intern/pages/InternDashboardPage').then(m => ({ default: m.InternDashboardPage })));
+const ConsultantDashboardPage = lazy(() => import('./features/consultant/pages/ConsultantDashboardPage').then(m => ({ default: m.ConsultantDashboardPage })));
 
-// SuperAdmin Pages & Layout
-import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
-import { SuperAdminDashboardPage } from './features/superadmin/Dashboard/SuperAdminDashboardPage';
-import { SuperAdminOrganizationPage } from './features/superadmin/Organization/SuperAdminOrganizationPage';
-import { SuperAdminSubscriptionPage } from './features/superadmin/Subcription/SuperAdminSubscriptionPage';
-import { SuperAdminHelpDeskPage } from './features/superadmin/HelpDesk/SuperAdminHelpDeskPage';
-import { SuperAdminProfilePage } from './features/superadmin/Profile/SuperAdminProfilePage';
-
-// Employee Portal Pages
-import ProfilePage from './features/employee/portal-pages/ProfilePage';
-import AttendancePage from './features/employee/portal-pages/AttendancePage';
-import LeavePage from './features/employee/portal-pages/LeavePage';
-import RegularizationPage from './features/employee/portal-pages/RegularizationPage';
-import FaceAttendancePage from './features/employee/portal-pages/FaceAttendancePage';
-import ShiftRosterPage from './features/employee/portal-pages/ShiftRosterPage';
-import HolidayCalendarPage from './features/employee/portal-pages/HolidayCalendarPage';
-import TimesheetPage from './features/employee/portal-pages/TimesheetPage';
-import PayrollPage from './features/employee/portal-pages/PayrollPage';
-import TaxDeclarationPage from './features/employee/portal-pages/TaxDeclarationPage';
-import ExpensePage from './features/employee/portal-pages/ExpensePage';
-import TravelPage from './features/employee/portal-pages/TravelPage';
-import AssetPage from './features/employee/portal-pages/AssetPage';
-import DocumentsPage from './features/employee/portal-pages/DocumentsPage';
-import IDCardPage from './features/employee/portal-pages/IDCardPage';
-import OrgChartPage from './features/employee/portal-pages/OrgChartPage';
-import TeamDirectoryPage from './features/employee/portal-pages/TeamDirectoryPage';
-import PerformancePage from './features/employee/portal-pages/PerformancePage';
-import GoalsPage from './features/employee/portal-pages/GoalsPage';
-import FeedbackPage from './features/employee/portal-pages/FeedbackPage';
-import LearningPage from './features/employee/portal-pages/LearningPage';
-import TrainingPage from './features/employee/portal-pages/TrainingPage';
-import PoliciesPage from './features/employee/portal-pages/PoliciesPage';
-import AnnouncementsPage from './features/employee/portal-pages/AnnouncementsPage';
-import SurveysPage from './features/employee/portal-pages/SurveysPage';
-import HelpdeskPage from './features/employee/portal-pages/HelpdeskPage';
-import ReferralPage from './features/employee/portal-pages/ReferralPage';
-import JobOpeningsPage from './features/employee/portal-pages/JobOpeningsPage';
-import HealthWellnessPage from './features/employee/portal-pages/HealthWellnessPage';
-import LoanRequestPage from './features/employee/portal-pages/LoanRequestPage';
-import AIAssistantPage from './features/employee/portal-pages/AIAssistantPage';
-import NotificationsPage from './features/employee/portal-pages/NotificationsPage';
-import ApprovalsPage from './features/employee/portal-pages/ApprovalsPage';
-import SettingsSecurityPage from './features/employee/portal-pages/SettingsSecurityPage';
-
-// Intern & Consultant Portal Pages
-import { InternDashboardPage } from './features/intern/pages/InternDashboardPage';
-import { ConsultantDashboardPage } from './features/consultant/pages/ConsultantDashboardPage';
+// ── Page Loading Fallback Spinner ──────────────────────────────────────────
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh] w-full p-8">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-xs font-medium text-slate-400">Loading module...</p>
+      </div>
+    </div>
+  );
+}
 
 function RootRedirect() {
   const { isAuthenticated, user } = useAuthStore();
@@ -263,7 +242,8 @@ function RootRedirect() {
 
 export function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
@@ -375,6 +355,18 @@ export function AppRoutes() {
         <Route path="/hr-operations/holidays" element={<HolidayCalendarsPage />} />
         <Route path="/hr/workflow/builder" element={<WorkflowBuilderPage />} />
         <Route path="/hr/workflow/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/hr/workflows" element={<WorkflowSettingsPage />} />
+        <Route path="/hr/workflows/list" element={<WorkflowListPage />} />
+        <Route path="/hr/workflows/create" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflows/new" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflows/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflows/:id" element={<WorkflowDetailPage />} />
+        <Route path="/hr/workflows/:id/edit" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflows/:id/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflow/create" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflow/new" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflow/:id/edit" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/settings/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/hr/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="company-profile" replace />} />
           <Route path="company-profile" element={<CompanyProfilePage />} />
@@ -385,6 +377,7 @@ export function AppRoutes() {
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
           <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
+          <Route path="workflows" element={<WorkflowSettingsPage />} />
           <Route path="modules" element={<ModuleManagementPage />} />
           <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>
@@ -601,7 +594,17 @@ export function AppRoutes() {
         <Route path="/performance/analytics" element={<PerformanceAnalyticsPage />} />
 
         {/* Workflow */}
-        <Route path="/workflow" element={<WorkflowListPage />} />
+        <Route path="/workflow" element={<WorkflowSettingsPage />} />
+        <Route path="/workflows" element={<WorkflowSettingsPage />} />
+        <Route path="/workflows/list" element={<WorkflowListPage />} />
+        <Route path="/workflows/create" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/new" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+        <Route path="/workflows/:id/edit" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/workflow/create" element={<WorkflowBuilderPage />} />
+        <Route path="/workflow/new" element={<WorkflowBuilderPage />} />
         <Route path="/workflow/builder" element={<WorkflowBuilderPage />} />
         <Route path="/workflow/approvals" element={<ApprovalInboxPage />} />
 
@@ -609,9 +612,13 @@ export function AppRoutes() {
         <Route path="/notifications" element={<NotificationCenterPage />} />
         <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
 
-        {/* HR Operations — Requests (stays within CEO/HR admin shell) */}
+        {/* HR Operations — Requests & Configuration (stays within CEO/HR admin shell) */}
         <Route path="/hr-operations/requests" element={<EmployeeRequestsPage />} />
         <Route path="/requests" element={<EmployeeRequestsPage />} />
+        <Route path="/configuration" element={<AdminConfigurationPage />} />
+        <Route path="/hr-operations/configuration" element={<AdminConfigurationPage />} />
+        <Route path="/settings/configuration" element={<AdminConfigurationPage />} />
+        <Route path="/admin/configuration" element={<AdminConfigurationPage />} />
 
         {/* Reports & Analytics */}
         <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
@@ -636,6 +643,7 @@ export function AppRoutes() {
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
         <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
+        <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
           path="/masters"
@@ -656,6 +664,7 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="workflows" element={<WorkflowSettingsPage />} />
           <Route path="modules" element={<ModuleManagementPage />} />
           <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>
@@ -792,6 +801,7 @@ export function AppRoutes() {
 
       {/* 404 */}
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }

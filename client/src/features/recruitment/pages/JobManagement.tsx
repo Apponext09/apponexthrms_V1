@@ -262,7 +262,7 @@ export const JobManagement: React.FC = () => {
       <div className="relative">
         
         {/* Search Input */}
-        {activeTab !== 'ai_suggestions' && (
+        {(activeTab as string) !== 'ai_suggestions' && (
           <div className="absolute right-4 top-2 z-20 w-64">
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
