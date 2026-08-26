@@ -1048,6 +1048,7 @@ export function LeavePoliciesPage() {
       restrictLeaveApplicationTillExpiry: false,
       showFromToDateForRequest: false,
       addLeaveApplicationAfterApproval: false,
+      onlyWhen: undefined as any,
     },
 
     // Application Settings
@@ -1081,6 +1082,7 @@ export function LeavePoliciesPage() {
       applyRestrictionForWeekoffHoliday: false,
       cancelFutureAppliedLeaveOnResignation: false,
       customHook: '',
+      onlyWhen: undefined as any,
     },
 
     // Payroll Condition Settings
@@ -1095,18 +1097,24 @@ export function LeavePoliciesPage() {
 
     // Employment Target scopes (Allocation)
     employment_allocation: {
-      locations: [] as number[],
-      departments: [] as number[],
-      grades: [] as string[],
+      companies: [] as (number | string)[],
+      locations: [] as (number | string)[],
+      departments: [] as (number | string)[],
+      subDepartments: [] as (number | string)[],
+      designations: [] as (number | string)[],
+      grades: [] as (number | string)[],
       employeeTypes: [] as string[],
       employeeStatuses: [] as string[],
     },
 
     // Employment Target scopes (Application)
     employment_application: {
-      locations: [] as number[],
-      departments: [] as number[],
-      grades: [] as string[],
+      companies: [] as (number | string)[],
+      locations: [] as (number | string)[],
+      departments: [] as (number | string)[],
+      subDepartments: [] as (number | string)[],
+      designations: [] as (number | string)[],
+      grades: [] as (number | string)[],
       employeeTypes: [] as string[],
       employeeStatuses: [] as string[],
     },
@@ -1117,7 +1125,8 @@ export function LeavePoliciesPage() {
       disbursement: {
         periodicity: 'Select',
         disbursementAfter: ''
-      }
+      },
+      onlyWhen: undefined as any,
     }
   });
 
@@ -1605,7 +1614,8 @@ export function LeavePoliciesPage() {
         encashment: {
           ...enc,
           rules: enc.rules || [],
-          disbursement: enc.disbursement || { periodicity: 'Select', disbursementAfter: '' }
+          disbursement: enc.disbursement || { periodicity: 'Select', disbursementAfter: '' },
+          onlyWhen: enc.onlyWhen || enc.only_when || undefined,
         }
       });
     } else {
@@ -1675,6 +1685,7 @@ export function LeavePoliciesPage() {
           restrictLeaveApplicationTillExpiry: false,
           showFromToDateForRequest: false,
           addLeaveApplicationAfterApproval: false,
+          onlyWhen: undefined as any,
         },
         application: {
           category: 'unplanned',
@@ -1706,6 +1717,7 @@ export function LeavePoliciesPage() {
           applyRestrictionForWeekoffHoliday: false,
           cancelFutureAppliedLeaveOnResignation: false,
           customHook: '',
+          onlyWhen: undefined as any,
         },
         payroll: {
           conditionOn: 'Choose',
@@ -1740,7 +1752,8 @@ export function LeavePoliciesPage() {
           disbursement: {
             periodicity: 'Select',
             disbursementAfter: ''
-          }
+          },
+          onlyWhen: undefined as any,
         }
       });
     }
@@ -2260,7 +2273,11 @@ export function LeavePoliciesPage() {
   }, [activeTab]);
 
   // Toggle dynamic employment selection
-  const handleToggleEmploymentTarget = (scope: 'allocation' | 'application', category: 'locations' | 'departments' | 'grades' | 'employeeTypes' | 'employeeStatuses', item: any) => {
+  const handleToggleEmploymentTarget = (
+    scope: 'allocation' | 'application',
+    category: 'companies' | 'locations' | 'departments' | 'subDepartments' | 'designations' | 'grades' | 'employeeTypes' | 'employeeStatuses',
+    item: any
+  ) => {
     const key = scope === 'allocation' ? 'employment_allocation' : 'employment_application';
     const currentList = (formData as any)[key][category] as any[];
 
