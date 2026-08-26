@@ -1,4 +1,6 @@
 # Dependencies
+myenv/
+venv/
 node_modules/
 package-lock.json
 yarn.lock
@@ -81,12 +83,22 @@ coverage/
 .turbo/
 __pycache__/
 *.py[cod]
+# Virtual Environments
+venv/
 .venv/
-m y e n v /  
- s c r a t c h /  
- * . t x t  
- * . j s  
- t e m p _ * . t s x  
+**/venv/
+**/.venv/
+biometric/venv/
+
+# Server Uploads & Candidate Resumes
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+
+# Diagnostics & Scratch Scripts
+server/test_*.ts
+server/test_*.js
+
+# Media & Temp
 *.mp4
 *.webm
 

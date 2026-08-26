@@ -53,6 +53,7 @@ import { RolesResponsibilityMasterForm } from '../components/RolesResponsibility
 import { KraMasterForm } from '../components/KraMasterForm';
 import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
 import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
+import { OfferTemplateMasterForm } from '../components/OfferTemplateMasterForm';
 import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
 import { EventMasterForm } from '../components/EventMasterForm';
 import { HolidayMasterForm } from '../components/HolidayMasterForm';
@@ -82,6 +83,7 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'employee-status', name: 'Employee Status', icon: Users, category: 'Core & Structure', description: 'Active, On-Probation, Suspended, and Exit employee states.', defaultItemCount: 5 },
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
   { id: 'events', name: 'Events', icon: Calendar, category: 'Events & Planning', description: 'Company events, town halls, anniversaries, and celebrations.', defaultItemCount: 9 },
+  { id: 'offer-templates', name: 'Offer Letter Master', icon: FileText, category: 'Templates & System', description: 'Create and customize company offer letter formats, candidate merge tags, and legal covenants.', defaultItemCount: 4 },
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
   { id: 'notification-merge-codes', name: 'Notification Merge Codes', icon: Code2, category: 'Templates & System', description: 'Store module and sub-module merge tags for notification templates.', defaultItemCount: 8 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
@@ -424,6 +426,8 @@ export function MastersHubPage() {
         <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'kra' ? (
         <KraMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'offer-templates' ? (
+        <OfferTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'notification-templates' || selectedMasterId === 'template') ? (
         <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (

@@ -43,6 +43,18 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
         });
       }
 
+      const hasAtsScore = await this.db.schema.hasColumn(this.tableName, 'ats_score');
+      if (!hasAtsScore) {
+        await this.db.schema.alterTable(this.tableName, (table) => {
+          table.integer('ats_score').nullable();
+          table.text('matched_skills').nullable();
+          table.text('missing_skills').nullable();
+          table.text('resume_text').nullable();
+          table.string('resume_file_url', 500).nullable();
+          table.timestamp('ats_scored_at').nullable();
+        });
+      }
+
       const hasCandidates = await this.db.schema.hasTable('candidates');
       if (hasCandidates) {
         const candidateCols = [
@@ -142,8 +154,8 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
 
     if (hasJobId) {
       query.leftJoin('jobs', 'resume_bank.job_id', 'jobs.id');
-      selectFields.push(this.db.raw("MAX(CASE WHEN jobs.job_title IS NOT NULL AND jobs.job_title != '' AND jobs.job_title != 'Job Position' THEN jobs.job_title WHEN resume_bank.position IS NOT NULL AND resume_bank.position != '' THEN resume_bank.position ELSE 'SOFTWARE DEVELOPER' END) as job_title"));
-      selectFields.push(this.db.raw('MAX(jobs.job_code) as job_code'));
+      selectFields.push(this.db.raw("MAX(CAST(CASE WHEN jobs.job_title IS NOT NULL AND jobs.job_title != '' AND jobs.job_title != 'Job Position' THEN jobs.job_title WHEN resume_bank.position IS NOT NULL AND resume_bank.position != '' THEN resume_bank.position ELSE 'SOFTWARE DEVELOPER' END AS CHAR)) as job_title"));
+      selectFields.push(this.db.raw("MAX(CAST(jobs.job_code AS CHAR)) as job_code"));
     }
 
     query.select(selectFields).groupBy('resume_bank.id');

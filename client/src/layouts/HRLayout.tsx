@@ -158,6 +158,7 @@ const HR_NAV = [
       { name: 'Employee Status', href: '/hr/masters?tab=employee-status', icon: Users },
       { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
       { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
+      { name: 'Offer Letter Master', href: '/hr/masters?tab=offer-templates', icon: FileText },
       { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
       { name: 'Notification Merge Codes', href: '/hr/masters?tab=notification-merge-codes', icon: Code2 },
       { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
@@ -348,7 +349,13 @@ function SidebarNavContent({
                 className="flex-1 min-w-0 leading-tight"
               >
                 <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
-                  {user?.firstName} {user?.lastName}
+                  {(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}
                 </p>
                 <p className={cn('text-[10px] font-medium truncate', C.icon)}>
                   {roleInfo.roleTitle}
@@ -518,7 +525,13 @@ export function HRLayout() {
                 </AvatarFallback>
               </Avatar>
               <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[12px] font-semibold text-foreground">{(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}</p>
                 <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
               </div>
             </button>
@@ -532,7 +545,7 @@ export function HRLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

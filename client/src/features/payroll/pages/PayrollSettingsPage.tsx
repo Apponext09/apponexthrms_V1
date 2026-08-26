@@ -285,33 +285,37 @@ export const PayrollSettingsPage: React.FC = () => {
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [selectedAuditGroup, setSelectedAuditGroup] = useState<any>(null);
 
-  // Fetch real database records on mount
+  // Fetch real database records — refetches whenever selected company changes
   useEffect(() => {
+    // Pass companyId so backend returns only records for the selected company.
+    const companyParams = selectedCompanyId ? { params: { companyId: selectedCompanyId } } : {};
+
     // 1. Fetch real Departments, Locations, Grades & Designations strictly from DB Settings Masters
     Promise.all([
-      apiClient.get('/settings/departments').catch(() => ({ data: [] })),
-      apiClient.get('/settings/locations').catch(() => ({ data: [] })),
-      apiClient.get('/settings/grades').catch(() => apiClient.get('/settings/pay-grades')).catch(() => ({ data: [] })),
-      apiClient.get('/settings/designations').catch(() => ({ data: [] })),
-      apiClient.get('/employees').catch(() => ({ data: [] }))
+      apiClient.get('/settings/departments', companyParams).catch(() => ({ data: [] })),
+      apiClient.get('/settings/locations', companyParams).catch(() => ({ data: [] })),
+      apiClient.get('/settings/grades', companyParams).catch(() => apiClient.get('/settings/pay-grades', companyParams)).catch(() => ({ data: [] })),
+      apiClient.get('/settings/designations', companyParams).catch(() => ({ data: [] })),
+      apiClient.get('/employees', companyParams).catch(() => ({ data: [] }))
     ]).then(([deptRes, locRes, gradeRes, desigRes, empRes]: any[]) => {
       const dbDepts = (deptRes.data?.data || deptRes.data || []).map((d: any) => d.name || d.department_name || d.title).filter(Boolean);
       const dbLocs = (locRes.data?.data || locRes.data || []).map((l: any) => l.name || l.location_name || l.city || l.branch).filter(Boolean);
       const dbGrades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.title).filter(Boolean);
       const dbDesigs = (desigRes.data?.data || desigRes.data || []).map((d: any) => d.name || d.designation_name || d.title).filter(Boolean);
-      
+
       const empList = empRes.data?.data || empRes.data || [];
       const empDepts = Array.isArray(empList) ? empList.map((e: any) => e.department || e.dept_name || e.department_name).filter(Boolean) : [];
       const empLocs = Array.isArray(empList) ? empList.map((e: any) => e.location || e.branch || e.city || e.location_name).filter(Boolean) : [];
       const empGrades = Array.isArray(empList) ? empList.map((e: any) => e.grade || e.grade_name || e.pay_grade_name).filter(Boolean) : [];
 
-      const finalDepts = [...new Set([...dbDepts, ...empDepts])];
-      const finalLocs = [...new Set([...dbLocs, ...empLocs])];
-      const finalGrades = [...new Set([...dbGrades, ...empGrades])];
+      // Merge settings masters + employee data; deduplicate
+      const finalDepts = [...new Set(['All Departments', ...dbDepts, ...empDepts])];
+      const finalLocs = [...new Set(['All Locations', ...dbLocs, ...empLocs])];
+      const finalGrades = [...new Set(['All Pay Grades', ...dbGrades, ...empGrades])];
 
-      if (finalDepts.length > 0) setAllDepartments(finalDepts);
-      if (finalLocs.length > 0) setAllLocations(finalLocs);
-      if (finalGrades.length > 0) setAllGrades(finalGrades);
+      setAllDepartments(finalDepts);
+      setAllLocations(finalLocs);
+      setAllGrades(finalGrades);
 
       if (Array.isArray(empList) && empList.length > 0) {
         setAllEmployees(empList.map((e: any) => ({
@@ -321,15 +325,14 @@ export const PayrollSettingsPage: React.FC = () => {
       }
     }).catch(() => {});
 
-    // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker —
-    //    must only offer roles that actually exist (rbac/roles), not fabricated ones.
+    // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker
     apiClient.get('/rbac/roles').then((res: any) => {
       const items = res.data?.data?.items || res.data?.items || [];
       if (Array.isArray(items) && items.length > 0) {
         setApproverRoles(items.map((r: any) => ({ code: r.code, name: r.name })).filter((r: any) => r.code));
       }
     }).catch(() => {});
-  }, []);
+  }, [selectedCompanyId]);
 
   // Fetch cycles and slabs whenever selected company changes
   useEffect(() => {
@@ -388,6 +391,10 @@ export const PayrollSettingsPage: React.FC = () => {
           let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
           let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
           let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch {}
+
+          if (!Array.isArray(depts) || depts.length === 0 || depts[0] === 'Choose') depts = ['All Departments'];
+          if (!Array.isArray(grades) || grades.length === 0 || grades[0] === 'Choose') grades = ['All Pay Grades'];
+          if (!Array.isArray(locs) || locs.length === 0) locs = ['All Locations'];
           const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
           let comps = []; try { comps = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []); } catch {}
 
@@ -907,23 +914,17 @@ export const PayrollSettingsPage: React.FC = () => {
       return;
     }
 
-    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0 && slabForm.departments[0] !== 'Choose') ? slabForm.departments : [];
-    if (targetDepartments.length === 0) {
-      showToast.error('Validation Error', 'Please select a Department for the payroll slab');
-      return;
-    }
+    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0 && slabForm.departments[0] !== 'Choose')
+      ? slabForm.departments
+      : ['All Departments'];
 
-    const targetGrades = (slabForm.grades && slabForm.grades.length > 0 && slabForm.grades[0] !== 'Choose') ? slabForm.grades : [];
-    if (targetGrades.length === 0) {
-      showToast.error('Validation Error', 'Please select a Grade for the payroll slab');
-      return;
-    }
+    const targetGrades = (slabForm.grades && slabForm.grades.length > 0 && slabForm.grades[0] !== 'Choose')
+      ? slabForm.grades
+      : ['All Pay Grades'];
 
-    const targetLocations = (slabForm.locations && slabForm.locations.length > 0) ? slabForm.locations : [];
-    if (targetLocations.length === 0) {
-      showToast.error('Validation Error', 'Please select at least one Location for the payroll slab');
-      return;
-    }
+    const targetLocations = (slabForm.locations && slabForm.locations.length > 0)
+      ? slabForm.locations
+      : ['All Locations'];
 
     const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
     if (!numericCycleId) {

@@ -110,6 +110,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       },
       { name: 'Interviewer Rating Details', href: '/recruitment/interviewer-rating', icon: 'ListChecks' },
       { name: 'Employee Referrals', href: '/recruitment/referrals', icon: 'UserPlus' },
+      {
+        name: 'Career Portal Customization',
+        href: '/recruitment/career-customization',
+        icon: 'Palette',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
     ],
   },
 
@@ -328,6 +334,13 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'UserCheck',
         minRoles: ['organization_admin'],
       },
+      {
+        name: 'Report Engine',
+        href: '/analytics/report-engine',
+        icon: 'Sparkles',
+        badge: 'New',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
     ],
   },
 
@@ -363,6 +376,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Employee Status', href: '/masters?tab=employee-status', icon: 'Users' },
       { name: 'Emp. Type', href: '/masters?tab=emp-type', icon: 'Users' },
       { name: 'Events', href: '/masters?tab=events', icon: 'CalendarDays' },
+      { name: 'Offer Letter Master', href: '/masters?tab=offer-templates', icon: 'FileText' },
       { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
       { name: 'Notification Merge Codes', href: '/masters?tab=notification-merge-codes', icon: 'Code2' },
       { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },
@@ -399,6 +413,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     items: [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
+      {
+        name: 'Career Portal Customization',
+        href: '/settings/career-customization',
+        icon: 'Palette',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
     ],
   },
 ];
@@ -407,14 +427,15 @@ function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {
   const normUser = userRoles.map((r) => r.toLowerCase().trim());
   return targetRoles.some((req) => {
     const normReq = (req as string).toLowerCase().trim();
-    if (normReq === 'organization_admin' || normReq === 'ceo') {
+    if (normReq === 'organization_admin' || normReq === 'ceo' || normReq === 'super_admin' || normReq === 'admin') {
       return (
         normUser.includes('organization_admin') ||
         normUser.includes('ceo') ||
+        normUser.includes('super_admin') ||
         normUser.includes('admin')
       );
     }
-    if (normReq === 'hr' || normReq === 'hr_admin') {
+    if (normReq === 'hr' || normReq === 'hr_admin' || normReq === 'hr_manager') {
       return (
         normUser.includes('hr') ||
         normUser.includes('hr_admin') ||

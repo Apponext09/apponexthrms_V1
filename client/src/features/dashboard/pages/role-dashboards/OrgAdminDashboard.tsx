@@ -97,7 +97,7 @@ export function OrgAdminDashboard() {
 
   // KPI Value Dictionary
   const kpiValues: Record<string, { value: string; icon: any; label: string; color?: string }> = {
-    totalHeadcount: { label: 'Total Headcount', value: isLoading ? '...' : String(totalEmployees), icon: Users },
+    totalHeadcount: { label: 'Total Employee Count', value: isLoading ? '...' : String(totalEmployees), icon: Users },
     activeDepartments: { label: 'Active Departments', value: isLoading ? '...' : String(totalDepartments), icon: Building2 },
     officeLocations: { label: 'Office Locations', value: isLoading ? '...' : String(totalLocations), icon: MapPin },
     reportingOfficers: { label: 'Reporting Officers', value: isLoading ? '...' : String(totalOfficers), icon: ShieldCheck },
@@ -194,13 +194,13 @@ export function OrgAdminDashboard() {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          {/* Headcount Growth Trend Card */}
+          {/* Employee Growth Trend Card */}
           {config.showGrowthTrendChart && (
             <Card className={panelClass}>
               <CardHeader className="p-5 pb-2">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <CardTitle className="text-balance text-sm font-bold">Headcount Growth Trend</CardTitle>
+                    <CardTitle className="text-balance text-sm font-bold">Employee Growth Trend</CardTitle>
                     <CardDescription className="mt-1 text-pretty text-xs">
                       Live workforce trajectory over recent months
                     </CardDescription>

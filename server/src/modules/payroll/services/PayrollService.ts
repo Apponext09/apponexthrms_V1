@@ -51,7 +51,7 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
   // 1. Department filter — match by ID or name
   const depts = parseJsonArr(comp.departments);
   if (depts.length > 0) {
-    const empDeptId   = String(emp.department_id || emp.current_department_id || '');
+    const empDeptId = String(emp.department_id || emp.current_department_id || '');
     const empDeptName = String(emp.department_name || emp.department || '').toLowerCase();
     const matches = depts.some(d => d === empDeptId || d.toLowerCase() === empDeptName);
     if (!matches) return false;
@@ -60,7 +60,7 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
   // 2. Grade filter — match by ID or name
   const grades = parseJsonArr(comp.grades);
   if (grades.length > 0) {
-    const empGradeId   = String(emp.grade_id || emp.pay_grade_id || '');
+    const empGradeId = String(emp.grade_id || emp.pay_grade_id || '');
     const empGradeName = String(emp.grade || emp.pay_grade || emp.designation || '').toLowerCase();
     const matches = grades.some(g => g === empGradeId || g.toLowerCase() === empGradeName);
     if (!matches) return false;
@@ -69,7 +69,7 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
   // 3. Location filter — match by ID or name
   const locs = parseJsonArr(comp.locations);
   if (locs.length > 0) {
-    const empLocId   = String(emp.work_location_id || emp.location_id || '');
+    const empLocId = String(emp.work_location_id || emp.location_id || '');
     const empLocName = String(emp.location || emp.work_location || '').toLowerCase();
     const matches = locs.some(l => l === empLocId || l.toLowerCase() === empLocName);
     if (!matches) return false;
@@ -114,10 +114,10 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
   if (runMonthStr && /^\d{4}-\d{2}$/.test(runMonthStr)) {
     const [y, m] = runMonthStr.split('-').map(Number);
     periodStart = new Date(y, m - 1, 1);          // 1st of run month
-    periodEnd   = new Date(y, m, 0);               // last day of run month
+    periodEnd = new Date(y, m, 0);               // last day of run month
   } else {
     periodStart = new Date();
-    periodEnd   = new Date();
+    periodEnd = new Date();
   }
   if (effFrom) {
     const fromDate = new Date(effFrom);
@@ -134,8 +134,8 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
   //    and word operators (Greater, Less, LessThanEqual, Equals, Between)
   const condOn = (comp.condition_on || comp.conditionOn || '').trim();
   const condOp = (comp.condition_operator || comp.conditionOperator || '').trim();
-  const cVal1  = comp.condition_value1 ?? comp.conditionValue1 ?? '';
-  const cVal2  = comp.condition_value2 ?? comp.conditionValue2 ?? '';
+  const cVal1 = comp.condition_value1 ?? comp.conditionValue1 ?? '';
+  const cVal2 = comp.condition_value2 ?? comp.conditionValue2 ?? '';
 
   if (condOn && condOn !== 'Choose' && cVal1 !== '' && cVal1 !== null) {
     // Resolve what value to compare against based on conditionOn
@@ -147,9 +147,9 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
     const condOnLower = condOn.toLowerCase();
 
     let compareValue = gross; // default to gross
-    if (condOnLower.includes('basic'))  compareValue = basic;
-    if (condOnLower.includes('gross'))  compareValue = gross;
-    if (condOnLower.includes('days'))   compareValue = 30; // can override later
+    if (condOnLower.includes('basic')) compareValue = basic;
+    if (condOnLower.includes('gross')) compareValue = gross;
+    if (condOnLower.includes('days')) compareValue = 30; // can override later
     if (condOnLower.includes('attend')) compareValue = gross; // attendance-linked
 
     const t1 = Number(cVal1);
@@ -157,18 +157,18 @@ function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonth
 
     // Match both symbol and word operators
     const op = condOp;
-    const isGt  = op === '>'  || op.includes('Greater') && !op.includes('Equal');
+    const isGt = op === '>' || op.includes('Greater') && !op.includes('Equal');
     const isGte = op === '>=' || (op.includes('Greater') && op.includes('Equal'));
-    const isLt  = op === '<'  || (op.includes('Less') && !op.includes('Equal') && !op.includes('Than') );
+    const isLt = op === '<' || (op.includes('Less') && !op.includes('Equal') && !op.includes('Than'));
     const isLte = op === '<=' || op === 'LessThanEqual' || (op.includes('Less') && op.includes('Equal'));
-    const isEq  = op === '='  || op === '==' || op.includes('Equals');
+    const isEq = op === '=' || op === '==' || op.includes('Equals');
     const isBtw = op === 'BETWEEN' || op.includes('Between');
 
-    if (isGt  && !(compareValue >  t1)) return false;
+    if (isGt && !(compareValue > t1)) return false;
     if (isGte && !(compareValue >= t1)) return false;
-    if (isLt  && !(compareValue <  t1)) return false;
+    if (isLt && !(compareValue < t1)) return false;
     if (isLte && !(compareValue <= t1)) return false;
-    if (isEq  && compareValue !== t1)   return false;
+    if (isEq && compareValue !== t1) return false;
     if (isBtw && (compareValue < t1 || compareValue > t2)) return false;
   }
 
@@ -189,9 +189,9 @@ function resolveComponentOverrides(
   const overrides: Record<string, number> = {};
 
   const computeAmount = (comp: any, base: number): number => {
-    const type    = (comp.component_type || comp.componentType || 'Value').toLowerCase();
+    const type = (comp.component_type || comp.componentType || 'Value').toLowerCase();
     const formula = (comp.formula || '').toLowerCase();
-    const amount  = Number(comp.amount || 0);
+    const amount = Number(comp.amount || 0);
 
     if (type === 'value') return amount;
     if (type !== 'derived') return 0;
@@ -209,9 +209,9 @@ function resolveComponentOverrides(
     const divBy100Match = formula.match(/(\d+(?:\.\d+)?)\s*\*[^/]*\/\s*100/);
     const decimalMultMatch = formula.match(/\*\s*(0?\.\d+)/);
     const pct = pctMatch ? Number(pctMatch[1]) / 100
-              : divBy100Match ? Number(divBy100Match[1]) / 100
-              : decimalMultMatch ? Number(decimalMultMatch[1])
-              : 0;
+      : divBy100Match ? Number(divBy100Match[1]) / 100
+        : decimalMultMatch ? Number(decimalMultMatch[1])
+          : 0;
     return pct > 0 ? Math.round(base * pct) : 0;
   };
 
@@ -238,11 +238,11 @@ function resolveComponentOverrides(
     const computed = computeAmount(comp, base);
     if (computed <= 0) continue;
 
-    if (name.includes('hra') || name.includes('house'))       overrides['hra']  = computed;
-    else if (name.includes('lta') || name.includes('travel')) overrides['lta']  = computed;
-    else if (name.includes('meal') || name.includes('food'))  overrides['meal'] = computed;
-    else if (name.includes('comm'))                            overrides['comm'] = computed;
-    else if (name.includes('child') || name.includes('cea'))   overrides['cea']  = computed;
+    if (name.includes('hra') || name.includes('house')) overrides['hra'] = computed;
+    else if (name.includes('lta') || name.includes('travel')) overrides['lta'] = computed;
+    else if (name.includes('meal') || name.includes('food')) overrides['meal'] = computed;
+    else if (name.includes('comm')) overrides['comm'] = computed;
+    else if (name.includes('child') || name.includes('cea')) overrides['cea'] = computed;
   }
 
   return overrides;
@@ -258,7 +258,7 @@ function mysqlNow(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 export class PayrollService {
@@ -358,7 +358,7 @@ export class PayrollService {
           await db0('payroll_deductions').whereIn('payroll_run_employee_id', empIds).del();
           await db0('payroll_adjustments').whereIn('payroll_run_employee_id', empIds).del();
         }
-        await db0('advance_recoveries').where('payroll_run_id', runId).del().catch(() => {});
+        await db0('advance_recoveries').where('payroll_run_id', runId).del().catch(() => { });
         await db0('payslips').where('payroll_run_id', runId).del();
         await db0('payroll_run_employees').where('payroll_run_id', runId).del();
 
@@ -580,9 +580,9 @@ export class PayrollService {
             }
             if (cycleRow.total_days_calc && !isNaN(Number(cycleRow.total_days_calc))) {
               totalCycleDays = Number(cycleRow.total_days_calc);
-            } else if (cycleRow.frequency === 'Weekly')      totalCycleDays = 7;
-            else if (cycleRow.frequency === 'Bi-Weekly')     totalCycleDays = 14;
-            else if (cycleRow.frequency === 'Semi-Monthly')  totalCycleDays = 15;
+            } else if (cycleRow.frequency === 'Weekly') totalCycleDays = 7;
+            else if (cycleRow.frequency === 'Bi-Weekly') totalCycleDays = 14;
+            else if (cycleRow.frequency === 'Semi-Monthly') totalCycleDays = 15;
             else {
               totalCycleDays = Math.max(1, cycleCutoffDay - cycleStartDay + 1);
             }
@@ -590,7 +590,7 @@ export class PayrollService {
         }
 
         const monthStart = `${runMonthStr}-${String(cycleStartDay).padStart(2, '0')}`;
-        const monthEnd   = `${runMonthStr}-${String(cycleCutoffDay).padStart(2, '0')}`;
+        const monthEnd = `${runMonthStr}-${String(cycleCutoffDay).padStart(2, '0')}`;
         let attendanceLopDays = 0;
         try {
           const [yearStr, monStr] = runMonthStr.split('-');
@@ -729,21 +729,21 @@ export class PayrollService {
 
         // ── Build formula context (base values) ───────────────────────────────
         const formulaContext: Record<string, any> = {
-          ctc:              resolvedGross,
-          monthly_ctc:      resolvedGross,
-          ctc_monthly:      resolvedGross,
-          annual_ctc:       resolvedAnnualCtc,
-          gross:            resolvedGross,
-          gross_salary:     resolvedGross,
-          basic:            resolvedBasicMonthly,
-          basic_salary:     resolvedBasicMonthly,
-          earned_basic:     resolvedBasicMonthly,
-          total_days:       totalCycleDays,
-          lop_days:         lopDays,
-          present_days:     Math.max(0, totalCycleDays - lopDays),
-          paid_days:        Math.max(0, totalCycleDays - lopDays),
+          ctc: resolvedGross,
+          monthly_ctc: resolvedGross,
+          ctc_monthly: resolvedGross,
+          annual_ctc: resolvedAnnualCtc,
+          gross: resolvedGross,
+          gross_salary: resolvedGross,
+          basic: resolvedBasicMonthly,
+          basic_salary: resolvedBasicMonthly,
+          earned_basic: resolvedBasicMonthly,
+          total_days: totalCycleDays,
+          lop_days: lopDays,
+          present_days: Math.max(0, totalCycleDays - lopDays),
+          paid_days: Math.max(0, totalCycleDays - lopDays),
           attendance_factor: lopRatio,
-          gender:           empRow?.gender || '',
+          gender: empRow?.gender || '',
         };
 
         // ── Intern check ──────────────────────────────────────────────────────
@@ -794,7 +794,7 @@ export class PayrollService {
 
           // ── GATE 3: Intern exemption for statutory components ───────────────
           if (isIntern && (compNameLower.includes('provident') || compNameLower.includes('pf') ||
-              compNameLower.includes('esic') || compNameLower.includes('professional tax'))) continue;
+            compNameLower.includes('esic') || compNameLower.includes('professional tax'))) continue;
 
           // ── GATE 4: Amount computation by component type ───────────────────────
           let baseAmount = 0;
@@ -926,8 +926,8 @@ export class PayrollService {
         }
 
         // ── Track which system-level items are covered by slab components ─────────
-        const slabCoversLop  = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('lop'));
-        const slabCoversTds  = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('tds')
+        const slabCoversLop = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('lop'));
+        const slabCoversTds = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('tds')
           || deductionRows.some(d => d.name.toLowerCase().includes('tds') && !d.isSystemRow));
         const slabCoversLoan = slabComponents.some(c => (c.module_source || c.moduleSource || '').toLowerCase().includes('loan'));
 
@@ -992,7 +992,7 @@ export class PayrollService {
         let totalDeductions = deductionRows.reduce((s, r) => s + r.amount, 0);
 
         if (regOverride) {
-          totalEarnings   = Number(regOverride.total_gross_earned || regOverride.gross_earned || totalEarnings);
+          totalEarnings = Number(regOverride.total_gross_earned || regOverride.gross_earned || totalEarnings);
           totalDeductions = Number(regOverride.total_deduction || totalDeductions);
         }
 
@@ -1003,13 +1003,13 @@ export class PayrollService {
           processingWarning = ` [ALERT: Earnings ₹${totalEarnings} exceed gross ₹${resolvedGross} by ₹${excess}. Check component amounts.]`;
         }
 
-        const netSalary   = regOverride ? Number(regOverride.net_salary) : Math.max(0, totalEarnings - totalDeductions);
-        const paidDays    = regOverride ? Number(regOverride.paid_days)   : Math.max(0, totalCycleDays - lopDays);
-        const unpaidDays  = regOverride ? Number(regOverride.unpaid_days) : lopDays;
+        const netSalary = regOverride ? Number(regOverride.net_salary) : Math.max(0, totalEarnings - totalDeductions);
+        const paidDays = regOverride ? Number(regOverride.paid_days) : Math.max(0, totalCycleDays - lopDays);
+        const unpaidDays = regOverride ? Number(regOverride.unpaid_days) : lopDays;
 
         // Employer contributions (for CTC display only — NOT employee deductions)
         const pfDeductionAmt = deductionRows.find(d => d.name.toLowerCase().includes('provident') || d.name.toLowerCase().includes(' epf') || d.name === 'Employee Provident Fund (EPF)')?.amount ?? 0;
-        const pfEmployer  = Number(struct?.pf_employer  || pfDeductionAmt);
+        const pfEmployer = Number(struct?.pf_employer || pfDeductionAmt);
         const esicDeductionAmt = deductionRows.find(d => d.name.toLowerCase().includes('esi') || d.name.toLowerCase().includes('esic'))?.amount ?? 0;
         const esicEmployer = Number(struct?.esic_employer || (esicDeductionAmt > 0 ? Math.round(totalEarnings * 0.0325) : 0));
 
@@ -1018,25 +1018,25 @@ export class PayrollService {
 
         // ── Update payroll_run_employees ──────────────────────────────────────
         await this.runEmployeeRepo.update(ctx, empRun.id, {
-          working_days:      paidDays,
-          leave_days:        Number((unadjustedLopDays + attendanceLopDays).toFixed(2)),
-          paid_leave_days:   Math.max(0, paidDays),
+          working_days: paidDays,
+          leave_days: Number((unadjustedLopDays + attendanceLopDays).toFixed(2)),
+          paid_leave_days: Math.max(0, paidDays),
           unpaid_leave_days: unpaidDays,
-          overtime_hours:    0,
-          tax_deducted:      tdsDeduction,
-          total_earnings:    totalEarnings,
-          total_deductions:  totalDeductions,
-          net_salary:        netSalary,
-          status:            'processed',
-          processed_at:      mysqlNow(),
-          processing_notes:  processingNotes,
-          updated_by:        ctx.userId
+          overtime_hours: 0,
+          tax_deducted: tdsDeduction,
+          total_earnings: totalEarnings,
+          total_deductions: totalDeductions,
+          net_salary: netSalary,
+          status: 'processed',
+          processed_at: mysqlNow(),
+          processing_notes: processingNotes,
+          updated_by: ctx.userId
         });
 
         // ── Write payroll_earnings rows ───────────────────────────────────────
         try {
-          await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => {});
-          await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => {});
+          await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => { });
+          await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => { });
 
           for (const row of earnedRows) {
             if (row.earnedAmount === 0 && row.baseAmount === 0) continue;
@@ -1052,7 +1052,7 @@ export class PayrollService {
               formula_used: row.formula || row.name,
               is_non_cashable: row.isNonCashable ? 1 : 0,
               created_at: new Date()
-            }).catch(() => {});
+            }).catch(() => { });
           }
 
           if (arrearsAmount > 0) {
@@ -1062,7 +1062,7 @@ export class PayrollService {
               component_name: 'Arrears (Backdated Revision)',
               calculated_value: arrearsAmount, actual_value: arrearsAmount,
               formula_used: 'Backdated salary revision arrear', created_at: new Date()
-            }).catch(() => {});
+            }).catch(() => { });
           }
 
           if (regOverride && Number(regOverride.adjustment || 0) !== 0) {
@@ -1072,7 +1072,7 @@ export class PayrollService {
               component_name: 'Adjustment / Bonus',
               calculated_value: Number(regOverride.adjustment), actual_value: Number(regOverride.adjustment),
               formula_used: 'Manual override', created_at: new Date()
-            }).catch(() => {});
+            }).catch(() => { });
           }
 
           for (const ded of deductionRows) {
@@ -1086,7 +1086,7 @@ export class PayrollService {
               calculated_value: ded.amount,
               actual_value: ded.amount,
               created_at: new Date()
-            }).catch(() => {});
+            }).catch(() => { });
           }
         } catch { /* supplemental rows — silent */ }
 
@@ -1189,9 +1189,9 @@ export class PayrollService {
           type: 'payroll_approval',
           link: '/payroll/processing?tab=payroll_requests',
           created_at: new Date()
-        }).catch(() => {});
+        }).catch(() => { });
       }
-    } catch {}
+    } catch { }
 
     return updated;
   }
@@ -1229,9 +1229,9 @@ export class PayrollService {
             type: 'payroll_revision_requested',
             link: '/payroll/processing',
             created_at: new Date()
-          }).catch(() => {});
+          }).catch(() => { });
         }
-      } catch {}
+      } catch { }
     }
 
     return updated;
@@ -1271,9 +1271,9 @@ export class PayrollService {
           type: 'payroll_approved',
           link: '/payroll/processing',
           created_at: new Date()
-        }).catch(() => {});
+        }).catch(() => { });
       }
-    } catch {}
+    } catch { }
 
     return updated;
   }
@@ -1376,7 +1376,7 @@ export class PayrollService {
       // Send in-app and template notifications to each employee
       try {
         const empUser = await db('users')
-          .where(function() {
+          .where(function () {
             this.where('employee_id', empId).orWhere('id', empId);
           })
           .andWhere('organization_id', ctx.organizationId)
@@ -1649,11 +1649,35 @@ export class PayrollService {
     if (type === 'Value') {
       computedValue = fixedAmount;
     } else if (type === 'Derived') {
-      if (formula.includes('basic * 0.5') || formula.includes('basic * 0.50') || formula.toLowerCase().includes('hra')) {
-        computedValue = Math.round(parentValues.basic * 0.50);
-      } else if (formula.includes('basic * 0.12') || formula.toLowerCase().includes('pf')) {
-        const pfBase = Math.min(parentValues.earnedBasic, 15000);
-        computedValue = Math.round(pfBase * 0.12);
+      if (formula && formula.trim()) {
+        try {
+          let expr = formula.toLowerCase();
+          const epfEpsWages = Math.min(parentValues.earnedBasic || parentValues.basic || 0, 15000);
+
+          expr = expr
+            .replace(/\[epf_eps_wages\]/g, String(epfEpsWages))
+            .replace(/\[earned_basic\]/g, String(parentValues.earnedBasic || 0))
+            .replace(/\[earned_gross\]/g, String(parentValues.earnedGross || 0))
+            .replace(/\[basic\]/g, String(parentValues.basic || 0))
+            .replace(/\[gross\]/g, String(parentValues.gross || 0))
+            .replace(/\[lop_factor\]/g, String(lopFactor || 1))
+            .replace(/\[attendance_days\]/g, String(lopFactor || 1))
+            .replace(/\[salary_days\]/g, String(lopFactor || 1))
+            .replace(/\bbasic\b/g, String(parentValues.basic || 0))
+            .replace(/\bgross\b/g, String(parentValues.gross || 0));
+
+          // Strip any characters except digits, decimals, basic operators, and parentheses
+          const safeExpr = expr.replace(/[^0-9.\+\-\*\/\(\)\s]/g, '');
+          if (safeExpr.trim()) {
+            const evalResult = new Function(`"use strict"; return (${safeExpr});`)();
+            if (typeof evalResult === 'number' && !isNaN(evalResult)) {
+              computedValue = Math.round(evalResult);
+            }
+          }
+        } catch (err) {
+          console.error('Error evaluating formula expression:', formula, err);
+          computedValue = fixedAmount;
+        }
       } else {
         computedValue = fixedAmount;
       }

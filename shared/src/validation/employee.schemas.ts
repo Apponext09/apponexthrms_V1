@@ -57,7 +57,7 @@ export const employeeCreateSchema = z.object({
   costCenterId: safeInt,
   avatarUrl: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
-  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head', 'organization_admin']).default('employee'),
+  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head', 'organization_admin', 'intern', 'consultant', 'admin', 'ceo', 'hr_admin', 'hr', 'support', 'super_admin']).default('employee'),
   password: z.string().min(6).optional(),
   // Statutory and Banking details
   bankName: z.string().max(100).nullable().optional(),

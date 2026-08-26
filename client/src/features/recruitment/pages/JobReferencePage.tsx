@@ -299,6 +299,8 @@ export const JobReferencePage: React.FC = () => {
     else if (roles.includes('hr_manager')) navigate('/hr/dashboard');
     else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard');
     else if (roles.includes('team_lead')) navigate('/team-lead/dashboard');
+    else if (roles.includes('intern')) navigate('/intern/dashboard');
+    else if (roles.includes('consultant')) navigate('/consultant/dashboard');
     else if (roles.includes('organization_admin')) navigate('/dashboard');
     else navigate('/employee/dashboard');
   };
@@ -506,7 +508,7 @@ export const JobReferencePage: React.FC = () => {
 
       {/* ─── Top Navbar ──────────────────────────────────────── */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
           <div className="flex items-center gap-3.5">
             {portalSettings?.companyLogoUrl ? (
               <div className="flex items-center justify-center p-1 rounded-xl bg-white border border-slate-100 shadow-2xs">
@@ -569,10 +571,7 @@ export const JobReferencePage: React.FC = () => {
         />
 
         <div className="relative max-w-7xl mx-auto px-6 text-center z-20">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold mb-6">
-            <Briefcase className="w-3.5 h-3.5" />
-            {positionTitle ? `Hiring for ${positionTitle}` : `${displayedOpenings.length} Active Openings`}
-          </div>
+
 
           <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight mb-3 leading-tight">
             {portalSettings?.portalTagline || 'Find Your Next Opportunity'}
@@ -827,7 +826,7 @@ export const JobReferencePage: React.FC = () => {
 
       {/* ─── Footer ───────────────────────────────────────────── */}
       <footer className="bg-white border-t border-slate-200 py-6">
-        <div className="max-w-7xl mx-auto px-6 text-center">
+        <div className="w-full px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-[11px] text-slate-400 font-medium">
             {portalSettings?.copyrightText || `© ${new Date().getFullYear()} HRMS Career Portal. All rights reserved.`}
           </p>

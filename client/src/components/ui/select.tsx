@@ -78,7 +78,7 @@ function Select({ value, defaultValue, onValueChange, disabled, children }: Sele
         disabled,
       }}
     >
-      <div ref={containerRef} className={cn("relative", isOpen ? "z-40" : "z-10")}>{children}</div>
+      <div ref={containerRef} className={cn("relative", isOpen ? "z-[9999]" : "z-10")}>{children}</div>
     </SelectContext.Provider>
   );
 }
@@ -97,7 +97,7 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
         type="button"
         disabled={isDisabled}
         className={cn(
-          'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-9 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer',
           className
         )}
         onClick={(event) => {
@@ -123,7 +123,7 @@ interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
 function SelectValue({ placeholder, className, ...props }: SelectValueProps) {
   const context = React.useContext(SelectContext);
   const displayLabel = context?.value ? context.itemsMap[context.value] : '';
-  return <span className={cn("truncate", className)} {...props}>{displayLabel || placeholder || ''}</span>;
+  return <span className={cn("truncate text-left", className)} {...props}>{displayLabel || placeholder || ''}</span>;
 }
 
 interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -137,7 +137,7 @@ function SelectContent({ className, children, style, ...props }: SelectContentPr
   return (
     <div 
       className={cn(
-        "absolute mt-1 w-full left-0 max-h-60 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl z-50 text-slate-800 text-xs",
+        "absolute mt-1 min-w-full w-max max-w-md left-0 max-h-60 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1 shadow-2xl z-[9999] text-slate-800 dark:text-slate-100 text-xs",
         className
       )}
       style={{ zIndex: 9999, ...style }}
@@ -172,7 +172,7 @@ const SelectItem = React.forwardRef<HTMLButtonElement, SelectItemProps>(
         ref={ref}
         type="button"
         className={cn(
-          'flex w-full items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-muted text-left',
+          'flex w-full items-center rounded-lg px-2.5 py-2 text-xs outline-none hover:bg-slate-100 dark:hover:bg-slate-800 font-medium whitespace-nowrap cursor-pointer text-left',
           className
         )}
         onClick={(event) => {

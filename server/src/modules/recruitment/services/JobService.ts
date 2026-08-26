@@ -157,7 +157,8 @@ export class JobService {
     }
 
     const titleToCheck = input.job_title || (input as any).jobTitle;
-    if (titleToCheck && titleToCheck.toLowerCase().trim() !== job.job_title.toLowerCase().trim()) {
+    const currentJobTitle = job.job_title || (job as any).jobTitle || '';
+    if (titleToCheck && titleToCheck.toLowerCase().trim() !== currentJobTitle.toLowerCase().trim()) {
       const existingTitle = await this.jobRepo.query(ctx)
         .whereRaw('LOWER(job_title) = ?', [titleToCheck.toLowerCase().trim()])
         .whereNot('id', jobId)

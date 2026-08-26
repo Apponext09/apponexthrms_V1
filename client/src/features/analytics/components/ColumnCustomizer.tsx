@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Settings2, GripVertical, Eye, EyeOff, RotateCcw, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 // ─── All available columns sourced from DB fields ─────────────────────────────
 // attendance_records: check_in_date, check_in_time, check_out_time,
@@ -87,25 +88,13 @@ export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGroup, setActiveGroup] = useState<ColumnDef['group'] | 'all'>('all');
-  const panelRef = useRef<HTMLDivElement>(null);
   const dragSrcRef = useRef<number | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Sync local state whenever columns prop changes
   React.useEffect(() => {
     setLocalCols(columns);
   }, [columns]);
-
-  // Close on outside click
-  React.useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
 
   const visibleCount = localCols.filter(c => c.visible).length;
 

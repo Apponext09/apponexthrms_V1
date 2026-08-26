@@ -18,8 +18,13 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
 
   const userNameLower = `${user?.firstName || ''} ${user?.lastName || ''} ${user?.email || ''}`.toLowerCase();
 
-  // Priority check: specific portal role takes precedence over general org_admin permission
-  if (accessRole === 'team_lead' || roles.includes('team_lead') || accessRole.includes('team_lead') || designation.includes('team lead') || designation.includes('team_lead')) {
+  if (accessRole === 'intern' || roles.includes('intern')) {
+    roleTitle = 'Intern';
+    roleCode = 'intern';
+  } else if (accessRole === 'consultant' || roles.includes('consultant')) {
+    roleTitle = 'Consultant';
+    roleCode = 'consultant';
+  } else if (accessRole === 'team_lead' || roles.includes('team_lead') || accessRole.includes('team_lead') || designation.includes('team lead') || designation.includes('team_lead')) {
     roleTitle = 'Team Lead';
     roleCode = 'team_lead';
   } else if (accessRole === 'department_head' || accessRole === 'manager' || roles.includes('department_head') || designation.includes('department head') || designation.includes('manager')) {

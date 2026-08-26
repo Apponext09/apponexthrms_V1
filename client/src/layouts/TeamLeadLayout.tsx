@@ -289,7 +289,13 @@ export function TeamLeadLayout() {
                 className="flex-1 min-w-0 leading-tight"
               >
                 <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
-                  {user?.firstName} {user?.lastName}
+                  {(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}
                 </p>
                 <p className={cn('text-[10px] font-medium truncate', C.icon)}>
                   {roleInfo.roleTitle}
@@ -417,7 +423,13 @@ export function TeamLeadLayout() {
                 </AvatarFallback>
               </Avatar>
               <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[12px] font-semibold text-foreground">{(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}</p>
                 <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
               </div>
             </button>
@@ -431,7 +443,7 @@ export function TeamLeadLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div >
   );
 }

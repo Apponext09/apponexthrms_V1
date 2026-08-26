@@ -15,6 +15,7 @@ import type { LeaveApplication } from '../repositories/LeaveApplicationRepositor
 import { withTransaction } from '../../../db/knex';
 import { calculateFinancialYearStart, calculateFinancialYearEnd, toLocalYYYYMMDD } from '../utils/dateUtils';
 import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../utils/settingsResolver';
+import { evaluateConditionGroup } from '../utils/ruleEngine';
 import axios from 'axios';
 
 interface ApplyLeaveInput {
@@ -196,19 +197,53 @@ export class LeaveService {
    * Helper to check array overlap for Eligibility Engine
    */
   private checkEmploymentEligibility(employee: any, settings: any): boolean {
-    if (!settings || Object.keys(settings).length === 0) return true; // No rules set
+    console.log('🔍 [ELIGIBILITY CHECK LOG]', {
+      empId: employee?.id,
+      dept: employee?.current_department_id || employee?.department_id,
+      loc: employee?.current_location_id || employee?.location_id,
+      empType: employee?.employment_type || employee?.employee_type,
+      status: employee?.status,
+      grade: employee?.current_grade_id || employee?.grade || employee?.grade_band,
+      settings
+    });
 
-    const hasOverlap = (employeeVal: any, ruleArray: any[]) => {
-      if (!ruleArray || !Array.isArray(ruleArray) || ruleArray.length === 0) return true;
-      if (!employeeVal) return false;
+    if (!settings || typeof settings !== 'object') return true;
+
+    const hasOverlap = (ruleName: string, employeeVal: any, ruleArray: any[]) => {
+      const cleanRules = (ruleArray || []).filter((r: any) => r !== null && r !== undefined && r !== '' && String(r).toLowerCase() !== 'select' && String(r).toLowerCase() !== 'all');
+      if (cleanRules.length === 0) return true;
+      if (employeeVal === undefined || employeeVal === null || employeeVal === '') {
+        // If employee profile field is not assigned (null/undefined), do not block leave application
+        return true;
+      }
       const eArray = Array.isArray(employeeVal) ? employeeVal : [employeeVal];
-      return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
+      const match = eArray.some(e => 
+        cleanRules.includes(e) || 
+        cleanRules.includes(String(e)) || 
+        (typeof e === 'number' && cleanRules.includes(Number(e)))
+      );
+      if (!match) {
+        console.warn(`❌ [ELIGIBILITY FAIL] Rule '${ruleName}' required ${JSON.stringify(cleanRules)}, but employee value was:`, eArray);
+      }
+      return match;
     };
 
-    if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId, settings.departments)) return false;
-    if (!hasOverlap(employee.current_location_id || employee.currentLocationId, settings.locations)) return false;
-    if (!hasOverlap(employee.employment_type || employee.employmentType || (employee as any).employee_type, settings.employeeTypes)) return false;
-    if (!hasOverlap(employee.status, settings.employeeStatuses)) return false;
+    const deptVal = employee.current_department_id || employee.currentDepartmentId || employee.department_id || employee.departmentId;
+    if (!hasOverlap('departments', deptVal, settings.departments)) return false;
+
+    const locVal = employee.current_location_id || employee.currentLocationId || employee.location_id || employee.locationId || employee.branch_id || employee.branchId;
+    if (!hasOverlap('locations', locVal, settings.locations)) return false;
+
+    const empTypeVal = employee.employment_type || employee.employmentType || (employee as any).employee_type || (employee as any).employeeType;
+    if (!hasOverlap('employeeTypes', empTypeVal, settings.employeeTypes)) return false;
+
+    const statusVal = employee.status;
+    if (!hasOverlap('employeeStatuses', statusVal, settings.employeeStatuses)) return false;
+
+    const gradeVal = employee.current_grade_id || employee.currentGradeId || employee.grade_id || employee.gradeId || employee.grade || employee.grade_band;
+    if (settings.grades && Array.isArray(settings.grades) && settings.grades.length > 0) {
+      if (!hasOverlap('grades', gradeVal, settings.grades)) return false;
+    }
 
     return true;
   }
@@ -330,10 +365,10 @@ export class LeaveService {
       }
 
       // GENDER APPLICABILITY VALIDATION
-      const leaveGender = (leaveType.gender_applicable || leaveType.genderApplicable || 'all').toLowerCase();
-      if (leaveGender !== 'all') {
+      const leaveGender = (leaveType.gender_applicable || leaveType.genderApplicable || allocationSettings.gender || 'all').toString().toLowerCase();
+      if (leaveGender !== 'all' && leaveGender !== 'both') {
         const empGender = (employee.gender || '').toLowerCase();
-        if (empGender !== leaveGender) {
+        if (empGender && empGender !== leaveGender) {
           throw new ValidationError(
             `This leave type is only applicable for ${leaveGender} employees.`
           );
@@ -353,15 +388,51 @@ export class LeaveService {
         throw new ValidationError('No active leave policy assignment found or could be dynamically resolved for this employee and leave category.');
       }
 
-      const startD = new Date(input.startDate);
-      startD.setHours(0, 0, 0, 0);
+      // RULE ENGINE EVALUATION (Only When)
+      if (applicationSettings.onlyWhen || applicationSettings.only_when) {
+        const isAppRuleEligible = evaluateConditionGroup(applicationSettings.onlyWhen || applicationSettings.only_when, employee);
+        if (!isAppRuleEligible) {
+          throw new ValidationError('You do not meet the custom condition criteria (Only When) required to apply for this leave type.');
+        }
+      }
+      if (allocationSettings.onlyWhen || allocationSettings.only_when) {
+        const isAllocRuleEligible = evaluateConditionGroup(allocationSettings.onlyWhen || allocationSettings.only_when, employee);
+        if (!isAllocRuleEligible) {
+          throw new ValidationError('You do not meet the eligibility conditions configured for this leave category.');
+        }
+      }
+
+      // PAST & FUTURE DATES ALLOWED TOGGLES
+      const todayZero = new Date();
+      todayZero.setHours(0, 0, 0, 0);
+
+      if (applicationSettings.pastDates === false && startD < todayZero) {
+        throw new ValidationError('Past dates cannot be requested for this leave type.');
+      }
+      if (applicationSettings.futureDates === false && startD > todayZero) {
+        throw new ValidationError('Future dates cannot be requested for this leave type.');
+      }
 
       // ADVANCE NOTICE / GRACE PERIOD VALIDATION
-      if (settings.leaveApplicationDateRestriction) {
-        const todayValidationDate = new Date();
-        todayValidationDate.setHours(0, 0, 0, 0);
-        const diffTime = startD.getTime() - todayValidationDate.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (settings.leaveApplicationDateRestriction || applicationSettings.daysInAdvance || applicationSettings.gracePeriod) {
+        const countAsWorkingDays = applicationSettings.countBothAs === 'working_days';
+        let diffDays = 0;
+
+        if (countAsWorkingDays) {
+          // Count only working days between todayZero and startD
+          let cur = new Date(todayZero < startD ? todayZero : startD);
+          const targetD = todayZero < startD ? startD : todayZero;
+          let count = 0;
+          while (cur < targetD) {
+            cur.setDate(cur.getDate() + 1);
+            const dayOfWeek = cur.getDay();
+            if (dayOfWeek !== 0 && dayOfWeek !== 6) count++;
+          }
+          diffDays = todayZero < startD ? count : -count;
+        } else {
+          const diffTime = startD.getTime() - todayZero.getTime();
+          diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        }
 
         if (applicationSettings.category === 'planned' && applicationSettings.daysInAdvance) {
           const advDays = parseInt(applicationSettings.daysInAdvance, 10);
@@ -370,21 +441,28 @@ export class LeaveService {
             if (applicationSettings.daysInAdvanceUnit === 'Weeks') reqDays = advDays * 7;
             if (applicationSettings.daysInAdvanceUnit === 'Months') reqDays = advDays * 30;
             if (diffDays < reqDays) {
-              throw new ValidationError(`Planned leaves require an advance notice of at least ${reqDays} days.`);
+              throw new ValidationError(`Planned leaves require an advance notice of at least ${reqDays} ${countAsWorkingDays ? 'working' : 'calendar'} days.`);
             }
           }
         } else if (applicationSettings.category === 'unplanned' && applicationSettings.gracePeriod) {
           const graceDays = parseInt(applicationSettings.gracePeriod, 10);
           if (!isNaN(graceDays) && graceDays > 0 && diffDays < 0) {
-            // If backdated
             if (Math.abs(diffDays) > graceDays) {
-              throw new ValidationError(`Unplanned leaves cannot be backdated beyond the grace period of ${graceDays} days.`);
+              throw new ValidationError(`Unplanned leaves cannot be backdated beyond the grace period of ${graceDays} ${countAsWorkingDays ? 'working' : 'calendar'} days.`);
             }
+          }
+        }
+
+        // Up to X days ahead limit
+        if (applicationSettings.upToDaysAhead) {
+          const maxAhead = parseInt(applicationSettings.upToDaysAhead, 10);
+          if (!isNaN(maxAhead) && maxAhead > 0 && diffDays > maxAhead) {
+            throw new ValidationError(`You cannot apply for leaves more than ${maxAhead} days in advance.`);
           }
         }
       }
 
-      // GAP BETWEEN APPLICATION VALIDATION
+      // GAP BETWEEN APPLICATION VALIDATION (with specific leave types support)
       if (applicationSettings.gapBetweenApplication) {
         const gapVal = parseInt(applicationSettings.gapBetweenApplication, 10);
         if (!isNaN(gapVal) && gapVal > 0) {
@@ -392,10 +470,14 @@ export class LeaveService {
           if (applicationSettings.gapBetweenApplicationUnit === 'Weeks') reqGap = gapVal * 7;
           if (applicationSettings.gapBetweenApplicationUnit === 'Months') reqGap = gapVal * 30;
 
+          const gapTypeIds = Array.isArray(applicationSettings.gapLeaveTypeIds) && applicationSettings.gapLeaveTypeIds.length > 0
+            ? applicationSettings.gapLeaveTypeIds
+            : [input.leaveTypeId];
+
           const lastLeave = await trx('leave_applications')
             .where('employee_id', input.employeeId)
-            .where('leave_type_id', input.leaveTypeId)
-            .whereIn('status', ['approved', 'submitted'])
+            .whereIn('leave_type_id', gapTypeIds)
+            .whereIn('status', ['approved', 'submitted', 'pending_manager', 'pending_hr'])
             .whereNull('deleted_at')
             .orderBy('application_end_date', 'desc')
             .first();
@@ -405,7 +487,41 @@ export class LeaveService {
             lastEnd.setHours(0, 0, 0, 0);
             const gapDiff = Math.ceil((startD.getTime() - lastEnd.getTime()) / (1000 * 60 * 60 * 24));
             if (gapDiff >= 0 && gapDiff < reqGap) {
-              throw new ValidationError(`A gap of at least ${reqGap} days is required between applications of this leave type.`);
+              throw new ValidationError(`A cooling gap of at least ${reqGap} days is required between previous leave and this request.`);
+            }
+          }
+        }
+      }
+
+      // SEQUENCE EXHAUSTION ENFORCEMENT ("Do not allow Annual Leave until [types] is fully used")
+      const exhaustLeaveTypes = applicationSettings.doNotAllowUntilUsed || applicationSettings.exhaustBeforeLeaveTypes;
+      if (Array.isArray(exhaustLeaveTypes) && exhaustLeaveTypes.length > 0) {
+        // Resolve IDs if strings
+        let exhaustIds = exhaustLeaveTypes.filter((t: any) => typeof t === 'number');
+        const exhaustNames = exhaustLeaveTypes.filter((t: any) => typeof t === 'string');
+        if (exhaustNames.length > 0) {
+          const found = await trx('leave_types')
+            .where('organization_id', ctx.organizationId)
+            .whereIn('leave_name', exhaustNames)
+            .whereNull('deleted_at')
+            .select('id');
+          exhaustIds = [...exhaustIds, ...found.map((f: any) => f.id)];
+        }
+
+        if (exhaustIds.length > 0) {
+          const otherBals = await trx('leave_balances')
+            .where('organization_id', ctx.organizationId)
+            .where('employee_id', input.employeeId)
+            .whereIn('leave_type_id', exhaustIds)
+            .where('financial_year_start', fyStart)
+            .whereNull('deleted_at');
+
+          for (const b of otherBals) {
+            const avail = parseFloat(String(b.available_balance || b.availableBalance || 0));
+            if (avail > 0) {
+              const lt = await trx('leave_types').where('id', b.leave_type_id).first();
+              const ltName = lt?.leave_name || 'other leave';
+              throw new ValidationError(`You cannot apply for this leave until your remaining balance for '${ltName}' (${avail} days) is fully exhausted.`);
             }
           }
         }
@@ -438,6 +554,24 @@ export class LeaveService {
         throw new ValidationError('Leave duration must be greater than 0 days (all requested days are weekends/holidays).');
       }
 
+      // GRANULARITY / ALLOWED UNITS VALIDATION (Full day / Half day / Quarter day)
+      if (Array.isArray(applicationSettings.allowedUnits) && applicationSettings.allowedUnits.length > 0) {
+        const allowed = applicationSettings.allowedUnits.map((u: string) => u.toLowerCase().replace(/[\s_-]+/g, ''));
+        const isHalf = !!input.isHalfDay;
+        const isQuarter = input.isHourly && input.hourlyDuration === 2;
+        const isFull = !isHalf && !isQuarter;
+
+        if (isHalf && !allowed.includes('halfday')) {
+          throw new ValidationError('Half-day requests are not permitted for this leave type.');
+        }
+        if (isQuarter && !allowed.includes('quarterday')) {
+          throw new ValidationError('Quarter-day requests are not permitted for this leave type.');
+        }
+        if (isFull && !allowed.includes('fullday')) {
+          throw new ValidationError('Full-day requests are not permitted for this leave type.');
+        }
+      }
+
       // MIN/MAX DAYS VALIDATION
       if (applicationSettings.minDaysAllowed) {
         const minD = parseFloat(applicationSettings.minDaysAllowed);
@@ -455,7 +589,53 @@ export class LeaveService {
       // MULTIPLE OF ONE VALIDATION
       if (applicationSettings.applyInMultipleOfOne) {
         if (totalDays % 1 !== 0) {
-          throw new ValidationError(`This leave type can only be applied in full days (Multiple of One). Half days are not allowed.`);
+          throw new ValidationError(`This leave type can only be applied in full days (Multiple of One). Fractional/Half days are not allowed.`);
+        }
+      }
+
+      // WHICH DAYS IT MAY COVER VALIDATION
+      if (Array.isArray(applicationSettings.whichDaysAllowed) && applicationSettings.whichDaysAllowed.length > 0) {
+        const allowedDays = applicationSettings.whichDaysAllowed.map((d: string) => d.toLowerCase().replace(/[\s_-]+/g, ''));
+        const holidayDates = (await trx('holidays')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .whereIn('holiday_date', days.map((d: any) => d.date))
+          .select('holiday_date')).map((h: any) => h.holiday_date);
+
+        for (const d of days) {
+          const dObj = new Date(d.date);
+          const isWeekend = [0, 6].includes(dObj.getDay());
+          const isHoliday = holidayDates.includes(d.date);
+          const isWorkingDay = !isWeekend && !isHoliday;
+
+          // Check birthday
+          let isBirthday = false;
+          if (employee.date_of_birth || employee.dateOfBirth) {
+            const dob = new Date(employee.date_of_birth || employee.dateOfBirth);
+            if (dob.getMonth() === dObj.getMonth() && dob.getDate() === dObj.getDate()) {
+              isBirthday = true;
+            }
+          }
+
+          // Check work anniversary
+          let isWorkAnniversary = false;
+          if (employee.date_of_joining || employee.dateOfJoining) {
+            const doj = new Date(employee.date_of_joining || employee.dateOfJoining);
+            if (doj.getMonth() === dObj.getMonth() && doj.getDate() === dObj.getDate()) {
+              isWorkAnniversary = true;
+            }
+          }
+
+          let dayMatches = false;
+          if (allowedDays.includes('birthday') && isBirthday) dayMatches = true;
+          if (allowedDays.includes('workanniversary') && isWorkAnniversary) dayMatches = true;
+          if (allowedDays.includes('weekend') && isWeekend) dayMatches = true;
+          if (allowedDays.includes('holiday') && isHoliday) dayMatches = true;
+          if (allowedDays.includes('workingday') && isWorkingDay) dayMatches = true;
+
+          if (!dayMatches) {
+            throw new ValidationError(`This leave category can only be requested on: ${applicationSettings.whichDaysAllowed.join(', ')}.`);
+          }
         }
       }
 
@@ -494,7 +674,6 @@ export class LeaveService {
         applicationSettings.restrictBeforeOrAfterWeekend ||
         applicationSettings.restrictBeforeAfterWeekend
       ) {
-        // We check the first day and last day in the breakdown to see if they are adjacent to a weekend/holiday
         const firstDayStr = days[0]?.date;
         const lastDayStr = days[days.length - 1]?.date;
 
@@ -506,7 +685,7 @@ export class LeaveService {
           nextDay.setDate(nextDay.getDate() + 1);
 
           if (applicationSettings.restrictBeforeOrAfterWeekend || applicationSettings.restrictBeforeAfterWeekend) {
-            const isPrevWeekend = [0, 6].includes(prevDay.getDay()); // Assuming standard Sat/Sun for simple check
+            const isPrevWeekend = [0, 6].includes(prevDay.getDay());
             const isNextWeekend = [0, 6].includes(nextDay.getDay());
             if (isPrevWeekend || isNextWeekend) {
               throw new ValidationError(`You cannot apply for this leave immediately before or after a weekend.`);
@@ -514,7 +693,6 @@ export class LeaveService {
           }
 
           if (applicationSettings.restrictBeforeOrAfterHoliday || applicationSettings.restrictBeforeAfterHoliday) {
-            // Check holiday table
             const adjacentHolidays = await trx('holidays')
               .where('organization_id', ctx.organizationId)
               .whereNull('deleted_at')
@@ -527,55 +705,83 @@ export class LeaveService {
         }
       }
 
-      // NUMBER OF TIMES / LEAVES LIMITS (PER MONTH / YEAR)
-      if (applicationSettings.noOfTimesEmployeeCanApply) {
-        const timesLimit = parseInt(applicationSettings.noOfTimesEmployeeCanApply, 10);
-        const timesUnit = applicationSettings.noOfTimesEmployeeCanApplyUnit; // 'Per Month' | 'Per Year'
-        if (!isNaN(timesLimit) && timesLimit > 0 && timesUnit) {
-          const appQuery = trx('leave_applications')
+      // NUMBER OF TIMES / LEAVES LIMITS (PER DAY / WEEK / MONTH / QUARTER / HALF-YEAR / YEAR)
+      const parsePeriodRange = (unit: string, refDate: Date): { fromDate: string; toDate: string } => {
+        const u = (unit || '').toLowerCase();
+        const d = new Date(refDate);
+        if (u.includes('day')) {
+          return { fromDate: toLocalYYYYMMDD(d), toDate: toLocalYYYYMMDD(d) };
+        } else if (u.includes('week')) {
+          const day = d.getDay();
+          const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+          const mon = new Date(d.setDate(diff));
+          const sun = new Date(mon);
+          sun.setDate(mon.getDate() + 6);
+          return { fromDate: toLocalYYYYMMDD(mon), toDate: toLocalYYYYMMDD(sun) };
+        } else if (u.includes('quarter')) {
+          const qMonth = Math.floor(d.getMonth() / 3) * 3;
+          const qStart = new Date(d.getFullYear(), qMonth, 1);
+          const qEnd = new Date(d.getFullYear(), qMonth + 3, 0);
+          return { fromDate: toLocalYYYYMMDD(qStart), toDate: toLocalYYYYMMDD(qEnd) };
+        } else if (u.includes('half')) {
+          const hMonth = d.getMonth() < 6 ? 0 : 6;
+          const hStart = new Date(d.getFullYear(), hMonth, 1);
+          const hEnd = new Date(d.getFullYear(), hMonth + 6, 0);
+          return { fromDate: toLocalYYYYMMDD(hStart), toDate: toLocalYYYYMMDD(hEnd) };
+        } else if (u.includes('year')) {
+          const yStart = new Date(d.getFullYear(), 0, 1);
+          const yEnd = new Date(d.getFullYear(), 11, 31);
+          return { fromDate: toLocalYYYYMMDD(yStart), toDate: toLocalYYYYMMDD(yEnd) };
+        } else {
+          // Default Month
+          const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+          const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+          return { fromDate: toLocalYYYYMMDD(mStart), toDate: toLocalYYYYMMDD(mEnd) };
+        }
+      };
+
+      const timesLimitStr = applicationSettings.noOfTimesEmployeeCanApply || applicationSettings.numTimesEmployeeCanApply;
+      const timesUnitStr = applicationSettings.noOfTimesEmployeeCanApplyUnit || applicationSettings.numTimesEmployeeCanApplyUnit;
+      if (timesLimitStr && timesUnitStr && timesUnitStr !== 'Select') {
+        const timesLimit = parseInt(timesLimitStr, 10);
+        if (!isNaN(timesLimit) && timesLimit > 0) {
+          const { fromDate, toDate } = parsePeriodRange(timesUnitStr, startD);
+          const countRes = await trx('leave_applications')
             .where('employee_id', input.employeeId)
             .where('leave_type_id', input.leaveTypeId)
             .whereIn('status', ['approved', 'submitted', 'pending_manager', 'pending_hr'])
-            .whereNull('deleted_at');
+            .where('application_start_date', '>=', fromDate)
+            .where('application_start_date', '<=', toDate)
+            .whereNull('deleted_at')
+            .count('id as count')
+            .first();
 
-          if (timesUnit === 'Per Month') {
-            appQuery.whereRaw(`EXTRACT(MONTH FROM application_start_date) = ?`, [startD.getMonth() + 1])
-              .whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
-          } else if (timesUnit === 'Per Year') {
-            appQuery.whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
-          }
-
-          const countRes = await appQuery.count('id as count').first();
           const count = countRes ? parseInt(String((countRes as any).count || 0), 10) : 0;
-
           if (count >= timesLimit) {
-            throw new ValidationError(`You have reached the maximum limit of applying for this leave type (${timesLimit} times ${timesUnit}).`);
+            throw new ValidationError(`You have reached the maximum limit of applying for this leave (${timesLimit} times per ${timesUnitStr}).`);
           }
         }
       }
 
-      if (applicationSettings.noOfLeavesEmployeeCanApply) {
-        const daysLimit = parseFloat(applicationSettings.noOfLeavesEmployeeCanApply);
-        const daysUnit = applicationSettings.noOfLeavesEmployeeCanApplyUnit; // 'Per Month' | 'Per Year'
-        if (!isNaN(daysLimit) && daysLimit > 0 && daysUnit) {
-          const sumQuery = trx('leave_applications')
+      const daysLimitStr = applicationSettings.noOfLeavesEmployeeCanApply || applicationSettings.numLeavesEmployeeCanApply;
+      const daysUnitStr = applicationSettings.noOfLeavesEmployeeCanApplyUnit || applicationSettings.numLeavesEmployeeCanApplyUnit;
+      if (daysLimitStr && daysUnitStr && daysUnitStr !== 'Select') {
+        const daysLimit = parseFloat(daysLimitStr);
+        if (!isNaN(daysLimit) && daysLimit > 0) {
+          const { fromDate, toDate } = parsePeriodRange(daysUnitStr, startD);
+          const sumRes = await trx('leave_applications')
             .where('employee_id', input.employeeId)
             .where('leave_type_id', input.leaveTypeId)
             .whereIn('status', ['approved', 'submitted', 'pending_manager', 'pending_hr'])
-            .whereNull('deleted_at');
+            .where('application_start_date', '>=', fromDate)
+            .where('application_start_date', '<=', toDate)
+            .whereNull('deleted_at')
+            .sum('total_days as sum')
+            .first();
 
-          if (daysUnit === 'Per Month') {
-            sumQuery.whereRaw(`EXTRACT(MONTH FROM application_start_date) = ?`, [startD.getMonth() + 1])
-              .whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
-          } else if (daysUnit === 'Per Year') {
-            sumQuery.whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
-          }
-
-          const sumRes = await sumQuery.sum('total_days as sum').first();
           const sumDays = sumRes ? parseFloat(String((sumRes as any).sum || 0)) : 0;
-
           if ((sumDays + totalDays) > daysLimit) {
-            throw new ValidationError(`You have reached the maximum limit of leave days for this type (${daysLimit} days ${daysUnit}). You have already applied for ${sumDays} days.`);
+            throw new ValidationError(`You have reached the maximum limit of leave days for this type (${daysLimit} days per ${daysUnitStr}). You have already applied for ${sumDays} days.`);
           }
         }
       }

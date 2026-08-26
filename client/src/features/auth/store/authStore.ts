@@ -12,6 +12,8 @@ export interface User {
   organizationCode?: string;
   organizationLocation?: string;
   roles: string[];
+  role?: string;
+  accessRole?: string;
   permissions: string[];
   employeeId?: number | null;
   employee_id?: number | null;

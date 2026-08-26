@@ -387,14 +387,85 @@ export class LeaveExpiryJobService {
 
                 if (prevBalance) {
                   const unused = parseFloat(prevBalance.available_balance || prevBalance.availableBalance || 0);
-                  let cfAmount = 0;
                   
-                  if (assignment.carry_forward_enabled && unused > 0) {
-                    const limit = assignment.carry_forward_limit !== null ? parseFloat(assignment.carry_forward_limit) : unused;
-                    cfAmount = Math.min(unused, limit);
+                  // Fetch leave type configuration
+                  const leaveType = await trx('leave_types').where('id', assignment.leave_type_id).first();
+                  let encashSettings: any = {};
+                  if (leaveType?.encashment_settings) {
+                    try {
+                      encashSettings = typeof leaveType.encashment_settings === 'string' ? JSON.parse(leaveType.encashment_settings) : leaveType.encashment_settings;
+                    } catch (e) {}
                   }
 
-                  const expiredAmount = unused - cfAmount;
+                  const fillPriority = (encashSettings.fillOrder || encashSettings.fillCapFirst || 'carry_forward').toLowerCase();
+                  const combinedCapVal = encashSettings.combinedCap || encashSettings.maxLimit ? parseFloat(encashSettings.combinedCap || encashSettings.maxLimit) : null;
+
+                  // 1. Calculate raw Carry-Forward Cap
+                  let rawCfCap = 0;
+                  if (assignment.carry_forward_enabled && unused > 0) {
+                    if (encashSettings.carryForwardUnit === 'percent' && encashSettings.maxCarryForwardPercent) {
+                      const pct = parseFloat(encashSettings.maxCarryForwardPercent);
+                      rawCfCap = Math.max(0, unused * (pct / 100));
+                    } else if (assignment.carry_forward_limit !== null) {
+                      rawCfCap = parseFloat(assignment.carry_forward_limit);
+                    } else {
+                      rawCfCap = unused;
+                    }
+                  }
+
+                  // 2. Calculate raw Encashment Cap
+                  let rawEncashCap = 0;
+                  if (assignment.encashment_enabled && unused > 0) {
+                    if (encashSettings.encashUnit === 'percent' && encashSettings.maxEncashPercent) {
+                      const pct = parseFloat(encashSettings.maxEncashPercent);
+                      rawEncashCap = Math.max(0, unused * (pct / 100));
+                    } else if (assignment.encashment_limit !== null) {
+                      rawEncashCap = parseFloat(assignment.encashment_limit);
+                    } else {
+                      rawEncashCap = unused;
+                    }
+                  }
+
+                  let cfAmount = 0;
+                  let encashAmount = 0;
+
+                  if (fillPriority.includes('encash')) {
+                    // Fill encashment first
+                    encashAmount = Math.min(unused, rawEncashCap);
+                    const remainingForCF = Math.max(0, unused - encashAmount);
+                    cfAmount = Math.min(remainingForCF, rawCfCap);
+                  } else {
+                    // Default: Fill carry forward first
+                    cfAmount = Math.min(unused, rawCfCap);
+                    const remainingForEncash = Math.max(0, unused - cfAmount);
+                    encashAmount = Math.min(remainingForEncash, rawEncashCap);
+                  }
+
+                  // Enforce combined ceiling cap if set
+                  if (combinedCapVal !== null && !isNaN(combinedCapVal) && combinedCapVal > 0) {
+                    if ((cfAmount + encashAmount) > combinedCapVal) {
+                      const excess = (cfAmount + encashAmount) - combinedCapVal;
+                      if (fillPriority.includes('encash')) {
+                        cfAmount = Math.max(0, cfAmount - excess);
+                      } else {
+                        encashAmount = Math.max(0, encashAmount - excess);
+                      }
+                    }
+                  }
+
+                  const expiredAmount = Math.max(0, unused - cfAmount - encashAmount);
+
+                  // Calculate lapse expiry date
+                  let lapseExpiryDate = newCycleEnd;
+                  const lapseDaysStr = encashSettings.lapseDays || encashSettings.expireAfterDays;
+                  if (lapseDaysStr) {
+                    const lDays = parseInt(lapseDaysStr, 10);
+                    if (!isNaN(lDays) && lDays > 0) {
+                      const expDate = new Date(newCycleStart);
+                      expDate.setDate(expDate.getDate() + lDays);
+                      lapseExpiryDate = expDate.toISOString().split('T')[0];
+                    }
+                  }
 
                   if (cfAmount > 0) {
                     await trx('leave_carry_forward').insert({
@@ -405,7 +476,7 @@ export class LeaveExpiryJobService {
                       to_financial_year_start: newCycleStart,
                       leave_type_id: assignment.leave_type_id,
                       carried_forward_days: cfAmount,
-                      expiry_date: newCycleEnd,
+                      expiry_date: lapseExpiryDate,
                       created_by: systemUserId,
                       updated_by: systemUserId,
                       created_at: new Date(),
@@ -421,7 +492,7 @@ export class LeaveExpiryJobService {
                       amount: cfAmount,
                       effective_date: newCycleStart,
                       reference_id: `CF-${emp.id}-${assignment.leave_type_id}-${newCycleStart}`,
-                      remarks: `Carry forward from previous cycle ending ${prevCycleEnd}`,
+                      remarks: `Carry forward from previous cycle ending ${prevCycleEnd} (Expires: ${lapseExpiryDate})`,
                       created_by: systemUserId,
                       created_at: new Date(),
                       updated_at: new Date(),

@@ -500,7 +500,7 @@ export class EmployeeService {
     departmentId?: number | null
   ) {
     const targetRole = accessRole || 'employee';
-    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head'];
+    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'intern', 'consultant'];
     if (!roleCodes.includes(targetRole)) return;
 
     // Fetch existing system roles for this organization
@@ -518,6 +518,8 @@ export class EmployeeService {
       team_lead: 'Team Lead',
       hr_manager: 'HR Manager',
       employee: 'Employee',
+      intern: 'Intern',
+      consultant: 'Consultant',
     };
 
     // 1. Ensure target role exists in roles table

@@ -44,7 +44,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to fetch offer letter details', err);
-        setError(err.response?.data?.error || 'Failed to fetch offer letter details. Please check the link.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to fetch offer letter details. Please check the link.';
+        setError(msg);
       })
       .finally(() => setIsLoading(false));
   }, [uuid]);
@@ -122,7 +124,16 @@ export const PublicOfferPage: React.FC = () => {
     );
   }
 
-  const { offer, candidateName, companyName, departmentName } = offerData;
+  let meta: any = {};
+  if (offer.meta) {
+    try {
+      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta) : offer.meta;
+    } catch (e) {
+      meta = {};
+    }
+  }
+
+  const effectiveCompanyName = meta.companyName || companyName;
 
   if (actionStatus === 'accepted') {
     return (
@@ -179,11 +190,19 @@ export const PublicOfferPage: React.FC = () => {
           </CardHeader>
           <CardContent className="p-6 space-y-6 text-sm text-foreground/90 leading-relaxed">
             
-            <p>Dear <strong>{candidateName}</strong>,</p>
-            
-            <p>
-              We are pleased to offer you employment at <strong>{companyName}</strong> in the position of <strong>{offer.position_title}</strong> under the <strong>{departmentName}</strong> department. We believe your skills and experience will be a valuable asset to our organization.
-            </p>
+            {meta.compiledBody ? (
+              <div className="whitespace-pre-line text-slate-800 space-y-3 font-serif border-b border-border pb-4">
+                {meta.compiledBody}
+              </div>
+            ) : (
+              <>
+                <p>Dear <strong>{candidateName}</strong>,</p>
+                
+                <p>
+                  We are pleased to offer you employment at <strong>{effectiveCompanyName}</strong> in the position of <strong>{offer.position_title}</strong> under the <strong>{departmentName}</strong> department. We believe your skills and experience will be a valuable asset to our organization.
+                </p>
+              </>
+            )}
 
             <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mt-4 mb-2">Offer Terms & Remuneration:</h3>
             <div className="border border-border">

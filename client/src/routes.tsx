@@ -4,6 +4,8 @@ import { AppShellLayout } from './layouts/AppShellLayout';
 import { HRLayout } from './layouts/HRLayout';
 import { ManagerLayout } from './layouts/ManagerLayout';
 import { TeamLeadLayout } from './layouts/TeamLeadLayout';
+import { InternLayout } from './layouts/InternLayout';
+import { ConsultantLayout } from './layouts/ConsultantLayout';
 import { LoginPage } from './features/auth/pages/LoginPage';
 import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 import { ApprovalsDashboardPage } from './features/leaves/pages/ApprovalsDashboardPage';
@@ -109,6 +111,7 @@ import { AnalyticsDashboard } from './features/analytics/pages/AnalyticsDashboar
 import { AttendanceReportsPage } from './features/analytics/pages/AttendanceReportsPage';
 import { TimelogReportPage } from './features/analytics/pages/TimelogReportPage';
 import { CeoAttendanceReportPage } from './features/analytics/pages/CeoAttendanceReportPage';
+import { ReportEnginePage } from './features/analytics/pages/ReportEnginePage';
 import CeoFacePunchPage from './features/attendance/pages/CeoFacePunchPage';
 
 // Performance Pages
@@ -177,7 +180,7 @@ import { SuperAdminHelpDeskPage } from './features/superadmin/HelpDesk/SuperAdmi
 import { SuperAdminProfilePage } from './features/superadmin/Profile/SuperAdminProfilePage';
 
 // Employee Portal Pages
-import ProfilePage from './features/employee/pages/EmployeeProfilePage';
+import ProfilePage from './features/employee/portal-pages/ProfilePage';
 import AttendancePage from './features/employee/portal-pages/AttendancePage';
 import LeavePage from './features/employee/portal-pages/LeavePage';
 import RegularizationPage from './features/employee/portal-pages/RegularizationPage';
@@ -212,6 +215,10 @@ import NotificationsPage from './features/employee/portal-pages/NotificationsPag
 import ApprovalsPage from './features/employee/portal-pages/ApprovalsPage';
 import SettingsSecurityPage from './features/employee/portal-pages/SettingsSecurityPage';
 
+// Intern & Consultant Portal Pages
+import { InternDashboardPage } from './features/intern/pages/InternDashboardPage';
+import { ConsultantDashboardPage } from './features/consultant/pages/ConsultantDashboardPage';
+
 function RootRedirect() {
   const { isAuthenticated, user } = useAuthStore();
 
@@ -243,6 +250,12 @@ function RootRedirect() {
   }
   if (roles.includes('team_lead')) {
     return <Navigate to="/team-lead/dashboard" replace />;
+  }
+  if (roles.includes('intern')) {
+    return <Navigate to="/intern/dashboard" replace />;
+  }
+  if (roles.includes('consultant')) {
+    return <Navigate to="/consultant/dashboard" replace />;
   }
 
   return <Navigate to="/employee/dashboard" replace />;
@@ -561,6 +574,7 @@ export function AppRoutes() {
         <Route path="/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/recruitment/referrals" element={<ReferralManagementPage />} />
+        <Route path="/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
 
         {/* Asset Management Admin */}
         <Route path="/assets" element={<AssetDashboard />} />
@@ -604,6 +618,7 @@ export function AppRoutes() {
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
         <Route path="/analytics/ceo-attendance" element={<CeoAttendanceReportPage />} />
+        <Route path="/analytics/report-engine" element={<ReportEnginePage />} />
 
         {/* Employee Lifecycle */}
         <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
@@ -620,6 +635,7 @@ export function AppRoutes() {
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
+        <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
           path="/masters"
@@ -722,6 +738,56 @@ export function AppRoutes() {
         <Route path="/employee/notifications" element={<NotificationCenterPage />} />
         <Route path="/employee/approvals" element={<ApprovalsPage />} />
         <Route path="/employee/settings" element={<SettingsSecurityPage />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          INTERN PORTAL  (/intern/*)
+          Amber-accented sidebar — internship self-service
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['intern']}>
+            <InternLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/intern" element={<Navigate to="/intern/dashboard" replace />} />
+        <Route path="/intern/dashboard"        element={<InternDashboardPage />} />
+        <Route path="/intern/profile"          element={<ProfilePage />} />
+        <Route path="/intern/attendance"       element={<AttendancePage />} />
+        <Route path="/intern/leaves"           element={<LeavePage />} />
+        <Route path="/intern/payslips"         element={<PayslipViewer />} />
+        <Route path="/intern/documents"        element={<DocumentsPage />} />
+        <Route path="/intern/holiday-calendar" element={<HolidayCalendarPage />} />
+        <Route path="/intern/announcements"    element={<AnnouncementsPage />} />
+        <Route path="/intern/id-card"          element={<IDCardPage />} />
+        <Route path="/intern/org-chart"        element={<OrgChartPage />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          CONSULTANT PORTAL  (/consultant/*)
+          Violet-accented sidebar — consultant self-service
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['consultant']}>
+            <ConsultantLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/consultant" element={<Navigate to="/consultant/dashboard" replace />} />
+        <Route path="/consultant/dashboard"        element={<ConsultantDashboardPage />} />
+        <Route path="/consultant/profile"          element={<ProfilePage />} />
+        <Route path="/consultant/attendance"       element={<AttendancePage />} />
+        <Route path="/consultant/leaves"           element={<LeavePage />} />
+        <Route path="/consultant/payslips"         element={<PayslipViewer />} />
+        <Route path="/consultant/expenses"         element={<ExpensePage />} />
+        <Route path="/consultant/travel"           element={<TravelPage />} />
+        <Route path="/consultant/documents"        element={<DocumentsPage />} />
+        <Route path="/consultant/holiday-calendar" element={<HolidayCalendarPage />} />
+        <Route path="/consultant/announcements"    element={<AnnouncementsPage />} />
+        <Route path="/consultant/id-card"          element={<IDCardPage />} />
+        <Route path="/consultant/org-chart"        element={<OrgChartPage />} />
       </Route>
 
       {/* 404 */}

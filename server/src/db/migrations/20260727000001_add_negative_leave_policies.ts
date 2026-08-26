@@ -2,8 +2,8 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Alter leave_types
-  const hasNegativeCol = await knex.schema.hasColumn('leave_types', 'allow_negative_balance');
-  if (!hasNegativeCol) {
+  const hasAllowNeg = await knex.schema.hasColumn('leave_types', 'allow_negative_balance');
+  if (!hasAllowNeg) {
     await knex.schema.alterTable('leave_types', (table) => {
       table.boolean('allow_negative_balance').defaultTo(false);
       table.string('negative_balance_action', 50).nullable();
@@ -13,8 +13,8 @@ export async function up(knex: Knex): Promise<void> {
   }
 
   // Alter leave_balances
-  const hasNegativeDaysCol = await knex.schema.hasColumn('leave_balances', 'carried_forward_negative_days');
-  if (!hasNegativeDaysCol) {
+  const hasCarriedForward = await knex.schema.hasColumn('leave_balances', 'carried_forward_negative_days');
+  if (!hasCarriedForward) {
     await knex.schema.alterTable('leave_balances', (table) => {
       table.decimal('carried_forward_negative_days', 5, 2).defaultTo(0);
     });

@@ -7,7 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight, FileText, ExternalLink, Sparkles, Eye, Layers, FileSpreadsheet, Files, Trash2, Loader2, FolderArchive, FileType, FileCheck } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+  Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight, FileText,
+  ExternalLink, Sparkles, Cpu, Zap, Eye, Sliders, Filter, CheckCircle, AlertCircle, FileUp, History
+} from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -22,6 +26,49 @@ const INITIAL_FILTERS = {
   status: 'all'
 };
 
+const getResumeViewUrl = (url: string | null | undefined): string => {
+  if (!url) return '#';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const rawApiUrl = (import.meta as any).env.VITE_API_URL || `http://${window.location.hostname}:5000/api/v1`;
+  const base = rawApiUrl.replace('/api/v1', '');
+  const formattedPath = url.startsWith('/') ? url : `/${url}`;
+  return `${base}${formattedPath}`;
+};
+
+const getJobTitle = (j: any): string => {
+  if (!j) return 'Untitled Job';
+  return (
+    j.jobTitle ||
+    j.job_title ||
+    j.positionTitle ||
+    j.position_title ||
+    j.title ||
+    j.position ||
+    (j.id || j.job_id ? `Job #${j.id || j.job_id}` : 'Untitled Job')
+  );
+};
+
+const getJobCode = (j: any): string => {
+  if (!j) return '';
+  return (
+    j.jobCode ||
+    j.job_code ||
+    j.requisitionCode ||
+    j.requisition_code ||
+    j.mrNumber ||
+    j.mr_number ||
+    j.code ||
+    ''
+  );
+};
+
+const getJobId = (j: any): string => {
+  if (!j) return '';
+  return String(j.id || j.job_id || j.mrf_id || j.jobId || '');
+};
+
 export const ResumeBankPage: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('source');
@@ -34,6 +81,25 @@ export const ResumeBankPage: React.FC = () => {
   
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [filteredData, setFilteredData] = useState<any[]>([]);
+
+  // ────── ATS SCREENING STATE ──────
+  const [atsJobId, setAtsJobId] = useState<string>('');
+  const [atsManualSkills, setAtsManualSkills] = useState<string>('');
+  const [atsMinMatchPct, setAtsMinMatchPct] = useState<string>('0'); // Default to All Matches (0%+ ) so no candidate is hidden
+  const [atsTopN, setAtsTopN] = useState<string>('10');
+  const [atsSourceFilter, setAtsSourceFilter] = useState<string>('all');
+  const [atsResults, setAtsResults] = useState<any[]>([]);
+  const [atsJobDetails, setAtsJobDetails] = useState<any>(null);
+  const [isLoadingAts, setIsLoadingAts] = useState(false);
+  const [totalScannedAts, setTotalScannedAts] = useState<number>(0);
+  const [selectedAtsDetail, setSelectedAtsDetail] = useState<any | null>(null);
+  const [useGeminiAI, setUseGeminiAI] = useState(false); // Gemini AI toggle
+
+  // ────── ENHANCED BULK UPLOAD STATE ──────
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkJobId, setBulkJobId] = useState<string>('');
+  const [bulkSourceTag, setBulkSourceTag] = useState<string>('bulk_import');
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
   // Dynamic filter lists populated from database & job openings
   const availableSources = React.useMemo(() => {
@@ -79,17 +145,8 @@ export const ResumeBankPage: React.FC = () => {
   const [totalLogEntries, setTotalLogEntries] = useState(0);
   const [logTotalPages, setLogTotalPages] = useState(1);
 
-  // Bulk Upload Multi-Format Files & AI Screening State
-  const [selectedUploadFiles, setSelectedUploadFiles] = useState<File[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [targetJobIdForUpload, setTargetJobIdForUpload] = useState<string>('');
-  const [autoShortlistForUpload, setAutoShortlistForUpload] = useState(true);
-
-  // AI Suggestions & Modal State
-  const [targetJobForAi, setTargetJobForAi] = useState<string | number | undefined>(undefined);
-  const [selectedCandidateForAiModal, setSelectedCandidateForAiModal] = useState<any | null>(null);
-  const [isAiAnalysisModalOpen, setIsAiAnalysisModalOpen] = useState(false);
+  // Bulk Upload File State (CSV / Excel)
+  const [selectedExcelFile, setSelectedExcelFile] = useState<File | null>(null);
 
   // Shortlist Modal State
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
@@ -120,23 +177,54 @@ export const ResumeBankPage: React.FC = () => {
           items = res.data;
         }
 
-        if (items.length === 0) {
-          apiClient.get('/public/job-reference/openings')
-            .then(openRes => {
-              const openItems = Array.isArray(openRes.data?.data) ? openRes.data.data : [];
-              setJobsList(openItems);
+        if (items.length > 0) {
+          setJobsList(items);
+          if (!atsJobId && items[0]) setAtsJobId(getJobId(items[0]));
+        } else {
+          apiClient.get('/recruitment/mrf')
+            .then(mrfRes => {
+              const mrfItems = Array.isArray(mrfRes.data?.data)
+                ? mrfRes.data.data
+                : (Array.isArray(mrfRes.data) ? mrfRes.data : []);
+              if (mrfItems.length > 0) {
+                setJobsList(mrfItems);
+                if (!atsJobId && mrfItems[0]) setAtsJobId(getJobId(mrfItems[0]));
+              } else {
+                apiClient.get('/public/job-reference/openings')
+                  .then(openRes => {
+                    const openItems = Array.isArray(openRes.data?.data)
+                      ? openRes.data.data
+                      : (Array.isArray(openRes.data) ? openRes.data : []);
+                    setJobsList(openItems);
+                    if (openItems.length > 0 && !atsJobId) setAtsJobId(getJobId(openItems[0]));
+                  })
+                  .catch(() => setJobsList([]));
+              }
             })
             .catch(() => setJobsList([]));
-        } else {
-          setJobsList(items);
         }
       })
       .catch(err => {
-        console.error('Failed to load jobs list from recruitment endpoint, attempting fallback', err);
-        apiClient.get('/public/job-reference/openings')
-          .then(openRes => {
-            const openItems = Array.isArray(openRes.data?.data) ? openRes.data.data : [];
-            setJobsList(openItems);
+        console.error('Failed to load jobs list', err);
+        apiClient.get('/recruitment/mrf')
+          .then(mrfRes => {
+            const mrfItems = Array.isArray(mrfRes.data?.data)
+              ? mrfRes.data.data
+              : (Array.isArray(mrfRes.data) ? mrfRes.data : []);
+            if (mrfItems.length > 0) {
+              setJobsList(mrfItems);
+              if (!atsJobId && mrfItems[0]) setAtsJobId(getJobId(mrfItems[0]));
+            } else {
+              apiClient.get('/public/job-reference/openings')
+                .then(openRes => {
+                  const openItems = Array.isArray(openRes.data?.data)
+                    ? openRes.data.data
+                    : (Array.isArray(openRes.data) ? openRes.data : []);
+                  setJobsList(openItems);
+                  if (openItems.length > 0 && !atsJobId) setAtsJobId(getJobId(openItems[0]));
+                })
+                .catch(() => setJobsList([]));
+            }
           })
           .catch(() => setJobsList([]));
       });
@@ -161,7 +249,7 @@ export const ResumeBankPage: React.FC = () => {
             id: item.id,
             candidateId: item.candidateId || item.candidate_id || item.id,
             trackerId: item.trackerId || item.tracker_id || '-',
-            name: item.candidateName || item.candidate_name || '-',
+            name: item.candidateName || item.candidate_name || (item.firstName || item.first_name ? `${item.firstName || item.first_name || ''} ${item.lastName || item.last_name || ''}`.trim() : (item.name || '-')),
             dob: item.candidateDob || item.candidate_dob || '-',
             gender: item.candidateGender || item.candidate_gender || item.gender || '-',
             email: item.candidateEmail || item.candidate_email || '-',
@@ -179,7 +267,7 @@ export const ResumeBankPage: React.FC = () => {
             atsScore: item.atsScore ?? item.ats_score ?? null,
             jdMatchScore: item.jdMatchScore ?? item.jd_match_score ?? null,
             status: item.status || '-',
-            resumeUrl: item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
+            resumeUrl: item.resumeFileUrl || item.resume_file_url || item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
           }));
           setResumesData(mapped);
           setFilteredData(mapped);
@@ -247,6 +335,76 @@ export const ResumeBankPage: React.FC = () => {
     }
   }, [activeTab, currentPage, pageSize, logCurrentPage, logPageSize]);
 
+  // ────── ATS SCORING TRIGGER (WITH MIN MATCH % SETTING) ──────
+  const handleRunAtsScoring = () => {
+    if (!atsJobId) {
+      toast.error('Please select a target Job Opening for ATS Screening');
+      return;
+    }
+    setIsLoadingAts(true);
+    apiClient.post('/recruitment/resume-bank/ats-score', {
+      jobId: atsJobId,
+      manualSkills: atsManualSkills,
+      topN: atsTopN,
+      sourceFilter: atsSourceFilter,
+      minMatchPct: atsMinMatchPct, // Passing min match % setting
+      useAI: useGeminiAI,          // Gemini AI mode toggle
+    })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setAtsResults(res.data.data);
+          if (res.data.meta) {
+            setTotalScannedAts(res.data.meta.totalScanned || res.data.data.length);
+            setAtsJobDetails(res.data.meta.jobDetails || null);
+          }
+          toast.success(`ATS Scan Complete! Found ${res.data.data.length} candidate(s) matching ≥ ${atsMinMatchPct}%.`);
+        } else {
+          toast.error('Failed to run ATS scoring scan');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to run ATS scoring', err);
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to run ATS scoring scan';
+        toast.error(msg);
+      })
+      .finally(() => setIsLoadingAts(false));
+  };
+
+  // ────── MULTI-FILE BULK UPLOAD TRIGGER (PDF / ZIP / RAR) ──────
+  const handleMultiFileUpload = () => {
+    if (bulkFiles.length === 0) {
+      toast.error('Please select PDF, ZIP, or RAR resume files to upload.');
+      return;
+    }
+    setIsUploadingFiles(true);
+    const formDataObj = new FormData();
+    for (let i = 0; i < bulkFiles.length; i++) {
+      formDataObj.append('files', bulkFiles[i]);
+    }
+    if (bulkJobId) formDataObj.append('jobId', bulkJobId);
+    if (bulkSourceTag) formDataObj.append('source', bulkSourceTag);
+
+    apiClient.post('/recruitment/resume-bank/bulk-upload-files', formDataObj, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success(res.data.message || 'Resumes uploaded & parsed successfully!');
+          setBulkFiles([]);
+          setActiveTab('logs');
+          fetchLogs();
+        } else {
+          toast.error(res.data?.message || 'Failed to process bulk file upload');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to upload files', err);
+        toast.error('Failed to process file upload');
+      })
+      .finally(() => setIsUploadingFiles(false));
+  };
+
   const handleShortlist = (resumeId: number, targetJobId?: number) => {
     if (!targetJobId) {
       const resume = resumesData.find(r => r.id === resumeId);
@@ -310,7 +468,8 @@ export const ResumeBankPage: React.FC = () => {
             jobId: item.jobId || item.job_id || null,
             jobTitle: item.jobTitle || item.job_title || null,
             jobCode: item.jobCode || item.job_code || null,
-            status: item.status || '-'
+            status: item.status || '-',
+            resumeUrl: item.resumeFileUrl || item.resume_file_url || item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
           }));
           setResumesData(mapped);
           setFilteredData(mapped);
@@ -326,34 +485,13 @@ export const ResumeBankPage: React.FC = () => {
 
   const handleSaveCandidate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      setFormError('Name is required.');
-      return;
-    }
-    if (!formData.email.trim()) {
-      setFormError('Email is required.');
-      return;
-    }
-    if (!formData.contact.trim()) {
-      setFormError('Contact Number is required.');
-      return;
-    }
-    if (!formData.gender) {
-      setFormError('Gender is required.');
-      return;
-    }
-    if (!formData.maritalStatus) {
-      setFormError('Marital Status is required.');
-      return;
-    }
-    if (!formData.qualification.trim()) {
-      setFormError('Qualification is required.');
-      return;
-    }
-    if (!formData.skills.trim()) {
-      setFormError('Skills is required.');
-      return;
-    }
+    if (!formData.name.trim()) { setFormError('Name is required.'); return; }
+    if (!formData.email.trim()) { setFormError('Email is required.'); return; }
+    if (!formData.contact.trim()) { setFormError('Contact Number is required.'); return; }
+    if (!formData.gender) { setFormError('Gender is required.'); return; }
+    if (!formData.maritalStatus) { setFormError('Marital Status is required.'); return; }
+    if (!formData.qualification.trim()) { setFormError('Qualification is required.'); return; }
+    if (!formData.skills.trim()) { setFormError('Skills is required.'); return; }
     setFormError('');
 
     const selectedJob = jobsList.find((j: any) => String(j.id) === String(formData.jobId));
@@ -419,36 +557,26 @@ export const ResumeBankPage: React.FC = () => {
   };
 
   const handleBulkUpload = () => {
-    if (selectedUploadFiles.length === 0) {
-      toast.error('Please select at least one file (PDF, Word, Excel, CSV, TXT, or ZIP) to upload.');
+    if (!selectedExcelFile) {
+      toast.error('Please select an Excel or CSV file (.xlsx, .xls, .csv) to upload.');
       return;
     }
 
-    setIsUploading(true);
+    setIsUploadingFiles(true);
     const formDataObj = new FormData();
-    selectedUploadFiles.forEach(file => {
-      formDataObj.append('files', file);
-    });
-    if (targetJobIdForUpload && targetJobIdForUpload !== 'none') {
-      formDataObj.append('jobId', targetJobIdForUpload);
+    formDataObj.append('file', selectedExcelFile);
+    if (bulkJobId) {
+      formDataObj.append('jobId', bulkJobId);
     }
-    formDataObj.append('autoShortlist', String(autoShortlistForUpload));
 
     apiClient.post('/recruitment/resume-bank/bulk-upload', formDataObj, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
       .then(res => {
         if (res.data?.success) {
-          toast.success(res.data?.message || 'Resumes and AI screening processed successfully!');
-          setSelectedUploadFiles([]);
-          if (targetJobIdForUpload && targetJobIdForUpload !== 'none') {
-            setTargetJobForAi(targetJobIdForUpload);
-            setActiveTab('suggestions');
-          } else {
-            setActiveTab('logs');
-          }
+          toast.success(res.data?.message || 'Excel candidate data processed successfully!');
+          setSelectedExcelFile(null);
+          setActiveTab('logs');
           fetchLogs();
           fetchResumes();
         } else {
@@ -457,10 +585,12 @@ export const ResumeBankPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to upload candidates', err);
-        toast.error(err?.response?.data?.message || err?.response?.data?.error || 'Failed to process bulk upload');
+        const errObj = err?.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err?.response?.data?.message || 'Failed to process bulk upload';
+        toast.error(msg);
       })
       .finally(() => {
-        setIsUploading(false);
+        setIsUploadingFiles(false);
       });
   };
 
@@ -534,52 +664,76 @@ export const ResumeBankPage: React.FC = () => {
   const paginatedLogs = logsData;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
+    <div className="p-4 md:p-6 space-y-6 bg-slate-50/50 dark:bg-slate-950 min-h-screen">
+      {/* Top Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">
+        <div>
+          <h1 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/60 text-indigo-600 dark:text-indigo-400 shadow-2xs">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            Resume Source Screen & ATS Bank
+          </h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
+            Scan candidates, bulk import PDF/ZIP/Word resumes, run AI ATS skill matching, and shortlist top talent.
+          </p>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="source">Resume Source Screen</TabsTrigger>
-          <TabsTrigger value="suggestions" className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-400 font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-            AI Resume Suggestions
+        <TabsList className="mb-6 bg-slate-100/80 dark:bg-slate-900/80 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex flex-wrap gap-1">
+          <TabsTrigger value="source" className="rounded-xl text-xs font-semibold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs">
+            <FileText className="w-3.5 h-3.5 mr-1.5 text-indigo-500" />
+            Resume Source Screen
           </TabsTrigger>
-          <TabsTrigger value="upload">Bulk Upload</TabsTrigger>
-          <TabsTrigger value="logs">Bulk Uploaded Log</TabsTrigger>
+          <TabsTrigger value="ats" className="rounded-xl text-xs font-bold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs text-amber-700 dark:text-amber-400">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-500 fill-amber-400 animate-pulse" />
+            AI ATS Screening & Top-N Rank
+          </TabsTrigger>
+          <TabsTrigger value="upload" className="rounded-xl text-xs font-semibold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs">
+            <FileUp className="w-3.5 h-3.5 mr-1.5 text-purple-500" />
+            Bulk Upload (PDF / ZIP / Word)
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="rounded-xl text-xs font-semibold px-4 py-2 transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:shadow-2xs">
+            <History className="w-3.5 h-3.5 mr-1.5 text-emerald-500" />
+            Bulk Uploaded Log
+          </TabsTrigger>
         </TabsList>
 
         {/* TAB 1: RESUME SOURCE SCREEN */}
         <TabsContent value="source" className="space-y-6">
-          <Card className="rounded-none shadow-sm border-border">
-            <CardHeader className="py-3 border-b border-border">
-              <CardTitle className="text-sm font-normal text-foreground">Resume Bank</CardTitle>
+          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-visible relative z-30">
+            <CardHeader className="py-3 px-5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900 rounded-t-2xl">
+              <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-200">Resume Bank Search & Filters</CardTitle>
             </CardHeader>
-            <CardContent className="p-4 md:p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
+            <CardContent className="p-5 space-y-4 overflow-visible relative z-30">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-5 gap-y-4">
                 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Candidate Tracker ID</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Candidate Tracker ID</label>
                   <Input 
                     placeholder="Search By Tracker ID..."
                     value={filters.trackerId} 
                     onChange={(e) => handleFilterChange('trackerId', e.target.value)} 
-                    className="h-8 text-xs bg-background border-input rounded-sm"
+                    className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Search</label>
+                <div className="space-y-1.5 lg:col-span-2">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Search</label>
                   <Input 
                     placeholder="Candidate Name / Email / Skills..."
                     value={filters.search} 
                     onChange={(e) => handleFilterChange('search', e.target.value)} 
-                    className="h-8 text-xs bg-background border-input rounded-sm"
+                    className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Candidate Source</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Application From</label>
                   <Select value={filters.source} onValueChange={(val) => handleFilterChange('source', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-input rounded-sm">
-                      <SelectValue placeholder="Choose" />
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl">
+                      <SelectValue placeholder="Select Source" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Sources</SelectItem>
@@ -598,9 +752,9 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Position Title</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Position Title</label>
                   <Select value={filters.position} onValueChange={(val) => handleFilterChange('position', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-input rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl">
                       <SelectValue placeholder="Choose Position" />
                     </SelectTrigger>
                     <SelectContent>
@@ -615,9 +769,9 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Candidate Status</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Candidate Status</label>
                   <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-input rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl">
                       <SelectValue placeholder="Choose Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -632,15 +786,11 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
                 
                 <div className="flex items-end gap-2 pt-1 lg:col-span-4 mt-2">
-                  <Button onClick={handleSearch} className="h-8 px-4 bg-primary text-primary-foreground hover:bg-primary/90 text-xs rounded-sm">
+                  <Button onClick={handleSearch} className="h-9 px-5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-xs">
                     Search
                   </Button>
-                  <Button onClick={handleReset} variant="outline" className="h-8 px-4 text-xs rounded-sm bg-destructive hover:bg-destructive/90 text-destructive-foreground border-none">
+                  <Button onClick={handleReset} variant="outline" className="h-9 px-5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-none">
                     Reset Filter
-                  </Button>
-                  <Button variant="secondary" onClick={() => setIsAddModalOpen(true)} className="h-8 px-4 text-xs rounded-sm">
-                    <Plus className="w-3 h-3 mr-1" />
-                    Add Candidate
                   </Button>
                 </div>
 
@@ -648,198 +798,118 @@ export const ResumeBankPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="rounded-none shadow-sm border-border">
-            <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-              <CardTitle className="text-sm font-normal text-foreground">Result</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleExportResumes} className="h-7 px-3 text-xs rounded-sm shadow-none">
-                <Download className="w-3 h-3 mr-1.5" />
-                Export
-              </Button>
+          {/* TABLE CONTAINER */}
+          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between py-4 px-5 border-b border-slate-100 dark:border-slate-800">
+              <CardTitle className="text-sm font-bold text-slate-900 dark:text-white">Candidates Database ({totalEntries})</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => setIsAddModalOpen(true)} className="h-8 px-3.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Candidate
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportResumes} className="h-8 px-3.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-700">
+                  <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                  Export
+                </Button>
+              </div>
             </CardHeader>
-            
+
             <CardContent className="p-0">
-              <div className="p-3 bg-card border-b border-border flex justify-between items-center text-xs text-foreground/90">
+              <div className="p-3 bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-600 dark:text-slate-400 font-medium">
                 <div>
                   Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
                 </div>
                 <div className="flex items-center gap-1.5">
                   Show 
                   <Select value={pageSize} onValueChange={(val) => { setPageSize(val); setCurrentPage(1); }}>
-                    <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-background border-input rounded-sm">
+                    <SelectTrigger className="h-7 w-16 px-1.5 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
                       <SelectItem value="50">50</SelectItem>
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
-                  entries
+                  per page
                 </div>
               </div>
-              
-              <div className="bg-background overflow-x-auto w-full">
-                <Table className="w-full min-w-[1200px]">
-                  <TableHeader className="bg-muted">
-                    <TableRow className="border-border">
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap pl-4">Candidate</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Job Opening</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Contact / Email</TableHead>
-                      <TableHead className="text-center text-xs font-semibold h-9 text-foreground whitespace-nowrap w-24">ATS Score</TableHead>
-                      <TableHead className="text-center text-xs font-semibold h-9 text-foreground whitespace-nowrap w-24">JD Match</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Company & Exp</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Status</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-right pr-4">Action</TableHead>
+
+              <div className="overflow-x-auto">
+                <Table className="min-w-[1200px]">
+                  <TableHeader className="bg-slate-50 dark:bg-slate-900">
+                    <TableRow className="border-slate-100 dark:border-slate-800">
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Tracker ID</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Candidate Name & Email</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Source</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Position</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Experience</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Contact</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Status</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap">Resume File</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 whitespace-nowrap text-right">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedData.length > 0 ? (
-                      paginatedData.map((candidate) => (
-                        <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-muted/50">
-                          <TableCell className="text-xs py-2 whitespace-nowrap font-medium pl-4">
-                            <div>
-                              <span className="font-semibold text-foreground">{candidate.name}</span>
-                              <span className="block text-[10px] text-muted-foreground">{candidate.trackerId}</span>
-                              {candidate.resumeUrl ? (
-                                <a
-                                  href={candidate.resumeUrl.startsWith('http') || candidate.resumeUrl.startsWith('data:') ? candidate.resumeUrl : `http://${window.location.hostname}:5000${candidate.resumeUrl}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] text-emerald-600 hover:text-emerald-700 font-bold mt-0.5 hover:underline"
-                                >
-                                  <FileText className="w-3 h-3" /> View Resume
-                                </a>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                                  <FileText className="w-3 h-3 text-slate-400" /> Form Data
-                                </span>
-                              )}
-                            </div>
+                    {isLoadingResumes ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="h-28 text-center text-xs text-slate-500 bg-white dark:bg-slate-900">
+                          Loading candidate resumes...
+                        </TableCell>
+                      </TableRow>
+                    ) : paginatedData.length > 0 ? (
+                      paginatedData.map((item) => (
+                        <TableRow key={item.id} className="border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                          <TableCell className="text-xs py-3 font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{item.trackerId}</TableCell>
+                          <TableCell className="text-xs py-3 font-medium whitespace-nowrap">
+                            <div className="font-bold text-slate-900 dark:text-slate-100">{item.name}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{item.email}</div>
                           </TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap">
-                            {candidate.jobTitle ? (
-                              <div className="flex items-center gap-1 text-blue-600 font-medium">
-                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
-                                <span>{candidate.jobCode ? `[${candidate.jobCode}] ` : ''}{candidate.jobTitle}</span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground italic text-[11px]">{candidate.position && candidate.position !== 'None' && candidate.position !== '-' ? candidate.position : 'Unassigned'}</span>
-                            )}
+                          <TableCell className="text-xs py-3 whitespace-nowrap">
+                            <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 rounded-lg capitalize px-2 py-0.5 font-semibold">
+                              {item.source === 'bulk_import' ? 'Bulk Import' : item.source}
+                            </Badge>
                           </TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap">
-                            <div className="text-foreground">{candidate.email}</div>
-                            <div className="text-[10px] text-muted-foreground">{candidate.contact}</div>
-                          </TableCell>
-
-                          {/* ATS Score Column */}
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-center">
-                            {candidate.atsScore !== null && candidate.atsScore !== undefined ? (
-                              <span className={cn(
-                                "px-2 py-0.5 rounded-full text-xs font-mono font-extrabold border inline-block",
-                                candidate.atsScore >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300" :
-                                candidate.atsScore >= 70 ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300" :
-                                "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300"
-                              )}>
-                                {candidate.atsScore}%
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-[11px] font-mono">-</span>
-                            )}
-                          </TableCell>
-
-                          {/* JD Match Column */}
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-center">
-                            {candidate.jdMatchScore !== null && candidate.jdMatchScore !== undefined ? (
-                              <span className={cn(
-                                "px-2 py-0.5 rounded-full text-xs font-mono font-extrabold border inline-block",
-                                candidate.jdMatchScore >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300" :
-                                candidate.jdMatchScore >= 65 ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300" :
-                                "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300"
-                              )}>
-                                {candidate.jdMatchScore}%
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-[11px] font-mono">-</span>
-                            )}
-                          </TableCell>
-
-                          <TableCell className="text-xs py-2 whitespace-nowrap">
-                            <div className="text-foreground">{candidate.company !== '-' ? candidate.company : 'N/A'}</div>
-                            <div className="text-[10px] text-muted-foreground">{candidate.experience} • {candidate.qualification}</div>
-                          </TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
-                              candidate.status === 'Screening' || candidate.status === 'Shortlisted' || candidate.status === 'Interview'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : candidate.status === 'Hired' || candidate.status === 'Offered'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : candidate.status === 'Rejected'
-                                ? 'bg-red-50 text-red-700 border border-red-200'
-                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                          <TableCell className="text-xs py-3 font-medium whitespace-nowrap">{item.position}</TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap">{item.experience}</TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap">{item.contact}</TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              item.status === 'Screening' || item.status === 'Shortlisted' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300'
                             }`}>
-                              {candidate.status}
+                              {item.status}
                             </span>
                           </TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-right pr-4">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {candidate.jobId && (
-                                  <div className="flex items-center gap-1.5">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => {
-                                        const isHr = window.location.pathname.startsWith('/hr');
-                                        navigate(isHr ? '/hr/recruitment/applicant-tracker' : '/recruitment/applicant-tracker');
-                                      }}
-                                      className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors gap-1 font-medium"
-                                    >
-                                      View Pipeline
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => {
-                                        setSelectedCandidateForAiModal(candidate);
-                                        setIsAiAnalysisModalOpen(true);
-                                      }}
-                                      className="h-7 px-2 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-medium"
-                                      title="View Detailed AI ATS Breakdown"
-                                    >
-                                      <Sparkles className="w-3 h-3 mr-1" />
-                                      AI Analysis
-                                    </Button>
-                                  </div>
-                              )}
-
-                              {candidate.status === 'Screening' || candidate.status === 'Shortlisted' || candidate.status === 'Interview' || candidate.status === 'Offered' || candidate.status === 'Hired' ? (
-                                <span className="inline-flex items-center text-xs font-semibold text-emerald-600 gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Shortlisted
-                                </span>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={shortlistingId === candidate.id}
-                                  onClick={() => handleShortlist(candidate.id, candidate.jobId)}
-                                  className="h-7 px-2.5 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 shadow-none font-medium transition-colors"
-                                >
-                                  {shortlistingId === candidate.id ? (
-                                    'Shortlisting...'
-                                  ) : (
-                                    <span className="flex items-center gap-1">
-                                      Shortlist <ArrowRight className="w-3 h-3" />
-                                    </span>
-                                  )}
-                                </Button>
-                              )}
-                            </div>
+                          <TableCell className="text-xs py-3 whitespace-nowrap">
+                            {item.resumeUrl ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(getResumeViewUrl(item.resumeUrl), '_blank')}
+                                className="h-7 px-2.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg"
+                              >
+                                <FileText className="w-3.5 h-3.5 mr-1" /> View Resume 📄
+                              </Button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">No file attached</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap text-right">
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleShortlist(item.id, item.jobId)}
+                              disabled={shortlistingId === item.id || item.status === 'Screening'}
+                              className="h-7 px-3 text-[11px] bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white rounded-lg font-semibold shadow-xs"
+                            >
+                              {item.status === 'Screening' ? 'Shortlisted' : 'Shortlist →'}
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
-                          No data available in table
+                        <TableCell colSpan={9} className="h-28 text-center text-xs text-slate-500 bg-white dark:bg-slate-900">
+                          No candidate records found matching criteria.
                         </TableCell>
                       </TableRow>
                     )}
@@ -848,13 +918,13 @@ export const ResumeBankPage: React.FC = () => {
               </div>
 
               {totalEntries > 0 && (
-                <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs px-4">
-                  <div className="text-muted-foreground font-medium">
-                    Showing Page {currentPage} of {totalPages} ({totalEntries} total entries)
+                <div className="bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 p-3.5 flex justify-between items-center text-xs">
+                  <div className="text-slate-500 font-medium">
+                    Page {currentPage} of {totalPages}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-7 px-3 text-xs bg-card" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
-                    <Button variant="outline" size="sm" className="h-7 px-3 text-xs bg-card" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
+                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
+                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
                   </div>
                 </div>
               )}
@@ -862,285 +932,476 @@ export const ResumeBankPage: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {/* TAB 2: AI RESUME SUGGESTIONS */}
-        <TabsContent value="suggestions">
-          <AiSuggestionsTab initialJobId={targetJobForAi} />
-        </TabsContent>
-
-        {/* TAB 3: BULK UPLOAD */}
-        <TabsContent value="upload">
-          <Card className="rounded-none shadow-sm border-border">
-            <CardHeader className="py-3 border-b border-border bg-slate-50/50 dark:bg-muted/30">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Upload className="w-4 h-4 text-primary" />
-                    Multi-Format Candidate & Resume Bulk Upload
-                  </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Upload resumes in PDF, Word (.docx/.doc), Excel (.xlsx/.xls/.csv), Plain Text, or ZIP archives with AI ATS Screening.
-                  </p>
+        {/* TAB 2: AI ATS SCREENING & TOP-N RANKING */}
+        <TabsContent value="ats" className="space-y-6">
+          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-visible relative z-30">
+            <CardHeader className="py-3.5 px-5 border-b border-amber-100 dark:border-amber-950/60 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent rounded-t-2xl">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-600">
+                  <Sparkles className="w-4 h-4 fill-amber-400" />
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900">PDF</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900">Word (DOCX/DOC)</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900">Excel / CSV</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-900">ZIP Archive</span>
-                </div>
-              </div>
+                AI ATS Job Matching & Top-N Resume Ranker
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 md:p-8">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Left Form (7 cols) */}
-                <div className="lg:col-span-7 space-y-5">
-                  
-                  {/* Target Job Opening for AI Screening */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span>Target Job Opening <span className="text-muted-foreground font-normal">(Optional for AI ATS Screening)</span></span>
-                    </label>
-                    <Select value={targetJobIdForUpload} onValueChange={setTargetJobIdForUpload}>
-                      <SelectTrigger className="text-xs h-9 bg-background border-input">
-                        <SelectValue placeholder="-- Select Target Job Opening (Optional) --" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">-- General Talent Pool (No Specific Job) --</SelectItem>
-                        {jobsList.map((job: any) => (
-                          <SelectItem key={job.id} value={String(job.id)}>
-                            {job.job_title || job.jobTitle} ({job.job_code || job.jobCode || `JOB-${job.id}`})
+            <CardContent className="p-5 space-y-4 overflow-visible relative z-30">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+                
+                {/* 1. Target Job Opening */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 h-4 flex items-center">1. Target Job Opening *</label>
+                  <Select value={atsJobId} onValueChange={setAtsJobId}>
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl font-medium">
+                      <SelectValue placeholder="-- Select Job Opening --" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      {jobsList.map((j: any) => {
+                        const id = getJobId(j);
+                        const title = getJobTitle(j);
+                        const code = getJobCode(j);
+                        if (!id) return null;
+                        return (
+                          <SelectItem key={id} value={id}>
+                            {code ? `[${code}] ` : ''}{title}
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[10px] text-muted-foreground">
-                      If linked to a job opening, resumes will be automatically evaluated against that job's required skills and ATS criteria.
-                    </p>
-                  </div>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                  {/* Auto Shortlist Checkbox */}
-                  {targetJobIdForUpload && targetJobIdForUpload !== 'none' && (
-                    <div className="p-3 bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900 rounded-md">
-                      <label className="flex items-start gap-2.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={autoShortlistForUpload}
-                          onChange={(e) => setAutoShortlistForUpload(e.target.checked)}
-                          className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 mt-0.5"
-                        />
-                        <div>
-                          <span className="text-xs font-semibold text-indigo-950 dark:text-indigo-200">
-                            Auto-shortlist high scoring candidates
-                          </span>
-                          <p className="text-[11px] text-indigo-700 dark:text-indigo-400 mt-0.5">
-                            Automatically advance candidates to the recruitment pipeline when they meet ATS and JD match thresholds.
-                          </p>
-                        </div>
-                      </label>
+                {/* 2. Manual Additional Skills */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 h-4 flex items-center">2. Add Manual Skills</label>
+                  <Input
+                    placeholder="e.g. Python, AWS, Docker, React..."
+                    value={atsManualSkills}
+                    onChange={e => setAtsManualSkills(e.target.value)}
+                    className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl"
+                  />
+                </div>
+
+                {/* 3. SETTING: Min ATS Match % Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 h-4 flex items-center gap-1">
+                    <Sliders className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    3. Min Match % Filter *
+                  </label>
+                  <Select value={atsMinMatchPct} onValueChange={setAtsMinMatchPct}>
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl font-medium">
+                      <SelectValue placeholder="60% & above" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">All Matches (0%+)</SelectItem>
+                      <SelectItem value="50">50% & Above</SelectItem>
+                      <SelectItem value="60">60% & Above (Default)</SelectItem>
+                      <SelectItem value="70">70% & Above</SelectItem>
+                      <SelectItem value="80">80% & Above (High Match)</SelectItem>
+                      <SelectItem value="90">90% & Above (Exact Fit)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 4. Top N Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 h-4 flex items-center">4. Top Candidates (N)</label>
+                  <Select value={atsTopN} onValueChange={setAtsTopN}>
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl font-medium">
+                      <SelectValue placeholder="Top 10" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">Top 5 Candidates</SelectItem>
+                      <SelectItem value="10">Top 10 Candidates</SelectItem>
+                      <SelectItem value="15">Top 15 Candidates</SelectItem>
+                      <SelectItem value="20">Top 20 Candidates</SelectItem>
+                      <SelectItem value="50">Top 50 Candidates</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 5. Application Source Filter */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-200 h-4 flex items-center">5. Source Filter</label>
+                  <Select value={atsSourceFilter} onValueChange={setAtsSourceFilter}>
+                    <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl font-medium">
+                      <SelectValue placeholder="All Sources" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sources</SelectItem>
+                      <SelectItem value="Career Portal">Career Portal</SelectItem>
+                      <SelectItem value="bulk_import">Bulk Import</SelectItem>
+                      <SelectItem value="Referral">Referral</SelectItem>
+                      <SelectItem value="direct_apply">Direct Apply</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-3 border-t border-slate-100 dark:border-slate-800 gap-3">
+                {atsJobDetails ? (
+                  <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-slate-900 dark:text-white">Target JD Skills ({atsJobDetails.targetSkills?.length || 0}):</span>
+                    <div className="flex flex-wrap gap-1">
+                      {atsJobDetails.targetSkills?.slice(0, 8).map((sk: string, idx: number) => (
+                        <Badge key={idx} variant="secondary" className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold px-2 py-0.5 rounded-md">✓ {sk}</Badge>
+                      ))}
                     </div>
-                  )}
-
-                  {/* Multi-Format Drag & Drop Zone */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <span className="text-destructive">*</span> Select or Drop Files
-                      </span>
-                      {selectedUploadFiles.length > 0 && (
-                        <span className="text-[11px] text-primary font-medium">
-                          {selectedUploadFiles.length} file(s) selected ({
-                            (selectedUploadFiles.reduce((acc, f) => acc + f.size, 0) / (1024 * 1024)).toFixed(2)
-                          } MB)
-                        </span>
-                      )}
-                    </label>
-
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-                      onDragLeave={() => setIsDragOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setIsDragOver(false);
-                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                          const newFiles = Array.from(e.dataTransfer.files);
-                          setSelectedUploadFiles(prev => [...prev, ...newFiles]);
-                        }
-                      }}
-                      className={cn(
-                        "relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer bg-slate-50/50 dark:bg-muted/10",
-                        isDragOver ? "border-primary bg-primary/5 scale-[0.99]" : "border-slate-300 dark:border-slate-700 hover:border-primary/60"
-                      )}
-                      onClick={() => document.getElementById('multi-file-input')?.click()}
-                    >
-                      <input
-                        id="multi-file-input"
-                        type="file"
-                        multiple
-                        accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.rtf,.zip"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files.length > 0) {
-                            const newFiles = Array.from(e.target.files);
-                            setSelectedUploadFiles(prev => [...prev, ...newFiles]);
-                            e.target.value = '';
-                          }
-                        }}
-                      />
-
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <div className="p-3 bg-primary/10 text-primary rounded-full">
-                          <Files className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-foreground">
-                            Click to browse or drag & drop files here
-                          </p>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Upload single or multiple files simultaneously (Up to 50MB per file)
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-center gap-1.5 pt-1 flex-wrap">
-                          <span className="text-[10px] px-2 py-0.5 bg-background border rounded text-muted-foreground">PDF</span>
-                          <span className="text-[10px] px-2 py-0.5 bg-background border rounded text-muted-foreground">Word (.docx, .doc)</span>
-                          <span className="text-[10px] px-2 py-0.5 bg-background border rounded text-muted-foreground">Excel (.xlsx, .xls, .csv)</span>
-                          <span className="text-[10px] px-2 py-0.5 bg-background border rounded text-muted-foreground">ZIP Archive (.zip)</span>
-                          <span className="text-[10px] px-2 py-0.5 bg-background border rounded text-muted-foreground">Text (.txt, .rtf)</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Selected Files List */}
-                    {selectedUploadFiles.length > 0 && (
-                      <div className="space-y-2 pt-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-foreground">Selected Files ({selectedUploadFiles.length})</span>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedUploadFiles([])}
-                            className="text-[11px] text-destructive hover:underline"
-                          >
-                            Clear all
-                          </button>
-                        </div>
-                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                          {selectedUploadFiles.map((file, idx) => {
-                            const ext = file.name.split('.').pop()?.toLowerCase() || '';
-                            const sizeFormatted = file.size < 1024 * 1024 
-                              ? `${(file.size / 1024).toFixed(1)} KB` 
-                              : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
-                            
-                            return (
-                              <div 
-                                key={`${file.name}-${idx}`} 
-                                className="flex items-center justify-between p-2 rounded bg-card border border-border text-xs"
-                              >
-                                <div className="flex items-center gap-2 min-w-0 flex-1">
-                                  {ext === 'pdf' ? (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200 uppercase shrink-0">PDF</span>
-                                  ) : ext === 'docx' || ext === 'doc' ? (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-700 border border-blue-200 uppercase shrink-0">WORD</span>
-                                  ) : ext === 'xlsx' || ext === 'xls' || ext === 'csv' ? (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase shrink-0">EXCEL</span>
-                                  ) : ext === 'zip' ? (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-700 border border-purple-200 uppercase shrink-0">ZIP</span>
-                                  ) : (
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-700 border border-slate-200 uppercase shrink-0">FILE</span>
-                                  )}
-                                  <span className="truncate font-medium text-foreground">{file.name}</span>
-                                  <span className="text-[10px] text-muted-foreground shrink-0">({sizeFormatted})</span>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedUploadFiles(prev => prev.filter((_, i) => i !== idx));
-                                  }}
-                                  className="text-muted-foreground hover:text-destructive p-1 transition-colors"
-                                  title="Remove file"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </div>
+                ) : <div />}
 
-                  <Button 
-                    onClick={handleBulkUpload} 
-                    disabled={isUploading || selectedUploadFiles.length === 0}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-10 rounded shadow-sm flex items-center justify-center gap-2 font-medium"
+                <div className="flex items-center gap-3 ml-auto shrink-0">
+                  {/* ── GEMINI AI TOGGLE (Fixed width w-[135px] so no size shifting) ── */}
+                  <button
+                    type="button"
+                    onClick={() => setUseGeminiAI(!useGeminiAI)}
+                    className={`group relative flex items-center justify-center gap-2 w-[135px] h-9 px-3 rounded-xl text-xs font-bold transition-all duration-300 border ${
+                      useGeminiAI
+                        ? 'bg-gradient-to-r from-violet-600 to-purple-600 text-white border-violet-500 shadow-md shadow-violet-500/20'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-violet-300'
+                    }`}
                   >
-                    {isUploading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Processing & Running AI Screening...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" /> Upload {selectedUploadFiles.length > 0 ? `${selectedUploadFiles.length} File(s)` : ''} & Run AI Screening
-                      </>
-                    )}
+                    {/* Toggle Track */}
+                    <div className={`relative w-7 h-4 rounded-full shrink-0 transition-colors duration-300 ${
+                      useGeminiAI ? 'bg-white/30' : 'bg-slate-300 dark:bg-slate-600'
+                    }`}>
+                      <div className={`absolute top-0.5 w-3 h-3 rounded-full transition-all duration-300 ${
+                        useGeminiAI
+                          ? 'left-[14px] bg-white shadow-xs'
+                          : 'left-0.5 bg-slate-500 dark:bg-slate-400'
+                      }`} />
+                    </div>
+                    <span className="truncate">
+                      {useGeminiAI ? '✨ Gemini AI' : '⚙ Normal Mode'}
+                    </span>
+                  </button>
+
+                  {/* ── RUN ATS MATCH BUTTON (Fixed width min-w-[210px] so no size shifting) ── */}
+                  <Button 
+                    onClick={handleRunAtsScoring} 
+                    disabled={isLoadingAts || !atsJobId}
+                    className={`h-9 min-w-[210px] px-5 font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all ${
+                      useGeminiAI
+                        ? 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white'
+                        : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white'
+                    }`}
+                  >
+                    <Sparkles className={`w-4 h-4 ${useGeminiAI ? 'fill-yellow-300 animate-pulse' : 'fill-amber-300 animate-pulse'}`} />
+                    {isLoadingAts
+                      ? (useGeminiAI ? 'AI Analyzing...' : 'Scanning & Scoring...')
+                      : `Run ATS Match (≥ ${atsMinMatchPct}%)`
+                    }
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
 
-                {/* Right Guide & Templates (5 cols) */}
-                <div className="lg:col-span-5 space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button onClick={handleDownloadSample} variant="outline" className="h-8 text-xs bg-[#337ab7] text-white hover:bg-[#286090] hover:text-white border-none rounded-sm px-3 flex items-center gap-1.5">
-                      <Download className="w-3.5 h-3.5" /> Sample Excel Template
-                    </Button>
-                    <Button onClick={handleDownloadDetails} variant="outline" className="h-8 text-xs bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white border-none rounded-sm px-3 flex items-center gap-1.5">
-                      <Download className="w-3.5 h-3.5" /> Download Candidate Data
-                    </Button>
+          {/* ATS RESULTS TABLE */}
+          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <CardHeader className="py-3.5 px-5 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-900 dark:text-white">
+                Ranked Candidates List ({atsResults.length})
+                {totalScannedAts > 0 && (
+                  <span className="text-xs text-slate-500 font-normal">
+                    (Scanned {totalScannedAts} total applications; Filtered by ≥ {atsMinMatchPct}% match)
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="bg-white dark:bg-slate-900 overflow-x-auto">
+                <Table className="min-w-[1200px]">
+                  <TableHeader className="bg-slate-50 dark:bg-slate-900">
+                    <TableRow className="border-slate-100 dark:border-slate-800">
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 w-20 whitespace-nowrap">Rank</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">Candidate Name</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">ATS Score</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">Matched Skills</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">Missing Skills</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">Experience</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">Resume File</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300">Recommendation</TableHead>
+                      <TableHead className="text-xs font-bold h-10 text-slate-700 dark:text-slate-300 text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingAts ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="h-32 text-center text-xs text-slate-500 bg-white dark:bg-slate-900">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Sparkles className="w-7 h-7 text-amber-500 animate-spin" />
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">Analyzing resumes, matching JD skills, and scoring candidates...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : atsResults.length > 0 ? (
+                      atsResults.map((item, idx) => (
+                        <TableRow key={item.resumeBankId} className="border-slate-100 dark:border-slate-800 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                          <TableCell className="text-xs py-2.5 font-extrabold whitespace-nowrap">
+                            {idx === 0 ? (
+                              <span className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-400 to-amber-500 text-white font-black rounded-full px-2.5 py-0.5 text-[11px] shadow-2xs whitespace-nowrap shrink-0">
+                                #1 👑
+                              </span>
+                            ) : idx === 1 ? (
+                              <span className="inline-flex items-center justify-center bg-gradient-to-r from-slate-300 to-slate-400 text-slate-900 font-bold rounded-full px-2.5 py-0.5 text-[11px] shadow-2xs whitespace-nowrap shrink-0">
+                                #2
+                              </span>
+                            ) : idx === 2 ? (
+                              <span className="inline-flex items-center justify-center bg-gradient-to-r from-amber-700 to-amber-800 text-white font-bold rounded-full px-2.5 py-0.5 text-[11px] shadow-2xs whitespace-nowrap shrink-0">
+                                #3
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-bold text-xs whitespace-nowrap px-1">#{idx + 1}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs py-3 font-medium">
+                            <div className="font-bold text-slate-900 dark:text-slate-100">{item.candidateName}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{item.email}</div>
+                          </TableCell>
+                          <TableCell className="text-xs py-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2.5 py-1 rounded-full font-black text-xs shadow-2xs ${
+                                item.atsScore >= 80 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800' : (item.atsScore >= 60 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300 dark:border-amber-800' : 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border border-rose-300 dark:border-rose-800')
+                              }`}>
+                                {item.atsScore}/100
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs py-2.5">
+                            <div className="flex items-center gap-1 flex-nowrap whitespace-nowrap overflow-hidden max-w-[220px]">
+                              {item.matchedSkills && item.matchedSkills.length > 0 ? (
+                                <>
+                                  {item.matchedSkills.slice(0, 2).map((sk: string, sIdx: number) => (
+                                    <Badge key={sIdx} className="bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 text-[10px] px-1.5 py-0.5 rounded-md font-bold truncate max-w-[90px]">✓ {sk}</Badge>
+                                  ))}
+                                  {item.matchedSkills.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedAtsDetail(item)}
+                                      className="text-[10px] bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-slate-200 hover:border-emerald-300 font-bold px-1.5 py-0.5 rounded-md cursor-pointer transition-all shrink-0"
+                                    >
+                                      +{item.matchedSkills.length - 2} More
+                                    </button>
+                                  )}
+                                </>
+                              ) : <span className="text-slate-400 text-[10px] italic">None matched</span>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs py-2.5">
+                            <div className="flex items-center gap-1 flex-nowrap whitespace-nowrap overflow-hidden max-w-[220px]">
+                              {item.missingSkills && item.missingSkills.length > 0 ? (
+                                <>
+                                  {item.missingSkills.slice(0, 2).map((sk: string, sIdx: number) => (
+                                    <Badge key={sIdx} variant="outline" className="text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[10px] px-1.5 py-0.5 rounded-md font-medium truncate max-w-[90px]">✕ {sk}</Badge>
+                                  ))}
+                                  {item.missingSkills.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedAtsDetail(item)}
+                                      className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-1.5 py-0.5 rounded-md cursor-pointer transition-all shrink-0"
+                                    >
+                                      +{item.missingSkills.length - 2} More
+                                    </button>
+                                  )}
+                                </>
+                              ) : (item.matchedSkills && item.matchedSkills.length > 0 ? (
+                                <span className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">100% Skills Matched ✓</span>
+                              ) : (
+                                <span className="text-slate-400 text-[10px] italic">None</span>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap font-medium text-slate-700 dark:text-slate-300">
+                            {item.yearsOfExperience} Yrs
+                          </TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap">
+                            {item.resumeUrl ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => window.open(getResumeViewUrl(item.resumeUrl), '_blank')}
+                                className="h-7 px-2.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg"
+                              >
+                                <FileText className="w-3.5 h-3.5 mr-1" /> View Resume 📄
+                              </Button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">Text parsed</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs py-3 whitespace-nowrap">
+                            <Badge className={`${
+                              item.recommendation === 'Strong Match' ? 'bg-emerald-600 text-white font-bold' : (item.recommendation === 'Good Match' ? 'bg-indigo-600 text-white font-bold' : (item.recommendation === 'Fair Match' ? 'bg-amber-600 text-white font-bold' : 'bg-slate-600 text-white font-medium'))
+                            } text-[10px] rounded-md px-2 py-0.5 shadow-2xs`}>
+                              {item.recommendation}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs py-3 text-right whitespace-nowrap">
+                            <div className="flex justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedAtsDetail(item)}
+                                className="h-7 px-2.5 text-[11px] font-medium border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1" /> Details
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleShortlist(item.resumeBankId, Number(atsJobId))}
+                                className="h-7 px-3 text-[11px] bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white rounded-lg font-bold shadow-xs"
+                              >
+                                Shortlist →
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={9} className="h-32 text-center text-xs text-slate-500 bg-white dark:bg-slate-900">
+                          <div className="flex flex-col items-center justify-center gap-1.5">
+                            <Sparkles className="w-6 h-6 text-slate-400" />
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">No candidates found matching criteria ≥ {atsMinMatchPct}%.</span>
+                            <span className="text-[11px] text-slate-400">Select a Job Opening above and click "Run AI ATS Match".</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* TAB 3: BULK UPLOAD (PDF / ZIP / RAR / WORD / EXCEL) */}
+        <TabsContent value="upload">
+          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <CardHeader className="py-4 px-5 border-b border-slate-100 dark:border-slate-800">
+              <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <FileUp className="w-4 h-4 text-purple-600" />
+                Bulk Resume & Structured Data Import
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* Left Upload Form */}
+                <div className="space-y-6">
+                  
+                  {/* Target Job Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-800 dark:text-slate-200">Link to Target Job Opening (Optional)</label>
+                    <Select value={bulkJobId || 'none'} onValueChange={val => setBulkJobId(val === 'none' ? '' : val)}>
+                      <SelectTrigger className="h-9 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl font-medium">
+                        <SelectValue placeholder="-- Select Job Opening --" />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60 overflow-y-auto">
+                        <SelectItem value="none">-- General (No Specific Job) --</SelectItem>
+                        {jobsList.map((job: any) => {
+                          const id = getJobId(job);
+                          const title = getJobTitle(job);
+                          const code = getJobCode(job);
+                          if (!id) return null;
+                          return (
+                            <SelectItem key={id} value={id}>
+                              {code ? `[${code}] ` : ''}{title}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div className="p-4 rounded-lg bg-card border border-border space-y-3.5 text-xs text-foreground/90">
-                    <h4 className="font-semibold text-foreground flex items-center gap-2">
-                      <FileCheck className="w-4 h-4 text-emerald-600" />
-                      Supported Upload Types & Intelligence:
-                    </h4>
-
-                    <div className="space-y-2.5">
-                      <div className="flex gap-2.5 items-start">
-                        <span className="p-1 rounded bg-red-100 text-red-700 mt-0.5 shrink-0">
-                          <FileText className="w-3.5 h-3.5" />
-                        </span>
-                        <div>
-                          <p className="font-medium text-foreground">PDF & Word Resumes (.pdf, .docx, .doc, .txt)</p>
-                          <p className="text-[11px] text-muted-foreground">Smart parser automatically detects candidate Name, Email, Phone, Skills, Experience, and Education directly from the resume document.</p>
-                        </div>
+                  {/* Multi-File Upload Section (PDF, ZIP, Word) */}
+                  <div className="p-5 bg-indigo-50/40 dark:bg-indigo-950/20 border-2 border-dashed border-indigo-200 dark:border-indigo-800/60 rounded-2xl space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-xs">
+                        <FileText className="w-5 h-5" />
                       </div>
-
-                      <div className="flex gap-2.5 items-start">
-                        <span className="p-1 rounded bg-emerald-100 text-emerald-700 mt-0.5 shrink-0">
-                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                        </span>
-                        <div>
-                          <p className="font-medium text-foreground">Excel & CSV Spreadsheets (.xlsx, .xls, .csv)</p>
-                          <p className="text-[11px] text-muted-foreground">Batch imports structured candidate columns (Name, Gender, Email, Contact, Total Experience, Skills, Position, etc.).</p>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2.5 items-start">
-                        <span className="p-1 rounded bg-purple-100 text-purple-700 mt-0.5 shrink-0">
-                          <FolderArchive className="w-3.5 h-3.5" />
-                        </span>
-                        <div>
-                          <p className="font-medium text-foreground">ZIP Archive Batch Import (.zip)</p>
-                          <p className="text-[11px] text-muted-foreground">Upload a single compressed ZIP file containing dozens of PDF, Word, or Excel files — all will be unpacked and screened simultaneously.</p>
-                        </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">Upload Resume Files (PDF / ZIP / Word .docx)</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Extracts candidate name, contact, skills & experience automatically</p>
                       </div>
                     </div>
 
-                    <div className="p-3 rounded bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 mt-2">
-                      <p className="font-semibold text-indigo-950 dark:text-indigo-300 mb-1 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                        Automated AI ATS Screening Engine:
-                      </p>
-                      <p className="text-[11px] text-indigo-800 dark:text-indigo-400 leading-relaxed">
-                        When linked to a target job opening, every candidate extracted from any document is scored on ATS Structure, Keyword Coverage, and JD Match. Qualified candidates can be auto-shortlisted immediately.
-                      </p>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.zip,.rar,.doc,.docx"
+                      className="text-xs h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer"
+                      onChange={e => setBulkFiles(Array.from(e.target.files || []))}
+                    />
+
+                    {bulkFiles.length > 0 && (
+                      <div className="text-[11px] text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-100/60 dark:bg-indigo-950/60 p-2 rounded-lg">
+                        ✓ {bulkFiles.length} file(s) selected: {bulkFiles.map(f => f.name).join(', ')}
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleMultiFileUpload}
+                      disabled={isUploadingFiles || bulkFiles.length === 0}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-9 text-xs rounded-xl font-bold flex gap-2 shadow-xs"
+                    >
+                      <Upload className="w-4 h-4" /> {isUploadingFiles ? 'Parsing & Uploading...' : `Upload & Parse ${bulkFiles.length} File(s)`}
+                    </Button>
+                  </div>
+
+                  {/* Excel Upload Section */}
+                  <div className="p-5 bg-emerald-50/40 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-2xl space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-emerald-600 text-white rounded-xl shadow-xs">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white">Upload Structured Excel / CSV Data</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Max file size: 10MB (.xlsx, .csv)</p>
+                      </div>
+                    </div>
+
+                    <Input 
+                      type="file"
+                      accept=".csv, .xlsx, .xls"
+                      className="text-xs h-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-xl cursor-pointer"
+                      onChange={(e) => setSelectedExcelFile(e.target.files?.[0] || null)}
+                    />
+
+                    <Button 
+                      onClick={handleBulkUpload} 
+                      disabled={isUploadingFiles || !selectedExcelFile}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs rounded-xl font-bold flex gap-2 shadow-xs disabled:opacity-50"
+                    >
+                      <Upload className="w-4 h-4" /> {isUploadingFiles ? 'Uploading Sheet...' : 'Upload Excel Sheet'}
+                    </Button>
+                  </div>
+
+                </div>
+
+                {/* Right Instructions */}
+                <div className="space-y-6">
+                  <div className="flex flex-wrap gap-2.5">
+                    <Button onClick={handleDownloadSample} variant="outline" className="h-9 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 hover:text-white border-none rounded-xl px-4 shadow-xs">
+                      Download Sample Excel File
+                    </Button>
+                    <Button onClick={handleDownloadDetails} variant="outline" className="h-9 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white border-none rounded-xl px-4 shadow-xs">
+                      Download Candidates Details
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-2xl space-y-1.5">
+                      <p className="font-bold text-slate-900 dark:text-white">Instruction for PDF / ZIP / Word File Upload:</p>
+                      <p>• Select single or multiple PDF, Word (.docx) resumes directly.</p>
+                      <p>• ZIP or RAR archives containing candidate PDF/Word resumes will be automatically uncompressed and parsed using OCR AI.</p>
+                      <p>• All imported candidates land with <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-slate-800 font-semibold px-2 py-0.5">bulk_import</Badge> tag in the Resume Source Screen tab.</p>
+                    </div>
+
+                    <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 rounded-2xl space-y-1">
+                      <p className="font-bold text-slate-900 dark:text-white">Instruction for Excel upload:</p>
+                      <p><strong>Required Columns:</strong> Name, Gender</p>
+                      <p><strong>Unique Column:</strong> Email Id</p>
+                      <p><strong>Date Columns:</strong> Must be in yyyy-mm-dd format.</p>
                     </div>
                   </div>
                 </div>
@@ -1152,24 +1413,27 @@ export const ResumeBankPage: React.FC = () => {
 
         {/* TAB 4: BULK UPLOADED LOG */}
         <TabsContent value="logs">
-          <Card className="rounded-none shadow-sm border-border">
-            <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-              <CardTitle className="text-sm font-normal text-foreground">Bulk Upload & AI Screening Log</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleExportLogs} className="h-7 px-3 text-xs rounded-sm shadow-none">
-                <Download className="w-3 h-3 mr-1.5" />
-                Export
+          <Card className="rounded-2xl shadow-xs border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between py-4 px-5 border-b border-slate-100 dark:border-slate-800">
+              <CardTitle className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <History className="w-4 h-4 text-emerald-600" />
+                Upload Activity Audit Logs ({totalLogEntries})
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={handleExportLogs} className="h-8 px-3.5 text-xs font-semibold rounded-xl border-slate-200 dark:border-slate-700">
+                <Download className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
+                Export Logs
               </Button>
             </CardHeader>
             
             <CardContent className="p-0">
-              <div className="p-3 bg-card border-b border-border flex justify-between items-center text-xs text-foreground/90">
+              <div className="p-3 bg-slate-50/50 dark:bg-slate-950/50 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-600 dark:text-slate-400 font-medium">
                 <div>
                   Showing {totalLogEntries > 0 ? logStartIndex + 1 : 0} to {logEndIndex} of {totalLogEntries} entries
                 </div>
                 <div className="flex items-center gap-1.5">
                   Show 
                   <Select value={logPageSize} onValueChange={(val) => { setLogPageSize(val); setLogCurrentPage(1); }}>
-                    <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-background border-input rounded-sm">
+                    <SelectTrigger className="h-7 w-16 px-1.5 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1178,7 +1442,7 @@ export const ResumeBankPage: React.FC = () => {
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
-                  entries
+                  per page
                 </div>
               </div>
               
@@ -1223,8 +1487,8 @@ export const ResumeBankPage: React.FC = () => {
                                 size="sm"
                                 variant="outline"
                                 onClick={() => {
-                                  setTargetJobForAi(log.targetJobId);
-                                  setActiveTab('suggestions');
+                                  setAtsJobId(String(log.targetJobId));
+                                  setActiveTab('ats');
                                 }}
                                 className="h-7 px-2.5 text-xs text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-medium"
                               >
@@ -1264,21 +1528,83 @@ export const ResumeBankPage: React.FC = () => {
         
       </Tabs>
 
-      {/* AI ANALYSIS MODAL */}
-      {selectedCandidateForAiModal && (
-        <AiAnalysisModal
-          isOpen={isAiAnalysisModalOpen}
-          onClose={() => {
-            setIsAiAnalysisModalOpen(false);
-            setSelectedCandidateForAiModal(null);
-          }}
-          candidateId={selectedCandidateForAiModal.candidateId || selectedCandidateForAiModal.id}
-          jobId={selectedCandidateForAiModal.jobId}
-          candidateName={selectedCandidateForAiModal.name}
-          jobTitle={selectedCandidateForAiModal.jobTitle}
-          onShortlistSuccess={fetchResumes}
-        />
-      )}
+      {/* ATS DETAIL MODAL */}
+      <Dialog open={!!selectedAtsDetail} onOpenChange={() => setSelectedAtsDetail(null)}>
+        <DialogContent className="max-w-md">
+          {selectedAtsDetail && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-md font-bold flex items-center justify-between">
+                  <span>Candidate ATS Breakdown</span>
+                  <Badge className="bg-amber-500 text-white text-xs">{selectedAtsDetail.atsScore}/100 Score</Badge>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 text-xs">
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{selectedAtsDetail.candidateName}</p>
+                  <p className="text-slate-500">{selectedAtsDetail.email} | {selectedAtsDetail.phone || 'No phone'}</p>
+                  <p className="text-slate-500">Applied Position: {selectedAtsDetail.position}</p>
+                </div>
+
+                {selectedAtsDetail.resumeUrl && (
+                  <Button
+                    onClick={() => window.open(getResumeViewUrl(selectedAtsDetail.resumeUrl), '_blank')}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs h-8 flex gap-2"
+                  >
+                    <FileText className="w-4 h-4" /> Open Original Candidate Resume PDF 📄
+                  </Button>
+                )}
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded space-y-2">
+                  <div className="flex justify-between">
+                    <span>Skill Match Score:</span>
+                    <span className="font-bold">{selectedAtsDetail.skillScore}/50</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Experience Score:</span>
+                    <span className="font-bold">{selectedAtsDetail.expScore}/25</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Recommendation:</span>
+                    <span className="font-bold text-emerald-600">{selectedAtsDetail.recommendation}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="font-semibold mb-1 text-slate-800 dark:text-slate-200">Matched Skills ({selectedAtsDetail.matchedSkills?.length || 0}):</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedAtsDetail.matchedSkills?.map((s: string, idx: number) => (
+                      <Badge key={idx} className="bg-emerald-100 text-emerald-800 text-[10px]">✓ {s}</Badge>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="font-semibold mb-1 text-slate-800 dark:text-slate-200">Missing Skills ({selectedAtsDetail.missingSkills?.length || 0}):</p>
+                  <div className="flex flex-wrap gap-1">
+                    {selectedAtsDetail.missingSkills?.map((s: string, idx: number) => (
+                      <Badge key={idx} variant="outline" className="text-red-600 border-red-300 text-[10px]">✕ {s}</Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button size="sm" variant="outline" onClick={() => setSelectedAtsDetail(null)}>Close</Button>
+                <Button 
+                  size="sm" 
+                  onClick={() => {
+                    handleShortlist(selectedAtsDetail.resumeBankId, Number(atsJobId));
+                    setSelectedAtsDetail(null);
+                  }}
+                  className="bg-slate-900 hover:bg-slate-800 text-white"
+                >
+                  Shortlist Candidate →
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* ADD CANDIDATE MODAL */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
@@ -1307,13 +1633,19 @@ export const ResumeBankPage: React.FC = () => {
                   <SelectTrigger className="h-8 text-xs bg-background">
                     <SelectValue placeholder="-- Select Job Opening --" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="none">-- General (No Specific Job) --</SelectItem>
-                    {jobsList.map((job: any) => (
-                      <SelectItem key={job.id} value={String(job.id)}>
-                        {job.job_code ? `[${job.job_code}] ` : ''}{job.job_title}
-                      </SelectItem>
-                    ))}
+                    {jobsList.map((job: any) => {
+                      const id = getJobId(job);
+                      const title = getJobTitle(job);
+                      const code = getJobCode(job);
+                      if (!id) return null;
+                      return (
+                        <SelectItem key={id} value={id}>
+                          {code ? `[${code}] ` : ''}{title}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -1433,11 +1765,12 @@ export const ResumeBankPage: React.FC = () => {
                 <label className="text-xs font-semibold">Marital Status <span className="text-red-500">*</span></label>
                 <Select value={formData.maritalStatus} onValueChange={(val) => setFormData({...formData, maritalStatus: val})}>
                   <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Unmarried" />
+                    <SelectValue placeholder="Single" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Unmarried">Unmarried</SelectItem>
+                    <SelectItem value="Single">Single</SelectItem>
                     <SelectItem value="Married">Married</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1462,96 +1795,190 @@ export const ResumeBankPage: React.FC = () => {
             {/* ROW 9 */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Relevant Experience</label>
+                <label className="text-xs font-semibold">Relevant Experience (Yrs)</label>
                 <Input value={formData.relevantExp} onChange={e => setFormData({...formData, relevantExp: e.target.value})} className="h-8 text-xs" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Total Experience</label>
+                <label className="text-xs font-semibold">Total Experience (Yrs)</label>
                 <Input value={formData.totalExp} onChange={e => setFormData({...formData, totalExp: e.target.value})} className="h-8 text-xs" />
               </div>
             </div>
 
             {/* ROW 10 */}
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold w-full flex items-center justify-between border-b pb-1">
-                  <span>Upload Signature</span>
-                </label>
-                <div className="pt-2">
-                  <Input type="file" accept="image/*" className="h-8 text-xs w-full mb-1" />
-                  <div className="text-[10px] text-muted-foreground">(Min Size - 0 MB and Max Size - 1 MB)</div>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-semibold w-full flex items-center justify-between border-b pb-1">
-                  <span>Upload Resume</span>
-                </label>
-                <div className="pt-2">
-                  <Input 
-                    type="file" 
-                    accept=".pdf,.doc,.docx" 
-                    onChange={(e) => setCandidateResumeFile(e.target.files?.[0] || null)}
-                    className="h-8 text-xs w-full mb-1" 
-                  />
-                  <div className="text-[10px] text-muted-foreground">(Min Size - 0 MB and Max Size - 5 MB)</div>
-                </div>
-              </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Skills <span className="text-red-500">*</span></label>
+              <Input value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="h-8 text-xs" required placeholder="e.g. React, Node.js, TypeScript" />
             </div>
 
-            {/* ROW 11 */}
+            {/* RESUME FILE UPLOAD */}
             <div className="space-y-1 pt-2">
-              <label className="text-xs font-semibold">Skills <span className="text-red-500">*</span></label>
-              <Input value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="h-8 text-xs" required />
+              <label className="text-xs font-semibold">Candidate Resume (PDF)</label>
+              <Input 
+                type="file" 
+                accept=".pdf,.doc,.docx"
+                className="h-8 text-xs bg-background cursor-pointer"
+                onChange={(e) => setCandidateResumeFile(e.target.files?.[0] || null)}
+              />
             </div>
 
             <DialogFooter className="pt-4">
-              <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-              <Button type="submit" className="bg-primary text-primary-foreground">Save</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
+              <Button type="submit" size="sm" className="bg-green-600 hover:bg-green-700 text-white">Save Candidate</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* QUICK SHORTLIST TO PIPELINE DIALOG */}
+      {/* QUICK SHORTLIST MODAL */}
       <Dialog open={isShortlistModalOpen} onOpenChange={setIsShortlistModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-semibold flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-blue-600" />
-              Shortlist Candidate to Job Opening
+            <DialogTitle className="text-md font-bold">Shortlist Candidate to Pipeline</DialogTitle>
+          </DialogHeader>
+          {selectedResumeForShortlist && (
+            <div className="space-y-4 text-xs">
+              <p className="text-slate-600">
+                Shortlisting <strong className="text-slate-900">{selectedResumeForShortlist.name}</strong> ({selectedResumeForShortlist.trackerId}) to the Applicant Pipeline stage:
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-slate-800">Select Job Opening *</label>
+                <Select value={quickJobId} onValueChange={setQuickJobId}>
+                  <SelectTrigger className="h-8 text-xs bg-background">
+                    <SelectValue placeholder="-- Choose Job Opening --" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60 overflow-y-auto">
+                    {jobsList.map((job: any) => {
+                      const id = getJobId(job);
+                      const title = getJobTitle(job);
+                      const code = getJobCode(job);
+                      if (!id) return null;
+                      return (
+                        <SelectItem key={id} value={id}>
+                          {code ? `[${code}] ` : ''}{title}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button size="sm" variant="outline" onClick={() => setIsShortlistModalOpen(false)}>Cancel</Button>
+                <Button 
+                  size="sm" 
+                  disabled={!quickJobId || shortlistingId === selectedResumeForShortlist.id}
+                  onClick={() => handleShortlist(selectedResumeForShortlist.id, Number(quickJobId))}
+                  className="bg-slate-900 hover:bg-slate-800 text-white"
+                >
+                  {shortlistingId === selectedResumeForShortlist.id ? 'Shortlisting...' : 'Confirm & Move to Pipeline →'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* ATS CANDIDATE SKILLS & DETAILS MODAL */}
+      <Dialog open={!!selectedAtsDetail} onOpenChange={(open) => !open && setSelectedAtsDetail(null)}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center justify-between gap-2 border-b pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500 fill-amber-300" />
+                <span>Candidate Skill Match Breakdown</span>
+              </div>
+              {selectedAtsDetail && (
+                <Badge className={`${
+                  selectedAtsDetail.atsScore >= 80 ? 'bg-emerald-600' : (selectedAtsDetail.atsScore >= 60 ? 'bg-amber-600' : 'bg-rose-600')
+                } text-white font-black text-xs px-2.5 py-1`}>
+                  {selectedAtsDetail.atsScore}/100 Score
+                </Badge>
+              )}
             </DialogTitle>
           </DialogHeader>
-          <div className="py-3 space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Select the target job opening to create an application profile for <strong className="text-foreground">{selectedResumeForShortlist?.name}</strong> and advance them into the recruitment pipeline.
-            </p>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Target Job Opening <span className="text-red-500">*</span></label>
-              <select
-                value={quickJobId}
-                onChange={(e) => setQuickJobId(e.target.value)}
-                className="w-full h-9 border border-input rounded-md px-3 text-xs bg-background text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
-              >
-                <option value="">-- Select Published Job Opening --</option>
-                {jobsList.map((job: any) => (
-                  <option key={job.id} value={String(job.id)}>
-                    {job.job_code || job.jobCode ? `[${job.job_code || job.jobCode}] ` : ''}{job.job_title || job.jobTitle || job.position_title || job.title || 'Job Opening'}
-                  </option>
-                ))}
-              </select>
+
+          {selectedAtsDetail && (
+            <div className="space-y-4 text-xs pt-1">
+              {/* Candidate Info Header */}
+              <div className="bg-slate-50 dark:bg-slate-900 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-1">
+                <div className="font-bold text-sm text-slate-900 dark:text-white flex justify-between items-center">
+                  <span>{selectedAtsDetail.candidateName}</span>
+                  <Badge variant="outline" className="text-[10px] font-semibold">{selectedAtsDetail.recommendation}</Badge>
+                </div>
+                <div className="text-slate-500 text-[11px] flex gap-3 flex-wrap">
+                  <span>📧 {selectedAtsDetail.email}</span>
+                  <span>💼 Exp: {selectedAtsDetail.yearsOfExperience} Yrs</span>
+                  <span>🎯 Role: {selectedAtsDetail.jobTitle}</span>
+                </div>
+              </div>
+
+              {/* Matched Skills List */}
+              <div className="space-y-2">
+                <div className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 text-xs">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Matched Skills ({selectedAtsDetail.matchedSkills?.length || 0}):
+                </div>
+                <div className="flex flex-wrap gap-1.5 p-3 bg-emerald-50/50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-900/60 max-h-40 overflow-y-auto">
+                  {selectedAtsDetail.matchedSkills && selectedAtsDetail.matchedSkills.length > 0 ? (
+                    selectedAtsDetail.matchedSkills.map((sk: string, idx: number) => (
+                      <Badge key={idx} className="bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 text-xs px-2.5 py-1 font-bold rounded-lg shadow-2xs">
+                        ✓ {sk}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-slate-400 italic">No skills matched from Job Description</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Missing Skills List */}
+              <div className="space-y-2">
+                <div className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5 text-xs">
+                  <AlertCircle className="w-4 h-4 text-rose-600" />
+                  Missing Skills ({selectedAtsDetail.missingSkills?.length || 0}):
+                </div>
+                <div className="flex flex-wrap gap-1.5 p-3 bg-rose-50/50 dark:bg-rose-950/30 rounded-xl border border-rose-200 dark:border-rose-900/60 max-h-40 overflow-y-auto">
+                  {selectedAtsDetail.missingSkills && selectedAtsDetail.missingSkills.length > 0 ? (
+                    selectedAtsDetail.missingSkills.map((sk: string, idx: number) => (
+                      <Badge key={idx} variant="outline" className="bg-white dark:bg-slate-900 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-xs px-2.5 py-1 font-medium rounded-lg">
+                        ✕ {sk}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-emerald-600 font-bold">All target skills matched! ✓</span>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter className="pt-3 border-t flex justify-between items-center">
+                {selectedAtsDetail.resumeUrl ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(getResumeViewUrl(selectedAtsDetail.resumeUrl), '_blank')}
+                    className="h-8 text-xs font-bold text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                  >
+                    <FileText className="w-3.5 h-3.5 mr-1" /> View Full Resume 📄
+                  </Button>
+                ) : <div />}
+
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setSelectedAtsDetail(null)}>Close</Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const rId = selectedAtsDetail.resumeBankId;
+                      setSelectedAtsDetail(null);
+                      handleShortlist(rId, Number(atsJobId));
+                    }}
+                    className="bg-slate-900 hover:bg-slate-800 text-white font-bold"
+                  >
+                    Shortlist Candidate →
+                  </Button>
+                </div>
+              </DialogFooter>
             </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setIsShortlistModalOpen(false)}>Cancel</Button>
-            <Button 
-              size="sm" 
-              className="bg-blue-600 hover:bg-blue-700 text-white" 
-              disabled={!quickJobId || shortlistingId === selectedResumeForShortlist?.id}
-              onClick={() => selectedResumeForShortlist && handleShortlist(selectedResumeForShortlist.id, Number(quickJobId))}
-            >
-              {shortlistingId === selectedResumeForShortlist?.id ? 'Shortlisting...' : 'Confirm & Shortlist'}
-            </Button>
-          </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>

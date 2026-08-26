@@ -85,7 +85,7 @@ export const MasterPayrollCycle: React.FC = () => {
   };
 
   // Pay period preview text
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const now = new Date();
   const previewMonth = monthNames[now.getMonth()];
   const previewYear = now.getFullYear();
@@ -447,11 +447,10 @@ export const MasterPayrollCycle: React.FC = () => {
                   <div
                     key={cycle.id}
                     onClick={() => handleSelectCycle(cycle)}
-                    className={`p-3 rounded-lg border transition-all cursor-pointer ${
-                      isSelected
+                    className={`p-3 rounded-lg border transition-all cursor-pointer ${isSelected
                         ? 'bg-primary/10 border-primary text-primary dark:bg-primary/20 dark:border-primary shadow-xs ring-1 ring-primary/30'
                         : 'bg-card hover:bg-muted/50 border-border text-foreground'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1.5 min-w-0">
@@ -459,18 +458,16 @@ export const MasterPayrollCycle: React.FC = () => {
                           <span>{cycle.name || cycle.cycle_name || 'Monthly'}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                          <span className={`px-2 py-0.5 rounded font-medium ${
-                            isSelected
+                          <span className={`px-2 py-0.5 rounded font-medium ${isSelected
                               ? 'bg-primary/20 text-primary border border-primary/30'
                               : 'bg-muted text-muted-foreground'
-                          }`}>
+                            }`}>
                             {cycle.frequency || 'Monthly'}
                           </span>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium truncate max-w-[150px] ${
-                            isSelected
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-medium truncate max-w-[150px] ${isSelected
                               ? 'bg-primary/15 text-primary border border-primary/20'
                               : 'bg-muted/80 text-muted-foreground border border-border/60'
-                          }`}>
+                            }`}>
                             <Building className="w-3 h-3 shrink-0" />
                             {cycle.companyName || 'All Companies'}
                           </span>
@@ -866,9 +863,8 @@ export const MasterPayrollCycle: React.FC = () => {
                       inputMode="numeric"
                       value={cycleForm.disbursementDate !== undefined && cycleForm.disbursementDate !== null ? String(cycleForm.disbursementDate) : ''}
                       onChange={e => setCycleForm({ ...cycleForm, disbursementDate: e.target.value as any })}
-                      className={`h-9 w-28 text-xs font-medium border-input bg-background ${
-                        cycleConflict ? 'border-destructive ring-1 ring-destructive' : 'border-green-500/60'
-                      }`}
+                      className={`h-9 w-28 text-xs font-medium border-input bg-background ${cycleConflict ? 'border-destructive ring-1 ring-destructive' : 'border-green-500/60'
+                        }`}
                       placeholder="28"
                     />
                     <span className="text-xs text-muted-foreground">of the month</span>
@@ -963,18 +959,16 @@ export const MasterPayrollCycle: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setCycleForm({ ...cycleForm, isActive: true })}
-                      className={`px-4 py-1 text-xs font-semibold rounded transition-all ${
-                        cycleForm.isActive ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`px-4 py-1 text-xs font-semibold rounded transition-all ${cycleForm.isActive ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       Yes
                     </button>
                     <button
                       type="button"
                       onClick={() => setCycleForm({ ...cycleForm, isActive: false })}
-                      className={`px-4 py-1 text-xs font-semibold rounded transition-all ${
-                        !cycleForm.isActive ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`px-4 py-1 text-xs font-semibold rounded transition-all ${!cycleForm.isActive ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       No
                     </button>

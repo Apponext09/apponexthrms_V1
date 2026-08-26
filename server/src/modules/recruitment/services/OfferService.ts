@@ -410,8 +410,8 @@ Executive HR
     }
 
     const ctx: TenantContext = {
-      organizationId: offerRecord.organization_id,
-      userId: offerRecord.created_by || 1,
+      organizationId: offerRecord.organizationId || offerRecord.organization_id,
+      userId: offerRecord.createdBy || offerRecord.created_by || 1,
       sessionUuid: uuidv4()
     };
 
@@ -426,8 +426,8 @@ Executive HR
     }
 
     const ctx: TenantContext = {
-      organizationId: offerRecord.organization_id,
-      userId: offerRecord.created_by || 1,
+      organizationId: offerRecord.organizationId || offerRecord.organization_id,
+      userId: offerRecord.createdBy || offerRecord.created_by || 1,
       sessionUuid: uuidv4()
     };
 
@@ -506,20 +506,43 @@ Executive HR
       }
     }
 
+    const candidateName = (offer.candidateName || offer.candidate_name || '').trim() || 'Candidate';
+    const candidateEmail = offer.candidateEmail || offer.candidate_email || 'No Email';
+    const candidatePhone = offer.candidatePhone || offer.candidate_phone || 'N/A';
+    const positionTitle = offer.positionTitle || offer.position_title || 'General Position';
+    const costToCompany = offer.costToCompany || offer.cost_to_company || 0;
+    const baseSalary = offer.baseSalary || offer.base_salary || 0;
+    const offerStartDate = offer.offerStartDate || offer.offer_start_date || '';
+    const offerExpiryDate = offer.offerExpiryDate || offer.offer_expiry_date || '';
+    const offerCode = offer.offerCode || offer.offer_code || 'DRAFT';
+    const departmentName = offer.departmentName || offer.department_name || '';
+    const designationName = offer.designationName || offer.designation_name || '';
+
     return {
       ...offer,
       meta: parsedMeta,
-      candidateName: offer.candidate_name || 'Candidate',
-      candidateEmail: offer.candidate_email || 'No Email',
-      candidatePhone: offer.candidate_phone || 'N/A',
-      positionTitle: offer.position_title,
-      costToCompany: offer.cost_to_company,
-      baseSalary: offer.base_salary,
-      offerStartDate: offer.offer_start_date,
-      offerExpiryDate: offer.offer_expiry_date,
-      offerCode: offer.offer_code,
-      departmentName: offer.department_name,
-      designationName: offer.designation_name,
+      candidateName,
+      candidateEmail,
+      candidatePhone,
+      positionTitle,
+      costToCompany,
+      baseSalary,
+      offerStartDate,
+      offerExpiryDate,
+      offerCode,
+      departmentName,
+      designationName,
+      candidate_name: candidateName,
+      candidate_email: candidateEmail,
+      candidate_phone: candidatePhone,
+      position_title: positionTitle,
+      cost_to_company: costToCompany,
+      base_salary: baseSalary,
+      offer_start_date: offerStartDate,
+      offer_expiry_date: offerExpiryDate,
+      offer_code: offerCode,
+      department_name: departmentName,
+      designation_name: designationName,
     };
   }
 
@@ -567,20 +590,44 @@ Executive HR
           parsedMeta = {};
         }
       }
+
+      const candidateName = (r.candidateName || r.candidate_name || '').trim() || 'Candidate';
+      const candidateEmail = r.candidateEmail || r.candidate_email || 'No Email';
+      const candidatePhone = r.candidatePhone || r.candidate_phone || 'N/A';
+      const positionTitle = r.positionTitle || r.position_title || 'General Position';
+      const costToCompany = r.costToCompany || r.cost_to_company || 0;
+      const baseSalary = r.baseSalary || r.base_salary || 0;
+      const offerStartDate = r.offerStartDate || r.offer_start_date || '';
+      const offerExpiryDate = r.offerExpiryDate || r.offer_expiry_date || '';
+      const offerCode = r.offerCode || r.offer_code || 'DRAFT';
+      const departmentName = r.departmentName || r.department_name || '';
+      const designationName = r.designationName || r.designation_name || '';
+
       return {
         ...r,
         meta: parsedMeta,
-        candidateName: r.candidate_name || 'Candidate',
-        candidateEmail: r.candidate_email || 'No Email',
-        candidatePhone: r.candidate_phone || 'N/A',
-        positionTitle: r.position_title,
-        costToCompany: r.cost_to_company,
-        baseSalary: r.base_salary,
-        offerStartDate: r.offer_start_date,
-        offerExpiryDate: r.offer_expiry_date,
-        offerCode: r.offer_code,
-        departmentName: r.department_name,
-        designationName: r.designation_name,
+        candidateName,
+        candidateEmail,
+        candidatePhone,
+        positionTitle,
+        costToCompany,
+        baseSalary,
+        offerStartDate,
+        offerExpiryDate,
+        offerCode,
+        departmentName,
+        designationName,
+        candidate_name: candidateName,
+        candidate_email: candidateEmail,
+        candidate_phone: candidatePhone,
+        position_title: positionTitle,
+        cost_to_company: costToCompany,
+        base_salary: baseSalary,
+        offer_start_date: offerStartDate,
+        offer_expiry_date: offerExpiryDate,
+        offer_code: offerCode,
+        department_name: departmentName,
+        designation_name: designationName,
       };
     });
 
