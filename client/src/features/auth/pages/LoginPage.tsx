@@ -24,32 +24,37 @@ export function LoginPage() {
 
     try {
       await login(email, password);
+
+      // Get user data immediately (avoid second fetch)
       const currentUser = useAuthStore.getState().user;
       const roles = currentUser?.roles || [];
       const cleanEmail = (email || '').trim().toLowerCase();
 
+      // Navigate immediately - page will show loading screen while data loads
       if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
-        navigate('/superadmin/dashboard');
+        navigate('/superadmin/dashboard', { replace: true });
       } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
       } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
-        navigate('/manager/dashboard');
+        navigate('/manager/dashboard', { replace: true });
       } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
-        navigate('/hr/dashboard');
+        navigate('/hr/dashboard', { replace: true });
       } else if (roles.includes('team_lead')) {
-        navigate('/team-lead/dashboard');
+        navigate('/team-lead/dashboard', { replace: true });
       } else if (roles.includes('intern')) {
-        navigate('/intern/dashboard');
+        navigate('/intern/dashboard', { replace: true });
       } else if (roles.includes('consultant')) {
-        navigate('/consultant/dashboard');
+        navigate('/consultant/dashboard', { replace: true });
       } else if (roles.includes('employee')) {
-        navigate('/employee/dashboard');
+        navigate('/employee/dashboard', { replace: true });
       } else {
-        navigate('/employee/dashboard');
+        navigate('/employee/dashboard', { replace: true });
       }
+
+      // Don't wait for setLoading(false) - navigate immediately
+      // Loading screen will handle the wait
     } catch (err) {
       setError('Invalid email or password');
-    } finally {
       setLoading(false);
     }
   };

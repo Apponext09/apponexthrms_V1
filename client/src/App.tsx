@@ -1,4 +1,4 @@
-import React, { useEffect, Component } from 'react';
+import React, { useEffect, Component, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './config/query';
@@ -8,6 +8,7 @@ import { useAuthStore } from './features/auth/store/authStore';
 import { useAttendanceStore } from './features/attendance/store/attendanceStore';
 import { BreakOverlay } from './features/attendance/components/BreakOverlay';
 import { useBreakSync } from './features/attendance/hooks/useBreakSync';
+import { LoadingScreen } from './components/LoadingScreen';
 
 // ── Global Error Boundary ──────────────────────────────────────────────────
 // Catches any unhandled React render errors and shows a readable message
@@ -67,92 +68,35 @@ class AppErrorBoundary extends Component<
 }
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [isLoading, setIsLoading] = useState(false);
+
   // Disable DevTools and Inspection
   useEffect(() => {
-    // 1. Disable right-click context menu
     const disableRightClick = (e: MouseEvent) => {
       e.preventDefault();
-      return false;
     };
-    document.addEventListener('contextmenu', disableRightClick);
-
-    // 2. Disable keyboard shortcuts for DevTools
     const disableKeys = (e: KeyboardEvent) => {
-      // F12 - DevTools
-      if (e.key === 'F12') {
+      if (e.key === 'F12' ||
+          (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'K')) ||
+          (e.ctrlKey && e.key === 'I')) {
         e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+I - Inspect Element
-      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+C - Inspect Element (Firefox)
-      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+J - Console
-      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+K - Console (Firefox)
-      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+I - Inspect (some browsers)
-      if (e.ctrlKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
       }
     };
-    document.addEventListener('keydown', disableKeys, true);
-
-    // 3. Detect if DevTools is open by checking window size
-    const checkDevTools = () => {
-      const devtools = { open: false };
-      const threshold = 160;
-
-      // Check if DevTools window opened
-      if (window.outerWidth - window.innerWidth > threshold ||
-          window.outerHeight - window.innerHeight > threshold) {
-        devtools.open = true;
-      }
-
-      if (devtools.open) {
-        console.clear();
-        document.body.innerHTML = '';
-        alert('⚠️ Inspection Disabled - Application Security\n\nAccessing browser tools is not permitted.');
-        window.location.href = '/login';
-      }
-    };
-
-    // Check DevTools every 500ms
-    const devToolsInterval = setInterval(checkDevTools, 500);
-
-    // 4. Disable text selection (optional - for extra security)
-    document.body.style.userSelect = 'none';
-    document.body.style.webkitUserSelect = 'none';
-    (document.body as any).style.msUserSelect = 'none';
-    (document.body as any).style.mozUserSelect = 'none';
-
-    // 5. Disable copy/paste for sensitive pages
     const disableCopyPaste = (e: ClipboardEvent) => {
       e.preventDefault();
-      return false;
     };
+
+    document.addEventListener('contextmenu', disableRightClick);
+    document.addEventListener('keydown', disableKeys, true);
     document.addEventListener('copy', disableCopyPaste);
     document.addEventListener('cut', disableCopyPaste);
     document.addEventListener('paste', disableCopyPaste);
 
-    // Cleanup
+    document.body.style.userSelect = 'none';
+
     return () => {
       document.removeEventListener('contextmenu', disableRightClick);
       document.removeEventListener('keydown', disableKeys, true);
-      clearInterval(devToolsInterval);
       document.removeEventListener('copy', disableCopyPaste);
       document.removeEventListener('cut', disableCopyPaste);
       document.removeEventListener('paste', disableCopyPaste);
@@ -162,8 +106,19 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
-    if (localStorage.getItem('accessToken')) {
-      useAuthStore.getState().fetchCurrentUser();
+
+    // Show loading screen while fetching user data
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      setIsLoading(true);
+      // Fetch user data in background without blocking navigation
+      useAuthStore.getState().fetchCurrentUser()
+        .catch((err) => {
+          console.warn('Failed to fetch user:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
 
     // Track last user ID and logout time to detect session changes
@@ -251,7 +206,12 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <>
+      {isLoading && <LoadingScreen />}
+      {children}
+    </>
+  );
 }
 
 /**
