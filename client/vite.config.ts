@@ -9,10 +9,27 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+      '@mui/material',
+      '@emotion/react',
+      '@emotion/styled',
+      'zustand',
+      'axios',
+    ],
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
   server: {
     host: true,
     port: 5173,
-    open: true,
+    open: false,
+    middlewareMode: false,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:5000',

@@ -24,47 +24,37 @@ export function LoginPage() {
 
     try {
       await login(email, password);
+
+      // Get user data immediately (avoid second fetch)
       const currentUser = useAuthStore.getState().user;
       const roles = currentUser?.roles || [];
       const cleanEmail = (email || '').trim().toLowerCase();
 
-      // If user is not super_admin, check for pending mandatory policies
-      if (!cleanEmail.includes('superadmin') && !roles.includes('super_admin')) {
-        try {
-          const { apiClient } = await import('@/config/api');
-          const pendingRes = await apiClient.get('/policies/pending');
-          const pendingList = pendingRes.data?.data || [];
-          if (Array.isArray(pendingList) && pendingList.length > 0) {
-            navigate('/policy-acceptance');
-            return;
-          }
-        } catch (e) {
-          console.warn('Policy pending check skipped on login:', e);
-        }
+      // Navigate immediately - page will show loading screen while data loads
+      if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
+        navigate('/superadmin/dashboard', { replace: true });
+      } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
+        navigate('/dashboard', { replace: true });
+      } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
+        navigate('/manager/dashboard', { replace: true });
+      } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
+        navigate('/hr/dashboard', { replace: true });
+      } else if (roles.includes('team_lead')) {
+        navigate('/team-lead/dashboard', { replace: true });
+      } else if (roles.includes('intern')) {
+        navigate('/intern/dashboard', { replace: true });
+      } else if (roles.includes('consultant')) {
+        navigate('/consultant/dashboard', { replace: true });
+      } else if (roles.includes('employee')) {
+        navigate('/employee/dashboard', { replace: true });
+      } else {
+        navigate('/employee/dashboard', { replace: true });
       }
 
-      if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
-        navigate('/superadmin/dashboard');
-      } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
-        navigate('/dashboard');
-      } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
-        navigate('/manager/dashboard');
-      } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
-        navigate('/hr/dashboard');
-      } else if (roles.includes('team_lead')) {
-        navigate('/team-lead/dashboard');
-      } else if (roles.includes('intern')) {
-        navigate('/intern/dashboard');
-      } else if (roles.includes('consultant')) {
-        navigate('/consultant/dashboard');
-      } else if (roles.includes('employee')) {
-        navigate('/employee/dashboard');
-      } else {
-        navigate('/employee/dashboard');
-      }
+      // Don't wait for setLoading(false) - navigate immediately
+      // Loading screen will handle the wait
     } catch (err) {
       setError('Invalid email or password');
-    } finally {
       setLoading(false);
     }
   };
