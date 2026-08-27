@@ -6,10 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star, Video, Clock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
+import { Download, Search, ChevronDown, ChevronLeft, ChevronRight, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star, Video, Clock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { AiAnalysisModal } from '../components/AiAnalysisModal';
 
@@ -697,63 +698,104 @@ export const ApplicantTrackerPage: React.FC = () => {
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
-      {/* Filters Section */}
-      <Card className="rounded-none shadow-sm border-border">
-        <CardHeader className="py-3 border-b border-border">
-          <CardTitle className="text-sm font-normal text-foreground">Applicant Tracker</CardTitle>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Applicant Pipeline Tracker
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Track candidate lifecycle, multi-round interviews, assessments, and offer letter generation.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
+          <div className="flex items-center gap-2 bg-muted/60 px-3.5 py-2 rounded-xl border border-border/80 text-xs font-semibold text-foreground shadow-2xs">
+            <UserCheck className="w-4 h-4 text-primary" />
+            <span>Active Pipeline: <strong className="text-primary font-bold">{totalEntries} Applicants</strong></span>
+          </div>
+
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            size="sm"
+            className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground cursor-pointer whitespace-nowrap"
+          >
+            <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Filters Section ──────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <CardHeader className="py-4 px-6 border-b border-border/60 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+            <Search className="w-4 h-4 text-primary" />
+            Filter Applicant Pipeline
+          </CardTitle>
+          <span className="text-xs text-muted-foreground font-medium">Refine search criteria</span>
         </CardHeader>
-        <CardContent className="p-4 md:p-6 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-x-6 gap-y-4">
+        <CardContent className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Name</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate Name</label>
               <Input 
+                placeholder="Search name..."
                 value={filters.name} 
                 onChange={(e) => handleFilterChange('name', e.target.value)} 
-                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
+                className="h-9 text-xs bg-background border-border rounded-xl"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Email Id</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Email Address</label>
               <Input 
+                placeholder="Search email..."
                 value={filters.email} 
                 onChange={(e) => handleFilterChange('email', e.target.value)} 
-                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
+                className="h-9 text-xs bg-background border-border rounded-xl"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Marrital Status</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Marital Status</label>
               <MultiSelectCheckboxDropdown 
                 options={MARITAL_STATUS_OPTIONS}
                 selectedValues={filters.maritalStatus}
                 onChange={(vals) => handleFilterChange('maritalStatus', vals)}
-                placeholderPrefix="Marrital Status"
+                placeholderPrefix="Marital Status"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Qualification</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Qualification</label>
               <Input 
+                placeholder="Degree / Stream..."
                 value={filters.qualification} 
                 onChange={(e) => handleFilterChange('qualification', e.target.value)} 
-                className="h-8 text-xs bg-background border-border rounded-sm"
+                className="h-9 text-xs bg-background border-border rounded-xl"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Skills</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Skills</label>
               <Input 
+                placeholder="e.g. React, Node, Python..."
                 value={filters.skills} 
                 onChange={(e) => handleFilterChange('skills', e.target.value)} 
-                className="h-8 text-xs bg-background border-border rounded-sm"
+                className="h-9 text-xs bg-background border-border rounded-xl"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Gender</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Gender</label>
               <MultiSelectCheckboxDropdown 
                 options={GENDER_OPTIONS}
                 selectedValues={filters.gender}
@@ -763,332 +805,321 @@ export const ApplicantTrackerPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Contact Number</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Contact Number</label>
               <Input 
+                placeholder="Phone number..."
                 value={filters.contact} 
                 onChange={(e) => handleFilterChange('contact', e.target.value)} 
-                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
+                className="h-9 text-xs bg-background border-border rounded-xl"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Candidate Status</label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate Status</label>
               <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
-                <SelectTrigger className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm">
-                  <SelectValue placeholder="Choose" />
+                <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+                  <SelectValue placeholder="All Stages" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Choose</SelectItem>
+                  <SelectItem value="all">All Stages</SelectItem>
                   {CANDIDATE_STAGES.map((stage) => (
-                    <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                    <SelectItem key={stage} value={stage} className="capitalize">{stage}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            
-            <div className="flex items-end gap-2 pt-1 lg:col-span-4 xl:col-span-4 mt-2">
-              <Button onClick={handleSearch} className="h-8 px-4 bg-primary text-primary-foreground hover:bg-primary/90 text-xs rounded-sm">
-                <Search className="w-3.5 h-3.5 mr-1.5" />
-                Search
-              </Button>
-              <Button onClick={handleReset} variant="outline" className="h-8 px-4 text-xs rounded-sm bg-destructive hover:bg-destructive/90 text-primary-foreground border-none hover:text-primary-foreground">
-                Reset
-              </Button>
-            </div>
+          </div>
 
+          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/60">
+            <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground">
+              Reset Filters
+            </Button>
+            <Button onClick={handleSearch} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs gap-1.5">
+              <Search className="w-3.5 h-3.5" />
+              Apply Filters
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Results Section */}
-      <Card className="rounded-none shadow-sm border-border">
-        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-          <CardTitle className="text-sm font-normal text-foreground">Result</CardTitle>
-          <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
-            <Download className="w-3 h-3 mr-1.5" />
-            Export
-          </Button>
+      {/* ── Results Section ──────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
+          <div>
+            <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-primary" />
+              Applicant Pipeline Roster
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} candidates</p>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium">Show</span>
+            <Select value={pageSize} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="h-8 w-20 text-xs bg-background border-border rounded-xl font-bold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground font-medium">entries</span>
+          </div>
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="p-3 bg-card text-card-foreground border-b border-border flex justify-between items-center text-xs text-foreground/90">
-            <div>
-              Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
-            </div>
-            <div className="flex items-center gap-1.5">
-              Show 
-              <Select value={pageSize} onValueChange={handlePageSizeChange}>
-                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-card text-card-foreground border-input rounded-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                  <SelectItem value="200">200</SelectItem>
-                  <SelectItem value="300">300</SelectItem>
-                </SelectContent>
-              </Select>
-              entries
-            </div>
-          </div>
-          
-          <div className="w-full overflow-x-auto border border-border rounded-md bg-card shadow-2xs">
+          <div className="w-full overflow-x-auto">
             <Table className="w-full min-w-[1250px] border-collapse">
-              <TableHeader className="bg-slate-50 border-b border-border">
-                <TableRow className="border-border">
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[160px] min-w-[160px]">Name</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[200px] min-w-[200px]">Email Id</TableHead>
-                  <TableHead className="text-center text-xs font-bold h-9 text-foreground w-[85px] min-w-[85px]">ATS Score</TableHead>
-                  <TableHead className="text-center text-xs font-bold h-9 text-foreground w-[85px] min-w-[85px]">JD Match</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[110px] min-w-[110px]">Marital Status</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Qualification</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Skills</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[80px] min-w-[80px]">Gender</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Contact Number</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[120px] min-w-[120px]">Stage Select</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[100px] min-w-[100px]">Action</TableHead>
-                  <TableHead className="text-xs font-bold h-9 text-foreground w-[100px] min-w-[100px]">Status</TableHead>
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground w-[180px]">Candidate</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground w-[180px]">Applied Role</TableHead>
+                  <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[90px]">ATS Score</TableHead>
+                  <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[90px]">JD Match</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[110px]">Qualification</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[130px]">Skills</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[120px]">Contact</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[140px]">Pipeline Stage</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[100px]">Actions</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground w-[100px] text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="divide-y divide-border/60">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-32 text-center text-xs text-slate-500 bg-background border-b-0">
+                    <TableCell colSpan={10} className="h-32 text-center text-xs text-muted-foreground bg-background">
                       <div className="flex flex-col items-center justify-center gap-2">
-                        <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                         <span>Loading applicant pipeline records...</span>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : paginatedData.length > 0 ? (
-                  paginatedData.map((candidate) => (
-                    <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-slate-50/80 transition-colors">
-                      <TableCell className="text-xs py-2 font-semibold text-slate-900 w-[160px] min-w-[160px] truncate">{candidate.name}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-600 w-[200px] min-w-[200px] truncate" title={candidate.email}>{candidate.email}</TableCell>
+                  paginatedData.map((candidate) => {
+                    const initials = (candidate.name || 'CA').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+                    const statusStr = (candidate.status || 'applied').toLowerCase();
 
-                      {/* ATS Score Column */}
-                      <TableCell className="text-xs py-2 text-center w-[85px] min-w-[85px]">
-                        {candidate.atsScore !== null && candidate.atsScore !== undefined ? (
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold border inline-block",
-                            candidate.atsScore >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                            candidate.atsScore >= 70 ? "bg-amber-50 text-amber-700 border-amber-200" :
-                            "bg-rose-50 text-rose-700 border-rose-200"
-                          )}>
-                            {candidate.atsScore}%
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[11px] font-mono">-</span>
-                        )}
-                      </TableCell>
+                    return (
+                      <TableRow key={candidate.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                        <TableCell className="py-3 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-foreground truncate">{candidate.name}</div>
+                              <div className="text-[11px] text-muted-foreground truncate font-mono">{candidate.email}</div>
+                            </div>
+                          </div>
+                        </TableCell>
 
-                      {/* JD Match Column */}
-                      <TableCell className="text-xs py-2 text-center w-[85px] min-w-[85px]">
-                        {candidate.jdMatchScore !== null && candidate.jdMatchScore !== undefined ? (
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold border inline-block",
-                            candidate.jdMatchScore >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                            candidate.jdMatchScore >= 65 ? "bg-amber-50 text-amber-700 border-amber-200" :
-                            "bg-rose-50 text-rose-700 border-rose-200"
-                          )}>
-                            {candidate.jdMatchScore}%
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[11px] font-mono">-</span>
-                        )}
-                      </TableCell>
+                        <TableCell className="py-3 px-5 text-xs font-semibold text-foreground">
+                          {candidate.positionTitle}
+                        </TableCell>
 
-                      <TableCell className="text-xs py-2 text-slate-700 w-[110px] min-w-[110px]">
-                        {candidate.maritalStatus && candidate.maritalStatus !== '-' ? candidate.maritalStatus : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[120px] min-w-[120px]">
-                        {candidate.qualification && candidate.qualification !== '-' ? candidate.qualification : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[120px] min-w-[120px] truncate" title={candidate.skills}>
-                        {candidate.skills && candidate.skills !== '-' ? candidate.skills : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[80px] min-w-[80px]">
-                        {candidate.gender && candidate.gender !== '-' ? candidate.gender : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
-                      </TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[120px] min-w-[120px]">
-                        {candidate.contact && candidate.contact !== '-' ? candidate.contact : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
-                      </TableCell>
-                      <TableCell className="text-xs py-1.5 w-[120px] min-w-[120px]">
-                        {/* Styled Pipeline Stage Select */}
-                        <div className="relative inline-block w-full">
-                          {(() => {
-                            const resolvedStageId = (() => {
-                              if (candidate.pipelineStageId) {
-                                const match = pipelineStages.find(s => Number(s.id) === Number(candidate.pipelineStageId));
-                                if (match) return match.id;
-                              }
-                              const statusLower = (candidate.status || '').toLowerCase().trim();
-                              const matchByName = pipelineStages.find(s => {
-                                const nameLower = (s.stageName || s.stage_name || '').toLowerCase().trim();
-                                if (nameLower === statusLower) return true;
-                                if ((statusLower === 'offer' || statusLower === 'offered') && (nameLower === 'offer' || nameLower === 'offered')) return true;
-                                if ((statusLower.includes('tech') || statusLower.includes('technical')) && (nameLower.includes('tech') || nameLower.includes('technical'))) return true;
-                                if (statusLower.includes('hr') && nameLower.includes('hr')) return true;
-                                return false;
-                              });
-                              return matchByName ? matchByName.id : '';
-                            })();
+                        {/* ATS Score Column */}
+                        <TableCell className="py-3 px-4 text-center">
+                          {candidate.atsScore !== null && candidate.atsScore !== undefined ? (
+                            <span className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold border inline-block",
+                              candidate.atsScore >= 85 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" :
+                              candidate.atsScore >= 70 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" :
+                              "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                            )}>
+                              {candidate.atsScore}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-[11px] font-mono">-</span>
+                          )}
+                        </TableCell>
 
-                            return (
-                              <select
-                                value={resolvedStageId || ''}
-                                onChange={(e) => {
-                                  const newStageId = Number(e.target.value);
-                                  if (newStageId) {
-                                    handleMoveStage(candidate.id, newStageId);
-                                  }
-                                }}
-                                className="h-7 text-[11px] font-semibold border border-slate-300 rounded-sm bg-white text-slate-800 px-2 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer hover:border-slate-400 w-full"
-                              >
-                                <option value="" disabled>Select Stage...</option>
-                                {pipelineStages.map((stage) => (
-                                  <option key={stage.id} value={stage.id}>
-                                    {stage.stageName || stage.stage_name}
-                                  </option>
-                                ))}
-                              </select>
-                            );
-                          })()}
-                          <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-1.5 top-2 pointer-events-none" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs py-1.5 w-[100px] min-w-[100px]">
-                        {/* Sleek Combined Actions Menu */}
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-[11px] font-semibold px-2.5 bg-white border-slate-300 hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1 cursor-pointer"
-                            >
-                              Actions <ChevronDown className="w-3 h-3 text-slate-400" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="w-52 p-1 text-xs space-y-0.5 shadow-md border-border bg-popover text-popover-foreground">
-                             {/* AI Analysis Modal Trigger */}
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 setSelectedCandidateForAiModal(candidate);
-                                 setIsAiAnalysisModalOpen(true);
-                               }}
-                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-indigo-50 font-medium text-indigo-700 cursor-pointer"
-                             >
-                               <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> View AI ATS Analysis
-                             </button>
+                        {/* JD Match Column */}
+                        <TableCell className="py-3 px-4 text-center">
+                          {candidate.jdMatchScore !== null && candidate.jdMatchScore !== undefined ? (
+                            <span className={cn(
+                              "px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold border inline-block",
+                              candidate.jdMatchScore >= 80 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" :
+                              candidate.jdMatchScore >= 65 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" :
+                              "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                            )}>
+                              {candidate.jdMatchScore}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-[11px] font-mono">-</span>
+                          )}
+                        </TableCell>
 
-                             <div className="my-1 border-t border-border" />
+                        <TableCell className="py-3 px-4 text-xs text-muted-foreground font-medium truncate max-w-[120px]" title={candidate.qualification}>
+                          {candidate.qualification || '-'}
+                        </TableCell>
 
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 setSelectedAppId(candidate.id);
-                                 setSelectedAssessmentId('');
-                                 setShowAssignDialog(true);
-                               }}
-                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
-                             >
-                               <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
-                             </button>
+                        <TableCell className="py-3 px-4 text-xs text-muted-foreground font-medium truncate max-w-[130px]" title={candidate.skills}>
+                          {candidate.skills || '-'}
+                        </TableCell>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => openScheduleInterviewModal(candidate)}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
-                                  >
-                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
-                                  </button>
+                        <TableCell className="py-3 px-4 text-xs text-muted-foreground font-mono">
+                          {candidate.contact || '-'}
+                        </TableCell>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => openCandidateRoundsDrawer(candidate)}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-indigo-50 font-medium text-indigo-700 cursor-pointer"
-                                  >
-                                    <Layers className="w-3.5 h-3.5 text-indigo-600" /> Interview Rounds & Timeline
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      window.location.href = '/hr/recruitment/interviews';
-                                    }}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
-                                  >
-                                    <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
-                                  </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedAppId(candidate.id);
-                                setOfferPosition(candidate.positionTitle || '');
-                                setOfferCtc('');
-                                setOfferBaseSalary('');
-                                setOfferStartDate('');
-                                setOfferExpiryDate('');
-                                setShowOfferDialog(true);
-                              }}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
-                            >
-                              <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
-                            </button>
-
-                            {['offered', 'offer'].includes((candidate.status || '').toLowerCase()) && (
-                              <button
-                                type="button"
-                                onClick={() => handleOnboardCandidate(candidate.id)}
-                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-green-50 font-medium text-green-700 cursor-pointer"
-                              >
-                                <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Hire & Onboard
-                              </button>
-                            )}
-
-                            {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
-                              <>
-                                <div className="my-1 border-t border-border" />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setRejectingCandidateInfo(candidate);
-                                    setRejectionReason('');
-                                    setShowRejectDialog(true);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-medium text-red-600 cursor-pointer"
+                        <TableCell className="py-3 px-4">
+                          <div className="relative">
+                            {(() => {
+                              const activeStage = pipelineStages.find((s) => s.id === Number(candidate.pipelineStageId));
+                              return (
+                                <select
+                                  value={candidate.pipelineStageId || ''}
+                                  onChange={(e) => handleMoveStage(candidate.id, Number(e.target.value))}
+                                  className="w-full text-xs font-semibold rounded-lg bg-background border border-border px-2 py-1 pr-6 focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs text-foreground cursor-pointer"
                                 >
-                                  <UserX className="w-3.5 h-3.5 text-red-500" /> Reject Candidate
+                                  <option value="" disabled>Select Stage...</option>
+                                  {pipelineStages.map((stage) => (
+                                    <option key={stage.id} value={stage.id}>
+                                      {stage.stageName || stage.stage_name}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            })()}
+                            <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-2 top-2.5 pointer-events-none" />
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="py-3 px-4">
+                          {/* Sleek Combined Actions Menu */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs font-bold px-3 rounded-xl border-border hover:bg-muted text-foreground shadow-2xs flex items-center gap-1 cursor-pointer"
+                              >
+                                Actions <ChevronDown className="w-3 h-3 text-muted-foreground ml-1" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-56 p-1.5 text-xs space-y-1 shadow-2xl border-border bg-card text-foreground rounded-xl">
+                               {/* AI Analysis Modal Trigger */}
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   setSelectedCandidateForAiModal(candidate);
+                                   setIsAiAnalysisModalOpen(true);
+                                 }}
+                                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-primary/10 font-bold text-primary cursor-pointer transition-colors"
+                               >
+                                 <Sparkles className="w-3.5 h-3.5 text-primary" /> View AI ATS Analysis
                                 </button>
-                              </>
-                            )}
-                          </PopoverContent>
-                        </Popover>
-                      </TableCell>
-                      <TableCell className="text-xs py-2 w-[100px] min-w-[100px]">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          ['hired', 'approved'].includes((candidate.status || '').toLowerCase())
-                            ? 'bg-green-100 text-green-800 border border-green-300' 
-                            : ['offered', 'offer'].includes((candidate.status || '').toLowerCase())
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : (candidate.status || '').toLowerCase() === 'interview'
-                            ? 'bg-purple-100 text-purple-800 border border-purple-300'
-                            : ['rejected', 'withdrawn'].includes((candidate.status || '').toLowerCase())
-                            ? 'bg-red-100 text-red-800 border border-red-300' 
-                            : 'bg-blue-100 text-blue-800 border border-blue-300'
-                        }`}>
-                          {candidate.status}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))
+
+                               <div className="my-1 border-t border-border/60" />
+
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   setSelectedAppId(candidate.id);
+                                   setSelectedAssessmentId('');
+                                   setShowAssignDialog(true);
+                                 }}
+                                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-muted font-medium text-foreground cursor-pointer transition-colors"
+                               >
+                                 <Code2 className="w-3.5 h-3.5 text-blue-500" /> Assign Assessment
+                               </button>
+
+                               <button
+                                 type="button"
+                                 onClick={() => openScheduleInterviewModal(candidate)}
+                                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-muted font-medium text-foreground cursor-pointer transition-colors"
+                               >
+                                 <Calendar className="w-3.5 h-3.5 text-indigo-500" /> Schedule Interview
+                               </button>
+
+                               <button
+                                 type="button"
+                                 onClick={() => openCandidateRoundsDrawer(candidate)}
+                                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-muted font-medium text-foreground cursor-pointer transition-colors"
+                               >
+                                 <Layers className="w-3.5 h-3.5 text-indigo-500" /> Interview Timeline
+                               </button>
+
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   window.location.href = '/hr/recruitment/interviews';
+                                 }}
+                                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-amber-500/10 font-medium text-amber-600 dark:text-amber-400 cursor-pointer transition-colors"
+                               >
+                                 <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> Rate Feedback
+                               </button>
+
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                   setSelectedAppId(candidate.id);
+                                   setOfferPosition(candidate.positionTitle || '');
+                                   setOfferCtc('');
+                                   setOfferBaseSalary('');
+                                   setOfferStartDate('');
+                                   setOfferExpiryDate('');
+                                   setShowOfferDialog(true);
+                                 }}
+                                 className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-purple-500/10 font-medium text-purple-600 dark:text-purple-400 cursor-pointer transition-colors"
+                               >
+                                 <FileText className="w-3.5 h-3.5 text-purple-500" /> Generate Offer Letter
+                               </button>
+
+                               {['offered', 'offer'].includes((candidate.status || '').toLowerCase()) && (
+                                 <button
+                                   type="button"
+                                   onClick={() => handleOnboardCandidate(candidate.id)}
+                                   className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-emerald-500/10 font-bold text-emerald-600 dark:text-emerald-400 cursor-pointer transition-colors"
+                                 >
+                                   <CheckCircle className="w-3.5 h-3.5 text-emerald-500" /> Hire & Onboard
+                                 </button>
+                               )}
+
+                               {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
+                                 <>
+                                   <div className="my-1 border-t border-border/60" />
+                                   <button
+                                     type="button"
+                                     onClick={() => {
+                                       setRejectingCandidateInfo(candidate);
+                                       setRejectionReason('');
+                                       setShowRejectDialog(true);
+                                     }}
+                                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-rose-500/10 font-bold text-rose-600 dark:text-rose-400 cursor-pointer transition-colors"
+                                   >
+                                     <UserX className="w-3.5 h-3.5 text-rose-500" /> Reject Candidate
+                                   </button>
+                                 </>
+                               )}
+                            </PopoverContent>
+                          </Popover>
+                        </TableCell>
+
+                        <TableCell className="py-3 px-4 text-center">
+                          <Badge variant="outline" className={cn(
+                            "px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full",
+                            ['hired', 'approved'].includes(statusStr)
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
+                              : ['offered', 'offer'].includes(statusStr)
+                              ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30'
+                              : statusStr === 'interview'
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                              : ['rejected', 'withdrawn'].includes(statusStr)
+                              ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30' 
+                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                          )}>
+                            {candidate.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-28 text-center text-xs text-muted-foreground bg-background border-b-0">
+                    <TableCell colSpan={10} className="h-32 text-center text-xs text-muted-foreground bg-background">
                       No applicant pipeline records found matching the criteria.
                     </TableCell>
                   </TableRow>
@@ -1098,28 +1129,28 @@ export const ApplicantTrackerPage: React.FC = () => {
 
             {/* Pagination Controls */}
             {totalEntries > 0 && (
-              <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
-                <div className="text-muted-foreground">
-                  Page {currentPage} of {totalPages}
+              <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+                <div className="font-medium">
+                  Page <span className="font-bold text-foreground">{currentPage}</span> of <span className="font-bold text-foreground">{totalPages}</span>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-card text-card-foreground"
+                    className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   >
-                    Previous
+                    <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Previous
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-card text-card-foreground"
+                    className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                     disabled={currentPage >= totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   >
-                    Next
+                    Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </div>
               </div>

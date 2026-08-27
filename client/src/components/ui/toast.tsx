@@ -9,14 +9,15 @@ export interface ToasterProps extends React.ComponentProps<typeof SonnerToaster>
  * Solid WhatsApp Web style Toast Notifications Container
  * Positioned in the bottom-right corner with 100% solid, opaque backgrounds.
  */
-export function Toaster({ position = 'bottom-right', ...props }: ToasterProps) {
+export function Toaster({ position = 'top-right', ...props }: ToasterProps) {
   return (
     <SonnerToaster
-      position="bottom-right"
+      position={position}
+      visibleToasts={1}
       richColors={false}
       closeButton
-      expand={true}
-      duration={4000}
+      expand={false}
+      duration={2500}
       className="toaster group"
       toastOptions={{
         style: {
@@ -30,7 +31,7 @@ export function Toaster({ position = 'bottom-right', ...props }: ToasterProps) {
         },
         classNames: {
           toast:
-            'group toast !bg-[#0f172a] !text-white !border-slate-700 !shadow-2xl !rounded-2xl !p-4 !gap-3 !opacity-100 font-sans animate-in fade-in-0 slide-in-from-bottom-5 slide-in-from-right-5 duration-300 ease-out',
+            'group toast !bg-[#0f172a] !text-white !border-slate-700 !shadow-2xl !rounded-2xl !p-4 !gap-3 !opacity-100 font-sans animate-in fade-in-0 slide-in-from-top-5 slide-in-from-right-5 duration-300 ease-out',
           title: '!text-xs !font-extrabold !text-white tracking-tight',
           description: '!text-[11px] !text-slate-300 mt-0.5 leading-snug font-medium',
           actionButton:

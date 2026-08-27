@@ -20,10 +20,16 @@ interface LeaveType {
   id: number;
   leave_name: string;
   leave_code: string;
-  description: string;
-  default_allowance_days: number;
+  description?: string;
+  default_allowance_days?: number;
   gender_applicable?: string;
   genderApplicable?: string;
+  allocation_settings?: any;
+  allocationSettings?: any;
+  allocation?: any;
+  only_when?: any;
+  onlyWhen?: any;
+  [key: string]: any;
 }
 
 interface LeaveBalanceItem {
@@ -37,6 +43,12 @@ interface LeaveBalanceItem {
   available_balance: number;
   gender_applicable?: string;
   genderApplicable?: string;
+  allocation_settings?: any;
+  allocationSettings?: any;
+  allocation?: any;
+  only_when?: any;
+  onlyWhen?: any;
+  [key: string]: any;
 }
 
 interface LeaveApplicationItem {

@@ -203,25 +203,33 @@ export const JobManagement: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 bg-slate-50/50 min-h-[calc(100vh-4rem)]">
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
       
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-            Job Management
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage open, closed, and published job postings.</p>
+      {/* ── Top Header Section ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
+            <Briefcase className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Job Openings & Requisitions
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Manage active, draft, and closed job postings across all organization departments.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto">
           <Button 
             onClick={() => {
               setEditingJob(null);
               setIsCreating(true);
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200 text-xs"
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 mr-1.5" />
+            <Plus className="w-3.5 h-3.5" />
             Create Job
           </Button>
           
@@ -229,26 +237,27 @@ export const JobManagement: React.FC = () => {
             <Button 
               variant="outline" 
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm transition-all"
+              className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs"
+              title="Configure Table Columns"
             >
               <Settings className="w-4 h-4" />
             </Button>
             {/* Settings Popover */}
             {isSettingsOpen && (
-              <div className="absolute right-0 top-12 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="p-3 bg-slate-50 border-b border-slate-100">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configure Columns</h4>
+              <div className="absolute right-0 top-12 w-64 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                <div className="p-3 bg-muted/50 border-b border-border">
+                  <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
                 </div>
-                <div className="p-2 max-h-64 overflow-y-auto">
+                <div className="p-2 max-h-64 overflow-y-auto space-y-1">
                   {ALL_CONFIGURABLE_COLUMNS.map(col => (
-                    <label key={col.key} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer">
+                    <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
                       <input 
                         type="checkbox" 
                         checked={visibleColumns.includes(col.key)}
                         onChange={() => toggleColumn(col.key)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+                        className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
                       />
-                      <span className="ml-2 text-sm text-slate-600">{col.label}</span>
+                      <span>{col.label}</span>
                     </label>
                   ))}
                 </div>
@@ -258,99 +267,67 @@ export const JobManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="relative">
-        
-        {/* Search Input */}
-        {activeTab !== 'ai_suggestions' && (
-          <div className="absolute right-4 top-2 z-20 w-64">
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* ── Main Content Area ────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        {/* Controls Toolbar: Tabs & Search */}
+        <CardHeader className="p-5 border-b border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 bg-muted/60 p-1 rounded-xl border border-border/60 w-fit">
+            <button
+              onClick={() => { setActiveTab('active'); setCurrentPage(1); }}
+              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'active'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Active Jobs ({jobs.filter((j: any) => j.status !== 'closed').length})
+            </button>
+            <button
+              onClick={() => { setActiveTab('closed'); setCurrentPage(1); }}
+              className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'closed'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-slate-400" />
+              Closed Jobs ({jobs.filter((j: any) => j.status === 'closed').length})
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search jobs..."
+                placeholder="Search job title or code..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm h-9 text-sm rounded-full"
+                className="pl-9 bg-background border-border text-xs rounded-xl h-9"
               />
             </div>
+
+            <Button
+              onClick={handleExport}
+              variant="outline"
+              size="sm"
+              className="text-xs font-bold gap-1.5 rounded-xl h-9 border-border hover:bg-muted shrink-0"
+            >
+              <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+            </Button>
           </div>
-        )}
+        </CardHeader>
 
-        {/* Tabs Row */}
-        <div className="flex items-center gap-1 mb-[-1px]">
-          <button
-            onClick={() => { setActiveTab('active'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'active'
-                ? 'bg-white text-slate-800 border-t-blue-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Active Jobs
-          </button>
-          <button
-            onClick={() => { setActiveTab('closed'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'closed'
-                ? 'bg-white text-slate-800 border-t-slate-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Closed Jobs
-          </button>
-        </div>
-
-        {/* Result Card Wrapper */}
-        <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-            
-            {/* Result Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <span className={`w-2.5 h-2.5 rounded-full ${activeTab === 'active' ? 'bg-blue-500' : 'bg-slate-400'}`}></span> Result
-              </h3>
-              <Button
-                onClick={handleExport}
-                variant="outline"
-                size="sm"
-                className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
-              >
-                <Download className="w-4 h-4" /> Export
-              </Button>
-            </div>
-
-            {/* Show Entries & Quick Text */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
-              <div className="font-medium">
-                Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries
-              </div>
-              <div className="flex items-center gap-2">
-                <span>Show</span>
-                <select
-                  value={entriesPerPage}
-                  onChange={(e) => {
-                    setEntriesPerPage(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
-                >
-                  <option value={5}>5</option>
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-                <span>entries</span>
-              </div>
-            </div>
-
-            {/* Table Container */}
-            <div className="overflow-x-auto border border-slate-200 rounded-lg w-full">
-              <table className="w-full text-sm text-left border-collapse min-w-[900px]">
-                <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-bold">
-                  <tr>
-                    <th className="p-3.5">Action</th>
-                    <th className="p-3.5">Job Code</th>
-                    <th className="p-3.5">Job Title</th>
-                    <th className="p-3.5 text-center">Status</th>
+        <CardContent className="p-0">
+          {/* Table Container */}
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-sm text-left border-collapse min-w-[900px]">
+              <thead className="bg-muted/50 text-muted-foreground border-b border-border/60 text-[11px] uppercase tracking-wider font-bold">
+                <tr>
+                  <th className="py-3.5 px-5">Actions</th>
+                  <th className="py-3.5 px-5">Job Code</th>
+                  <th className="py-3.5 px-5">Job Title & Description</th>
+                  <th className="py-3.5 px-5 text-center">Status</th>
                     
                     {/* Dynamically configured columns */}
                     {visibleColumns.map((colKey) => {
@@ -365,32 +342,32 @@ export const JobManagement: React.FC = () => {
                     <th className="p-3.5 text-center">Positions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-600">
+                <tbody className="divide-y divide-border/60 text-foreground">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={5 + visibleColumns.length} className="p-8 text-center">
-                        <div className="flex items-center justify-center gap-2 text-slate-500">
-                          <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin"></div>
+                      <td colSpan={5 + visibleColumns.length} className="p-12 text-center">
+                        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                           Loading jobs...
                         </div>
                       </td>
                     </tr>
                   ) : paginatedData.length === 0 ? (
                     <tr>
-                      <td colSpan={5 + visibleColumns.length} className="p-8 text-center text-slate-400 italic">
-                        No Jobs found matching the criteria
+                      <td colSpan={5 + visibleColumns.length} className="p-12 text-center text-muted-foreground text-xs italic">
+                        No Jobs found matching the selected criteria.
                       </td>
                     </tr>
                   ) : (
                     paginatedData.map((item: any) => (
-                      <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
-                        <td className="p-3.5">
-                          <div className="flex items-center gap-1">
+                      <tr key={item.id} className="hover:bg-muted/40 transition-colors">
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-1.5">
                             <Button 
                               variant="ghost" 
                               size="icon" 
                               onClick={() => setViewingJob(item)}
-                              className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10"
                               title="View Job Details"
                             >
                               <Eye className="w-4 h-4" />
@@ -399,7 +376,7 @@ export const JobManagement: React.FC = () => {
                               variant="ghost" 
                               size="icon" 
                               onClick={() => setEditingJob(item)}
-                              className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10"
                               title="Edit Job"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -408,33 +385,33 @@ export const JobManagement: React.FC = () => {
                               variant="ghost" 
                               size="icon" 
                               onClick={() => handleCopyCareerLink(item)}
-                              className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-indigo-600 hover:bg-indigo-500/10"
                               title="Copy Career Page Apply Link"
                             >
-                              <Link2 className="w-4 h-4 text-indigo-600" />
+                              <Link2 className="w-4 h-4 text-indigo-500" />
                             </Button>
                             <Button 
                               variant="ghost" 
                               size="icon" 
                               onClick={() => setJobToDelete(item)}
-                              className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10"
                               title="Delete Job"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </td>
-                        <td className="p-3.5 font-semibold text-slate-700">{item.jobCode || item.job_code}</td>
-                        <td className="p-3.5">
-                          <div className="font-medium text-slate-800">{item.jobTitle || item.job_title}</div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {stripHtml(item.jobDescription || item.job_description).substring(0, 60)}... 
-                            <button onClick={() => setViewingJob(item)} className="text-blue-600 font-semibold hover:underline ml-1">
+                        <td className="py-3.5 px-5 font-mono font-bold text-xs text-foreground">{item.jobCode || item.job_code}</td>
+                        <td className="py-3.5 px-5">
+                          <div className="font-bold text-foreground text-xs">{item.jobTitle || item.job_title}</div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+                            {stripHtml(item.jobDescription || item.job_description).substring(0, 75)}... 
+                            <button onClick={() => setViewingJob(item)} className="text-primary font-bold hover:underline ml-1 inline">
                               Read more
                             </button>
                           </div>
                         </td>
-                        <td className="p-3.5 text-center relative">
+                        <td className="py-3.5 px-5 text-center relative">
                           {/* Status Button / Popover trigger */}
                           <div 
                             onClick={(e) => {
@@ -442,35 +419,41 @@ export const JobManagement: React.FC = () => {
                               setActiveStatusPopoverId(prev => prev === item.id ? null : item.id);
                             }}
                             className={cn(
-                              "inline-flex items-center justify-center p-1.5 rounded-full shadow-sm cursor-pointer transition-transform hover:scale-105",
-                              item.status === 'published' ? 'bg-green-100 text-green-600' :
-                              item.status === 'draft' ? 'bg-amber-100 text-amber-600' :
-                              'bg-slate-100 text-slate-500'
+                              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase shadow-2xs cursor-pointer transition-transform hover:scale-105",
+                              item.status === 'published' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
+                              item.status === 'draft' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30' :
+                              'bg-muted text-muted-foreground border border-border'
                             )}
                             title="Change Status"
                           >
-                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span className={cn(
+                              "w-1.5 h-1.5 rounded-full",
+                              item.status === 'published' ? 'bg-emerald-500' :
+                              item.status === 'draft' ? 'bg-amber-500' :
+                              'bg-slate-400'
+                            )} />
+                            {item.status || 'Active'}
                           </div>
 
                           {/* Status Popover */}
                           {activeStatusPopoverId === item.id && (
                             <div 
                               onClick={(e) => e.stopPropagation()}
-                              className="absolute left-[70%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none animate-in fade-in zoom-in-95 duration-150"
+                              className="absolute left-[70%] top-[40%] bg-card border border-border rounded-xl shadow-2xl p-4 text-left z-50 min-w-[220px] text-foreground select-none animate-in fade-in zoom-in-95 duration-150"
                             >
-                              <h4 className="text-xs font-bold text-slate-800 uppercase border-b border-slate-100 pb-2 mb-3">Job Status</h4>
+                              <h4 className="text-xs font-black text-foreground uppercase border-b border-border pb-2 mb-3">Job Status</h4>
                               <div className="space-y-2 text-xs">
                                 <div className="flex justify-between">
-                                  <span className="text-slate-500">Current Status:</span>
-                                  <span className="font-semibold uppercase tracking-wider">{item.status}</span>
+                                  <span className="text-muted-foreground">Current Status:</span>
+                                  <span className="font-bold uppercase tracking-wider text-foreground">{item.status}</span>
                                 </div>
                               </div>
                               
                               {item.status === 'draft' && (
-                                <div className="mt-3 flex items-center gap-2 pt-2 border-t border-slate-100">
+                                <div className="mt-3 flex items-center gap-2 pt-2 border-t border-border">
                                   <button
                                     onClick={() => handlePublish(item.id)}
-                                    className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2 rounded-lg text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
                                   >
                                     Publish Job
                                   </button>
@@ -482,13 +465,15 @@ export const JobManagement: React.FC = () => {
 
                         {/* Dynamic Columns */}
                         {visibleColumns.map(colKey => (
-                          <td key={colKey} className="p-3.5">
+                          <td key={colKey} className="py-3.5 px-5 text-xs text-foreground font-medium">
                             {item[colKey] || item[colKey.replace(/([A-Z])/g, '_$1').toLowerCase()] || '-'}
                           </td>
                         ))}
 
-                        <td className="p-3.5 text-center font-bold text-slate-700">
-                          {item.noOfPositions || item.no_of_positions}
+                        <td className="py-3.5 px-5 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold text-xs">
+                            {item.noOfPositions || item.no_of_positions || 1}
+                          </span>
                         </td>
                       </tr>
                     ))
@@ -499,51 +484,53 @@ export const JobManagement: React.FC = () => {
 
             {/* Pagination Controls */}
             {filteredData.length > 0 && (
-              <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 text-sm">
-                <div className="text-slate-500 font-medium">
-                  Page {currentPage} of {totalPages}
+              <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+                <div className="font-medium">
+                  Showing <span className="font-bold text-foreground">{filteredData.length === 0 ? 0 : startIndex + 1}</span> to <span className="font-bold text-foreground">{Math.min(endIndex, filteredData.length)}</span> of <span className="font-bold text-foreground">{filteredData.length}</span> entries
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
-                    className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                    className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                   >
-                    <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                    <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Prev
                   </Button>
-                  <div className="flex gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => (
-                      <Button
-                        key={i + 1}
-                        variant={currentPage === i + 1 ? "default" : "outline"}
-                        onClick={() => setCurrentPage(i + 1)}
-                        className={`h-8 w-8 p-0 ${
-                          currentPage === i + 1 
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
-                            : 'text-slate-600 border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        {i + 1}
-                      </Button>
-                    )).slice(
-                      Math.max(0, currentPage - 3), 
-                      Math.min(totalPages, currentPage + 2)
-                    )}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))
+                      .map((pageNum) => (
+                        <Button
+                          key={pageNum}
+                          variant={currentPage === pageNum ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`h-8 w-8 p-0 rounded-xl text-xs font-bold ${
+                            currentPage === pageNum 
+                              ? 'bg-primary text-primary-foreground shadow-xs' 
+                              : 'border-border hover:bg-muted text-foreground'
+                          }`}
+                        >
+                          {pageNum}
+                        </Button>
+                      ))}
                   </div>
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
-                    className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                    className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                   >
-                    Next <ChevronRight className="w-4 h-4 ml-1" />
+                    Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </div>
               </div>
             )}
-          </div>
-      </div>
+          </CardContent>
+        </Card>
 
       {/* Create / Edit Modal */}
       {(isCreating || !!editingJob) && (
@@ -590,41 +577,46 @@ export const JobManagement: React.FC = () => {
 
       {/* View Job Dialog */}
       <Dialog open={!!viewingJob} onOpenChange={(open) => !open && setViewingJob(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0">
-          <DialogHeader className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-            <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-blue-500" />
-              {viewingJob?.jobTitle || viewingJob?.job_title} ({viewingJob?.jobCode || viewingJob?.job_code})
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col p-0 rounded-2xl border-border/80 shadow-2xl">
+          <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/40">
+            <DialogTitle className="text-lg font-black text-foreground flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-primary" />
+              {viewingJob?.jobTitle || viewingJob?.job_title} <span className="text-xs font-mono text-muted-foreground">({viewingJob?.jobCode || viewingJob?.job_code})</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="p-6 overflow-y-auto bg-white flex-1 text-sm text-slate-700 prose prose-sm max-w-none space-y-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg not-prose text-xs">
+          <div className="p-6 overflow-y-auto bg-card flex-1 text-sm text-foreground space-y-5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-muted/50 rounded-xl border border-border/60 text-xs">
               <div>
-                <span className="text-slate-500 block">Positions:</span>
-                <span className="font-bold text-slate-800">{viewingJob?.noOfPositions || viewingJob?.no_of_positions}</span>
+                <span className="text-muted-foreground block text-[11px] font-medium">Positions</span>
+                <span className="font-extrabold text-foreground text-sm">{viewingJob?.noOfPositions || viewingJob?.no_of_positions || 1}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Status:</span>
-                <span className="font-bold uppercase text-slate-800">{viewingJob?.status}</span>
+                <span className="text-muted-foreground block text-[11px] font-medium">Status</span>
+                <span className="font-extrabold uppercase text-primary text-xs">{viewingJob?.status || 'Active'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Job Type:</span>
-                <span className="font-bold text-slate-800">{viewingJob?.jobType || viewingJob?.job_type || 'Full Time'}</span>
+                <span className="text-muted-foreground block text-[11px] font-medium">Job Type</span>
+                <span className="font-bold text-foreground capitalize">{viewingJob?.jobType || viewingJob?.job_type || 'Full Time'}</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Employment:</span>
-                <span className="font-bold text-slate-800">{viewingJob?.employmentType || viewingJob?.employment_type || 'Onsite'}</span>
+                <span className="text-muted-foreground block text-[11px] font-medium">Employment</span>
+                <span className="font-bold text-foreground capitalize">{viewingJob?.employmentType || viewingJob?.employment_type || 'Onsite'}</span>
               </div>
             </div>
 
-            <h4 className="text-sm font-bold text-slate-800 border-b pb-1">Job Description</h4>
-            <div dangerouslySetInnerHTML={{ __html: viewingJob?.jobDescription || viewingJob?.job_description || '<p class="text-slate-400 italic">No description provided.</p>' }} />
+            <div className="space-y-2">
+              <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider border-b border-border/60 pb-1.5">Job Description</h4>
+              <div 
+                className="text-xs leading-relaxed text-muted-foreground prose prose-sm dark:prose-invert max-w-none" 
+                dangerouslySetInnerHTML={{ __html: viewingJob?.jobDescription || viewingJob?.job_description || '<p class="italic">No description provided.</p>' }} 
+              />
+            </div>
           </div>
-          <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
-            <Button onClick={() => handleCopyCareerLink(viewingJob)} variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 text-xs font-semibold">
-              <Link2 className="w-4 h-4 text-indigo-600" /> Copy Career Apply Link
+          <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/30 flex items-center justify-between gap-2">
+            <Button onClick={() => handleCopyCareerLink(viewingJob)} variant="outline" className="border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 flex items-center gap-2 text-xs font-bold rounded-xl h-9">
+              <Link2 className="w-4 h-4 text-indigo-500" /> Copy Career Apply Link
             </Button>
-            <Button onClick={() => setViewingJob(null)} variant="outline" className="border-slate-200 text-slate-600 hover:bg-slate-100">Close</Button>
+            <Button onClick={() => setViewingJob(null)} variant="outline" className="border-border text-foreground hover:bg-muted rounded-xl h-9 text-xs font-bold">Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -749,16 +741,16 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-card rounded-2xl shadow-2xl max-w-3xl w-full flex flex-col max-h-[92vh] overflow-hidden border border-border/80">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between bg-muted/40">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">{initialData ? 'Edit Job Opening' : 'Create New Job'}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{initialData ? 'Update opening requirements and AI screening rules.' : 'Fill in the details and configure AI ATS screening rules.'}</p>
+            <h2 className="text-lg font-black text-foreground">{initialData ? 'Edit Job Opening' : 'Create New Job Opening'}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{initialData ? 'Update opening requirements and AI screening rules.' : 'Fill in the details and configure AI ATS screening rules.'}</p>
           </div>
-          <div className="h-10 w-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+          <div className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center font-bold">
             <Briefcase className="w-5 h-5" />
           </div>
         </div>
@@ -773,12 +765,12 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
             });
           }} className="space-y-5">
 
-            <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg space-y-2">
-              <label className="text-xs font-bold text-blue-800 uppercase tracking-wider block">Link to MRF Requisition</label>
+            <div className="bg-primary/5 border border-primary/20 p-4 rounded-xl space-y-2">
+              <label className="text-xs font-bold text-primary uppercase tracking-wider block">Link to MRF Requisition</label>
               <select
                 value={formData.mrfRequestId || ''}
                 onChange={(e) => handleMrfSelect(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg bg-white border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm font-medium text-slate-700"
+                className="w-full px-3 py-2 border rounded-xl bg-card border-border text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
               >
                 <option value="">-- No MRF (Direct Job) --</option>
                 {mrfRequests
@@ -794,50 +786,50 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                     );
                   })}
               </select>
-              <p className="text-[10px] text-blue-600">Selecting an MRF will auto-fill job details based on manager requests. Pending MRFs will be automatically approved upon job creation.</p>
+              <p className="text-[11px] text-muted-foreground">Selecting an MRF will auto-fill job details based on manager requests. Pending MRFs will be automatically approved upon job creation.</p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Job Code <span className="text-red-500">*</span></label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Code <span className="text-rose-500">*</span></label>
                 <Input
                   name="jobCode"
                   placeholder="e.g. SE-001"
                   value={formData.jobCode}
                   onChange={handleChange}
-                  className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
+                  className="bg-background border-border text-xs rounded-xl h-9"
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Job Title <span className="text-red-500">*</span></label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Title <span className="text-rose-500">*</span></label>
                 <Input
                   name="jobTitle"
-                  placeholder="e.g. Senior Node.js Developer"
+                  placeholder="e.g. Senior Full Stack Engineer"
                   value={formData.jobTitle}
                   onChange={handleChange}
-                  className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
+                  className="bg-background border-border text-xs rounded-xl h-9"
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Job Description <span className="text-red-500">*</span></label>
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Description <span className="text-rose-500">*</span></label>
               <TipTapRichTextEditor
                 content={formData.jobDescription}
                 onChange={(html) => setFormData(prev => ({ ...prev, jobDescription: html }))}
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Job Type</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Type</label>
                 <select
                   name="jobType"
                   value={formData.jobType}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg bg-slate-50 border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
+                  className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
                 >
                   <option value="full_time">Full Time</option>
                   <option value="part_time">Part Time</option>
@@ -847,11 +839,11 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
               </div>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Experience Requirement</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Experience Level</label>
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <span className={`text-xs font-bold ${isFresher ? 'text-blue-600' : 'text-slate-400'}`}>Fresher</span>
+                    <span className={`text-xs font-bold ${isFresher ? 'text-primary' : 'text-muted-foreground'}`}>Fresher</span>
                     <div 
-                      className={`w-10 h-5 rounded-full p-1 transition-colors ${isFresher ? 'bg-blue-100' : 'bg-slate-300'}`}
+                      className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${isFresher ? 'bg-primary/30' : 'bg-muted'}`}
                       onClick={() => {
                         setIsFresher(!isFresher);
                         if (!isFresher) {
@@ -859,9 +851,9 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                         }
                       }}
                     >
-                      <div className={`w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${!isFresher ? 'translate-x-5 bg-blue-500' : ''}`}></div>
+                      <div className={`w-4 h-4 rounded-full bg-primary shadow transition-transform ${!isFresher ? 'translate-x-4 bg-muted-foreground' : ''}`}></div>
                     </div>
-                    <span className={`text-xs font-bold ${!isFresher ? 'text-blue-600' : 'text-slate-400'}`}>Experienced</span>
+                    <span className={`text-xs font-bold ${!isFresher ? 'text-primary' : 'text-muted-foreground'}`}>Experienced</span>
                   </label>
                 </div>
                 
@@ -873,7 +865,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       placeholder="Min (Yrs)"
                       value={formData.minExperienceYears || ''}
                       onChange={handleChange}
-                      className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
+                      className="bg-background border-border text-xs rounded-xl h-9"
                       min={0}
                     />
                     <Input
@@ -882,7 +874,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       placeholder="Max (Yrs)"
                       value={formData.maxExperienceYears || ''}
                       onChange={handleChange}
-                      className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
+                      className="bg-background border-border text-xs rounded-xl h-9"
                       min={0}
                     />
                   </div>
@@ -890,14 +882,14 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Employment Type</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Employment Mode</label>
                 <select
                   name="employmentType"
                   value={formData.employmentType}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-lg bg-slate-50 border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
+                  className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
                 >
                   <option value="onsite">Onsite</option>
                   <option value="remote">Remote</option>
@@ -905,60 +897,47 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Positions <span className="text-red-500">*</span></label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Open Positions <span className="text-rose-500">*</span></label>
                 <Input
                   type="number"
                   name="noOfPositions"
                   value={formData.noOfPositions}
                   onChange={handleChange}
                   min={1}
-                  className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
+                  className="bg-background border-border text-xs rounded-xl h-9"
                   required
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Application Deadline / Expiry Date</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Application Deadline</label>
                 <Input
                   type="date"
                   name="expiryDate"
                   value={formData.expiryDate || ''}
                   onChange={handleChange}
-                  className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Currency</label>
-                <Input
-                  name="currency"
-                  value={formData.currency}
-                  onChange={handleChange}
-                  className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm uppercase"
-                  maxLength={3}
+                  className="bg-background border-border text-xs rounded-xl h-9"
                 />
               </div>
             </div>
-
-
-
           </form>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-border/60 bg-muted/40 flex items-center justify-end gap-3">
           <Button
             type="button"
             variant="outline"
             onClick={onClose}
-            className="border-slate-200 text-slate-600 hover:bg-slate-100"
+            className="border-border text-foreground hover:bg-muted rounded-xl h-9 text-xs font-bold"
           >
             Cancel
           </Button>
           <Button
             type="submit"
             form="create-job-form"
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl h-9 text-xs shadow-xs gap-1.5"
           >
-            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Job' : 'Create Job'}
+            <CheckCircle className="w-4 h-4" /> {initialData ? 'Update Job' : 'Create Job'}
           </Button>
         </div>
 

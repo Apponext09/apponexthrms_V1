@@ -83,13 +83,13 @@ async function testFullPayrollFlow() {
   // STEP 5: Test Process Payroll Engine & DB Persistence
   console.log('\n▶ TEST STEP 5: Processing & Freezing Monthly Payroll...');
   try {
-    const runResult = await service.processPayroll(reqCtx, {
-      month: '2026-08',
-      cycle_id: cycles[0]?.id || 6,
-      cutoff_date: '2026-08-25',
-      payout_date: '2026-08-31'
-    } as any);
-    console.log(`   [SUCCESS] Payroll Run Created ID: ${runResult?.id || runResult?.payroll_run_id || 'Success'}`);
+    // processPayroll now takes (ctx, payrollRunId: number)
+    // First generate a run to get its ID, then process it.
+    const genResult = await service.generatePayroll(reqCtx, cycles[0]?.id || 6, 'regular');
+    const runId = genResult?.id || genResult?.payroll_run_id;
+    if (!runId) throw new Error('generatePayroll did not return a run ID');
+    const runResult = await service.processPayroll(reqCtx, Number(runId));
+    console.log(`   [SUCCESS] Payroll Run Processed ID: ${runResult?.id || runId}`);
   } catch (err: any) {
     console.log(`   [INFO] Payroll Run Execution Note: ${err.message}`);
   }

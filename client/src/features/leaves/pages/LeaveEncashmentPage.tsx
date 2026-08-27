@@ -76,9 +76,12 @@ export function LeaveEncashmentPage() {
     }
   };
 
+  const [encashmentViewTab, setEncashmentViewTab] = useState<'pending' | 'my'>('pending');
+
   const fetchRequestsList = async () => {
     try {
-      const res = await apiClient.get('/leaves/encashments/my');
+      const endpoint = (isAdmin && encashmentViewTab === 'pending') ? '/leaves/encashments/pending' : '/leaves/encashments/my';
+      const res = await apiClient.get(endpoint);
       setRequests(res.data?.data || []);
     } catch (err) {
       console.error('Failed to fetch requests', err);
@@ -87,8 +90,11 @@ export function LeaveEncashmentPage() {
 
   useEffect(() => {
     fetchReferenceData();
-    fetchRequestsList();
   }, [isAdmin]);
+
+  useEffect(() => {
+    fetchRequestsList();
+  }, [isAdmin, encashmentViewTab]);
 
   // Handle Live Preview on form change
   useEffect(() => {
@@ -401,13 +407,41 @@ export function LeaveEncashmentPage() {
           {/* RIGHT COLUMN: Requests History */}
           <div className="lg:col-span-7">
             <Card className="border shadow-sm rounded-2xl bg-white dark:bg-gray-900 min-h-[480px]">
-              <CardHeader className="pb-3 border-b">
-                <CardTitle className="text-sm font-extrabold flex items-center gap-2">
-                  <Database className="w-4 h-4 text-emerald-600" /> Requests History
-                </CardTitle>
-                <CardDescription className="text-[10px]">
-                  {isAdmin ? 'Manage leave encashment requests for all employees.' : 'Review your leave encashment application history.'}
-                </CardDescription>
+              <CardHeader className="pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+                    <Database className="w-4 h-4 text-emerald-600" /> Requests History
+                  </CardTitle>
+                  <CardDescription className="text-[10px]">
+                    {isAdmin ? 'Manage leave encashment requests for all employees.' : 'Review your leave encashment application history.'}
+                  </CardDescription>
+                </div>
+                {isAdmin && (
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setEncashmentViewTab('pending')}
+                      className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        encashmentViewTab === 'pending'
+                          ? 'bg-white dark:bg-slate-900 text-foreground shadow-2xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Pending Approvals
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEncashmentViewTab('my')}
+                      className={`px-3 py-1 rounded-md text-[11px] font-bold transition-all ${
+                        encashmentViewTab === 'my'
+                          ? 'bg-white dark:bg-slate-900 text-foreground shadow-2xs'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      My Submissions
+                    </button>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 {requests.length === 0 ? (

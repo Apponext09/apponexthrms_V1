@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RuleConditionBuilder } from './RuleConditionBuilder';
 import { MultiSelectDropdown, MultiSelectOption } from './MultiSelectDropdown';
 import { HelpHint } from './HelpHint';
+import { LeaveScopeCards } from './LeaveScopeCards';
 import { 
   Calendar, 
   Layers, 
@@ -23,19 +24,28 @@ import {
 interface LeaveApplicationTabProps {
   formData: any;
   setFormData: React.Dispatch<React.SetStateAction<any>>;
+  companies?: { id: number; name: string }[];
   departments: { id: number; name: string }[];
   locations: { id: number; name: string }[];
+  subDepartments?: { id: number; name: string }[];
+  designations?: { id: number; name: string }[];
   gradeOptions: string[];
   employeeTypeOptions: string[];
+  employeeStatusOptions?: string[];
   leaveTypes: any[];
 }
 
 export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
   formData,
   setFormData,
+  companies = [],
   departments,
   locations,
+  subDepartments = [],
+  designations = [],
   gradeOptions,
+  employeeTypeOptions,
+  employeeStatusOptions = [],
   leaveTypes,
 }) => {
   const app = formData.application || {};
@@ -53,9 +63,27 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
   const updateEmployment = (category: string, id: any) => {
     setFormData((prev: any) => {
       const currentArr = prev.employment_application?.[category] || [];
-      const updated = currentArr.includes(id)
-        ? currentArr.filter((x: any) => x !== id)
+      const exists = currentArr.some((x: any) => String(x) === String(id));
+      const updated = exists
+        ? currentArr.filter((x: any) => String(x) !== String(id))
         : [...currentArr, id];
+      return {
+        ...prev,
+        employment_application: {
+          ...prev.employment_application,
+          [category]: updated,
+        },
+      };
+    });
+  };
+
+  const toggleSelectAll = (category: string, allItems: any[]) => {
+    setFormData((prev: any) => {
+      const currentArr = prev.employment_application?.[category] || [];
+      const allSelected =
+        allItems.length > 0 &&
+        allItems.every((item) => currentArr.some((x: any) => String(x) === String(item.id)));
+      const updated = allSelected ? [] : allItems.map((item) => item.id);
       return {
         ...prev,
         employment_application: {
@@ -518,82 +546,29 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
         </CardContent>
       </Card>
 
-      {/* 9. Applies to */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-500" />
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
-              Applies to
-            </CardTitle>
-          </div>
-          <CardDescription className="text-[11px] text-slate-500">
-            Leave this empty and these request rules apply to every employee.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Scope Card 1: Company */}
-            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-              <div className="flex items-center justify-between text-xs font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                <span>[-] Company</span>
-                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">0</span>
-              </div>
-              <select className="w-full h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
-                <option value="all">All</option>
-              </select>
-            </div>
-
-            {/* Scope Card 2: Location */}
-            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-              <div className="flex items-center justify-between text-xs font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                <span>[-] Location</span>
-                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">
-                  {formData.employment_application?.locations?.length || 0}
-                </span>
-              </div>
-              <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
-                {locations.map((loc) => {
-                  const isChecked = (formData.employment_application?.locations || []).includes(loc.id);
-                  return (
-                    <label key={loc.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
-                      <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={() => updateEmployment('locations', loc.id)}
-                      />
-                      <span>{loc.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Scope Card 3: Department */}
-            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
-              <div className="flex items-center justify-between text-xs font-semibold mb-2 text-slate-800 dark:text-slate-200">
-                <span>[-] Department</span>
-                <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-bold">
-                  {formData.employment_application?.departments?.length || 0}
-                </span>
-              </div>
-              <div className="max-h-28 overflow-y-auto space-y-1 pr-1">
-                {departments.map((dept) => {
-                  const isChecked = (formData.employment_application?.departments || []).includes(dept.id);
-                  return (
-                    <label key={dept.id} className="flex items-center gap-2 text-[11px] text-slate-700 dark:text-slate-300 cursor-pointer">
-                      <Checkbox
-                        checked={isChecked}
-                        onCheckedChange={() => updateEmployment('departments', dept.id)}
-                      />
-                      <span>{dept.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* 9. Applies to (Dynamic Scope Cards) */}
+      <LeaveScopeCards
+        title="Applies to"
+        description="Leave this empty and these request rules apply to every employee."
+        scopeData={formData.employment_application || {}}
+        onUpdateScope={(key, values) => {
+          setFormData((prev: any) => ({
+            ...prev,
+            employment_application: {
+              ...prev.employment_application,
+              [key]: values,
+            },
+          }));
+        }}
+        companies={companies}
+        locations={locations}
+        departments={departments}
+        subDepartments={subDepartments}
+        designations={designations}
+        grades={gradeOptions}
+        employeeTypes={employeeTypeOptions}
+        employeeStatuses={employeeStatusOptions}
+      />
 
       {/* 10. Only when */}
       <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">

@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mail, Phone, Briefcase, MapPin, Camera, CheckCircle2, Calendar, Building2, Edit2, User, Lock as LockIcon, Shield, Layers, FileEdit } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Camera, CheckCircle2, Calendar, Building2, Edit2, User, Lock as LockIcon, Shield, Layers, FileEdit, Banknote } from 'lucide-react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
@@ -197,6 +197,27 @@ export function EmployeeProfilePage() {
                   Type: {employee.employmentType.replace(/_/g, ' ')}
                 </Badge>
               )}
+
+              {/* Dynamic Pay Slab Badge */}
+              {(() => {
+                const slabName = (employee as any)?.salarySlabName || (employee as any)?.payrollSlab || (employee as any)?.salary_slab_name || (employee as any)?.salarySlab || (employee as any)?.salary_slab;
+                const annualCtc = Number((employee as any)?.annualCtc || (employee as any)?.annual_ctc || (employee as any)?.ctc || 0);
+
+                return (
+                  <>
+                    <Badge variant="outline" className={`text-[11px] font-bold py-0 ${slabName ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : 'bg-muted/50 text-muted-foreground border-border/60'}`}>
+                      <Layers className="w-3 h-3 mr-1 text-emerald-600 dark:text-emerald-400" />
+                      Slab: {slabName || 'Not Assigned'}
+                    </Badge>
+                    {annualCtc > 0 && (
+                      <Badge variant="outline" className="text-[11px] font-bold bg-primary/10 text-primary border-primary/20 py-0">
+                        <Banknote className="w-3 h-3 mr-1" />
+                        CTC: ₹{(annualCtc / 100000).toFixed(2)}L/yr
+                      </Badge>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Quick Contact Footer Strip */}

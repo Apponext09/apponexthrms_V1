@@ -1,5 +1,5 @@
 import http from 'http';
-// reload trigger comment #27
+// reload trigger comment #29 - clean reload for master routes
 import { Server } from 'socket.io';
 import fs from 'fs';
 import { createApp } from './app';
@@ -59,6 +59,15 @@ async function start() {
 
     // Auto check-out service disabled as requested
     // startAutoCheckOutCron();
+
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        logger.error(`Port ${env.PORT} is already in use. Exiting process so supervisor can restart cleanly...`);
+        setTimeout(() => process.exit(1), 1000);
+      } else {
+        logger.error('Server error:', err);
+      }
+    });
 
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {

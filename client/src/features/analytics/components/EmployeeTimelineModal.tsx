@@ -74,7 +74,7 @@ export function EmployeeTimelineModal({ row, isOpen, onClose }: EmployeeTimeline
       events.push({
         time: shiftStart,
         title: 'Shift Schedule Start',
-        description: `Scheduled shift start time (${row.shift || 'General Shift'})`,
+        description: `Scheduled shift start time (${row.shift || 'Assigned Shift'})`,
         icon: Clock,
         color: 'text-indigo-600 bg-indigo-100 dark:bg-indigo-950',
       });

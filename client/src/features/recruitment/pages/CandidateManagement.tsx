@@ -6,7 +6,9 @@ import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { 
@@ -198,382 +200,393 @@ export const CandidateManagement: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 bg-slate-50/50 min-h-[calc(100vh-4rem)]">
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
       
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-            Candidate Management
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage, review, and link candidates to job openings.</p>
+      {/* ── Top Header Section ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Candidate Management Roster
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Manage, review ATS profiles, and link candidates to published job requisitions.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
           <Button 
             type="button"
             variant="outline"
             onClick={() => setIsBulkImportOpen(true)}
-            className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold shadow-2xs text-xs cursor-pointer"
+            className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 cursor-pointer shadow-2xs whitespace-nowrap"
           >
-            <FileSpreadsheet className="w-4 h-4 mr-1.5 text-indigo-600" />
-            Bulk Import (CSV / Excel)
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Bulk Import
           </Button>
 
           <Button 
             onClick={() => setIsCreating(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200"
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 mr-1.5" />
+            <Plus className="w-3.5 h-3.5" />
             Add Candidate
           </Button>
           
-          <div className="relative">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm transition-all"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
-            {/* Settings Popover */}
-            {isSettingsOpen && (
-              <div className="absolute right-0 top-12 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="p-3 bg-slate-50 border-b border-slate-100">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configure Columns</h4>
-                </div>
-                <div className="p-2 max-h-64 overflow-y-auto">
-                  {ALL_CONFIGURABLE_COLUMNS.map(col => (
-                    <label key={col.key} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={visibleColumns.includes(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
-                      />
-                      <span className="ml-2 text-sm text-slate-600">{col.label}</span>
-                    </label>
-                  ))}
-                </div>
+          <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs"
+                title="Configure Table Columns"
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent align="end" className="w-64 p-0 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+              <div className="p-3 bg-muted/50 border-b border-border">
+                <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
               </div>
-            )}
-          </div>
+              <div className="p-2 max-h-64 overflow-y-auto space-y-1">
+                {ALL_CONFIGURABLE_COLUMNS.map(col => (
+                  <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={visibleColumns.includes(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
+                    />
+                    <span>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex flex-col relative w-full">
-        {/* Search Bar */}
-        <div className="absolute right-4 top-2 z-20 w-64">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search candidates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm h-9 text-sm rounded-full"
-            />
+      {/* ── Main Content Area ────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        {/* Toolbar: Segmented Tabs & Search Bar */}
+        <CardHeader className="p-5 border-b border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/60 flex-wrap">
+            <button
+              onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'all'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              All Candidates
+            </button>
+            <button
+              onClick={() => { setActiveTab('applied'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'applied'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              Applied
+            </button>
+            <button
+              onClick={() => { setActiveTab('interview'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'interview'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Interviewing
+            </button>
+            <button
+              onClick={() => { setActiveTab('offer'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'offer'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Offered
+            </button>
           </div>
-        </div>
 
-        {/* Tabs Row */}
-        <div className="flex items-center gap-1 mb-[-1px]">
-          <button
-            onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'all'
-                ? 'bg-white text-slate-800 border-t-blue-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            All Candidates
-          </button>
-          <button
-            onClick={() => { setActiveTab('applied'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'applied'
-                ? 'bg-white text-slate-800 border-t-amber-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Applied
-          </button>
-          <button
-            onClick={() => { setActiveTab('interview'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'interview'
-                ? 'bg-white text-slate-800 border-t-green-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Interviewing
-          </button>
-          <button
-            onClick={() => { setActiveTab('offer'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'offer'
-                ? 'bg-white text-slate-800 border-t-purple-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Offered
-          </button>
-        </div>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search candidates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-background border-border text-xs rounded-xl h-9"
+              />
+            </div>
 
-        {/* Result Card Wrapper */}
-        <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-          
-          {/* Result Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${activeTab === 'all' ? 'bg-blue-500' : activeTab === 'applied' ? 'bg-amber-500' : activeTab === 'interview' ? 'bg-green-500' : 'bg-purple-500'}`}></span> Result
-            </h3>
             <Button
               onClick={handleExport}
               variant="outline"
               size="sm"
-              className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
+              className="text-xs font-bold gap-1.5 rounded-xl h-9 border-border hover:bg-muted shrink-0"
             >
-              <Download className="w-4 h-4" /> Export
+              <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
             </Button>
           </div>
+        </CardHeader>
 
-          {/* Show Entries & Quick Text */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
-            <div className="font-medium">
-              Showing {totalEntries === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, totalEntries)} of {totalEntries} entries
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span>entries</span>
-            </div>
-          </div>
-
+        <CardContent className="p-0">
           {/* Table Container */}
-          <div className="overflow-x-auto border border-slate-200 rounded-lg w-full pb-[200px]">
+          <div className="overflow-x-auto w-full">
             <table className="w-full text-sm text-left border-collapse min-w-[1000px] mrf-table">
-              <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-bold">
+              <thead className="bg-muted/50 text-muted-foreground border-b border-border/60 text-[11px] uppercase tracking-wider font-bold">
                 <tr>
-                  <th className="p-3.5">Action</th>
-                  <th className="p-3.5">Candidate Name</th>
-                  <th className="p-3.5">Email</th>
-                  <th className="p-3.5 text-center">Status</th>
+                  <th className="py-3.5 px-5">Actions</th>
+                  <th className="py-3.5 px-5">Candidate Name</th>
+                  <th className="py-3.5 px-5">Email & Contact</th>
+                  <th className="py-3.5 px-5 text-center">Status</th>
                   
                   {/* Dynamically configured columns */}
                   {visibleColumns.map((colKey) => {
                     const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === colKey);
                     return (
-                      <th key={colKey} className={cn("p-3.5", colKey === 'ai_score' && "text-center")}>
+                      <th key={colKey} className={cn("py-3.5 px-5", colKey === 'ai_score' && "text-center")}>
                         {col?.label || colKey}
                       </th>
                     );
                   })}
                   
-                  <th className="p-3.5 text-center">Link Job</th>
+                  <th className="py-3.5 px-5 text-center">Link Job</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-600">
+              <tbody className="divide-y divide-border/60 text-foreground">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5 + visibleColumns.length} className="p-8 text-center">
-                      <div className="flex items-center justify-center gap-2 text-slate-500">
-                        <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin"></div>
-                        Loading candidates...
+                    <td colSpan={5 + visibleColumns.length} className="p-12 text-center">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        Loading candidates roster...
                       </div>
                     </td>
                   </tr>
                 ) : candidates.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + visibleColumns.length} className="p-8 text-center text-slate-400 italic">
-                      No Candidates found matching the criteria
+                    <td colSpan={5 + visibleColumns.length} className="p-12 text-center text-muted-foreground text-xs italic">
+                      No Candidates found matching the criteria.
                     </td>
                   </tr>
                 ) : (
-                  candidates.map((item: any) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => {
-                              setSelectedCandidateForAiModal(item);
-                              setIsAiAnalysisModalOpen(true);
-                            }} 
-                            className="h-8 w-8 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50"
-                            title="View AI ATS & JD Match Analysis"
-                          >
-                            <Sparkles className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setViewingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => setEditingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"><Edit2 className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => setCandidateToDelete(item)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-semibold text-slate-700">
-                          {((item.first_name || item.firstName)
-                            ? `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim()
-                            : (item.name || item.candidate_name || item.candidateName || (item.email ? item.email.split('@')[0] : 'Candidate')))}
-                        </div>
-                      </td>
-                      <td className="p-3.5 text-slate-600">{item.email}</td>
-                      <td className="p-3.5 text-center">
-                        <span className={cn(
-                          "px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-md",
-                          ['offer', 'hired'].includes(item.status) ? 'bg-green-100 text-green-700' :
-                          ['rejected', 'dropped'].includes(item.status) ? 'bg-red-100 text-red-700' :
-                          item.status === 'interview' ? 'bg-purple-100 text-purple-700' :
-                          'bg-blue-100 text-blue-700'
-                        )}>
-                          {item.status || 'Applied'}
-                        </span>
-                      </td>
+                  candidates.map((item: any) => {
+                    const fullName = ((item.first_name || item.firstName)
+                      ? `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim()
+                      : (item.name || item.candidate_name || item.candidateName || (item.email ? item.email.split('@')[0] : 'Candidate')));
+                    
+                    const initials = fullName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'CA';
+                    const statusStr = (item.status || 'applied').toLowerCase();
 
-                      {/* Dynamic Columns */}
-                      {visibleColumns.map(colKey => {
-                        const val = item[colKey];
-                        const isSource = colKey === 'source';
-
-                        if (colKey === 'ats_score') {
-                          const score = item.ats_score ?? item.atsScore;
-                          return (
-                            <td key={colKey} className="p-3.5 text-center">
-                              {score !== null && score !== undefined ? (
-                                <span className={cn(
-                                  "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
-                                  score >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                  score >= 70 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200"
-                                )}>
-                                  {score}%
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 text-xs font-mono">-</span>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        if (colKey === 'jd_match_score') {
-                          const score = item.jd_match_score ?? item.jdMatchScore;
-                          return (
-                            <td key={colKey} className="p-3.5 text-center">
-                              {score !== null && score !== undefined ? (
-                                <span className={cn(
-                                  "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
-                                  score >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                                  score >= 65 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200"
-                                )}>
-                                  {score}%
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 text-xs font-mono">-</span>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        if (isSource) {
-                          const hasResumeBank = Boolean(item.resume_tracker_id || item.resume_bank_id);
-                          return (
-                            <td key={colKey} className="p-3.5">
-                              {hasResumeBank ? (
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200" title={`Sourced from Resume Bank (${item.resume_tracker_id || 'ID:' + item.resume_bank_id})`}>
-                                  <FileText className="w-3 h-3 text-purple-600 shrink-0" />
-                                  <span>Resume Bank</span>
-                                  {item.resume_tracker_id && (
-                                    <span className="text-[10px] text-purple-600 font-mono font-bold">[{item.resume_tracker_id}]</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                  {val || 'Direct Apply'}
-                                </span>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        return (
-                          <td key={colKey} className="p-3.5">
-                            {val || '-'}
-                          </td>
-                        );
-                      })}
-
-                      <td className="p-3.5 text-center relative">
-                        {/* Link to Job Button / Popover trigger */}
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveLinkPopoverId(prev => prev === item.id ? null : item.id);
-                            setSelectedJobIdForLink('');
-                          }}
-                          className="inline-flex items-center justify-center p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-100 hover:text-blue-600 shadow-sm cursor-pointer transition-colors"
-                          title="Link to Job"
-                        >
-                          <Link2 className="w-4 h-4" />
-                        </div>
-
-                        {/* Link to Job Popover */}
-                        {activeLinkPopoverId === item.id && (
-                          <div 
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute right-[50%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[280px] text-slate-700 animate-in fade-in zoom-in-95 duration-150"
-                          >
-                            <h4 className="text-xs font-bold text-slate-800 uppercase border-b border-slate-100 pb-2 mb-3">Link Candidate to Job</h4>
-                            <div className="space-y-3 text-sm">
-                              <div>
-                                <label className="text-xs font-semibold text-slate-500 mb-1 block">Select Job Opening</label>
-                                <select
-                                  value={selectedJobIdForLink}
-                                  onChange={(e) => setSelectedJobIdForLink(e.target.value)}
-                                  className="w-full border border-slate-200 rounded px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs font-medium"
-                                >
-                                  <option value="">-- Choose Job Opening --</option>
-                                  {(Array.isArray(jobs) ? jobs : []).map((job: any) => {
-                                    const code = job.job_code || job.jobCode || job.mr_number || `JOB-${job.id}`;
-                                    const title = job.job_title || job.position_title || job.title || job.positionTitle || 'Software Developer';
-                                    return (
-                                      <option key={job.id} value={job.id}>
-                                        [{code}] {title}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                              </div>
-                              <div className="pt-2 border-t border-slate-100 flex gap-2">
-                                <button
-                                  onClick={() => setActiveLinkPopoverId(null)}
-                                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => handleLinkToJob(item.id)}
-                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
-                                >
-                                  Apply to Job
-                                </button>
-                              </div>
+                    return (
+                      <tr key={item.id} className="hover:bg-muted/40 transition-colors">
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-1.5">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setViewingCandidate(item)} 
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10" 
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setEditingCandidate(item)} 
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10" 
+                              title="Edit Candidate"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setCandidateToDelete(item)} 
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10" 
+                              title="Delete Candidate"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20">
+                              {initials}
+                            </div>
+                            <div className="font-bold text-foreground text-xs">
+                              {fullName}
                             </div>
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3.5 px-5 text-xs text-muted-foreground font-mono">
+                          <div>{item.email}</div>
+                          {item.phone && <div className="text-[10px] text-muted-foreground/80 mt-0.5">{item.phone}</div>}
+                        </td>
+                        <td className="py-3.5 px-5 text-center">
+                          <Badge variant="outline" className={cn(
+                            "px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full",
+                            ['offer', 'hired'].includes(statusStr) ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' :
+                            ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30' :
+                            statusStr === 'interview' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30' :
+                            'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                          )}>
+                            {item.status || 'Applied'}
+                          </Badge>
+                        </td>
+
+                        {/* Dynamic Columns */}
+                        {visibleColumns.map(colKey => {
+                          const val = item[colKey];
+                          const isSource = colKey === 'source';
+
+                          if (colKey === 'ats_score') {
+                            const score = item.ats_score ?? item.atsScore;
+                            return (
+                              <td key={colKey} className="py-3.5 px-5 text-center">
+                                {score !== null && score !== undefined ? (
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                    score >= 85 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" :
+                                    score >= 70 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                  )}>
+                                    {score}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          if (colKey === 'jd_match_score') {
+                            const score = item.jd_match_score ?? item.jdMatchScore;
+                            return (
+                              <td key={colKey} className="py-3.5 px-5 text-center">
+                                {score !== null && score !== undefined ? (
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                    score >= 80 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" :
+                                    score >= 65 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                  )}>
+                                    {score}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          if (isSource) {
+                            const hasResumeBank = Boolean(item.resume_tracker_id || item.resume_bank_id);
+                            return (
+                              <td key={colKey} className="py-3.5 px-5">
+                                {hasResumeBank ? (
+                                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30" title={`Sourced from Resume Bank (${item.resume_tracker_id || 'ID:' + item.resume_bank_id})`}>
+                                    <FileText className="w-3 h-3 text-purple-500 shrink-0" />
+                                    <span>Resume Bank</span>
+                                    {item.resume_tracker_id && (
+                                      <span className="text-[10px] font-mono font-bold">[{item.resume_tracker_id}]</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-muted-foreground border border-border">
+                                    {val || 'Direct Apply'}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={colKey} className="py-3.5 px-5 text-xs text-foreground font-medium">
+                              {val || '-'}
+                            </td>
+                          );
+                        })}
+
+                        <td className="py-3.5 px-5 text-center relative">
+                          {/* Link to Job Button / Popover trigger */}
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveLinkPopoverId(prev => prev === item.id ? null : item.id);
+                              setSelectedJobIdForLink('');
+                            }}
+                            className="inline-flex items-center justify-center p-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary shadow-2xs cursor-pointer transition-colors"
+                            title="Link to Job"
+                          >
+                            <Link2 className="w-4 h-4" />
+                          </div>
+
+                          {/* Link to Job Popover */}
+                          {activeLinkPopoverId === item.id && (
+                            <div 
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 sm:left-auto top-10 bg-card border border-border rounded-xl shadow-2xl p-4 text-left z-50 min-w-[280px] max-w-[320px] text-foreground select-none animate-in fade-in zoom-in-95 duration-150"
+                            >
+                              <div className="flex items-center justify-between border-b border-border pb-2 mb-3">
+                                <h4 className="text-xs font-black text-foreground uppercase tracking-wider">Link Candidate to Job</h4>
+                                <button 
+                                  onClick={() => setActiveLinkPopoverId(null)}
+                                  className="text-muted-foreground hover:text-foreground text-xs"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">Target Job Opening</label>
+                                  <select
+                                    value={selectedJobIdForLink}
+                                    onChange={(e) => setSelectedJobIdForLink(e.target.value)}
+                                    className="w-full px-2.5 py-1.5 border border-border rounded-lg bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
+                                  >
+                                    <option value="">-- Choose Job --</option>
+                                    {jobs.map((job: any) => (
+                                      <option key={job.id} value={job.id}>
+                                        {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button
+                                    onClick={() => setActiveLinkPopoverId(null)}
+                                    className="flex-1 bg-muted hover:bg-muted/80 text-muted-foreground font-bold py-1.5 px-2 rounded-lg text-[11px] text-center cursor-pointer transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => handleLinkToJob(item.id)}
+                                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-1.5 px-2 rounded-lg text-[11px] text-center cursor-pointer transition-colors uppercase tracking-wider"
+                                  >
+                                    Apply to Job
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -581,29 +594,31 @@ export const CandidateManagement: React.FC = () => {
 
           {/* Pagination Controls */}
           {candidates.length > 0 && (
-            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 text-sm">
-              <div className="text-slate-500 font-medium">
-                Page {currentPage} of {totalPages}
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+              <div className="font-medium">
+                Showing <span className="font-bold text-foreground">{totalEntries === 0 ? 0 : startIndex + 1}</span> to <span className="font-bold text-foreground">{Math.min(endIndex, totalEntries)}</span> of <span className="font-bold text-foreground">{totalEntries}</span> entries
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Prev
                 </Button>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: totalPages }, (_, i) => (
                     <Button
                       key={i + 1}
                       variant={currentPage === i + 1 ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setCurrentPage(i + 1)}
-                      className={`h-8 w-8 p-0 ${
+                      className={`h-8 w-8 p-0 rounded-xl text-xs font-bold ${
                         currentPage === i + 1 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
-                          : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-primary text-primary-foreground shadow-xs' 
+                          : 'border-border hover:bg-muted text-foreground'
                       }`}
                     >
                       {i + 1}
@@ -615,17 +630,18 @@ export const CandidateManagement: React.FC = () => {
                 </div>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                 >
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                  Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {isCreating && (
         <CandidateFormModal

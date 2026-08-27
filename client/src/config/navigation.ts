@@ -55,12 +55,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
-      {
-        name: 'Company Policies',
-        href: '/settings/policies',
-        icon: 'ShieldCheck',
-        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
-      },
     ],
   },
 
@@ -358,21 +352,13 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
       { name: 'Workflow Builder', href: '/workflow', icon: 'GitBranch' },
+      { name: 'Configuration', href: '/configuration', icon: 'Sliders' },
       { name: 'Announcements', href: '/hr-operations/announcements', icon: 'Megaphone' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },
     ],
   },
 
-  // ── 15. Company Policies ──────────────────────────────────────────────────
-  {
-    id: 'company_policies',
-    label: 'POLICIES',
-    items: [
-      { name: 'Company Policies', href: '/employee/policies', icon: 'Shield' },
-    ],
-  },
-
-  // ── 16. Masters ───────────────────────────────────────────────────────────
+  // ── 15. Masters ───────────────────────────────────────────────────────────
   {
     id: 'masters',
     label: 'MASTERS',
@@ -429,9 +415,15 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {
-        name: 'Company Policies',
-        href: '/settings/policies',
-        icon: 'ShieldCheck',
+        name: 'Workflow Settings',
+        href: '/settings/workflows',
+        icon: 'GitBranch',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'ID Card Designer',
+        href: '/settings/id-card-designer',
+        icon: 'CreditCard',
         minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
       },
       {
@@ -443,6 +435,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
 
 function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {
   const normUser = userRoles.map((r) => r.toLowerCase().trim());

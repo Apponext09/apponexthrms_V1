@@ -105,7 +105,10 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       .join('employees as e', 'e.id', 'esa.employee_id')
       .join('shift_templates as st', 'st.id', 'esa.shift_id')
       .leftJoin('departments as d', 'd.id', 'e.current_department_id')
-      .leftJoin('designations as des', 'des.id', 'e.current_designation_id');
+      .leftJoin('designations as des', 'des.id', 'e.current_designation_id')
+      .where((builder) => {
+        builder.where('e.is_ceo', 0).orWhereNull('e.is_ceo');
+      });
 
     if (ctx.companyId) {
       query = query.where('e.company_id', ctx.companyId);

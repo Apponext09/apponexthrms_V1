@@ -18,21 +18,7 @@ interface CreateLoanInput {
   status?: 'pending' | 'active' | 'approved' | 'rejected';
 }
 
-/**
- * The global response hook camelCases every query result, but EmployeeLoanRepository.getById()
- * uses raw SQL + convertSnakeToCamel — so `loan.employee_id`/`loan.loan_type`/`loan.loan_amount`
- * reads below were always undefined (real fields: employeeId/loanType/loanAmount). Aliasing both
- * forms onto the object right after fetch fixes every read site without touching each one.
- */
-function withSnakeAliases<T extends Record<string, any>>(obj: T | null | undefined): T | null {
-  if (!obj) return (obj as any) ?? null;
-  const out: Record<string, any> = { ...obj };
-  for (const key of Object.keys(obj)) {
-    const snake = key.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
-    if (snake !== key && !(snake in out)) out[snake] = (obj as any)[key];
-  }
-  return out as T;
-}
+import { withSnakeAliases } from '../utils/payroll.utils';
 
 export class LoanService {
   private loanRepo: EmployeeLoanRepository;

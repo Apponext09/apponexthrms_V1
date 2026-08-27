@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calendar, Save, X } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface PayrollCycleItem {
   id: string;
@@ -31,6 +32,7 @@ export interface PayrollCycleItem {
 
 export const PayrollCycleManager: React.FC = () => {
   const queryClient = useQueryClient();
+  const selectedCompanyId = useCompanyStore((s) => s.selectedCompanyId);
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
   const [selectedCycleId, setSelectedCycleId] = useState<string>('');
 
@@ -110,6 +112,8 @@ export const PayrollCycleManager: React.FC = () => {
     const payload = {
       cycle_name: cycleForm.name,
       name: cycleForm.name,
+      company_id: selectedCompanyId || null,
+      companyId: selectedCompanyId || null,
       is_daily_wages: cycleForm.isDailyWages,
       frequency: cycleForm.frequency,
       start_date: cycleForm.startDate,
@@ -603,19 +607,19 @@ export const PayrollCycleManager: React.FC = () => {
             </div>
 
             {/* Form Action Buttons */}
-            <div className="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 onClick={handleSaveCycle}
-                className="h-9 px-5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm rounded-md"
+                className="h-9 px-5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shadow-xs rounded-md"
               >
-                <Plus className="w-3.5 h-3.5 text-white" />
-                {selectedCycleId ? '+ Update' : '+ Save Cycle'}
+                <Save className="w-3.5 h-3.5" />
+                {selectedCycleId ? 'Update Cycle' : 'Save Cycle'}
               </Button>
 
               <Button
                 type="button"
-                variant="destructive"
+                variant="outline"
                 onClick={() => {
                   setSelectedCycleId('');
                   setCycleForm({
@@ -629,9 +633,10 @@ export const PayrollCycleManager: React.FC = () => {
                     isActive: true
                   });
                 }}
-                className="h-9 px-4 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 rounded-md"
+                className="h-9 px-4 text-xs font-semibold flex items-center gap-1.5 rounded-md border-border hover:bg-muted text-foreground"
               >
-                ✕ Cancel
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+                Cancel
               </Button>
             </div>
           </CardContent>

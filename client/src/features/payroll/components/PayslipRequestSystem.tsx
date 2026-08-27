@@ -41,21 +41,8 @@ const MONTHS_MAP: Record<string, string> = new Proxy({}, {
   },
 }) as Record<string, string>;
 
-// ── Dummy salary data per employee ID for PDF generation ─────────────────────
-const SALARY_DATA: Record<number, { basic: number; name: string; code: string }> = {
-  38: { basic: 37500, name: 'Got Sharma', code: 'EMP101' },
-  39: { basic: 34000, name: 'Mot Sharma', code: 'EMP202' },
-  40: { basic: 41000, name: 'Tee Gfdsa', code: 'EMP206' },
-  41: { basic: 48000, name: 'Team Lead', code: 'EMP2002' },
-  42: { basic: 31000, name: 'Hrr Fccc', code: 'EMP1001' },
-  43: { basic: 27000, name: 'NN Employee', code: 'EMP702' },
-  44: { basic: 60000, name: 'PP Manager', code: '432' },
-  45: { basic: 29000, name: 'Hrrr Employee', code: 'EMP7576' },
-  46: { basic: 32000, name: 'Gooo Jjjjjj', code: 'EMP046' },
-};
-
-function computePayslip(empId: number, month: string) {
-  const emp = SALARY_DATA[empId] || { basic: 30000, name: `Employee #${empId}`, code: `EMP-${empId}` };
+function computePayslip(empId: number, month: string, empName?: string) {
+  const emp = { basic: 40000, name: empName || `Employee #${empId}`, code: `EMP-${empId}` };
   const basic = emp.basic;
   const hra = Math.round(basic * 0.40);
   const sa = Math.round(basic * 0.25);
@@ -70,7 +57,7 @@ function computePayslip(empId: number, month: string) {
 }
 
 function openPDFWindow(req: PayslipRequest) {
-  const p = computePayslip(req.requestedById, req.month);
+  const p = computePayslip(req.requestedById, req.month, req.requestedBy);
   const win = window.open('', '_blank');
   if (!win) return;
   win.document.write(`

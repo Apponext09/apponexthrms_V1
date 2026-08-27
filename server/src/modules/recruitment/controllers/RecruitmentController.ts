@@ -1712,7 +1712,17 @@ export class RecruitmentController {
 
   submitPublicAssessmentAttempt = asyncHandler(async (req: Request, res: Response) => {
     const { uuid } = req.params;
-    const result = await this.assessmentService.submitAssessmentResultByUuid(uuid, req.body);
+    const candidateIp = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+    const result = await this.assessmentService.submitAssessmentResultByUuid(uuid, {
+      ...req.body,
+      candidateIp,
+    });
+    res.json({ success: true, data: result });
+  });
+
+  autosavePublicAssessmentAttempt = asyncHandler(async (req: Request, res: Response) => {
+    const { uuid } = req.params;
+    const result = await this.assessmentService.autosaveAnswersByUuid(uuid, req.body);
     res.json({ success: true, data: result });
   });
 

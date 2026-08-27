@@ -65,8 +65,8 @@ export function initializeKnex(): Knex {
     wrapIdentifier,
   });
 
-  instance.on('query-error', () => {
-    console.error('[KNEX ERROR] Database operation failed');
+  instance.on('query-error', (err: any, obj: any) => {
+    console.error('[KNEX ERROR]', err?.message || err, obj?.sql);
   });
 
   return instance;
