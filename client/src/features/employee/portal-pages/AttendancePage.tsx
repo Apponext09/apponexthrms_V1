@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar as CalendarIcon, Clock, CheckCircle2, UserCheck, AlertCircle, ChevronLeft, ChevronRight, MapPin, Navigation, Play, Square, Scan, ShieldCheck, Wifi, Building2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, CheckCircle2, UserCheck, AlertCircle, ChevronLeft, ChevronRight, MapPin, Navigation, Play, Square, Scan, ShieldCheck, Wifi, Building2, Palmtree } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { showToast, toast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
@@ -25,7 +25,14 @@ export default function AttendancePage() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [attendanceLogsMap, setAttendanceLogsMap] = useState<Record<string, DailyLog>>({});
   const [shiftsMap, setShiftsMap] = useState<Record<string, any>>({});
-  const [myShiftInfo, setMyShiftInfo] = useState<string>('General Shift (09:00 AM - 06:00 PM)');
+  
+  // Holiday calendar awareness
+  const [todayHoliday, setTodayHoliday] = useState<{ isHoliday: boolean; holidayName?: string; holidayType?: string } | null>(null);
+  const [hasShift, setHasShift] = useState<boolean | null>(null);
+  const [calendarHolidayMap, setCalendarHolidayMap] = useState<Map<string, string>>(new Map());
+
+  // Shift info display
+  const [myShiftInfo, setMyShiftInfo] = useState<string>('');
 
   // View toggle & calendar states
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
@@ -83,8 +90,25 @@ export default function AttendancePage() {
       const res = await apiClient.get('/attendance/status');
       if (res.data?.data) {
         const st = res.data.data;
+
+        // ── Holiday & Shift gate fields (Tasks 8) ────────────────────────
+        if (typeof st.isHoliday === 'boolean') {
+          setTodayHoliday({
+            isHoliday: st.isHoliday,
+            holidayName: st.holidayName ?? undefined,
+            holidayType: st.holidayType ?? undefined,
+          });
+        }
+        if (typeof st.hasShift === 'boolean') {
+          setHasShift(st.hasShift);
+        }
+
         if (st.shiftInfo) {
           setMyShift(st.shiftInfo);
+          const name = st.shiftInfo.shiftName || '';
+          const start = st.shiftInfo.startTime || '';
+          const end = st.shiftInfo.endTime || '';
+          setMyShiftInfo(name && start ? `${name} (${start} - ${end})` : name || '');
         }
 
         if (st.isCheckedOut) {
@@ -231,6 +255,7 @@ export default function AttendancePage() {
     fetchMyShift();
     fetchMonthlyAttendance();
     fetchMyLocations();
+    fetchCalendarHolidays(calendarDate.getFullYear(), calendarDate.getMonth());
   }, [calendarDate]);
 
   const fetchMyShift = async () => {
@@ -238,13 +263,20 @@ export default function AttendancePage() {
       const res = await apiClient.get('/attendance/my-shift');
       if (res.data?.data) {
         const s = res.data.data;
-        const name = s.shift_name || s.shiftName || 'General Shift';
-        const start = s.start_time || s.startTime || '09:00 AM';
-        const end = s.end_time || s.endTime || '06:00 PM';
-        setMyShiftInfo(`${name} (${start} - ${end})`);
+        // Task 9: Remove hardcoded fallbacks — no shift means no shift
+        const name = s.shift_name || s.shiftName || '';
+        const start = s.start_time || s.startTime || '';
+        const end = s.end_time || s.endTime || '';
+        setMyShiftInfo(name && start ? `${name} (${start} - ${end})` : name || 'No Shift Assigned');
+        // Also set myShift if not already set by status API
+        if (!myShift) {
+          setMyShift(s);
+        }
+      } else {
+        setMyShiftInfo('No Shift Assigned');
       }
     } catch (err) {
-      console.log('Using default shift info');
+      setMyShiftInfo('No Shift Assigned');
     }
   };
 
@@ -463,6 +495,24 @@ export default function AttendancePage() {
     }
   };
 
+  // Fetch holiday dates for the currently-viewed calendar month
+  const fetchCalendarHolidays = async (year: number, month: number) => {
+    try {
+      const res = await apiClient.get('/settings/holidays/my-calendar');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        const map = new Map<string, string>();
+        res.data.data.forEach((h: any) => {
+          const d = h.holiday_date || h.holidayDate;
+          const n = h.holiday_name || h.holidayName;
+          if (d) map.set(String(d).slice(0, 10), n || 'Holiday');
+        });
+        setCalendarHolidayMap(map);
+      }
+    } catch (e) {
+      // Non-fatal: calendar will just not show holiday colours
+    }
+  };
+
   // Calendar Controls
   const prevMonth = () => {
     setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
@@ -471,7 +521,7 @@ export default function AttendancePage() {
     setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
   };
 
-  // Generate Calendar Grid
+  // Generate Calendar Grid (includes isHoliday field for each day cell)
   const getCalendarDays = () => {
     const year = calendarDate.getFullYear();
     const month = calendarDate.getMonth();
@@ -479,11 +529,11 @@ export default function AttendancePage() {
     const firstDayIndex = new Date(year, month, 1).getDay();
     const totalDays = new Date(year, month + 1, 0).getDate();
 
-    const days: Array<{ dayNumber: number; dateStr: string; isCurrentMonth: boolean; isWeekend: boolean }> = [];
+    const days: Array<{ dayNumber: number; dateStr: string; isCurrentMonth: boolean; isWeekend: boolean; isHoliday: boolean; holidayName?: string }> = [];
 
     // Filler from previous month
     for (let i = 0; i < firstDayIndex; i++) {
-      days.push({ dayNumber: 0, dateStr: '', isCurrentMonth: false, isWeekend: false });
+      days.push({ dayNumber: 0, dateStr: '', isCurrentMonth: false, isWeekend: false, isHoliday: false });
     }
 
     // Days of current month
@@ -493,12 +543,15 @@ export default function AttendancePage() {
       const dayStr = String(d).padStart(2, '0');
       const fullDateStr = `${year}-${mStr}-${dayStr}`;
       const dayOfWeek = dObj.getDay();
+      const isHoliday = calendarHolidayMap.has(fullDateStr);
 
       days.push({
         dayNumber: d,
         dateStr: fullDateStr,
         isCurrentMonth: true,
         isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+        isHoliday,
+        holidayName: isHoliday ? calendarHolidayMap.get(fullDateStr) : undefined,
       });
     }
 
@@ -558,6 +611,31 @@ export default function AttendancePage() {
 
       {/* Today's GPS Punch Console Banner */}
       <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+        {/* Dynamic Holiday / No-Shift Top Alert Banner */}
+        {todayHoliday?.isHoliday && !hasShift ? (
+          <div className="bg-blue-500/15 border-b border-blue-500/30 p-3.5 px-5 flex items-center justify-between text-blue-700 dark:text-blue-300">
+            <div className="flex items-center gap-2.5">
+              <Palmtree className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+              <div>
+                <h4 className="text-xs font-bold">🎉 Public Holiday Today — {todayHoliday.holidayName || 'Holiday'}</h4>
+                <p className="text-[11px] opacity-90">No attendance marking is required today as per calendar. Enjoy your day off!</p>
+              </div>
+            </div>
+            <Badge className="bg-blue-600 text-white text-[10px] font-bold">Public Holiday</Badge>
+          </div>
+        ) : !hasShift && hasShift !== null ? (
+          <div className="bg-amber-500/15 border-b border-amber-500/30 p-3.5 px-5 flex items-center justify-between text-amber-800 dark:text-amber-300">
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <h4 className="text-xs font-bold">⚠️ No Work Shift Assigned Today</h4>
+                <p className="text-[11px] opacity-90">Please contact HR or your Department Manager to assign a work shift before marking attendance.</p>
+              </div>
+            </div>
+            <Badge variant="outline" className="border-amber-500 text-amber-700 dark:text-amber-300 text-[10px] font-bold">Action Required</Badge>
+          </div>
+        ) : null}
+
         <div className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border/60">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-primary/10 text-primary shrink-0">
@@ -573,7 +651,7 @@ export default function AttendancePage() {
                     ? 'bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
                     : 'bg-muted text-muted-foreground border-border'
                 }`}>
-                  {checkInStatus === 'not_started' && 'Off Duty'}
+                  {checkInStatus === 'not_started' && (todayHoliday?.isHoliday && !hasShift ? '🎉 Holiday' : !hasShift ? '⚠️ No Shift' : 'Off Duty')}
                   {checkInStatus === 'checked_in' && '● On Duty'}
                   {checkInStatus === 'completed' && (requireCheckout ? 'Duty Finished' : 'Punched In (Check-In Only)')}
                 </Badge>
@@ -608,9 +686,18 @@ export default function AttendancePage() {
                 )}
               </div>
               <h3 className="text-base font-bold text-foreground mt-0.5">Attendance Desk</h3>
-              <p className="text-xs text-muted-foreground font-medium flex items-center gap-2 mt-0.5">
-                <span>🗓️ {myShift?.shiftName || 'Standard Morning Shift'} ({myShift?.startTime || '09:00'} - {myShift?.endTime || '17:30'})</span>
-                <span className="text-primary font-bold">• Grace: {myShift?.gracePeriodMinutes || 15}m (till {myShift?.graceDeadline || '09:15'})</span>
+              <p className="text-xs text-muted-foreground font-medium flex items-center gap-2 mt-0.5 flex-wrap">
+                {myShift?.shiftName ? (
+                  <span>🗓️ {myShift.shiftName} ({myShift.startTime || '--'} - {myShift.endTime || '--'})</span>
+                ) : (
+                  <span className="text-amber-600 font-semibold">⚠️ No Shift Assigned — Contact HR to assign a shift</span>
+                )}
+                {myShift?.gracePeriodMinutes > 0 && (
+                  <span className="text-primary font-bold">• Grace: {myShift.gracePeriodMinutes}m{myShift.graceDeadline ? ` (till ${myShift.graceDeadline})` : ''}</span>
+                )}
+                {todayHoliday?.isHoliday && hasShift && (
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">🎉 Working on Holiday: {todayHoliday.holidayName}</span>
+                )}
               </p>
             </div>
           </div>
@@ -658,8 +745,24 @@ export default function AttendancePage() {
               </Button>
             </div>
 
-            {/* Punch Action Button */}
-            {checkInStatus !== 'completed' ? (
+            {/* Punch Action Button — gated by holiday & shift assignment */}
+            {todayHoliday?.isHoliday && !hasShift ? (
+              // STATE 1: Public holiday with no shift → show holiday badge, no check-in button
+              <Badge variant="outline" className="h-9 px-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 text-xs font-bold flex items-center gap-1.5">
+                <Palmtree className="w-3.5 h-3.5" />
+                Holiday — {todayHoliday.holidayName || 'Today'}
+              </Badge>
+            ) : !hasShift && hasShift !== null ? (
+              // STATE 2: No shift on a working day → disabled button with warning
+              <Button
+                disabled
+                className="bg-muted text-muted-foreground font-bold text-xs h-9 px-4 rounded-lg gap-1.5 cursor-not-allowed opacity-60"
+              >
+                <AlertCircle className="w-3.5 h-3.5" />
+                No Shift Assigned
+              </Button>
+            ) : checkInStatus !== 'completed' ? (
+              // STATE 3: Normal day or holiday with shift → standard punch button
               <Button
                 onClick={handleCheckInToggle}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-4 rounded-lg shadow-2xs gap-1.5"
@@ -900,6 +1003,9 @@ export default function AttendancePage() {
                   let computedStatus: DailyLog['status'] | null = null;
                   if (log) {
                     computedStatus = log.status;
+                  } else if (cell.isHoliday) {
+                    // Holiday date from calendar (no attendance record needed)
+                    computedStatus = 'holiday';
                   } else if (cell.isWeekend) {
                     computedStatus = 'off_day';
                   } else if (isPast) {
@@ -916,6 +1022,8 @@ export default function AttendancePage() {
                       className={`min-h-[110px] p-2.5 rounded-xl border flex flex-col justify-between transition-all ${
                         isToday
                           ? 'border-primary bg-primary/10 text-primary shadow-2xs font-bold'
+                          : cell.isHoliday
+                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50/60 dark:bg-blue-950/30'
                           : 'border-border/70 bg-card hover:border-primary/40'
                       }`}
                     >
@@ -931,10 +1039,16 @@ export default function AttendancePage() {
                         )}
                       </div>
 
-                      {/* Shift Info */}
+                      {/* Shift / Holiday Info */}
                       <div className="text-[10px] font-semibold text-muted-foreground truncate mb-1">
-                        <span className="text-primary font-medium">Shift: </span>
-                        {cell.isWeekend ? 'Off Day' : myShiftInfo}
+                        {cell.isHoliday ? (
+                          <span className="text-blue-600 dark:text-blue-400 font-bold">🎉 {cell.holidayName || 'Holiday'}</span>
+                        ) : (
+                          <>
+                            <span className="text-primary font-medium">Shift: </span>
+                            {cell.isWeekend ? 'Off Day' : (myShiftInfo || 'No Shift Assigned')}
+                          </>
+                        )}
                       </div>
 
                       {/* Timing Info (In Time, Out Time & Work Duration) */}

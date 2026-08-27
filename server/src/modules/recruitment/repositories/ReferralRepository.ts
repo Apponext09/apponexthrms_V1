@@ -53,44 +53,52 @@ export class ReferralRepository extends BaseRepository<Referral> {
     const rows = await q.orderBy('referrals.id', 'desc');
 
     return rows.map((r: any) => {
-      const candFn = r.candidate_first_name || '';
-      const candLn = r.candidate_last_name || '';
-      const candName = `${candFn} ${candLn}`.trim() || r.candidate_name || (r.candidate_id ? `Candidate #${r.candidate_id}` : 'Candidate');
+      const candFn = r.candidateFirstName || r.candidate_first_name || '';
+      const candLn = r.candidateLastName || r.candidate_last_name || '';
+      const candId = r.candidateId || r.candidate_id;
+      const candName = `${candFn} ${candLn}`.trim() || r.candidateName || r.candidate_name || (candId ? `Candidate #${candId}` : 'Candidate');
 
-      const refFn = r.referrer_first_name || '';
-      const refLn = r.referrer_last_name || '';
-      const refName = `${refFn} ${refLn}`.trim() || r.referrer_name || (r.referrer_employee_id ? `Employee #${r.referrer_employee_id}` : 'Employee');
+      const refFn = r.referrerFirstName || r.referrer_first_name || '';
+      const refLn = r.referrerLastName || r.referrer_last_name || '';
+      const refId = r.referrerEmployeeId || r.referrer_employee_id;
+      const refName = `${refFn} ${refLn}`.trim() || r.referrerName || r.referrer_name || (refId ? `Employee #${refId}` : 'Employee');
 
-      const statusVal = r.status || r.referral_status || 'submitted';
+      const candEmail = r.candidateEmail || r.candidate_email || '';
+      const candPhone = r.candidatePhone || r.candidate_phone || '';
+      const candPos = r.candidatePosition || r.candidate_position || 'Open Role';
+      const refEmail = r.referrerEmail || r.referrer_email || '';
+      const rewardAmt = r.referralRewardAmount || r.referral_reward_amount || null;
+
+      const statusVal = r.status || r.referralStatus || r.referral_status || 'submitted';
 
       return {
         ...r,
         id: r.id,
-        candidate_id: r.candidate_id,
-        candidateId: r.candidate_id,
+        candidate_id: candId,
+        candidateId: candId,
         candidate_name: candName,
         candidateName: candName,
-        candidate_email: r.candidate_email || '',
-        candidateEmail: r.candidate_email || '',
-        candidate_phone: r.candidate_phone || '',
-        candidatePhone: r.candidate_phone || '',
-        position_title: r.candidate_position || 'Open Role',
-        positionTitle: r.candidate_position || 'Open Role',
-        referrer_employee_id: r.referrer_employee_id,
-        referrerEmployeeId: r.referrer_employee_id,
+        candidate_email: candEmail,
+        candidateEmail: candEmail,
+        candidate_phone: candPhone,
+        candidatePhone: candPhone,
+        position_title: candPos,
+        positionTitle: candPos,
+        referrer_employee_id: refId,
+        referrerEmployeeId: refId,
         referrer_name: refName,
         referrerName: refName,
-        referrer_email: r.referrer_email || '',
-        referrerEmail: r.referrer_email || '',
-        referral_reward_amount: r.referral_reward_amount,
-        referralRewardAmount: r.referral_reward_amount,
+        referrer_email: refEmail,
+        referrerEmail: refEmail,
+        referral_reward_amount: rewardAmt,
+        referralRewardAmount: rewardAmt,
         status: statusVal,
         referral_status: statusVal,
         referralStatus: statusVal,
-        reward_status: r.reward_status || 'pending',
-        rewardStatus: r.reward_status || 'pending',
-        created_at: r.created_at,
-        createdAt: r.created_at,
+        reward_status: r.rewardStatus || r.reward_status || 'pending',
+        rewardStatus: r.rewardStatus || r.reward_status || 'pending',
+        created_at: r.createdAt || r.created_at,
+        createdAt: r.createdAt || r.created_at,
       };
     });
   }

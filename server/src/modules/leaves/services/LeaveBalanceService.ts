@@ -94,11 +94,14 @@ export class LeaveBalanceService {
             return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
           };
 
-          if (!hasOverlap(employee.organization_id || employee.organizationId, empSettings.companies || empSettings.organizations)) continue;
-          if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId, empSettings.departments)) continue;
-          if (!hasOverlap(employee.current_location_id || employee.currentLocationId, empSettings.locations)) continue;
+          if (!hasOverlap(employee.organization_id || employee.organizationId || employee.company_id || employee.companyId, empSettings.companies || empSettings.organizations)) continue;
+          if (!hasOverlap(employee.current_department_id || employee.currentDepartmentId || employee.department_id, empSettings.departments)) continue;
+          if (!hasOverlap(employee.sub_department_id || employee.subDepartmentId, empSettings.subDepartments || empSettings.sub_departments)) continue;
+          if (!hasOverlap(employee.current_location_id || employee.currentLocationId || employee.location_id, empSettings.locations)) continue;
+          if (!hasOverlap(employee.current_designation_id || employee.currentDesignationId || employee.designation_id, empSettings.designations)) continue;
           if (!hasOverlap(employee.employment_type || employee.employmentType, empSettings.employeeTypes)) continue;
-          if (!hasOverlap(employee.current_grade_id || employee.currentGradeId, empSettings.grades)) continue;
+          if (!hasOverlap(employee.status, empSettings.employeeStatuses)) continue;
+          if (!hasOverlap(employee.current_grade_id || employee.currentGradeId || employee.grade, empSettings.grades)) continue;
         }
       }
 

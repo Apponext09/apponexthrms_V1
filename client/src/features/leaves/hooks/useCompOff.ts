@@ -22,7 +22,21 @@ export function useCompOffBalance() {
     queryKey: ['comp-off-balance', selectedCompanyId],
     queryFn: async () => {
       const response = await apiClient.get('/leaves/comp-off');
-      return response.data;
+      const resData = response.data;
+      if (Array.isArray(resData?.data)) {
+        const list = resData.data;
+        const available = list.filter((b: any) => b.status === 'available');
+        const total = available.reduce(
+          (sum: number, b: any) => sum + (parseFloat(b.comp_off_earned_hours || b.compOffEarnedHours) || 8),
+          0
+        );
+        return {
+          balance: list,
+          totalHours: total,
+          pendingRequests: list.filter((b: any) => b.status === 'pending'),
+        };
+      }
+      return resData;
     },
   });
 
@@ -33,6 +47,35 @@ export function useCompOffBalance() {
     isLoading,
     error: error ? (error as Error).message : null,
     refetch,
+  };
+}
+
+/**
+ * Hook to claim / log extra work on a holiday or weekend to earn comp-off
+ */
+export function useClaimCompOff() {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const { mutateAsync, isPending } = useMutation({
+    mutationFn: async ({ workedDate, hoursEarned, reason }: { workedDate: string; hoursEarned: number; reason: string }) => {
+      setError(null);
+      const response = await apiClient.post('/leaves/comp-off/requests', { workedDate, hoursEarned, reason });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comp-off-balance'] });
+    },
+    onError: (err: any) => {
+      setError(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to claim comp-off');
+    },
+  });
+
+  return {
+    claimCompOff: mutateAsync,
+    isLoading: isPending,
+    error,
+    clearError: () => setError(null),
   };
 }
 
@@ -64,4 +107,5 @@ export function useRequestCompOff() {
     clearError: () => setError(null),
   };
 }
+
 

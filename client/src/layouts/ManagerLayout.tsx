@@ -447,7 +447,7 @@ export function ManagerLayout() {
       </div>
 
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

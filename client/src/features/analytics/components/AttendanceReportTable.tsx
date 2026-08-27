@@ -1,4 +1,6 @@
+
 import React, { useState } from 'react';
+
 import { Calendar as CalendarIcon, Download, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -108,36 +110,36 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
   // ── Get raw cell value for a given column key ──────────────────────────────
   const getCellValue = (row: AttendanceReportRow, key: string): string => {
     switch (key) {
-      case 'date':              return row.date;
-      case 'employeeName':      return row.employeeName;
-      case 'employeeCode':      return row.employeeCode ?? '-';
-      case 'departmentName':    return row.departmentName ?? '-';
-      case 'day':               return row.day;
-      case 'payrollCycle':      return row.payrollCycle;
-      case 'shift':             return row.shift;
-      case 'expTiming':         return row.expTiming;
-      case 'actualTiming':      return row.actualTiming;
-      case 'checkInTime':       return row.checkInTime ?? '-';
-      case 'checkOutTime':      return row.checkOutTime ?? '-';
+      case 'date': return row.date;
+      case 'employeeName': return row.employeeName;
+      case 'employeeCode': return row.employeeCode ?? '-';
+      case 'departmentName': return row.departmentName ?? '-';
+      case 'day': return row.day;
+      case 'payrollCycle': return row.payrollCycle;
+      case 'shift': return row.shift;
+      case 'expTiming': return row.expTiming;
+      case 'actualTiming': return row.actualTiming;
+      case 'checkInTime': return row.checkInTime ?? '-';
+      case 'checkOutTime': return row.checkOutTime ?? '-';
       // check_in_method / check_out_method not in AttendanceReportRow yet → stub
-      case 'checkInMethod':     return '-';
-      case 'checkOutMethod':    return '-';
-      case 'expHours':          return row.expHours;
-      case 'actualHours':       return row.actualHours;
-      case 'shortHours':        return row.shortHours;
-      case 'bufferMins':        return row.bufferMins;
-      case 'lateMins':          return row.lateMins;
-      case 'totalBreakHours':   return row.totalBreakHours;
-      case 'actualWorkingHours':return row.actualWorkingHours;
-      case 'overtimeMins':      return '-';
-      case 'isLate':            return row.isLate;
-      case 'isEarlyDeparture':  return '-';
-      case 'isRegularized':     return '-';
-      case 'dayStatus':         return row.dayStatus;
-      case 'notes':             return '-';
-      case 'checkInLocation':   return row.checkInLocation;
-      case 'checkOutLocation':  return row.checkOutLocation;
-      default:                  return '-';
+      case 'checkInMethod': return '-';
+      case 'checkOutMethod': return '-';
+      case 'expHours': return row.expHours;
+      case 'actualHours': return row.actualHours;
+      case 'shortHours': return row.shortHours;
+      case 'bufferMins': return row.bufferMins;
+      case 'lateMins': return row.lateMins;
+      case 'totalBreakHours': return row.totalBreakHours;
+      case 'actualWorkingHours': return row.actualWorkingHours;
+      case 'overtimeMins': return '-';
+      case 'isLate': return row.isLate;
+      case 'isEarlyDeparture': return '-';
+      case 'isRegularized': return '-';
+      case 'dayStatus': return row.dayStatus;
+      case 'notes': return '-';
+      case 'checkInLocation': return row.checkInLocation;
+      case 'checkOutLocation': return row.checkOutLocation;
+      default: return '-';
     }
   };
 
@@ -240,11 +242,10 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
         );
       case 'totalBreakHours':
         return (
-          <td key={col.key} className={`py-2.5 px-3 font-medium whitespace-nowrap ${borderCls} ${
-            row.totalBreakHours && row.totalBreakHours !== '--'
+          <td key={col.key} className={`py-2.5 px-3 font-medium whitespace-nowrap ${borderCls} ${row.totalBreakHours && row.totalBreakHours !== '--'
               ? 'text-amber-600 dark:text-amber-400'
               : 'text-slate-400 dark:text-slate-600'
-          }`}>
+            }`}>
             {row.totalBreakHours || '--'}
           </td>
         );

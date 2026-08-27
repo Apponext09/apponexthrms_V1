@@ -163,10 +163,10 @@ export function MyAttendanceFaceTab({
     endTime: string;
     hours: string;
   }>({
-    name: 'General Shift',
-    startTime: '09:00 AM',
-    endTime: '06:00 PM',
-    hours: '9 Hours',
+    name: '',
+    startTime: '',
+    endTime: '',
+    hours: '',
   });
 
   useEffect(() => {
@@ -176,10 +176,10 @@ export function MyAttendanceFaceTab({
         const s = res.data?.data;
         if (s) {
           setShiftInfo({
-            name: s.shift_name || s.shiftName || 'General Shift',
-            startTime: s.start_time || s.startTime || '09:00 AM',
-            endTime: s.end_time || s.endTime || '06:00 PM',
-            hours: s.duration_hours ? `${s.duration_hours} Hours` : '9 Hours',
+            name: s.shift_name || s.shiftName || 'No Shift Assigned',
+            startTime: s.start_time || s.startTime || '--',
+            endTime: s.end_time || s.endTime || '--',
+            hours: s.duration_hours ? `${s.duration_hours} Hours` : '--',
           });
         }
       } catch (e) {
@@ -306,7 +306,7 @@ export function MyAttendanceFaceTab({
       <canvas ref={canvasRef} className="hidden" />
 
       {/* ─────────────────────────────────────────────────────────────
-          GENERAL SHIFT & EMPLOYEE LOCK CARD
+          ASSIGNED SHIFT & EMPLOYEE LOCK CARD
       ───────────────────────────────────────────────────────────── */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/20 rounded-3xl p-6 shadow-xl text-white relative overflow-hidden">
         <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-indigo-500/10 blur-2xl pointer-events-none" />
@@ -339,7 +339,7 @@ export function MyAttendanceFaceTab({
             </div>
           </div>
 
-          {/* GENERAL SHIFT TIMING BANNER */}
+          {/* ASSIGNED SHIFT TIMING BANNER */}
           <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-3.5 min-w-[220px] text-right shadow-inner w-full md:w-auto">
             <div className="flex items-center justify-end gap-1.5 text-amber-300 text-xs font-bold">
               <Clock className="w-3.5 h-3.5 animate-pulse" /> {shiftInfo.name}
@@ -582,7 +582,7 @@ export function MyAttendanceFaceTab({
             {/* Shift Rules Box */}
             <div className="p-3 rounded-2xl bg-muted/20 border border-border/40 text-[11px] space-y-1 text-muted-foreground">
               <p className="font-bold text-foreground flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5 text-amber-500" /> Shift Rules (General Shift)
+                <Zap className="w-3.5 h-3.5 text-amber-500" /> Shift Rules ({shiftInfo.name || 'No Shift'})
               </p>
               <p>• Standard Check-In: 09:30 AM</p>
               <p>• Standard Check-Out: 06:30 PM (18:30)</p>

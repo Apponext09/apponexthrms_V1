@@ -116,90 +116,98 @@ export const OfferManagementPage: React.FC = () => {
   });
 
   return (
-    <div className="p-6 space-y-6 bg-slate-50/50 min-h-screen">
-      
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <FileText className="h-6 w-6 text-indigo-600" />
-            Offer Management
-          </h1>
-          <p className="text-slate-500 text-xs mt-1">Generate and manage candidate offer letters, salary structures, and acceptance statuses.</p>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Offer Management
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Generate structured compensation letters, calculate CTC breakdowns, and monitor candidate acceptance.
+            </p>
+          </div>
         </div>
-        <Button 
-          onClick={() => setIsCreateOpen(true)} 
-          className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shadow-sm font-medium text-xs"
-        >
-          <Plus className="h-4 w-4" /> Create Offer
-        </Button>
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto">
+          <Button 
+            onClick={() => setIsCreateOpen(true)} 
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Create Offer Letter
+          </Button>
+        </div>
       </div>
 
-      {/* KPI Stats Widgets */}
+      {/* ── KPI Stats Widgets ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500 font-medium">Total Offers</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">{totalOffersCount}</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Drafts: <span className="text-slate-700 font-medium">{draftOffersCount}</span></p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Offers</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{totalOffersCount}</h3>
+              <p className="text-[11px] text-muted-foreground mt-1">Drafts: <span className="text-foreground font-bold">{draftOffersCount}</span></p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
-              <FileSpreadsheet className="h-5 w-5" />
+            <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <FileSpreadsheet className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500 font-medium">Active / Sent Offers</p>
-              <h3 className="text-2xl font-bold text-blue-700 mt-1">{sentOffersCount}</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Awaiting candidate response</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sent & Pending</p>
+              <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{sentOffersCount}</h3>
+              <p className="text-[11px] text-blue-600/80 dark:text-blue-400/80 font-medium mt-1">Awaiting Candidate</p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-              <Send className="h-5 w-5" />
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Send className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500 font-medium">Accepted Offers</p>
-              <h3 className="text-2xl font-bold text-emerald-700 mt-1">{acceptedOffersCount}</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Ready for onboarding</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Accepted Offers</p>
+              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{acceptedOffersCount}</h3>
+              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 font-medium mt-1">Ready for Onboarding</p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <CheckCircle className="h-5 w-5" />
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
           <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-500 font-medium">Acceptance Rate</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-1">{acceptanceRate}%</h3>
-              <p className="text-[11px] text-slate-400 mt-1">Excludes draft offers</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Acceptance Rate</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{acceptanceRate}%</h3>
+              <p className="text-[11px] text-muted-foreground mt-1">Excludes Drafts</p>
             </div>
-            <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
-              <TrendingUp className="h-5 w-5" />
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filter Row */}
-      <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-        <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 w-full max-w-sm bg-slate-50/50 focus-within:bg-white focus-within:ring-1 focus-within:ring-indigo-500 transition">
-          <Search className="h-4 w-4 text-slate-400" />
+      {/* ── Filter Row & Segmented Status Pills ──────────────────────────────── */}
+      <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-card p-4 rounded-2xl border border-border/80 shadow-2xs">
+        <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 w-full max-w-sm bg-background">
+          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <input
             type="text"
-            placeholder="Search by candidate, title, or ref..."
+            placeholder="Search candidate, role, or ref..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="outline-none w-full bg-transparent text-xs text-slate-800"
+            className="outline-none w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground"
           />
         </div>
         
@@ -209,10 +217,10 @@ export const OfferManagementPage: React.FC = () => {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`text-xs px-3.5 py-1.5 rounded-lg border font-semibold capitalize transition ${
+              className={`text-xs px-3.5 py-1.5 rounded-xl font-bold capitalize transition-all cursor-pointer ${
                 statusFilter === status 
-                  ? 'bg-slate-900 border-slate-900 text-white shadow-sm' 
-                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  ? 'bg-primary text-primary-foreground shadow-xs' 
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted border border-border/80'
               }`}
             >
               {status}
@@ -221,105 +229,118 @@ export const OfferManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Data Table */}
-      <Card className="border-slate-100 shadow-sm overflow-hidden bg-white">
+      {/* ── Data Table ───────────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-50/70 border-b border-slate-100">
-              <TableRow>
-                <TableHead className="text-slate-500 font-semibold text-xs py-3.5 pl-6">Ref Code & Candidate</TableHead>
-                <TableHead className="text-slate-500 font-semibold text-xs">Official Role / Position</TableHead>
-                <TableHead className="text-slate-500 font-semibold text-xs">Structured Annual CTC</TableHead>
-                <TableHead className="text-slate-500 font-semibold text-xs">Joining Target</TableHead>
-                <TableHead className="text-slate-500 font-semibold text-xs">Validity Expiry</TableHead>
-                <TableHead className="text-slate-500 font-semibold text-xs">Current State</TableHead>
-                <TableHead className="text-slate-500 font-semibold text-xs text-right pr-6">Action Control</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-slate-400 text-xs">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="h-4 w-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                      Loading official recruitment records...
-                    </div>
-                  </TableCell>
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[1000px] border-collapse">
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Candidate & Code</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Offered Role</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Annual CTC</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Joining Target</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Expiry Date</TableHead>
+                  <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Status</TableHead>
+                  <TableHead className="text-right text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Actions</TableHead>
                 </TableRow>
-              ) : filteredOffers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-slate-400 text-xs">
-                    No offer records match the search parameters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredOffers.map((o: any) => {
-                  const rawCTC = o.cost_to_company || o.costToCompany;
-                  const formattedCTC = rawCTC && !isNaN(parseFloat(rawCTC)) && parseFloat(rawCTC) > 0
-                    ? `${o.currency || 'INR'} ${parseFloat(rawCTC).toLocaleString()}`
-                    : 'N/A';
+              </TableHeader>
+              <TableBody className="divide-y divide-border/60">
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs bg-background">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        <span>Loading official recruitment records...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredOffers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs bg-background">
+                      No offer records match the search parameters.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredOffers.map((o: any) => {
+                    const rawCTC = o.cost_to_company || o.costToCompany;
+                    const formattedCTC = rawCTC && !isNaN(parseFloat(rawCTC)) && parseFloat(rawCTC) > 0
+                      ? `${o.currency || 'INR'} ${parseFloat(rawCTC).toLocaleString()}`
+                      : 'N/A';
 
-                  const candidateName = o.candidate_name || o.candidateName || 'Candidate';
-                  const candidateEmail = o.candidate_email || o.candidateEmail || 'No Email';
-                  const positionTitle = o.position_title || o.positionTitle || 'General Position';
-                  const offerCode = o.offer_code || o.offerCode || 'DRAFT';
+                    const candidateName = o.candidate_name || o.candidateName || 'Candidate';
+                    const candidateEmail = o.candidate_email || o.candidateEmail || 'No Email';
+                    const positionTitle = o.position_title || o.positionTitle || 'General Position';
+                    const offerCode = o.offer_code || o.offerCode || 'DRAFT';
+                    const initials = candidateName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
-                  const formatDate = (dateVal: any) => {
-                    if (!dateVal) return 'N/A';
-                    const str = String(dateVal);
-                    return str.includes('T') ? str.split('T')[0] : str;
-                  };
-                  
-                  return (
-                    <TableRow key={o.id} className="hover:bg-slate-50/50 transition">
-                      <TableCell className="py-4 pl-6">
-                        <div>
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{offerCode}</span>
-                          <div className="font-bold text-slate-900 text-xs mt-0.5">{candidateName}</div>
-                          <div className="text-[10px] text-slate-500">{candidateEmail}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs font-semibold text-slate-700">
-                        {positionTitle}
-                      </TableCell>
-                      <TableCell className="text-xs font-bold text-slate-900">
-                        {formattedCTC}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-650">
-                        {formatDate(o.offer_start_date || o.offerStartDate)}
-                      </TableCell>
-                      <TableCell className="text-xs text-slate-650">
-                        {formatDate(o.offer_expiry_date || o.offerExpiryDate)}
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(o.status)}
-                      </TableCell>
-                      <TableCell className="text-right pr-6 py-4 space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          onClick={() => handleViewDetails(o)}
-                          className="h-8 w-8 text-slate-600 border-slate-200 hover:text-indigo-650 hover:border-indigo-200"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {o.status === 'draft' && (
-                          <Button 
-                            variant="default" 
-                            size="sm" 
-                            onClick={() => handleSendOffer(o)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[11px] h-8 px-3"
-                          >
-                            <Send className="h-3 w-3 mr-1" /> Dispatch
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+                    const formatDate = (dateVal: any) => {
+                      if (!dateVal) return 'N/A';
+                      const str = String(dateVal);
+                      return str.includes('T') ? str.split('T')[0] : str;
+                    };
+                    
+                    return (
+                      <TableRow key={o.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                        <TableCell className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase">{offerCode}</span>
+                              <div className="font-bold text-foreground text-xs truncate">{candidateName}</div>
+                              <div className="text-[11px] text-muted-foreground truncate font-mono">{candidateEmail}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs font-semibold text-foreground">
+                          {positionTitle}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4">
+                          <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                            {formattedCTC}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs text-muted-foreground font-mono">
+                          {formatDate(o.offer_start_date || o.offerStartDate)}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs text-muted-foreground font-mono">
+                          {formatDate(o.offer_expiry_date || o.offerExpiryDate)}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-center">
+                          {getStatusBadge(o.status)}
+                        </TableCell>
+                        <TableCell className="text-right py-3.5 px-5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              onClick={() => handleViewDetails(o)}
+                              className="h-8 w-8 rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground shadow-2xs"
+                              title="View Offer Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {o.status === 'draft' && (
+                              <Button 
+                                variant="default" 
+                                size="sm" 
+                                onClick={() => handleSendOffer(o)}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg shadow-2xs gap-1"
+                              >
+                                <Send className="h-3 w-3" /> Dispatch
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 

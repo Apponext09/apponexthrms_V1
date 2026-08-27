@@ -21,7 +21,6 @@ export const useNotifications = (options?: NotificationListOptions) => {
       const response = await apiClient.get(`/notifications?${params.toString()}`);
       return response.data;
     },
-    refetchInterval: 3000,
   });
 
   const unreadCountQuery = useQuery({
@@ -30,7 +29,7 @@ export const useNotifications = (options?: NotificationListOptions) => {
       const response = await apiClient.get('/notifications/unread-count');
       return response.data;
     },
-    refetchInterval: 3000, // Refetch every 3 seconds for instant Bell badge update
+    refetchInterval: 30000, // Refetch every 30 seconds for Bell badge update
   });
 
   const markAsReadMutation = useMutation({

@@ -1,3 +1,4 @@
+
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { AttendanceService } from '../services/AttendanceService';
@@ -30,7 +31,6 @@ export class AttendanceController {
     this.policyService = new AttendancePolicyService();
     this.userRepo = new UserRepository();
   }
-
   /**
    * Helper to resolve the true employeeId linked to the logged-in user
    */
@@ -430,14 +430,7 @@ export class AttendanceController {
 
     res.json({
       success: true,
-      data: {
-        shift_name: 'General Shift',
-        shiftName: 'General Shift',
-        start_time: '09:00 AM',
-        startTime: '09:00 AM',
-        end_time: '06:00 PM',
-        endTime: '06:00 PM',
-      }
+      data: null,
     });
   });
 

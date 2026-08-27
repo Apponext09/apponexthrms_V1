@@ -141,6 +141,10 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       }
     }
 
+    if ((options as any).customWhere) {
+      query = (query as any).where((options as any).customWhere);
+    }
+
     // Apply search (subclasses can override this method for custom search logic)
     if (search && this.getSearchableFields().length > 0) {
       query = query.andWhere((q) => {

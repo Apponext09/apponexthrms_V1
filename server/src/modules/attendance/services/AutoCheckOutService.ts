@@ -11,6 +11,8 @@ export class AutoCheckOutService {
     logger.info('Auto check-out functionality is disabled.');
     return { processedCount: 0 };
 
+    const db = getKnex();
+    let totalProcessed = 0;
     try {
       // 1. Get all organizations
       const orgs = await db('organizations').select('id', 'name');
@@ -41,6 +43,31 @@ export class AutoCheckOutService {
           // Get current date & time
           const nowObj = new Date();
           const todayStr = `${nowObj.getFullYear()}-${String(nowObj.getMonth() + 1).padStart(2, '0')}-${String(nowObj.getDate()).padStart(2, '0')}`;
+
+          // ── Holiday Guard: skip auto-checkout on public holidays ───────────
+          try {
+            const currentYear = nowObj.getFullYear();
+            const holidayCalIds = await db('holiday_calendars')
+              .where('organization_id', org.id)
+              .where('year', currentYear)
+              .select('id')
+              .then((rows: any[]) => rows.map((r) => Number(r.id)))
+              .catch(() => []);
+            if (holidayCalIds.length > 0) {
+              const todayHoliday = await db('holidays')
+                .whereIn('holiday_calendar_id', holidayCalIds)
+                .where('holiday_date', todayStr)
+                .where('is_optional', false)
+                .first()
+                .catch(() => null);
+              if (todayHoliday) {
+                logger.info(`[AutoCheckOut] Skipping org ${org.id} — today (${todayStr}) is a public holiday: ${todayHoliday.holiday_name || todayHoliday.holidayName}`);
+                continue;
+              }
+            }
+          } catch (holidayErr) {
+            logger.warn(`[AutoCheckOut] Could not verify holiday for org ${org.id} (non-fatal):`, holidayErr);
+          }
 
           // 2. Fetch unclosed attendance records for today (check_out_time is null)
           const unclosedRecords = await db('attendance_records')

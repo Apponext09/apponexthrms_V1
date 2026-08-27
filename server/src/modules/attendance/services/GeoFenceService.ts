@@ -459,7 +459,10 @@ export class GeoFenceService {
       .leftJoin('employees as mgr', 'employees.reporting_manager_id', 'mgr.id')
       .leftJoin('users', 'employees.email', 'users.email')
       .where('employees.organization_id', ctx.organizationId)
-      .whereNull('employees.deleted_at');
+      .whereNull('employees.deleted_at')
+      .where(function () {
+        this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
+      });
 
     if (ctx.companyId) {
       empQuery = empQuery.where('employees.company_id', ctx.companyId);
