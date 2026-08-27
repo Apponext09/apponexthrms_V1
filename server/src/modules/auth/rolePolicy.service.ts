@@ -140,10 +140,13 @@ export class RolePolicyService {
     if (primary === 'hr_manager') {
       codes.add('hr_manager');
       codes.add('hr');
-      codes.add('employee');
     }
-    if (['department_head', 'team_lead'].includes(primary)) {
-      codes.add('employee');
+    if (primary === 'department_head') {
+      codes.add('department_head');
+      codes.add('manager');
+    }
+    if (primary === 'team_lead') {
+      codes.add('team_lead');
     }
 
     codes.add('all');

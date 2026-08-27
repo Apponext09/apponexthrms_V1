@@ -766,7 +766,7 @@ export class AttendanceController {
     const departmentIds = req.query.departmentIds
       ? String(req.query.departmentIds).split(',').map((x) => parseInt(x, 10)).filter((n) => !isNaN(n))
       : [];
-    const options = await this.attendanceService.getReportFilterOptions(ctx, companyId, departmentIds);
+    const options = await (this.attendanceService as any).getReportFilterOptions(ctx, companyId, departmentIds);
     res.json({ success: true, data: options });
   });
 

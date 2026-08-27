@@ -1,5 +1,5 @@
 import { getKnex } from '../../../db/knex';
-import type { TenantContext } from '../../../common/types/tenant.types';
+import type { TenantContext } from '../../../db/types';
 import type {
   IdCardTemplate,
   IdCardTemplateVersion,
@@ -7,8 +7,18 @@ import type {
   UpdateTemplateInput,
   IdCardConfig,
 } from '../types/idCardTemplate.types';
-import { DEFAULT_ID_CARD_CONFIG } from '../../../../../client/src/features/id-card/constants/defaultIdCardConfig';
 import { NotFoundError, ValidationError } from '../../../common/errors';
+
+export const DEFAULT_ID_CARD_CONFIG: any = {
+  header: { visible: true, showLogo: true, logoUrl: null, logoSize: 42, orgName: 'Company', subtitle: 'Corporation' },
+  photo: { visible: true, shape: 'square', size: 104, borderWidth: 2 },
+  fields: [
+    { id: 'f1', key: 'name', label: 'Employee Name', visible: true, side: 'front' },
+    { id: 'f2', key: 'employeeCode', label: 'ID', visible: true, side: 'front' },
+  ],
+  qrCode: { enabled: true, content: 'vcard', position: 'back_bottom', side: 'back', size: 64 },
+  back: { showDisclaimer: true, showReturnAddress: true },
+};
 
 export class IdCardTemplateService {
   /**

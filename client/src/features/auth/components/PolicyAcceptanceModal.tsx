@@ -118,9 +118,6 @@ export const PolicyAcceptanceModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-bold text-slate-100">Mandatory Policy Acceptance</h2>
-                <span className="px-2.5 py-0.5 text-[10px] font-extrabold tracking-wider uppercase rounded-full bg-primary/20 text-primary border border-primary/30">
-                  {formattedRoleBadge}
-                </span>
               </div>
               <p className="text-xs text-slate-400">
                 Official HR Document for <strong>{user.firstName || 'User'} {user.lastName || ''}</strong>

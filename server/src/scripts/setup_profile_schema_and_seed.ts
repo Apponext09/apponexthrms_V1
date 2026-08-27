@@ -91,6 +91,9 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
           { name: 'mrf_request_id', type: (t: any) => t.bigInteger('mrf_request_id').unsigned().nullable() },
           { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
           { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+          { name: 'is_internal', type: (t: any) => t.boolean('is_internal').defaultTo(false) },
+          { name: 'is_published_external', type: (t: any) => t.boolean('is_published_external').defaultTo(true) },
+          { name: 'expiry_date', type: (t: any) => t.date('expiry_date').nullable() },
         ];
         for (const col of jobCols) {
           if (!(await db.schema.hasColumn('jobs', col.name))) {

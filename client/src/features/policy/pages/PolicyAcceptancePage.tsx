@@ -233,6 +233,12 @@ export function PolicyAcceptancePage() {
     navigate('/login');
   };
 
+  useEffect(() => {
+    if (!isLoading && totalPending === 0) {
+      navigate(getDestinationDashboard(), { replace: true });
+    }
+  }, [isLoading, totalPending]);
+
   if (isLoading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4">
@@ -253,7 +259,7 @@ export function PolicyAcceptancePage() {
           All mandatory organizational policies have been acknowledged for your account.
         </p>
         <Button
-          onClick={() => navigate(getDestinationDashboard())}
+          onClick={() => navigate(getDestinationDashboard(), { replace: true })}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 h-10 rounded-xl gap-2 shadow-md shadow-blue-500/20 cursor-pointer"
         >
           Proceed to Dashboard
@@ -282,9 +288,6 @@ export function PolicyAcceptancePage() {
                 <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                   Mandatory Policy Acceptance
                 </h1>
-                <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-md tracking-wide uppercase shadow-2xs">
-                  {formatRoleLabel(primaryRoleCode)}
-                </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 Step <span className="text-blue-600 font-bold">{activePolicyIndex + 1} of {totalPending}</span>: Accept all policies to unlock system access

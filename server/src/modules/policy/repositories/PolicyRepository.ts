@@ -22,6 +22,41 @@ function parseDeptIds(val: any): number[] {
   }
 }
 
+export function expandRoleCodes(roleCodes: string[]): string[] {
+  const expanded = new Set<string>();
+  for (const r of roleCodes) {
+    const norm = String(r || '').toLowerCase().trim();
+    if (!norm) continue;
+    expanded.add(norm);
+
+    if (['organization_admin', 'org_admin', 'ceo', 'admin'].includes(norm)) {
+      expanded.add('organization_admin');
+      expanded.add('org_admin');
+      expanded.add('ceo');
+      expanded.add('admin');
+    }
+    if (['hr', 'hr_admin', 'hr_manager', 'support'].includes(norm)) {
+      expanded.add('hr');
+      expanded.add('hr_admin');
+      expanded.add('hr_manager');
+      expanded.add('support');
+    }
+    if (['department_head', 'manager', 'dept_head', 'dept_manager'].includes(norm)) {
+      expanded.add('department_head');
+      expanded.add('manager');
+      expanded.add('dept_head');
+      expanded.add('dept_manager');
+    }
+    if (['team_lead', 'teamlead', 'lead'].includes(norm)) {
+      expanded.add('team_lead');
+      expanded.add('teamlead');
+      expanded.add('lead');
+    }
+  }
+  expanded.add('all');
+  return Array.from(expanded);
+}
+
 export class PolicyRepository {
   private get db() {
     return getKnex();
@@ -379,10 +414,7 @@ export class PolicyRepository {
     userId: number,
     roleCodes: string[]
   ): Promise<UserPolicyView[]> {
-    const roles = roleCodes.map((r) => r.toLowerCase().trim());
-    if (!roles.includes('all')) {
-      roles.push('all');
-    }
+    const roles = expandRoleCodes(roleCodes);
 
     // Fetch user's gender and department from linked employee profile
     const userEmployee = await this.db('users as u')
@@ -641,11 +673,11 @@ export class PolicyRepository {
       .where('u.status', 'active');
 
     if (!mappedRoles.includes('all')) {
-      targetUsersQuery = targetUsersQuery.whereIn(this.db.raw('LOWER(r.code)'), mappedRoles);
+      targetUsersQuery = targetUsersQuery.whereIn('r.code', mappedRoles);
     }
 
     if (pGender !== 'all') {
-      targetUsersQuery = targetUsersQuery.where(this.db.raw('LOWER(e.gender)'), pGender);
+      targetUsersQuery = targetUsersQuery.whereRaw('LOWER(e.gender) = ?', [pGender]);
     }
 
     if (pDepts.length > 0) {

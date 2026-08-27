@@ -28,21 +28,6 @@ export function LoginPage() {
       const roles = currentUser?.roles || [];
       const cleanEmail = (email || '').trim().toLowerCase();
 
-      // If user is not super_admin, check for pending mandatory policies
-      if (!cleanEmail.includes('superadmin') && !roles.includes('super_admin')) {
-        try {
-          const { apiClient } = await import('@/config/api');
-          const pendingRes = await apiClient.get('/policies/pending');
-          const pendingList = pendingRes.data?.data || [];
-          if (Array.isArray(pendingList) && pendingList.length > 0) {
-            navigate('/policy-acceptance');
-            return;
-          }
-        } catch (e) {
-          console.warn('Policy pending check skipped on login:', e);
-        }
-      }
-
       if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
         navigate('/superadmin/dashboard');
       } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
