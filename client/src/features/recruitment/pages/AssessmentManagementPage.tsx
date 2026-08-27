@@ -510,85 +510,118 @@ export const AssessmentManagementPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 p-4">
-      {/* Header */}
-      <Card className="rounded-none shadow-sm border-border">
-        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-          <div>
-            <CardTitle className="text-base font-semibold text-foreground">Assessment Management</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">Create, manage and track online assessments for candidates</p>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <Code2 className="w-5 h-5" />
           </div>
-          <Button onClick={openCreateDialog} className="h-8 px-4 text-xs rounded-sm">
-            <Plus className="w-3.5 h-3.5 mr-1.5" />
-            Create Assessment
-          </Button>
-        </CardHeader>
-      </Card>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Assessment Management
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Build coding challenges, MCQ tests, subjective forms, and monitor candidate attempts with AI proctoring.
+            </p>
+          </div>
+        </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="rounded-none shadow-sm border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-              <Code2 className="w-5 h-5 text-blue-600" />
-            </div>
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto">
+          <Button onClick={openCreateDialog} className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap">
+            <Plus className="w-3.5 h-3.5" /> Create Assessment Profile
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Stats Cards ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-lg font-bold text-foreground">{assessments.filter(a => a.assessmentType === 'coding').length}</p>
-              <p className="text-xs text-muted-foreground">Coding Tests</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Coding Tests</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{assessments.filter(a => a.assessmentType === 'coding').length}</h3>
+              <p className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold mt-1">Algorithmic & Practical</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Code2 className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-none shadow-sm border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <ListChecks className="w-5 h-5 text-green-600" />
-            </div>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-lg font-bold text-foreground">{assessments.filter(a => a.assessmentType === 'mcq').length}</p>
-              <p className="text-xs text-muted-foreground">MCQ Tests</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">MCQ Tests</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{assessments.filter(a => a.assessmentType === 'mcq').length}</h3>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-1">Multi-choice Quiz</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <ListChecks className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
-        <Card className="rounded-none shadow-sm border-border">
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-purple-600" />
-            </div>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
             <div>
-              <p className="text-lg font-bold text-foreground">{assessments.filter(a => a.assessmentType === 'form').length}</p>
-              <p className="text-xs text-muted-foreground">Subjective Forms</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Subjective Forms</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{assessments.filter(a => a.assessmentType === 'form').length}</h3>
+              <p className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold mt-1">Long-form Responses</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <FileText className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Hybrid Tests</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{assessments.filter(a => a.assessmentType === 'hybrid').length}</h3>
+              <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-1">MCQ + Code combined</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <Layers className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Assessment Table */}
-      <Card className="rounded-none shadow-sm border-border">
-        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-          <CardTitle className="text-sm font-normal text-foreground">
-            All Assessments ({assessments.length})
-          </CardTitle>
+      {/* ── Assessment Table ─────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between p-5 border-b border-border/60">
+          <div>
+            <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+              <ListChecks className="w-4 h-4 text-primary" />
+              All Assessment Tests ({assessments.length})
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Configured question banks and test profiles</p>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="bg-background">
-            <Table className="min-w-[800px]">
-              <TableHeader className="bg-card">
-                <TableRow className="border-border">
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Assessment Name</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Target Dept / Designation</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Type</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Duration</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Passing Score</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Description</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Created</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Actions</TableHead>
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[900px] border-collapse">
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Assessment Title</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Target Dept / Designation</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Format</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Duration</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Passing Score</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Created Date</TableHead>
+                  <TableHead className="text-right text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="divide-y divide-border/60">
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-xs text-muted-foreground bg-background">
-                      Loading assessments...
+                    <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <span>Loading assessments...</span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : assessments.length > 0 ? (
@@ -596,69 +629,75 @@ export const AssessmentManagementPage: React.FC = () => {
                     const typeConfig = getTypeConfig(assessment.assessmentType);
                     const TypeIcon = typeConfig.icon;
                     return (
-                      <TableRow key={assessment.id} className="border-border bg-card text-card-foreground hover:bg-background">
-                        <TableCell className="text-xs py-2 font-medium">{assessment.assessmentName}</TableCell>
-                        <TableCell className="text-xs py-2">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 w-fit">
+                      <TableRow key={assessment.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                        <TableCell className="py-3 px-5">
+                          <div className="font-bold text-xs text-foreground">{assessment.assessmentName}</div>
+                          {assessment.description && (
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[240px] mt-0.5">{assessment.description}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3 px-4">
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full w-fit">
                               🏢 {assessment.departmentName || 'All Departments'}
                             </span>
-                            <span className="inline-flex items-center text-[10px] font-medium text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded w-fit">
+                            <span className="inline-flex items-center text-[10px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full w-fit">
                               💼 {assessment.designationName || 'All Designations'}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs py-2">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${typeConfig.color}`}>
+                        <TableCell className="py-3 px-4">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${typeConfig.color}`}>
                             <TypeIcon className="w-3 h-3" />
                             {typeConfig.label}
                           </span>
                         </TableCell>
-                        <TableCell className="text-xs py-2">
-                          <span className="inline-flex items-center gap-1 text-muted-foreground">
-                            <Clock className="w-3 h-3" />
+                        <TableCell className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                             {assessment.durationMinutes} min
                           </span>
                         </TableCell>
-                        <TableCell className="text-xs py-2 font-medium">{assessment.passingScore}%</TableCell>
-                        <TableCell className="text-xs py-2 text-muted-foreground max-w-[200px] truncate">
-                          {assessment.description || '—'}
+                        <TableCell className="py-3 px-4">
+                          <span className="inline-flex items-center text-xs font-extrabold font-mono text-foreground px-2 py-0.5 rounded-md bg-muted">
+                            {assessment.passingScore}%
+                          </span>
                         </TableCell>
-                        <TableCell className="text-xs py-2 text-muted-foreground">
+                        <TableCell className="py-3 px-4 text-xs text-muted-foreground font-mono">
                           {assessment.createdAt ? new Date(assessment.createdAt).toLocaleDateString('en-IN') : '—'}
                         </TableCell>
-                        <TableCell className="text-xs py-1">
-                          <div className="flex gap-1.5 items-center">
+                        <TableCell className="py-3 px-5 text-right">
+                          <div className="flex gap-1 items-center justify-end">
                             <button
                               onClick={() => openAttemptsDialog(assessment)}
-                              className="p-1.5 rounded hover:bg-blue-50 text-blue-600 transition-colors"
-                              title="View Attempts"
+                              className="p-1.5 rounded-lg hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 transition-colors"
+                              title="View Attempts & Proctor Reports"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openQuestionsDialog(assessment)}
-                              className="p-1.5 rounded hover:bg-green-50 text-green-600 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition-colors"
                               title="Manage Questions"
                             >
-                              <FileText className="w-3.5 h-3.5" />
+                              <ListChecks className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => openEditDialog(assessment)}
-                              className="p-1.5 rounded hover:bg-yellow-50 text-yellow-600 transition-colors"
-                              title="Edit"
+                              className="p-1.5 rounded-lg hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 transition-colors"
+                              title="Edit Assessment"
                             >
-                              <Pencil className="w-3.5 h-3.5" />
+                              <Pencil className="w-4 h-4" />
                             </button>
                             <button
                               onClick={() => {
                                 setDeletingId(assessment.id);
                                 setShowDeleteDialog(true);
                               }}
-                              className="p-1.5 rounded hover:bg-red-50 text-red-600 transition-colors"
-                              title="Delete"
+                              className="p-1.5 rounded-lg hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 transition-colors"
+                              title="Delete Assessment"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </TableCell>
@@ -667,8 +706,8 @@ export const AssessmentManagementPage: React.FC = () => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
-                      No assessments created yet. Click "Create Assessment" to get started.
+                    <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                      No assessments created yet. Click "Create Assessment Profile" to begin.
                     </TableCell>
                   </TableRow>
                 )}

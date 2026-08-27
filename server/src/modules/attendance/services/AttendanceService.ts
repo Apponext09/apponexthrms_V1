@@ -216,6 +216,65 @@ export class AttendanceService {
   }
 
   /**
+   * Resolve whether a given date is a public holiday for an employee,
+   * based on the holiday_calendars scoped to their location (or default calendar).
+   * Optional holidays (restricted/RH) are intentionally excluded — they do not
+   * auto-block check-in.
+   */
+  private async resolveHolidayStatus(
+    ctx: TenantContext,
+    employeeId: number,
+    date: string  // YYYY-MM-DD
+  ): Promise<{ isHoliday: boolean; holidayName?: string; holidayType?: string }> {
+    try {
+      const db = getKnex();
+      const year = parseInt(date.split('-')[0], 10);
+
+      // 1. Resolve employee's current location
+      const emp = await db('employees')
+        .where({ id: employeeId, organization_id: ctx.organizationId })
+        .first('current_location_id')
+        .catch(() => null);
+      const locationId = emp?.current_location_id ?? null;
+
+      // 2. Find applicable holiday calendars (location-scoped + default fallback)
+      let calQuery = db('holiday_calendars')
+        .where('organization_id', ctx.organizationId)
+        .where('year', year);
+      if (locationId) {
+        calQuery = calQuery.where(function (this: any) {
+          this.where('applicable_location_id', locationId).orWhere('is_default', true);
+        });
+      } else {
+        calQuery = calQuery.where('is_default', true);
+      }
+      const calendars = await calQuery.select('id').catch(() => []);
+      const calIds = calendars.map((c: any) => Number(c.id));
+      if (calIds.length === 0) return { isHoliday: false };
+
+      // 3. Check if the given date is a non-optional public holiday
+      const holiday = await db('holidays')
+        .whereIn('holiday_calendar_id', calIds)
+        .where('holiday_date', date)
+        .where('is_optional', false)
+        .first('holiday_name', 'holiday_type')
+        .catch(() => null);
+
+      if (holiday) {
+        return {
+          isHoliday: true,
+          holidayName: holiday.holiday_name || holiday.holidayName,
+          holidayType: holiday.holiday_type || holiday.holidayType,
+        };
+      }
+      return { isHoliday: false };
+    } catch (e) {
+      console.warn('[AttendanceService] resolveHolidayStatus error (non-fatal):', e);
+      return { isHoliday: false };
+    }
+  }
+
+  /**
    * Check in an employee
    */
   async checkIn(ctx: TenantContext, input: {
@@ -282,6 +341,28 @@ export class AttendanceService {
       }
     }
 
+    // ── Holiday & Shift Gate ──────────────────────────────────────────────────
+    const holidayStatus = await this.resolveHolidayStatus(ctx, input.employeeId, today);
+
+    if (holidayStatus.isHoliday && !resolvedShift) {
+      // Public holiday AND no shift assigned → block check-in
+      throw new ValidationError(
+        `Today is a public holiday (${holidayStatus.holidayName}). No shift is assigned, so attendance cannot be marked.`
+      );
+    }
+
+    if (!resolvedShift && !holidayStatus.isHoliday) {
+      // Normal working day but no shift assigned → block check-in
+      throw new ValidationError(
+        'No shift is assigned for today. Please contact HR to assign a shift before marking attendance.'
+      );
+    }
+
+    // If holiday but shift exists → allow (holiday working day), attach a note
+    const holidayNote = holidayStatus.isHoliday && resolvedShift
+      ? `Working on Holiday: ${holidayStatus.holidayName}`
+      : null;
+
     // ── Grace Period + Half-Day Status Computation ────────────────────────────
     const checkInDateObj = new Date();
     const entryResult = computeShiftEntryStatus(
@@ -309,6 +390,11 @@ export class AttendanceService {
     })();
 
     // Get or create today's attendance record
+    // Merge holiday note into entry notes
+    const finalNotes = holidayNote
+      ? (entryNotes ? `${holidayNote} | ${entryNotes}` : holidayNote)
+      : entryNotes;
+
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
       record = await this.recordRepo.create(ctx, {
@@ -321,7 +407,7 @@ export class AttendanceService {
         check_in_method: cleanMethod,
         status: attendanceStatus,
         is_late: isLateFlag,
-        notes: entryNotes,
+        notes: finalNotes,
         created_by: ctx.userId,
         updated_by: ctx.userId,
       } as any);
@@ -333,7 +419,7 @@ export class AttendanceService {
         check_in_method: cleanMethod,
         status: attendanceStatus,
         is_late: isLateFlag,
-        notes: entryNotes,
+        notes: finalNotes,
         ...(assignedShiftId ? { shift_id: assignedShiftId } : {}),
       });
     }
@@ -1059,6 +1145,12 @@ export class AttendanceService {
       console.warn('[AttendanceService] getCheckInStatus shift error:', e);
     }
 
+    // Resolve holiday status for today
+    const holidayStatus = await this.resolveHolidayStatus(ctx, employeeId, today);
+    const hasShift = !!resolvedShift;
+    // Attendance is blocked when: (a) holiday with no shift, OR (b) no shift on a working day
+    const isAttendanceBlocked = !hasShift;
+
     if (record) {
       try {
         const existingBreaks = await this.breakRepo.getByRecord(ctx, record.id);
@@ -1098,6 +1190,12 @@ export class AttendanceService {
       checkOutTime: record ? (record.checkOutTime ?? record.check_out_time) : null,
       duration: record ? (record.durationMinutes ?? record.duration_minutes) : null,
       isOnBreak: !!activeBreak,
+      // ── Holiday & Shift Gate fields ──────────────────────────────────────────
+      isHoliday: holidayStatus.isHoliday,
+      holidayName: holidayStatus.holidayName ?? null,
+      holidayType: holidayStatus.holidayType ?? null,
+      hasShift,
+      isAttendanceBlocked,
       isBreakPaused: activeBreak?.status === 'paused',
       isBreakCompleted: isBreakQuotaExhausted,
       isBreakQuotaExhausted,
@@ -1298,7 +1396,10 @@ export class AttendanceService {
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at');
+      .whereNull('deleted_at')
+      .where(function () {
+        this.where('is_ceo', 0).orWhereNull('is_ceo');
+      });
 
     if (targetCompanyIds.length > 0) {
       empQuery = empQuery.where(function () {
@@ -1513,6 +1614,38 @@ export class AttendanceService {
       if (lId && gName) locationNameMap.set(lId, gName);
     });
 
+    // ── Pre-fetch holiday dates for the report range (org-wide, non-optional) ────────────
+    // We fetch all calendars for the org (both location-specific and default)
+    // so that any holiday that applies to any employee in this org is included.
+    // Per-employee location filtering would require N+1 queries; org-wide is a
+    // safe conservative approach for report generation.
+    const reportHolidaySet = new Map<string, string>(); // holiday_date -> holiday_name
+    try {
+      const reportYear = parseInt(startStr.split('-')[0], 10);
+      const calendarIds = await db('holiday_calendars')
+        .where('organization_id', ctx.organizationId)
+        .where('year', reportYear)
+        .select('id')
+        .catch(() => []);
+      const calIds = calendarIds.map((c: any) => Number(c.id));
+      if (calIds.length > 0) {
+        const holidayRows = await db('holidays')
+          .whereIn('holiday_calendar_id', calIds)
+          .where('holiday_date', '>=', startStr)
+          .where('holiday_date', '<=', endStr)
+          .where('is_optional', false)
+          .select('holiday_date', 'holiday_name')
+          .catch(() => []);
+        holidayRows.forEach((h: any) => {
+          const d = h.holiday_date || h.holidayDate;
+          const n = h.holiday_name || h.holidayName;
+          if (d) reportHolidaySet.set(String(d).slice(0, 10), n || 'Holiday');
+        });
+      }
+    } catch (e) {
+      console.warn('[TabularReport] Failed to fetch holiday set (non-fatal):', e);
+    }
+
     for (const dateStr of dates) {
       const parts = dateStr.split('-').map(Number);
       const dateObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
@@ -1646,7 +1779,9 @@ export class AttendanceService {
             breakHoursForRow = bM > 0 ? `${bH}h ${bM}m` : `${bH}h`;
           }
         } else {
-          dayStatus = isWeekend ? 'Week Off' : 'Absent';
+          // No attendance record for this date — check if holiday or week-off or absent
+          const isHolidayDate = reportHolidaySet.has(dateStr);
+          dayStatus = isWeekend ? 'Week Off' : isHolidayDate ? 'Holiday' : 'Absent';
           actualTiming = '-- - --';
           actualWorkingHours = '00:00';
         }
@@ -1691,9 +1826,10 @@ export class AttendanceService {
         const resolveEmpShift = (eId: number, dStr: string, recordObj?: any) => {
           if (recordObj && recordObj.rec_shift_name) {
             const sName = recordObj.rec_shift_name;
-            const sIn = recordObj.rec_shift_start_time ? formatDisplayTime(recordObj.rec_shift_start_time) : '09:00 AM';
-            const sOut = recordObj.rec_shift_end_time ? formatDisplayTime(recordObj.rec_shift_end_time) : '06:00 PM';
-            return { shiftName: sName, startTime: sIn, endTime: sOut };
+            const sIn = recordObj.rec_shift_start_time ? formatDisplayTime(recordObj.rec_shift_start_time) : '--';
+            const sOut = recordObj.rec_shift_end_time ? formatDisplayTime(recordObj.rec_shift_end_time) : '--';
+            const dur = Number(recordObj.rec_shift_duration_hours || recordObj.recShiftDurationHours || 0);
+            return { shiftName: sName, startTime: sIn, endTime: sOut, durationHours: dur };
           }
           const saMatch = shiftAssignments.find((sa: any) => {
             if (Number(sa.employee_id) !== eId) return false;
@@ -1705,21 +1841,33 @@ export class AttendanceService {
           });
           if (saMatch) {
             return {
-              shiftName: saMatch.shift_name || 'General Shift',
-              startTime: saMatch.start_time ? formatDisplayTime(saMatch.start_time) : '09:00 AM',
-              endTime: saMatch.end_time ? formatDisplayTime(saMatch.end_time) : '06:00 PM',
+              shiftName: saMatch.shift_name || 'Unknown Shift',
+              startTime: saMatch.start_time ? formatDisplayTime(saMatch.start_time) : '--',
+              endTime: saMatch.end_time ? formatDisplayTime(saMatch.end_time) : '--',
+              durationHours: Number(saMatch.duration_hours || saMatch.durationHours || 0),
             };
           }
-          return {
-            shiftName: 'General Shift',
-            startTime: '09:00 AM',
-            endTime: '06:00 PM',
-          };
+          // No shift assigned — return Unassigned (do NOT fall back to hardcoded General Shift)
+          return { shiftName: 'Unassigned', startTime: '--', endTime: '--', durationHours: 0 };
         };
 
         const currentShift = resolveEmpShift(empId, dateStr, dbRec);
-        const shiftLabel = `${currentShift.shiftName} (${currentShift.startTime} - ${currentShift.endTime})`;
-        const expTimingLabel = `${currentShift.startTime} - ${currentShift.endTime}`;
+        const isUnassigned = currentShift.shiftName === 'Unassigned';
+        const shiftLabel = isUnassigned
+          ? 'Unassigned'
+          : `${currentShift.shiftName} (${currentShift.startTime} - ${currentShift.endTime})`;
+        const expTimingLabel = isUnassigned
+          ? '--'
+          : `${currentShift.startTime} - ${currentShift.endTime}`;
+
+        // Derive expected hours from shift duration_hours; fall back to '--' when unassigned
+        const expHoursValue = (() => {
+          if (isUnassigned || !currentShift.durationHours) return '--';
+          const totalMins = Math.round(currentShift.durationHours * 60);
+          const h = Math.floor(totalMins / 60).toString().padStart(2, '0');
+          const m = (totalMins % 60).toString().padStart(2, '0');
+          return `${h}:${m}`;
+        })();
 
         rows.push({
           id: String(rowIdCounter++),
@@ -1731,7 +1879,7 @@ export class AttendanceService {
           actualTiming,
           checkInTime: formattedIn || '--',
           checkOutTime: formattedOut || (formattedIn ? 'Active' : '--'),
-          expHours: '09:00',
+          expHours: expHoursValue,
           actualHours: actualWorkingHours,
           shortHours,
           bufferMins: '00:00:00',
@@ -1961,6 +2109,34 @@ export class AttendanceService {
       }
     });
 
+    // ── Pre-fetch holiday dates for the matrix report range ────────────────────────────
+    const matrixHolidaySet = new Map<string, string>(); // date -> holiday name
+    try {
+      const matrixYear = parseInt(startStr.split('-')[0], 10);
+      const matrixCalIds = await db('holiday_calendars')
+        .where('organization_id', ctx.organizationId)
+        .where('year', matrixYear)
+        .select('id')
+        .catch(() => []);
+      const mCalIds = matrixCalIds.map((c: any) => Number(c.id));
+      if (mCalIds.length > 0) {
+        const mHolidays = await db('holidays')
+          .whereIn('holiday_calendar_id', mCalIds)
+          .where('holiday_date', '>=', startStr)
+          .where('holiday_date', '<=', endStr)
+          .where('is_optional', false)
+          .select('holiday_date', 'holiday_name')
+          .catch(() => []);
+        mHolidays.forEach((h: any) => {
+          const d = h.holiday_date || h.holidayDate;
+          const n = h.holiday_name || h.holidayName;
+          if (d) matrixHolidaySet.set(String(d).slice(0, 10), n || 'Holiday');
+        });
+      }
+    } catch (e) {
+      console.warn('[MatrixReport] Failed to fetch holiday set (non-fatal):', e);
+    }
+
     return employeeList.map((emp: any) => {
       const empId = emp.id;
       const fn = emp.first_name || emp.firstName || '';
@@ -2008,9 +2184,17 @@ export class AttendanceService {
         }
 
         if (!rec) {
-          // Working day but no attendance record → Not Present
-          dailyStatus[dateStr] = 'NP';
-          dailyTimings[dateStr] = '00:00-00:00';
+          // Working day but no attendance record — check if holiday before marking NP
+          if (matrixHolidaySet.has(dateStr)) {
+            const holName = matrixHolidaySet.get(dateStr) || 'Holiday';
+            dailyStatus[dateStr] = 'Holiday';
+            dailyTimings[dateStr] = holName;
+            totalHoliday += 1;
+          } else {
+            // No record, not a holiday → Not Present
+            dailyStatus[dateStr] = 'NP';
+            dailyTimings[dateStr] = '00:00-00:00';
+          }
           return;
         }
 

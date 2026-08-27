@@ -545,7 +545,7 @@ export function HRLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

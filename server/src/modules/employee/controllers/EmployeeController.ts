@@ -230,11 +230,14 @@ export class EmployeeController {
       department_id,
       companyId,
       company_id,
+      excludeCeo,
+      exclude_ceo,
     } = req.query;
 
     const empType = (employmentType || employment_type) as string;
     const deptId = (departmentId || department_id) as string;
-    const targetCompId = (companyId || company_id || (ctx.companyId ? String(ctx.companyId) : undefined)) as string;
+    const targetCompId = (companyId || company_id) as string;
+    const shouldExcludeCeo = excludeCeo === 'true' || exclude_ceo === 'true' || excludeCeo === true;
 
     logger.debug('listEmployees called', {
       organizationId: ctx.organizationId,
@@ -260,6 +263,7 @@ export class EmployeeController {
         ...(empType && { employment_type: empType }),
         ...(deptId && { current_department_id: parseInt(deptId, 10) }),
         ...(targetCompId && targetCompId.toLowerCase() !== 'all' && { company_id: parseInt(targetCompId, 10) }),
+        ...(shouldExcludeCeo && { is_ceo: 0 }),
       },
     });
 

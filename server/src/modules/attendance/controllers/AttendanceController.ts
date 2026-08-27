@@ -430,14 +430,7 @@ export class AttendanceController {
 
     res.json({
       success: true,
-      data: {
-        shift_name: 'General Shift',
-        shiftName: 'General Shift',
-        start_time: '09:00 AM',
-        startTime: '09:00 AM',
-        end_time: '06:00 PM',
-        endTime: '06:00 PM',
-      }
+      data: null,
     });
   });
 

@@ -421,6 +421,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager'],
       },
       {
+        name: 'ID Card Designer',
+        href: '/settings/id-card-designer',
+        icon: 'CreditCard',
+        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+      },
+      {
         name: 'Career Portal Customization',
         href: '/settings/career-customization',
         icon: 'Palette',

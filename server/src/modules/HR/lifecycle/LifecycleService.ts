@@ -309,43 +309,45 @@ export class LifecycleService {
         'loc.location_name as location_name'
       );
 
-    // 1. Resolve logged-in user from context (ctx.userId) and target ID
+    // 1. Resolve target employeeId first, falling back to currentUser context
     const currentUser = ctx.userId ? await db('users').where('id', ctx.userId).first().catch(() => null) : null;
-    const targetUser = await db('users').where('id', employeeId).first().catch(() => null);
-    const resolvedUser = currentUser || targetUser;
+    const targetUser = employeeId ? await db('users').where('id', employeeId).first().catch(() => null) : null;
 
-    // 2. Try matching employee record by logged-in user's email first
     let emp: any = null;
 
-    if (currentUser?.email) {
+    // A. Priority 1: Match requested employeeId directly by employees.id
+    if (employeeId && !isNaN(Number(employeeId))) {
+      emp = await buildEmpQuery()
+        .where('employees.id', Number(employeeId))
+        .first()
+        .catch(() => null);
+
+      // Priority 1b: Match by targetUser.email if employee record has matching email
+      if (!emp && targetUser?.email) {
+        emp = await buildEmpQuery()
+          .whereRaw('LOWER(employees.email) = ?', [targetUser.email.toLowerCase()])
+          .first()
+          .catch(() => null);
+      }
+
+      if (!emp) {
+        emp = await buildEmpQuery()
+          .where((b) => b.where('employees.id', employeeId).orWhere('users.id', employeeId))
+          .first()
+          .catch(() => null);
+      }
+    }
+
+    // B. Priority 2 (Fallback): Match logged-in user if no target employeeId was requested or found
+    if (!emp && currentUser?.email) {
       emp = await buildEmpQuery()
         .whereRaw('LOWER(employees.email) = ?', [currentUser.email.toLowerCase()])
         .first()
         .catch(() => null);
     }
 
-    if (!emp && resolvedUser?.email) {
-      emp = await buildEmpQuery()
-        .whereRaw('LOWER(employees.email) = ?', [resolvedUser.email.toLowerCase()])
-        .first()
-        .catch(() => null);
-    }
-
-    if (!emp && ctx.userId) {
-      emp = await buildEmpQuery()
-        .where((b) => b.where('employees.id', ctx.userId).orWhere('users.id', ctx.userId))
-        .first()
-        .catch(() => null);
-    }
-
-    if (!emp && employeeId) {
-      emp = await buildEmpQuery()
-        .where('employees.id', employeeId)
-        .first()
-        .catch(() => null);
-    }
-
-    // Fallback 1: Match by first_name of resolved user if email didn't match directly
+    // Fallback: Match by first_name if email didn't match directly
+    const resolvedUser = targetUser || currentUser;
     if (!emp && resolvedUser) {
       const fName = resolvedUser.first_name || resolvedUser.firstName || (resolvedUser.email ? resolvedUser.email.split('@')[0] : '');
       if (fName) {

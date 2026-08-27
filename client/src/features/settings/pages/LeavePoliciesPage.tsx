@@ -11,7 +11,8 @@ import {
   Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck,
   HelpCircle, Calendar, Settings, Search, Database, Info,
   ChevronDown, ChevronUp, Play, ArrowLeft, Clock, FileText, Check, X, AlertCircle, CreditCard,
-  Zap, Loader2, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, SlidersHorizontal
+  Zap, Loader2, PanelLeftClose, PanelLeftOpen, ChevronLeft, ChevronRight, SlidersHorizontal,
+  LayoutList, Layers, Calculator, Sparkles
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
@@ -49,7 +50,19 @@ interface LeaveType {
   pool_from_leave_type_id?: number;
   paidType?: 'paid' | 'unpaid' | 'half_paid';
   paid_type?: 'paid' | 'unpaid' | 'half_paid';
+  leaveClassification?: 'calendar' | 'non-calendar' | 'uncategorized';
   leave_classification?: 'calendar' | 'non-calendar' | 'uncategorized';
+  color?: string;
+  themeColor?: string;
+  theme_color?: string;
+  icon?: string;
+  categoryIcon?: string;
+  category_icon?: string;
+  effectiveFrom?: string;
+  effective_from?: string;
+  effectiveTo?: string;
+  effective_to?: string;
+  description?: string;
   allocationSettings?: any;
   allocation_settings?: any;
   applicationSettings?: any;
@@ -68,6 +81,188 @@ interface LeaveType {
   sandwichRuleEnabled?: boolean;
 }
 
+const LEAVE_THEME_COLORS: Record<string, { dot: string; bg: string; text: string; border: string; badge: string; ring: string }> = {
+  None: {
+    dot: 'bg-slate-400 dark:bg-slate-500',
+    bg: 'bg-slate-100 dark:bg-slate-800/60',
+    text: 'text-slate-700 dark:text-slate-300',
+    border: 'border-slate-200 dark:border-slate-700',
+    badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    ring: 'ring-slate-400/30'
+  },
+  Sky: {
+    dot: 'bg-sky-500',
+    bg: 'bg-sky-50 dark:bg-sky-950/40',
+    text: 'text-sky-600 dark:text-sky-400',
+    border: 'border-sky-200 dark:border-sky-800',
+    badge: 'bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300',
+    ring: 'ring-sky-500/30'
+  },
+  Indigo: {
+    dot: 'bg-indigo-600',
+    bg: 'bg-indigo-50 dark:bg-indigo-950/40',
+    text: 'text-indigo-600 dark:text-indigo-400',
+    border: 'border-indigo-200 dark:border-indigo-800',
+    badge: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300',
+    ring: 'ring-indigo-500/30'
+  },
+  Emerald: {
+    dot: 'bg-emerald-500',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    text: 'text-emerald-600 dark:text-emerald-400',
+    border: 'border-emerald-200 dark:border-emerald-800',
+    badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+    ring: 'ring-emerald-500/30'
+  },
+  Amber: {
+    dot: 'bg-amber-500',
+    bg: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-600 dark:text-amber-400',
+    border: 'border-amber-200 dark:border-amber-800',
+    badge: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+    ring: 'ring-amber-500/30'
+  },
+  Rose: {
+    dot: 'bg-rose-500',
+    bg: 'bg-rose-50 dark:bg-rose-950/40',
+    text: 'text-rose-600 dark:text-rose-400',
+    border: 'border-rose-200 dark:border-rose-800',
+    badge: 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
+    ring: 'ring-rose-500/30'
+  },
+  Teal: {
+    dot: 'bg-teal-500',
+    bg: 'bg-teal-50 dark:bg-teal-950/40',
+    text: 'text-teal-600 dark:text-teal-400',
+    border: 'border-teal-200 dark:border-teal-800',
+    badge: 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
+    ring: 'ring-teal-500/30'
+  },
+  Violet: {
+    dot: 'bg-violet-600',
+    bg: 'bg-violet-50 dark:bg-violet-950/40',
+    text: 'text-violet-600 dark:text-violet-400',
+    border: 'border-violet-200 dark:border-violet-800',
+    badge: 'bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
+    ring: 'ring-violet-500/30'
+  },
+  Fuchsia: {
+    dot: 'bg-fuchsia-500',
+    bg: 'bg-fuchsia-50 dark:bg-fuchsia-950/40',
+    text: 'text-fuchsia-600 dark:text-fuchsia-400',
+    border: 'border-fuchsia-200 dark:border-fuchsia-800',
+    badge: 'bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-950/60 dark:text-fuchsia-300',
+    ring: 'ring-fuchsia-500/30'
+  },
+  Orange: {
+    dot: 'bg-orange-500',
+    bg: 'bg-orange-50 dark:bg-orange-950/40',
+    text: 'text-orange-600 dark:text-orange-400',
+    border: 'border-orange-200 dark:border-orange-800',
+    badge: 'bg-orange-50 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300',
+    ring: 'ring-orange-500/30'
+  },
+  Lime: {
+    dot: 'bg-lime-500',
+    bg: 'bg-lime-50 dark:bg-lime-950/40',
+    text: 'text-lime-600 dark:text-lime-400',
+    border: 'border-lime-200 dark:border-lime-800',
+    badge: 'bg-lime-50 text-lime-700 dark:bg-lime-950/60 dark:text-lime-300',
+    ring: 'ring-lime-500/30'
+  },
+  Cyan: {
+    dot: 'bg-cyan-500',
+    bg: 'bg-cyan-50 dark:bg-cyan-950/40',
+    text: 'text-cyan-600 dark:text-cyan-400',
+    border: 'border-cyan-200 dark:border-cyan-800',
+    badge: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300',
+    ring: 'ring-cyan-500/30'
+  }
+};
+
+const LEAVE_COLOR_OPTIONS = [
+  { id: 'None', label: '⚪ None / Default' },
+  { id: 'Sky', label: '🔵 Sky Blue' },
+  { id: 'Indigo', label: '🟣 Indigo Purple' },
+  { id: 'Emerald', label: '🟢 Emerald Green' },
+  { id: 'Amber', label: '🟠 Amber Gold' },
+  { id: 'Rose', label: '🔴 Rose Red' },
+  { id: 'Teal', label: '🩵 Teal Cyan' },
+  { id: 'Violet', label: '🔮 Deep Violet' },
+  { id: 'Fuchsia', label: '🌸 Fuchsia Pink' },
+  { id: 'Orange', label: '🔥 Sunset Orange' },
+  { id: 'Lime', label: '🌱 Lime Green' },
+  { id: 'Cyan', label: '💠 Electric Cyan' },
+];
+
+const LEAVE_ICON_OPTIONS = [
+  { id: 'None', emoji: '', label: '🚫 None (No Icon)' },
+  { id: 'Sun', emoji: '☀️', label: '☀️ Sun (Casual/Standard)' },
+  { id: 'Palm', emoji: '🌴', label: '🌴 Palm (Annual/Earned)' },
+  { id: 'Vacation', emoji: '🏖️', label: '🏖️ Beach (Vacation/Holiday)' },
+  { id: 'Hospital', emoji: '🏥', label: '🏥 Hospital (Sick/Medical)' },
+  { id: 'Pill', emoji: '💊', label: '💊 Pill (Health/Pharmacy)' },
+  { id: 'Thermometer', emoji: '🌡️', label: '🌡️ Thermometer (Sick/Flu)' },
+  { id: 'Heart', emoji: '💖', label: '💖 Heart (Care/Wellness)' },
+  { id: 'Baby', emoji: '👶', label: '👶 Baby (Maternity/Paternity)' },
+  { id: 'Briefcase', emoji: '💼', label: '💼 Briefcase (Official Duty)' },
+  { id: 'Coffee', emoji: '☕', label: '☕ Coffee (Short Break)' },
+  { id: 'Clock', emoji: '⏰', label: '⏰ Clock (Compensatory Off)' },
+  { id: 'Plane', emoji: '✈️', label: '✈️ Plane (Travel/Relocation)' },
+  { id: 'Book', emoji: '📚', label: '📚 Book (Study/Exam Leave)' },
+  { id: 'Home', emoji: '🏠', label: '🏠 Home (WFH/Personal)' },
+  { id: 'Award', emoji: '🏆', label: '🏆 Trophy (Privilege/Reward)' },
+  { id: 'Star', emoji: '⭐', label: '⭐ Star (Special Leave)' },
+  { id: 'Shield', emoji: '🛡️', label: '🛡️ Shield (Emergency/Bereavement)' },
+  { id: 'Party', emoji: '🎉', label: '🎉 Celebration (Marriage/Festival)' },
+  { id: 'Umbrella', emoji: '☂️', label: '☂️ Umbrella (Emergency/Weather)' },
+];
+
+const getLeaveThemeColor = (colorName?: string) => {
+  const c = colorName || 'None';
+  if (LEAVE_THEME_COLORS[c]) return LEAVE_THEME_COLORS[c];
+  const lower = c.toLowerCase().trim();
+  if (lower === 'none' || lower === 'neutral' || lower === 'default' || lower === '') return LEAVE_THEME_COLORS.None;
+  if (lower.includes('rose') || lower.includes('red') || lower.includes('pink')) return LEAVE_THEME_COLORS.Rose;
+  if (lower.includes('fuchsia') || lower.includes('magenta')) return LEAVE_THEME_COLORS.Fuchsia;
+  if (lower.includes('violet') || lower.includes('deep purple')) return LEAVE_THEME_COLORS.Violet;
+  if (lower.includes('indigo') || lower.includes('purple')) return LEAVE_THEME_COLORS.Indigo;
+  if (lower.includes('emerald') || lower.includes('green')) return LEAVE_THEME_COLORS.Emerald;
+  if (lower.includes('teal')) return LEAVE_THEME_COLORS.Teal;
+  if (lower.includes('lime')) return LEAVE_THEME_COLORS.Lime;
+  if (lower.includes('amber') || lower.includes('gold') || lower.includes('yellow')) return LEAVE_THEME_COLORS.Amber;
+  if (lower.includes('orange') || lower.includes('sunset')) return LEAVE_THEME_COLORS.Orange;
+  if (lower.includes('cyan') || lower.includes('electric')) return LEAVE_THEME_COLORS.Cyan;
+  if (lower.includes('sky') || lower.includes('blue')) return LEAVE_THEME_COLORS.Sky;
+  return LEAVE_THEME_COLORS.None;
+};
+
+const getCategoryIconEmoji = (iconName?: string) => {
+  if (!iconName) return '';
+  const i = iconName.toLowerCase().trim();
+  if (i === 'none' || i === 'null' || i === 'undefined' || i === '') return '';
+  if (i.includes('hospital') || i.includes('medical') || i.includes('cross') || i.includes('pulse')) return '🏥';
+  if (i.includes('pill') || i.includes('medication') || i.includes('pharmacy')) return '💊';
+  if (i.includes('thermometer') || i.includes('flu') || i.includes('fever')) return '🌡️';
+  if (i.includes('heart') || i.includes('care') || i.includes('wellness')) return '💖';
+  if (i.includes('baby') || i.includes('maternity') || i.includes('paternity') || i.includes('infant')) return '👶';
+  if (i.includes('briefcase') || i.includes('work') || i.includes('duty') || i.includes('office')) return '💼';
+  if (i.includes('palm') || i.includes('tree')) return '🌴';
+  if (i.includes('vacation') || i.includes('beach') || i.includes('holiday')) return '🏖️';
+  if (i.includes('coffee') || i.includes('tea') || i.includes('break')) return '☕';
+  if (i.includes('clock') || i.includes('time') || i.includes('comp') || i.includes('hour')) return '⏰';
+  if (i.includes('plane') || i.includes('flight') || i.includes('travel') || i.includes('trip')) return '✈️';
+  if (i.includes('book') || i.includes('study') || i.includes('exam') || i.includes('learn')) return '📚';
+  if (i.includes('home') || i.includes('house') || i.includes('wfh') || i.includes('remote')) return '🏠';
+  if (i.includes('award') || i.includes('trophy') || i.includes('privilege') || i.includes('honor')) return '🏆';
+  if (i.includes('star') || i.includes('special')) return '⭐';
+  if (i.includes('shield') || i.includes('bereavement') || i.includes('emergency')) return '🛡️';
+  if (i.includes('party') || i.includes('celebration') || i.includes('marriage') || i.includes('festival')) return '🎉';
+  if (i.includes('umbrella') || i.includes('rain') || i.includes('weather')) return '☂️';
+  if (i.includes('sun')) return '☀️';
+  return '';
+};
+
 export function LeavePoliciesPage() {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'leave' | 'policy' | 'late_deduction_policy' | 'late_auto_deduction' | 'encashment'>('leave');
@@ -76,7 +271,7 @@ export function LeavePoliciesPage() {
 
   // Sidebar collapse states for maximum form workspace
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
-  const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState<boolean>(false);
+  const [isCategoriesCollapsed, setIsCategoriesCollapsed] = useState<boolean>(true);
 
   // Master lists
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -101,6 +296,7 @@ export function LeavePoliciesPage() {
   const [designationsList, setDesignationsList] = useState<any[]>([]);
   const [employmentTypesList, setEmploymentTypesList] = useState<any[]>([]);
   const [employmentStatusesList, setEmploymentStatusesList] = useState<any[]>([]);
+  const [salaryComponentsList, setSalaryComponentsList] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchScopeMasters = async () => {
@@ -108,21 +304,29 @@ export function LeavePoliciesPage() {
         const res = await apiClient.get('/settings/scope-masters');
         if (res.data && res.data.success && res.data.data) {
           const d = res.data.data;
-          if (d.companies && d.companies.length > 0) {
-            setCompaniesList(d.companies);
-          } else {
+          let list: any[] = (d.companies || [])
+            .map((c: any) => ({
+              id: Number(c.companyId ?? c.company_id ?? c.id),
+              name: String(c.name || c.companyName || c.company_name || c.employerName || `Company #${c.companyId || c.company_id || c.id}`).trim(),
+            }))
+            .filter((c: any) => c.name && c.name !== 'null');
+
+          if (list.length === 0) {
             // Direct fallback fetch from Company Controller
             try {
               const compRes = await apiClient.get('/settings/companies');
-              if (compRes.data && compRes.data.success && Array.isArray(compRes.data.data)) {
-                const mapped = compRes.data.data.map((c: any) => ({
-                  id: c.company_id || c.id,
-                  name: String(c.name || c.company_name || c.employerName || `Company #${c.company_id || c.id}`).trim()
-                }));
-                setCompaniesList(mapped);
+              const records = Array.isArray(compRes.data?.data) ? compRes.data.data : (Array.isArray(compRes.data) ? compRes.data : []);
+              if (records.length > 0) {
+                list = records
+                  .map((c: any) => ({
+                    id: Number(c.companyId ?? c.company_id ?? c.id),
+                    name: String(c.name || c.companyName || c.company_name || c.employerName || `Company #${c.companyId || c.id}`).trim(),
+                  }))
+                  .filter((c: any) => c.name && c.name !== 'null');
               }
             } catch (err) {}
           }
+          setCompaniesList(list);
           if (d.locations) setLocationsList(d.locations);
           if (d.departments) setDepartmentsList(d.departments);
           if (d.subDepartments) setSubDepartmentsList(d.subDepartments);
@@ -130,6 +334,7 @@ export function LeavePoliciesPage() {
           if (d.grades) setGradesList(d.grades);
           if (d.employmentTypes) setEmploymentTypesList(d.employmentTypes);
           if (d.employmentStatuses) setEmploymentStatusesList(d.employmentStatuses);
+          if (d.salaryComponents) setSalaryComponentsList(d.salaryComponents);
         }
       } catch (e) {
         console.error('Failed to load scope masters:', e);
@@ -238,9 +443,23 @@ export function LeavePoliciesPage() {
   const fetchLatePolicies = async () => {
     setIsLoadingLatePolicies(true);
     try {
-      const res = await apiClient.get('/settings/late-deduction-policies');
-      if (res.data && res.data.success) {
-        setLatePolicies(res.data.data || []);
+      const [resPolicies, resElig] = await Promise.allSettled([
+        apiClient.get('/settings/late-deduction-policies'),
+        apiClient.get('/settings/late-deduction-policies/eligibility-data')
+      ]);
+
+      if (resPolicies.status === 'fulfilled' && resPolicies.value.data?.success) {
+        setLatePolicies(resPolicies.value.data.data || []);
+      }
+
+      if (resElig.status === 'fulfilled' && resElig.value.data?.success) {
+        const elig = resElig.value.data.data;
+        if (elig.shifts && Array.isArray(elig.shifts)) setShiftOptions(elig.shifts);
+        if (elig.locations && Array.isArray(elig.locations) && elig.locations.length > 0) setLocations(elig.locations);
+        if (elig.departments && Array.isArray(elig.departments) && elig.departments.length > 0) setDepartments(elig.departments);
+        if (elig.employee_statuses && Array.isArray(elig.employee_statuses) && elig.employee_statuses.length > 0) {
+          setEmployeeStatusOptions(elig.employee_statuses);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch late deduction policies", err);
@@ -262,6 +481,15 @@ export function LeavePoliciesPage() {
       setIsLoadingLogs(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'late_deduction_policy') {
+      fetchLatePolicies();
+    } else if (activeTab === 'late_auto_deduction') {
+      fetchLateUpdations();
+      fetchLateDeductionLogs();
+    }
+  }, [activeTab]);
 
   const handleSaveLatePolicy = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -379,9 +607,23 @@ export function LeavePoliciesPage() {
   const fetchLateUpdations = async () => {
     setIsLoadingLateUpdations(true);
     try {
-      const res = await apiClient.get('/settings/late-updations');
-      if (res.data && res.data.success) {
-        setLateUpdations(res.data.data || []);
+      const [resUpdations, resElig] = await Promise.allSettled([
+        apiClient.get('/settings/late-updations'),
+        apiClient.get('/settings/late-deduction-policies/eligibility-data')
+      ]);
+
+      if (resUpdations.status === 'fulfilled' && resUpdations.value.data?.success) {
+        setLateUpdations(resUpdations.value.data.data || []);
+      }
+
+      if (resElig.status === 'fulfilled' && resElig.value.data?.success) {
+        const elig = resElig.value.data.data;
+        if (elig.shifts && Array.isArray(elig.shifts)) setShiftOptions(elig.shifts);
+        if (elig.locations && Array.isArray(elig.locations) && elig.locations.length > 0) setLocations(elig.locations);
+        if (elig.departments && Array.isArray(elig.departments) && elig.departments.length > 0) setDepartments(elig.departments);
+        if (elig.employee_statuses && Array.isArray(elig.employee_statuses) && elig.employee_statuses.length > 0) {
+          setEmployeeStatusOptions(elig.employee_statuses);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch late updations", err);
@@ -561,15 +803,14 @@ export function LeavePoliciesPage() {
   const [expandedRuleSub, setExpandedRuleSub] = useState<string | null>(null);
 
   // --- New Leave Encashment Tab UI State ---
-  const [encashmentsList, setEncashmentsList] = useState<any[]>([
-    { id: 1, name: 'Leave encashment one', formula: '[NUMBER_OF_LEAVE] * [PER_DAY_SALARY]', limit: '', isActive: true }
-  ]);
-  const [selectedEncashmentId, setSelectedEncashmentId] = useState<number | null>(1);
+  const [encashmentsList, setEncashmentsList] = useState<any[]>([]);
+  const [isLoadingEncashments, setIsLoadingEncashments] = useState(false);
+  const [selectedEncashmentId, setSelectedEncashmentId] = useState<number | null>(null);
   const [encashmentSearchQuery, setEncashmentSearchQuery] = useState('');
   const [encashmentStatusFilter, setEncashmentStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
 
   const [encashmentTabForm, setEncashmentTabForm] = useState({
-    name: 'Leave encashment one',
+    name: '',
     formula: '[NUMBER_OF_LEAVE] * [PER_DAY_SALARY]',
     limit: '',
     isActive: true,
@@ -582,6 +823,67 @@ export function LeavePoliciesPage() {
     }
   });
   const [expandedEncashmentSub, setExpandedEncashmentSub] = useState<string | null>(null);
+
+  // Dynamic Database-Driven Salary Component Formula Helpers
+  const [selectedCol1, setSelectedCol1] = useState<string>('Basic');
+  const [selectedOperator, setSelectedOperator] = useState<string>('+');
+  const [selectedCol2Type, setSelectedCol2Type] = useState<'component' | 'custom_number'>('component');
+  const [selectedCol2, setSelectedCol2] = useState<string>('DA');
+  const [customNumberValue, setCustomNumberValue] = useState<string>('26');
+
+  const getSalaryColumns = () => {
+    if (salaryComponentsList && salaryComponentsList.length > 0) {
+      return salaryComponentsList.map(sc => ({
+        id: sc.code || sc.name || sc.id,
+        label: sc.name || sc.code,
+      }));
+    }
+    return [
+      { id: 'Basic', label: 'Basic Salary' },
+      { id: 'DA', label: 'Dearness Allowance (DA)' },
+      { id: 'HRA', label: 'House Rent Allowance (HRA)' },
+      { id: 'Special_Allowance', label: 'Special Allowance' },
+      { id: 'Conveyance', label: 'Conveyance Allowance' },
+      { id: 'Medical_Allowance', label: 'Medical Allowance' },
+      { id: 'Gross_Salary', label: 'Gross Monthly Salary' },
+      { id: 'CTC', label: 'Monthly CTC' },
+    ];
+  };
+
+  const handleAppendFormulaToken = (token: string) => {
+    const current = encashmentTabForm.formula ? encashmentTabForm.formula.trim() : '';
+    const next = current ? `${current} ${token}` : token;
+    setEncashmentTabForm({ ...encashmentTabForm, formula: next });
+  };
+
+  const handleApplyBuilderExpression = () => {
+    const col2Val = selectedCol2Type === 'custom_number' ? customNumberValue.trim() : selectedCol2;
+    if (!col2Val) {
+      toast.error('Please select or enter second value');
+      return;
+    }
+    const current = encashmentTabForm.formula ? encashmentTabForm.formula.trim() : '';
+    let newFormula = '';
+    if (!current) {
+      newFormula = `${selectedCol1} ${selectedOperator} ${col2Val}`;
+    } else {
+      newFormula = `${current} ${selectedOperator} ${col2Val}`;
+    }
+    setEncashmentTabForm({ ...encashmentTabForm, formula: newFormula });
+    toast.success('Added to formula');
+  };
+
+  const handleClearFormula = () => {
+    setEncashmentTabForm({ ...encashmentTabForm, formula: '' });
+  };
+
+  const handleUndoFormulaToken = () => {
+    const formula = encashmentTabForm.formula ? encashmentTabForm.formula.trim() : '';
+    if (!formula) return;
+    const tokens = formula.split(/\s+/);
+    tokens.pop();
+    setEncashmentTabForm({ ...encashmentTabForm, formula: tokens.join(' ') });
+  };
 
   const handleToggleEncashmentEmploymentTarget = (category: 'locations' | 'departments' | 'grades' | 'employeeTypes', id: any) => {
     setEncashmentTabForm(prev => {
@@ -683,6 +985,11 @@ export function LeavePoliciesPage() {
     status: 'active' as 'active' | 'inactive',
     paid_type: 'paid' as 'paid' | 'unpaid' | 'half_paid',
     annual_quota: '' as number | string,
+    color: 'Sky',
+    icon: 'Sun',
+    effective_from: '',
+    effective_to: '',
+    description: '',
 
     // Allocation Settings
     allocation: {
@@ -741,6 +1048,7 @@ export function LeavePoliciesPage() {
       restrictLeaveApplicationTillExpiry: false,
       showFromToDateForRequest: false,
       addLeaveApplicationAfterApproval: false,
+      onlyWhen: undefined as any,
     },
 
     // Application Settings
@@ -774,6 +1082,7 @@ export function LeavePoliciesPage() {
       applyRestrictionForWeekoffHoliday: false,
       cancelFutureAppliedLeaveOnResignation: false,
       customHook: '',
+      onlyWhen: undefined as any,
     },
 
     // Payroll Condition Settings
@@ -788,18 +1097,24 @@ export function LeavePoliciesPage() {
 
     // Employment Target scopes (Allocation)
     employment_allocation: {
-      locations: [] as number[],
-      departments: [] as number[],
-      grades: [] as string[],
+      companies: [] as (number | string)[],
+      locations: [] as (number | string)[],
+      departments: [] as (number | string)[],
+      subDepartments: [] as (number | string)[],
+      designations: [] as (number | string)[],
+      grades: [] as (number | string)[],
       employeeTypes: [] as string[],
       employeeStatuses: [] as string[],
     },
 
     // Employment Target scopes (Application)
     employment_application: {
-      locations: [] as number[],
-      departments: [] as number[],
-      grades: [] as string[],
+      companies: [] as (number | string)[],
+      locations: [] as (number | string)[],
+      departments: [] as (number | string)[],
+      subDepartments: [] as (number | string)[],
+      designations: [] as (number | string)[],
+      grades: [] as (number | string)[],
       employeeTypes: [] as string[],
       employeeStatuses: [] as string[],
     },
@@ -810,7 +1125,8 @@ export function LeavePoliciesPage() {
       disbursement: {
         periodicity: 'Select',
         disbursementAfter: ''
-      }
+      },
+      onlyWhen: undefined as any,
     }
   });
 
@@ -875,15 +1191,16 @@ export function LeavePoliciesPage() {
         }
       };
 
-      const [policiesRes, mappingsRes, deptsRes, desigsRes, locsRes, empOptsRes, shiftsRes, rolesRes] = await Promise.all([
+      const [policiesRes, mappingsRes, deptsRes, desigsRes, locsRes, empOptsRes, shiftsRes, rolesRes, compRes] = await Promise.all([
         apiClient.get('/leaves/policies').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
         fetchWithFallback('/settings/departments', '/departments'),
         fetchWithFallback('/settings/designations', '/designations'),
-        fetchWithFallback('/settings/locations', '/settings/branches'),
+        apiClient.get('/settings/locations').catch(() => ({ data: { data: [] } })),
         apiClient.get('/settings/employment-options').catch(() => ({ data: { data: { grades: [], employeeTypes: [], employeeStatuses: [] } } })),
         apiClient.get('/attendance/shifts/active').catch(() => ({ data: { data: [] } })),
         apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } })),
+        fetchWithFallback('/settings/companies', '/companies'),
       ]);
 
       const policiesData = policiesRes.data?.data || policiesRes.data || [];
@@ -906,6 +1223,20 @@ export function LeavePoliciesPage() {
 
       const rolesData = rolesRes.data?.data?.items || rolesRes.data?.data || rolesRes.data || [];
       setRoles(Array.isArray(rolesData) ? rolesData : []);
+
+      const compData = compRes.data?.data || compRes.data || [];
+      if (Array.isArray(compData) && compData.length > 0) {
+        setCompaniesList((prev) =>
+          prev.length > 0
+            ? prev
+            : compData
+                .map((c: any) => ({
+                  id: Number(c.companyId ?? c.company_id ?? c.id),
+                  name: String(c.name || c.companyName || c.company_name || c.employerName || `Company #${c.companyId || c.id}`).trim(),
+                }))
+                .filter((c: any) => c.name && c.name !== 'null')
+        );
+      }
 
       const empData = empOptsRes.data?.data || {};
       setGradeOptions(empData.grades || []);
@@ -996,6 +1327,93 @@ export function LeavePoliciesPage() {
     return () => document.removeEventListener('change', handleGlobalChange);
   }, []);
 
+  // Deduplicated master data getters
+  const getUniqueLocations = () => {
+    const list = locationsList.length > 0 ? locationsList : locations;
+    const seen = new Set<string>();
+    return list.filter(item => {
+      const name = item.locationName || item.location_name || item.name;
+      if (!name || seen.has(String(name).toLowerCase())) return false;
+      seen.add(String(name).toLowerCase());
+      return true;
+    });
+  };
+
+  const getUniqueDepartments = () => {
+    const list = departmentsList.length > 0 ? departmentsList : departments;
+    const seen = new Set<string>();
+    return list.filter(item => {
+      const name = item.name || item.department_name || item.departmentName;
+      if (!name || seen.has(String(name).toLowerCase())) return false;
+      seen.add(String(name).toLowerCase());
+      return true;
+    });
+  };
+
+  const getUniqueGrades = () => {
+    const list = gradesList.length > 0 ? gradesList : gradeOptions;
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const grd of list) {
+      const name = typeof grd === 'object' ? (grd.name || grd.gradeName || grd.grade) : String(grd);
+      if (name && !seen.has(String(name).toLowerCase())) {
+        seen.add(String(name).toLowerCase());
+        result.push(String(name));
+      }
+    }
+    return result;
+  };
+
+  const getUniqueEmployeeTypes = () => {
+    const list = employmentTypesList.length > 0 ? employmentTypesList : employeeTypeOptions;
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const typ of list) {
+      const name = typeof typ === 'object' ? (typ.name || typ.type) : String(typ);
+      if (name && !seen.has(String(name).toLowerCase())) {
+        seen.add(String(name).toLowerCase());
+        result.push(String(name));
+      }
+    }
+    return result;
+  };
+
+  const getUniqueEmployeeStatuses = () => {
+    const list = employmentStatusesList.length > 0 ? employmentStatusesList : employeeStatusOptions;
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const stat of list) {
+      const name = typeof stat === 'object' ? (stat.name || stat.status) : String(stat);
+      if (name && !seen.has(String(name).toLowerCase())) {
+        seen.add(String(name).toLowerCase());
+        result.push(String(name));
+      }
+    }
+    return result;
+  };
+
+  const getUniqueSubDepartments = () => {
+    const list = subDepartmentsList || [];
+    const seen = new Set<string>();
+    return list.filter((item: any) => {
+      const name = item.name || item.sub_department_name || item.subDepartmentName;
+      if (!name || seen.has(String(name).toLowerCase())) return false;
+      seen.add(String(name).toLowerCase());
+      return true;
+    });
+  };
+
+  const getUniqueDesignations = () => {
+    const list = designationsList || [];
+    const seen = new Set<string>();
+    return list.filter((item: any) => {
+      const name = item.name || item.designation_name || item.designationName;
+      if (!name || seen.has(String(name).toLowerCase())) return false;
+      seen.add(String(name).toLowerCase());
+      return true;
+    });
+  };
+
   // Fit LeavePoliciesPage inside AppShellLayout without outer overflow
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -1037,10 +1455,21 @@ export function LeavePoliciesPage() {
       const empApp = parseJson(lt.employmentApplicationSettings || lt.employment_application_settings, {});
       const enc = parseJson(lt.encashmentSettings || lt.encashment_settings, { rules: [], disbursement: { periodicity: 'Select', disbursementAfter: '' } });
 
+      const colorVal = lt.color || lt.themeColor || lt.theme_color || alloc.color || 'Sky';
+      const iconVal = lt.icon || lt.categoryIcon || lt.category_icon || alloc.icon || 'Sun';
+      const effFrom = lt.effective_from || lt.effectiveFrom || alloc.effective_from || '';
+      const effTo = lt.effective_to || lt.effectiveTo || alloc.effective_to || '';
+      const desc = lt.description || alloc.description || '';
+
       setFormData({
         leave_name: lt.leaveName || lt.leave_name || '',
         leave_code: lt.leaveCode || lt.leave_code || '',
-        leave_classification: lt.leave_classification ||
+        color: colorVal,
+        icon: iconVal,
+        effective_from: effFrom,
+        effective_to: effTo,
+        description: desc,
+        leave_classification: lt.leave_classification || lt.leaveClassification ||
           ((lt.leaveName || lt.leave_name || '').toLowerCase().includes('lwp') ? 'uncategorized' :
             (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilage') || (lt.leaveName || lt.leave_name || '').toLowerCase().includes('privilege') ? 'non-calendar' : 'calendar'),
         status: lt.status || 'active',
@@ -1049,6 +1478,10 @@ export function LeavePoliciesPage() {
 
         allocation: {
           ...alloc,
+          color: colorVal,
+          icon: iconVal,
+          effective_from: effFrom,
+          effective_to: effTo,
           considerLeaveStartYearAsFrom: alloc.considerLeaveStartYearAsFrom ?? false,
           leaveStartMonth: alloc.leaveStartMonth || '4',
           entitlementDays: alloc.entitlementDays ?? String(lt.annualQuota ?? lt.annual_quota ?? '0'),
@@ -1155,33 +1588,45 @@ export function LeavePoliciesPage() {
         },
 
         employment_allocation: {
-          ...empAlloc,
+          companies: empAlloc.companies || [],
           locations: empAlloc.locations || [],
           departments: empAlloc.departments || [],
+          subDepartments: empAlloc.subDepartments || [],
+          designations: empAlloc.designations || [],
           grades: empAlloc.grades || [],
           employeeTypes: empAlloc.employeeTypes || [],
           employeeStatuses: empAlloc.employeeStatuses || [],
+          ...empAlloc,
         },
 
         employment_application: {
-          ...empApp,
+          companies: empApp.companies || [],
           locations: empApp.locations || [],
           departments: empApp.departments || [],
+          subDepartments: empApp.subDepartments || [],
+          designations: empApp.designations || [],
           grades: empApp.grades || [],
           employeeTypes: empApp.employeeTypes || [],
           employeeStatuses: empApp.employeeStatuses || [],
+          ...empApp,
         },
 
         encashment: {
           ...enc,
           rules: enc.rules || [],
-          disbursement: enc.disbursement || { periodicity: 'Select', disbursementAfter: '' }
+          disbursement: enc.disbursement || { periodicity: 'Select', disbursementAfter: '' },
+          onlyWhen: enc.onlyWhen || enc.only_when || undefined,
         }
       });
     } else {
       setFormData({
         leave_name: '',
         leave_code: '',
+        color: 'Sky',
+        icon: 'Sun',
+        effective_from: '',
+        effective_to: '',
+        description: '',
         leave_classification: 'calendar',
         status: 'active',
         paid_type: 'paid',
@@ -1240,6 +1685,7 @@ export function LeavePoliciesPage() {
           restrictLeaveApplicationTillExpiry: false,
           showFromToDateForRequest: false,
           addLeaveApplicationAfterApproval: false,
+          onlyWhen: undefined as any,
         },
         application: {
           category: 'unplanned',
@@ -1271,6 +1717,7 @@ export function LeavePoliciesPage() {
           applyRestrictionForWeekoffHoliday: false,
           cancelFutureAppliedLeaveOnResignation: false,
           customHook: '',
+          onlyWhen: undefined as any,
         },
         payroll: {
           conditionOn: 'Choose',
@@ -1281,15 +1728,21 @@ export function LeavePoliciesPage() {
           reverseCondition: false,
         },
         employment_allocation: {
+          companies: [],
           locations: [],
           departments: [],
+          subDepartments: [],
+          designations: [],
           grades: [],
           employeeTypes: [],
           employeeStatuses: [],
         },
         employment_application: {
+          companies: [],
           locations: [],
           departments: [],
+          subDepartments: [],
+          designations: [],
           grades: [],
           employeeTypes: [],
           employeeStatuses: [],
@@ -1299,7 +1752,8 @@ export function LeavePoliciesPage() {
           disbursement: {
             periodicity: 'Select',
             disbursementAfter: ''
-          }
+          },
+          onlyWhen: undefined as any,
         }
       });
     }
@@ -1307,12 +1761,16 @@ export function LeavePoliciesPage() {
 
   const handleToggleLeaveStatus = async (lt: LeaveType) => {
     const newStatus = lt.status === 'active' ? 'inactive' : 'active';
+    setLeaveTypes((prev) =>
+      prev.map((item) => (item.id === lt.id ? { ...item, status: newStatus } : item))
+    );
     try {
       await apiClient.put(`/settings/leave-types/${lt.id}`, { status: newStatus });
       toast.success(`${lt.leaveName || lt.leave_name} status updated to ${newStatus}`);
       fetchLeaveTypes();
     } catch (err: any) {
       toast.error('Failed to update status');
+      fetchLeaveTypes();
     }
   };
 
@@ -1322,6 +1780,20 @@ export function LeavePoliciesPage() {
       toast.error('Name is required');
       return;
     }
+    const color = (formData as any).color || 'Sky';
+    const icon = (formData as any).icon || 'Sun';
+    const effective_from = (formData as any).effective_from || null;
+    const effective_to = (formData as any).effective_to || null;
+    const description = (formData as any).description || '';
+
+    const allocPayload = {
+      ...(formData.allocation || {}),
+      color,
+      icon,
+      effective_from,
+      effective_to,
+    };
+
     if (!selectedLeaveType?.id) {
       try {
         const payload = {
@@ -1330,12 +1802,12 @@ export function LeavePoliciesPage() {
           paid_type: formData.paid_type || 'paid',
           leave_classification: formData.leave_classification || 'calendar',
           status: formData.status || 'active',
-          color: (formData as any).color || 'Sky',
-          icon: (formData as any).icon || 'Sun',
-          effective_from: (formData as any).effective_from || null,
-          effective_to: (formData as any).effective_to || null,
-          description: (formData as any).description || '',
-          allocation_settings: formData.allocation,
+          color,
+          icon,
+          effective_from,
+          effective_to,
+          description,
+          allocation_settings: allocPayload,
           application_settings: formData.application,
           encashment_settings: formData.encashment,
         };
@@ -1358,18 +1830,44 @@ export function LeavePoliciesPage() {
         paid_type: formData.paid_type || 'paid',
         leave_classification: formData.leave_classification || 'calendar',
         status: formData.status || 'active',
-        color: (formData as any).color || 'Sky',
-        icon: (formData as any).icon || 'Sun',
-        effective_from: (formData as any).effective_from || null,
-        effective_to: (formData as any).effective_to || null,
-        description: (formData as any).description || '',
+        color,
+        icon,
+        effective_from,
+        effective_to,
+        description,
         annual_quota: formData.annual_quota ?? 12,
-        allocation_settings: formData.allocation,
+        allocation_settings: allocPayload,
         application_settings: formData.application,
+        payroll_settings: formData.payroll,
+        employment_allocation_settings: formData.employment_allocation,
+        employment_application_settings: formData.employment_application,
         encashment_settings: formData.encashment,
       };
       await apiClient.put(`/settings/leave-types/${selectedLeaveType.id}`, payload);
       toast.success('Leave category details updated successfully');
+      const updatedType: any = {
+        ...selectedLeaveType,
+        ...payload,
+        leaveName: payload.leave_name,
+        leave_name: payload.leave_name,
+        leaveCode: payload.leave_code,
+        leave_code: payload.leave_code,
+        color,
+        icon,
+        effective_from,
+        effective_to,
+        description,
+        allocation_settings: allocPayload,
+        allocationSettings: allocPayload,
+        employment_allocation_settings: payload.employment_allocation_settings,
+        employmentAllocationSettings: payload.employment_allocation_settings,
+        employment_application_settings: payload.employment_application_settings,
+        employmentApplicationSettings: payload.employment_application_settings,
+        payroll_settings: payload.payroll_settings,
+        payrollSettings: payload.payroll_settings,
+      };
+      setSelectedLeaveType(updatedType);
+      setLeaveTypes((prev) => prev.map(t => t.id === selectedLeaveType.id ? updatedType : t));
       fetchLeaveTypes();
       setViewMode('configure');
     } catch (err: any) {
@@ -1386,6 +1884,19 @@ export function LeavePoliciesPage() {
     }
 
     const computedQuota = parseInt(formData.allocation?.entitlementDays || String(formData.annual_quota || 0), 10) || 0;
+    const color = (formData as any).color || selectedLeaveType?.color || 'Sky';
+    const icon = (formData as any).icon || selectedLeaveType?.icon || 'Sun';
+    const effective_from = (formData as any).effective_from || selectedLeaveType?.effective_from || null;
+    const effective_to = (formData as any).effective_to || selectedLeaveType?.effective_to || null;
+    const description = (formData as any).description || selectedLeaveType?.description || '';
+
+    const allocPayload = {
+      ...(formData.allocation || {}),
+      color,
+      icon,
+      effective_from,
+      effective_to,
+    };
 
     const payload = {
       leave_name: formData.leave_name,
@@ -1410,9 +1921,14 @@ export function LeavePoliciesPage() {
         const rules = formData.encashment?.rules || [];
         return rules.some((r: any) => (parseFloat(r.maxCarryForward) || 0) > 0);
       })(),
+      color,
+      icon,
+      effective_from,
+      effective_to,
+      description,
 
       // Pass config JSONs directly
-      allocation_settings: formData.allocation,
+      allocation_settings: allocPayload,
       application_settings: formData.application,
       payroll_settings: formData.payroll,
       employment_allocation_settings: formData.employment_allocation,
@@ -1425,7 +1941,7 @@ export function LeavePoliciesPage() {
         // Update
         const res = await apiClient.put(`/settings/leave-types/${selectedLeaveType.id}`, payload);
         if (res.data?.success) {
-          toast.success('Leave settings updated successfully!');
+          toast.success('Leave settings updated successfully!', { id: 'leave-settings-save' });
           const updatedType: any = {
             ...selectedLeaveType,
             ...payload,
@@ -1433,6 +1949,11 @@ export function LeavePoliciesPage() {
             leaveName: payload.leave_name,
             leave_code: payload.leave_code,
             leaveCode: payload.leave_code,
+            color,
+            icon,
+            effective_from,
+            effective_to,
+            description,
             annual_quota: computedQuota,
             annualQuota: computedQuota,
             allocation_settings: payload.allocation_settings,
@@ -1650,13 +2171,18 @@ export function LeavePoliciesPage() {
       return;
     }
 
+    const selectedCompId = localStorage.getItem('company-context-storage')
+      ? JSON.parse(localStorage.getItem('company-context-storage') || '{}')?.state?.selectedCompanyId
+      : null;
+
     const payload = {
       name: encashmentTabForm.name,
       formula: encashmentTabForm.formula,
       limit: encashmentTabForm.limit ? parseFloat(encashmentTabForm.limit) : null,
       isActive: encashmentTabForm.isActive,
       daysBasis: encashmentTabForm.daysBasis,
-      employment: encashmentTabForm.employment
+      employment: encashmentTabForm.employment,
+      company_id: selectedCompId || undefined
     };
 
     try {
@@ -1724,17 +2250,43 @@ export function LeavePoliciesPage() {
     }
   }, [selectedEncashmentId, encashmentsList]);
 
+  const fetchEncashmentSettings = async () => {
+    setIsLoadingEncashments(true);
+    try {
+      const res = await apiClient.get('/leaves/encashment-settings');
+      if (res.data?.success) {
+        const list = res.data.data || [];
+        setEncashmentsList(list);
+        if (list.length > 0) {
+          setSelectedEncashmentId(list[0].id);
+        } else {
+          setSelectedEncashmentId(null);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch encashment settings", err);
+    } finally {
+      setIsLoadingEncashments(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'late_deduction_policy') {
       fetchLatePolicies();
     } else if (activeTab === 'late_auto_deduction') {
       fetchLateUpdations();
       fetchLateDeductionLogs();
+    } else if (activeTab === 'encashment') {
+      fetchEncashmentSettings();
     }
   }, [activeTab]);
 
   // Toggle dynamic employment selection
-  const handleToggleEmploymentTarget = (scope: 'allocation' | 'application', category: 'locations' | 'departments' | 'grades' | 'employeeTypes' | 'employeeStatuses', item: any) => {
+  const handleToggleEmploymentTarget = (
+    scope: 'allocation' | 'application',
+    category: 'companies' | 'locations' | 'departments' | 'subDepartments' | 'designations' | 'grades' | 'employeeTypes' | 'employeeStatuses',
+    item: any
+  ) => {
     const key = scope === 'allocation' ? 'employment_allocation' : 'employment_application';
     const currentList = (formData as any)[key][category] as any[];
 
@@ -1878,11 +2430,17 @@ export function LeavePoliciesPage() {
 
   // Filter Leave types list
   const filteredLeaveTypes = leaveTypes.filter(lt => {
-    const nameMatch = (lt.leaveName || lt.leave_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (lt.leaveCode || lt.leave_code || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const q = (searchQuery || '').trim().toLowerCase();
+    const name = (lt.leaveName || lt.leave_name || '').toLowerCase();
+    const code = (lt.leaveCode || lt.leave_code || '').toLowerCase();
+    const nameMatch = !q || name.includes(q) || code.includes(q);
 
-    const statusMatch = statusFilter === 'all' || lt.status === statusFilter;
-    const classMatch = classificationFilter === 'all' || lt.leave_classification === classificationFilter;
+    const statusVal = String(lt.status ?? '').toLowerCase();
+    const rawStatus = (statusVal === 'active' || statusVal === '1' || statusVal === 'true') ? 'active' : 'inactive';
+    const statusMatch = statusFilter === 'all' || rawStatus === statusFilter.toLowerCase();
+
+    const rawClass = (lt.leaveClassification || lt.leave_classification || 'calendar').toLowerCase();
+    const classMatch = classificationFilter === 'all' || rawClass === classificationFilter.toLowerCase();
 
     return nameMatch && statusMatch && classMatch;
   });
@@ -1890,28 +2448,15 @@ export function LeavePoliciesPage() {
   return (
     <div className="w-full h-full flex flex-col lg:flex-row bg-gray-50 dark:bg-gray-950 overflow-hidden">
 
-      {/* 1st COLUMN: Sidebar Sub-Navigation (Collapsible Rail) */}
-      <div className={`bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-full lg:w-48 xl:w-52'
-        }`}>
-        <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-          {!isSidebarCollapsed && (
-            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-              Administration
-            </span>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className={`h-7 w-7 p-0 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 cursor-pointer ${isSidebarCollapsed ? 'mx-auto' : ''
-              }`}
-            title={isSidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-          >
-            {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-          </Button>
+      {/* 1st COLUMN: Sidebar Sub-Navigation (Fixed Compact Rail) */}
+      <div className="w-14 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0">
+        <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-center">
+          <div className="p-1 rounded-lg text-gray-400 dark:text-gray-500" title="Leave Administration">
+            <SlidersHorizontal className="h-4 w-4" />
+          </div>
         </div>
 
-        <div className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+        <div className="flex-1 py-3 px-1.5 space-y-1.5 overflow-y-auto flex flex-col items-center">
           {[
             { id: 'leave', label: 'Categories', icon: Database },
             { id: 'policy', label: 'Policy Mappings', icon: ShieldCheck },
@@ -1925,15 +2470,13 @@ export function LeavePoliciesPage() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id as any)}
-                title={isSidebarCollapsed ? item.label : undefined}
-                className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
-                  } py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${isActive
-                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 font-bold shadow-xs'
-                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800/60'
-                  }`}
+                title={item.label}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${isActive
+                  ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400 font-bold shadow-xs'
+                  : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/60'
+                }`}
               >
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}`} />
-                {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`} />
               </button>
             );
           })}
@@ -1945,18 +2488,20 @@ export function LeavePoliciesPage() {
       {activeTab === 'leave' && (
         <div className="flex-1 flex flex-col lg:flex-row bg-slate-50/70 dark:bg-slate-950 h-full overflow-hidden">
           {/* LEFT MASTER PANEL: Leave Categories Roster */}
-          <div className={`bg-white dark:bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col h-full shrink-0 transition-all duration-300 ${isCategoriesCollapsed ? 'w-14' : 'w-full lg:w-72 xl:w-80'}`}>
+          <div className={`bg-white dark:bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800 flex flex-col h-full shrink-0 transition-all duration-200 ${isCategoriesCollapsed ? 'w-14' : 'w-full lg:w-60 xl:w-64'}`}>
             {/* Header */}
-            <div className="p-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+            <div className="p-2.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
               {!isCategoriesCollapsed ? (
                 <>
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl shadow-2xs">
-                      <Database className="h-4 w-4" />
+                  <div className="flex items-center gap-1.5">
+                    <div className="p-1 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg shadow-2xs">
+                      <Database className="h-3.5 w-3.5" />
                     </div>
-                    <div>
+                    <div className="flex items-center gap-1.5">
                       <h3 className="font-bold text-slate-900 dark:text-white text-xs">Categories</h3>
-                      <p className="text-[10px] text-slate-400 font-semibold">{filteredLeaveTypes.length} Policies Configured</p>
+                      <span className="text-[9.5px] bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-1.5 py-0.2 rounded-full">
+                        {filteredLeaveTypes.length}
+                      </span>
                     </div>
                   </div>
 
@@ -1964,10 +2509,10 @@ export function LeavePoliciesPage() {
                     <Button
                       onClick={() => setIsAddLeaveModalOpen(true)}
                       size="sm"
-                      className="h-7 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold shadow-2xs cursor-pointer flex items-center gap-1"
+                      className="h-6.5 px-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold shadow-2xs cursor-pointer flex items-center gap-1"
                       title="Add New Leave Category"
                     >
-                      <Plus className="h-3.5 w-3.5" />
+                      <Plus className="h-3 w-3" />
                       <span>New</span>
                     </Button>
 
@@ -1975,9 +2520,10 @@ export function LeavePoliciesPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => setIsCategoriesCollapsed(true)}
-                      className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-indigo-600 cursor-pointer"
+                      className="h-6.5 w-6.5 p-0 rounded-lg text-slate-400 hover:text-indigo-600 cursor-pointer"
+                      title="Collapse Categories Roster"
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <ChevronLeft className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </>
@@ -1987,66 +2533,105 @@ export function LeavePoliciesPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsCategoriesCollapsed(false)}
-                    className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-indigo-600 cursor-pointer"
+                    className="h-6.5 w-6.5 p-0 rounded-lg text-slate-400 hover:text-indigo-600 cursor-pointer"
+                    title="Expand Categories Roster"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     onClick={() => setIsAddLeaveModalOpen(true)}
                     size="sm"
-                    className="h-7 w-7 p-0 rounded-lg bg-indigo-600 text-white shadow-2xs cursor-pointer"
+                    className="h-6.5 w-6.5 p-0 rounded-lg bg-indigo-600 text-white shadow-2xs cursor-pointer"
+                    title="Add New Leave Category"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3 w-3" />
                   </Button>
                 </div>
               )}
             </div>
 
-            {!isCategoriesCollapsed && (
+            {isCategoriesCollapsed ? (
+              /* Collapsed compact leave code buttons */
+              <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 flex flex-col items-center">
+                {filteredLeaveTypes.map((lt) => {
+                  const isSelected = selectedLeaveType?.id === lt.id;
+                  const code = lt.leaveCode || lt.leave_code || 'L';
+                  const name = lt.leaveName || lt.leave_name || 'Leave';
+                  const quota = lt.annualQuota ?? lt.annual_quota ?? 0;
+                  const isPaid = (lt.paidType || lt.paid_type) !== 'unpaid';
+                  const alloc = parseJson(lt.allocationSettings || lt.allocation_settings, {});
+                  const itemColor = lt.color || lt.themeColor || lt.theme_color || alloc.color || 'Sky';
+                  const itemIcon = lt.icon || lt.categoryIcon || lt.category_icon || alloc.icon || 'Sun';
+                  const theme = getLeaveThemeColor(itemColor);
+                  const iconEmoji = getCategoryIconEmoji(itemIcon);
+
+                  return (
+                    <button
+                      key={lt.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedLeaveType(lt);
+                        if (viewMode === 'table') setViewMode('configure');
+                      }}
+                      className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-all cursor-pointer group relative ${
+                        isSelected
+                          ? `${theme.bg} ${theme.text} font-extrabold shadow-sm ring-2 ${theme.ring} border ${theme.border} scale-105`
+                          : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-slate-700 font-bold border border-slate-200/80 dark:border-slate-700/80'
+                      }`}
+                      title={`${name} (${code}) • ${quota} Days • ${isPaid ? 'Paid' : 'Unpaid'}`}
+                    >
+                      {iconEmoji ? (
+                        <span className="text-xs leading-none select-none">
+                          {iconEmoji}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] uppercase font-black tracking-tight leading-none">
+                          {code.slice(0, 4)}
+                        </span>
+                      )}
+                      <span className={`text-[7.5px] font-semibold leading-none mt-0.5 ${isSelected ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {quota}d
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
               <>
                 {/* Search & Filters */}
-                <div className="p-2.5 border-b border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="p-2 border-b border-slate-100 dark:border-slate-800 space-y-1.5">
                   <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <Search className="absolute left-2.5 top-2 h-3 w-3 text-slate-400" />
                     <input
                       type="text"
                       placeholder="Search policies..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
+                      className="w-full pl-7 pr-2 py-1 text-[11px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 font-medium"
                     />
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <select
-                      value={statusFilter}
-                      onChange={(e: any) => setStatusFilter(e.target.value)}
-                      className="flex-1 px-2 py-1 text-[10px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg font-semibold text-slate-700 dark:text-slate-300 focus:outline-none"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
-
-                    <button
-                      onClick={() => setViewMode(viewMode === 'table' ? 'configure' : 'table')}
-                      className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
-                        viewMode === 'table'
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                      }`}
-                      title="Toggle Full Table View"
-                    >
-                      {viewMode === 'table' ? '📋 Workspace' : '📊 Table View'}
-                    </button>
-                  </div>
+                  <select
+                    value={statusFilter}
+                    onChange={(e: any) => setStatusFilter(e.target.value)}
+                    className="w-full px-2 py-0.5 text-[10px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-lg font-medium text-slate-700 dark:text-slate-300 focus:outline-none h-6.5"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
                 </div>
 
                 {/* Categories List Cards */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
                   {filteredLeaveTypes.map((lt) => {
                     const isSelected = selectedLeaveType?.id === lt.id;
                     const isPaid = (lt.paidType || lt.paid_type) !== 'unpaid';
+                    const alloc = parseJson(lt.allocationSettings || lt.allocation_settings, {});
+                    const itemColor = lt.color || lt.themeColor || lt.theme_color || alloc.color || 'Sky';
+                    const itemIcon = lt.icon || lt.categoryIcon || lt.category_icon || alloc.icon || 'Sun';
+                    const theme = getLeaveThemeColor(itemColor);
+                    const iconEmoji = getCategoryIconEmoji(itemIcon);
 
                     return (
                       <div
@@ -2055,35 +2640,36 @@ export function LeavePoliciesPage() {
                           setSelectedLeaveType(lt);
                           if (viewMode === 'table') setViewMode('configure');
                         }}
-                        className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col gap-1.5 ${
+                        className={`p-2 rounded-xl border cursor-pointer transition-all duration-150 flex flex-col gap-1 ${
                           isSelected
-                            ? 'bg-gradient-to-r from-indigo-50/90 to-purple-50/60 dark:from-indigo-950/40 dark:to-purple-950/30 border-indigo-500/80 shadow-xs ring-1 ring-indigo-500/20'
+                            ? `${theme.bg} border-indigo-500/80 shadow-2xs ring-1 ring-indigo-500/20`
                             : 'bg-white dark:bg-slate-900 border-slate-200/60 dark:border-slate-800/80 hover:bg-slate-50/80 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">☀️</span>
-                            <span className={`text-xs font-bold truncate max-w-[130px] ${isSelected ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}`}>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className={`w-2 h-2 rounded-full ${theme.dot} shrink-0`} />
+                            {iconEmoji ? <span className="text-xs shrink-0 select-none">{iconEmoji}</span> : null}
+                            <span className={`text-[11px] font-bold truncate ${isSelected ? 'text-indigo-900 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}`}>
                               {lt.leaveName || lt.leave_name}
                             </span>
                           </div>
-                          <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-2 py-0.5 rounded-md">
+                          <span className="text-[9.5px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 px-1.5 py-0.2 rounded shrink-0">
                             {lt.annualQuota ?? lt.annual_quota ?? 0}d
                           </span>
                         </div>
 
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium">
-                          <span className="font-mono text-slate-500 dark:text-slate-400 font-bold">
+                        <div className="flex items-center justify-between text-[9px] text-slate-500 font-medium pl-3.5">
+                          <span className="font-mono text-slate-500 dark:text-slate-400 font-bold uppercase tracking-tight">
                             {lt.leaveCode || lt.leave_code}
                           </span>
 
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold ${isPaid ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
+                          <div className="flex items-center gap-1">
+                            <span className={`px-1.5 py-0.2 rounded text-[8.5px] font-semibold ${isPaid ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'}`}>
                               {isPaid ? 'Paid' : 'Unpaid'}
                             </span>
                             {lt.status === 'inactive' && (
-                              <span className="text-[8px] font-bold px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">Off</span>
+                              <span className="text-[7.5px] font-bold px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">Off</span>
                             )}
                           </div>
                         </div>
@@ -2100,13 +2686,23 @@ export function LeavePoliciesPage() {
             {/* VIEW 1: FULL ROSTER TABLE (Apponext Styling) */}
             {viewMode === 'table' && (
               <div className="p-6 space-y-5 max-w-7xl mx-auto w-full">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">Leave Category Directory</h2>
-                    <p className="text-xs text-slate-500">Overview of all active leave entitlements and rules across the organization.</p>
+                {/* Clean Harmonized Header */}
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 shadow-2xs shrink-0">
+                      <LayoutList className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h1 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
+                        Leave Category Directory
+                      </h1>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                        Overview of all active leave entitlements and rules across the organization.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button
                       onClick={() => setIsAddLeaveModalOpen(true)}
                       className="h-8 px-3.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs gap-1.5 cursor-pointer"
@@ -2118,10 +2714,11 @@ export function LeavePoliciesPage() {
                     <Button
                       onClick={() => setViewMode('configure')}
                       variant="outline"
-                      className="h-8 px-3.5 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 gap-1.5 cursor-pointer"
+                      className="h-8 px-3.5 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 gap-1.5 cursor-pointer shadow-2xs"
+                      title="Switch to Policy Configuration Workspace"
                     >
-                      <SlidersHorizontal className="w-3.5 h-3.5" />
-                      <span>Configure Active Policy</span>
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Policy Workspace</span>
                     </Button>
 
                     <Button
@@ -2130,10 +2727,12 @@ export function LeavePoliciesPage() {
                         fetchLeaveYearSettings();
                         setViewMode('leave-year');
                       }}
-                      className="h-8 px-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center justify-center cursor-pointer shadow-2xs"
+                      variant="outline"
+                      className="h-8 px-3 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 gap-1.5 cursor-pointer shadow-2xs"
                       title="Leave year setting"
                     >
-                      <Calendar className="w-3.5 h-3.5" />
+                      <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Leave Year</span>
                     </Button>
                   </div>
                 </div>
@@ -2157,15 +2756,25 @@ export function LeavePoliciesPage() {
                           const isPaid = (lt.paidType || lt.paid_type) !== 'unpaid';
                           const alloc = parseJson(lt.allocationSettings || lt.allocation_settings, {});
                           const entitlementType = alloc.accrualBasis === 'ratio' ? 'Attendance Ratio' : (alloc.fixedLeave ? 'Fixed Quota' : 'Request Based');
+                          const itemColor = lt.color || lt.themeColor || lt.theme_color || alloc.color || 'Sky';
+                          const itemIcon = lt.icon || lt.categoryIcon || lt.category_icon || alloc.icon || 'Sun';
+                          const theme = getLeaveThemeColor(itemColor);
+                          const iconEmoji = getCategoryIconEmoji(itemIcon);
 
                           return (
                             <TableRow key={lt.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/60">
                               <TableCell className="text-xs font-bold text-slate-900 dark:text-white py-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
-                                    ☀️
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`p-1.5 rounded-lg ${theme.bg} ${theme.text} border ${theme.border} flex items-center justify-center text-sm shadow-2xs select-none min-w-7 min-h-7`}>
+                                    {iconEmoji || <Layers className="w-3.5 h-3.5" />}
                                   </div>
-                                  <span>{lt.leaveName || lt.leave_name}</span>
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-slate-900 dark:text-white">{lt.leaveName || lt.leave_name}</span>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className={`w-1.5 h-1.5 rounded-full ${theme.dot}`} />
+                                      <span className="text-[10px] text-slate-400 font-normal">{itemColor}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 py-3">
@@ -2253,6 +2862,32 @@ export function LeavePoliciesPage() {
                 </div>
 
                 <form onSubmit={handleSaveEditLeave} className="space-y-4">
+                  {/* Live Category Identity Preview Card */}
+                  <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-2xl ${getLeaveThemeColor(formData.color).bg} ${getLeaveThemeColor(formData.color).text} border ${getLeaveThemeColor(formData.color).border} flex items-center justify-center text-2xl shadow-2xs select-none`}>
+                        {getCategoryIconEmoji(formData.icon) || <Layers className="w-5 h-5 text-slate-400" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${getLeaveThemeColor(formData.color).dot}`} />
+                          <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                            {formData.leave_name || 'Category Name Preview'}
+                          </h3>
+                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {formData.leave_code || 'CODE'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Theme: <strong className="text-slate-700 dark:text-slate-300">{formData.color || 'None'}</strong> • Icon: <strong className="text-slate-700 dark:text-slate-300">{formData.icon || 'None'}</strong>
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${getLeaveThemeColor(formData.color).badge} border ${getLeaveThemeColor(formData.color).border}`}>
+                      Live Preview
+                    </span>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Category Name *</Label>
@@ -2282,29 +2917,30 @@ export function LeavePoliciesPage() {
                     <div>
                       <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Theme Color</Label>
                       <select
-                        value={(formData as any).color || 'Sky'}
+                        value={(formData as any).color || 'None'}
                         onChange={(e) => setFormData((prev: any) => ({ ...prev, color: e.target.value }))}
                         className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold"
                       >
-                        <option value="Sky">🔵 Sky Blue</option>
-                        <option value="Indigo">🟣 Indigo</option>
-                        <option value="Emerald">🟢 Emerald Green</option>
-                        <option value="Amber">🟠 Amber Gold</option>
-                        <option value="Rose">🔴 Rose Red</option>
+                        {LEAVE_COLOR_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
                     <div>
                       <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Category Icon</Label>
                       <select
-                        value={(formData as any).icon || 'Sun'}
+                        value={(formData as any).icon || 'None'}
                         onChange={(e) => setFormData((prev: any) => ({ ...prev, icon: e.target.value }))}
                         className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold"
                       >
-                        <option value="Sun">☀️ Sun</option>
-                        <option value="Palm">🌴 Palm</option>
-                        <option value="Vacation">🏖️ Vacation</option>
-                        <option value="Hospital">🏥 Hospital</option>
+                        {LEAVE_ICON_OPTIONS.map((opt) => (
+                          <option key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -2438,31 +3074,43 @@ export function LeavePoliciesPage() {
                       return (
                         <div
                           key={item.id}
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                          className="group relative w-full bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg hover:border-indigo-200 dark:hover:border-indigo-800/60 transition-all duration-300"
                         >
-                          {/* Card Header Row */}
-                          <div className="flex items-start justify-between gap-3 w-full border-b border-slate-100 dark:border-slate-800/80 pb-3">
-                            <div className="flex-1 min-w-0 pr-1">
-                              <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                                APPLIES TO
-                              </span>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                <span className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
-                                  {scopeLabel}
-                                </span>
-                                {isDefault && (
-                                  <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 dark:bg-indigo-950/80 dark:text-indigo-300 dark:border-indigo-800 rounded-full shrink-0">
-                                    Default
-                                  </span>
-                                )}
-                              </div>
-                            </div>
+                          {/* Accent Gradient Bar */}
+                          <div className={`h-1.5 w-full ${item.status !== 'inactive' ? 'bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500' : 'bg-gradient-to-r from-slate-300 to-slate-400 dark:from-slate-700 dark:to-slate-600'}`} />
 
-                            {/* Active Switch Box */}
-                            <div className="flex items-center gap-2 shrink-0 bg-slate-50 dark:bg-slate-800/60 px-2.5 py-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                                {item.status === 'inactive' ? 'Inactive' : 'Active'}
-                              </span>
+                          <div className="p-5 space-y-4">
+                            {/* Header: Scope + Status */}
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {scopeParts.length > 0 ? scopeParts.map((part, idx) => {
+                                    const [label, countStr] = part.split(' (');
+                                    const count = countStr?.replace(')', '') || '0';
+                                    return (
+                                      <span
+                                        key={idx}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[10.5px] font-bold rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/60"
+                                      >
+                                        <span>{label}</span>
+                                        <span className="w-4 h-4 flex items-center justify-center text-[9px] font-black bg-indigo-600 text-white rounded-md">{count}</span>
+                                      </span>
+                                    );
+                                  }) : (
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-900/60">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      All Employees
+                                    </span>
+                                  )}
+                                  {isDefault && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-extrabold rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 uppercase tracking-wide">
+                                      ★ Default
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Status Toggle */}
                               <button
                                 type="button"
                                 onClick={async () => {
@@ -2474,46 +3122,48 @@ export function LeavePoliciesPage() {
                                     toast.error('Failed to toggle status');
                                   }
                                 }}
-                                className={`relative inline-flex h-4.5 w-8 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer ${
-                                  item.status !== 'inactive' ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700'
+                                className={`shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer border ${
+                                  item.status !== 'inactive'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                                 }`}
                               >
-                                <span
-                                  className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
-                                    item.status !== 'inactive' ? 'translate-x-[15px]' : 'translate-x-[2px]'
-                                  }`}
-                                />
+                                <span className={`w-1.5 h-1.5 rounded-full ${item.status !== 'inactive' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                                {item.status !== 'inactive' ? 'Active' : 'Inactive'}
                               </button>
                             </div>
-                          </div>
 
-                          {/* Start Date Body */}
-                          <div className="py-1">
-                            <span className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
-                              LEAVE YEAR STARTS
-                            </span>
-                            <div className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2.5 mt-2">
-                              <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                                <Calendar className="w-5 h-5" />
+                            {/* Hero: Start Date */}
+                            <div className="flex items-center gap-4 py-3 px-4 rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50/50 dark:from-slate-800/60 dark:to-indigo-950/30 border border-slate-100 dark:border-slate-800/80">
+                              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white shadow-md shrink-0">
+                                <Calendar className="w-6 h-6" />
                               </div>
-                              <span>{item.start_day} {item.start_month}</span>
+                              <div>
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Leave Year Starts</span>
+                                <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-tight">
+                                  {item.start_day} <span className="text-indigo-600 dark:text-indigo-400">{item.start_month}</span>
+                                </div>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Footer Edit Button */}
-                          <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              onClick={() => {
-                                setLeaveYearToEdit(item);
-                                setIsLeaveYearModalOpen(true);
-                              }}
-                              className="h-8 px-3 text-xs font-bold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                              <span>Edit</span>
-                            </Button>
+                            {/* Footer Actions */}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                ID: {item.id}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => {
+                                  setLeaveYearToEdit(item);
+                                  setIsLeaveYearModalOpen(true);
+                                }}
+                                className="h-7 px-3 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-950/50 rounded-lg flex items-center gap-1.5 cursor-pointer transition-all"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                                <span>Edit</span>
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -2525,31 +3175,48 @@ export function LeavePoliciesPage() {
 
             {/* VIEW 3: 3-TAB MASTER CONFIGURATION WORKSPACE */}
             {viewMode === 'configure' && (
-              <form onSubmit={handleSaveDetails} className="w-full max-w-4xl mx-auto px-5 py-6 space-y-6">
-                {/* Header Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-gradient-to-r from-indigo-900/90 via-slate-900 to-indigo-950 text-white shadow-sm border border-indigo-800/40">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-base font-extrabold tracking-tight">
-                        {formData.leave_name || 'Configure Leave'}
-                      </h1>
-                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
-                        {formData.leave_code || 'POLICY'}
-                      </span>
+              <form onSubmit={handleSaveDetails} className="w-full max-w-7xl mx-auto p-6 space-y-5">
+                {/* Clean Harmonized Header */}
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`p-2 rounded-xl ${getLeaveThemeColor(formData.color || selectedLeaveType?.color).bg} ${getLeaveThemeColor(formData.color || selectedLeaveType?.color).text} border ${getLeaveThemeColor(formData.color || selectedLeaveType?.color).border} shadow-2xs shrink-0 flex items-center justify-center text-lg select-none min-w-9 min-h-9`}>
+                      {getCategoryIconEmoji(formData.icon || selectedLeaveType?.icon) || <SlidersHorizontal className="w-4.5 h-4.5" />}
                     </div>
-                    <p className="text-[11px] text-indigo-200/80">
-                      Configure accrual formulas, application constraints, sandwich rules, and encashment caps.
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${getLeaveThemeColor(formData.color || selectedLeaveType?.color).dot}`} />
+                        <h1 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight truncate">
+                          {formData.leave_name || selectedLeaveType?.leaveName || 'Policy Workspace'}
+                        </h1>
+                        <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                          {formData.leave_code || 'POLICY'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                        Configure accrual formulas, application constraints, sandwich rules, and encashment caps.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setViewMode('table')}
+                      className="h-8 px-3.5 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 gap-1.5 cursor-pointer shadow-2xs"
+                      title="Switch to Directory Table View"
+                    >
+                      <LayoutList className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Directory Table</span>
+                    </Button>
+
                     <Button
                       type="button"
                       variant="outline"
                       onClick={() => setViewMode('edit')}
-                      className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-bold h-8 px-3 rounded-xl gap-1 cursor-pointer"
+                      className="h-8 px-3.5 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 gap-1.5 cursor-pointer shadow-2xs"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-3.5 h-3.5 text-slate-500" />
                       <span>Edit Identity</span>
                     </Button>
 
@@ -2561,9 +3228,9 @@ export function LeavePoliciesPage() {
                           setIsAuditModalOpen(true);
                           fetchAuditLogs();
                         }}
-                        className="bg-white/10 hover:bg-white/20 text-white border-white/20 text-xs font-bold h-8 px-3 rounded-xl gap-1 cursor-pointer"
+                        className="h-8 px-3.5 rounded-xl text-xs font-bold border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 gap-1.5 cursor-pointer shadow-2xs"
                       >
-                        <Settings className="w-3.5 h-3.5" />
+                        <Clock className="w-3.5 h-3.5 text-slate-500" />
                         <span>Audit Log</span>
                       </Button>
                     )}
@@ -2571,14 +3238,14 @@ export function LeavePoliciesPage() {
                 </div>
 
                 {/* 3 Main Segmented Configuration Tabs */}
-                <div className="flex items-center gap-2 p-1.5 bg-slate-200/60 dark:bg-slate-900/80 rounded-2xl border border-slate-300/60 dark:border-slate-800 shadow-2xs w-full sm:w-fit overflow-x-auto">
+                <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs w-full sm:w-fit overflow-x-auto">
                   <button
                     type="button"
                     onClick={() => setConfigureTab('allocation')}
                     className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
                       configureTab === 'allocation'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/40'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     <Database className="w-3.5 h-3.5" />
@@ -2590,8 +3257,8 @@ export function LeavePoliciesPage() {
                     onClick={() => setConfigureTab('application')}
                     className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
                       configureTab === 'application'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/40'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
@@ -2603,8 +3270,8 @@ export function LeavePoliciesPage() {
                     onClick={() => setConfigureTab('encashment')}
                     className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
                       configureTab === 'encashment'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-800/40'
+                        ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs border border-slate-200/80 dark:border-slate-700'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
@@ -2618,10 +3285,13 @@ export function LeavePoliciesPage() {
                     formData={formData}
                     setFormData={setFormData}
                     companies={companiesList || []}
-                    departments={departmentsList && departmentsList.length > 0 ? departmentsList : (departments || [])}
-                    locations={locationsList && locationsList.length > 0 ? locationsList : (locations || [])}
-                    gradeOptions={gradeOptions}
-                    employeeTypeOptions={employeeTypeOptions}
+                    departments={getUniqueDepartments()}
+                    locations={getUniqueLocations()}
+                    subDepartments={getUniqueSubDepartments()}
+                    designations={getUniqueDesignations()}
+                    gradeOptions={getUniqueGrades()}
+                    employeeTypeOptions={getUniqueEmployeeTypes()}
+                    employeeStatusOptions={getUniqueEmployeeStatuses()}
                     leaveTypes={leaveTypes}
                   />
                 )}
@@ -2630,10 +3300,14 @@ export function LeavePoliciesPage() {
                   <LeaveApplicationTab
                     formData={formData}
                     setFormData={setFormData}
-                    departments={departments}
-                    locations={locations}
-                    gradeOptions={gradeOptions}
-                    employeeTypeOptions={employeeTypeOptions}
+                    companies={companiesList || []}
+                    departments={getUniqueDepartments()}
+                    locations={getUniqueLocations()}
+                    subDepartments={getUniqueSubDepartments()}
+                    designations={getUniqueDesignations()}
+                    gradeOptions={getUniqueGrades()}
+                    employeeTypeOptions={getUniqueEmployeeTypes()}
+                    employeeStatusOptions={getUniqueEmployeeStatuses()}
                     leaveTypes={leaveTypes}
                   />
                 )}
@@ -2642,9 +3316,14 @@ export function LeavePoliciesPage() {
                   <LeaveEncashmentTab
                     formData={formData}
                     setFormData={setFormData}
-                    departments={departments}
-                    locations={locations}
-                    gradeOptions={gradeOptions}
+                    companies={companiesList || []}
+                    departments={getUniqueDepartments()}
+                    locations={getUniqueLocations()}
+                    subDepartments={getUniqueSubDepartments()}
+                    designations={getUniqueDesignations()}
+                    gradeOptions={getUniqueGrades()}
+                    employeeTypeOptions={getUniqueEmployeeTypes()}
+                    employeeStatusOptions={getUniqueEmployeeStatuses()}
                   />
                 )}
 
@@ -2912,16 +3591,7 @@ export function LeavePoliciesPage() {
         <div className="flex-1 flex overflow-hidden">
           {/* LEFT SIDEBAR: Encashment List */}
           <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0">
-            <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1.5 bg-white dark:bg-gray-900">
-              <select
-                value={encashmentStatusFilter}
-                onChange={(e) => setEncashmentStatusFilter(e.target.value as any)}
-                className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20"
-              >
-                <option value="all">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+            <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2 bg-white dark:bg-gray-900">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
                 <Input
@@ -2932,8 +3602,11 @@ export function LeavePoliciesPage() {
                 />
               </div>
               <select
-                className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20"
+                value={encashmentStatusFilter}
+                onChange={(e) => setEncashmentStatusFilter(e.target.value as any)}
+                className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20 font-semibold"
               >
+                <option value="all">All</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
@@ -2949,7 +3622,22 @@ export function LeavePoliciesPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setSelectedEncashmentId(null)}
+                  onClick={() => {
+                    setSelectedEncashmentId(null);
+                    setEncashmentTabForm({
+                      name: '',
+                      formula: '[NUMBER_OF_LEAVE] * [PER_DAY_SALARY]',
+                      limit: '',
+                      isActive: true,
+                      daysBasis: 30,
+                      employment: {
+                        locations: [],
+                        departments: [],
+                        grades: [],
+                        employeeTypes: [],
+                      }
+                    });
+                  }}
                   className="px-2 py-1 text-[10px] font-bold bg-[#3c8dbc] hover:bg-[#357ebd] text-white rounded transition-colors flex items-center gap-1 shadow-sm border-none cursor-pointer"
                   title="Add New Leave Encashment Policy"
                 >
@@ -2959,22 +3647,38 @@ export function LeavePoliciesPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-gray-950/20">
-              {encashmentsList.map(enc => {
-                const isActive = selectedEncashmentId && enc.id && String(selectedEncashmentId) === String(enc.id);
-                return (
-                  <button
-                    key={enc.id}
-                    onClick={() => setSelectedEncashmentId(enc.id)}
-                    className={`w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all text-xs font-bold shadow-xs ${isActive
-                      ? 'bg-[#26c6da] text-white'
-                      : 'bg-white border border-gray-100 hover:border-[#26c6da]/50 text-gray-700 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-250'
-                      }`}
-                  >
-                    <CreditCard className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
-                    <span className="truncate">{enc.name}</span>
-                  </button>
-                );
-              })}
+              {isLoadingEncashments ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-indigo-500 border-t-transparent"></div>
+                </div>
+              ) : encashmentsList
+                .filter(enc => {
+                  const matchesSearch = !encashmentSearchQuery || (enc.name && enc.name.toLowerCase().includes(encashmentSearchQuery.toLowerCase()));
+                  const isActive = enc.is_active !== undefined ? !!enc.is_active : !!enc.isActive;
+                  const matchesStatus = encashmentStatusFilter === 'all' || (encashmentStatusFilter === 'active' ? isActive : !isActive);
+                  return matchesSearch && matchesStatus;
+                })
+                .map(enc => {
+                  const isActive = selectedEncashmentId && enc.id && String(selectedEncashmentId) === String(enc.id);
+                  return (
+                    <button
+                      key={enc.id}
+                      onClick={() => setSelectedEncashmentId(enc.id)}
+                      className={`w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all text-xs font-bold shadow-xs ${isActive
+                        ? 'bg-[#26c6da] text-white'
+                        : 'bg-white border border-gray-100 hover:border-[#26c6da]/50 text-gray-700 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-250'
+                        }`}
+                    >
+                      <CreditCard className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                      <span className="truncate">{enc.name}</span>
+                    </button>
+                  );
+                })}
+              {!isLoadingEncashments && encashmentsList.length === 0 && (
+                <div className="text-center py-6 text-xs text-gray-400">
+                  No encashment rules yet. Click "+ New" to add one.
+                </div>
+              )}
             </div>
           </div>
 
@@ -3005,25 +3709,179 @@ export function LeavePoliciesPage() {
                         value={encashmentTabForm.name}
                         onChange={e => setEncashmentTabForm({ ...encashmentTabForm, name: e.target.value })}
                         className="h-10 text-xs font-semibold rounded-lg bg-white border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-[#3c8dbc]"
-                        placeholder=""
+                        placeholder="e.g. Annual Leave Encashment"
                       />
                     </div>
                   </div>
 
-                  {/* Formula */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                    <div className="md:col-span-1 pt-2">
-                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                        Formula<span className="text-red-500 font-bold">*</span>
+                  {/* Dynamic Database-Driven Formula Section */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <div className="md:col-span-1 pt-1 space-y-1">
+                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                        <Calculator className="w-4 h-4 text-indigo-600" />
+                        <span>Formula</span>
+                        <span className="text-red-500 font-bold">*</span>
                       </Label>
+                      <p className="text-[11px] text-gray-500 leading-relaxed">
+                        Construct formula using database salary heads, arithmetic operators, and divisors.
+                      </p>
                     </div>
-                    <div className="md:col-span-2">
-                      <textarea
-                        value={encashmentTabForm.formula}
-                        onChange={e => setEncashmentTabForm({ ...encashmentTabForm, formula: e.target.value })}
-                        className="w-full h-24 p-3 text-xs font-semibold bg-white border border-gray-250 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#3c8dbc] dark:bg-gray-800"
-                        placeholder="Comp1 + Comp2"
-                      />
+
+                    <div className="md:col-span-2 space-y-3">
+                      {/* Step-by-Step Expression Constructor Card */}
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 shadow-2xs">
+                        
+                        {/* 3-Step Column & Operator Selectors */}
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                          {/* Column 1 (Fetched dynamically from Database) */}
+                          <div className="sm:col-span-4">
+                            <Label className="text-[10px] font-bold text-gray-500 mb-1 block">1. Salary Head (Database)</Label>
+                            <select
+                              value={selectedCol1}
+                              onChange={(e) => setSelectedCol1(e.target.value)}
+                              className="w-full h-8 px-2 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500"
+                            >
+                              {getSalaryColumns().map(col => (
+                                <option key={col.id} value={col.id}>{col.label}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Operator */}
+                          <div className="sm:col-span-3">
+                            <Label className="text-[10px] font-bold text-gray-500 mb-1 block">2. Operator</Label>
+                            <select
+                              value={selectedOperator}
+                              onChange={(e) => setSelectedOperator(e.target.value)}
+                              className="w-full h-8 px-2 text-xs font-extrabold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-indigo-600 dark:text-indigo-400 focus:ring-1 focus:ring-indigo-500"
+                            >
+                              <option value="+">+ (Add)</option>
+                              <option value="-">- (Subtract)</option>
+                              <option value="*">* (Multiply)</option>
+                              <option value="/">/ (Divide)</option>
+                            </select>
+                          </div>
+
+                          {/* Column 2 or Custom Value */}
+                          <div className="sm:col-span-3">
+                            <div className="flex items-center justify-between mb-1">
+                              <Label className="text-[10px] font-bold text-gray-500">3. Second Value</Label>
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCol2Type('component')}
+                                  className={`px-1 py-0.2 rounded text-[9px] font-bold ${selectedCol2Type === 'component' ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'text-gray-400'}`}
+                                >
+                                  Col
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedCol2Type('custom_number')}
+                                  className={`px-1 py-0.2 rounded text-[9px] font-bold ${selectedCol2Type === 'custom_number' ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300' : 'text-gray-400'}`}
+                                >
+                                  Num
+                                </button>
+                              </div>
+                            </div>
+
+                            {selectedCol2Type === 'component' ? (
+                              <select
+                                value={selectedCol2}
+                                onChange={(e) => setSelectedCol2(e.target.value)}
+                                className="w-full h-8 px-2 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500"
+                              >
+                                {getSalaryColumns().map(col => (
+                                  <option key={col.id} value={col.id}>{col.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type="text"
+                                value={customNumberValue}
+                                onChange={(e) => setCustomNumberValue(e.target.value)}
+                                placeholder="e.g. 26, 30"
+                                className="w-full h-8 px-2 text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500"
+                              />
+                            )}
+                          </div>
+
+                          {/* Add Expression Button */}
+                          <div className="sm:col-span-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={handleApplyBuilderExpression}
+                              className="w-full h-8 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add</span>
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Presets Standard Industry Rules */}
+                        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold text-gray-500">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => setEncashmentTabForm({ ...encashmentTabForm, formula: '((Basic + DA) / 26) * LEAVE_BALANCE' })}
+                            className="px-2 py-0.5 text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded cursor-pointer"
+                          >
+                            Factory Act ((Basic + DA) / 26) * Leaves
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEncashmentTabForm({ ...encashmentTabForm, formula: '(Basic / 30) * LEAVE_BALANCE' })}
+                            className="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded cursor-pointer"
+                          >
+                            IT/Corporate (Basic / 30) * Leaves
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEncashmentTabForm({ ...encashmentTabForm, formula: '(Gross_Salary / 30) * LEAVE_BALANCE' })}
+                            className="px-2 py-0.5 text-[10px] font-bold bg-violet-50 hover:bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded cursor-pointer"
+                          >
+                            Gross Pay (Gross / 30) * Leaves
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEncashmentTabForm({ ...encashmentTabForm, formula: 'Basic + DA' })}
+                            className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700 rounded cursor-pointer"
+                          >
+                            Base Sum (Basic + DA)
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Formula Text Field */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 dark:text-gray-300">
+                          <span>Formula:</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleUndoFormulaToken}
+                              className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold cursor-pointer"
+                            >
+                              ↶ Undo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleClearFormula}
+                              className="text-[10px] text-red-500 hover:underline font-bold cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </div>
+                        <textarea
+                          value={encashmentTabForm.formula}
+                          onChange={e => setEncashmentTabForm({ ...encashmentTabForm, formula: e.target.value })}
+                          rows={2}
+                          className="w-full p-2.5 text-xs font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          placeholder="e.g. ((Basic + DA) / 26) * LEAVE_BALANCE"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -3086,51 +3944,57 @@ export function LeavePoliciesPage() {
                         <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
                             <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-250 dark:border-gray-700 grid grid-cols-2 gap-3">
-                              {sub.key === 'locations' && locations.map(loc => (
-                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                              {sub.key === 'locations' && getUniqueLocations().map(loc => {
+                                const lId = Number(loc.id);
+                                return (
+                                  <label key={lId} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={encashmentTabForm.employment?.locations?.includes(lId) || false}
+                                      onChange={() => handleToggleEncashmentEmploymentTarget('locations', lId)}
+                                      className="h-4 w-4 rounded border-gray-300 text-indigo-650"
+                                    />
+                                    {loc.locationName || loc.location_name || loc.name}
+                                  </label>
+                                );
+                              })}
+
+                              {sub.key === 'departments' && getUniqueDepartments().map(dept => {
+                                const dId = Number(dept.id);
+                                return (
+                                  <label key={dId} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={encashmentTabForm.employment?.departments?.includes(dId) || false}
+                                      onChange={() => handleToggleEncashmentEmploymentTarget('departments', dId)}
+                                      className="h-4 w-4 rounded border-gray-300 text-indigo-650"
+                                    />
+                                    {dept.name || dept.department_name || dept.departmentName}
+                                  </label>
+                                );
+                              })}
+
+                              {sub.key === 'grades' && getUniqueGrades().map(gradeName => (
+                                <label key={gradeName} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
                                   <input
                                     type="checkbox"
-                                    checked={encashmentTabForm.employment?.locations?.includes(loc.id) || false}
-                                    onChange={() => handleToggleEncashmentEmploymentTarget('locations', loc.id)}
+                                    checked={encashmentTabForm.employment?.grades?.includes(gradeName) || false}
+                                    onChange={() => handleToggleEncashmentEmploymentTarget('grades', gradeName)}
                                     className="h-4 w-4 rounded border-gray-300 text-indigo-650"
                                   />
-                                  {loc.locationName || loc.location_name || loc.name}
+                                  {gradeName}
                                 </label>
                               ))}
 
-                              {sub.key === 'departments' && departments.map(dept => (
-                                <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                              {sub.key === 'employeeTypes' && getUniqueEmployeeTypes().map(typeName => (
+                                <label key={typeName} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer capitalize">
                                   <input
                                     type="checkbox"
-                                    checked={encashmentTabForm.employment?.departments?.includes(dept.id) || false}
-                                    onChange={() => handleToggleEncashmentEmploymentTarget('departments', dept.id)}
+                                    checked={encashmentTabForm.employment?.employeeTypes?.includes(typeName) || false}
+                                    onChange={() => handleToggleEncashmentEmploymentTarget('employeeTypes', typeName)}
                                     className="h-4 w-4 rounded border-gray-300 text-indigo-650"
                                   />
-                                  {dept.name}
-                                </label>
-                              ))}
-
-                              {sub.key === 'grades' && gradeOptions.map(grd => (
-                                <label key={grd} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={encashmentTabForm.employment?.grades?.includes(grd) || false}
-                                    onChange={() => handleToggleEncashmentEmploymentTarget('grades', grd)}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
-                                  />
-                                  {grd}
-                                </label>
-                              ))}
-
-                              {sub.key === 'employeeTypes' && employeeTypeOptions.map(typ => (
-                                <label key={typ} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer capitalize">
-                                  <input
-                                    type="checkbox"
-                                    checked={encashmentTabForm.employment?.employeeTypes?.includes(typ) || false}
-                                    onChange={() => handleToggleEncashmentEmploymentTarget('employeeTypes', typ)}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
-                                  />
-                                  {typ.replace('_', ' ')}
+                                  {typeName.replace('_', ' ')}
                                 </label>
                               ))}
                             </div>
@@ -3431,7 +4295,13 @@ export function LeavePoliciesPage() {
                   {/* Available */}
                   <div className="border rounded-lg bg-white dark:bg-gray-950 p-2 h-36 overflow-y-auto">
                     <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1 border-b pb-1">Available</span>
-                    {['LWP', 'Paid leaves', 'Privilege Leave', 'Salary']
+                    {Array.from(new Set<string>([
+                      ...leaveTypes.map(l => l.leaveName || l.leave_name).filter((name): name is string => Boolean(name)),
+                      'LWP',
+                      'Paid leaves',
+                      'Privilege Leave',
+                      'Salary'
+                    ]))
                       .filter(item => !latePolicyForm.deduction_sequence.includes(item))
                       .map(item => (
                         <label key={item} className="flex items-center gap-1.5 p-0.5 hover:bg-gray-50 dark:hover:bg-gray-900 rounded cursor-pointer text-[11px] font-semibold text-gray-600 dark:text-gray-300">
@@ -3584,7 +4454,7 @@ export function LeavePoliciesPage() {
                           {orgLocation.name || orgLocation.locationName || orgLocation.location_name} (Company HQ)
                         </label>
                       )}
-                      {locations.map(loc => {
+                      {getUniqueLocations().map(loc => {
                         const lId = Number(loc.id);
                         if (orgLocation && lId === Number(orgLocation.id)) return null;
                         return (
@@ -3603,7 +4473,7 @@ export function LeavePoliciesPage() {
                           </label>
                         );
                       })}
-                      {!orgLocation && locations.length === 0 && (
+                      {!orgLocation && getUniqueLocations().length === 0 && (
                         <span className="text-[10px] text-gray-400">No locations loaded</span>
                       )}
                     </div>
@@ -3622,10 +4492,10 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateSub === 'departments' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {departments.length === 0 ? (
+                      {getUniqueDepartments().length === 0 ? (
                         <span className="text-[10px] text-gray-400">No departments loaded</span>
                       ) : (
-                        departments.map(dept => {
+                        getUniqueDepartments().map(dept => {
                           const dId = Number(dept.id);
                           return (
                             <label key={dId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
@@ -3660,37 +4530,21 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateSub === 'grades' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {gradeOptions.length === 0 ? (
-                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                      {getUniqueGrades().map(gradeName => (
+                        <label key={gradeName} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={latePolicyForm.grades.includes('NA')}
+                            checked={latePolicyForm.grades.includes(gradeName)}
                             onChange={() => {
                               const list = latePolicyForm.grades;
-                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              const newList = list.includes(gradeName) ? list.filter(x => x !== gradeName) : [...list, gradeName];
                               setLatePolicyForm({ ...latePolicyForm, grades: newList });
                             }}
                             className="rounded border-gray-300 text-indigo-650"
                           />
-                          NA
+                          {gradeName}
                         </label>
-                      ) : (
-                        gradeOptions.map(grade => (
-                          <label key={grade} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={latePolicyForm.grades.includes(grade)}
-                              onChange={() => {
-                                const list = latePolicyForm.grades;
-                                const newList = list.includes(grade) ? list.filter(x => x !== grade) : [...list, grade];
-                                setLatePolicyForm({ ...latePolicyForm, grades: newList });
-                              }}
-                              className="rounded border-gray-300 text-indigo-650"
-                            />
-                            {grade}
-                          </label>
-                        ))
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
@@ -3724,7 +4578,7 @@ export function LeavePoliciesPage() {
                                 }}
                                 className="rounded border-gray-300 text-indigo-650"
                               />
-                              {shift.shift_name || shift.shiftName}
+                              {shift.shift_name || shift.shiftName || shift.name}
                             </label>
                           );
                         })
@@ -3745,41 +4599,24 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateSub === 'employee_statuses' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {employeeStatusOptions.length === 0 ? (
-                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                      {getUniqueEmployeeStatuses().map(statusName => (
+                        <label key={statusName} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={latePolicyForm.employee_statuses.includes('NA')}
+                            checked={latePolicyForm.employee_statuses.includes(statusName)}
                             onChange={() => {
                               const list = latePolicyForm.employee_statuses;
-                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              const newList = list.includes(statusName) ? list.filter(x => x !== statusName) : [...list, statusName];
                               setLatePolicyForm({ ...latePolicyForm, employee_statuses: newList });
                             }}
                             className="rounded border-gray-300 text-indigo-650"
                           />
-                          NA
+                          {statusName}
                         </label>
-                      ) : (
-                        employeeStatusOptions.map(status => (
-                          <label key={status} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={latePolicyForm.employee_statuses.includes(status)}
-                              onChange={() => {
-                                const list = latePolicyForm.employee_statuses;
-                                const newList = list.includes(status) ? list.filter(x => x !== status) : [...list, status];
-                                setLatePolicyForm({ ...latePolicyForm, employee_statuses: newList });
-                              }}
-                              className="rounded border-gray-300 text-indigo-650"
-                            />
-                            {status}
-                          </label>
-                        ))
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
-
               </div>
             </div>
 
@@ -3932,7 +4769,7 @@ export function LeavePoliciesPage() {
                           {orgLocation.name || orgLocation.locationName || orgLocation.location_name} (Company HQ)
                         </label>
                       )}
-                      {locations.map(loc => {
+                      {getUniqueLocations().map(loc => {
                         const locId = Number(loc.id);
                         if (orgLocation && locId === Number(orgLocation.id)) return null;
                         return (
@@ -3951,7 +4788,7 @@ export function LeavePoliciesPage() {
                           </label>
                         );
                       })}
-                      {!orgLocation && locations.length === 0 && (
+                      {!orgLocation && getUniqueLocations().length === 0 && (
                         <span className="text-[10px] text-gray-400">No locations loaded</span>
                       )}
                     </div>
@@ -3970,10 +4807,10 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateUpdationSub === 'departments' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {departments.length === 0 ? (
+                      {getUniqueDepartments().length === 0 ? (
                         <span className="text-[10px] text-gray-400">No departments loaded</span>
                       ) : (
-                        departments.map(dept => {
+                        getUniqueDepartments().map(dept => {
                           const deptId = Number(dept.id);
                           return (
                             <label key={deptId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
@@ -4008,37 +4845,21 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateUpdationSub === 'grades' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {gradeOptions.length === 0 ? (
-                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                      {getUniqueGrades().map(gradeName => (
+                        <label key={gradeName} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={lateUpdationForm.grades.includes('NA')}
+                            checked={lateUpdationForm.grades.includes(gradeName)}
                             onChange={() => {
                               const list = lateUpdationForm.grades;
-                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              const newList = list.includes(gradeName) ? list.filter(x => x !== gradeName) : [...list, gradeName];
                               setLateUpdationForm({ ...lateUpdationForm, grades: newList });
                             }}
                             className="rounded border-gray-300 text-indigo-600"
                           />
-                          NA
+                          {gradeName}
                         </label>
-                      ) : (
-                        gradeOptions.map(grade => (
-                          <label key={grade} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lateUpdationForm.grades.includes(grade)}
-                              onChange={() => {
-                                const list = lateUpdationForm.grades;
-                                const newList = list.includes(grade) ? list.filter(x => x !== grade) : [...list, grade];
-                                setLateUpdationForm({ ...lateUpdationForm, grades: newList });
-                              }}
-                              className="rounded border-gray-300 text-indigo-600"
-                            />
-                            {grade}
-                          </label>
-                        ))
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
@@ -4072,7 +4893,7 @@ export function LeavePoliciesPage() {
                                 }}
                                 className="rounded border-gray-300 text-indigo-600"
                               />
-                              {shift.shift_name || shift.shiftName}
+                              {shift.shift_name || shift.shiftName || shift.name}
                             </label>
                           );
                         })
@@ -4093,37 +4914,21 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateUpdationSub === 'employee_statuses' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {employeeStatusOptions.length === 0 ? (
-                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                      {getUniqueEmployeeStatuses().map(statusName => (
+                        <label key={statusName} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
                           <input
                             type="checkbox"
-                            checked={lateUpdationForm.employee_statuses.includes('NA')}
+                            checked={lateUpdationForm.employee_statuses.includes(statusName)}
                             onChange={() => {
                               const list = lateUpdationForm.employee_statuses;
-                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              const newList = list.includes(statusName) ? list.filter(x => x !== statusName) : [...list, statusName];
                               setLateUpdationForm({ ...lateUpdationForm, employee_statuses: newList });
                             }}
                             className="rounded border-gray-300 text-indigo-600"
                           />
-                          NA
+                          {statusName}
                         </label>
-                      ) : (
-                        employeeStatusOptions.map(status => (
-                          <label key={status} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={lateUpdationForm.employee_statuses.includes(status)}
-                              onChange={() => {
-                                const list = lateUpdationForm.employee_statuses;
-                                const newList = list.includes(status) ? list.filter(x => x !== status) : [...list, status];
-                                setLateUpdationForm({ ...lateUpdationForm, employee_statuses: newList });
-                              }}
-                              className="rounded border-gray-300 text-indigo-600"
-                            />
-                            {status}
-                          </label>
-                        ))
-                      )}
+                      ))}
                     </div>
                   )}
                 </div>
@@ -4740,7 +5545,7 @@ export function LeavePoliciesPage() {
 
                         {isSubExpanded && (
                           <div className="p-3 bg-white border-t grid grid-cols-2 gap-2.5 max-h-48 overflow-y-auto">
-                            {sub.key === 'locations' && locations.map(loc => (
+                            {sub.key === 'locations' && getUniqueLocations().map(loc => (
                               <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
                                 <input
                                   type="checkbox"
@@ -4752,7 +5557,7 @@ export function LeavePoliciesPage() {
                               </label>
                             ))}
 
-                            {sub.key === 'departments' && departments.map(dept => (
+                            {sub.key === 'departments' && getUniqueDepartments().map(dept => (
                               <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
                                 <input
                                   type="checkbox"
@@ -4760,11 +5565,11 @@ export function LeavePoliciesPage() {
                                   onChange={() => handleToggleRuleEmploymentTarget('departments', dept.id)}
                                   className="h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                 />
-                                {dept.name}
+                                {dept.name || dept.department_name || dept.departmentName}
                               </label>
                             ))}
 
-                            {sub.key === 'grades' && gradeOptions.map(grd => (
+                            {sub.key === 'grades' && getUniqueGrades().map(grd => (
                               <label key={grd} className="flex items-center gap-2 text-xs font-semibold text-gray-655 cursor-pointer">
                                 <input
                                   type="checkbox"
@@ -4776,7 +5581,7 @@ export function LeavePoliciesPage() {
                               </label>
                             ))}
 
-                            {sub.key === 'employeeTypes' && employeeTypeOptions.map(typ => (
+                            {sub.key === 'employeeTypes' && getUniqueEmployeeTypes().map(typ => (
                               <label key={typ} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer capitalize">
                                 <input
                                   type="checkbox"
@@ -4788,7 +5593,7 @@ export function LeavePoliciesPage() {
                               </label>
                             ))}
 
-                            {sub.key === 'employeeStatuses' && employeeStatusOptions.map(stat => (
+                            {sub.key === 'employeeStatuses' && getUniqueEmployeeStatuses().map(stat => (
                               <label key={stat} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer capitalize">
                                 <input
                                   type="checkbox"

@@ -67,12 +67,188 @@ class AppErrorBoundary extends Component<
 }
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // Disable DevTools and Inspection
+  useEffect(() => {
+    // 1. Disable right-click context menu
+    const disableRightClick = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+    document.addEventListener('contextmenu', disableRightClick);
+
+    // 2. Disable keyboard shortcuts for DevTools
+    const disableKeys = (e: KeyboardEvent) => {
+      // F12 - DevTools
+      if (e.key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+I - Inspect Element
+      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+C - Inspect Element (Firefox)
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+J - Console
+      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+Shift+K - Console (Firefox)
+      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+        e.preventDefault();
+        return false;
+      }
+      // Ctrl+I - Inspect (some browsers)
+      if (e.ctrlKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+      }
+    };
+    document.addEventListener('keydown', disableKeys, true);
+
+    // 3. Detect if DevTools is open by checking window size
+    const checkDevTools = () => {
+      const devtools = { open: false };
+      const threshold = 160;
+
+      // Check if DevTools window opened
+      if (window.outerWidth - window.innerWidth > threshold ||
+          window.outerHeight - window.innerHeight > threshold) {
+        devtools.open = true;
+      }
+
+      if (devtools.open) {
+        console.clear();
+        document.body.innerHTML = '';
+        alert('⚠️ Inspection Disabled - Application Security\n\nAccessing browser tools is not permitted.');
+        window.location.href = '/login';
+      }
+    };
+
+    // Check DevTools every 500ms
+    const devToolsInterval = setInterval(checkDevTools, 500);
+
+    // 4. Disable text selection (optional - for extra security)
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    (document.body as any).style.msUserSelect = 'none';
+    (document.body as any).style.mozUserSelect = 'none';
+
+    // 5. Disable copy/paste for sensitive pages
+    const disableCopyPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      return false;
+    };
+    document.addEventListener('copy', disableCopyPaste);
+    document.addEventListener('cut', disableCopyPaste);
+    document.addEventListener('paste', disableCopyPaste);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('contextmenu', disableRightClick);
+      document.removeEventListener('keydown', disableKeys, true);
+      clearInterval(devToolsInterval);
+      document.removeEventListener('copy', disableCopyPaste);
+      document.removeEventListener('cut', disableCopyPaste);
+      document.removeEventListener('paste', disableCopyPaste);
+    };
+  }, []);
+
   // Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
     if (localStorage.getItem('accessToken')) {
       useAuthStore.getState().fetchCurrentUser();
     }
+
+    // Track last user ID and logout time to detect session changes
+    let lastUserId: number | null = null;
+    let lastLogoutTime = localStorage.getItem('last-logout-time');
+
+    // Re-validate auth when tab becomes visible (back from other tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+        // Check if logout happened in another tab
+        const currentLogoutTime = localStorage.getItem('last-logout-time');
+        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+          // Logout happened elsewhere - logout this session too
+          logout();
+          return;
+        }
+
+        // Check if different user logged in
+        if (user && lastUserId && user.id !== lastUserId) {
+          // Different user - force redirect
+          window.location.href = '/login?' + new Date().getTime();
+          return;
+        }
+
+        if (lastUserId === null && user) {
+          lastUserId = user.id;
+        }
+
+        if (isAuthenticated && localStorage.getItem('accessToken')) {
+          // Re-validate token is still valid
+          fetchCurrentUser().catch(() => {
+            // Token invalid, logout
+            logout();
+          });
+        }
+      }
+    };
+
+    // Check on window focus
+    const handleFocus = () => {
+      const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+      // Check if logout happened
+      const currentLogoutTime = localStorage.getItem('last-logout-time');
+      if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+        logout();
+        return;
+      }
+
+      // Check if different user logged in
+      if (user && lastUserId && user.id !== lastUserId) {
+        window.location.href = '/login?' + new Date().getTime();
+        return;
+      }
+
+      if (lastUserId === null && user) {
+        lastUserId = user.id;
+      }
+
+      if (isAuthenticated && localStorage.getItem('accessToken')) {
+        fetchCurrentUser().catch(() => {
+          logout();
+        });
+      }
+    };
+
+    // Prevent back button navigation
+    const handlePopState = (e: PopStateEvent) => {
+      const { isAuthenticated } = useAuthStore.getState();
+      if (!isAuthenticated) {
+        window.history.pushState(null, '', '/login');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   return <>{children}</>;

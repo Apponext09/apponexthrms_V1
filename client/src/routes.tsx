@@ -130,6 +130,7 @@ const LeavePoliciesPage = lazy(() => import('./features/settings/pages/LeavePoli
 const OrgLeaveSettings = lazy(() => import('./features/settings/pages/OrgLeaveSettings').then(m => ({ default: m.OrgLeaveSettings })));
 const AttendanceModulePage = lazy(() => import('./features/settings/pages/AttendanceModulePage').then(m => ({ default: m.AttendanceModulePage })));
 const MastersHubPage = lazy(() => import('./features/settings/pages/MastersHubPage').then(m => ({ default: m.MastersHubPage })));
+const IdCardDesignerPage = lazy(() => import('./features/settings/pages/IdCardDesignerPage').then(m => ({ default: m.IdCardDesignerPage })));
 const AdminConfigurationPage = lazy(() => import('./features/settings/pages/AdminConfigurationPage').then(m => ({ default: m.AdminConfigurationPage })));
 const OnboardingPage = lazy(() => import('./features/employee-lifecycle/pages/OnboardingPage').then(m => ({ default: m.OnboardingPage })));
 const TransfersPage = lazy(() => import('./features/employee-lifecycle/pages/TransfersPage').then(m => ({ default: m.TransfersPage })));
@@ -199,44 +200,16 @@ function PageLoader() {
 }
 
 function RootRedirect() {
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
 
+  // If not authenticated, go to login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  const roles = user?.roles || [];
-
-  if (roles.includes('super_admin')) {
-    return <Navigate to="/superadmin/dashboard" replace />;
-  }
-  // CEO and HR (organization_admin, ceo, hr_manager, hr_admin, hr) — all go to Admin portal
-  if (
-    roles.includes('organization_admin') ||
-    roles.includes('ceo') ||
-    roles.includes('hr_manager') ||
-    roles.includes('hr_admin') ||
-    roles.includes('hr')
-  ) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  // Support persona — uses the dedicated /hr/* portal
-  if (roles.includes('support')) {
-    return <Navigate to="/hr/dashboard" replace />;
-  }
-  if (roles.includes('department_head') || roles.includes('manager')) {
-    return <Navigate to="/manager/dashboard" replace />;
-  }
-  if (roles.includes('team_lead')) {
-    return <Navigate to="/team-lead/dashboard" replace />;
-  }
-  if (roles.includes('intern')) {
-    return <Navigate to="/intern/dashboard" replace />;
-  }
-  if (roles.includes('consultant')) {
-    return <Navigate to="/consultant/dashboard" replace />;
-  }
-
+  // If authenticated, stay on root (/) - don't auto-redirect
+  // User will see 404 or can manually navigate to their desired dashboard
+  // This prevents unintended redirects when accessing URLs directly
   return <Navigate to="/employee/dashboard" replace />;
 }
 
@@ -260,11 +233,12 @@ export function AppRoutes() {
 
       {/* ─────────────────────────────────────────────────
           HR MANAGER PORTAL  (/hr/*)
-          Rose-accented sidebar — full HR tool access
+          Rose-accented sidebar — HR manager tool access ONLY
+          hr_manager role ONLY (not organization_admin or ceo)
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['hr_manager']}>
             <HRLayout />
           </ProtectedRoute>
         }
@@ -388,11 +362,12 @@ export function AppRoutes() {
 
       {/* ─────────────────────────────────────────────────
           MANAGER / DEPT HEAD PORTAL  (/manager/*)
-          Violet-accented sidebar — department management
+          Violet-accented sidebar — department management ONLY
+          manager & department_head roles ONLY (not admin roles)
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['department_head', 'manager']}>
             <ManagerLayout />
           </ProtectedRoute>
         }
@@ -429,11 +404,12 @@ export function AppRoutes() {
 
       {/* ─────────────────────────────────────────────────
           TEAM LEAD PORTAL  (/team-lead/*)
-          Emerald-accented sidebar — team management
+          Emerald-accented sidebar — team management ONLY
+          team_lead role ONLY (not manager or admin roles)
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['team_lead']}>
             <TeamLeadLayout />
           </ProtectedRoute>
         }
@@ -460,31 +436,31 @@ export function AppRoutes() {
 
       {/* ─────────────────────────────────────────────────
           ADMIN PANEL  (AppShellLayout)
-          Used by: CEO (organization_admin) + HR (hr_admin/hr)
-          Full admin access — both personas share this portal
+          ADMIN-LEVEL ONLY: CEO, HR Admin, Super Admin
+          Full admin access — for CEO and HR personas only
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'team_lead', 'super_admin', 'employee'] as any}>
+          <ProtectedRoute allowedRoles={['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'super_admin']}>
             <AppShellLayout />
           </ProtectedRoute>
         }
       >
-        {/* Approvals generic shortcut */}
+        {/* Approvals generic shortcut - Admin only */}
         <Route path="/approvals" element={<ApprovalInboxPage />} />
         <Route path="/approvals/dashboard" element={<ApprovalsDashboardPage />} />
 
-        {/* Dashboard — smart redirects by role */}
+        {/* Dashboard — ADMIN ONLY */}
         <Route path="/dashboard" element={<DashboardPage />} />
 
-        {/* Employee Management */}
+        {/* Employee Management — ADMIN ONLY */}
         <Route path="/employees" element={<EmployeeListPage />} />
         <Route path="/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
         <Route path="/org-structure" element={<OrgStructurePage />} />
 
-        {/* Attendance Admin & Self-Service */}
+        {/* Attendance Admin — ADMIN ONLY */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
         <Route path="/attendance/locations" element={<HRAttendanceLocationPage />} />
@@ -497,14 +473,12 @@ export function AppRoutes() {
         <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/regularization-logs" element={<AdminRegularizationLogsPage />} />
         <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
-        <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
-        <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
         {/* CEO Face Punch Terminal */}
         <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
 
-        {/* Leaves */}
+        {/* Leaves Self-Service */}
         <Route path="/leaves" element={<MyLeavesPage />} />
         <Route path="/leaves/my-leaves" element={<MyLeavesPage />} />
         <Route path="/leaves/history" element={<MyLeavesPage />} />
@@ -515,11 +489,12 @@ export function AppRoutes() {
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/encashment" element={<LeaveEncashmentPage />} />
 
+        {/* Leave Admin Reports — ADMIN ONLY */}
         <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
         <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
         <Route path="/holidays" element={<HolidayCalendarsPage />} />
 
-        {/* Payroll Admin */}
+        {/* Payroll Admin — ADMIN ONLY */}
         <Route path="/payroll" element={<PayrollDashboard />} />
         <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
         <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
@@ -537,7 +512,6 @@ export function AppRoutes() {
         <Route path="/payroll/processing" element={<PayrollProcessing />} />
         <Route path="/payroll-processing" element={<PayrollProcessing />} />
         <Route path="/payroll/reports" element={<PayrollReportsPage />} />
-        <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
         <Route path="/payroll/loan-types" element={<LoanManagement />} />
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
@@ -546,14 +520,12 @@ export function AppRoutes() {
         <Route path="/payroll/gratuity" element={<GratuityPolicyPage />} />
         <Route path="/gratuity" element={<GratuityPolicyPage />} />
         <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
-        <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
-        <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
         <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
         <Route path="/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
 
-        {/* Recruitment */}
+        {/* Recruitment Admin — ADMIN ONLY */}
         <Route path="/recruitment" element={<Navigate to="/recruitment/dashboard" replace />} />
         <Route path="/recruitment/dashboard" element={<RecruitmentDashboard />} />
         <Route path="/recruitment/mrf-request" element={<MrfRequestPage />} />
@@ -569,7 +541,7 @@ export function AppRoutes() {
         <Route path="/recruitment/referrals" element={<ReferralManagementPage />} />
         <Route path="/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
 
-        {/* Asset Management Admin */}
+        {/* Asset Management Admin — ADMIN ONLY */}
         <Route path="/assets" element={<AssetDashboard />} />
         <Route path="/assets/list" element={<AssetList />} />
         <Route path="/assets/:id" element={<AssetDetails />} />
@@ -581,7 +553,7 @@ export function AppRoutes() {
         <Route path="/assets/reports" element={<Reports />} />
         <Route path="/assets/analytics" element={<Analytics />} />
 
-        {/* Performance Admin */}
+        {/* Performance Admin — ADMIN ONLY */}
         <Route path="/performance" element={<PerformanceDashboard />} />
         <Route path="/performance/goals" element={<GoalManagementPage />} />
         <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
@@ -593,7 +565,7 @@ export function AppRoutes() {
         <Route path="/performance/recognition" element={<RecognitionDashboardPage />} />
         <Route path="/performance/analytics" element={<PerformanceAnalyticsPage />} />
 
-        {/* Workflow */}
+        {/* Workflow Admin — ADMIN ONLY */}
         <Route path="/workflow" element={<WorkflowSettingsPage />} />
         <Route path="/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/workflows/list" element={<WorkflowListPage />} />
@@ -612,7 +584,7 @@ export function AppRoutes() {
         <Route path="/notifications" element={<NotificationCenterPage />} />
         <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
 
-        {/* HR Operations — Requests & Configuration (stays within CEO/HR admin shell) */}
+        {/* HR Operations & Configuration — ADMIN ONLY */}
         <Route path="/hr-operations/requests" element={<EmployeeRequestsPage />} />
         <Route path="/requests" element={<EmployeeRequestsPage />} />
         <Route path="/configuration" element={<AdminConfigurationPage />} />
@@ -620,7 +592,7 @@ export function AppRoutes() {
         <Route path="/settings/configuration" element={<AdminConfigurationPage />} />
         <Route path="/admin/configuration" element={<AdminConfigurationPage />} />
 
-        {/* Reports & Analytics */}
+        {/* Reports & Analytics — ADMIN ONLY */}
         <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
@@ -631,7 +603,7 @@ export function AppRoutes() {
         <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
         <Route path="/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
 
-        {/* Settings & Profile */}
+        {/* Settings & Configuration — ADMIN ONLY */}
         <Route path="/profile" element={<CompanyProfilePage />} />
         <Route path="/settings" element={<GeneralSettingsPage />} />
         <Route path="/settings/general" element={<GeneralSettingsPage />} />
@@ -642,6 +614,8 @@ export function AppRoutes() {
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
+        <Route path="/settings/id-card-designer" element={<IdCardDesignerPage />} />
+        <Route path="/settings/id-card-templates" element={<IdCardDesignerPage />} />
         <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
         <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
@@ -665,6 +639,7 @@ export function AppRoutes() {
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
           <Route path="workflows" element={<WorkflowSettingsPage />} />
+          <Route path="id-card-designer" element={<IdCardDesignerPage />} />
           <Route path="modules" element={<ModuleManagementPage />} />
           <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>
@@ -689,19 +664,19 @@ export function AppRoutes() {
       </Route>
 
       {/* ─────────────────────────────────────────────────
-          EMPLOYEE + SHARED PORTAL ROUTES
-          (EmployeeLayout — used by all roles for self-service)
+          EMPLOYEE PORTAL ROUTES
+          (EmployeeLayout — self-service for employees only)
+          Excludes: organization_admin, ceo, hr_admin, hr, hr_manager
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['employee', 'intern', 'consultant']}>
             <EmployeeLayout />
           </ProtectedRoute>
         }
       >
         <Route path="/employee" element={<Navigate to="/employee/dashboard" replace />} />
         <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
-        <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/employee/profile" element={<ProfilePage />} />
         <Route path="/employee/lifecycle" element={<MyLifecyclePage />} />
         <Route path="/employee/lifecycle/*" element={<MyLifecyclePage />} />
