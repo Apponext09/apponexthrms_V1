@@ -43,20 +43,95 @@ export class NotificationRepository extends BaseRepository<Notification> {
     userId: number,
     options: any = {}
   ): Promise<{ items: Notification[]; meta: any }> {
-    return this.list(ctx, { ...options, filters: { recipient_id: userId } });
+    const user = await this.db('users').where('id', userId).first().catch(() => null);
+    const employeeId = user?.employee_id;
+    let userRoles: string[] = [];
+    if (typeof user?.roles === 'string') {
+      try { userRoles = JSON.parse(user.roles); } catch { userRoles = [user.roles]; }
+    } else if (Array.isArray(user?.roles)) {
+      userRoles = user.roles;
+    }
+    const isSuperOrAdmin = userRoles.includes('organization_admin') || 
+                           userRoles.includes('super_admin') || 
+                           userRoles.includes('hr_admin') ||
+                           userRoles.includes('hr') ||
+                           userRoles.includes('hr_manager');
+
+    const page = Number(options?.page) || 1;
+    const pageSize = Number(options?.pageSize) || 20;
+
+    let q = this.query(ctx)
+      .whereNull('notifications.deleted_at')
+      .where((builder) => {
+        builder.where('notifications.recipient_id', userId);
+        if (employeeId) {
+          builder.orWhere('notifications.recipient_id', employeeId);
+        }
+        builder.orWhereNull('notifications.recipient_id');
+        if (isSuperOrAdmin) {
+          builder.orWhere('notifications.created_by', userId);
+        }
+      });
+
+    if (options?.filters?.status) {
+      q = q.where('notifications.status', options.filters.status);
+    }
+
+    const countRes = await q.clone().count('* as count').first();
+    const total = Number((countRes as any)?.count || 0);
+
+    const items = await q
+      .orderBy('notifications.created_at', 'desc')
+      .offset((page - 1) * pageSize)
+      .limit(pageSize);
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasMore: page * pageSize < total,
+        totalPages: Math.ceil(total / pageSize),
+      }
+    };
   }
 
   /**
    * Get unread count for user
    */
   async getUnreadCount(ctx: TenantContext, userId: number): Promise<number> {
+    const user = await this.db('users').where('id', userId).first().catch(() => null);
+    const employeeId = user?.employee_id;
+    let userRoles: string[] = [];
+    if (typeof user?.roles === 'string') {
+      try { userRoles = JSON.parse(user.roles); } catch { userRoles = [user.roles]; }
+    } else if (Array.isArray(user?.roles)) {
+      userRoles = user.roles;
+    }
+    const isSuperOrAdmin = userRoles.includes('organization_admin') || 
+                           userRoles.includes('super_admin') || 
+                           userRoles.includes('hr_admin') ||
+                           userRoles.includes('hr') ||
+                           userRoles.includes('hr_manager');
+
     const result = await this.query(ctx)
-      .where('recipient_id', userId)
-      .whereNull('read_at')
+      .whereNull('notifications.deleted_at')
+      .whereNull('notifications.read_at')
+      .where((builder) => {
+        builder.where('notifications.recipient_id', userId);
+        if (employeeId) {
+          builder.orWhere('notifications.recipient_id', employeeId);
+        }
+        builder.orWhereNull('notifications.recipient_id');
+        if (isSuperOrAdmin) {
+          builder.orWhere('notifications.created_by', userId);
+        }
+      })
       .count('* as count')
       .first();
 
-    return (result as any)?.count || 0;
+    return Number((result as any)?.count || 0);
   }
 
   /**

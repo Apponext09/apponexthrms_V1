@@ -88,6 +88,7 @@ import { JobManagement } from './features/recruitment/pages/JobManagement';
 import { CandidateManagement } from './features/recruitment/pages/CandidateManagement';
 import { AssessmentManagementPage } from './features/recruitment/pages/AssessmentManagementPage';
 import { OfferManagementPage } from './features/recruitment/pages/OfferManagementPage';
+import { LetterManagementPage } from './features/letters/pages/LetterManagementPage';
 import { InterviewCalendarPage } from './features/recruitment/pages/InterviewCalendarPage';
 import { ReferralManagementPage } from './features/recruitment/pages/ReferralManagementPage';
 import { CareersPortalPage } from './features/recruitment/pages/CareersPortalPage';
@@ -358,6 +359,7 @@ export function AppRoutes() {
         <Route path="/hr/recruitment/applicant-tracker" element={<ApplicantTrackerPage />} />
         <Route path="/hr/recruitment/assessments" element={<AssessmentManagementPage />} />
         <Route path="/hr/recruitment/offers" element={<OfferManagementPage />} />
+        <Route path="/hr/letters" element={<LetterManagementPage />} />
         <Route path="/hr/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/hr/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/hr/recruitment/referrals" element={<ReferralManagementPage />} />
@@ -572,6 +574,8 @@ export function AppRoutes() {
         <Route path="/recruitment/applicant-tracker" element={<ApplicantTrackerPage />} />
         <Route path="/recruitment/assessments" element={<AssessmentManagementPage />} />
         <Route path="/recruitment/offers" element={<OfferManagementPage />} />
+        <Route path="/letters" element={<LetterManagementPage />} />
+        <Route path="/employee-lifecycle/letters" element={<LetterManagementPage />} />
         <Route path="/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/recruitment/referrals" element={<ReferralManagementPage />} />

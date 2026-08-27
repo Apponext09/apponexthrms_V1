@@ -117,6 +117,7 @@ router.get('/interviews/templates', requirePermission('recruitment.interview.rea
 router.post('/interviews', requirePermission('recruitment.interview.write'), recruitmentController.scheduleInterview);
 router.post('/interviews/:interviewId/decision', requirePermission('recruitment.interview.write'), recruitmentController.recordInterviewDecision);
 router.patch('/interviews/:interviewId/reschedule', requirePermission('recruitment.interview.write'), recruitmentController.rescheduleInterview);
+router.post('/interviews/:interviewId/complete', requireInterviewFeedbackPermission, recruitmentController.completeInterview);
 router.post('/interviews/:interviewId/cancel', requirePermission('recruitment.interview.write'), recruitmentController.cancelInterview);
 router.get('/applications/:applicationId/interviews', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewsByApplication);
 router.get('/applications/:applicationId/interview-rounds', requireInterviewReadOrAssigned, recruitmentController.getCandidateRoundsSummary);

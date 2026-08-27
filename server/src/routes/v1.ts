@@ -18,6 +18,7 @@ import marketplaceRoutes from '../modules/marketplace/marketplace.routes';
 import licensingRoutes from '../modules/licensing/licensing.routes';
 import superAdminRoutes from '../modules/superadmin/superadmin.routes';
 import { interviewRouter } from '../modules/employee-lifecycle/routes/InterviewRoutes';
+import { lettersRouter } from '../modules/letters/letters.routes';
 import teamLeadRoutes from '../modules/team-lead/team-lead.routes';
 import managerRoutes from '../modules/manager/manager.routes';
 import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
@@ -62,6 +63,7 @@ router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
+router.use('/letters', lettersRouter);
 router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
 
 /**

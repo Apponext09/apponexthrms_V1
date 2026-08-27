@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Briefcase, Eye, CheckCircle, AlertTriangle, Link2, Palette, Sparkles
@@ -203,10 +204,10 @@ export const JobManagement: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="flex-1 space-y-6 max-w-full p-6 min-h-[calc(100vh-4rem)]">
       
       {/* ── Top Header Section ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
             <Briefcase className="w-5 h-5" />
@@ -233,37 +234,36 @@ export const JobManagement: React.FC = () => {
             Create Job
           </Button>
           
-          <div className="relative">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs"
-              title="Configure Table Columns"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
-            {/* Settings Popover */}
-            {isSettingsOpen && (
-              <div className="absolute right-0 top-12 w-64 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="p-3 bg-muted/50 border-b border-border">
-                  <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
-                </div>
-                <div className="p-2 max-h-64 overflow-y-auto space-y-1">
-                  {ALL_CONFIGURABLE_COLUMNS.map(col => (
-                    <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
-                      <input 
-                        type="checkbox" 
-                        checked={visibleColumns.includes(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                        className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
-                      />
-                      <span>{col.label}</span>
-                    </label>
-                  ))}
-                </div>
+          <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs cursor-pointer"
+                title="Configure Table Columns"
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent align="end" className="w-64 p-0 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+              <div className="p-3 bg-muted/50 border-b border-border">
+                <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
               </div>
-            )}
-          </div>
+              <div className="p-2 max-h-64 overflow-y-auto space-y-1">
+                {ALL_CONFIGURABLE_COLUMNS.map(col => (
+                  <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={visibleColumns.includes(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
+                    />
+                    <span>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 

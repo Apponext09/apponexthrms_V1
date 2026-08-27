@@ -10,11 +10,11 @@ export async function sendMail(options: {
   replyTo?: string;
   organizationId?: number;
 }): Promise<boolean> {
-  let host = process.env.SMTP_HOST;
+  let host = (process.env.SMTP_HOST || '').trim();
   let port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
-  let user = process.env.SMTP_USER;
-  let pass = process.env.SMTP_PASS;
-  let from = options.from || process.env.SMTP_FROM || `"Apponext HRMS" <noreply@apponexthrms.com>`;
+  let user = (process.env.SMTP_USER || '').trim();
+  let pass = (process.env.SMTP_PASS || '').trim();
+  let from = options.from || process.env.SMTP_FROM || `"Apponext HRMS" <${user || 'noreply@apponexthrms.com'}>`;
 
   // Dynamic Per-Tenant Organization Settings Lookup
   if (options.organizationId) {
@@ -31,7 +31,7 @@ export async function sendMail(options: {
         }
         if (org.sender_email || org.name) {
           const senderName = org.sender_name || org.name || 'HR Team';
-          const senderMail = org.sender_email || org.email || 'noreply@apponexthrms.com';
+          const senderMail = org.sender_email || org.email || user || 'noreply@apponexthrms.com';
           from = options.from || `"${senderName}" <${senderMail}>`;
         }
       }
@@ -42,20 +42,11 @@ export async function sendMail(options: {
 
   const recipients = Array.isArray(options.to) ? options.to.join(', ') : options.to;
 
-  logger.info(`[MailService] Attempting to send email to [${recipients}], Subject: "${options.subject}"`);
-
-  // Log the HTML content for development/debug visibility
-  console.log(`\n=================== SENT MAIL SIMULATION ===================`);
-  console.log(`To:       ${recipients}`);
-  console.log(`From:     ${from}`);
-  console.log(`Reply-To: ${options.replyTo || from}`);
-  console.log(`Subject:  ${options.subject}`);
-  console.log(`Body (HTML):\n${options.html}`);
-  console.log(`============================================================\n`);
+  logger.info(`[MailService] Sending email → To: [${recipients}], Subject: "${options.subject}"`);
 
   if (!host || !user || !pass) {
-    logger.warn('[MailService] SMTP credentials missing in settings/.env. Email details logged to console simulation.');
-    return true;
+    logger.warn('[MailService] SMTP credentials missing — email NOT sent. Configure SMTP_HOST/USER/PASS in .env');
+    return false;
   }
 
   try {

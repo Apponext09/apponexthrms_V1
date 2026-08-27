@@ -295,6 +295,12 @@ export class RecruitmentController {
     res.json({ success: true, data: application });
   });
 
+  listPipelineStages = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const stages = await this.recruitmentService.getPipelineStages(ctx);
+    res.json({ success: true, data: stages });
+  });
+
   // ==================== Interview Endpoints ====================
 
   scheduleInterview = asyncHandler(async (req: Request, res: Response) => {
@@ -1087,18 +1093,36 @@ export class RecruitmentController {
 
   getDashboard = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
     res.json({ success: true, data: dashboard });
   });
 
   getMetrics = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
-    res.json({ success: true, data: metrics });
+    res.json({ success: true, data: dashboard });
   });
 
   // ==================== Additional Candidate Endpoints ====================
@@ -1200,6 +1224,34 @@ export class RecruitmentController {
       success: true,
       data: result,
       message: `Interview decision '${decision}' recorded successfully`,
+    });
+  });
+
+  completeInterview = asyncHandler(async (req: Request, res: Response) => {
+    const rawId = req.params.interviewId || req.body.interviewId;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      updated_at: new Date(),
+    });
+
+    const updated = await db('interviews').where('id', interviewId).first();
+    res.json({
+      success: true,
+      message: 'Interview marked as completed successfully',
+      data: updated,
     });
   });
 
@@ -2509,20 +2561,6 @@ export class RecruitmentController {
 
     const skills = await skillMasterService.listSkills(ctx);
     res.json({ success: true, data: skills });
-  });
-
-  // ==================== Dashboard & Analytics ====================
-
-  getDashboard = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const dashboard = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: dashboard });
-  });
-
-  getMetrics = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: metrics });
   });
 
   getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {

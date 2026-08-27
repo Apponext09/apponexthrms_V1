@@ -65,8 +65,15 @@ export function initializeKnex(): Knex {
     wrapIdentifier,
   });
 
-  instance.on('query-error', () => {
-    console.error('[KNEX ERROR] Database operation failed');
+  // Only log query errors at debug level — callers handle errors via try/catch
+  instance.on('query-error', (_error: any, query: any) => {
+    // Suppress noisy duplicate column / table-already-exists errors from schema seeds
+    const sql = query?.sql || '';
+    if (sql.includes('ALTER TABLE') || sql.includes('CREATE TABLE')) return;
+    // For non-schema errors, log at debug level (visible only with LOG_LEVEL=debug)
+    if (process.env.LOG_LEVEL === 'debug') {
+      console.error('[KNEX DEBUG] Query error:', sql.substring(0, 120));
+    }
   });
 
   return instance;

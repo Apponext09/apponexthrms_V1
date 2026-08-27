@@ -20,6 +20,7 @@ import { useNotifications } from '@/features/notifications/hooks/useNotification
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 // ── Accent palette for HR (rose/pink) ────────────────────────────────────────
@@ -132,6 +133,7 @@ const HR_NAV = [
       { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
       { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
       { name: 'Assessment Management', href: '/hr/recruitment/assessments', icon: Code2 },
+      { name: 'Offer Management', href: '/recruitment/offers', icon: FileCheck },
       { name: 'Interview Schedule', href: '/hr/recruitment/interview-schedule', icon: Calendar },
       { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
     ],
@@ -503,14 +505,7 @@ export function HRLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
             <div className="w-px h-5 bg-border mx-1" />
 

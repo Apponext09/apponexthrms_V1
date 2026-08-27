@@ -1772,6 +1772,7 @@ export const MrfRequestPage: React.FC = () => {
         const response = await apiClient.delete(`/recruitment/mrf/${id}`);
         if (response.data?.success) {
           toast.success(`${recordToDelete?.mrNumber} deleted successfully`);
+          setDataList(prev => (Array.isArray(prev) ? prev.filter((item: any) => item.id !== id) : []));
           fetchMrfs();
         } else {
           toast.error(response.data?.message || 'Failed to delete MRF request');

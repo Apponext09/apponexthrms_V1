@@ -23,13 +23,13 @@ export class AnalyticsService {
   async calculateTimeToHire(ctx: TenantContext, jobId?: number): Promise<number> {
     // Get all hired applications
     const allApplications = await this.applicationRepo.list(ctx);
-    const hiredApplications = allApplications.items.filter((a) => a.application_status === 'hired');
+    const hiredApplications = allApplications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'hired');
 
     if (hiredApplications.length === 0) return 0;
 
     let targetApplications = hiredApplications;
     if (jobId) {
-      targetApplications = hiredApplications.filter((a) => a.job_id === jobId);
+      targetApplications = hiredApplications.filter((a: any) => (a.job_id || a.jobId) === jobId);
     }
 
     if (targetApplications.length === 0) return 0;
@@ -39,14 +39,14 @@ export class AnalyticsService {
 
     let totalDays = 0;
     for (const app of targetApplications) {
-      const appliedDate = new Date(app.applied_at);
+      const appliedDate = new Date(app.applied_at || app.appliedAt || app.created_at || app.createdAt || new Date());
       
       const offer = await db('offers')
         .where('application_id', app.id)
         .where('status', 'accepted')
         .first();
 
-      const endHireDate = offer && offer.accepted_at ? new Date(offer.accepted_at) : new Date();
+      const endHireDate = offer && (offer.accepted_at || offer.acceptedAt) ? new Date(offer.accepted_at || offer.acceptedAt) : new Date();
       const days = Math.floor((endHireDate.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24));
       totalDays += Math.max(0, days);
     }
@@ -56,10 +56,10 @@ export class AnalyticsService {
 
   async calculateTimeToFill(ctx: TenantContext, jobId: number): Promise<number> {
     const job = await this.jobRepo.getById(ctx, jobId);
-    if (!job || !job.published_at) return 0;
+    if (!job || !(job.published_at || (job as any).publishedAt)) return 0;
 
-    const publishedDate = new Date(job.published_at);
-    const closedDate = job.closed_at ? new Date(job.closed_at) : new Date();
+    const publishedDate = new Date(job.published_at || (job as any).publishedAt);
+    const closedDate = (job.closed_at || (job as any).closedAt) ? new Date(job.closed_at || (job as any).closedAt) : new Date();
     const days = Math.floor((closedDate.getTime() - publishedDate.getTime()) / (1000 * 60 * 60 * 24));
 
     return days;
@@ -85,10 +85,11 @@ export class AnalyticsService {
 
     // Get count of hired candidates
     const hiredCountRes = await db('applications')
-      .where({ organization_id: ctx.organizationId, application_status: 'hired' })
+      .where('organization_id', ctx.organizationId)
+      .whereRaw("LOWER(COALESCE(application_status, '')) = 'hired'")
       .count('id as count')
       .first();
-    const hiredCount = Number(hiredCountRes?.count || 0);
+    const hiredCount = Number(hiredCountRes?.count || (hiredCountRes as any)?.count || 0);
 
     if (hiredCount === 0) {
       return 0;
@@ -98,7 +99,6 @@ export class AnalyticsService {
     return Math.round(totalCost / hiredCount);
   }
 
-
   async getSourceEffectiveness(ctx: TenantContext): Promise<Record<string, any>> {
     const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
     const allCandidates = await this.candidateRepo.list(ctx, { pageSize: 10000 });
@@ -106,7 +106,7 @@ export class AnalyticsService {
     const sourceStats: Record<string, any> = {};
 
     for (const candidate of allCandidates.items) {
-      const source = candidate.source;
+      const source = candidate.source || (candidate as any).appliedFromSource || (candidate as any).applied_from_source || 'Direct Sourcing';
       if (!sourceStats[source]) {
         sourceStats[source] = {
           source,
@@ -119,11 +119,10 @@ export class AnalyticsService {
 
       sourceStats[source].totalCandidates++;
 
-      const candidateApps = allApplications.items.filter((a) => a.candidate_id === candidate.id);
+      const candidateApps = allApplications.items.filter((a: any) => (a.candidate_id || a.candidateId) === candidate.id);
       sourceStats[source].appliedCount += candidateApps.length;
-      sourceStats[source].hiredCount += candidateApps.filter((a) => a.application_status === 'hired').length;
-      sourceStats[source].rejectedCount += candidateApps.filter((a) => a.application_status === 'rejected')
-        .length;
+      sourceStats[source].hiredCount += candidateApps.filter((a: any) => (a.application_status || a.applicationStatus) === 'hired').length;
+      sourceStats[source].rejectedCount += candidateApps.filter((a: any) => (a.application_status || a.applicationStatus) === 'rejected').length;
     }
 
     return sourceStats;
@@ -131,13 +130,13 @@ export class AnalyticsService {
 
   async getRecruiterPerformance(ctx: TenantContext, recruiterId: number): Promise<any> {
     const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
-    const recruiterApps = allApplications.items.filter((a) => a.created_by === recruiterId);
+    const recruiterApps = allApplications.items.filter((a: any) => (a.created_by || a.createdBy) === recruiterId);
 
     const stats = {
       recruiterId,
       totalApplicationsCreated: recruiterApps.length,
-      hiredCount: recruiterApps.filter((a) => a.application_status === 'hired').length,
-      rejectedCount: recruiterApps.filter((a) => a.application_status === 'rejected').length,
+      hiredCount: recruiterApps.filter((a: any) => (a.application_status || a.applicationStatus) === 'hired').length,
+      rejectedCount: recruiterApps.filter((a: any) => (a.application_status || a.applicationStatus) === 'rejected').length,
       hireRate: 0,
     };
 
@@ -152,7 +151,7 @@ export class AnalyticsService {
     const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
     const allCandidates = await this.candidateRepo.list(ctx, { pageSize: 10000 });
 
-    const getStatus = (item: any) => String(item.application_status || item.status || '').toLowerCase().trim();
+    const getStatus = (item: any) => String(item.application_status || item.applicationStatus || item.status || '').toLowerCase().trim();
 
     const appStatuses = allApplications.items.map(getStatus);
     const candStatuses = allCandidates.items.map(getStatus);
@@ -201,17 +200,17 @@ export class AnalyticsService {
 
     return {
       jobId,
-      jobTitle: job.job_title,
-      jobCode: job.job_code,
+      jobTitle: job.job_title || (job as any).jobTitle,
+      jobCode: job.job_code || (job as any).jobCode,
       totalApplications: applications.meta.total,
-      appliedCount: applications.items.filter((a) => a.application_status === 'applied').length,
-      screeningCount: applications.items.filter((a) => a.application_status === 'screening').length,
-      interviewCount: applications.items.filter((a) => a.application_status === 'interview').length,
-      offerCount: applications.items.filter((a) => a.application_status === 'offer').length,
-      hiredCount: applications.items.filter((a) => a.application_status === 'hired').length,
-      rejectedCount: applications.items.filter((a) => a.application_status === 'rejected').length,
+      appliedCount: applications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'applied').length,
+      screeningCount: applications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'screening').length,
+      interviewCount: applications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'interview').length,
+      offerCount: applications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'offer').length,
+      hiredCount: applications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'hired').length,
+      rejectedCount: applications.items.filter((a: any) => (a.application_status || a.applicationStatus) === 'rejected').length,
       timeToFill,
-      positionsNeeded: job.no_of_positions,
+      positionsNeeded: job.no_of_positions || (job as any).noOfPositions,
     };
   }
 
@@ -237,7 +236,7 @@ export class AnalyticsService {
 
     const rejections = await db('applications')
       .where('organization_id', ctx.organizationId)
-      .where('application_status', 'rejected')
+      .whereRaw("LOWER(COALESCE(application_status, '')) = 'rejected'")
       .select('rejected_at_stage')
       .count('* as count')
       .groupBy('rejected_at_stage');
@@ -250,14 +249,16 @@ export class AnalyticsService {
     };
 
     for (const row of rejections as any[]) {
-      const stage = row.rejected_at_stage || 'applied';
+      const stage = row.rejectedAtStage || row.rejected_at_stage || 'applied';
+      const countVal = parseInt(row.count || '0', 10);
       if (stage in dropOffStats) {
-        dropOffStats[stage] = parseInt(row.count, 10);
+        dropOffStats[stage] = countVal;
       } else {
-        dropOffStats[stage] = (dropOffStats[stage] || 0) + parseInt(row.count, 10);
+        dropOffStats[stage] = (dropOffStats[stage] || 0) + countVal;
       }
     }
 
     return dropOffStats;
   }
 }
+
