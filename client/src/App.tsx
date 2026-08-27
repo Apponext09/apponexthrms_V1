@@ -1,4 +1,4 @@
-import React, { useEffect, Component } from 'react';
+import React, { useEffect, Component, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './config/query';
@@ -8,6 +8,7 @@ import { useAuthStore } from './features/auth/store/authStore';
 import { useAttendanceStore } from './features/attendance/store/attendanceStore';
 import { BreakOverlay } from './features/attendance/components/BreakOverlay';
 import { useBreakSync } from './features/attendance/hooks/useBreakSync';
+import { LoadingScreen } from './components/LoadingScreen';
 
 // ── Global Error Boundary ──────────────────────────────────────────────────
 // Catches any unhandled React render errors and shows a readable message
@@ -67,15 +68,150 @@ class AppErrorBoundary extends Component<
 }
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Disable DevTools and Inspection
+  useEffect(() => {
+    const disableRightClick = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    const disableKeys = (e: KeyboardEvent) => {
+      if (e.key === 'F12' ||
+          (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'K')) ||
+          (e.ctrlKey && e.key === 'I')) {
+        e.preventDefault();
+      }
+    };
+    const disableCopyPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+    };
+
+    document.addEventListener('contextmenu', disableRightClick);
+    document.addEventListener('keydown', disableKeys, true);
+    document.addEventListener('copy', disableCopyPaste);
+    document.addEventListener('cut', disableCopyPaste);
+    document.addEventListener('paste', disableCopyPaste);
+
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('contextmenu', disableRightClick);
+      document.removeEventListener('keydown', disableKeys, true);
+      document.removeEventListener('copy', disableCopyPaste);
+      document.removeEventListener('cut', disableCopyPaste);
+      document.removeEventListener('paste', disableCopyPaste);
+    };
+  }, []);
+
   // Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
-    if (localStorage.getItem('accessToken')) {
-      useAuthStore.getState().fetchCurrentUser();
+
+    // Show loading screen while fetching user data
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      setIsLoading(true);
+      // Fetch user data in background without blocking navigation
+      useAuthStore.getState().fetchCurrentUser()
+        .catch((err) => {
+          console.warn('Failed to fetch user:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
     }
+
+    // Track last user ID and logout time to detect session changes
+    let lastUserId: number | null = null;
+    let lastLogoutTime = localStorage.getItem('last-logout-time');
+
+    // Re-validate auth when tab becomes visible (back from other tab)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+        // Check if logout happened in another tab
+        const currentLogoutTime = localStorage.getItem('last-logout-time');
+        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+          // Logout happened elsewhere - logout this session too
+          logout();
+          return;
+        }
+
+        // Check if different user logged in
+        if (user && lastUserId && user.id !== lastUserId) {
+          // Different user - force redirect
+          window.location.href = '/login?' + new Date().getTime();
+          return;
+        }
+
+        if (lastUserId === null && user) {
+          lastUserId = user.id;
+        }
+
+        if (isAuthenticated && localStorage.getItem('accessToken')) {
+          // Re-validate token is still valid
+          fetchCurrentUser().catch(() => {
+            // Token invalid, logout
+            logout();
+          });
+        }
+      }
+    };
+
+    // Check on window focus
+    const handleFocus = () => {
+      const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+      // Check if logout happened
+      const currentLogoutTime = localStorage.getItem('last-logout-time');
+      if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+        logout();
+        return;
+      }
+
+      // Check if different user logged in
+      if (user && lastUserId && user.id !== lastUserId) {
+        window.location.href = '/login?' + new Date().getTime();
+        return;
+      }
+
+      if (lastUserId === null && user) {
+        lastUserId = user.id;
+      }
+
+      if (isAuthenticated && localStorage.getItem('accessToken')) {
+        fetchCurrentUser().catch(() => {
+          logout();
+        });
+      }
+    };
+
+    // Prevent back button navigation
+    const handlePopState = (e: PopStateEvent) => {
+      const { isAuthenticated } = useAuthStore.getState();
+      if (!isAuthenticated) {
+        window.history.pushState(null, '', '/login');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
-  return <>{children}</>;
+  return (
+    <>
+      {isLoading && <LoadingScreen />}
+      {children}
+    </>
+  );
 }
 
 /**
