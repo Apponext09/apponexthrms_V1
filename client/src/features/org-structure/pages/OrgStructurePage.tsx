@@ -539,17 +539,22 @@ export function OrgStructurePage() {
     const claimedEmpIds = new Set<number>();
 
     // Separate employees by access role
+    const cxos = activeList.filter((e) =>
+      ['cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
+    );
     const managers = activeList.filter((e) =>
-      ['department_head', 'hr_manager', 'hr_admin'].includes((e as any).accessRole || '')
+      ['department_head', 'hr_manager', 'hr_admin'].includes(((e as any).accessRole || '').toLowerCase()) &&
+      !cxos.some((c) => c.id === e.id)
     );
     const teamLeads = activeList.filter(
-      (e) => ((e as any).accessRole || '') === 'team_lead'
+      (e) => ((e as any).accessRole || '').toLowerCase() === 'team_lead'
     );
     const regularEmployees = activeList.filter(
-      (e) => !['department_head', 'hr_manager', 'hr_admin', 'team_lead'].includes((e as any).accessRole || '')
+      (e) => !['department_head', 'hr_manager', 'hr_admin', 'team_lead', 'cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
     );
 
-    // Mark managers as claimed at top level
+    // Mark CXOs & managers as claimed at top level
+    cxos.forEach((c) => { if (c.id) claimedEmpIds.add(c.id); });
     managers.forEach((m) => { if (m.id) claimedEmpIds.add(m.id); });
 
     // Helper to find employees reporting to a parent manager/lead
@@ -586,11 +591,10 @@ export function OrgStructurePage() {
       };
     };
 
-    // Build manager branches
-    const managerNodes = managers.map((m) => {
+    // Helper to build manager subtrees
+    const buildManagerNode = (m: Employee) => {
       const mDeptKey = getDeptKey(m);
 
-      // Find team leads reporting to manager explicitly OR by department (if not reporting to another manager)
       const managerLeads = teamLeads.filter((tl) => {
         if (!tl.id || claimedEmpIds.has(tl.id)) return false;
         if (tl.reportingManagerId) {
@@ -599,7 +603,6 @@ export function OrgStructurePage() {
         return mDeptKey !== 'General' && getDeptKey(tl) === mDeptKey;
       });
 
-      // Claim team leads
       managerLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
 
       const leadNodes = managerLeads.map((tl) => {
@@ -610,14 +613,41 @@ export function OrgStructurePage() {
         };
       });
 
-      // Find employees directly under manager
       const unassignedEmps = findDirectChildren(m.id!, mDeptKey);
 
       return {
         emp: m,
         children: [...leadNodes, ...unassignedEmps.map(buildSubTree)],
       };
+    };
+
+    // Build CXO subtrees (optional layer)
+    const claimedManagerIds = new Set<number>();
+    const cxoNodes = cxos.map((cxo) => {
+      const cxoDeptKey = getDeptKey(cxo);
+
+      const cxoManagers = managers.filter((m) => {
+        if (!m.id || claimedManagerIds.has(m.id)) return false;
+        if (m.reportingManagerId) {
+          return m.reportingManagerId === cxo.id;
+        }
+        return cxoDeptKey !== 'General' && getDeptKey(m) === cxoDeptKey;
+      });
+
+      cxoManagers.forEach((m) => { if (m.id) claimedManagerIds.add(m.id); });
+
+      const subManagerNodes = cxoManagers.map(buildManagerNode);
+      const directEmps = findDirectChildren(cxo.id!, cxoDeptKey);
+
+      return {
+        emp: cxo,
+        children: [...subManagerNodes, ...directEmps.map(buildSubTree)],
+      };
     });
+
+    // Managers not assigned to a CXO attach directly under CEO/Admin
+    const remainingManagers = managers.filter((m) => m.id && !claimedManagerIds.has(m.id));
+    const unattachedManagerNodes = remainingManagers.map(buildManagerNode);
 
     // Handle remaining unclaimed team leads & regular employees as orphan nodes under root
     const unclaimedLeads = teamLeads.filter((tl) => tl.id && !claimedEmpIds.has(tl.id));
@@ -639,7 +669,7 @@ export function OrgStructurePage() {
     return {
       emp: rootAdminEmp,
       isAdmin: true,
-      children: [...managerNodes, ...orphanLeadNodes, ...orphanEmpNodes],
+      children: [...cxoNodes, ...unattachedManagerNodes, ...orphanLeadNodes, ...orphanEmpNodes],
     };
   }, [localEmps, employees, user]);
 

@@ -100,7 +100,7 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       
     const roles = userRoles.map((r: any) => r.code);
     const isHrOrAdmin = roles.includes('hr_manager') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
-    const isDeptHead = roles.includes('department_head');
+    const isDeptHead = roles.some((r: any) => ['department_head', 'cto', 'cfo', 'coo', 'cxo'].includes(r));
 
     // 2b. Department employees for department_head role users
     if (isDeptHead && employee) {
@@ -342,7 +342,7 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       
     const roles = userRoles.map((r: any) => r.code);
     const isHrOrAdmin = roles.includes('hr_manager') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
-    const isDeptHead = roles.includes('department_head');
+    const isDeptHead = roles.some((r: any) => ['department_head', 'cto', 'cfo', 'coo', 'cxo'].includes(r));
 
     // 2b. Department employees for department_head
     if (isDeptHead && employee) {

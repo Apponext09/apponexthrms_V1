@@ -178,9 +178,9 @@ export class EmployeeService {
       }
     }
 
-    // Helper to get Org Admin's employee ID
+    // Helper to get Org Admin's employee ID if no reporting manager is specified
     let finalReportingManagerId = input.reportingManagerId || null;
-    if (['department_head', 'hr_manager'].includes(input.accessRole || 'employee')) {
+    if (!finalReportingManagerId && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId) {
         finalReportingManagerId = adminEmpId;
@@ -500,7 +500,7 @@ export class EmployeeService {
     departmentId?: number | null
   ) {
     const targetRole = accessRole || 'employee';
-    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'intern', 'consultant'];
+    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'];
     if (!roleCodes.includes(targetRole)) return;
 
     // Fetch existing system roles for this organization
@@ -514,6 +514,10 @@ export class EmployeeService {
     }
 
     const roleNames: Record<string, string> = {
+      cto: 'Chief Technology Officer',
+      cfo: 'Chief Financial Officer',
+      coo: 'Chief Operating Officer',
+      cxo: 'Chief Executive Officer / CXO',
       department_head: 'Department Manager',
       team_lead: 'Team Lead',
       hr_manager: 'HR Manager',
@@ -716,12 +720,8 @@ export class EmployeeService {
       }
     }
 
-    // Hardcode rule: Manager ('department_head') and HR ('hr_manager') directly report to Admin
-    const targetAccessRole = input.accessRole !== undefined
-      ? input.accessRole
-      : (employee as any).accessRole || 'employee';
-
-    if (['department_head', 'hr_manager'].includes(targetAccessRole)) {
+    // Default Manager ('department_head', 'cto', etc.) and HR ('hr_manager') to Admin only if no reporting manager was provided
+    if (['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId && adminEmpId !== employeeId) {

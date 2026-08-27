@@ -30,76 +30,103 @@ export default function OrgChartPage() {
       const items = Array.isArray(res.data?.data) ? res.data.data : [];
 
       if (items.length > 0) {
-        // Build live tree by department / manager
-        const engTeam = items.filter((e: any) => (e.department || '').toLowerCase().includes('eng') || (e.jobTitle || '').toLowerCase().includes('dev'));
-        const hrTeam = items.filter((e: any) => (e.department || '').toLowerCase().includes('hr'));
-        const salesTeam = items.filter((e: any) => (e.department || '').toLowerCase().includes('sal'));
+        // Dynamic hierarchy tree builder with optional CXO layer
+        const cxos = items.filter((e: any) =>
+          ['cto', 'cfo', 'coo', 'cxo'].includes((e.accessRole || '').toLowerCase()) ||
+          (e.designation || '').toLowerCase().includes('chief') ||
+          (e.designation || '').toLowerCase().includes('cto') ||
+          (e.designation || '').toLowerCase().includes('cfo') ||
+          (e.designation || '').toLowerCase().includes('coo')
+        );
 
-        const root: EmployeeNode = {
-          id: 1,
-          name: 'Narendra Gaikwad',
-          role: 'Chief Technology Officer & VP Engineering',
-          department: 'Executive Management',
-          email: 'gaikwadnarendra316@gmail.com',
-          avatar: 'NG',
-          children: [
-            {
-              id: 2,
-              name: 'John Doe',
-              role: 'HR Director',
-              department: 'Human Resources',
-              email: 'john.doe@example.com',
-              avatar: 'JD',
-              children: hrTeam.slice(0, 4).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName || e.first_name || 'Employee'} ${e.lastName || e.last_name || ''}`,
-                role: e.designation || e.jobTitle || 'HR Executive',
-                department: e.department || 'Human Resources',
-                email: e.email || '',
-                avatar: `${(e.firstName || 'E')[0]}${(e.lastName || 'M')[0]}`
-              }))
-            },
-            {
-              id: 3,
-              name: 'Rahul Sharma',
-              role: 'Engineering Manager',
-              department: 'Engineering',
-              email: 'rahul.sharma@example.com',
-              avatar: 'RS',
-              children: engTeam.slice(0, 6).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName || e.first_name || 'Engineer'} ${e.lastName || e.last_name || ''}`,
-                role: e.designation || e.jobTitle || 'Software Engineer',
-                department: e.department || 'Engineering',
-                email: e.email || '',
-                avatar: `${(e.firstName || 'E')[0]}${(e.lastName || 'ENG')[0]}`
-              }))
-            },
-            {
-              id: 4,
-              name: 'Priya Verma',
-              role: 'Sales Head',
-              department: 'Sales & Business',
-              email: 'priya.verma@example.com',
-              avatar: 'PV',
-              children: salesTeam.slice(0, 4).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName || e.first_name || 'Sales'} ${e.lastName || e.last_name || ''}`,
-                role: e.designation || e.jobTitle || 'Account Executive',
-                department: e.department || 'Sales',
-                email: e.email || '',
-                avatar: `${(e.firstName || 'S')[0]}${(e.lastName || 'L')[0]}`
-              }))
-            }
-          ]
+        const managers = items.filter((e: any) =>
+          ['department_head', 'hr_manager'].includes((e.accessRole || '').toLowerCase()) &&
+          !cxos.some((c: any) => c.id === e.id)
+        );
+
+        const teamLeads = items.filter((e: any) =>
+          (e.accessRole || '').toLowerCase() === 'team_lead'
+        );
+
+        const employees = items.filter((e: any) =>
+          !['cto', 'cfo', 'coo', 'cxo', 'department_head', 'hr_manager', 'team_lead'].includes((e.accessRole || '').toLowerCase())
+        );
+
+        const claimedIds = new Set<number>();
+
+        const mapNode = (e: any, children: EmployeeNode[] = []): EmployeeNode => {
+          if (e.id) claimedIds.add(e.id);
+          const fName = e.firstName || e.first_name || 'Employee';
+          const lName = e.lastName || e.last_name || '';
+          return {
+            id: e.id,
+            name: `${fName} ${lName}`.trim(),
+            role: e.designation || e.jobTitle || e.accessRole || 'Staff',
+            department: e.department || e.departmentName || 'General',
+            email: e.email || '',
+            avatar: `${fName[0] || 'E'}${lName[0] || 'M'}`,
+            children: children.length > 0 ? children : undefined,
+          };
         };
 
-        setTreeData(root);
+        // 1. Build Manager nodes
+        const managerNodes = managers.map((m: any) => {
+          const mDept = (m.department || m.departmentName || '').toLowerCase();
+          const subLeads = teamLeads.filter((tl: any) =>
+            !claimedIds.has(tl.id) &&
+            (tl.reportingManagerId === m.id || (mDept && (tl.department || '').toLowerCase() === mDept))
+          );
+
+          const subEmps = employees.filter((emp: any) =>
+            !claimedIds.has(emp.id) &&
+            (emp.reportingManagerId === m.id || (mDept && (emp.department || '').toLowerCase() === mDept))
+          );
+
+          const leadNodes = subLeads.map((tl: any) => {
+            const tlEmps = employees.filter((emp: any) =>
+              !claimedIds.has(emp.id) && emp.reportingManagerId === tl.id
+            );
+            return mapNode(tl, tlEmps.map((e: any) => mapNode(e)));
+          });
+
+          return mapNode(m, [...leadNodes, ...subEmps.map((e: any) => mapNode(e))]);
+        });
+
+        // 2. Build CXO nodes (optional layer)
+        const claimedManagerIds = new Set<number>();
+        const cxoNodes = cxos.map((cxo: any) => {
+          const cxoDept = (cxo.department || cxo.departmentName || '').toLowerCase();
+          const cxoManagers = managerNodes.filter((mNode: EmployeeNode) => {
+            if (claimedManagerIds.has(mNode.id)) return false;
+            const rawM = managers.find((m: any) => m.id === mNode.id);
+            return rawM?.reportingManagerId === cxo.id || (cxoDept && mNode.department.toLowerCase() === cxoDept);
+          });
+
+          cxoManagers.forEach((m: EmployeeNode) => claimedManagerIds.add(m.id));
+          return mapNode(cxo, cxoManagers);
+        });
+
+        // 3. Managers not assigned under a CXO
+        const unattachedManagerNodes = managerNodes.filter((m: EmployeeNode) => !claimedManagerIds.has(m.id));
+
+        // 4. Root CEO node
+        const topAdmin = items.find((e: any) =>
+          ['ceo', 'organization_admin', 'super_admin'].includes((e.accessRole || '').toLowerCase())
+        ) || {
+          id: 1,
+          firstName: 'Chief Executive',
+          lastName: 'Officer',
+          role: 'CEO & President',
+          department: 'Executive Management',
+          email: 'ceo@organization.com',
+        };
+
+        const rootNode = mapNode(topAdmin, [...cxoNodes, ...unattachedManagerNodes]);
+
+        setTreeData(rootNode);
         setExpandedNodes({
-          'Narendra Gaikwad': true,
-          'John Doe': true,
-          'Rahul Sharma': true,
-          'Priya Verma': true,
+          [rootNode.name]: true,
+          ...cxoNodes.reduce((acc: Record<string, boolean>, c: EmployeeNode) => ({ ...acc, [c.name]: true }), {}),
         });
       }
     } catch (err) {
