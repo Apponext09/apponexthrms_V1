@@ -27,5 +27,40 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@mui') || id.includes('@emotion')) {
+              return 'vendor-mui';
+            }
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('leaflet') || id.includes('react-leaflet')) {
+              return 'vendor-maps';
+            }
+            if (id.includes('reactflow')) {
+              return 'vendor-reactflow';
+            }
+            if (id.includes('@tiptap')) {
+              return 'vendor-tiptap';
+            }
+            if (id.includes('@dnd-kit')) {
+              return 'vendor-dnd';
+            }
+            if (id.includes('xlsx') || id.includes('html2canvas')) {
+              return 'vendor-utils';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+          }
+        },
+      },
+    },
   },
 });

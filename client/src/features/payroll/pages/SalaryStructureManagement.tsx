@@ -923,9 +923,9 @@ export const SalaryStructureManagement: React.FC = () => {
 
     const targetTemplate = structuresList.find(s => s.structureName === assignTemplateName);
     const grossVal = targetTemplate?.grossMonthly || (targetTemplate?.annualCtc ? Math.round(targetTemplate.annualCtc / 12) : (grossMonthly > 0 ? grossMonthly : 0));
-    const basicVal = targetTemplate?.basicMonthly || (grossVal ? Math.round(grossVal * 0.50) : 0);
+    const basicVal = targetTemplate?.basicMonthly || 0;
     const ctcVal = targetTemplate?.annualCtc || (grossVal * 12);
-    const netVal = targetTemplate?.netTakeHome || (grossVal ? Math.round(grossVal * 0.90) : 0);
+    const netVal = targetTemplate?.netTakeHome || grossVal;
     const grossDisplayStr = grossVal > 0 ? `₹${Number(grossVal).toLocaleString('en-IN')}/mo` : '₹0/mo';
 
     try {
@@ -1113,11 +1113,11 @@ export const SalaryStructureManagement: React.FC = () => {
 
         const basicMonthly = matchingStruct && matchingStruct.basicMonthly > 0
           ? matchingStruct.basicMonthly
-          : Math.round(grossMonthly * 0.5);
+          : 0;
 
         const hraMonthly = matchingStruct && matchingStruct.hraMonthly > 0
           ? matchingStruct.hraMonthly
-          : Math.round(basicMonthly * 0.5);
+          : 0;
 
         const specialAllowanceMonthly = matchingStruct && matchingStruct.specialAllowanceMonthly > 0
           ? matchingStruct.specialAllowanceMonthly
@@ -1125,11 +1125,11 @@ export const SalaryStructureManagement: React.FC = () => {
 
         const pfDeduction = matchingStruct && matchingStruct.pfDeduction > 0
           ? matchingStruct.pfDeduction
-          : Math.round(Math.min(basicMonthly, 15000) * 0.12);
+          : 0;
 
         const netTakeHome = matchingStruct && matchingStruct.netTakeHome > 0
           ? matchingStruct.netTakeHome
-          : Math.max(0, grossMonthly - pfDeduction - 200);
+          : Math.max(0, grossMonthly - pfDeduction);
 
         return {
           id: emp.id,

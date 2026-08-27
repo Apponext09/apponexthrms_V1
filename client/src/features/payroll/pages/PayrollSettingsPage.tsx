@@ -40,68 +40,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MasterPayrollCycle } from '../components/MasterPayrollCycle';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FULL PAYROLL COMPONENTS MASTER LIST (matches actual payroll software)
-const FULL_PAYROLL_COMPONENTS = [
-  { id: 'adjustment', name: 'Adjustment' },
-  { id: 'admin_charges', name: 'Admin Charges' },
-  { id: 'annual_bonus', name: 'Annual Bonus' },
-  { id: 'basic', name: 'Basic' },
-  { id: 'basic_earned', name: 'Basic Earned' },
-  { id: 'children_edu_allowance', name: 'Children Education Allowance' },
-  { id: 'children_edu_allowance_earned', name: 'Children Education Allowance Earned' },
-  { id: 'communication_allowance', name: 'Communication Allowance' },
-  { id: 'communication_allowance_earned', name: 'Communication Allowance Earned' },
-  { id: 'conveyance', name: 'Conveyance' },
-  { id: 'conveyance_allowance', name: 'Conveyance Allowance' },
-  { id: 'conveyance_allowance_earned', name: 'Conveyance Allowance Earned' },
-  { id: 'conveyance_earned', name: 'Conveyance Earned' },
-  { id: 'early_deduction', name: 'Early Deduction' },
-  { id: 'ecr_gross_amount', name: 'ECR Gross Amount' },
-  { id: 'edli_charges', name: 'EDLI Charges' },
-  { id: 'edli_wages', name: 'EDLI Wages' },
-  { id: 'epf_eps_diff', name: 'EPF and EPS Diff' },
-  { id: 'epf_eps_wages', name: 'EPF EPS Wages' },
-  { id: 'eps_component', name: 'EPS Component' },
-  { id: 'eps_wages', name: 'EPS Wages' },
-  { id: 'esi_wages', name: 'ESI Wages' },
-  { id: 'esic', name: 'ESIC' },
-  { id: 'esic_employer', name: 'ESIC Employer' },
-  { id: 'expense_reimbursement', name: 'Expense Reimbursement' },
-  { id: 'extra_pay_amount', name: 'Extra Pay Amount' },
-  { id: 'gratuity', name: 'Gratuity' },
-  { id: 'group_mediclaim', name: 'Group Mediclaim' },
-  { id: 'hra', name: 'HRA' },
-  { id: 'hra_earned', name: 'HRA Earned' },
-  { id: 'incentives', name: 'Incentives' },
-  { id: 'late_deduction', name: 'Late Deduction' },
-  { id: 'leave_encashment', name: 'Leave Encashment' },
-  { id: 'leave_salary', name: 'Leave Salary' },
-  { id: 'loan', name: 'Loan' },
-  { id: 'lop', name: 'LOP' },
-  { id: 'lta', name: 'LTA' },
-  { id: 'lta_earned', name: 'LTA Earned' },
-  { id: 'meal_allowance', name: 'Meal Allowance' },
-  { id: 'meal_allowance_earned', name: 'Meal Allowance Earned' },
-  { id: 'medical_allowance', name: 'Medical Allowance' },
-  { id: 'medical_allowance_earned', name: 'Medical Allowance Earned' },
-  { id: 'ot', name: 'OT' },
-  { id: 'ot_hour', name: 'OT Hour' },
-  { id: 'pf', name: 'PF' },
-  { id: 'pf_employer', name: 'PF Employer' },
-  { id: 'professional_allowance', name: 'Professional Allowance' },
-  { id: 'professional_allowance_earned', name: 'Professional Allowance Earned' },
-  { id: 'pt', name: 'PT' },
-  { id: 'sal_deduction', name: 'Sal. Deduction' },
-  { id: 'salary_days', name: 'Salary Days' },
-  { id: 'special_allowance', name: 'Special Allowance' },
-  { id: 'special_allowance_earned', name: 'Special Allowance Earned' },
-  { id: 'standard_allowance', name: 'Standard Allowance' },
-  { id: 'standard_allowance_earned', name: 'Standard Allowance Earned' },
-  { id: 'tds', name: 'TDS' },
-  { id: 'weekoff_holiday_double_pay', name: 'Weekoff and Holiday Double Pay' },
-];
+import { MasterPayrollComponents } from '../components/MasterPayrollComponents';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -125,6 +64,8 @@ interface PayrollCycleItem {
   capAmount?: number | string;
   toleranceEnabled?: boolean;
   toleranceMinutes?: number;
+  companyId?: string | number | null;
+  company_id?: string | number | null;
   isActive: boolean;
 }
 
@@ -191,11 +132,6 @@ interface PayrollSlabItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INITIAL MOCK DATA (Hoshi HRMS Aligned)
-// ─────────────────────────────────────────────────────────────────────────────
-// COMPONENT MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -349,33 +285,37 @@ export const PayrollSettingsPage: React.FC = () => {
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [selectedAuditGroup, setSelectedAuditGroup] = useState<any>(null);
 
-  // Fetch real database records on mount
+  // Fetch real database records — refetches whenever selected company changes
   useEffect(() => {
+    // Pass companyId so backend returns only records for the selected company.
+    const companyParams = selectedCompanyId ? { params: { companyId: selectedCompanyId } } : {};
+
     // 1. Fetch real Departments, Locations, Grades & Designations strictly from DB Settings Masters
     Promise.all([
-      apiClient.get('/settings/departments').catch(() => ({ data: [] })),
-      apiClient.get('/settings/locations').catch(() => ({ data: [] })),
-      apiClient.get('/settings/grades').catch(() => apiClient.get('/settings/pay-grades')).catch(() => ({ data: [] })),
-      apiClient.get('/settings/designations').catch(() => ({ data: [] })),
-      apiClient.get('/employees').catch(() => ({ data: [] }))
+      apiClient.get('/settings/departments', companyParams).catch(() => ({ data: [] })),
+      apiClient.get('/settings/locations', companyParams).catch(() => ({ data: [] })),
+      apiClient.get('/settings/grades', companyParams).catch(() => apiClient.get('/settings/pay-grades', companyParams)).catch(() => ({ data: [] })),
+      apiClient.get('/settings/designations', companyParams).catch(() => ({ data: [] })),
+      apiClient.get('/employees', companyParams).catch(() => ({ data: [] }))
     ]).then(([deptRes, locRes, gradeRes, desigRes, empRes]: any[]) => {
       const dbDepts = (deptRes.data?.data || deptRes.data || []).map((d: any) => d.name || d.department_name || d.title).filter(Boolean);
       const dbLocs = (locRes.data?.data || locRes.data || []).map((l: any) => l.name || l.location_name || l.city || l.branch).filter(Boolean);
       const dbGrades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.title).filter(Boolean);
       const dbDesigs = (desigRes.data?.data || desigRes.data || []).map((d: any) => d.name || d.designation_name || d.title).filter(Boolean);
-      
+
       const empList = empRes.data?.data || empRes.data || [];
       const empDepts = Array.isArray(empList) ? empList.map((e: any) => e.department || e.dept_name || e.department_name).filter(Boolean) : [];
       const empLocs = Array.isArray(empList) ? empList.map((e: any) => e.location || e.branch || e.city || e.location_name).filter(Boolean) : [];
       const empGrades = Array.isArray(empList) ? empList.map((e: any) => e.grade || e.grade_name || e.pay_grade_name).filter(Boolean) : [];
 
-      const finalDepts = [...new Set([...dbDepts, ...empDepts])];
-      const finalLocs = [...new Set([...dbLocs, ...empLocs])];
-      const finalGrades = [...new Set([...dbGrades, ...empGrades])];
+      // Merge settings masters + employee data; deduplicate
+      const finalDepts = [...new Set(['All Departments', ...dbDepts, ...empDepts])];
+      const finalLocs = [...new Set(['All Locations', ...dbLocs, ...empLocs])];
+      const finalGrades = [...new Set(['All Pay Grades', ...dbGrades, ...empGrades])];
 
-      if (finalDepts.length > 0) setAllDepartments(finalDepts);
-      if (finalLocs.length > 0) setAllLocations(finalLocs);
-      if (finalGrades.length > 0) setAllGrades(finalGrades);
+      setAllDepartments(finalDepts);
+      setAllLocations(finalLocs);
+      setAllGrades(finalGrades);
 
       if (Array.isArray(empList) && empList.length > 0) {
         setAllEmployees(empList.map((e: any) => ({
@@ -385,15 +325,14 @@ export const PayrollSettingsPage: React.FC = () => {
       }
     }).catch(() => {});
 
-    // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker —
-    //    must only offer roles that actually exist (rbac/roles), not fabricated ones.
+    // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker
     apiClient.get('/rbac/roles').then((res: any) => {
       const items = res.data?.data?.items || res.data?.items || [];
       if (Array.isArray(items) && items.length > 0) {
         setApproverRoles(items.map((r: any) => ({ code: r.code, name: r.name })).filter((r: any) => r.code));
       }
     }).catch(() => {});
-  }, []);
+  }, [selectedCompanyId]);
 
   // Fetch cycles and slabs whenever selected company changes
   useEffect(() => {
@@ -452,6 +391,10 @@ export const PayrollSettingsPage: React.FC = () => {
           let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
           let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
           let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch {}
+
+          if (!Array.isArray(depts) || depts.length === 0 || depts[0] === 'Choose') depts = ['All Departments'];
+          if (!Array.isArray(grades) || grades.length === 0 || grades[0] === 'Choose') grades = ['All Pay Grades'];
+          if (!Array.isArray(locs) || locs.length === 0) locs = ['All Locations'];
           const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
           let comps = []; try { comps = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []); } catch {}
 
@@ -512,7 +455,12 @@ export const PayrollSettingsPage: React.FC = () => {
                 id: String(c.id),
                 name: c.name || 'Component',
                 groupId: String(g.id),
-                type: c.componentType || c.component_type || 'Value',
+                type: (() => {
+                  const raw = (c.componentType || c.component_type || 'Value').toString();
+                  if (raw === 'Formula' || raw === 'formula') return 'Derived';
+                  if (raw === 'module') return 'Module';
+                  return raw as 'Value' | 'Derived' | 'Module';
+                })() as 'Value' | 'Derived' | 'Module',
                 isNonCashable: Boolean(c.nonCashable ?? c.non_cashable),
                 basedOnAttendance: Boolean(c.basedOnAttendance ?? c.based_on_attendance),
                 isActive: Boolean(c.isActive ?? c.is_active),
@@ -571,7 +519,7 @@ export const PayrollSettingsPage: React.FC = () => {
           setGroupForm(mappedGroups[0]);
           if (mappedGroups[0].components.length > 0) {
             setSelectedComponentId(mappedGroups[0].components[0].id);
-            setCompForm(mappedGroups[0].components[0]);
+            setCompForm(normalizeComp(mappedGroups[0].components[0]));
           }
         }
       } catch (err) {
@@ -582,13 +530,23 @@ export const PayrollSettingsPage: React.FC = () => {
   }, []);
 
 
-  // Sync selected group form
+  // Normalize component type from raw DB value to UI-expected casing
+  const normalizeComp = (c: ComponentItem): ComponentItem => {
+    const raw = (c.type || 'Value').toString();
+    const type: 'Value' | 'Derived' | 'Module' =
+      raw === 'Formula' || raw === 'formula' || raw === 'derived' ? 'Derived'
+      : raw === 'module' ? 'Module'
+      : 'Value';
+    return { ...c, type };
+  };
+
+  // Sync selected group form — auto-selects first component
   const handleSelectGroup = (g: ComponentGroup) => {
     setSelectedGroupId(g.id);
     setGroupForm(g);
     if (g.components.length > 0) {
       setSelectedComponentId(g.components[0].id);
-      setCompForm(g.components[0]);
+      setCompForm(normalizeComp(g.components[0]));
     }
   };
 
@@ -601,16 +559,13 @@ export const PayrollSettingsPage: React.FC = () => {
   // Sync selected component form
   const handleSelectComponent = (c: ComponentItem) => {
     setSelectedComponentId(c.id);
-    setCompForm(c);
+    setCompForm(normalizeComp(c));
   };
 
   // Sync selected slab form
   const handleSelectSlab = (s: PayrollSlabItem) => {
     setSelectedSlabId(s.id);
-    const comps = (s.selectedComponentIds && s.selectedComponentIds.length > 0)
-      ? s.selectedComponentIds
-      : ['basic', 'hra', 'special_allowance', 'pf', 'pt', 'conveyance', 'basic_pay', 'house_rent_allowance_hra'];
-    setSlabForm({ ...s, selectedComponentIds: comps });
+    setSlabForm({ ...s });
   };
 
   // Delete Component Handler
@@ -636,17 +591,53 @@ export const PayrollSettingsPage: React.FC = () => {
       showToast.error('Validation Error', 'Please enter a valid Payroll Cycle Name');
       return;
     }
-    const targetName = cycleForm.name.trim();
+
+    const targetCompId = selectedCompanyId ? String(selectedCompanyId) : (cycleForm.companyId || (cycleForm as any).company_id || '');
+    if (!targetCompId || targetCompId === 'all') {
+      const activeAllCompCycle = cycles.find(c =>
+        (!c.company_id && !c.companyId) &&
+        String(c.id) !== String(selectedCycleId) &&
+        (c.isActive !== false)
+      );
+      if (activeAllCompCycle) {
+        showToast.error(
+          'Validation Error',
+          `Payroll cycle "${activeAllCompCycle.name}" is already assigned to All Companies. You cannot target All Companies for another cycle while one is active.`
+        );
+        return;
+      }
+    } else {
+      const activeSameCompCycle = cycles.find(c =>
+        (String(c.company_id || c.companyId) === String(targetCompId)) &&
+        String(c.id) !== String(selectedCycleId) &&
+        (c.isActive !== false)
+      );
+      if (activeSameCompCycle) {
+        showToast.error(
+          'Validation Error',
+          `Payroll cycle "${activeSameCompCycle.name}" is already active for this Company. Only one active cycle per company is allowed.`
+        );
+        return;
+      }
+    }
+
+    const targetName = (cycleForm.name || "").trim();
+    const effectiveCompanyId = cycleForm.companyId
+      ? Number(cycleForm.companyId)
+      : (selectedCompanyId ? Number(selectedCompanyId) : null);
+
     const payload = {
       cycle_name: targetName,
       name: targetName,
+      company_id: effectiveCompanyId,
+      companyId: effectiveCompanyId,
       is_daily_wages: cycleForm.isDailyWages,
       daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
       daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
-      frequency: cycleForm.frequency || 'Monthly',
+      frequency: cycleForm.frequency || "Monthly",
       start_date: cycleForm.startDate || 1,
       cutoff_day: cycleForm.cutoffDay || 25,
-      month_offset: cycleForm.monthOffset || 'Current',
+      month_offset: cycleForm.monthOffset || "Current",
       disbursement_date: cycleForm.disbursementDate || 1,
       cap_amount: cycleForm.capAmount || 1000000,
       tolerance_enabled: cycleForm.toleranceEnabled,
@@ -785,9 +776,6 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        // A failed save here used to be silently swallowed — local state and
-        // the success toast happened unconditionally either way, so a real
-        // API failure looked identical to a successful save.
         const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
         serverId = res?.data?.data?.id || res?.data?.id;
         const updatedId = String(serverId || selectedGroupId);
@@ -866,10 +854,6 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        // A failed save here used to be silently swallowed — the UI would
-        // still update local state and show "Component Updated" even though
-        // nothing was actually persisted. Let a real failure fall through
-        // to the outer catch below instead.
         const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
         serverId = res?.data?.data?.id || res?.data?.id;
         setGroups(prev => prev.map(g => {
@@ -914,7 +898,7 @@ export const PayrollSettingsPage: React.FC = () => {
           return g;
         }));
         setSelectedComponentId(newComp.id);
-        setCompForm(newComp);
+        setCompForm(normalizeComp(newComp));
         showToast.success('Component Created', `Component "${newComp.name}" created successfully.`);
       }
       setIsEditingComponent(false);
@@ -926,21 +910,36 @@ export const PayrollSettingsPage: React.FC = () => {
 
   const handleSaveSlab = async () => {
     if (!slabForm.name || !slabForm.name.trim()) {
-      showToast.error('Validation Error', 'Payroll Slab Name is required');
+      showToast.error('Validation Error', 'Please enter a Payroll Slab Name');
       return;
     }
-    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0) ? slabForm.departments : ['All Departments'];
-    const targetGrades = (slabForm.grades && slabForm.grades.length > 0) ? slabForm.grades : ['All Pay Grades'];
-    const targetLocations = (slabForm.locations && slabForm.locations.length > 0) ? slabForm.locations : ['All Locations'];
 
-    const activeCompIds = slabForm.selectedComponentIds && slabForm.selectedComponentIds.length > 0 
-      ? slabForm.selectedComponentIds 
-      : (groups.flatMap(g => g.components.map(c => c.id)).length > 0 
-          ? groups.flatMap(g => g.components.map(c => c.id)) 
-          : ['basic', 'hra', 'special_allowance', 'pf', 'pt']);
+    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0 && slabForm.departments[0] !== 'Choose')
+      ? slabForm.departments
+      : ['All Departments'];
+
+    const targetGrades = (slabForm.grades && slabForm.grades.length > 0 && slabForm.grades[0] !== 'Choose')
+      ? slabForm.grades
+      : ['All Pay Grades'];
+
+    const targetLocations = (slabForm.locations && slabForm.locations.length > 0)
+      ? slabForm.locations
+      : ['All Locations'];
+
     const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
+    if (!numericCycleId) {
+      showToast.error('Validation Error', 'Please select a Payroll Cycle for the slab');
+      return;
+    }
 
-    const payload = {
+    // Use only the components explicitly selected by the user — never fall back to hardcoded IDs.
+    const activeCompIds = slabForm.selectedComponentIds || [];
+    if (activeCompIds.length === 0) {
+      showToast.error('Validation Error', 'Please select at least one Payroll Component for the slab');
+      return;
+    }
+
+    const payload: Record<string, any> = {
       name: slabForm.name.trim(),
       companyId: selectedCompanyId ? Number(selectedCompanyId) : null,
       company_id: selectedCompanyId ? Number(selectedCompanyId) : null,
@@ -951,15 +950,13 @@ export const PayrollSettingsPage: React.FC = () => {
       maxCtc: Number(slabForm.maxCtc || 10000000),
       selectedComponentIds: activeCompIds,
       cycleId: numericCycleId,
-      pfRatePct: (slabForm as any).pfRatePct ?? 12.00,
-      ptTiers: (slabForm as any).ptTiers || [
-        { min: 0, max: 15000, amount: 0 },
-        { min: 15001, max: 25000, amount: 150 },
-        { min: 25001, max: 9999999, amount: 200 }
-      ],
       isActive: slabForm.isActive ?? true,
       employmentType: (slabForm as any).employmentType || 'Regular'
     };
+
+    // Only include PF rate and PT tiers if they were explicitly configured (not hardcoded defaults)
+    if ((slabForm as any).pfRatePct !== undefined) payload.pfRatePct = (slabForm as any).pfRatePct;
+    if ((slabForm as any).ptTiers !== undefined) payload.ptTiers = (slabForm as any).ptTiers;
 
     try {
       const isEdit = Boolean(selectedSlabId && slabs.some(s => s.id === selectedSlabId));
@@ -1054,13 +1051,13 @@ export const PayrollSettingsPage: React.FC = () => {
         </div>
 
         {/* 3 Master Setup Sub-Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 shadow-2xs">
           <button
             onClick={() => setActiveTab('cycles')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'cycles'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Calendar className="w-3.5 h-3.5" />
@@ -1068,10 +1065,10 @@ export const PayrollSettingsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('components')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'components'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
@@ -1079,10 +1076,10 @@ export const PayrollSettingsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('slabs')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'slabs'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Calculator className="w-3.5 h-3.5" />
@@ -1090,10 +1087,10 @@ export const PayrollSettingsPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               activeTab === 'settings'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
             }`}
           >
             <Settings2 className="w-3.5 h-3.5" />
@@ -1108,1285 +1105,82 @@ export const PayrollSettingsPage: React.FC = () => {
       {activeTab === 'cycles' && <MasterPayrollCycle />}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 2: PAYROLL COMPONENT ENGINE (2-State Hoshi Alignment)
+          TAB 2: PAYROLL COMPONENT ENGINE (1:1 Hoshi Match)
       ────────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'components' && (
-        <div className="space-y-4">
-          {/* Top Filter Bar (matches Image 2) */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center gap-2">
-              <select className="border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold">
-                <option value="Earning Group">Earning Group</option>
-                <option value="Deduction Group">Deduction Group</option>
-              </select>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-2.5" />
-                <Input placeholder="Search term..." className="pl-9 h-8 text-xs font-semibold w-52" />
-              </div>
-              <select className="border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold">
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-            {(isEditingGroup || isEditingComponent) && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setIsEditingGroup(false);
-                  setIsEditingComponent(false);
-                }}
-                className="text-xs font-bold flex items-center gap-1.5 border-slate-300"
-              >
-                ← Return to View Mode
-              </Button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left Column: Group Accordion List (Default Mode) or Group Edit Form (Edit Mode) */}
-            <div className="lg:col-span-5 space-y-4">
-              <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                {/* Category Switcher */}
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full">
-                    <button
-                      onClick={() => {
-                        setActiveComponentCategory('Earning');
-                        setIsEditingGroup(false);
-                        const firstEarn = groups.find(g => (g.category?.toLowerCase() || '').includes('earning'));
-                        setSelectedGroupId(firstEarn ? firstEarn.id : '');
-                      }}
-                      className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                        activeComponentCategory === 'Earning'
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Earning
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveComponentCategory('Deduction');
-                        setIsEditingGroup(false);
-                        const firstDed = groups.find(g => (g.category?.toLowerCase() || '').includes('deduct'));
-                        setSelectedGroupId(firstDed ? firstDed.id : '');
-                      }}
-                      className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                        activeComponentCategory === 'Deduction'
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Deduction
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  <span className="text-sm font-bold">{activeComponentCategory} Group</span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedGroupId('');
-                        setIsEditingGroup(true);
-                        setGroupForm({
-                          name: '',
-                          category: activeComponentCategory,
-                          roundFormat: 'Round',
-                          groupFunction: 'Sum',
-                          configureOnProfile: false,
-                          displayOnProfile: false,
-                          isEditable: true,
-                          contributedBy: 'Employee',
-                          recalculateOnChange: false,
-                          groupForPayslip: 'Choose',
-                          displayOrder: 10,
-                          disableArrear: true,
-                          displayTotalOnProcess: false,
-                          tdsSameMonth: false,
-                          isTaxable: true,
-                          isActive: true
-                        });
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> + Group
-                    </Button>
-                    <Badge variant="outline" className="text-[10px] font-bold">
-                      {groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase())).length}
-                    </Badge>
-                  </div>
-                </div>
-
-                <CardContent className="p-0 divide-y divide-slate-100 dark:divide-slate-800">
-                  {/* INLINE EXPANDABLE GROUP FORM (matches video timestamp 00:02 when +Group or Pencil is clicked) */}
-                  {isEditingGroup && (
-                    <div className="p-4 bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 space-y-3.5 text-xs">
-                      {/* Select Group / Name */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Group Name *</label>
-                          <Input
-                            value={groupForm.name || ''}
-                            onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
-                            placeholder="Group Name"
-                            className="text-xs font-semibold h-9"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Round Format *</label>
-                            <select
-                              value={groupForm.roundFormat || 'Round'}
-                              onChange={e => setGroupForm({ ...groupForm, roundFormat: e.target.value as any })}
-                              className="w-full border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded p-1.5 text-xs font-semibold"
-                            >
-                              <option value="Round">Round</option>
-                              <option value="Round two decimal">Round two decimal</option>
-                              <option value="Round Up">Round Up</option>
-                              <option value="Round Down">Round Down</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Group Function *</label>
-                            <select
-                              value={groupForm.groupFunction || 'Max'}
-                              onChange={e => setGroupForm({ ...groupForm, groupFunction: e.target.value as any })}
-                              className="w-full border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded p-1.5 text-xs font-semibold"
-                            >
-                              <option value="Max">Max</option>
-                              <option value="Sum">Sum</option>
-                              <option value="Min">Min</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Toggles Row 1: Configure, Display, Is Editable */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Configure On Profile</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, configureOnProfile: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.configureOnProfile ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, configureOnProfile: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.configureOnProfile ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Display On Profile</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayOnProfile: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.displayOnProfile ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayOnProfile: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.displayOnProfile ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Is Editable</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isEditable: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.isEditable ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isEditable: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.isEditable ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Contributed By & Active */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Contributed By *</label>
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, contributedBy: 'Employee' })}
-                              className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                                groupForm.contributedBy === 'Employee' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-300'
-                              }`}>✓ Employee</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, contributedBy: 'Employer' })}
-                              className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                                groupForm.contributedBy === 'Employer' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-300'
-                              }`}>Employer</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Active</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isActive: false })}
-                              className={`flex-1 py-1.5 font-bold ${!groupForm.isActive ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isActive: true })}
-                              className={`flex-1 py-1.5 font-bold ${groupForm.isActive ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Recalculate, Group for Payslip, Display Order */}
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Recalculate Payroll On Change</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, recalculateOnChange: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.recalculateOnChange ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, recalculateOnChange: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.recalculateOnChange ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Group For Payslip</label>
-                          <select
-                            value={groupForm.groupForPayslip || 'Choose'}
-                            onChange={e => setGroupForm({ ...groupForm, groupForPayslip: e.target.value })}
-                            className="w-full border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded p-1 text-xs font-semibold"
-                          >
-                            <option value="Choose">Choose</option>
-                            <option value="Earnings">Earnings</option>
-                            <option value="Deductions">Deductions</option>
-                            {groups.map(g => (
-                              <option key={g.id} value={g.name}>{g.name}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Display Order</label>
-                          <Input
-                            type="number"
-                            value={groupForm.displayOrder ?? 10}
-                            onChange={e => setGroupForm({ ...groupForm, displayOrder: Number(e.target.value) })}
-                            className="text-xs font-semibold h-7"
-                            placeholder="10"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Disable Arrear, Display Total, TDS Deducted, Taxable */}
-                      <div className="grid grid-cols-4 gap-2">
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Disable Arrear</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, disableArrear: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.disableArrear ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, disableArrear: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.disableArrear ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Display Total On Process</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayTotalOnProcess: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.displayTotalOnProcess ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayTotalOnProcess: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.displayTotalOnProcess ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">TDS deducted same month</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, tdsSameMonth: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.tdsSameMonth ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, tdsSameMonth: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.tdsSameMonth ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Taxable</label>
-                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isTaxable: false })}
-                              className={`flex-1 py-1 font-bold ${!groupForm.isTaxable ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isTaxable: true })}
-                              className={`flex-1 py-1 font-bold ${groupForm.isTaxable ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons: Green + Update | Red ✕ Cancel (matches video timestamp 00:04 & 00:13) */}
-                      <div className="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        <Button
-                          onClick={() => handleSaveGroup()}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-5 gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Update
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          onClick={() => setIsEditingGroup(false)}
-                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-8 px-5 gap-1 ml-auto"
-                        >
-                          ✕ Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* GROUP ACCORDION LIST (Matching Hoshi HRMS Cyan/Teal Card Screenshots) */}
-                  <div className="max-h-[600px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                    {groups
-                      .filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()))
-                      .map(group => {
-                        const isSelected = selectedGroupId === group.id;
-                        return (
-                          <div key={group.id} className="rounded-lg overflow-hidden border border-border/80 shadow-xs bg-card">
-                            {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
-                            <div
-                              onClick={() => {
-                                setSelectedGroupId(group.id);
-                                setGroupForm(group);
-                                setIsEditingComponent(false);
-                              }}
-                              className="flex items-center justify-between px-3.5 py-2.5 cursor-pointer bg-[#00a8a8] text-white"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="w-2.5 h-2.5 rounded-xs bg-white/80 shrink-0" />
-                                <span className="text-xs font-extrabold tracking-wide drop-shadow-xs">{group.name}</span>
-                              </div>
-
-                              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                {/* Code Badge e.g. E ADJUSTMENT */}
-                                <span className="px-2 py-0.5 text-[10px] font-mono font-extrabold bg-white/20 text-white rounded border border-white/30 uppercase">
-                                  E {group.name.replace(/\s+/g, '_')}
-                                </span>
-                                {/* Pencil Edit Icon */}
-                                <button
-                                  onClick={() => {
-                                    setSelectedGroupId(group.id);
-                                    setGroupForm(group);
-                                    setIsEditingGroup(true);
-                                  }}
-                                  className="p-1 rounded hover:bg-white/20 transition-colors text-white"
-                                  title="Edit Group Settings"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                {/* Audit Log Button */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedAuditGroup(group);
-                                    setShowAuditLog(true);
-                                  }}
-                                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-white text-[#00a8a8] shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
-                                  title="Audit Log"
-                                >
-                                  🔄 Audit Log
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* White Component Rows inside Group Box (Matches Hoshi HRMS 1:1) */}
-                            <div className="bg-[#e0f7fa]/70 dark:bg-slate-900/90 p-2 space-y-1.5 border-t border-[#4dd0e1]/40">
-                              {group.components && group.components.length > 0 ? (
-                                group.components.map(comp => (
-                                  <div
-                                    key={comp.id}
-                                    onClick={() => {
-                                      setSelectedGroupId(group.id);
-                                      setSelectedComponentId(comp.id);
-                                      setCompForm(comp as any);
-                                      setIsEditingComponent(true);
-                                    }}
-                                    className="flex items-center justify-between px-3 py-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-xs transition-all cursor-pointer group"
-                                  >
-                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                      {comp.name}
-                                    </span>
-                                    <button
-                                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600"
-                                      title="Edit Component"
-                                    >
-                                      <Edit2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                ))
-                              ) : (
-                                <div
-                                  onClick={() => {
-                                    setSelectedGroupId(group.id);
-                                    setSelectedComponentId('');
-                                    setCompForm({ name: '', type: 'Value', amount: 0, basedOnAttendance: false, isActive: true, groupId: group.id } as any);
-                                    setIsEditingComponent(true);
-                                  }}
-                                  className="flex items-center justify-between px-3 py-2 rounded border border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-400 transition-all cursor-pointer group"
-                                  title="This group has no components yet — click to add one"
-                                >
-                                  <span className="text-[11px] italic text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                    No components yet — click to add one
-                                  </span>
-                                  <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Right Column: Component Table (Default Mode) or Component Edit Form (Edit Mode) */}
-            <div className="lg:col-span-7 space-y-4">
-              {!isEditingComponent ? (
-                /* DEFAULT VIEW MODE: Component Table View (Image 2 Right Panel) */
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                  <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-                    <CardTitle className="text-sm font-bold">
-                      {(() => {
-                        const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
-                        const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0];
-                        return activeGrp?.name || `No ${activeComponentCategory} Groups Yet`;
-                      })()}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedComponentId('');
-                          setIsEditingComponent(true);
-                          setCompForm({ name: '', type: 'Value', amount: 0, basedOnAttendance: false, isActive: true });
-                        }}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> + Add Component
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-xs font-bold text-slate-600"
-                        title="Reset List"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="p-0">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
-                          <th className="text-left px-4 py-3 font-bold text-slate-600 dark:text-slate-400">Name</th>
-                          <th className="text-left px-4 py-3 font-bold text-slate-600 dark:text-slate-400">Component Type</th>
-                          <th className="text-left px-4 py-3 font-bold text-slate-600 dark:text-slate-400">Based On Attendance</th>
-                          <th className="text-left px-4 py-3 font-bold text-slate-600 dark:text-slate-400">Active</th>
-                          <th className="text-left px-4 py-3 font-bold text-slate-600 dark:text-slate-400">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(() => {
-                          const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
-                          const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0];
-
-                          if (!activeGrp) {
-                            return (
-                              <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
-                                  No {activeComponentCategory} groups yet. Click <span className="font-bold">+ Group</span> on the left to create one.
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          const list = activeGrp.components && activeGrp.components.length > 0 ? activeGrp.components : [];
-
-                          if (list.length === 0) {
-                            return (
-                              <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
-                                  "{activeGrp.name}" has no components yet. Click <span className="font-bold">+ Add Component</span> above to add one.
-                                </td>
-                              </tr>
-                            );
-                          }
-
-                          return list.map(comp => (
-                          <tr
-                            key={comp.id}
-                            className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
-                          >
-                            <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">{comp.name}</td>
-                            <td className="px-4 py-3 uppercase font-bold text-slate-500">{comp.type}</td>
-                            <td className="px-4 py-3 text-slate-600">{comp.basedOnAttendance ? 'Yes' : 'No'}</td>
-                            <td className="px-4 py-3 text-slate-600">{comp.isActive ? 'Yes' : 'No'}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5">
-                                {/* Pencil Icon in Action column -> Opens Update Component Information Form */}
-                                <button
-                                  onClick={() => {
-                                    setSelectedComponentId(comp.id);
-                                    setCompForm(comp);
-                                    setIsEditingComponent(true);
-                                  }}
-                                  className="p-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all"
-                                  title="Edit Component Information"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteComponent(comp.id, e);
-                                  }}
-                                  className="p-1 rounded border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 hover:text-rose-600 transition-all"
-                                  title="Delete Component"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  className="p-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-slate-400 transition-all"
-                                  title="Reset"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                         ));
-                        })()}
-                      </tbody>
-                    </table>
-                  </CardContent>
-                </Card>
-              ) : (
-                /* EDIT MODE: Update Component Information Form (Image 1 Right Panel) */
-                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-                  <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-xs font-bold flex items-center gap-2">
-                        <Edit2 className="w-3.5 h-3.5 text-indigo-500" />
-                        Update Component Information
-                      </CardTitle>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setIsEditingComponent(false)}
-                        className="text-[11px] font-bold text-indigo-600"
-                      >
-                        ← Back to Component Table
-                      </Button>
-                      <Button
-                        onClick={() => setShowAuditLog(true)}
-                        variant="outline"
-                        size="sm"
-                        className="text-xs font-bold flex items-center gap-1.5"
-                      >
-                        Audit Log
-                      </Button>
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="p-5 space-y-5">
-                    {/* Formula Setting Collapsible Accordion (matches Condition/Employment Setting) */}
-                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
-                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
-                        <span className="flex items-center gap-2">
-                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
-                          <span className="text-indigo-500 font-black">£</span> Formula Setting
-                        </span>
-                      </summary>
-                      <div className="p-4 space-y-5 bg-white dark:bg-slate-900">
-
-                    {/* Component Name & Assigned Group */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
-                        <Input
-                          value={compForm.name || ''}
-                          onChange={e => setCompForm({ ...compForm, name: e.target.value })}
-                          placeholder="e.g. Mobile Allowance"
-                          className="mt-1 text-xs font-semibold"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Assign to Component Group</label>
-                        <select
-                          value={(compForm as any).groupId || ''}
-                          onChange={e => setCompForm({ ...compForm, groupId: e.target.value } as any)}
-                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold"
-                        >
-                          <option value="">Select Group Category...</option>
-                          {groups.map(g => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Non-Cashable / Based On Attendance / Active */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Non-Cashable Item</label>
-                        <div className="flex rounded-md overflow-hidden border border-slate-200 text-xs">
-                          <button type="button" onClick={() => setCompForm({ ...compForm, isNonCashable: false })}
-                            className={`flex-1 py-1 font-bold ${!compForm.isNonCashable ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                          <button type="button" onClick={() => setCompForm({ ...compForm, isNonCashable: true })}
-                            className={`flex-1 py-1 font-bold ${compForm.isNonCashable ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Based On Attendance</label>
-                        <div className="flex rounded-md overflow-hidden border border-slate-200 text-xs">
-                          <button type="button" onClick={() => setCompForm({ ...compForm, basedOnAttendance: false })}
-                            className={`flex-1 py-1 font-bold ${!compForm.basedOnAttendance ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
-                          <button type="button" onClick={() => setCompForm({ ...compForm, basedOnAttendance: true })}
-                            className={`flex-1 py-1 font-bold ${compForm.basedOnAttendance ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Active</label>
-                        <div className="flex items-center gap-2 mt-1">
-                          <input
-                            type="checkbox"
-                            checked={compForm.isActive || false}
-                            onChange={e => setCompForm({ ...compForm, isActive: e.target.checked })}
-                            className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
-                          />
-                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Active</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Component Type (Value / Derived / Module) */}
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Type <span className="text-red-500">*</span></label>
-                      <div className="grid grid-cols-3 gap-3 mt-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setCompForm({ ...compForm, type: 'Value' })}
-                          className={`p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                            compForm.type === 'Value'
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          {compForm.type === 'Value' && <Check className="w-3.5 h-3.5 text-white" />} Value
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCompForm({ ...compForm, type: 'Derived' })}
-                          className={`p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                            compForm.type === 'Derived'
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          {compForm.type === 'Derived' && <Check className="w-3.5 h-3.5 text-white" />} Derived
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCompForm({ ...compForm, type: 'Module' })}
-                          className={`p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                            compForm.type === 'Module'
-                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                              : 'bg-white text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          {compForm.type === 'Module' && <Check className="w-3.5 h-3.5 text-white" />} Module
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Amount field if Value */}
-                    {compForm.type === 'Value' && (
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount (₹) <span className="text-red-500">*</span></label>
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          value={compForm.amount !== undefined && compForm.amount !== null ? String(compForm.amount) : ''}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                              setCompForm({ ...compForm, amount: val as any });
-                            }
-                          }}
-                          className="mt-1 text-xs font-bold w-full bg-background"
-                          placeholder="e.g. 5000.00"
-                        />
-                      </div>
-                    )}
-
-                    {/* Derived Formula Expression Editor (matches video timestamp 00:19) */}
-                    {compForm.type === 'Derived' && (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                          <span>Formula Expression <span className="text-red-500">*</span></span>
-                        </label>
-
-                        {/* Editable Monospace Text Area */}
-                        <textarea
-                          rows={2}
-                          value={compForm.formula || ''}
-                          onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
-                          placeholder="e.g. (50 * [CTC]) / 100  or  [BASIC] * 0.40"
-                          className="w-full text-xs font-mono font-bold bg-slate-950 text-emerald-400 border border-slate-800 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
-                        />
-
-                        {/* Quick Variable Chips & Operators — only BASIC/GROSS/CTC are actually
-                            interpreted by the payroll calculation engine (PayrollService's
-                            resolveComponentOverrides); EPF_EPS_WAGES, SALARY_DAYS, and
-                            ATTENDANCE_DAYS used to be offered here too, but nothing in the
-                            backend ever reads them — a formula built from them silently fell
-                            back to whatever bare percentage the regex parser could find. */}
-                        <div className="space-y-1.5 pt-1">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Click to append variable / operator:</span>
-                          <div className="flex flex-wrap gap-1.5">
-                            {['[BASIC]', '[GROSS]', '[CTC]'].map(tag => (
-                              <button
-                                key={tag}
-                                type="button"
-                                onClick={() => setCompForm({ ...compForm, formula: `${compForm.formula || ''} ${tag}`.trim() })}
-                                className="px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded hover:bg-indigo-100"
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                            {['+', '-', '*', '/', '(', ')', '0.50', '0.005', '0.12'].map(op => (
-                              <button
-                                key={op}
-                                type="button"
-                                onClick={() => setCompForm({ ...compForm, formula: `${compForm.formula || ''} ${op}`.trim() })}
-                                className="px-2 py-0.5 text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-200"
-                              >
-                                {op}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Module Source if Module */}
-                    {compForm.type === 'Module' && (
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Module Integration Source</label>
-                        <select
-                          value={compForm.moduleSource || 'Overtime'}
-                          onChange={e => setCompForm({ ...compForm, moduleSource: e.target.value })}
-                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-xs font-bold"
-                        >
-                          <option value="Overtime">Overtime Module (OT Rate x Hours)</option>
-                          <option value="Loan">Loan Module (EMI Deduction Sync)</option>
-                          <option value="Expense">Expense &amp; Travel Claims Sync</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Boundary Type (Min/ Max) */}
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Boundary Type (Min/ Max)</label>
-                        <select
-                          value={compForm.boundaryType || 'Fixed'}
-                          onChange={e => setCompForm({ ...compForm, boundaryType: e.target.value })}
-                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-semibold"
-                        >
-                          <option value="Choose">Choose</option>
-                          <option value="Fixed">Fixed</option>
-                          <option value="Range">Range</option>
-                        </select>
-                      </div>
-
-                      {/* Minimum & Maximum Amount Inputs */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Minimum Amount</label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={compForm.minBoundary !== undefined && compForm.minBoundary !== null ? String(compForm.minBoundary) : ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                setCompForm({ ...compForm, minBoundary: val as any });
-                              }
-                            }}
-                            className="mt-1 text-xs font-bold bg-background"
-                            placeholder="0.00"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Maximum Amount</label>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={compForm.maxBoundary !== undefined && compForm.maxBoundary !== null ? String(compForm.maxBoundary) : ''}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                setCompForm({ ...compForm, maxBoundary: val as any });
-                              }
-                            }}
-                            className="mt-1 text-xs font-bold bg-background"
-                            placeholder="75.00"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Effective Dates */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Effective From Date</label>
-                          <Input
-                            type="date"
-                            value={(compForm as any).effectiveFrom || ''}
-                            onChange={e => setCompForm({ ...compForm, effectiveFrom: e.target.value } as any)}
-                            className="mt-1 text-xs font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Effective To Date</label>
-                          <Input
-                            type="date"
-                            value={(compForm as any).effectiveTo || ''}
-                            onChange={e => setCompForm({ ...compForm, effectiveTo: e.target.value } as any)}
-                            className="mt-1 text-xs font-semibold"
-                          />
-                        </div>
-                      </div>
-                      </div>
-                      </div>
-                    </details>
-
-                    {/* Condition Setting Collapsible Accordion (matches Hoshi 1:1) */}
-                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
-                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
-                        <span className="flex items-center gap-2">
-                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> Condition Setting
-                        </span>
-                      </summary>
-                      <div className="p-4 space-y-3.5 bg-white dark:bg-slate-900 text-xs">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Condition On</label>
-                            <select
-                              value={(compForm as any).conditionOn || ''}
-                              onChange={e => setCompForm({ ...compForm, conditionOn: e.target.value } as any)}
-                              className="w-full mt-1 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs font-semibold bg-background"
-                            >
-                              <option value="">Choose</option>
-                              <option value="Gross Pay">Gross Pay (Monthly)</option>
-                              <option value="Basic Pay">Basic Pay</option>
-                              <option value="Gross">Gross (Total Earnings)</option>
-                              <option value="LOP">LOP (Loss of Pay Days)</option>
-                              <option value="Days">Working Days</option>
-                              {Array.from(new Set([
-                                ...groups.map(g => g.name),
-                                ...groups.flatMap(g => g.components.map(c => c.name)),
-                              ])).filter(Boolean).map(opt => (
-                                <option key={opt} value={opt}>{opt}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Operator</label>
-                            <select
-                              value={(compForm as any).conditionOperator || ''}
-                              onChange={e => setCompForm({ ...compForm, conditionOperator: e.target.value } as any)}
-                              className="w-full mt-1 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs font-semibold bg-background"
-                            >
-                              <option value="">Choose</option>
-                              <option value=">">Greater than (&gt;)</option>
-                              <option value="<">Less than (&lt;)</option>
-                              <option value="=">Equals (=)</option>
-                              <option value=">=">Greater than or Equal (&gt;=)</option>
-                              <option value="<=">Less than or Equal (&lt;=)</option>
-                              <option value="BETWEEN">Between (range)</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Value1</label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={(compForm as any).conditionValue1 ?? ''}
-                              onChange={e => setCompForm({ ...compForm, conditionValue1: e.target.value } as any)}
-                              placeholder="e.g. 25 (Days) or 15000"
-                              className="mt-1 text-xs font-bold"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Value2</label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={(compForm as any).conditionValue2 ?? ''}
-                              onChange={e => setCompForm({ ...compForm, conditionValue2: e.target.value } as any)}
-                              placeholder="Upper bound if Between"
-                              className="mt-1 text-xs font-bold"
-                            />
-                          </div>
-                        </div>
-
-                        {/* [+] Months Collapsible Selector */}
-                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
-                            <span>[+] Months</span>
-                            {((compForm as any).months || []).length > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
-                                {((compForm as any).months || []).length} Selected
-                              </span>
-                            )}
-                          </summary>
-                          <div className="p-2 mt-2 space-y-1.5 max-h-48 overflow-y-auto border-t border-slate-100 dark:border-slate-800">
-                            {(() => {
-                              const ALL_MONTHS = [
-                                'January', 'February', 'March', 'April', 'May', 'June',
-                                'July', 'August', 'September', 'October', 'November', 'December'
-                              ];
-                              const selectedMonths = (compForm as any).months || [];
-                              const isAllSelected = selectedMonths.length >= ALL_MONTHS.length;
-
-                              return (
-                                <>
-                                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-1 mb-1">
-                                    <input
-                                      type="checkbox"
-                                      checked={isAllSelected}
-                                      onChange={e => {
-                                        if (e.target.checked) {
-                                          setCompForm({ ...compForm, months: [...ALL_MONTHS] } as any);
-                                        } else {
-                                          setCompForm({ ...compForm, months: [] } as any);
-                                        }
-                                      }}
-                                      className="rounded accent-indigo-600"
-                                    /> Select All Months
-                                  </label>
-                                  <div className="grid grid-cols-2 gap-1.5">
-                                    {ALL_MONTHS.map(m => {
-                                      const isChecked = selectedMonths.includes(m);
-                                      return (
-                                        <label key={m} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
-                                          <input
-                                            type="checkbox"
-                                            checked={isChecked}
-                                            onChange={e => {
-                                              const curr = (compForm as any).months || [];
-                                              if (e.target.checked) {
-                                                setCompForm({ ...compForm, months: [...curr, m] } as any);
-                                              } else {
-                                                setCompForm({ ...compForm, months: curr.filter((monthName: string) => monthName !== m) } as any);
-                                              }
-                                            }}
-                                            className="rounded accent-indigo-600"
-                                          /> {m}
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </details>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Gender</label>
-                          <div className="flex gap-2">
-                            {['All', 'Male', 'Female'].map(g => (
-                              <button
-                                key={g}
-                                type="button"
-                                onClick={() => setCompForm({ ...compForm, genderFilter: g } as any)}
-                                className={`px-3 py-1 rounded text-xs font-bold border transition-all ${
-                                  ((compForm as any).genderFilter || 'All') === g
-                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                                    : 'bg-background text-slate-600 border-slate-200 dark:border-slate-800'
-                                }`}
-                              >
-                                {g === 'All' ? '✓ All' : g}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </details>
-
-                    {/* Employment Setting Collapsible Accordion (matches Hoshi 1:1) */}
-                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
-                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
-                        <span className="flex items-center gap-2">
-                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> Employment Setting
-                        </span>
-                      </summary>
-                      <div className="p-4 space-y-3 bg-white dark:bg-slate-900 text-xs">
-                        {/* [+] Grade */}
-                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
-                            <span>[+] Grade</span>
-                          </summary>
-                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={(allGrades.length > 0 && ((compForm as any).grades || []).length >= allGrades.length)}
-                                onChange={e => {
-                                  if (e.target.checked) setCompForm({ ...compForm, grades: [...allGrades] } as any);
-                                  else setCompForm({ ...compForm, grades: [] } as any);
-                                }}
-                                className="rounded accent-indigo-600"
-                              /> Select All
-                            </label>
-                            {allGrades.map(grade => (
-                              <label key={grade} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
-                                <input
-                                  type="checkbox"
-                                  checked={((compForm as any).grades || []).includes(grade)}
-                                  onChange={e => {
-                                    const curr = (compForm as any).grades || [];
-                                    if (e.target.checked) setCompForm({ ...compForm, grades: [...curr, grade] } as any);
-                                    else setCompForm({ ...compForm, grades: curr.filter((g: string) => g !== grade) } as any);
-                                  }}
-                                  className="rounded accent-indigo-600"
-                                /> {grade}
-                              </label>
-                            ))}
-                          </div>
-                        </details>
-
-                        {/* [+] Department */}
-                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
-                            <span>[+] Department</span>
-                          </summary>
-                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={(allDepartments.length > 0 && ((compForm as any).departments || []).length >= allDepartments.length)}
-                                onChange={e => {
-                                  if (e.target.checked) setCompForm({ ...compForm, departments: [...allDepartments] } as any);
-                                  else setCompForm({ ...compForm, departments: [] } as any);
-                                }}
-                                className="rounded accent-indigo-600"
-                              /> Select All
-                            </label>
-                            {allDepartments.map(dept => (
-                              <label key={dept} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
-                                <input
-                                  type="checkbox"
-                                  checked={((compForm as any).departments || []).includes(dept)}
-                                  onChange={e => {
-                                    const curr = (compForm as any).departments || [];
-                                    if (e.target.checked) setCompForm({ ...compForm, departments: [...curr, dept] } as any);
-                                    else setCompForm({ ...compForm, departments: curr.filter((d: string) => d !== dept) } as any);
-                                  }}
-                                  className="rounded accent-indigo-600"
-                                /> {dept}
-                              </label>
-                            ))}
-                          </div>
-                        </details>
-
-                        {/* [+] Location */}
-                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
-                            <span>[+] Location</span>
-                            {((compForm as any).locations || []).length > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
-                                {((compForm as any).locations || []).length} Selected
-                              </span>
-                            )}
-                          </summary>
-                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
-                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={(allLocations.length > 0 && ((compForm as any).locations || []).length >= allLocations.length)}
-                                onChange={e => {
-                                  if (e.target.checked) setCompForm({ ...compForm, locations: [...allLocations] } as any);
-                                  else setCompForm({ ...compForm, locations: [] } as any);
-                                }}
-                                className="rounded accent-indigo-600"
-                              /> Select All
-                            </label>
-                            {allLocations.map(loc => (
-                              <label key={loc} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
-                                <input
-                                  type="checkbox"
-                                  checked={((compForm as any).locations || []).includes(loc)}
-                                  onChange={e => {
-                                    const curr = (compForm as any).locations || [];
-                                    if (e.target.checked) setCompForm({ ...compForm, locations: [...curr, loc] } as any);
-                                    else setCompForm({ ...compForm, locations: curr.filter((l: string) => l !== loc) } as any);
-                                  }}
-                                  className="rounded accent-indigo-600"
-                                /> {loc}
-                              </label>
-                            ))}
-                          </div>
-                        </details>
-
-                        {/* [+] Employee */}
-                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
-                            <span>[+] Employee</span>
-                            {((compForm as any).employees || []).length > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
-                                {((compForm as any).employees || []).length} Selected
-                              </span>
-                            )}
-                          </summary>
-                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
-                            {(() => {
-                              const empList = allEmployees;
-                              const selectedEmps = (compForm as any).employees || [];
-                              const isAllEmpSelected = empList.length > 0 && selectedEmps.length >= empList.length;
-
-                              return (
-                                <>
-                                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
-                                    <input
-                                      type="checkbox"
-                                      checked={isAllEmpSelected}
-                                      onChange={e => {
-                                        if (e.target.checked) setCompForm({ ...compForm, employees: empList.map((emp: any) => emp.name) } as any);
-                                        else setCompForm({ ...compForm, employees: [] } as any);
-                                      }}
-                                      className="rounded accent-indigo-600"
-                                    /> Select All
-                                  </label>
-                                  {empList.map((emp: any) => {
-                                    const isChecked = selectedEmps.includes(emp.name);
-                                    return (
-                                      <label key={emp.id} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
-                                        <input
-                                          type="checkbox"
-                                          checked={isChecked}
-                                          onChange={e => {
-                                            const curr = (compForm as any).employees || [];
-                                            if (e.target.checked) setCompForm({ ...compForm, employees: [...curr, emp.name] } as any);
-                                            else setCompForm({ ...compForm, employees: curr.filter((name: string) => name !== emp.name) } as any);
-                                          }}
-                                          className="rounded accent-indigo-600"
-                                        /> {emp.name}
-                                      </label>
-                                    );
-                                  })}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </details>
-                      </div>
-                    </details>
-
-                    {/* Action Buttons: Green + Update | Red ✕ Cancel (matches video) */}
-                    <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          handleSaveComponent();
-                          setIsEditingComponent(false);
-                        }}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-6 gap-1"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Update
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => setIsEditingComponent(false)}
-                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-8 px-6 gap-1"
-                      >
-                        ✕ Cancel
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-
+      {activeTab === 'components' && <MasterPayrollComponents />}
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 3: PAYROLL SLAB — HOSHI EXACT MATCH
+          TAB 3: PAYROLL SLAB — CLEAN UNIFORM DESIGN
       ────────────────────────────────────────────────────────────────────────── */}
-
       {activeTab === 'slabs' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Slabs List — Hoshi Teal Card Style */}
-          <div className="lg:col-span-4 space-y-4">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              {/* Header bar matching Hoshi */}
-              <div style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Payroll Slab</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Left Column: Slabs List */}
+          <div className="lg:col-span-4 space-y-3">
+            <Card className="border border-border/80 bg-card shadow-xs overflow-hidden rounded-xl">
+              {/* Header bar */}
+              <div className="p-3.5 px-4 border-b border-border/60 flex items-center justify-between bg-muted/25">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center text-primary">
+                    <Calculator className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold text-foreground">Payroll Slabs</span>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 800, background: '#f1f5f9', color: '#64748b', borderRadius: 4, padding: '2px 8px' }}>{slabs.length}</span>
+                <span className="text-xs font-bold bg-muted text-muted-foreground rounded-md px-2 py-0.5 border border-border/60">{slabs.length}</span>
               </div>
-              <div style={{ padding: '8px', background: '#fff' }}>
-                {/* Slab Cards — Hoshi Teal Style */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+              <div className="p-2 space-y-2 bg-card">
+                {/* Slab Cards List */}
+                <div className="flex flex-col gap-2 max-h-[580px] overflow-y-auto pr-0.5">
                   {slabs.map(slab => {
                     const isSelected = selectedSlabId === slab.id;
-                    const cycleName = cycles.find(c => c.id === slab.cycleId)?.name || 'Monthly';
+                    const cycleName = cycles.find(c => String(c.id) === String(slab.cycleId))?.name || 'Monthly';
                     const gradeLabel = slab.grades && slab.grades.length > 0 ? slab.grades.slice(0, 2).join(', ') + (slab.grades.length > 2 ? '...' : '') : 'All Grades';
                     return (
                       <div
                         key={slab.id}
                         onClick={() => handleSelectSlab(slab)}
-                        style={{
-                          borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                          border: isSelected ? '2px solid hsl(var(--primary))' : '1px solid hsl(var(--border))',
-                          boxShadow: isSelected ? '0 4px 12px rgba(99,102,241,0.15)' : 'none',
-                          transition: 'all 0.15s'
-                        }}
+                        className={`rounded-xl overflow-hidden cursor-pointer border transition-all duration-150 ${
+                          isSelected
+                            ? 'border-primary ring-1 ring-primary/30 shadow-xs bg-primary/5 dark:bg-primary/10'
+                            : 'border-border/80 hover:border-border bg-card hover:bg-muted/40'
+                        }`}
                       >
-                        {/* Teal header like Hoshi */}
-                        <div style={{
-                          background: isSelected ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
-                          padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {/* Calendar icon */}
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>{cycleName}</span>
+                        {/* Header banner */}
+                        <div className={`px-3 py-2 flex items-center justify-between border-b ${
+                          isSelected
+                            ? 'bg-primary text-primary-foreground border-primary/40'
+                            : 'bg-muted/40 text-foreground border-border/50'
+                        }`}>
+                          <div className="flex items-center gap-1.5 font-bold text-xs">
+                            <Calendar className="w-3.5 h-3.5 opacity-80" />
+                            <span>{cycleName}</span>
                           </div>
                           <button
                             type="button"
                             onClick={(e) => handleDeleteSlab(slab.id, e)}
-                            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', color: '#fff', fontSize: 10, fontWeight: 700 }}
+                            className={`p-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
+                              isSelected ? 'hover:bg-primary-foreground/20 text-primary-foreground' : 'text-muted-foreground hover:text-destructive'
+                            }`}
                             title="Delete Slab"
                           >
-                            ✕
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
+
                         {/* Slab info rows */}
-                        <div style={{ background: 'hsl(var(--card))', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                            {/* Dollar icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
-                            <span style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{slab.name}</span>
+                        <div className="p-2.5 space-y-1 text-xs">
+                          <div className="flex items-center gap-2 font-bold text-foreground truncate">
+                            <DollarSign className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <span className="truncate">{slab.name}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                            {/* Badge icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                            <span style={{ color: '#374151', fontWeight: 600 }}>{gradeLabel}</span>
+                          <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
+                            <Award className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                            <span className="truncate">{gradeLabel}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                            {/* Range icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-                            <span style={{ color: '#374151', fontWeight: 600 }}>
-                              {Number(slab.minCtc || 0).toLocaleString('en-IN')} – {Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
+                          <div className="flex items-center gap-2 text-muted-foreground font-mono text-[11px]">
+                            <Sliders className="w-3.5 h-3.5 text-primary/70 shrink-0" />
+                            <span>
+                              ₹{Number(slab.minCtc || 0).toLocaleString('en-IN')} – ₹{Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
                             </span>
                           </div>
                         </div>
@@ -2413,96 +1207,89 @@ export const PayrollSettingsPage: React.FC = () => {
                       employmentType: 'Regular'
                     });
                   }}
-                  style={{
-                    width: '100%', marginTop: 10, padding: '10px', border: '1.5px dashed #cbd5e1',
-                    borderRadius: 8, background: '#f8fafc', color: '#4f46e5', fontSize: 12,
-                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: 6
-                  }}
+                  className="w-full mt-2 py-2.5 border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 text-primary text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                 >
-                  <Plus style={{ width: 14, height: 14 }} /> Add Payroll Slab
+                  <Plus className="w-3.5 h-3.5" /> Add Payroll Slab
                 </button>
               </div>
             </Card>
           </div>
 
-          {/* Right Column: Add Payroll Slab Form — Hoshi Exact Match */}
+          {/* Right Column: Add/Edit Payroll Slab Form */}
           <div className="lg:col-span-8">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              {/* Hoshi-style right panel header */}
-              <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: '#4f46e5', fontSize: 18 }}>+</span>
+            <Card className="border border-border/80 bg-card rounded-xl shadow-xs overflow-hidden">
+              {/* Form Header */}
+              <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/25">
+                <span className="text-xs font-bold text-foreground flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center text-primary">
+                    <Plus className="w-3.5 h-3.5" />
+                  </div>
                   {selectedSlabId ? 'Edit Payroll Slab' : 'Add Payroll Slab'}
                 </span>
-                <Button onClick={handleSaveSlab} style={{ background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 12, height: 34, paddingLeft: 16, paddingRight: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Button
+                  onClick={handleSaveSlab}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-8 px-4 flex items-center gap-1.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer active:scale-95"
+                >
                   <Save className="w-3.5 h-3.5" /> Save Slab
                 </Button>
               </div>
 
-              <CardContent className="p-5 space-y-5">
-
-                {/* Row 1: Slab Name — Hoshi style: label on left, input on right */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <label style={{ width: 160, flexShrink: 0, fontSize: 12, fontWeight: 700, color: '#374151' }}>Payroll Slab Name <span style={{ color: '#ef4444' }}>*</span></label>
+              <CardContent className="p-5 space-y-4">
+                {/* Row 1: Slab Name */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                  <label className="sm:w-40 shrink-0 text-xs font-bold text-foreground">
+                    Payroll Slab Name <span className="text-rose-500">*</span>
+                  </label>
                   <Input
                     value={slabForm.name || ''}
                     onChange={e => setSlabForm({ ...slabForm, name: e.target.value })}
                     placeholder="e.g. Monthly Senior Slab"
-                    style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
+                    className="flex-1 text-xs font-semibold h-9 bg-background"
                   />
                 </div>
 
-                {/* Row 2: Department + Grade — single-choice searchable dropdowns.
-                    A slab applies to exactly one Department and one Grade at a
-                    time; stored internally as a 1-element array to stay
-                    compatible with the existing departments/grades JSON columns. */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                {/* Row 2: Department + Grade */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Department */}
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Department<span style={{ color: '#ef4444' }}>*</span></label>
+                  <div className="relative">
+                    <label className="text-xs font-bold text-foreground block mb-1">
+                      Department <span className="text-rose-500">*</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => { setShowDeptDropdown(v => !v); setShowGradeDropdown(false); setDeptSearchQuery(''); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
-                        fontSize: 13, fontWeight: 400, color: (slabForm.departments && slabForm.departments.length > 0) ? '#1f2937' : '#6b7280',
-                        cursor: 'pointer', marginTop: 6
-                      }}
+                      className="w-full flex items-center justify-between border border-input rounded-lg px-3 py-2 bg-background text-xs font-medium text-foreground cursor-pointer shadow-2xs focus:ring-1 focus:ring-primary"
                     >
-                      <span>{slabForm.departments?.[0] || 'Choose'}</span>
-                      <ChevronDown size={16} color="#6b7280" style={{ transform: showDeptDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                      <span className={slabForm.departments?.[0] ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
+                        {slabForm.departments?.[0] || 'Choose Department'}
+                      </span>
+                      <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-150 ${showDeptDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showDeptDropdown && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                      <div className="absolute top-full left-0 right-0 z-30 mt-1 border border-border rounded-xl bg-card shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <input
                           autoFocus
                           value={deptSearchQuery}
                           onChange={e => setDeptSearchQuery(e.target.value)}
                           placeholder="Search department..."
-                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
+                          className="w-full border-b border-border px-3 py-2 text-xs bg-background focus:outline-none"
                         />
-                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                        <div className="max-h-44 overflow-y-auto p-1">
                           {allDepartments
                             .filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase()))
                             .map(dept => (
                               <div
                                 key={dept}
                                 onClick={() => { setSlabForm({ ...slabForm, departments: [dept] }); setShowDeptDropdown(false); }}
-                                style={{
-                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
-                                  background: slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent',
-                                  color: '#1f2937'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent')}
+                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
+                                  slabForm.departments?.[0] === dept ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
+                                }`}
                               >
                                 {dept}
                               </div>
                             ))}
                           {allDepartments.filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase())).length === 0 && (
-                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                            <div className="p-3 text-xs text-muted-foreground text-center italic">No matches found</div>
                           )}
                         </div>
                       </div>
@@ -2510,50 +1297,45 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
 
                   {/* Grade */}
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Grade<span style={{ color: '#ef4444' }}>*</span></label>
+                  <div className="relative">
+                    <label className="text-xs font-bold text-foreground block mb-1">
+                      Grade <span className="text-rose-500">*</span>
+                    </label>
                     <button
                       type="button"
                       onClick={() => { setShowGradeDropdown(v => !v); setShowDeptDropdown(false); setGradeSearchQuery(''); }}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
-                        fontSize: 13, fontWeight: 400, color: (slabForm.grades && slabForm.grades.length > 0) ? '#1f2937' : '#6b7280',
-                        cursor: 'pointer', marginTop: 6
-                      }}
+                      className="w-full flex items-center justify-between border border-input rounded-lg px-3 py-2 bg-background text-xs font-medium text-foreground cursor-pointer shadow-2xs focus:ring-1 focus:ring-primary"
                     >
-                      <span>{slabForm.grades?.[0] || 'Choose'}</span>
-                      <ChevronDown size={16} color="#6b7280" style={{ transform: showGradeDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                      <span className={slabForm.grades?.[0] ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
+                        {slabForm.grades?.[0] || 'Choose Grade'}
+                      </span>
+                      <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-150 ${showGradeDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showGradeDropdown && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                      <div className="absolute top-full left-0 right-0 z-30 mt-1 border border-border rounded-xl bg-card shadow-lg overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                         <input
                           autoFocus
                           value={gradeSearchQuery}
                           onChange={e => setGradeSearchQuery(e.target.value)}
                           placeholder="Search grade..."
-                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
+                          className="w-full border-b border-border px-3 py-2 text-xs bg-background focus:outline-none"
                         />
-                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                        <div className="max-h-44 overflow-y-auto p-1">
                           {allGrades
                             .filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase()))
                             .map(grade => (
                               <div
                                 key={grade}
                                 onClick={() => { setSlabForm({ ...slabForm, grades: [grade] }); setShowGradeDropdown(false); }}
-                                style={{
-                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
-                                  background: slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent',
-                                  color: '#1f2937'
-                                }}
-                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent')}
+                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
+                                  slabForm.grades?.[0] === grade ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
+                                }`}
                               >
                                 {grade}
                               </div>
                             ))}
                           {allGrades.filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase())).length === 0 && (
-                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                            <div className="p-3 text-xs text-muted-foreground text-center italic">No matches found</div>
                           )}
                         </div>
                       </div>
@@ -2561,35 +1343,29 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Location — Hoshi style: scrollable checkbox list (Select all + items) */}
+                {/* Location */}
                 <div>
-                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Location</label>
-                  <div style={{
-                    maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8,
-                    padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4
-                  }}>
-                    {/* Navigation arrows (decorative, matching Hoshi) */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>◀</span>
-                      <span style={{ fontSize: 10, color: '#94a3b8' }}>▶</span>
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer', paddingBottom: 4, borderBottom: '1px solid #f1f5f9' }}>
-                      <input type="checkbox"
+                  <label className="text-xs font-bold text-foreground block mb-1.5">Locations</label>
+                  <div className="max-h-36 overflow-y-auto border border-border/80 rounded-xl p-2.5 bg-background flex flex-col gap-1.5">
+                    <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer pb-1.5 border-b border-border/60">
+                      <input
+                        type="checkbox"
                         checked={allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))}
                         onChange={e => setSlabForm({ ...slabForm, locations: e.target.checked ? [...allLocations] : [] })}
-                        style={{ accentColor: '#4f46e5' }}
+                        className="rounded accent-primary w-4 h-4 cursor-pointer"
                       />
-                      Select all
+                      Select all locations
                     </label>
                     {allLocations.map(loc => (
-                      <label key={loc} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
-                        <input type="checkbox"
+                      <label key={loc} className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer py-0.5 hover:text-primary transition-colors">
+                        <input
+                          type="checkbox"
                           checked={slabForm.locations?.includes(loc)}
                           onChange={e => {
                             const curr = slabForm.locations || [];
                             setSlabForm({ ...slabForm, locations: e.target.checked ? [...curr, loc] : curr.filter(l => l !== loc) });
                           }}
-                          style={{ accentColor: '#4f46e5' }}
+                          className="rounded accent-primary w-3.5 h-3.5 cursor-pointer"
                         />
                         {loc}
                       </label>
@@ -2597,17 +1373,16 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* CTC — Hoshi exact: label + range display + dual slider */}
+                {/* CTC Range */}
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>CTC <span style={{ color: '#ef4444' }}>*</span></label>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1', fontFamily: 'monospace' }}>
-                      {Number(slabForm.minCtc || 1).toLocaleString('en-IN')} – {Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-foreground">CTC Range <span className="text-rose-500">*</span></label>
+                    <span className="text-xs font-bold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                      ₹{Number(slabForm.minCtc || 1).toLocaleString('en-IN')} – ₹{Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
                     </span>
                   </div>
-                  {/* Min Slider */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, color: '#64748b', width: 28, flexShrink: 0 }}>Min</span>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-xs text-muted-foreground w-8 shrink-0 font-medium">Min</span>
                     <input
                       type="range"
                       min="1"
@@ -2615,7 +1390,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       step="10000"
                       value={slabForm.minCtc || 1}
                       onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
-                      style={{ flex: 1, accentColor: '#00a8a8', cursor: 'pointer' }}
+                      className="flex-1 accent-primary cursor-pointer"
                     />
                     <input
                       type="number"
@@ -2623,12 +1398,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       max={slabForm.maxCtc || 10000000}
                       value={slabForm.minCtc || 1}
                       onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
-                      style={{ width: 90, height: 28, border: '1px solid #d1d5db', borderRadius: 4, padding: '0 6px', fontSize: 11, fontWeight: 600, textAlign: 'right' }}
+                      className="w-24 h-8 border border-input rounded-lg px-2 text-xs font-semibold text-right bg-background"
                     />
                   </div>
-                  {/* Max Slider */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 11, color: '#64748b', width: 28, flexShrink: 0 }}>Max</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-8 shrink-0 font-medium">Max</span>
                     <input
                       type="range"
                       min="1"
@@ -2636,7 +1410,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       step="10000"
                       value={slabForm.maxCtc || 10000000}
                       onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                      style={{ flex: 1, accentColor: '#00a8a8', cursor: 'pointer' }}
+                      className="flex-1 accent-primary cursor-pointer"
                     />
                     <input
                       type="number"
@@ -2644,39 +1418,36 @@ export const PayrollSettingsPage: React.FC = () => {
                       max="10000000"
                       value={slabForm.maxCtc || 10000000}
                       onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                      style={{ width: 90, height: 28, border: '1px solid #d1d5db', borderRadius: 4, padding: '0 6px', fontSize: 11, fontWeight: 600, textAlign: 'right' }}
+                      className="w-24 h-8 border border-input rounded-lg px-2 text-xs font-semibold text-right bg-background"
                     />
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-1 font-mono">
                     <span>₹1</span><span>₹25L</span><span>₹50L</span><span>₹75L</span><span>₹1Cr</span>
                   </div>
                 </div>
 
-                {/* Payroll Component — Hoshi exact: label + scrollable checkbox list */}
+                {/* Components Selector */}
                 <div>
                   {(() => {
-                    // Use DB components if available, else fall back to full master list
-                    const getUniqueComponents = () => {
-                      const masterComps = groups.flatMap(g => g.components.map(c => ({ id: String(c.id), name: c.name, type: c.type || 'Derived' })))
-                        .filter(c => c.name && !['hello', 'test'].includes(c.name.toLowerCase()));
+                    const getUniqueComponents = (): { id: string; name: string; type: string }[] => {
+                      const masterComps: { id: string; name: string; type: string }[] = (groups || []).flatMap(g =>
+                        (g.components || []).map((c: any) => ({
+                          id: String(c.id),
+                          name: String(c.name || ''),
+                          type: String(c.type || 'Derived')
+                        }))
+                      ).filter(c => c.name.trim().length > 0);
 
-                      if (masterComps.length > 0) {
-                        const seen = new Set<string>();
-                        return masterComps.filter(c => {
-                          const k = c.name.trim().toLowerCase();
-                          if (seen.has(k)) return false;
-                          seen.add(k); return true;
-                        });
-                      }
-
-                      // Fall back to FULL_PAYROLL_COMPONENTS (all 60+ items from top of file)
-                      return FULL_PAYROLL_COMPONENTS.map(c => ({ id: c.id, name: c.name, type: 'Derived' as const }));
+                      const seen = new Set<string>();
+                      return masterComps.filter(c => {
+                        const k = c.name.trim().toLowerCase();
+                        if (seen.has(k)) return false;
+                        seen.add(k);
+                        return true;
+                      });
                     };
 
                     const uniqueComps = getUniqueComponents();
-                    const allUniqueIds = uniqueComps.map(c => String(c.id));
-
-                    // Helper to match component ID, name, or slug against slab's selectedComponentIds with exact matching
                     const isComponentChecked = (comp: { id: string; name: string }) => {
                       const selected = slabForm.selectedComponentIds || [];
                       if (!selected || selected.length === 0) return false;
@@ -2692,17 +1463,18 @@ export const PayrollSettingsPage: React.FC = () => {
                     };
 
                     const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
-                    const allSelected = uniqueComps.length > 0 && selectedCount === uniqueComps.length;
+                    const totalCount = uniqueComps.length;
+                    const allSelected = totalCount > 0 && selectedCount === totalCount;
 
                     return (
                       <>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-                            Payroll Component <span style={{ color: '#ef4444' }}>*</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs font-bold text-foreground">
+                            Payroll Components <span className="text-rose-500">*</span>
                           </label>
                           <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              {selectedCount} Components Selected
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                              {selectedCount} Selected
                             </span>
                             <button
                               type="button"
@@ -2712,28 +1484,26 @@ export const PayrollSettingsPage: React.FC = () => {
                                   selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
                                 });
                               }}
-                              className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                              className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
                             >
                               {allSelected ? 'Deselect All' : 'Select All'}
                             </button>
                           </div>
                         </div>
 
-                        <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl">
-                          {/* Search component filter input */}
+                        <div className="space-y-2 p-3 bg-muted/20 border border-border/80 rounded-xl">
                           <div className="relative">
-                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                             <input
                               type="text"
                               placeholder="Search pay component..."
                               value={compSearch}
                               onChange={e => setCompSearch(e.target.value)}
-                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-slate-200 dark:border-slate-700 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border/80 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
                             />
                           </div>
 
-                          {/* Checkbox List Box */}
-                          <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                          <div className="space-y-1 max-h-56 overflow-y-auto border border-border/60 rounded-lg p-2 bg-background text-xs">
                             {(() => {
                               const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
@@ -2750,10 +1520,10 @@ export const PayrollSettingsPage: React.FC = () => {
                                 return (
                                   <label
                                     key={c.id}
-                                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors border ${
+                                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border ${
                                       isChecked
-                                        ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 font-bold border-emerald-300 dark:border-emerald-700 shadow-sm'
-                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-transparent'
+                                        ? 'bg-primary/10 text-foreground font-semibold border-primary/30 shadow-2xs'
+                                        : 'hover:bg-muted text-muted-foreground border-transparent'
                                     }`}
                                   >
                                     <div className="flex items-center gap-2.5">
@@ -2766,11 +1536,10 @@ export const PayrollSettingsPage: React.FC = () => {
                                           const cname = c.name.trim().toLowerCase();
                                           const cslug = cname.replace(/[^a-z0-9]+/g, '_');
 
-                                          let next: string[];
+                                          let next;
                                           if (e.target.checked) {
                                             next = [...new Set([...current, String(c.id), cslug])];
                                           } else {
-                                            // Exact filter out
                                             next = current.filter(id => {
                                               const sid = String(id).trim().toLowerCase();
                                               const sslug = sid.replace(/[^a-z0-9]+/g, '_');
@@ -2779,14 +1548,16 @@ export const PayrollSettingsPage: React.FC = () => {
                                           }
                                           setSlabForm({ ...slabForm, selectedComponentIds: next });
                                         }}
-                                        className="rounded accent-emerald-600 w-4 h-4 cursor-pointer"
+                                        className="rounded accent-primary w-4 h-4 cursor-pointer"
                                       />
                                       <span className="text-xs">{c.name}</span>
                                     </div>
                                     <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
-                                      c.type === 'Derived'
-                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                      String(c.type) === 'Derived'
+                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                        : String(c.type) === 'Module'
+                                        ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20'
+                                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                                     }`}>
                                       {c.type}
                                     </span>
@@ -2795,54 +1566,20 @@ export const PayrollSettingsPage: React.FC = () => {
                               });
                             })()}
                           </div>
-
-                          {/* Selected Active Component Badges */}
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {(() => {
-                              const selectedComps = uniqueComps.filter(c => isComponentChecked(c));
-                              if (selectedComps.length === 0) {
-                                return (
-                                  <p className="text-[11px] text-muted-foreground italic">No components selected. Check items above to include them in this slab.</p>
-                                );
-                              }
-
-                              return selectedComps.map(c => (
-                                <span
-                                  key={c.id}
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200 rounded-md text-[11px] font-bold shadow-2xs"
-                                >
-                                  ✓ {c.name}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const next = (slabForm.selectedComponentIds || []).filter(item => String(item) !== String(c.id));
-                                      setSlabForm({ ...slabForm, selectedComponentIds: next });
-                                    }}
-                                    className="w-3.5 h-3.5 rounded-full bg-emerald-200 hover:bg-red-200 hover:text-red-700 dark:bg-emerald-800 flex items-center justify-center text-[10px] ml-1 transition-colors"
-                                    title="Remove component"
-                                  >
-                                    ✕
-                                  </button>
-                                </span>
-                              ));
-                            })()}
-                          </div>
                         </div>
                       </>
                     );
                   })()}
                 </div>
 
-
-
-                {/* Row: Payroll Cycle + Active toggle */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Payroll Cycle */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Cycle <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-bold text-foreground">Payroll Cycle <span className="text-rose-500">*</span></label>
                     <select
                       value={slabForm.cycleId || (cycles[0]?.id ? String(cycles[0].id) : '')}
                       onChange={e => setSlabForm({ ...slabForm, cycleId: e.target.value })}
-                      className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="w-full mt-1 border border-input bg-background rounded-lg p-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
                     >
                       <option value="">-- Select Payroll Cycle --</option>
                       {cycles.map(c => (
@@ -2850,20 +1587,20 @@ export const PayrollSettingsPage: React.FC = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="flex items-center gap-4 pt-5">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Active</span>
+                  <div className="flex items-center gap-3 pt-5">
+                    <span className="text-xs font-bold text-foreground">Status</span>
                     <button
                       type="button"
                       onClick={() => setSlabForm({ ...slabForm, isActive: !slabForm.isActive })}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        slabForm.isActive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        slabForm.isActive ? 'bg-emerald-600' : 'bg-muted border border-border'
                       }`}
                     >
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
                         slabForm.isActive ? 'translate-x-6' : 'translate-x-1'
                       }`} />
                     </button>
-                    <span className={`text-xs font-bold ${slabForm.isActive ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <span className={`text-xs font-bold ${slabForm.isActive ? 'text-emerald-600' : 'text-muted-foreground'}`}>
                       {slabForm.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>

@@ -764,16 +764,18 @@ export default function LeavePage() {
     
     // Find matching leave type object to ensure policy settings & onlyWhen condition tree are present
     const matchingType = leaveTypes.find(t => String(t.id) === String(b.leave_type_id || b.leaveTypeId || b.id));
-    const mergedItem = matchingType
+    const bAny = b as any;
+    const matchingTypeAny = matchingType as any;
+    const mergedItem = matchingTypeAny
       ? {
-          ...matchingType,
-          ...b,
-          allocation_settings: b.allocation_settings || b.allocationSettings || matchingType.allocation_settings || matchingType.allocationSettings,
-          allocation: b.allocation || matchingType.allocation,
-          gender_applicable: b.gender_applicable || b.genderApplicable || matchingType.gender_applicable || matchingType.genderApplicable,
-          only_when: b.only_when || b.onlyWhen || matchingType.only_when || matchingType.onlyWhen,
+          ...matchingTypeAny,
+          ...bAny,
+          allocation_settings: bAny.allocation_settings || bAny.allocationSettings || matchingTypeAny.allocation_settings || matchingTypeAny.allocationSettings,
+          allocation: bAny.allocation || matchingTypeAny.allocation,
+          gender_applicable: bAny.gender_applicable || bAny.genderApplicable || matchingTypeAny.gender_applicable || matchingTypeAny.genderApplicable,
+          only_when: bAny.only_when || bAny.onlyWhen || matchingTypeAny.only_when || matchingTypeAny.onlyWhen,
         }
-      : b;
+      : bAny;
 
     return isLeaveTypeApplicableForGender(mergedItem, currentEmpGender);
   }).map(b => {
@@ -855,7 +857,13 @@ export default function LeavePage() {
                   className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
                 >
                   <option value="">Select Leave Category...</option>
-                  {displayBalances
+                  {(displayBalances.length > 0 ? displayBalances : allLeaveTypes.map((t: any) => ({
+                    id: t.id,
+                    leave_type_id: t.id,
+                    leave_name: t.leave_name || t.leaveName,
+                    leave_code: t.leave_code || t.leaveCode,
+                    available_balance: t.default_allowance_days || t.defaultAllowanceDays || 0,
+                  })))
                     .filter((b) => isLeaveTypeApplicableForGender(b, currentEmpGender))
                     .map((b) => {
                       const name = b.leave_name || b.leaveName || 'Leave';
@@ -870,6 +878,12 @@ export default function LeavePage() {
                       );
                     })}
                 </select>
+                {(displayBalances.length === 0 && allLeaveTypes.length === 0) && (
+                  <p className="text-[11px] font-medium text-amber-500 mt-1.5 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    No eligible leave categories available for your current tenure/profile (e.g. minimum 6 months service requirement or gender restriction).
+                  </p>
+                )}
               </div>
 
               {/* Date Selection */}

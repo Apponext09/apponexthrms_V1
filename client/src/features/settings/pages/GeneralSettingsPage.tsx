@@ -20,12 +20,14 @@ import {
   ArrowRight,
   Palette,
   Sparkles,
+  GitBranch,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export function GeneralSettingsPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -37,6 +39,9 @@ export function GeneralSettingsPage() {
   const [geofenceRadius, setGeofenceRadius] = useState<number>(100);
   const [attendanceMode, setAttendanceMode] = useState<string>('gps');
   const [requireCheckout, setRequireCheckout] = useState<boolean>(true);
+
+  // ... fetchSettings and saveSettings logic ...
+
 
   // Fetch Settings from API
   const fetchSettings = async () => {
@@ -158,6 +163,36 @@ export function GeneralSettingsPage() {
         <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
           Workflow &amp; Policy Rules
         </h2>
+
+        {/* Custom Workflow Engine Settings */}
+        <Card className="border border-indigo-500/30 rounded-2xl shadow-xs bg-indigo-50/30 dark:bg-indigo-950/20 hover:border-indigo-500/50 transition-colors">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5 sm:mt-0">
+                <GitBranch className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground tracking-tight flex items-center gap-2">
+                  Custom Workflow Engine Settings
+                  <span className="text-[10px] bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded-full font-bold">Configurable</span>
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Configure custom multi-stage approval workflows, step roles (Reporting Officer, Employee, Dept, Role), form permissions, escalation SLA timers, and event notifications.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+              <Button
+                size="sm"
+                onClick={() => navigate('/settings/workflows')}
+                className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
+              >
+                Configure Workflows <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* 1. Leave Approval Workflow */}
         <Card className="border border-border/80 rounded-2xl shadow-xs bg-card hover:border-border transition-colors">

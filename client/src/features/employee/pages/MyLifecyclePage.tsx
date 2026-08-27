@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
-import { lifecycleApi, EmployeeLifecycleDetails } from '@/features/HR/EmployeeLifecycle/api/lifecycleApi';
-import { ChronologicalLifecycleFlow } from '@/features/HR/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
+import { lifecycleApi, EmployeeLifecycleDetails } from '@/features/hr/EmployeeLifecycle/api/lifecycleApi';
+import { ChronologicalLifecycleFlow } from '@/features/hr/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

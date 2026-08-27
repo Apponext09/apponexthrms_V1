@@ -55,7 +55,7 @@ async function start() {
     initializeLiveTrackingSocket(io);
 
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
-    server.listen(env.PORT, '0.0.0.0', () => {
+      server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
 
       // Run schema checks and profile seeding asynchronously in background

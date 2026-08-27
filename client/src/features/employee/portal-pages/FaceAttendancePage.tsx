@@ -121,13 +121,17 @@ export default function FaceAttendancePage() {
     gracePeriodMinutes: number;
     durationHours: number;
   }>({
-    shiftName: 'General Shift',
-    startTime: '09:00 AM',
-    endTime: '06:00 PM',
+    shiftName: '',
+    startTime: '',
+    endTime: '',
     breakDurationMinutes: 60,
     gracePeriodMinutes: 15,
     durationHours: 9,
   });
+
+  // Holiday & Shift Gate State
+  const [todayHoliday, setTodayHoliday] = useState<{ isHoliday: boolean; holidayName?: string } | null>(null);
+  const [hasShift, setHasShift] = useState<boolean | null>(null);
 
   // Live shift entry zone state (updated from /attendance/status)
   const [shiftStatusInfo, setShiftStatusInfo] = useState<{
@@ -147,9 +151,9 @@ export default function FaceAttendancePage() {
       const s = res.data?.data;
       if (s) {
         setMyShift({
-          shiftName: s.shift_name || s.shiftName || 'General Shift',
-          startTime: s.start_time || s.startTime || '09:00 AM',
-          endTime: s.end_time || s.endTime || '06:00 PM',
+          shiftName: s.shift_name || s.shiftName || '',
+          startTime: s.start_time || s.startTime || '',
+          endTime: s.end_time || s.endTime || '',
           shiftCode: s.shift_code || s.shiftCode,
           breakDurationMinutes: Number(s.break_duration_minutes || s.breakDurationMinutes || 60),
           gracePeriodMinutes: Number(s.grace_period_minutes || s.gracePeriodMinutes || 15),
@@ -343,6 +347,12 @@ export default function FaceAttendancePage() {
       const res = await apiClient.get('/attendance/status');
       if (res.data?.data) {
         const st = res.data.data;
+        if (typeof st.isHoliday === 'boolean') {
+          setTodayHoliday({ isHoliday: st.isHoliday, holidayName: st.holidayName });
+        }
+        if (typeof st.hasShift === 'boolean') {
+          setHasShift(st.hasShift);
+        }
         if (st.isCheckedOut) {
           setCheckInStatus('completed');
           setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
@@ -1145,15 +1155,15 @@ export default function FaceAttendancePage() {
               )}
 
               <Button
-                disabled={!geofenceStatus.isValid || locLoading || biometricLoading || checkInStatus === 'completed'}
+                disabled={!geofenceStatus.isValid || locLoading || biometricLoading || checkInStatus === 'completed' || (todayHoliday?.isHoliday && !hasShift) || (!hasShift && hasShift !== null)}
                 onClick={handleBiometricPunch}
                 className={cn(
                   'h-8 text-xs font-bold px-6 gap-1.5 transition-all',
-                  !geofenceStatus.isValid
+                  (!geofenceStatus.isValid || (todayHoliday?.isHoliday && !hasShift) || (!hasShift && hasShift !== null))
                     ? 'bg-muted text-muted-foreground cursor-not-allowed border border-rose-200'
                     : 'bg-primary hover:bg-primary/90 text-primary-foreground'
                 )}
-                title={!geofenceStatus.isValid ? 'Check-in is disabled outside 700m office radius' : ''}
+                title={todayHoliday?.isHoliday && !hasShift ? `Public Holiday (${todayHoliday.holidayName})` : !hasShift ? 'No Shift Assigned' : !geofenceStatus.isValid ? 'Check-in is disabled outside 700m office radius' : ''}
               >
                 {locLoading ? (
                   <>
@@ -1163,6 +1173,14 @@ export default function FaceAttendancePage() {
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying Face...
                   </>
+                ) : todayHoliday?.isHoliday && !hasShift ? (
+                  <>
+                    <Palmtree className="w-3.5 h-3.5 text-blue-500" /> Holiday ({todayHoliday.holidayName})
+                  </>
+                ) : !hasShift && hasShift !== null ? (
+                  <>
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500" /> No Shift Assigned
+                  </>
                 ) : !geofenceStatus.isValid ? (
                   <>
                     <MapPin className="w-3.5 h-3.5 text-rose-500" /> Outside Geofence (Blocked)
@@ -1170,7 +1188,7 @@ export default function FaceAttendancePage() {
                 ) : (
                   <>
                     <Scan className="w-3.5 h-3.5" />
-                    {punchAction === 'check_in' ? `Verify & Check In (${myShift.startTime})` : `Verify & Check Out (${myShift.endTime})`}
+                    {punchAction === 'check_in' ? `Verify & Check In${myShift.startTime ? ` (${myShift.startTime})` : ''}` : `Verify & Check Out${myShift.endTime ? ` (${myShift.endTime})` : ''}`}
                   </>
                 )}
               </Button>

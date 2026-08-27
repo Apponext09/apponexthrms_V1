@@ -231,6 +231,13 @@ export async function runDynamicReport(params: RunReportParams): Promise<{
     q = q.whereNull('e.deleted_at');
   }
 
+  // ── Always Exclude CEO from Reports ───────────────────────────────────────
+  if (joinsApplied.has('employees') || alias === 'e') {
+    q = q.where((builder) => {
+      builder.where('e.is_ceo', 0).orWhereNull('e.is_ceo');
+    });
+  }
+
   // ── Apply explicit company filter if requested ────────────────────────────
   const explicitCompany = filters.companyId || (filters.companies && filters.companies.length > 0 ? filters.companies[0] : null);
 

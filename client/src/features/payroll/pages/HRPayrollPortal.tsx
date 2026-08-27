@@ -91,13 +91,18 @@ export const HRPayrollPortal: React.FC = () => {
     setReportLoading(key);
     try {
       if (key === 'register') {
-        const hdr = 'Code,Name,Basic,HRA,Gross,PF,ESI,TDS,Net\n';
-        const rows = employees.map((e: any) => {
-          const g = Number(e.gross_salary || 0);
-          const b = Math.round(g * 0.5);
-          const h = Math.round(b * 0.4);
-          const pf = Math.min(1800, Math.round(b * 0.12));
-          return `${e.employee_code || 'EMP-' + e.id},"${e.first_name} ${e.last_name}",${b},${h},${g},${pf},0,0,${g - pf}`;
+        const regRes: any = await apiClient.get(latestRunId ? `/payroll/runs/${latestRunId}/register` : '/payroll/salary-structures');
+        const regData = Array.isArray(regRes.data?.data) ? regRes.data.data : (Array.isArray(regRes.data) ? regRes.data : []);
+        const hdr = 'Code,Name,Basic,HRA,Gross,Total Deductions,Net\n';
+        const rows = regData.map((r: any) => {
+          const code = r.employee_code || r.employeeCode || `EMP-${r.id || ''}`;
+          const name = r.name || r.employee_name || `${r.first_name || ''} ${r.last_name || ''}`.trim();
+          const b = Number(r.basic_monthly || r.basic || 0);
+          const h = Number(r.hra_monthly || r.hra || 0);
+          const g = Number(r.gross_monthly || r.gross || 0);
+          const d = Number(r.total_deductions || r.totalDeductions || 0);
+          const n = Number(r.net_salary || r.net_take_home || r.netTakeHome || (g - d));
+          return `"${code}","${name}",${b},${h},${g},${d},${n}`;
         }).join('\n');
         download(hdr + rows, `Payroll_Register_${new Date().toISOString().slice(0, 7)}.csv`);
       } else if (key === 'tds') {

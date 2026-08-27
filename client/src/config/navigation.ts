@@ -352,6 +352,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
       { name: 'Workflow Builder', href: '/workflow', icon: 'GitBranch' },
+      { name: 'Configuration', href: '/configuration', icon: 'Sliders' },
       { name: 'Announcements', href: '/hr-operations/announcements', icon: 'Megaphone' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },
     ],
@@ -414,6 +415,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {
+        name: 'Workflow Settings',
+        href: '/settings/workflows',
+        icon: 'GitBranch',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
         name: 'ID Card Designer',
         href: '/settings/id-card-designer',
         icon: 'CreditCard',
@@ -428,6 +435,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
 
 function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {
   const normUser = userRoles.map((r) => r.toLowerCase().trim());

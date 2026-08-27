@@ -304,7 +304,24 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
-    const result = await super.list(effectiveCtx, options, includeDeleted);
+    const queryFilters = { ...options.filters };
+    let excludeCeoFilter = false;
+    if (queryFilters.is_ceo === 0 || (queryFilters as any).isCeo === 0) {
+      delete queryFilters.is_ceo;
+      delete (queryFilters as any).isCeo;
+      excludeCeoFilter = true;
+    }
+
+    const modifiedOptions = { ...options, filters: queryFilters };
+    if (excludeCeoFilter) {
+      (modifiedOptions as any).customWhere = (builder: any) => {
+        builder.where(function(this: any) {
+          this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
+        });
+      };
+    }
+
+    const result = await super.list(effectiveCtx, modifiedOptions, includeDeleted);
 
 
     
@@ -484,7 +501,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
-    this.stripSensitiveListFields(result.items);
+    // Sensitive aadhar / passport can be omitted if needed, but preserve pan, bank, pf, uan, esic
+    // this.stripSensitiveListFields(result.items);
 
     return result;
   }
