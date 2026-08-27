@@ -57,7 +57,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Check if the error is 401 and it's not a retry or an auth endpoint
+    // 401 Unauthorized — token expired, try refresh
     if (
       error.response?.status === 401 &&
       originalRequest &&
@@ -83,7 +83,6 @@ apiClient.interceptors.response.use(
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');
-        // Call the refresh endpoint to obtain a new token pair (works with httpOnly cookies & body)
         const response = await axios.post(
           `${API_BASE_URL}/auth/refresh`,
           { refreshToken: refreshToken || undefined },
@@ -106,7 +105,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        // If refresh token request fails (e.g. refresh token expired), clean up and redirect to login
+        console.error('[API] Token refresh failed, clearing auth and redirecting to login');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
@@ -116,6 +115,20 @@ apiClient.interceptors.response.use(
       } finally {
         isRefreshing = false;
       }
+    }
+
+    // 403 Forbidden — user lacks permission for this resource
+    if (error.response?.status === 403) {
+      console.warn('[API] Access forbidden (403)', {
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        timestamp: new Date().toISOString(),
+      });
+      // Redirect to unauthorized page
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/unauthorized')) {
+        window.location.href = '/unauthorized';
+      }
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);

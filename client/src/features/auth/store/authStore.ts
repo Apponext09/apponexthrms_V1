@@ -169,10 +169,46 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Clear all tokens and auth data
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('ai-chat-storage');
+        localStorage.removeItem('auth-storage');
+
+        // Set logout timestamp to detect session changes
+        localStorage.setItem('last-logout-time', Date.now().toString());
+
+        // Clear browser service worker cache
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            names.forEach(name => {
+              caches.delete(name).catch(() => {
+                // Ignore errors
+              });
+            });
+          });
+        }
+
+        // Disable browser back button completely
+        // Clear all history by replacing state multiple times
+        window.history.replaceState(null, '', '/login');
+        window.history.replaceState(null, '', '/login?logout=true');
+        window.history.replaceState(null, '', '/login?' + new Date().getTime());
+
+        // Prevent back button by listening to popstate
+        const preventBack = (e: PopStateEvent) => {
+          window.history.pushState(null, '', '/login?' + new Date().getTime());
+        };
+        window.addEventListener('popstate', preventBack);
+
         set({ user: null, isAuthenticated: false });
+
+        // Force hard redirect with cache busting
+        const timestamp = new Date().getTime();
+        window.location.replace('/login?' + timestamp);
+
+        // Extra safety: prevent any code after logout from running
+        return;
       },
     }),
     {

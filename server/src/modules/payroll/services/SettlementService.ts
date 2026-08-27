@@ -149,7 +149,6 @@ export class SettlementService {
       }
 
       if (encashmentPolicy && encashmentPolicy.formula) {
-        const grossMonthly = (struct as any)?.gross_monthly || (basicMonthly * 2);
         const fStr = String(encashmentPolicy.formula).trim();
         let evalStr = fStr
           .replace(/\bBasic\b|\bbasic_monthly\b/gi, String(basicMonthly))
