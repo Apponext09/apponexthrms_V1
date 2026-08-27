@@ -623,13 +623,13 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
         <div className="relative z-10 my-auto space-y-2 px-1 text-center">
           <div className="bg-white/85 dark:bg-slate-900/60 backdrop-blur-xs rounded-xl p-2.5 border border-slate-200/80 shadow-xs space-y-1">
             <p className="text-[9.5px] text-slate-500 font-medium leading-none">
-              {config?.back?.disclaimerText || 'This credential is the property of'}
+              {(config?.back as any)?.disclaimerText || config?.back?.disclaimer || 'This credential is the property of'}
             </p>
             <h4 className="text-[12px] font-extrabold text-slate-900 uppercase tracking-wide">
               {orgDisplayName}
             </h4>
             <p className="text-[9px] text-slate-600 leading-snug">
-              {config?.back?.returnAddress || 'If found, please return to Human Resources Department.'}
+              {(config?.back as any)?.returnAddress || 'If found, please return to Human Resources Department.'}
             </p>
           </div>
 
@@ -666,7 +666,7 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
           )}
 
           <p className="text-[8.5px] text-slate-500 font-medium italic">
-            {config?.back?.termsAndConditions || 'This card is non-transferable.'}
+            {(config?.back as any)?.termsAndConditions || 'This card is non-transferable.'}
           </p>
         </div>
 

@@ -87,7 +87,7 @@ export function isAdminLevel(roles: string[]): boolean {
     SYSTEM_ROLES.HR,
     SYSTEM_ROLES.HR_MANAGER,
   ];
-  return roles.some((role) => adminRoles.includes(role as Role));
+  return roles.some((role) => (adminRoles as string[]).includes(role));
 }
 
 /**
@@ -98,7 +98,7 @@ export function isManagerLevel(roles: string[]): boolean {
   return (
     isAdminLevel(roles) ||
     roles.some((role) =>
-      [SYSTEM_ROLES.DEPARTMENT_HEAD, SYSTEM_ROLES.MANAGER].includes(role as Role)
+      ([SYSTEM_ROLES.DEPARTMENT_HEAD, SYSTEM_ROLES.MANAGER] as string[]).includes(role)
     )
   );
 }

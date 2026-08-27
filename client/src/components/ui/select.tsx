@@ -240,7 +240,7 @@ function SelectContent({ className, children, style, ...props }: SelectContentPr
 
   const content = (
     <div 
-      ref={context.contentRef}
+      ref={context.contentRef as any}
       className={cn(
         "fixed max-h-60 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-2xl text-slate-800 dark:text-slate-100 text-xs animate-in fade-in-0 zoom-in-95 duration-100",
         className
