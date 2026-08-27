@@ -137,20 +137,33 @@ export const CandidateReportPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
-      {/* Top View Toggle */}
-      <div className="flex items-center justify-between border-b pb-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Recruitment & Candidate Funnel Analytics</h1>
-          <p className="text-xs text-slate-500">Track end-to-end conversion from resume sourcing bank down to hiring</p>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Recruitment & Funnel Analytics
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Audit pipeline conversion rates, sourcing channel yield, department hiring velocity, and stage bottlenecks.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
+        <div className="flex items-center gap-2 bg-muted/60 p-1.5 rounded-2xl border border-border/80 relative z-10 shrink-0 w-full sm:w-auto flex-wrap">
           <Button
             size="sm"
             variant={activeTab === 'applications' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('applications')}
-            className={`text-xs h-7 px-3 ${activeTab === 'applications' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600'}`}
+            className={`text-xs h-8 px-4 font-bold rounded-xl transition-all cursor-pointer ${
+              activeTab === 'applications' 
+                ? 'bg-background text-foreground shadow-xs' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
             <Users className="w-3.5 h-3.5 mr-1.5" />
             Application Funnel
@@ -159,7 +172,11 @@ export const CandidateReportPage: React.FC = () => {
             size="sm"
             variant={activeTab === 'sourcing' ? 'default' : 'ghost'}
             onClick={() => setActiveTab('sourcing')}
-            className={`text-xs h-7 px-3 ${activeTab === 'sourcing' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-600'}`}
+            className={`text-xs h-8 px-4 font-bold rounded-xl transition-all cursor-pointer ${
+              activeTab === 'sourcing' 
+                ? 'bg-background text-foreground shadow-xs' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
             <Layers className="w-3.5 h-3.5 mr-1.5" />
             Sourcing & Conversion Funnel
@@ -172,40 +189,40 @@ export const CandidateReportPage: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* Funnel Metric Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="rounded-none shadow-sm border-l-4 border-l-purple-500 bg-white">
-              <CardContent className="p-4 flex items-center justify-between">
+            <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+              <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Resumes Sourced</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">{sourcingSummary.totalSourced}</p>
-                  <p className="text-[11px] text-purple-600 font-medium mt-0.5">Top of Funnel (Resume Bank)</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Resumes Sourced</p>
+                  <h3 className="text-2xl font-black text-foreground mt-1">{sourcingSummary.totalSourced}</h3>
+                  <p className="text-[11px] text-purple-600 dark:text-purple-400 font-bold mt-1">Top of Funnel (Resume Bank)</p>
                 </div>
-                <div className="p-3 bg-purple-50 text-purple-600 rounded-full">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                   <Layers className="w-6 h-6" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-none shadow-sm border-l-4 border-l-blue-500 bg-white">
-              <CardContent className="p-4 flex items-center justify-between">
+            <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+              <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Shortlisted to Pipeline</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">{sourcingSummary.totalShortlisted}</p>
-                  <p className="text-[11px] text-blue-600 font-medium mt-0.5">{sourcingSummary.overallShortlistRatePct}% Shortlist Conversion</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Shortlisted to Pipeline</p>
+                  <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{sourcingSummary.totalShortlisted}</h3>
+                  <p className="text-[11px] text-blue-600/80 dark:text-blue-400/80 font-bold mt-1">{sourcingSummary.overallShortlistRatePct}% Shortlist Conversion</p>
                 </div>
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-full">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                   <Target className="w-6 h-6" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-none shadow-sm border-l-4 border-l-emerald-500 bg-white">
-              <CardContent className="p-4 flex items-center justify-between">
+            <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+              <CardContent className="p-5 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidates Hired</p>
-                  <p className="text-2xl font-bold text-slate-800 mt-1">{sourcingSummary.totalHired}</p>
-                  <p className="text-[11px] text-emerald-600 font-medium mt-0.5">{sourcingSummary.overallHireRatePct}% Funnel Hire Rate</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Candidates Hired</p>
+                  <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{sourcingSummary.totalHired}</h3>
+                  <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 font-bold mt-1">{sourcingSummary.overallHireRatePct}% Funnel Hire Rate</p>
                 </div>
-                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-full">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                   <UserCheck className="w-6 h-6" />
                 </div>
               </CardContent>
@@ -213,51 +230,61 @@ export const CandidateReportPage: React.FC = () => {
           </div>
 
           {/* Sourcing Channels Breakdown */}
-          <Card className="rounded-none shadow-sm border-border bg-white">
-            <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                <TrendingUp className="w-4 h-4 text-blue-600" />
-                Sourcing Channel Conversion Performance
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={handleExportSourcingFunnel} className="h-7 px-3 text-xs rounded-sm shadow-none">
-                <Download className="w-3 h-3 mr-1.5" />
-                Export Sourcing CSV
+          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
+              <div>
+                <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-primary" />
+                  Sourcing Channel Conversion Performance
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">Channel-wise conversion yield from intake to hired stage</p>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExportSourcingFunnel} 
+                className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground"
+              >
+                <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export Sourcing CSV
               </Button>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table className="min-w-[800px]">
-                  <TableHeader className="bg-slate-50">
-                    <TableRow>
-                      <TableHead className="text-xs font-semibold text-slate-700">Source Channel</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Total Resumes Sourced</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Shortlisted to Pipeline</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Candidates Hired</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Shortlist Rate %</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Hire Rate %</TableHead>
+              <div className="w-full overflow-x-auto">
+                <Table className="min-w-[800px] border-collapse">
+                  <TableHeader className="bg-muted/50 border-b border-border/60">
+                    <TableRow className="border-border/60">
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Source Channel</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Total Resumes Sourced</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Shortlisted to Pipeline</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Candidates Hired</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Shortlist Rate %</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground text-center">Hire Rate %</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="divide-y divide-border/60">
                     {funnelLoading ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-xs text-slate-500">
-                          Loading sourcing funnel metrics...
+                        <TableCell colSpan={6} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                            <span>Loading sourcing funnel metrics...</span>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ) : (funnelData?.sourcingFunnel?.bySource || []).length > 0 ? (
                       funnelData.sourcingFunnel.bySource.map((channel: any, idx: number) => (
-                        <TableRow key={idx} className="hover:bg-slate-50/60">
-                          <TableCell className="text-xs font-semibold text-slate-800">{channel.sourceChannel}</TableCell>
-                          <TableCell className="text-xs text-center font-medium text-slate-700">{channel.totalSourced}</TableCell>
-                          <TableCell className="text-xs text-center font-medium text-blue-600">{channel.totalShortlisted}</TableCell>
-                          <TableCell className="text-xs text-center font-medium text-emerald-600">{channel.totalHired}</TableCell>
-                          <TableCell className="text-xs text-center">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <TableRow key={idx} className="border-border/60 hover:bg-muted/40 transition-colors">
+                          <TableCell className="text-xs font-bold text-foreground py-3.5 px-5">{channel.sourceChannel}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-foreground py-3.5 px-4">{channel.totalSourced}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-blue-600 dark:text-blue-400 py-3.5 px-4">{channel.totalShortlisted}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-emerald-600 dark:text-emerald-400 py-3.5 px-4">{channel.totalHired}</TableCell>
+                          <TableCell className="text-xs text-center py-3.5 px-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-mono">
                               {channel.shortlistRatePct}%
                             </span>
                           </TableCell>
-                          <TableCell className="text-xs text-center">
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <TableCell className="text-xs text-center py-3.5 px-5">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-mono">
                               {channel.hireRatePct}%
                             </span>
                           </TableCell>
@@ -265,7 +292,7 @@ export const CandidateReportPage: React.FC = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-xs text-slate-500">
+                        <TableCell colSpan={6} className="h-32 text-center text-xs text-muted-foreground bg-background">
                           No sourcing data found in Resume Bank.
                         </TableCell>
                       </TableRow>
@@ -277,39 +304,39 @@ export const CandidateReportPage: React.FC = () => {
           </Card>
 
           {/* Job Openings Funnel Breakdown */}
-          <Card className="rounded-none shadow-sm border-border bg-white">
-            <CardHeader className="py-3 px-4 border-b">
-              <CardTitle className="text-sm font-semibold text-foreground">
+          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+            <CardHeader className="p-5 border-b border-border/60">
+              <CardTitle className="text-sm font-extrabold text-foreground">
                 Job Openings vs. Sourcing Bank Allocation
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table className="min-w-[800px]">
-                  <TableHeader className="bg-slate-50">
-                    <TableRow>
-                      <TableHead className="text-xs font-semibold text-slate-700">Job Title / Pool</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Open Positions</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Resumes Sourced</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Shortlisted</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Conversion %</TableHead>
-                      <TableHead className="text-xs font-semibold text-slate-700 text-center">Job Status</TableHead>
+              <div className="w-full overflow-x-auto">
+                <Table className="min-w-[800px] border-collapse">
+                  <TableHeader className="bg-muted/50 border-b border-border/60">
+                    <TableRow className="border-border/60">
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Job Title / Pool</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Open Positions</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Resumes Sourced</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Shortlisted</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Conversion %</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground text-center">Job Status</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="divide-y divide-border/60">
                     {(funnelData?.sourcingFunnel?.byJob || []).length > 0 ? (
                       funnelData.sourcingFunnel.byJob.map((jobRow: any, idx: number) => (
-                        <TableRow key={idx} className="hover:bg-slate-50/60">
-                          <TableCell className="text-xs font-medium text-slate-800">{jobRow.positionTitle}</TableCell>
-                          <TableCell className="text-xs text-center font-bold text-slate-700">{jobRow.noOfPositions ?? '-'}</TableCell>
-                          <TableCell className="text-xs text-center font-medium text-slate-700">{jobRow.totalSourced}</TableCell>
-                          <TableCell className="text-xs text-center font-medium text-blue-600">{jobRow.totalShortlisted}</TableCell>
-                          <TableCell className="text-xs text-center font-semibold text-slate-700">{jobRow.shortlistRatePct}%</TableCell>
-                          <TableCell className="text-xs text-center">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                              jobRow.jobStatus === 'published' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                              jobRow.jobStatus === 'closed' ? 'bg-slate-100 text-slate-600 border border-slate-200' :
-                              'bg-amber-50 text-amber-700 border border-amber-200'
+                        <TableRow key={idx} className="border-border/60 hover:bg-muted/40 transition-colors">
+                          <TableCell className="text-xs font-bold text-foreground py-3.5 px-5">{jobRow.positionTitle}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-foreground py-3.5 px-4">{jobRow.noOfPositions ?? '-'}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-foreground py-3.5 px-4">{jobRow.totalSourced}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-blue-600 dark:text-blue-400 py-3.5 px-4">{jobRow.totalShortlisted}</TableCell>
+                          <TableCell className="text-xs text-center font-mono font-bold text-foreground py-3.5 px-4">{jobRow.shortlistRatePct}%</TableCell>
+                          <TableCell className="text-xs text-center py-3.5 px-5">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                              jobRow.jobStatus === 'published' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' :
+                              jobRow.jobStatus === 'closed' ? 'bg-muted text-muted-foreground border border-border' :
+                              'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
                             }`}>
                               {jobRow.jobStatus}
                             </span>
@@ -318,7 +345,7 @@ export const CandidateReportPage: React.FC = () => {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-20 text-center text-xs text-slate-500">
+                        <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground bg-background">
                           No job sourcing distribution records available.
                         </TableCell>
                       </TableRow>
@@ -333,17 +360,17 @@ export const CandidateReportPage: React.FC = () => {
         /* Existing Applications Funnel & Report View */
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* Filters Section */}
-          <Card className="rounded-none shadow-sm bg-white">
-            <CardHeader className="py-3 border-b">
-              <CardTitle className="text-sm font-normal text-foreground">Candidate Application Filter</CardTitle>
+          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+            <CardHeader className="py-4 px-6 border-b border-border/60 bg-muted/30">
+              <CardTitle className="text-sm font-extrabold text-foreground">Candidate Application Filter</CardTitle>
             </CardHeader>
-            <CardContent className="p-4 md:p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-4">
+            <CardContent className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Company</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Company</label>
                   <Select value={filters.companyId} onValueChange={(val) => handleFilterChange('companyId', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder={`Company (${companies?.length || 0})`} />
                     </SelectTrigger>
                     <SelectContent>
@@ -356,9 +383,9 @@ export const CandidateReportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Location</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Location</label>
                   <Select value={filters.locationId} onValueChange={(val) => handleFilterChange('locationId', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder={`Location (${locations?.items?.length || 0})`} />
                     </SelectTrigger>
                     <SelectContent>
@@ -371,9 +398,9 @@ export const CandidateReportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Department</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Department</label>
                   <Select value={filters.departmentId} onValueChange={(val) => handleFilterChange('departmentId', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder={`Department (${departments?.items?.length || 0})`} />
                     </SelectTrigger>
                     <SelectContent>
@@ -386,9 +413,9 @@ export const CandidateReportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Grade</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Grade</label>
                   <Select value={filters.gradeId} onValueChange={(val) => handleFilterChange('gradeId', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder={`Grade (${grades?.items?.length || 0})`} />
                     </SelectTrigger>
                     <SelectContent>
@@ -401,13 +428,13 @@ export const CandidateReportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Employment Type</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Type</label>
                   <Select value={filters.typeId} onValueChange={(val) => handleFilterChange('typeId', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
-                      <SelectValue placeholder={`Employment Type (${employeeTypes?.length || 0})`} />
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
+                      <SelectValue placeholder={`Type (${employeeTypes?.length || 0})`} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Employment Type ({employeeTypes?.length || 0})</SelectItem>
+                      <SelectItem value="all">Type ({employeeTypes?.length || 0})</SelectItem>
                       {employeeTypes?.map((item: any) => (
                         <SelectItem key={item.id} value={item.id.toString()}>{item.name}</SelectItem>
                       ))}
@@ -416,9 +443,9 @@ export const CandidateReportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Designation</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Designation</label>
                   <Select value={filters.designationId} onValueChange={(val) => handleFilterChange('designationId', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder={`Designation (${designations?.length || 0})`} />
                     </SelectTrigger>
                     <SelectContent>
@@ -431,49 +458,54 @@ export const CandidateReportPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Interview Stage</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Stage</label>
                   <Select value={filters.stage} onValueChange={(val) => handleFilterChange('stage', val)}>
-                    <SelectTrigger className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm">
+                    <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold capitalize">
                       <SelectValue placeholder="Choose" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Choose</SelectItem>
                       {INTERVIEW_STAGES.map((stage) => (
-                        <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                        <SelectItem key={stage} value={stage} className="capitalize">{stage}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                
-                <div className="flex items-end pt-1">
-                  <Button onClick={handleSubmit} className="h-8 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs rounded-sm">
-                    Submit
-                  </Button>
-                </div>
 
+              </div>
+              
+              <div className="flex items-center gap-2 pt-2">
+                <Button onClick={handleSubmit} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs cursor-pointer">
+                  Filter Applications
+                </Button>
               </div>
             </CardContent>
           </Card>
 
           {/* Results Section */}
-          <Card className="rounded-none shadow-sm border-border bg-white">
-            <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-              <CardTitle className="text-sm font-normal text-foreground">Result</CardTitle>
-              <Button variant="outline" size="sm" onClick={handleExportApplications} className="h-7 px-3 text-xs rounded-sm shadow-none">
-                <Download className="w-3 h-3 mr-1.5" />
-                Export
+          <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between p-5 border-b border-border/60">
+              <CardTitle className="text-sm font-extrabold text-foreground">Candidate Applications ({totalEntries})</CardTitle>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExportApplications} 
+                className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground"
+              >
+                <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                Export CSV
               </Button>
             </CardHeader>
             
             <CardContent className="p-0">
-              <div className="p-3 bg-card text-card-foreground border-b border-border flex justify-between items-center text-xs text-foreground/90">
+              <div className="p-3.5 bg-muted/30 border-b border-border/60 flex justify-between items-center text-xs text-muted-foreground font-medium">
                 <div>
                   Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
                 </div>
                 <div className="flex items-center gap-1.5">
-                  Show 
+                  <span>Show</span>
                   <Select value={pageSize} onValueChange={handlePageSizeChange}>
-                    <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-card text-card-foreground border-input rounded-sm">
+                    <SelectTrigger className="h-7 w-16 px-1.5 text-xs bg-background border-border rounded-lg font-bold">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -483,103 +515,92 @@ export const CandidateReportPage: React.FC = () => {
                       <SelectItem value="100">100</SelectItem>
                     </SelectContent>
                   </Select>
-                  entries
+                  <span>entries</span>
                 </div>
               </div>
               
-              <div className="border border-border rounded-sm bg-white overflow-x-auto shadow-sm">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                      <TableHead className="h-10 text-xs font-semibold text-slate-600">Name</TableHead>
-                      <TableHead className="h-10 text-xs font-semibold text-slate-600">Email</TableHead>
-                      <TableHead className="h-10 text-xs font-semibold text-slate-600">Role</TableHead>
-                      <TableHead className="h-10 text-xs font-semibold text-slate-600">Department</TableHead>
-                      <TableHead className="h-10 text-xs font-semibold text-slate-600">Stage</TableHead>
-                      <TableHead className="h-10 text-xs font-semibold text-slate-600">Date</TableHead>
+              <div className="w-full overflow-x-auto">
+                <Table className="min-w-[900px] border-collapse">
+                  <TableHeader className="bg-muted/50 border-b border-border/60">
+                    <TableRow className="border-border/60">
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Candidate</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Contact Email</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Role Applied</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Department</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Stage</TableHead>
+                      <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Applied Date</TableHead>
                     </TableRow>
                   </TableHeader>
-                  <TableBody>
+                  <TableBody className="divide-y divide-border/60">
                     {isApplicationsLoading ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-slate-500">
-                          Loading candidates...
+                        <TableCell colSpan={6} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                            <span>Loading application records...</span>
+                          </div>
                         </TableCell>
                       </TableRow>
-                    ) : paginatedData.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center text-slate-500">
-                          No candidates found matching the filters
-                        </TableCell>
-                      </TableRow>
+                    ) : paginatedData.length > 0 ? (
+                      paginatedData.map((c: any) => {
+                        const name = c.candidate_name || c.candidateName || 'Candidate';
+                        const email = c.candidate_email || c.candidateEmail || 'No Email';
+                        const role = c.position_title || c.positionTitle || 'Position';
+                        const dept = c.department_name || c.departmentName || 'General';
+                        const stage = c.application_status || c.applicationStatus || 'applied';
+                        const appliedAt = c.applied_at || c.appliedAt;
+                        const dateStr = appliedAt ? format(new Date(appliedAt), 'MMM dd, yyyy') : 'N/A';
+                        const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+
+                        return (
+                          <TableRow key={c.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                            <TableCell className="py-3.5 px-5">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px] shrink-0 border border-primary/20">
+                                  {initials}
+                                </div>
+                                <span className="font-bold text-xs text-foreground">{name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-3.5 px-4 text-xs font-mono text-muted-foreground">{email}</TableCell>
+                            <TableCell className="py-3.5 px-4 text-xs font-semibold text-foreground">{role}</TableCell>
+                            <TableCell className="py-3.5 px-4 text-xs text-muted-foreground">{dept}</TableCell>
+                            <TableCell className="py-3.5 px-4 text-center">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                stage === 'hired' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
+                                stage === 'rejected' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30' :
+                                stage === 'offer' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30' :
+                                'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30'
+                              }`}>
+                                {stage}
+                              </span>
+                            </TableCell>
+                            <TableCell className="py-3.5 px-5 text-xs text-muted-foreground font-mono">{dateStr}</TableCell>
+                          </TableRow>
+                        );
+                      })
                     ) : (
-                      paginatedData.map((candidate: any) => (
-                        <TableRow key={candidate.id} className="hover:bg-slate-50/50">
-                          <TableCell className="py-2.5 text-xs font-medium text-slate-700">
-                            {candidate.candidate_name || candidate.candidateName}
-                          </TableCell>
-                          <TableCell className="py-2.5 text-xs text-slate-600">
-                            {candidate.candidate_email || candidate.candidateEmail}
-                          </TableCell>
-                          <TableCell className="py-2.5 text-xs text-slate-600">
-                            {candidate.position_title || candidate.positionTitle}
-                          </TableCell>
-                          <TableCell className="py-2.5 text-xs text-slate-600">
-                            {candidate.department_name || candidate.departmentName || 'N/A'}
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                              (candidate.application_status || candidate.applicationStatus) === 'offer' || (candidate.application_status || candidate.applicationStatus) === 'hired' ? 'bg-green-50 text-green-700' :
-                              (candidate.application_status || candidate.applicationStatus) === 'rejected' || (candidate.application_status || candidate.applicationStatus) === 'withdrawn' ? 'bg-red-50 text-red-700' :
-                              'bg-blue-50 text-blue-700'
-                            }`}>
-                              {(() => {
-                                const status = candidate.application_status || candidate.applicationStatus || '';
-                                return status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
-                              })()}
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-2.5 text-xs text-slate-600">
-                            {(() => {
-                              const appliedAt = candidate.applied_at || candidate.appliedAt;
-                              return appliedAt ? format(new Date(appliedAt), 'MMM dd, yyyy') : 'N/A';
-                            })()}
-                          </TableCell>
-                        </TableRow>
-                      ))
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                          No candidate application records matching the filters.
+                        </TableCell>
+                      </TableRow>
                     )}
                   </TableBody>
                 </Table>
-
-                {/* Pagination Controls */}
-                {totalEntries > 0 && (
-                  <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
-                    <div className="text-muted-foreground">
-                      Page {currentPage} of {totalPages}
-                    </div>
-                    <div className="flex gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-card text-card-foreground"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      >
-                        Previous
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-3 text-xs bg-card text-card-foreground"
-                        disabled={currentPage >= totalPages}
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      >
-                        Next
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {totalEntries > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+                  <div className="font-medium">
+                    Page <span className="font-bold text-foreground">{currentPage}</span> of <span className="font-bold text-foreground">{totalPages}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
+                    <Button variant="outline" size="sm" className="h-8 px-3.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -587,4 +608,3 @@ export const CandidateReportPage: React.FC = () => {
     </div>
   );
 };
-

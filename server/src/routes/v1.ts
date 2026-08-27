@@ -14,7 +14,7 @@ import notificationRoutes from '../modules/notifications/notification.routes';
 import settingsRoutes from '../modules/settings/settings.routes';
 import assetRoutes from '../modules/asset/asset.routes';
 import recruitmentRoutes from '../modules/recruitment/recruitment.routes';
-import policyRoutes from '../modules/policy/policy.routes';
+import masterHolidayCalendarRoutes from '../modules/master/routes/masterHolidayCalendar.routes';
 import workflowRoutes from '../modules/workflow/workflow.routes';
 import marketplaceRoutes from '../modules/marketplace/marketplace.routes';
 import licensingRoutes from '../modules/licensing/licensing.routes';
@@ -67,7 +67,7 @@ router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
-router.use('/policies', policyRoutes);
+router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
 
 /**
  * Public Job Reference Routes (no auth required)
@@ -98,6 +98,7 @@ router.post('/public/offers/:uuid/accept', recruitmentController.acceptPublicOff
 router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOffer);
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/autosave', recruitmentController.autosavePublicAssessmentAttempt);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 // ── Report Engine (isolated module) ─────────────────────────────────────────

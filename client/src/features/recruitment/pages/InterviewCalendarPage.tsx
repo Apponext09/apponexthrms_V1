@@ -40,6 +40,7 @@ export const InterviewCalendarPage: React.FC = () => {
   const isEmployeeView = !isAdminOrHr || location.pathname.startsWith('/employee');
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [isGuidelinesOpen, setIsGuidelinesOpen] = useState(false);
 
   // Rating Modal state
   const [ratingModal, setRatingModal] = useState<{
@@ -287,198 +288,259 @@ export const InterviewCalendarPage: React.FC = () => {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
-      {/* Top Banner Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden">
-        <div className="space-y-1 relative z-10">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              {isEmployeeView ? "My Assigned Interview Schedule" : "Interview Schedule & Rating Portal"}
-            </h1>
-            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-semibold px-2.5 py-0.5">
-              {isEmployeeView ? "Employee Portal" : "Recruitment Desk"}
-            </Badge>
-          </div>
-          <p className="text-slate-500 text-xs md:text-sm">
-            {isEmployeeView
-              ? "Track your assigned candidate interviews, enter video rooms, and record performance ratings."
-              : "Company-wide interview scheduling, panel member assignments, video links, and scorecard feedback."}
-          </p>
-        </div>
-
-        {/* Admin/HR only Toggle */}
-        {!isEmployeeView && (
-          <div className="flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-xl border border-slate-200 self-start md:self-auto relative z-10">
-            <button
-              type="button"
-              onClick={() => setAssignedOnly(true)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${assignedOnly
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-            >
-              <User className="w-3.5 h-3.5" /> My Assigned
-            </button>
-            <button
-              type="button"
-              onClick={() => setAssignedOnly(false)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${!assignedOnly
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-            >
-              <Building2 className="w-3.5 h-3.5" /> All Company
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* KPI Stats Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Active Meetings</p>
-            <p className="text-2xl font-bold text-slate-900">{activeTodayList.length}</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <Clock className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Upcoming Schedule</p>
-            <p className="text-2xl font-bold text-slate-900">{upcomingInterviews.length}</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0 border border-indigo-500/20 shadow-xs">
             <Calendar className="w-5 h-5" />
           </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned Mode</p>
-            <p className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mt-1">
-              <ShieldCheck className="w-4 h-4 text-indigo-600" />
-              {activeAssignedOnly ? "My Panel Assigned" : "Company Schedule"}
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                {isEmployeeView ? "My Assigned Interview Schedule" : "Interview Schedule & Scorecards"}
+              </h1>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full">
+                {isEmployeeView ? "Employee Portal" : "Recruitment Desk"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isEmployeeView
+                ? "Track your assigned candidate interviews, enter video rooms, and record performance ratings."
+                : "Company-wide interview scheduling, panel assignments, video room links, and candidate rating scorecards."}
             </p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
-            <User className="w-5 h-5" />
-          </div>
+        </div>
+
+        {/* Action Controls & Toggle */}
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setIsGuidelinesOpen(true)}
+            className="h-9 px-3.5 text-xs font-bold border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 flex items-center gap-1.5 rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span>Interviewer Guidelines</span>
+          </Button>
+
+          {/* Admin/HR only Toggle */}
+          {!isEmployeeView && (
+            <div className="flex items-center gap-1 bg-muted p-1 rounded-xl border border-border/80">
+              <button
+                type="button"
+                onClick={() => setAssignedOnly(true)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${assignedOnly
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                  }`}
+              >
+                <User className="w-3.5 h-3.5" /> My Assigned
+              </button>
+              <button
+                type="button"
+                onClick={() => setAssignedOnly(false)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${!assignedOnly
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                  }`}
+              >
+                <Building2 className="w-3.5 h-3.5" /> All Company
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Grid Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ── KPI Stats Overview Cards ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Today's Active Meetings</p>
+              <p className="text-2xl font-black text-foreground">{activeTodayList.length}</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+              <Clock className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Left Column: Schedules */}
-        <div className="lg:col-span-2 space-y-6">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Upcoming Schedule</p>
+              <p className="text-2xl font-black text-foreground">{upcomingInterviews.length}</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+              <Calendar className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Card 1: Today's Active Schedule & Next In Line */}
-          <Card className="border border-slate-200/80 shadow-sm rounded-xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/60 flex flex-row items-center justify-between py-3.5 px-5 border-b border-slate-200/70">
-              <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                Today's Active Schedule ({filteredActiveToday.length})
-              </CardTitle>
-              {filteredPastToday.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowPastToday(!showPastToday)}
-                  className="text-xs font-semibold text-slate-600 hover:text-blue-600 cursor-pointer flex items-center gap-1"
-                >
-                  {showPastToday ? "Hide" : "View"} Earlier Today ({filteredPastToday.length})
-                </button>
-              )}
-            </CardHeader>
-            <CardContent className="p-0">
-              {todayLoading ? (
-                <div className="p-8 text-center text-xs text-slate-500">Loading today's schedule...</div>
-              ) : filteredActiveToday.length === 0 ? (
-                <div className="p-8 text-center text-slate-500 text-xs space-y-2">
-                  <p className="font-medium">
-                    {filteredPastToday.length > 0 
-                      ? "All scheduled interviews for earlier today are completed." 
-                      : (isEmployeeView ? "No active interviews assigned to you for today." : (assignedOnly ? "No active interviews directly assigned to you for today." : "No active interviews scheduled for today."))}
-                  </p>
-                  {filteredPastToday.length > 0 && !showPastToday && (
-                    <button
-                      onClick={() => setShowPastToday(true)}
-                      className="text-blue-600 hover:underline font-bold text-xs cursor-pointer block mx-auto"
-                    >
-                      📋 View Completed / Earlier Today Interviews ({filteredPastToday.length})
-                    </button>
-                  )}
-                  {!isEmployeeView && assignedOnly && (
-                    <button
-                      onClick={() => setAssignedOnly(false)}
-                      className="text-blue-600 hover:underline font-bold text-xs cursor-pointer"
-                    >
-                      🌐 Switch to View All Company Interviews
-                    </button>
-                  )}
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assigned Mode</p>
+              <p className="text-xs font-bold text-foreground flex items-center gap-1.5 mt-1.5">
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                {activeAssignedOnly ? "My Panel Assigned" : "Company Schedule"}
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+              <User className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Main Content: Schedules ───────────────────────────────────────────── */}
+      <div className="space-y-6">
+
+        {/* Card 1: Today's Active Schedule & Next In Line */}
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="bg-muted/40 flex flex-row items-center justify-between py-4 px-6 border-b border-border/60">
+            <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+              Today's Active Schedule ({filteredActiveToday.length})
+            </CardTitle>
+            {filteredPastToday.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowPastToday(!showPastToday)}
+                className="text-xs font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+              >
+                {showPastToday ? "Hide" : "View"} Earlier Today ({filteredPastToday.length})
+              </button>
+            )}
+          </CardHeader>
+          <CardContent className="p-0">
+            {todayLoading ? (
+              <div className="p-12 text-center text-xs text-muted-foreground">
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  <span>Loading today's schedule...</span>
                 </div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {filteredActiveToday.map((int: any, idx: number) => {
-                    const candidateName = int.candidate_name || int.candidateName || int.name || (int.first_name ? `${int.first_name} ${int.last_name || ''}` : 'Candidate');
-                    const initials = getInitials(candidateName);
+              </div>
+            ) : filteredActiveToday.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-xs space-y-2">
+                <p className="font-medium">
+                  {filteredPastToday.length > 0 
+                    ? "All scheduled interviews for earlier today are completed." 
+                    : (isEmployeeView ? "No active interviews assigned to you for today." : (assignedOnly ? "No active interviews directly assigned to you for today." : "No active interviews scheduled for today."))}
+                </p>
+                {filteredPastToday.length > 0 && !showPastToday && (
+                  <button
+                    onClick={() => setShowPastToday(true)}
+                    className="text-primary hover:underline font-bold text-xs cursor-pointer block mx-auto mt-2"
+                  >
+                    📋 View Completed / Earlier Today Interviews ({filteredPastToday.length})
+                  </button>
+                )}
+                {!isEmployeeView && assignedOnly && (
+                  <button
+                    onClick={() => setAssignedOnly(false)}
+                    className="text-primary hover:underline font-bold text-xs cursor-pointer"
+                  >
+                    🌐 Switch to View All Company Interviews
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-border/60">
+                {filteredActiveToday.map((int: any, idx: number) => {
+                  const candidateName = int.candidate_name || int.candidateName || int.name || (int.first_name ? `${int.first_name} ${int.last_name || ''}` : 'Candidate');
+                  const initials = getInitials(candidateName);
+                  const panelNames = int.interviewer_names || int.interviewerNames || int.interviewer || 'Assigned Panel';
+                  const timeDisplay = formatMeetingTimeRange(int.scheduled_date || int.scheduledDate, int.interview_duration_minutes || int.durationMinutes);
+
+                  return (
+                    <div key={int.id} className={`p-4 hover:bg-muted/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${idx === 0 ? 'bg-primary/5' : ''}`}>
+                      <div className="flex items-start gap-3.5">
+                        {/* Avatar Circle */}
+                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs flex-shrink-0 border border-primary/20 mt-0.5">
+                          {initials}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="font-bold text-foreground text-sm flex items-center gap-2 flex-wrap">
+                            {candidateName}
+                            {idx === 0 && (
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                Next In Line
+                              </Badge>
+                            )}
+                            <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                              {int.interview_type || 'General'}
+                            </span>
+                          </div>
+
+                          <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-md">
+                              <Clock className="w-3.5 h-3.5" /> {timeDisplay}
+                            </span>
+                            <span className="font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md text-[11px]">
+                              Round {int.interview_round || int.interviewRound || 1}
+                            </span>
+                            <span className="flex items-center gap-1 text-muted-foreground font-medium bg-muted px-2 py-0.5 rounded-md">
+                              <User className="w-3 h-3 text-muted-foreground" /> Panel: {panelNames}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Actions */}
+                      <div className="flex items-center gap-2 self-start sm:self-center">
+                        {int.meeting_url && (
+                          <Button
+                            size="sm"
+                            onClick={() => window.open(int.meeting_url)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 h-8 text-xs cursor-pointer shadow-xs rounded-xl"
+                          >
+                            <Video className="w-3.5 h-3.5" /> Join Room
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openRatingModal(int.id, candidateName)}
+                          className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold flex items-center gap-1.5 h-8 text-xs cursor-pointer rounded-xl"
+                        >
+                          <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> Rate & Feedback
+                        </Button>
+                        {getStatusBadge(int.status)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Collapsible Section for Completed/Past Today */}
+            {showPastToday && filteredPastToday.length > 0 && (
+              <div className="border-t border-border/60 bg-muted/20 p-4">
+                <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
+                  Completed / Earlier Today ({filteredPastToday.length})
+                </p>
+                <div className="divide-y divide-border/60">
+                  {filteredPastToday.map((int: any) => {
+                    const candidateName = int.candidate_name || int.candidateName || int.name || 'Candidate';
                     const panelNames = int.interviewer_names || int.interviewerNames || int.interviewer || 'Assigned Panel';
                     const timeDisplay = formatMeetingTimeRange(int.scheduled_date || int.scheduledDate, int.interview_duration_minutes || int.durationMinutes);
 
                     return (
-                      <div key={int.id} className={`p-4 hover:bg-slate-50/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${idx === 0 ? 'bg-blue-50/20' : ''}`}>
-                        <div className="flex items-start gap-3">
-                          {/* Avatar Circle */}
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs border border-indigo-200/60 mt-0.5">
-                            {initials}
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="font-bold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
-                              {candidateName}
-                              {idx === 0 && (
-                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] font-bold px-1.5 py-0">
-                                  Next In Line
-                                </Badge>
-                              )}
-                              <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold uppercase tracking-wider border border-slate-200/60">
-                                {int.interview_type || 'General'}
-                              </span>
-                            </div>
-
-                            <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-4 gap-y-1">
-                              <span className="flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
-                                <Clock className="w-3.5 h-3.5 text-blue-600" /> {timeDisplay}
-                              </span>
-                              <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded text-[11px]">
-                                Round {int.interview_round || int.interviewRound || 1}
-                              </span>
-                              <span className="flex items-center gap-1 text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">
-                                <User className="w-3 h-3 text-slate-400" /> Panel: {panelNames}
-                              </span>
-                            </div>
-                          </div>
+                      <div key={int.id} className="py-2.5 flex items-center justify-between opacity-80 hover:opacity-100 transition-all">
+                        <div>
+                          <span className="font-bold text-xs text-foreground">{candidateName}</span>
+                          <span className="text-[11px] text-muted-foreground ml-2">({timeDisplay}) • Panel: {panelNames}</span>
                         </div>
-
-                        {/* Right Actions */}
-                        <div className="flex items-center gap-2 self-start sm:self-center">
-                          {int.meeting_url && (
-                            <Button
-                              size="sm"
-                              onClick={() => window.open(int.meeting_url)}
-                              className="bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 h-8 text-xs cursor-pointer shadow-sm rounded-lg"
-                            >
-                              <Video className="w-3.5 h-3.5" /> Join Room
-                            </Button>
-                          )}
+                        <div className="flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => openRatingModal(int.id, candidateName)}
-                            className="bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 font-semibold flex items-center gap-1.5 h-8 text-xs cursor-pointer rounded-lg"
+                            className="h-7 text-[11px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 rounded-lg"
                           >
-                            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> Rate & Feedback
+                            <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Rate
                           </Button>
                           {getStatusBadge(int.status)}
                         </div>
@@ -486,87 +548,55 @@ export const InterviewCalendarPage: React.FC = () => {
                     );
                   })}
                 </div>
-              )}
-
-              {/* Collapsible Section for Completed/Past Today */}
-              {showPastToday && filteredPastToday.length > 0 && (
-                <div className="border-t border-slate-200 bg-slate-50/50 p-3">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1">
-                    Completed / Earlier Today ({filteredPastToday.length})
-                  </p>
-                  <div className="divide-y divide-slate-200/60">
-                    {filteredPastToday.map((int: any) => {
-                      const candidateName = int.candidate_name || int.candidateName || int.name || 'Candidate';
-                      const panelNames = int.interviewer_names || int.interviewerNames || int.interviewer || 'Assigned Panel';
-                      const timeDisplay = formatMeetingTimeRange(int.scheduled_date || int.scheduledDate, int.interview_duration_minutes || int.durationMinutes);
-
-                      return (
-                        <div key={int.id} className="p-3 flex items-center justify-between opacity-80 hover:opacity-100 transition-all">
-                          <div>
-                            <span className="font-bold text-xs text-slate-800">{candidateName}</span>
-                            <span className="text-[11px] text-slate-500 ml-2">({timeDisplay}) • Panel: {panelNames}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openRatingModal(int.id, candidateName)}
-                              className="h-7 text-[11px] bg-amber-50 text-amber-800 border-amber-300"
-                            >
-                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Rate
-                            </Button>
-                            {getStatusBadge(int.status)}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card 2: Upcoming Interviews Table */}
-          <Card className="border border-slate-200/80 shadow-sm rounded-xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5 px-5 border-b border-slate-200/70">
-              <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-indigo-600" />
-                Upcoming Interview Schedule ({filteredUpcoming.length})
-              </CardTitle>
-
-              {/* Search Filter Box */}
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  type="text"
-                  placeholder="Search candidate or panel..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 text-xs pl-8 pr-2 bg-white border-slate-200 rounded-lg"
-                />
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-50/90">
-                  <TableRow className="border-b border-slate-200">
-                    <TableHead className="text-[11px] font-bold text-slate-600 uppercase tracking-wider py-3">Candidate</TableHead>
-                    <TableHead className="text-[11px] font-bold text-slate-600 uppercase tracking-wider py-3">Type & Round</TableHead>
-                    <TableHead className="text-[11px] font-bold text-slate-600 uppercase tracking-wider py-3">Assigned Panel</TableHead>
-                    <TableHead className="text-[11px] font-bold text-slate-600 uppercase tracking-wider py-3">Scheduled Date</TableHead>
-                    <TableHead className="text-[11px] font-bold text-slate-600 uppercase tracking-wider py-3">Status</TableHead>
-                    <TableHead className="text-[11px] font-bold text-slate-600 uppercase tracking-wider text-right py-3">Action</TableHead>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Upcoming Interviews Table */}
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="bg-muted/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4 px-6 border-b border-border/60">
+            <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-primary" />
+              Upcoming Interview Schedule ({filteredUpcoming.length})
+            </CardTitle>
+
+            {/* Search Filter Box */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search candidate or panel..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 text-xs pl-8 pr-2 bg-background border-border rounded-xl"
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider py-3.5 px-5">Candidate</TableHead>
+                  <TableHead className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider py-3.5 px-4">Type & Round</TableHead>
+                  <TableHead className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider py-3.5 px-4">Assigned Panel</TableHead>
+                  <TableHead className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider py-3.5 px-4">Scheduled Date</TableHead>
+                  <TableHead className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider py-3.5 px-4">Status</TableHead>
+                  <TableHead className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-right py-3.5 px-5">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border/60">
+                {scheduleLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-xs text-muted-foreground bg-background">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <span>Loading upcoming schedule...</span>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody className="divide-y divide-slate-100">
-                  {scheduleLoading ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-xs text-slate-500">
-                        Loading upcoming schedule...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredUpcoming.length === 0 ? (
-                    <TableRow>
+                ) : filteredUpcoming.length === 0 ? (
+                  <TableRow>
                       <TableCell colSpan={6} className="text-center py-10 text-xs text-slate-500">
                         {isEmployeeView ? (
                           <p className="font-medium">No upcoming interviews assigned to you.</p>
@@ -650,44 +680,6 @@ export const InterviewCalendarPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-
-        {/* Right Column: Guidelines */}
-        <div className="space-y-6">
-          <Card className="border border-slate-200/80 shadow-sm rounded-xl overflow-hidden bg-white">
-            <CardHeader className="bg-slate-50/60 py-3.5 px-5 border-b border-slate-200/70">
-              <CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-500" />
-                Interviewer Guidelines
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4 text-xs text-slate-600 leading-relaxed">
-              <div className="space-y-1">
-                <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-extrabold flex items-center justify-center text-[10px]">1</span>
-                  Prepare Feedback Scorecard
-                </p>
-                <p className="pl-6 text-[11px] text-slate-500">Provide clear observations and score ratings immediately after completing the candidate interview round.</p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 font-extrabold flex items-center justify-center text-[10px]">2</span>
-                  Record Hiring Decision
-                </p>
-                <p className="pl-6 text-[11px] text-slate-500">Final recruiter decision is compiled once all panel interviewers submit their respective rating scorecards.</p>
-              </div>
-
-              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200/80 text-[11px] text-slate-600 space-y-1">
-                <p className="font-bold text-slate-700 flex items-center gap-1">
-                  <Video className="w-3.5 h-3.5 text-blue-600" /> Meeting Room Assistance
-                </p>
-                <p className="text-slate-500">Facing video link or room connectivity issues? Contact HR recruitment panel desk.</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-      </div>
 
       {/* ─── Interviewer Rating & Feedback Modal ────────────────────────── */}
       <Dialog open={ratingModal.isOpen} onOpenChange={(open) => setRatingModal(prev => ({ ...prev, isOpen: open }))}>
@@ -793,6 +785,64 @@ export const InterviewCalendarPage: React.FC = () => {
               className="bg-amber-600 hover:bg-amber-700 text-white font-bold h-8 text-xs px-4 cursor-pointer shadow-sm rounded-lg"
             >
               {ratingModal.isSubmitting ? 'Submitting...' : 'Submit Rating & Feedback'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Interviewer Guidelines Modal / Popup ────────────────────────── */}
+      <Dialog open={isGuidelinesOpen} onOpenChange={setIsGuidelinesOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-white rounded-2xl shadow-2xl p-6 text-slate-700 border border-slate-200">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-amber-600" />
+              </div>
+              <span>Interviewer Guidelines</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3 text-xs leading-relaxed">
+            {/* Step 1 */}
+            <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100/80 space-y-1">
+              <p className="font-bold text-slate-900 flex items-center gap-2 text-xs">
+                <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-black flex items-center justify-center text-[10px]">1</span>
+                Prepare Feedback Scorecard
+              </p>
+              <p className="pl-7 text-[11px] text-slate-600">
+                Provide clear observations, key technical strengths, growth areas, and score ratings immediately after completing the candidate interview round.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100/80 space-y-1">
+              <p className="font-bold text-slate-900 flex items-center gap-2 text-xs">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black flex items-center justify-center text-[10px]">2</span>
+                Record Hiring Decision
+              </p>
+              <p className="pl-7 text-[11px] text-slate-600">
+                Final recruiter decision is compiled once all panel interviewers submit their respective rating scorecards.
+              </p>
+            </div>
+
+            {/* Meeting Room Assistance */}
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 text-[11px] text-slate-700 space-y-1">
+              <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                <Video className="w-3.5 h-3.5 text-blue-600" /> Meeting Room Assistance
+              </p>
+              <p className="pl-5 text-slate-500">
+                Facing video link or room connectivity issues? Contact HR recruitment panel desk.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-100 flex justify-end">
+            <Button
+              type="button"
+              onClick={() => setIsGuidelinesOpen(false)}
+              className="bg-slate-900 hover:bg-slate-800 text-white font-bold h-8 text-xs px-5 rounded-lg cursor-pointer shadow-xs"
+            >
+              Got It
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { WorkflowController } from './controllers/WorkflowController';
+import { WorkflowSettingsController } from './controllers/WorkflowSettingsController';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { requirePermission } from '../../common/middleware/requirePermission';
@@ -7,6 +8,7 @@ import { asyncHandler } from '../../common/utils/asyncHandler';
 
 const router = Router();
 const controller = new WorkflowController();
+const settingsController = new WorkflowSettingsController();
 
 router.use(authenticate, resolveTenant);
 
@@ -43,5 +45,18 @@ router.patch('/templates/:id', authenticate, requirePermission('workflow:manage_
 router.delete('/templates/:id', authenticate, requirePermission('workflow:manage_templates'), asyncHandler(controller.deleteTemplate.bind(controller)));
 router.post('/templates/:id/workflows', authenticate, requirePermission('workflow:create'), asyncHandler(controller.createWorkflowFromTemplate.bind(controller)));
 
-export default router;
+// Workflow Settings Routes (Admin Config UI)
+router.get('/settings/recipients/options', authenticate, asyncHandler(settingsController.getRecipientOptions.bind(settingsController)));
+router.get('/settings/applicability/options', authenticate, asyncHandler(settingsController.getApplicabilityOptions.bind(settingsController)));
+router.get('/settings', authenticate, asyncHandler(settingsController.listSettings.bind(settingsController)));
+router.post('/settings', authenticate, asyncHandler(settingsController.createSetting.bind(settingsController)));
+router.get('/settings/:id', authenticate, asyncHandler(settingsController.getSetting.bind(settingsController)));
+router.patch('/settings/:id', authenticate, asyncHandler(settingsController.updateSetting.bind(settingsController)));
+router.delete('/settings/:id', authenticate, asyncHandler(settingsController.deleteSetting.bind(settingsController)));
+router.get('/settings/:workflowId/steps', authenticate, asyncHandler(settingsController.getSteps.bind(settingsController)));
+router.post('/settings/:workflowId/steps', authenticate, asyncHandler(settingsController.addStep.bind(settingsController)));
+router.post('/settings/:workflowId/steps/reorder', authenticate, asyncHandler(settingsController.reorderSteps.bind(settingsController)));
+router.patch('/settings/steps/:stepId', authenticate, asyncHandler(settingsController.updateStep.bind(settingsController)));
+router.delete('/settings/:workflowId/steps/:stepId', authenticate, asyncHandler(settingsController.deleteStep.bind(settingsController)));
 
+export default router;

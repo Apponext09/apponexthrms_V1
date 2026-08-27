@@ -24,7 +24,6 @@ export const useLoan = (employeeId?: number) => {
       });
       return res.data?.data || res.data || [];
     },
-    refetchInterval: 2000,
     refetchOnWindowFocus: true
   });
 

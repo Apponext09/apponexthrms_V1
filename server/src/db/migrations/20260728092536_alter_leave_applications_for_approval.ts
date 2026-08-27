@@ -4,25 +4,26 @@ export async function up(knex: Knex): Promise<void> {
   const hasTable = await knex.schema.hasTable('leave_applications');
   if (!hasTable) return;
 
-  // 1. Add new columns
-  await knex.schema.alterTable('leave_applications', (table) => {
-    table.decimal('lop_days', 5, 2).defaultTo(0);
-    table.bigInteger('pool_leave_type_id').unsigned().nullable();
-    table.bigInteger('l1_approved_by').unsigned().nullable();
-    table.timestamp('l1_approval_date').nullable();
-    table.bigInteger('l2_approved_by').unsigned().nullable();
-    table.timestamp('l2_approval_date').nullable();
+  // 1. Add new columns if not present
+  const hasLop = await knex.schema.hasColumn('leave_applications', 'lop_days');
+  if (!hasLop) {
+    await knex.schema.alterTable('leave_applications', (table) => {
+      table.decimal('lop_days', 5, 2).defaultTo(0);
+      table.bigInteger('pool_leave_type_id').unsigned().nullable();
+      table.bigInteger('l1_approved_by').unsigned().nullable();
+      table.timestamp('l1_approval_date').nullable();
+      table.bigInteger('l2_approved_by').unsigned().nullable();
+      table.timestamp('l2_approval_date').nullable();
 
     table.foreign('pool_leave_type_id').references('leave_types.id');
     table.foreign('l1_approved_by').references('users.id');
     table.foreign('l2_approved_by').references('users.id');
   });
 
-  // 2. Modify status enum
+  // 2. Modify status enum to VARCHAR(50)
   await knex.raw(`
     ALTER TABLE leave_applications 
-    MODIFY COLUMN status ENUM('draft', 'submitted', 'pending_manager', 'pending_hr', 'pending', 'approved', 'rejected', 'cancelled', 'withdrawn') 
-    DEFAULT 'draft'
+    MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'draft'
   `);
 }
 

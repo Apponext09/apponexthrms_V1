@@ -124,6 +124,11 @@ export const PublicOfferPage: React.FC = () => {
     );
   }
 
+  const offer = offerData?.offer || {};
+  const candidateName = offerData?.candidateName || offer?.candidate_name || 'Candidate';
+  const companyName = offerData?.companyName || 'Company';
+  const departmentName = offerData?.departmentName || offer?.department || 'General';
+
   let meta: any = {};
   if (offer.meta) {
     try {

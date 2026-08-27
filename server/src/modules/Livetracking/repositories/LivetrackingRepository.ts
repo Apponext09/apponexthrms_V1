@@ -254,6 +254,9 @@ export class LivetrackingRepository {
         builder.whereNotIn('e.status', ['exit', 'alumni', 'candidate']).orWhereNull('e.status');
       })
       .whereNull('e.deleted_at')
+      .where((builder) => {
+        builder.where('e.is_ceo', 0).orWhereNull('e.is_ceo');
+      })
       // ── Exclude HR & Admin staff (HR tracks employees, HR is not tracked) ──
       .where((builder) => {
         builder.whereNull('d.name')

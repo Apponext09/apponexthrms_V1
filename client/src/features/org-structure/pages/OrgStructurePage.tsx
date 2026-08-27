@@ -515,13 +515,13 @@ export function OrgStructurePage() {
 
   // Build Hierarchy Tree Structure keying off currentDepartmentId / departmentId:
   const treeData = useMemo(() => {
-    const activeList = localEmps || (employees as Employee[]);
-    if (!activeList || activeList.length === 0) return null;
+    const rawList = localEmps || (employees as Employee[]);
+    if (!rawList || rawList.length === 0) return null;
 
     const adminName = user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Organization Admin';
     const adminEmail = user?.email || 'admin@kosqu.com';
 
-    // Root Admin Node
+    // Root Admin Node at Top of Tree
     const rootAdminEmp: Employee = {
       id: 999999,
       firstName: adminName,
@@ -531,6 +531,12 @@ export function OrgStructurePage() {
       designation: 'ORGANIZATION ADMIN',
       department: 'Executive Management',
     };
+
+    // Filter out CEO profile from lower employee list so he doesn't appear twice under Department
+    const activeList = rawList.filter((e: any) => {
+      const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+      return !isCeo;
+    });
 
     const getDeptKey = (e: Employee): string =>
       e.department || (e as any).departmentName || 'General';
@@ -1311,7 +1317,7 @@ export function OrgStructurePage() {
                   >
                     <option value="">— Reports to Organization Admin —</option>
                     {(employees as Employee[])
-                      .filter((e) => e.id !== selectedEmp.id)
+                      .filter((e: any) => e.id !== selectedEmp.id && !e.isCeo && !e.is_ceo && !e.isCeoProfileHidden && !e.is_ceo_profile_hidden && e.accessRole !== 'organization_admin')
                       .map((e) => (
                         <option key={e.id} value={e.id}>
                           {e.firstName} {e.lastName} ({e.employeeCode})

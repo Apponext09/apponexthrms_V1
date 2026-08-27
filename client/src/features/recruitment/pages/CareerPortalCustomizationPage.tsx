@@ -193,59 +193,60 @@ export const CareerPortalCustomizationPage: React.FC = () => {
   const currentColorObj = COLOR_PALETTES.find((c) => c.value === settings.primaryColor) || COLOR_PALETTES[0];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/settings')}
-              className="h-8 px-2 text-slate-500 hover:text-slate-800"
-            >
-              <ArrowLeft className="w-4 h-4 mr-1" /> Back
-            </Button>
-            <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 font-semibold">
-              Module Management
-            </Badge>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <Palette className="w-5 h-5" />
           </div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Palette className="w-6 h-6 text-indigo-600" />
-            Career Portal Customization
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Customize branding, logo, header text, account visibility, and candidate application form fields for your company.
-          </p>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/settings')}
+                className="h-7 px-2 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
+              </Button>
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                Career Portal Customization
+              </h1>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Customize corporate branding, logo, banner titles, applicant form field visibility, and footer legal text.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
           <Button
             variant="outline"
             onClick={() => window.open('/careers', '_blank')}
-            className="border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold"
+            className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted text-foreground cursor-pointer whitespace-nowrap"
           >
-            <Eye className="w-4 h-4 mr-1.5 text-slate-500" /> Live Preview Portal
+            <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Live Preview
           </Button>
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 shadow-md shadow-indigo-200"
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
           >
-            <Save className="w-4 h-4 mr-1.5" />
+            <Save className="w-3.5 h-3.5" />
             {saving ? 'Saving...' : 'Save Settings'}
           </Button>
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      {/* ── Tabs Navigation ──────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 bg-muted/60 p-1.5 rounded-2xl border border-border/80 overflow-x-auto">
         <button
           onClick={() => setActiveTab('branding')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'branding'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-background text-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <Building className="w-4 h-4" /> Branding & Banner
@@ -253,10 +254,10 @@ export const CareerPortalCustomizationPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('visibility')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'visibility'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-background text-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <Eye className="w-4 h-4" /> Account & Header Toggles
@@ -264,10 +265,10 @@ export const CareerPortalCustomizationPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('fields')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'fields'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-background text-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <Sliders className="w-4 h-4" /> Form Fields Matrix
@@ -275,10 +276,10 @@ export const CareerPortalCustomizationPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('footer')}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === 'footer'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              ? 'bg-background text-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <FileText className="w-4 h-4" /> Footer & Copyright

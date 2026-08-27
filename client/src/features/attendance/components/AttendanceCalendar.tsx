@@ -299,7 +299,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
             >
               {/* Header: Shift Name on Left, Date Badge on Right */}
               <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
-                <span className="truncate max-w-[70px]">General Shift</span>
+                <span className="truncate max-w-[80px]">{(record as any).shift_name || (record as any).shiftName || (isWeekend ? 'Off Day' : 'Shift')}</span>
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${
                   isToday
                     ? 'bg-indigo-600 text-white font-bold'

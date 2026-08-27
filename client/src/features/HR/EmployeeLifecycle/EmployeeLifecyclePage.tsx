@@ -54,7 +54,7 @@ export default function EmployeeLifecyclePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
-  const [companyFilter, setCompanyFilter] = useState<string>('all');
+  const [companyFilter, setCompanyFilter] = useState<string>(selectedCompanyId ? String(selectedCompanyId) : '');
   const [deptFilter, setDeptFilter] = useState('all');
   const [desigFilter, setDesigFilter] = useState('all');
   const [empTypeFilter, setEmpTypeFilter] = useState('all');
@@ -148,11 +148,15 @@ export default function EmployeeLifecyclePage() {
   const fetchLifecycleData = async () => {
     try {
       setLoading(true);
+      const effectiveCompanyId = companyFilter === 'all'
+        ? 'all'
+        : (companyFilter || (selectedCompanyId ? String(selectedCompanyId) : undefined));
+
       const data = await lifecycleApi.getSummaries({
         search,
         stage: stageFilter,
         departmentId: deptFilter !== 'all' ? Number(deptFilter) : undefined,
-        companyId: companyFilter !== 'all' ? companyFilter : 'all',
+        companyId: effectiveCompanyId,
       });
       setEmployees(data);
     } catch (err: any) {
@@ -236,11 +240,10 @@ export default function EmployeeLifecyclePage() {
     }
   };
 
-  // Set initial company filter once on mount if selectedCompanyId exists
+  // Sync company filter with currently selected company in topbar switcher (handles null when switching back to Organization)
   useEffect(() => {
-    if (!hasInitializedCompanyRef.current && selectedCompanyId) {
-      setCompanyFilter(String(selectedCompanyId));
-      hasInitializedCompanyRef.current = true;
+    if (companyFilter !== 'all') {
+      setCompanyFilter(selectedCompanyId ? String(selectedCompanyId) : '');
     }
   }, [selectedCompanyId]);
 

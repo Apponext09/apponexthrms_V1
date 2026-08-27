@@ -92,113 +92,213 @@ export const ReferralManagementPage: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'submitted': return <Badge variant="outline" className="bg-blue-100 text-blue-800">Submitted</Badge>;
-      case 'approved': return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Approved</Badge>;
-      case 'hired': return <Badge variant="outline" className="bg-green-100 text-green-800">Candidate Hired</Badge>;
-      case 'rejected': return <Badge variant="outline" className="bg-red-100 text-red-800">Rejected</Badge>;
-      case 'reward_paid': return <Badge variant="outline" className="bg-emerald-100 text-emerald-800">Reward Paid</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
+      case 'submitted': return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Submitted</Badge>;
+      case 'approved': return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Approved</Badge>;
+      case 'hired': return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Candidate Hired</Badge>;
+      case 'rejected': return <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Rejected</Badge>;
+      case 'reward_paid': return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Reward Paid</Badge>;
+      default: return <Badge variant="outline" className="bg-muted text-muted-foreground border-border/80 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">{status}</Badge>;
     }
   };
 
+  const hiredCount = referrals.filter((r: any) => r.status === 'hired' || r.referral_status === 'hired' || r.status === 'reward_paid' || r.referral_status === 'reward_paid').length;
+  const rewardPaidCount = referrals.filter((r: any) => r.status === 'reward_paid' || r.referral_status === 'reward_paid').length;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Employee Referrals</h1>
-          <p className="text-gray-500 mt-1">Track and manage employee-submitted candidate referrals and payout rewards.</p>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 border border-emerald-500/20 shadow-xs">
+            <DollarSign className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Employee Referrals
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Track candidate referrals submitted by employees, review candidate progression, and disburse bonus payouts.
+            </p>
+          </div>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Submit Referral
-        </Button>
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto">
+          <Button 
+            onClick={() => setIsCreateOpen(true)} 
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Submit Referral
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Candidate</TableHead>
-                <TableHead>Referred By (Employee)</TableHead>
-                <TableHead>Reward Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                    Loading referrals...
-                  </TableCell>
-                </TableRow>
-              ) : referrals.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                    No referrals recorded. Click "Submit Referral" to get started.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                referrals.map((r: any) => {
-                  const candName = r.candidateName || r.candidate_name || (r.candidate_id ? `Candidate #${r.candidate_id}` : 'Candidate');
-                  const candEmail = r.candidateEmail || r.candidate_email || '';
-                  const refName = r.referrerName || r.referrer_name || (r.referrer_employee_id ? `Employee #${r.referrer_employee_id}` : 'Employee');
-                  const refEmail = r.referrerEmail || r.referrer_email || '';
-                  const rewardAmt = r.referralRewardAmount || r.referral_reward_amount;
+      {/* ── KPI Stats Widgets ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Referrals</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{referrals.length}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <Clock className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
 
-                  return (
-                    <TableRow key={r.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-semibold text-gray-900">{candName}</div>
-                          {candEmail && <div className="text-xs text-gray-500">{candEmail}</div>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-semibold text-gray-900">{refName}</div>
-                          {refEmail && <div className="text-xs text-gray-500">{refEmail}</div>}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {rewardAmt ? `INR ${parseFloat(rewardAmt).toLocaleString()}` : '—'}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(r.status || r.referral_status)}</TableCell>
-                      <TableCell className="text-right space-x-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            apiClient.get(`/recruitment/referrals/${r.id}/progress`).then((res) => {
-                              setSelectedReferral({ ...r, ...res.data.data });
-                            });
-                          }}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {(r.status === 'hired' || r.referral_status === 'hired') && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedReferral(r);
-                              setIsRewardOpen(true);
-                            }}
-                            className="bg-emerald-600 hover:bg-emerald-700"
-                          >
-                            <DollarSign className="h-3 w-3 mr-1" /> Pay Reward
-                          </Button>
-                        )}
-                        <Button variant="outline" size="icon" onClick={() => handleDelete(r.id)} className="text-red-600 hover:bg-red-50">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Hired from Referrals</p>
+              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{hiredCount}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rewards Paid</p>
+              <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{rewardPaidCount}</h3>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <DollarSign className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Table Container ──────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <CardContent className="p-0">
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[900px] border-collapse">
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Candidate</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Referred By (Employee)</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Reward Amount</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground text-center">Status</TableHead>
+                  <TableHead className="text-right text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-border/60">
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs bg-background">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <span>Loading referral submissions...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : referrals.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs bg-background">
+                      No referrals recorded yet. Click "Submit Referral" to register an applicant.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  referrals.map((r: any) => {
+                    const candId = r.candidateId || r.candidate_id;
+                    const candObj = candidates.find((c: any) => c.id === candId);
+                    const candName = (r.candidateName && r.candidateName !== 'Candidate')
+                      ? r.candidateName
+                      : (r.candidate_name && r.candidate_name !== 'Candidate')
+                      ? r.candidate_name
+                      : candObj
+                      ? `${candObj.first_name || candObj.firstName || ''} ${candObj.last_name || candObj.lastName || ''}`.trim() || candObj.name
+                      : (candId ? `Candidate #${candId}` : 'Candidate');
+                    const candEmail = r.candidateEmail || r.candidate_email || candObj?.email || '';
+
+                    const refId = r.referrerEmployeeId || r.referrer_employee_id;
+                    const empObj = employees.find((e: any) => e.id === refId);
+                    const refName = (r.referrerName && r.referrerName !== 'Employee')
+                      ? r.referrerName
+                      : (r.referrer_name && r.referrer_name !== 'Employee')
+                      ? r.referrer_name
+                      : empObj
+                      ? empObj.name
+                      : (refId ? `Employee #${refId}` : 'Employee');
+                    const refEmail = r.referrerEmail || r.referrer_email || empObj?.email || '';
+
+                    const rewardAmt = r.referralRewardAmount || r.referral_reward_amount || r.rewardAmount || r.reward_amount;
+                    const initials = candName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'CA';
+
+                    return (
+                      <TableRow key={r.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                        <TableCell className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xs shrink-0 border border-emerald-500/20">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="font-bold text-foreground text-xs">{candName}</div>
+                              {candEmail && <div className="text-[11px] text-muted-foreground font-mono">{candEmail}</div>}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4">
+                          <div>
+                            <div className="font-semibold text-foreground text-xs">{refName}</div>
+                            {refEmail && <div className="text-[11px] text-muted-foreground font-mono">{refEmail}</div>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4">
+                          <span className="font-mono text-xs font-bold text-foreground">
+                            {rewardAmt ? `INR ${parseFloat(rewardAmt).toLocaleString()}` : '—'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-center">{getStatusBadge(r.status || r.referral_status || r.referralStatus)}</TableCell>
+                        <TableCell className="text-right py-3.5 px-5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                apiClient.get(`/recruitment/referrals/${r.id}/progress`).then((res) => {
+                                  setSelectedReferral({ ...r, ...res.data.data });
+                                });
+                              }}
+                              className="h-8 w-8 rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer shadow-2xs"
+                              title="View Referral Progress"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {(r.status === 'hired' || r.referral_status === 'hired') && (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedReferral(r);
+                                  setIsRewardOpen(true);
+                                }}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-3 rounded-lg shadow-2xs cursor-pointer gap-1"
+                              >
+                                <DollarSign className="h-3 w-3" /> Pay Reward
+                              </Button>
+                            )}
+                            <Button 
+                              variant="outline" 
+                              size="icon" 
+                              onClick={() => handleDelete(r.id)} 
+                              className="h-8 w-8 rounded-lg border-border hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 cursor-pointer shadow-2xs"
+                              title="Delete Referral"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -310,20 +410,24 @@ export const ReferralManagementPage: React.FC = () => {
               </DialogHeader>
               <div className="space-y-4">
                 <div className="border-b pb-4">
-                  <h3 className="font-bold text-gray-900 text-lg">{selectedReferral.candidate_name || 'Candidate'}</h3>
-                  <p className="text-sm text-gray-500">{selectedReferral.candidate_email}</p>
+                  <h3 className="font-bold text-foreground text-lg">
+                    {selectedReferral.candidateName || selectedReferral.candidate_name || 'Candidate'}
+                  </h3>
+                  {(selectedReferral.candidateEmail || selectedReferral.candidate_email) && (
+                    <p className="text-xs text-muted-foreground font-mono">{selectedReferral.candidateEmail || selectedReferral.candidate_email}</p>
+                  )}
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="font-semibold text-gray-500">Referred By:</div>
-                  <div className="text-gray-900">{selectedReferral.referrer_name || 'Employee'}</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="font-semibold text-muted-foreground">Referred By:</div>
+                  <div className="text-foreground font-medium">{selectedReferral.referrerName || selectedReferral.referrer_name || 'Employee'}</div>
 
-                  <div className="font-semibold text-gray-500">Application Status:</div>
-                  <div className="text-gray-900 capitalize font-medium">{selectedReferral.applicationStatus || 'Unapplied'}</div>
+                  <div className="font-semibold text-muted-foreground">Application Status:</div>
+                  <div className="text-foreground capitalize font-medium">{selectedReferral.applicationStatus || 'Unapplied'}</div>
 
-                  <div className="font-semibold text-gray-500">Referral Status:</div>
+                  <div className="font-semibold text-muted-foreground">Referral Status:</div>
                   <div>{getStatusBadge(selectedReferral.referralStatus || selectedReferral.referral_status)}</div>
 
-                  <div className="font-semibold text-gray-500">Reward Payout:</div>
+                  <div className="font-semibold text-muted-foreground">Reward Payout:</div>
                   <div>{getStatusBadge(selectedReferral.rewardStatus || selectedReferral.reward_status)}</div>
                 </div>
 

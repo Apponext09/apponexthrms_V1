@@ -132,7 +132,51 @@ export class SettlementService {
       dataWarnings.push('Could not read leave balance records — leave encashment defaulted to 0 days. Verify manually before finalizing.');
     }
 
-    const leaveEncashment = Math.round((basicMonthly / 26) * Math.max(0, leaveBalanceDays));
+    let leaveEncashment = 0;
+    try {
+      const encashmentPolicy = await db('leave_encashment_settings')
+        .where('organization_id', ctx.organizationId)
+        .where('is_active', true)
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
+        .first()
+        .catch(() => null);
+
+      const daysBasis = Number(encashmentPolicy?.days_basis || 26);
+      let cappedLeaves = Math.max(0, leaveBalanceDays);
+      if (encashmentPolicy && encashmentPolicy.limit !== null && encashmentPolicy.limit !== undefined) {
+        cappedLeaves = Math.min(cappedLeaves, Number(encashmentPolicy.limit));
+      }
+
+      if (encashmentPolicy && encashmentPolicy.formula) {
+        const fStr = String(encashmentPolicy.formula).trim();
+        let evalStr = fStr
+          .replace(/\bBasic\b|\bbasic_monthly\b/gi, String(basicMonthly))
+          .replace(/\bDA\b|\bda_monthly\b/gi, String(struct?.da_monthly || 0))
+          .replace(/\bHRA\b|\bhra_monthly\b/gi, String(struct?.hra_monthly || 0))
+          .replace(/\bSpecial_Allowance\b/gi, String(struct?.special_allowance_monthly || 0))
+          .replace(/\bGross_Salary\b|\bGross\b/gi, String(grossMonthly))
+          .replace(/\bLEAVE_BALANCE\b|\bLEAVE_DAYS\b/gi, String(cappedLeaves));
+
+        if (/^[\d\s\+\-\*\/\(\)\.]+$/.test(evalStr)) {
+          // eslint-disable-next-line no-new-func
+          const evaluated = Function(`"use strict"; return (${evalStr});`)();
+          if (typeof evaluated === 'number' && !isNaN(evaluated) && isFinite(evaluated)) {
+            if (fStr.includes('LEAVE_BALANCE') || fStr.includes('LEAVE_DAYS') || fStr.includes('/')) {
+              leaveEncashment = Math.round(Math.max(0, evaluated));
+            } else {
+              leaveEncashment = Math.round((Math.max(0, evaluated) / daysBasis) * cappedLeaves);
+            }
+          }
+        }
+      }
+
+      if (leaveEncashment === 0 && cappedLeaves > 0) {
+        leaveEncashment = Math.round((basicMonthly / daysBasis) * cappedLeaves);
+      }
+    } catch (e) {
+      leaveEncashment = Math.round((basicMonthly / 26) * Math.max(0, leaveBalanceDays));
+    }
 
     // 4. Calculate Gratuity using Dynamic Gratuity Rules Configuration
     let gratuity = 0;

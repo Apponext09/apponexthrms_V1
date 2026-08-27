@@ -189,33 +189,75 @@ export const InterviewerRatingPage: React.FC = () => {
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
-      {/* Filters Section */}
-      <Card className="rounded-none shadow-sm border-border">
-        <CardHeader className="py-3 border-b border-border">
-          <CardTitle className="text-sm font-normal text-foreground">Interviewer Rating & Decision Management</CardTitle>
-        </CardHeader>
-        <CardContent className="p-4 md:p-6">
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold shrink-0 border border-amber-500/20 shadow-xs">
+            <Star className="w-5 h-5 fill-amber-500 text-amber-500" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Interviewer Rating & Scorecards
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Review candidate ratings, technical & communication scores, and record final hiring decisions.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto">
+          <Button 
+            onClick={() => setSubmitRatingModal({
+              isOpen: true,
+              interviewId: '',
+              candidateName: '',
+              overallRating: 5,
+              technicalScore: 4,
+              communicationScore: 4,
+              recommendation: 'hire',
+              feedbackText: '',
+              isSubmitting: false,
+            })} 
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Submit Scorecard
+          </Button>
+
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            size="sm"
+            className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground whitespace-nowrap cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Filters Section ──────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <CardContent className="p-5">
           <div className="flex flex-col md:flex-row items-end gap-4">
-            <div className="space-y-1.5 flex-1">
-              <label className="text-xs font-semibold text-foreground">Search</label>
+            <div className="space-y-1.5 flex-1 w-full">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Search Feedback</label>
               <Input 
-                placeholder="Search by candidate, contact, email or interviewer..."
+                placeholder="Search candidate, phone, email, or interviewer..."
                 value={searchTerm} 
                 onChange={(e) => handleSearchChange(e.target.value)} 
-                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm w-full"
+                className="h-9 text-xs bg-background border-border rounded-xl w-full"
               />
             </div>
 
-            <div className="space-y-1.5 w-full md:w-48">
-              <label className="text-xs font-semibold text-foreground">Filter by Round</label>
+            <div className="space-y-1.5 w-full md:w-56">
+              <label className="text-xs font-bold text-foreground uppercase tracking-wider">Interview Round</label>
               <select
                 value={roundFilter}
                 onChange={(e) => {
                   setRoundFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full h-8 text-xs bg-card text-card-foreground border border-input rounded-sm px-2 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full h-9 text-xs bg-background border border-border rounded-xl px-3 focus:outline-none focus:ring-1 focus:ring-primary font-bold text-foreground cursor-pointer"
               >
                 <option value="all">All Rounds</option>
                 <option value="1">Round 1 (Technical / Screening)</option>
@@ -226,8 +268,8 @@ export const InterviewerRatingPage: React.FC = () => {
               </select>
             </div>
 
-            <div className="pt-1 w-full md:w-auto">
-              <Button onClick={handleReset} variant="destructive" className="h-8 px-5 text-xs rounded-sm w-full md:w-auto">
+            <div className="w-full md:w-auto">
+              <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground w-full md:w-auto">
                 Reset Filter
               </Button>
             </div>
@@ -235,144 +277,135 @@ export const InterviewerRatingPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Results Section */}
-      <Card className="rounded-none shadow-sm border-border">
-        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-          <CardTitle className="text-sm font-normal text-foreground">Candidate Feedback & Decision Actions</CardTitle>
+      {/* ── Results Section ──────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
+          <div>
+            <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              Candidate Feedback & Decision Actions
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} records</p>
+          </div>
+
           <div className="flex items-center gap-2">
-            <Button 
-              size="sm" 
-              onClick={() => setSubmitRatingModal({
-                isOpen: true,
-                interviewId: '',
-                candidateName: '',
-                overallRating: 5,
-                technicalScore: 4,
-                communicationScore: 4,
-                recommendation: 'hire',
-                feedbackText: '',
-                isSubmitting: false,
-              })} 
-              className="h-7 px-3 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold flex items-center gap-1 shadow-none cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Submit Rating & Feedback
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
-              <Download className="w-3 h-3 mr-1.5" />
-              Export
-            </Button>
+            <span className="text-xs text-muted-foreground font-medium">Show</span>
+            <Select value={pageSize} onValueChange={handlePageSizeChange}>
+              <SelectTrigger className="h-8 w-20 text-xs bg-background border-border rounded-xl font-bold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="25">25</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground font-medium">entries</span>
           </div>
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="p-3 bg-card text-card-foreground border-b border-border flex justify-between items-center text-xs text-foreground/90">
-            <div>
-              Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
-            </div>
-            <div className="flex items-center gap-1.5">
-              Show 
-              <Select value={pageSize} onValueChange={handlePageSizeChange}>
-                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-card text-card-foreground border-input rounded-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              entries
-            </div>
-          </div>
-          
-          <div className="bg-background overflow-x-auto">
-            <Table className="min-w-[1100px]">
-              <TableHeader className="bg-card">
-                <TableRow className="border-border">
-                  <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Candidate Name</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Contact & Email</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Interviewer</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Rating (1-5)</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground max-w-xs">Feedback</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-center">Interview State</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-center">Actions / Decision</TableHead>
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[1100px] border-collapse">
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground whitespace-nowrap">Candidate</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Contact & Email</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap">Interviewer</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap text-center">Scorecard</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground max-w-xs">Feedback Remarks</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground whitespace-nowrap text-center">Interview State</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground whitespace-nowrap text-right">Actions / Decision</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {paginatedData.length > 0 ? (
+              <TableBody className="divide-y divide-border/60">
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <span>Loading feedback records...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedData.length > 0 ? (
                   paginatedData.map((rating) => {
                     const isDecisionMade = Boolean(rating.interviewDecision) || rating.applicationStatus === 'offer' || rating.applicationStatus === 'hired' || rating.applicationStatus === 'rejected';
+                    const initials = (rating.candidateName || 'CA').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
                     return (
-                      <TableRow key={rating.id} className="border-border bg-card text-card-foreground hover:bg-background">
-                        <TableCell className="text-xs py-2.5 whitespace-nowrap">
-                          <div className="font-semibold text-slate-800">{rating.candidateName}</div>
-                          <span className="text-[10px] text-slate-500">Round {rating.interviewRound}</span>
-                        </TableCell>
-                        <TableCell className="text-xs py-2.5 whitespace-nowrap text-muted-foreground">
-                          <div>{rating.contact}</div>
-                          <div className="text-[11px] text-slate-400">{rating.email}</div>
-                        </TableCell>
-                        <TableCell className="text-xs py-2.5 whitespace-nowrap">{rating.interviewerName}</TableCell>
-                        <TableCell className="text-xs py-2.5 whitespace-nowrap">
-                          <div className="flex items-center text-amber-500 font-bold">
-                            {rating.rating} <span className="ml-1 text-sm">★</span>
+                      <TableRow key={rating.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                        <TableCell className="py-3 px-5 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs shrink-0 border border-amber-500/20">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="font-bold text-foreground text-xs">{rating.candidateName}</div>
+                              <span className="text-[10px] text-primary font-bold">Round {rating.interviewRound}</span>
+                            </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-xs py-2.5 max-w-xs text-foreground/90">
-                          <p className="truncate" title={rating.feedback}>{rating.feedback}</p>
-                          <span className="text-[10px] text-slate-400">Date: {rating.date}</span>
+                        <TableCell className="py-3 px-4 whitespace-nowrap text-muted-foreground">
+                          <div className="text-xs font-mono">{rating.contact}</div>
+                          <div className="text-[11px] text-muted-foreground font-mono">{rating.email}</div>
                         </TableCell>
-                        <TableCell className="text-xs py-2.5 whitespace-nowrap text-center">
+                        <TableCell className="py-3 px-4 whitespace-nowrap text-xs font-semibold text-foreground">{rating.interviewerName}</TableCell>
+                        <TableCell className="py-3 px-4 whitespace-nowrap text-center">
+                          <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-extrabold text-xs">
+                            {rating.rating} <Star className="w-3 h-3 fill-amber-500" />
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3 px-4 max-w-xs">
+                          <p className="text-xs text-foreground truncate font-medium" title={rating.feedback}>{rating.feedback}</p>
+                          <span className="text-[10px] text-muted-foreground font-mono">Date: {rating.date}</span>
+                        </TableCell>
+                        <TableCell className="py-3 px-4 whitespace-nowrap text-center">
                           {isDecisionMade ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                               <CheckCircle2 className="w-3 h-3 mr-1" />
                               Decision: {rating.interviewDecision || rating.applicationStatus}
                             </span>
                           ) : rating.interviewStatus === 'completed' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                              <CheckCircle2 className="w-3 h-3 mr-1 text-blue-600" />
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
                               Feedback In — Decision Pending
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                              <Clock className="w-3 h-3 mr-1 text-amber-600" />
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                              <Clock className="w-3 h-3 mr-1" />
                               Feedback Submitted
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs py-2.5 whitespace-nowrap text-center">
+                        <TableCell className="py-3 px-5 whitespace-nowrap text-right">
                           {isDecisionMade ? (
-                            <span className="text-xs text-slate-400 italic">Completed</span>
+                            <span className="text-xs text-muted-foreground font-medium italic">Completed</span>
                           ) : (
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5">
                               <Button
                                 size="sm"
                                 onClick={() => openDecisionModal(rating.interviewId, rating.candidateName, 'advance')}
-                                className="h-6 px-2 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1 shadow-none"
+                                className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1 rounded-lg shadow-xs cursor-pointer"
                               >
-                                <CheckCircle2 className="w-3 h-3" />
-                                Advance
+                                <CheckCircle2 className="w-3 h-3" /> Advance
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openDecisionModal(rating.interviewId, rating.candidateName, 'reject')}
-                                className="h-6 px-2 text-[11px] border-red-200 text-red-600 hover:bg-red-50 font-medium flex items-center gap-1 shadow-none"
+                                className="h-7 px-2.5 text-xs border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 font-bold flex items-center gap-1 rounded-lg cursor-pointer"
                               >
-                                <XCircle className="w-3 h-3" />
-                                Reject
+                                <XCircle className="w-3 h-3" /> Reject
                               </Button>
                               <Button
                                 size="sm"
                                 variant="outline"
                                 onClick={() => openDecisionModal(rating.interviewId, rating.candidateName, 'hold')}
-                                className="h-6 px-2 text-[11px] border-amber-200 text-amber-600 hover:bg-amber-50 font-medium flex items-center gap-1 shadow-none"
+                                className="h-7 px-2.5 text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 font-bold flex items-center gap-1 rounded-lg cursor-pointer"
                               >
-                                <PauseCircle className="w-3 h-3" />
-                                Hold
+                                <PauseCircle className="w-3 h-3" /> Hold
                               </Button>
                             </div>
                           )}
@@ -382,8 +415,8 @@ export const InterviewerRatingPage: React.FC = () => {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
-                      {loading ? 'Loading feedback records...' : 'No feedback records found'}
+                    <TableCell colSpan={7} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                      No feedback records found matching the criteria.
                     </TableCell>
                   </TableRow>
                 )}
@@ -392,15 +425,15 @@ export const InterviewerRatingPage: React.FC = () => {
 
             {/* Pagination Controls */}
             {totalEntries > 0 && (
-              <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
-                <div className="text-muted-foreground">
-                  Page {currentPage} of {totalPages}
+              <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+                <div className="font-medium">
+                  Page <span className="font-bold text-foreground">{currentPage}</span> of <span className="font-bold text-foreground">{totalPages}</span>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-card text-card-foreground"
+                    className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   >
@@ -409,7 +442,7 @@ export const InterviewerRatingPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-card text-card-foreground"
+                    className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                     disabled={currentPage >= totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   >

@@ -766,7 +766,7 @@ export class SalaryStructureController {
       .select('st.name as shift_name')
       .first()
       .catch(() => null);
-    const shiftName = (shiftAssign as any)?.shiftName || (shiftAssign as any)?.shift_name || 'General Shift';
+    const shiftName = (shiftAssign as any)?.shiftName || (shiftAssign as any)?.shift_name || 'Unassigned';
 
     const records = await db('attendance_records')
       .where('employee_id', empId)
