@@ -8,6 +8,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { useThemeStore } from '@/features/settings/store/themeStore';
