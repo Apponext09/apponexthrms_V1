@@ -69,9 +69,21 @@ class AppErrorBoundary extends Component<
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [securityEnabled, setSecurityEnabled] = useState(false);
 
-  // Disable DevTools and Inspection - Multiple methods
+  // OPTIMIZED: Lazy load security checks after 2 seconds (after login page renders)
   useEffect(() => {
+    const securityTimer = setTimeout(() => {
+      setSecurityEnabled(true);
+    }, 2000);
+
+    return () => clearTimeout(securityTimer);
+  }, []);
+
+  // OPTIMIZED: Only setup security when needed (after login page loads)
+  useEffect(() => {
+    if (!securityEnabled) return;
+
     // 1. Block right-click context menu
     const disableRightClick = (e: MouseEvent) => {
       e.preventDefault();
@@ -80,32 +92,26 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // 2. Block keyboard shortcuts for DevTools
     const disableKeys = (e: KeyboardEvent) => {
-      // F12 - DevTools
       if (e.key === 'F12') {
         e.preventDefault();
         return false;
       }
-      // Ctrl+Shift+I - Inspect (Chrome)
       if (e.ctrlKey && e.shiftKey && e.key === 'I') {
         e.preventDefault();
         return false;
       }
-      // Ctrl+Shift+C - Inspect (Firefox)
       if (e.ctrlKey && e.shiftKey && e.key === 'C') {
         e.preventDefault();
         return false;
       }
-      // Ctrl+Shift+J - Console (Chrome)
       if (e.ctrlKey && e.shiftKey && e.key === 'J') {
         e.preventDefault();
         return false;
       }
-      // Ctrl+Shift+K - Console (Firefox)
       if (e.ctrlKey && e.shiftKey && e.key === 'K') {
         e.preventDefault();
         return false;
       }
-      // Ctrl+I - Inspect (some browsers)
       if (e.ctrlKey && e.key === 'I') {
         e.preventDefault();
         return false;
@@ -118,7 +124,7 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
       return false;
     };
 
-    // 4. Detect if DevTools is opened (via size check - immediately close)
+    // 4. OPTIMIZED: Check DevTools every 2000ms instead of 100ms
     let isDevToolsOpen = false;
     const checkDevToolsSize = () => {
       const threshold = 160;
@@ -127,22 +133,21 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
 
       if (isOpen && !isDevToolsOpen) {
         isDevToolsOpen = true;
-        // Immediately redirect to prevent any access
         window.location.href = '/login';
         return;
       }
       isDevToolsOpen = isOpen;
     };
 
-    // Setup event listeners
+    // Setup event listeners with passive flags where possible
     document.addEventListener('contextmenu', disableRightClick, { passive: false });
     document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
     document.addEventListener('copy', disableCopyPaste, { passive: false });
     document.addEventListener('cut', disableCopyPaste, { passive: false });
     document.addEventListener('paste', disableCopyPaste, { passive: false });
 
-    // Check for DevTools every 100ms (very aggressive)
-    const devToolsCheckInterval = setInterval(checkDevToolsSize, 100);
+    // OPTIMIZED: Check every 2000ms (20x less frequent than before)
+    const devToolsCheckInterval = setInterval(checkDevToolsSize, 2000);
 
     // Disable text selection
     document.body.style.userSelect = 'none';
@@ -166,9 +171,9 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.removeEventListener('paste', disableCopyPaste);
       clearInterval(devToolsCheckInterval);
     };
-  }, []);
+  }, [securityEnabled]);
 
-  // Initialize theme and current user on mount
+  // OPTIMIZED: Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
 
@@ -186,33 +191,58 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
         });
     } else {
       // No token found - clear any stale auth state from localStorage
-      // This ensures we don't show unauthorized when user opens app without valid token
       const { user, isAuthenticated } = useAuthStore.getState();
       if (user || isAuthenticated) {
         useAuthStore.setState({ user: null, isAuthenticated: false });
       }
     }
+  }, []);
 
-    // Track last user ID and logout time to detect session changes
-    let lastUserId: number | null = null;
-    let lastLogoutTime = localStorage.getItem('last-logout-time');
+  // OPTIMIZED: Defer session validation listeners until after 3 seconds
+  useEffect(() => {
+    const validationTimer = setTimeout(() => {
+      let lastUserId: number | null = null;
+      let lastLogoutTime = localStorage.getItem('last-logout-time');
 
-    // Re-validate auth when tab becomes visible (back from other tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      // Re-validate auth when tab becomes visible
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+          const currentLogoutTime = localStorage.getItem('last-logout-time');
+          if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+            logout();
+            return;
+          }
+
+          if (user && lastUserId && user.id !== lastUserId) {
+            window.location.href = '/login?' + new Date().getTime();
+            return;
+          }
+
+          if (lastUserId === null && user) {
+            lastUserId = user.id;
+          }
+
+          if (isAuthenticated && localStorage.getItem('accessToken')) {
+            fetchCurrentUser().catch(() => {
+              logout();
+            });
+          }
+        }
+      };
+
+      // Check on window focus
+      const handleFocus = () => {
         const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
 
-        // Check if logout happened in another tab
         const currentLogoutTime = localStorage.getItem('last-logout-time');
         if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
-          // Logout happened elsewhere - logout this session too
           logout();
           return;
         }
 
-        // Check if different user logged in
         if (user && lastUserId && user.id !== lastUserId) {
-          // Different user - force redirect
           window.location.href = '/login?' + new Date().getTime();
           return;
         }
@@ -222,60 +252,32 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (isAuthenticated && localStorage.getItem('accessToken')) {
-          // Re-validate token is still valid
           fetchCurrentUser().catch(() => {
-            // Token invalid, logout
             logout();
           });
         }
-      }
-    };
+      };
 
-    // Check on window focus
-    const handleFocus = () => {
-      const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+      // Prevent back button navigation
+      const handlePopState = () => {
+        const { isAuthenticated } = useAuthStore.getState();
+        if (!isAuthenticated) {
+          window.history.pushState(null, '', '/login');
+        }
+      };
 
-      // Check if logout happened
-      const currentLogoutTime = localStorage.getItem('last-logout-time');
-      if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
-        logout();
-        return;
-      }
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('popstate', handlePopState);
 
-      // Check if different user logged in
-      if (user && lastUserId && user.id !== lastUserId) {
-        window.location.href = '/login?' + new Date().getTime();
-        return;
-      }
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, 3000);
 
-      if (lastUserId === null && user) {
-        lastUserId = user.id;
-      }
-
-      if (isAuthenticated && localStorage.getItem('accessToken')) {
-        fetchCurrentUser().catch(() => {
-          logout();
-        });
-      }
-    };
-
-    // Prevent back button navigation
-    const handlePopState = (e: PopStateEvent) => {
-      const { isAuthenticated } = useAuthStore.getState();
-      if (!isAuthenticated) {
-        window.history.pushState(null, '', '/login');
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => clearTimeout(validationTimer);
   }, []);
 
   return (

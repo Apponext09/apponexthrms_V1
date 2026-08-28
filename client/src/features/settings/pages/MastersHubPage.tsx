@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
   MapPin,
@@ -179,20 +179,37 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
 };
 
 export function MastersHubPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get('tab');
 
   const [selectedMasterId, setSelectedMasterId] = useState<string>('company');
 
   useEffect(() => {
-    if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
-      setSelectedMasterId(tabFromUrl);
+    const pathSegments = location.pathname.split('/').filter(Boolean);
+    let masterId = null;
+
+    if (pathSegments.includes('masters')) {
+      const masterIndex = pathSegments.indexOf('masters');
+      masterId = pathSegments[masterIndex + 1];
     }
-  }, [tabFromUrl]);
+
+    if (masterId && MASTER_CATEGORIES.some(m => m.id === masterId)) {
+      setSelectedMasterId(masterId);
+    } else if (searchParams.get('tab')) {
+      const tabFromUrl = searchParams.get('tab');
+      if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
+        setSelectedMasterId(tabFromUrl);
+      }
+    } else {
+      setSelectedMasterId('company');
+    }
+  }, [location.pathname, searchParams]);
 
   const handleSelectMaster = (id: string) => {
     setSelectedMasterId(id);
-    setSearchParams({ tab: id });
+    const basePath = location.pathname.includes('/hr/') ? '/hr/masters' : '/masters';
+    navigate(`${basePath}/${id}`);
     setSearchQuery('');
   };
   const [fullCompanyRecords, setFullCompanyRecords] = useState<CompanyRecordItem[]>([]);

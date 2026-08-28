@@ -321,7 +321,7 @@ export function AppRoutes() {
         <Route path="/hr/performance/reviews" element={<ReviewCyclesPage />} />
 
         {/* Operations */}
-        <Route path="/hr/masters" element={<MastersHubPage />} />
+        <Route path="/hr/masters/*" element={<MastersHubPage />} />
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
         <Route path="/hr/workflows" element={<WorkflowListPage />} />
         <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
@@ -622,14 +622,14 @@ export function AppRoutes() {
         <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
-          path="/masters"
+          path="/masters/*"
           element={
             <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin']}>
               <MastersHubPage />
             </ProtectedRoute>
           }
         />
-        <Route path="/modules" element={<ModuleManagementPage />} />
+        <Route path="/modules/*" element={<ModuleManagementPage />} />
         <Route path="/settings-group" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/general" replace />} />
           <Route path="general" element={<GeneralSettingsPage />} />

@@ -76,7 +76,13 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       return;
     }
     navigate(href);
-    // Don't close sidebar on desktop
+  };
+
+  const isPathActive = (itemHref: string, currentPath: string): boolean => {
+    if (itemHref === currentPath) return true;
+    if (currentPath.startsWith(itemHref + '/')) return true;
+    if (itemHref.startsWith(currentPath + '/')) return false;
+    return currentPath.startsWith(itemHref);
   };
 
   const getFullName = () => {
@@ -147,7 +153,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
         <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {visibleSections.map((section) => {
             const isActive = section.items.some((item) =>
-              location.pathname.startsWith(item.href)
+              isPathActive(item.href, location.pathname)
             );
             const isExpanded = expandedSections[section.id] ?? true;
 
@@ -200,8 +206,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                       {section.items.map((item) => {
                         const hasChildren = item.children && item.children.length > 0;
-                        const isChildActive = hasChildren && item.children!.some((c) => location.pathname === c.href);
-                        const itemActive = (location.pathname === item.href && !hasChildren) || isChildActive;
+                        const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname));
+                        const itemActive = (isPathActive(item.href, location.pathname) && !hasChildren) || isChildActive;
                         const isLocked = (item as any).isLocked;
 
                         if (hasChildren) {
@@ -243,7 +249,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
                               <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                                 {item.children!.map((child) => {
-                                  const childActive = location.pathname === child.href;
+                                  const childActive = isPathActive(child.href, location.pathname);
                                   return (
                                     <button
                                       key={child.name}
