@@ -184,6 +184,13 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
         .finally(() => {
           setIsLoading(false);
         });
+    } else {
+      // No token found - clear any stale auth state from localStorage
+      // This ensures we don't show unauthorized when user opens app without valid token
+      const { user, isAuthenticated } = useAuthStore.getState();
+      if (user || isAuthenticated) {
+        useAuthStore.setState({ user: null, isAuthenticated: false });
+      }
     }
 
     // Track last user ID and logout time to detect session changes

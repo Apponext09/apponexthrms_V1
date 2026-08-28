@@ -400,6 +400,7 @@ export function AppRoutes() {
         <Route path="/manager/leaves" element={<LeavePage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/manager/live-tracking/history" element={<TrackingHistoryPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -432,6 +433,7 @@ export function AppRoutes() {
         <Route path="/team-lead/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/team-lead/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/team-lead/live-tracking/history" element={<TrackingHistoryPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
