@@ -260,57 +260,36 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
       let pointsToUse: RoutePoint[] = [];
 
       if (data && data.length >= 2) {
-        // Use EXACT real breadcrumb history recorded in DB for this employee & date
         pointsToUse = data;
       } else if (employee.routeTrail && employee.routeTrail.length >= 2) {
         pointsToUse = employee.routeTrail;
-      } else {
-        // Fallback: If no DB breadcrumbs recorded yet for this date, anchor fallback path around current position
-        const hasLiveCoords = employee.latitude != null && Number(employee.latitude) !== 0 && employee.longitude != null && Number(employee.longitude) !== 0;
-        const curLat = hasLiveCoords ? Number(employee.latitude) : 20.0059;
-        const curLng = hasLiveCoords ? Number(employee.longitude) : 73.7898;
-        const now = new Date().toISOString();
+      }
 
-        pointsToUse = [
-          { latitude: curLat - 0.0060, longitude: curLng - 0.0050, speed: 12, recorded_at: new Date(Date.now() - 3600_000).toISOString() }, // Start (Point A)
-          { latitude: curLat - 0.0035, longitude: curLng - 0.0028, speed: 18, recorded_at: new Date(Date.now() - 2400_000).toISOString() },
-          { latitude: curLat - 0.0018, longitude: curLng - 0.0012, speed: 22, recorded_at: new Date(Date.now() - 1200_000).toISOString() },
-          { latitude: curLat, longitude: curLng, speed: 0, recorded_at: now },                                                               // Destination (Point B)
-        ];
+      if (pointsToUse.length === 0) {
+        setRawRoute([]);
+        setInterpolatedRoute([]);
+        setIsPlaying(false);
+        return;
       }
 
       setRawRoute(pointsToUse);
-
       const smoothPoints = interpolateRoutePoints(pointsToUse, 25);
       setInterpolatedRoute(smoothPoints);
 
       if (smoothPoints.length > 1) {
-        setIsPlaying(true); // Automatically start frame-by-frame walking animation
+        setIsPlaying(true);
       }
-    } catch {
-      const hasLiveCoords = employee.latitude != null && Number(employee.latitude) !== 0 && employee.longitude != null && Number(employee.longitude) !== 0;
-      const curLat = hasLiveCoords ? Number(employee.latitude) : 20.0059;
-      const curLng = hasLiveCoords ? Number(employee.longitude) : 73.7898;
-      const now = new Date().toISOString();
-
-      const fallback = [
-        { latitude: curLat - 0.0060, longitude: curLng - 0.0050, speed: 12, recorded_at: new Date(Date.now() - 3600_000).toISOString() },
-        { latitude: curLat - 0.0035, longitude: curLng - 0.0028, speed: 18, recorded_at: new Date(Date.now() - 2400_000).toISOString() },
-        { latitude: curLat - 0.0018, longitude: curLng - 0.0012, speed: 22, recorded_at: new Date(Date.now() - 1200_000).toISOString() },
-        { latitude: curLat, longitude: curLng, speed: 0, recorded_at: now },
-      ];
-      setRawRoute(fallback);
-      const smooth = interpolateRoutePoints(fallback, 25);
-      setInterpolatedRoute(smooth);
-      if (smooth.length > 1) setIsPlaying(true);
+    } catch (error) {
+      console.error('[RoutePlayback] Failed to load route history:', error);
+      setRawRoute([]);
+      setInterpolatedRoute([]);
+      setIsPlaying(false);
     } finally {
       setLoading(false);
     }
   }, [
     employee.employee_id,
     employee.routeTrail,
-    employee.latitude,
-    employee.longitude,
     date,
   ]);
 
@@ -435,6 +414,19 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
           {loading && (
             <div className="absolute inset-0 z-[1000] bg-background/60 backdrop-blur-sm flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+          )}
+          {!loading && interpolatedRoute.length === 0 && (
+            <div className="absolute inset-0 z-[500] bg-background/80 backdrop-blur-sm flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <Navigation className="w-12 h-12 text-muted-foreground opacity-40" />
+                <div>
+                  <p className="font-semibold text-foreground mb-1">No tracking data available</p>
+                  <p className="text-xs text-muted-foreground">
+                    Employee had no location tracking active on {new Date(date).toLocaleDateString('en-IN')}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           <MapContainer

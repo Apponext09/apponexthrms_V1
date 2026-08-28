@@ -101,13 +101,28 @@ export const LiveTrackingDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem('accessToken');
 
-  // Detect HR/Admin role from authStore
-  const isHROrAdmin = useMemo(() => {
+  // Detect tracking-enabled role from authStore
+  const isTrackingEnabled = useMemo(() => {
     const roles: string[] = Array.isArray(user?.roles) ? [...user.roles] : [];
-    const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin'];
+    const trackingPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin', 'manager', 'department_head', 'team_lead'];
     return roles.some((r) =>
-      adminPatterns.some((p) => String(r).toLowerCase().replace(/[\s-]+/g, '_').includes(p))
+      trackingPatterns.some((p) => String(r).toLowerCase().replace(/[\s-]+/g, '_').includes(p))
     );
+  }, [user]);
+
+  // Get history route based on current user role
+  const getHistoryRoute = useMemo(() => {
+    const roles: string[] = Array.isArray(user?.roles) ? [...user.roles] : [];
+    const roleStr = roles.map((r) => String(r).toLowerCase().replace(/[\s-]+/g, '_')).join(',');
+
+    if (roleStr.includes('hr_manager') || roleStr.includes('hr_admin') || roleStr.includes('organization_admin') || roleStr.includes('super_admin')) {
+      return '/admin/live-tracking/history';
+    } else if (roleStr.includes('manager') || roleStr.includes('department_head')) {
+      return '/manager/live-tracking/history';
+    } else if (roleStr.includes('team_lead')) {
+      return '/team-lead/live-tracking/history';
+    }
+    return '/admin/live-tracking/history';
   }, [user]);
 
   const [employees, setEmployees] = useState<LiveEmployee[]>([]);
@@ -245,10 +260,10 @@ export const LiveTrackingDashboardPage: React.FC = () => {
             Updated {lastRefreshed.toLocaleTimeString('en-IN')}
           </span>
 
-          {/* History button — HR/Admin only */}
-          {isHROrAdmin && (
+          {/* History button — Tracking-enabled roles only */}
+          {isTrackingEnabled && (
             <button
-              onClick={() => navigate('/admin/live-tracking/history')}
+              onClick={() => navigate(getHistoryRoute)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-xl font-bold text-xs transition-all"
             >
               <History className="w-3.5 h-3.5" />

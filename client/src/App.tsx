@@ -1,4 +1,4 @@
-import React, { useEffect, Component } from 'react';
+import React, { useEffect, Component, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './config/query';
@@ -8,6 +8,7 @@ import { useAuthStore } from './features/auth/store/authStore';
 import { useAttendanceStore } from './features/attendance/store/attendanceStore';
 import { BreakOverlay } from './features/attendance/components/BreakOverlay';
 import { useBreakSync } from './features/attendance/hooks/useBreakSync';
+import { LoadingScreen } from './components/LoadingScreen';
 
 // ── Global Error Boundary ──────────────────────────────────────────────────
 // Catches any unhandled React render errors and shows a readable message
@@ -67,15 +68,224 @@ class AppErrorBoundary extends Component<
 }
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Initialize theme and current user on mount
+  const [isLoading, setIsLoading] = useState(false);
+  const [securityEnabled, setSecurityEnabled] = useState(false);
+
+  // OPTIMIZED: Lazy load security checks after 2 seconds (after login page renders)
+  useEffect(() => {
+    const securityTimer = setTimeout(() => {
+      setSecurityEnabled(true);
+    }, 2000);
+
+    return () => clearTimeout(securityTimer);
+  }, []);
+
+  // OPTIMIZED: Only setup security when needed (after login page loads)
+  useEffect(() => {
+    if (!securityEnabled) return;
+
+    // 1. Block right-click context menu
+    const disableRightClick = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // 2. Block keyboard shortcuts for DevTools
+    const disableKeys = (e: KeyboardEvent) => {
+      if (e.key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    // 3. Block copy/paste
+    const disableCopyPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // 4. OPTIMIZED: Check DevTools every 2000ms instead of 100ms
+    let isDevToolsOpen = false;
+    const checkDevToolsSize = () => {
+      const threshold = 160;
+      const isOpen = window.outerWidth - window.innerWidth > threshold ||
+                     window.outerHeight - window.innerHeight > threshold;
+
+      if (isOpen && !isDevToolsOpen) {
+        isDevToolsOpen = true;
+        window.location.href = '/login';
+        return;
+      }
+      isDevToolsOpen = isOpen;
+    };
+
+    // Setup event listeners with passive flags where possible
+    document.addEventListener('contextmenu', disableRightClick, { passive: false });
+    document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
+    document.addEventListener('copy', disableCopyPaste, { passive: false });
+    document.addEventListener('cut', disableCopyPaste, { passive: false });
+    document.addEventListener('paste', disableCopyPaste, { passive: false });
+
+    // OPTIMIZED: Check every 2000ms (20x less frequent than before)
+    const devToolsCheckInterval = setInterval(checkDevToolsSize, 2000);
+
+    // Disable text selection
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    (document.body as any).style.msUserSelect = 'none';
+    (document.body as any).style.mozUserSelect = 'none';
+
+    // Block inspect element via developer tools protocol
+    try {
+      (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = undefined;
+      (window as any).__REDUX_DEVTOOLS_EXTENSION__ = undefined;
+    } catch (e) {
+      // Ignore errors
+    }
+
+    return () => {
+      document.removeEventListener('contextmenu', disableRightClick);
+      document.removeEventListener('keydown', disableKeys, true);
+      document.removeEventListener('copy', disableCopyPaste);
+      document.removeEventListener('cut', disableCopyPaste);
+      document.removeEventListener('paste', disableCopyPaste);
+      clearInterval(devToolsCheckInterval);
+    };
+  }, [securityEnabled]);
+
+  // OPTIMIZED: Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
-    if (localStorage.getItem('accessToken')) {
-      useAuthStore.getState().fetchCurrentUser();
+
+    // Show loading screen while fetching user data
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      setIsLoading(true);
+      // Fetch user data in background without blocking navigation
+      useAuthStore.getState().fetchCurrentUser()
+        .catch((err) => {
+          console.warn('Failed to fetch user:', err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      // No token found - clear any stale auth state from localStorage
+      const { user, isAuthenticated } = useAuthStore.getState();
+      if (user || isAuthenticated) {
+        useAuthStore.setState({ user: null, isAuthenticated: false });
+      }
     }
   }, []);
 
-  return <>{children}</>;
+  // OPTIMIZED: Defer session validation listeners until after 3 seconds
+  useEffect(() => {
+    const validationTimer = setTimeout(() => {
+      let lastUserId: number | null = null;
+      let lastLogoutTime = localStorage.getItem('last-logout-time');
+
+      // Re-validate auth when tab becomes visible
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+          const currentLogoutTime = localStorage.getItem('last-logout-time');
+          if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+            logout();
+            return;
+          }
+
+          if (user && lastUserId && user.id !== lastUserId) {
+            window.location.href = '/login?' + new Date().getTime();
+            return;
+          }
+
+          if (lastUserId === null && user) {
+            lastUserId = user.id;
+          }
+
+          if (isAuthenticated && localStorage.getItem('accessToken')) {
+            fetchCurrentUser().catch(() => {
+              logout();
+            });
+          }
+        }
+      };
+
+      // Check on window focus
+      const handleFocus = () => {
+        const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+
+        const currentLogoutTime = localStorage.getItem('last-logout-time');
+        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+          logout();
+          return;
+        }
+
+        if (user && lastUserId && user.id !== lastUserId) {
+          window.location.href = '/login?' + new Date().getTime();
+          return;
+        }
+
+        if (lastUserId === null && user) {
+          lastUserId = user.id;
+        }
+
+        if (isAuthenticated && localStorage.getItem('accessToken')) {
+          fetchCurrentUser().catch(() => {
+            logout();
+          });
+        }
+      };
+
+      // Prevent back button navigation
+      const handlePopState = () => {
+        const { isAuthenticated } = useAuthStore.getState();
+        if (!isAuthenticated) {
+          window.history.pushState(null, '', '/login');
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('popstate', handlePopState);
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, 3000);
+
+    return () => clearTimeout(validationTimer);
+  }, []);
+
+  return (
+    <>
+      {isLoading && <LoadingScreen />}
+      {children}
+    </>
+  );
 }
 
 /**
