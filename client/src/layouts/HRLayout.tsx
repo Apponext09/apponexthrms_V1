@@ -95,13 +95,18 @@ const HR_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/expense-claims', icon: Receipt },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/travel-requests', icon: Compass },
+      { name: 'Dashboard', href: '/expenses/dashboard', icon: TrendingUp },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: Receipt },
+      { name: 'Approvals', href: '/expenses/approvals', icon: CheckCircle2 },
+      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: FileCheck },
+      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: CreditCard },
+      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: Compass },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: Navigation },
+      { name: 'Expense Categories', href: '/expenses/categories', icon: Layers },
+      { name: 'Expense Policies', href: '/expenses/policies', icon: ShieldCheck },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: LineChart },
+      { name: 'Settings', href: '/expenses/settings', icon: Sliders },
     ],
   },
   {

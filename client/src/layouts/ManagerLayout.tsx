@@ -86,13 +86,9 @@ const MANAGER_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
+      { name: 'Expense Approvals', href: '/manager/expenses/approvals', icon: FileText },
+      { name: 'My Expenses', href: '/manager/expenses/my-expenses', icon: FileText },
+      { name: 'Travel Requests', href: '/manager/expenses/travel-requests', icon: Clock },
     ],
   },
   {
