@@ -701,7 +701,15 @@ export class ResumeBankService {
 
     for (const file of files) {
       const ext = file.originalname.split('.').pop()?.toLowerCase();
-      if (ext === 'zip' || ext === 'rar') {
+      if (ext === 'rar') {
+        failedCount++;
+        errors.push({
+          file: file.originalname,
+          error: 'RAR archives are not supported. Upload PDF/DOCX files or a ZIP of resumes.',
+        });
+        continue;
+      }
+      if (ext === 'zip') {
         try {
           const zip = new AdmZip(file.buffer);
           const zipEntries = zip.getEntries();

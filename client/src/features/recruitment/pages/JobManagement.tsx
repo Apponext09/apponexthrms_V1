@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { formatApiError } from '@/lib/apiError';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
 import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
 
@@ -102,10 +103,7 @@ export const JobManagement: React.FC = () => {
       refetch();
     } catch (error: any) {
       console.error('Failed to save job:', error);
-      const errMsg = error?.response?.data?.details 
-        ? Object.entries(error.response.data.details).map(([k, v]: any) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ')
-        : (error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Failed to save job');
-      toast.error(errMsg);
+      toast.error(formatApiError(error, 'Failed to save job'));
     }
   };
 

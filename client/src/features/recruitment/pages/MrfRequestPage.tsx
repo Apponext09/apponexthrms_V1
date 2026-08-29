@@ -2794,7 +2794,27 @@ export const MrfRequestPage: React.FC = () => {
 
       {/* Add / Edit Recruitment Form Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact">
+        <DialogContent
+          className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact"
+          onPointerDownOutside={(e) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-select-content]')) {
+              e.preventDefault();
+            }
+          }}
+          onInteractOutside={(e) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-select-content]')) {
+              e.preventDefault();
+            }
+          }}
+          onFocusOutside={(e) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-select-content]')) {
+              e.preventDefault();
+            }
+          }}
+        >
           <form onSubmit={handleSave}>
             <DialogHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
               <div>

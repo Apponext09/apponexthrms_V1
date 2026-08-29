@@ -450,7 +450,7 @@ export class JobReferenceService {
 
     if (!candidate) {
       const first_name = input.name.split(' ')[0] || input.name;
-      const last_name = input.name.split(' ').slice(1).join(' ') || null;
+      const last_name = input.name.split(' ').slice(1).join(' ') || first_name || 'Applicant';
       try {
         const candId = await this.safeInsert('candidates', {
           uuid: uuidv4(),

@@ -389,14 +389,23 @@ export const ResumeBankPage: React.FC = () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
       .then(res => {
-        if (res.data?.success) {
+        const result = res.data?.data;
+        const failed = Number(result?.failedCount ?? 0);
+        const ok = Number(result?.successCount ?? 0);
+        const firstErr = Array.isArray(result?.errors) && result.errors[0]
+          ? `${result.errors[0].file || 'file'}: ${result.errors[0].error}`
+          : '';
+
+        if (res.data?.success && failed === 0) {
           toast.success(res.data.message || 'Resumes uploaded & parsed successfully!');
-          setBulkFiles([]);
-          setActiveTab('logs');
-          fetchLogs();
+        } else if (ok > 0 && failed > 0) {
+          toast.warning(res.data.message || `Partial upload: ${ok} ok, ${failed} failed. ${firstErr}`);
         } else {
-          toast.error(res.data?.message || 'Failed to process bulk file upload');
+          toast.error(firstErr || res.data?.message || 'Bulk upload failed. Open Upload Logs for details.');
         }
+        setBulkFiles([]);
+        setActiveTab('logs');
+        fetchLogs();
       })
       .catch(err => {
         console.error('Failed to upload files', err);
