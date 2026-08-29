@@ -4063,17 +4063,35 @@ router.post('/merge-codes/:id/restore', asyncHandler((req, res) => mergeCodeCtrl
       console.log('[Settings] ✅ Created table: notification_templates');
     } else {
       // Add our required columns if they don't exist (table may have old schema)
-      const hasTemplateName = await db.schema.hasColumn('notification_templates', 'template_name');
-      const hasSubject = await db.schema.hasColumn('notification_templates', 'subject');
-      const hasEmailNotification = await db.schema.hasColumn('notification_templates', 'email_notification');
-      const hasIsActive = await db.schema.hasColumn('notification_templates', 'is_active');
+      const notifCols = [
+        { name: 'template_code', type: (t: any) => t.string('template_code', 100).nullable() },
+        { name: 'template_name', type: (t: any) => t.string('template_name', 255).nullable() },
+        { name: 'template_description', type: (t: any) => t.text('template_description').nullable() },
+        { name: 'category', type: (t: any) => t.string('category', 100).nullable() },
+        { name: 'channels', type: (t: any) => t.json('channels').nullable() },
+        { name: 'subject_line', type: (t: any) => t.string('subject_line', 500).nullable() },
+        { name: 'subject', type: (t: any) => t.string('subject', 500).nullable() },
+        { name: 'body_text', type: (t: any) => t.text('body_text').nullable() },
+        { name: 'body_html', type: (t: any) => t.text('body_html').nullable() },
+        { name: 'email_notification', type: (t: any) => t.text('email_notification').nullable() },
+        { name: 'sms_text', type: (t: any) => t.string('sms_text', 160).nullable() },
+        { name: 'whatsapp_template_name', type: (t: any) => t.string('whatsapp_template_name', 100).nullable() },
+        { name: 'variables', type: (t: any) => t.json('variables').nullable() },
+        { name: 'version_number', type: (t: any) => t.integer('version_number').defaultTo(1) },
+        { name: 'is_published', type: (t: any) => t.boolean('is_published').defaultTo(true) },
+        { name: 'is_active', type: (t: any) => t.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes') },
+        { name: 'status', type: (t: any) => t.string('status', 50).defaultTo('published') },
+        { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+        { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+        { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        { name: 'deleted_at', type: (t: any) => t.datetime('deleted_at').nullable() },
+      ];
 
-      await db.schema.alterTable('notification_templates', (table) => {
-        if (!hasTemplateName) table.string('template_name', 255).nullable();
-        if (!hasSubject) table.string('subject', 500).nullable();
-        if (!hasEmailNotification) table.text('email_notification').nullable();
-        if (!hasIsActive) table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
-      }).catch(() => {});
+      for (const col of notifCols) {
+        if (!(await db.schema.hasColumn('notification_templates', col.name))) {
+          await db.schema.table('notification_templates', col.type).catch(() => {});
+        }
+      }
     }
   } catch (err) {
     console.error('[Settings] ❌ Failed to create/migrate notification_templates table:', err);

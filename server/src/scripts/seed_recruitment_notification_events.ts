@@ -147,17 +147,115 @@ async function seedRecruitmentNotificationEvents() {
   const db = getKnex();
 
   try {
-    const hasSubjectLine = await db.schema.hasColumn('notification_templates', 'subject_line');
-    if (!hasSubjectLine) {
-      await db.schema.alterTable('notification_templates', (table) => {
+    const hasTemplatesTable = await db.schema.hasTable('notification_templates');
+    if (!hasTemplatesTable) {
+      await db.schema.createTable('notification_templates', (table) => {
+        table.bigIncrements('id').primary();
+        table.uuid('uuid').notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable();
+        table.string('template_code', 100).nullable();
+        table.string('template_name', 255).notNullable();
+        table.text('template_description').nullable();
+        table.string('category', 100).nullable();
+        table.json('channels').nullable();
         table.string('subject_line', 500).nullable();
-      });
-    }
-    const hasBodyText = await db.schema.hasColumn('notification_templates', 'body_text');
-    if (!hasBodyText) {
-      await db.schema.alterTable('notification_templates', (table) => {
+        table.string('subject', 500).nullable();
         table.text('body_text').nullable();
-      });
+        table.text('body_html').nullable();
+        table.text('email_notification').nullable();
+        table.string('sms_text', 160).nullable();
+        table.string('whatsapp_template_name', 100).nullable();
+        table.json('variables').nullable();
+        table.integer('version_number').defaultTo(1);
+        table.boolean('is_published').defaultTo(true);
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.string('status', 50).defaultTo('published');
+        table.bigInteger('company_id').unsigned().nullable();
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+        table.timestamp('deleted_at').nullable();
+        table.index('organization_id');
+      }).catch(() => {});
+    } else {
+      const templateCols = [
+        { name: 'template_code', type: (t: any) => t.string('template_code', 100).nullable() },
+        { name: 'template_description', type: (t: any) => t.text('template_description').nullable() },
+        { name: 'category', type: (t: any) => t.string('category', 100).nullable() },
+        { name: 'channels', type: (t: any) => t.json('channels').nullable() },
+        { name: 'subject_line', type: (t: any) => t.string('subject_line', 500).nullable() },
+        { name: 'subject', type: (t: any) => t.string('subject', 500).nullable() },
+        { name: 'body_text', type: (t: any) => t.text('body_text').nullable() },
+        { name: 'body_html', type: (t: any) => t.text('body_html').nullable() },
+        { name: 'email_notification', type: (t: any) => t.text('email_notification').nullable() },
+        { name: 'sms_text', type: (t: any) => t.string('sms_text', 160).nullable() },
+        { name: 'whatsapp_template_name', type: (t: any) => t.string('whatsapp_template_name', 100).nullable() },
+        { name: 'variables', type: (t: any) => t.json('variables').nullable() },
+        { name: 'version_number', type: (t: any) => t.integer('version_number').defaultTo(1) },
+        { name: 'is_published', type: (t: any) => t.boolean('is_published').defaultTo(true) },
+        { name: 'is_active', type: (t: any) => t.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes') },
+        { name: 'status', type: (t: any) => t.string('status', 50).defaultTo('published') },
+        { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+        { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+        { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        { name: 'deleted_at', type: (t: any) => t.timestamp('deleted_at').nullable() },
+      ];
+      for (const col of templateCols) {
+        if (!(await db.schema.hasColumn('notification_templates', col.name))) {
+          await db.schema.table('notification_templates', col.type).catch(() => {});
+        }
+      }
+      if (await db.schema.hasColumn('notification_templates', 'template_code')) {
+        try {
+          await db.raw('ALTER TABLE notification_templates MODIFY COLUMN template_code VARCHAR(100) NULL');
+        } catch (e: any) {}
+      }
+    }
+
+    const hasEventsTable = await db.schema.hasTable('notification_events');
+    if (!hasEventsTable) {
+      await db.schema.createTable('notification_events', (table) => {
+        table.bigIncrements('id').primary();
+        table.uuid('uuid').notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable();
+        table.string('event_code', 100).notNullable();
+        table.string('event_name', 255).notNullable();
+        table.text('event_description').nullable();
+        table.bigInteger('default_template_id').unsigned().nullable();
+        table.boolean('is_enabled').defaultTo(true);
+        table.integer('retry_count').defaultTo(3);
+        table.integer('retry_interval_minutes').defaultTo(5);
+        table.integer('max_queue_delay_hours').defaultTo(1);
+        table.bigInteger('company_id').unsigned().nullable();
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+        table.timestamp('deleted_at').nullable();
+        table.index('organization_id');
+      }).catch(() => {});
+    } else {
+      const eventCols = [
+        { name: 'uuid', type: (t: any) => t.uuid('uuid').nullable() },
+        { name: 'event_code', type: (t: any) => t.string('event_code', 100).nullable() },
+        { name: 'event_name', type: (t: any) => t.string('event_name', 255).nullable() },
+        { name: 'event_description', type: (t: any) => t.text('event_description').nullable() },
+        { name: 'default_template_id', type: (t: any) => t.bigInteger('default_template_id').unsigned().nullable() },
+        { name: 'is_enabled', type: (t: any) => t.boolean('is_enabled').defaultTo(true) },
+        { name: 'retry_count', type: (t: any) => t.integer('retry_count').defaultTo(3) },
+        { name: 'retry_interval_minutes', type: (t: any) => t.integer('retry_interval_minutes').defaultTo(5) },
+        { name: 'max_queue_delay_hours', type: (t: any) => t.integer('max_queue_delay_hours').defaultTo(1) },
+        { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+        { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+        { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        { name: 'deleted_at', type: (t: any) => t.timestamp('deleted_at').nullable() },
+      ];
+      for (const col of eventCols) {
+        if (!(await db.schema.hasColumn('notification_events', col.name))) {
+          await db.schema.table('notification_events', col.type).catch(() => {});
+        }
+      }
     }
   } catch {
     // schema check non-fatal
@@ -182,52 +280,73 @@ async function seedRecruitmentNotificationEvents() {
 
     for (const event of RECRUITMENT_EVENTS) {
       try {
-        // Check if template exists
-        let template = await db('notification_templates')
-          .where('organization_id', orgId)
-          .where('template_code', event.templateCode)
-          .first();
+        // Check if template exists by template_code or template_name
+        let template: any = null;
+        const hasTmplCode = await db.schema.hasColumn('notification_templates', 'template_code');
+        if (hasTmplCode) {
+          template = await db('notification_templates')
+            .where('organization_id', orgId)
+            .where('template_code', event.templateCode)
+            .first()
+            .catch(() => null);
+        }
+        if (!template) {
+          template = await db('notification_templates')
+            .where('organization_id', orgId)
+            .where('template_name', event.templateName)
+            .first()
+            .catch(() => null);
+        }
 
         if (!template) {
-          // Prepare payload with fallbacks for both old and new schema columns
+          // Prepare payload with column existence checks
           const insertPayload: any = {
             uuid: uuidv4(),
             organization_id: orgId,
-            template_code: event.templateCode,
             template_name: event.templateName,
-            template_description: event.eventDescription,
-            category: event.category,
-            channels: JSON.stringify(['inapp']),
-            version_number: 1,
-            is_published: true,
-            is_active: 'Yes',
-            status: 'published',
             created_by: userId,
             updated_by: userId,
             created_at: new Date(),
             updated_at: new Date(),
           };
 
-          const hasSubjLine = await db.schema.hasColumn('notification_templates', 'subject_line');
-          if (hasSubjLine) {
+          if (hasTmplCode) {
+            insertPayload.template_code = event.templateCode;
+          }
+          if (await db.schema.hasColumn('notification_templates', 'template_description')) {
+            insertPayload.template_description = event.eventDescription;
+          }
+          if (await db.schema.hasColumn('notification_templates', 'category')) {
+            insertPayload.category = event.category;
+          }
+          if (await db.schema.hasColumn('notification_templates', 'channels')) {
+            insertPayload.channels = JSON.stringify(['inapp']);
+          }
+          if (await db.schema.hasColumn('notification_templates', 'version_number')) {
+            insertPayload.version_number = 1;
+          }
+          if (await db.schema.hasColumn('notification_templates', 'is_published')) {
+            insertPayload.is_published = true;
+          }
+          if (await db.schema.hasColumn('notification_templates', 'is_active')) {
+            insertPayload.is_active = 'Yes';
+          }
+          if (await db.schema.hasColumn('notification_templates', 'status')) {
+            insertPayload.status = 'published';
+          }
+          if (await db.schema.hasColumn('notification_templates', 'subject_line')) {
             insertPayload.subject_line = event.subjectLine;
           }
-          const hasSubject = await db.schema.hasColumn('notification_templates', 'subject');
-          if (hasSubject) {
+          if (await db.schema.hasColumn('notification_templates', 'subject')) {
             insertPayload.subject = event.subjectLine;
           }
-
-          const hasBodyTxt = await db.schema.hasColumn('notification_templates', 'body_text');
-          if (hasBodyTxt) {
+          if (await db.schema.hasColumn('notification_templates', 'body_text')) {
             insertPayload.body_text = event.bodyText;
           }
-          const hasEmailNotif = await db.schema.hasColumn('notification_templates', 'email_notification');
-          if (hasEmailNotif) {
+          if (await db.schema.hasColumn('notification_templates', 'email_notification')) {
             insertPayload.email_notification = event.bodyText;
           }
-
-          const hasVars = await db.schema.hasColumn('notification_templates', 'variables');
-          if (hasVars) {
+          if (await db.schema.hasColumn('notification_templates', 'variables')) {
             insertPayload.variables = JSON.stringify(
               (event.bodyText.match(/\{\{(\w+)\}\}/g) || []).map((v: string) => v.replace(/[{}]/g, ''))
             );
@@ -241,7 +360,8 @@ async function seedRecruitmentNotificationEvents() {
         const existingEvent = await db('notification_events')
           .where('organization_id', orgId)
           .where('event_code', event.eventCode)
-          .first();
+          .first()
+          .catch(() => null);
 
         if (existingEvent) {
           // If event exists but missing default_template_id, update it
@@ -258,22 +378,37 @@ async function seedRecruitmentNotificationEvents() {
         }
 
         // Create event linked to template
-        await db('notification_events').insert({
+        const eventPayload: any = {
           uuid: uuidv4(),
           organization_id: orgId,
           event_code: event.eventCode,
           event_name: event.eventName,
-          event_description: event.eventDescription,
-          default_template_id: template?.id || 1,
-          is_enabled: true,
-          retry_count: 3,
-          retry_interval_minutes: 5,
-          max_queue_delay_hours: 1,
           created_by: userId,
           updated_by: userId,
           created_at: new Date(),
           updated_at: new Date(),
-        });
+        };
+
+        if (await db.schema.hasColumn('notification_events', 'event_description')) {
+          eventPayload.event_description = event.eventDescription;
+        }
+        if (await db.schema.hasColumn('notification_events', 'default_template_id')) {
+          eventPayload.default_template_id = template?.id || null;
+        }
+        if (await db.schema.hasColumn('notification_events', 'is_enabled')) {
+          eventPayload.is_enabled = true;
+        }
+        if (await db.schema.hasColumn('notification_events', 'retry_count')) {
+          eventPayload.retry_count = 3;
+        }
+        if (await db.schema.hasColumn('notification_events', 'retry_interval_minutes')) {
+          eventPayload.retry_interval_minutes = 5;
+        }
+        if (await db.schema.hasColumn('notification_events', 'max_queue_delay_hours')) {
+          eventPayload.max_queue_delay_hours = 1;
+        }
+
+        await db('notification_events').insert(eventPayload);
       } catch (err: any) {
         // non-fatal seed failure
       }
