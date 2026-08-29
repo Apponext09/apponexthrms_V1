@@ -60,6 +60,12 @@ export class MrfRequestRepository extends BaseRepository<MrfRequest> {
           table.date('expiry_date').nullable();
         });
       }
+      const hasDeletedAt = await this.db.schema.hasColumn('mrf_requests', 'deleted_at');
+      if (!hasDeletedAt) {
+        await this.db.schema.alterTable('mrf_requests', (table) => {
+          table.timestamp('deleted_at').nullable();
+        });
+      }
       MrfRequestRepository.schemaChecked = true;
     } catch (err) {
       console.warn('MrfRequestRepository ensureColumns error:', err);
@@ -67,7 +73,20 @@ export class MrfRequestRepository extends BaseRepository<MrfRequest> {
   }
 
   override query(ctx: TenantContext): any {
-    return this.db('mrf_requests').where('mrf_requests.organization_id', ctx.organizationId);
+    return this.db('mrf_requests')
+      .where('mrf_requests.organization_id', ctx.organizationId)
+      .whereNull('mrf_requests.deleted_at');
+  }
+
+  override async delete(ctx: TenantContext, id: number | string): Promise<void> {
+    await this.ensureColumns();
+    await this.db('mrf_requests')
+      .where('organization_id', ctx.organizationId)
+      .where(this.isPrimaryKeyUuid(id) ? 'uuid' : 'id', id)
+      .update({
+        deleted_at: new Date(),
+        updated_at: new Date(),
+      });
   }
 
   override async create(ctx: TenantContext, data: Partial<MrfRequest>): Promise<MrfRequest> {

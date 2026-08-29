@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Briefcase, Eye, CheckCircle, AlertTriangle, Link2, Palette, Sparkles
@@ -14,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { formatApiError } from '@/lib/apiError';
+import { downloadCsvFile } from '@/lib/downloadCsv';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
 import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
 
@@ -44,7 +46,7 @@ export const JobManagement: React.FC = () => {
   const [viewingJob, setViewingJob] = useState<any>(null);
   const [selectedJobForAi, setSelectedJobForAi] = useState<string | number | undefined>(undefined);
 
-  const { data: jobsResponse, isLoading, refetch } = useJobs();
+  const { data: jobsResponse, isLoading, refetch } = useJobs({ pageSize: 500 });
   const createJob = useCreateJob();
   const updateJob = useUpdateJob(editingJob?.id || 0);
   const deleteJob = useDeleteJob();
@@ -61,11 +63,24 @@ export const JobManagement: React.FC = () => {
 
   const jobs = jobsResponse?.data || [];
 
+  const todayDate = (() => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
+
+  const isJobClosed = (job: any) => {
+    const status = String(job.status || '').toLowerCase();
+    if (status === 'closed' || status === 'archived') return true;
+    const deadline = String(job.expiryDate || job.expiry_date || '').slice(0, 10);
+    return Boolean(deadline && deadline < todayDate);
+  };
+
   // Filter Data
   const filteredData = useMemo(() => {
     return jobs.filter((job: any) => {
       // Tab filter
-      const isClosed = job.status === 'closed';
+      const isClosed = isJobClosed(job);
       if (activeTab === 'active' && isClosed) return false;
       if (activeTab === 'closed' && !isClosed) return false;
 
@@ -128,6 +143,7 @@ export const JobManagement: React.FC = () => {
         currency: job.currency || 'INR',
         employmentType: job.employmentType || job.employment_type || 'onsite',
         noOfPositions: job.noOfPositions || job.no_of_positions || 1,
+        expiryDate: job.expiryDate || job.expiry_date || todayDate,
       };
 
       await createJob.mutateAsync(cloneData);
@@ -175,36 +191,28 @@ export const JobManagement: React.FC = () => {
       toast.error('No job records available to export');
       return;
     }
-    const headers = ['Job Code', 'Job Title', 'Status', 'Positions', 'Job Type', 'Experience Level', 'Employment Type'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredData.map((j: any) => {
-        const code = j.jobCode || j.job_code || '';
-        const title = j.jobTitle || j.job_title || '';
-        const status = j.status || '';
-        const positions = j.noOfPositions || j.no_of_positions || 0;
-        const type = j.jobType || j.job_type || '';
-        const exp = j.experienceLevel || j.experience_level || '';
-        const empType = j.employmentType || j.employment_type || '';
-        return `"${code}","${title}","${status}","${positions}","${type}","${exp}","${empType}"`;
-      })
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `job_management_${activeTab}_export.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-    toast.success('Jobs exported successfully');
+    downloadCsvFile(
+      `job_management_${activeTab}_export.csv`,
+      ['Job Code', 'Job Title', 'Status', 'Positions', 'Job Type', 'Experience Level', 'Employment Type', 'Application Deadline'],
+      filteredData.map((j: any) => [
+        j.jobCode || j.job_code || '',
+        j.jobTitle || j.job_title || '',
+        j.status || '',
+        j.noOfPositions || j.no_of_positions || 0,
+        j.jobType || j.job_type || '',
+        j.experienceLevel || j.experience_level || '',
+        j.employmentType || j.employment_type || '',
+        String(j.expiryDate || j.expiry_date || '').slice(0, 10),
+      ])
+    );
+    toast.success('Jobs CSV downloaded');
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+    <div className="flex-1 space-y-6 max-w-full p-6 min-h-[calc(100vh-4rem)]">
       
       {/* ── Top Header Section ────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold shrink-0 border border-blue-500/20 shadow-xs">
             <Briefcase className="w-5 h-5" />
@@ -231,37 +239,36 @@ export const JobManagement: React.FC = () => {
             Create Job
           </Button>
           
-          <div className="relative">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs"
-              title="Configure Table Columns"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
-            {/* Settings Popover */}
-            {isSettingsOpen && (
-              <div className="absolute right-0 top-12 w-64 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="p-3 bg-muted/50 border-b border-border">
-                  <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
-                </div>
-                <div className="p-2 max-h-64 overflow-y-auto space-y-1">
-                  {ALL_CONFIGURABLE_COLUMNS.map(col => (
-                    <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
-                      <input 
-                        type="checkbox" 
-                        checked={visibleColumns.includes(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                        className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
-                      />
-                      <span>{col.label}</span>
-                    </label>
-                  ))}
-                </div>
+          <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs cursor-pointer"
+                title="Configure Table Columns"
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent align="end" className="w-64 p-0 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+              <div className="p-3 bg-muted/50 border-b border-border">
+                <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
               </div>
-            )}
-          </div>
+              <div className="p-2 max-h-64 overflow-y-auto space-y-1">
+                {ALL_CONFIGURABLE_COLUMNS.map(col => (
+                  <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={visibleColumns.includes(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
+                    />
+                    <span>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
@@ -279,7 +286,7 @@ export const JobManagement: React.FC = () => {
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Active Jobs ({jobs.filter((j: any) => j.status !== 'closed').length})
+              Active Jobs ({jobs.filter((j: any) => !isJobClosed(j)).length})
             </button>
             <button
               onClick={() => { setActiveTab('closed'); setCurrentPage(1); }}
@@ -290,7 +297,7 @@ export const JobManagement: React.FC = () => {
               }`}
             >
               <span className="w-2 h-2 rounded-full bg-slate-400" />
-              Closed Jobs ({jobs.filter((j: any) => j.status === 'closed').length})
+              Closed Jobs ({jobs.filter((j: any) => isJobClosed(j)).length})
             </button>
           </div>
 
@@ -645,7 +652,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     currency: initialData?.currency || 'INR',
     employmentType: initialData?.employmentType || initialData?.employment_type || 'onsite',
     noOfPositions: initialData?.noOfPositions || initialData?.no_of_positions || 1,
-    expiryDate: initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '',
+    expiryDate: String(initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '').slice(0, 10),
     departmentId: initialData?.departmentId || initialData?.department_id || undefined,
   });
 
@@ -733,7 +740,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
         departmentId: mrf.department_id || mrf.departmentId ? Number(mrf.department_id || mrf.departmentId) : prev.departmentId,
         jobType: mappedJobType,
         employmentType: prev.employmentType || 'onsite',
-        expiryDate: mrf.expiry_date || mrf.expiryDate || mrf.target_closure_date || mrf.targetClosureDate || prev.expiryDate,
+        expiryDate: String(mrf.expiry_date || mrf.expiryDate || mrf.target_closure_date || mrf.targetClosureDate || prev.expiryDate || '').slice(0, 10),
       }));
     }
   };
@@ -757,8 +764,20 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
         <div className="p-6 overflow-y-auto custom-scrollbar">
           <form id="create-job-form" onSubmit={(e) => {
             e.preventDefault();
+            const deadline = String(formData.expiryDate || '').slice(0, 10);
+            const d = new Date();
+            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            if (!deadline) {
+              toast.error('Application deadline is required');
+              return;
+            }
+            if (deadline < today) {
+              toast.error('Application deadline must be today or a future date');
+              return;
+            }
             onSubmit({
               ...formData,
+              expiryDate: deadline,
               aiSettings,
             });
           }} className="space-y-5">
@@ -907,13 +926,18 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Application Deadline</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Application Deadline <span className="text-rose-500">*</span></label>
                 <Input
                   type="date"
                   name="expiryDate"
                   value={formData.expiryDate || ''}
                   onChange={handleChange}
+                  min={(() => {
+                    const d = new Date();
+                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                  })()}
                   className="bg-background border-border text-xs rounded-xl h-9"
+                  required
                 />
               </div>
             </div>

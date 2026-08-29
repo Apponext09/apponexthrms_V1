@@ -18,7 +18,13 @@ export const createJobSchema = z.object({
   currency: z.string().optional(),
   employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
   noOfPositions: z.number().min(1).default(1),
-  expiryDate: z.string().optional(),
+  expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
+    const datePart = String(value).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return datePart >= todayStr;
+  }, { message: 'Application deadline must be today or a future date' }),
   jobTemplateId: z.number().optional(),
   isInternal: z.boolean().optional(),
   isPublishedExternal: z.boolean().optional(),
@@ -29,10 +35,22 @@ export const createJobSchema = z.object({
 
 export const updateJobSchema = createJobSchema.partial();
 
+const candidateSourceSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const raw = String(value).toLowerCase().trim();
+  if (['linkedin', 'naukri', 'job_board', 'jobboard'].includes(raw)) return 'job_board';
+  if (['referral', 'employee_referral', 'employee referral'].includes(raw)) return 'employee_referral';
+  if (['agency', 'recruitment_agency', 'recruitment agency'].includes(raw)) return 'recruitment_agency';
+  if (['bulk', 'bulk_import', 'csv', 'import'].includes(raw)) return 'bulk_import';
+  if (['resume_bank', 'resume bank'].includes(raw)) return 'resume_bank';
+  if (['direct', 'direct_apply', 'direct apply', 'direct application'].includes(raw)) return 'direct_apply';
+  return raw || undefined;
+}, z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency', 'bulk_import', 'resume_bank']).optional());
+
 // Candidate schemas
 export const createCandidateSchema = z.object({
-  firstName: z.string().min(2).max(100),
-  lastName: z.string().min(2).max(100),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
   email: z.string().email(),
   phone: z.string().optional(),
   alternativePhone: z.string().optional(),
@@ -49,11 +67,12 @@ export const createCandidateSchema = z.object({
   noticePeriodDays: z.number().optional(),
   currentCompany: z.string().optional(),
   yearsOfExperience: z.number().optional(),
-  linkedinUrl: z.string().url().optional(),
-  githubUrl: z.string().url().optional(),
-  portfolioUrl: z.string().url().optional(),
-  source: z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency']),
+  linkedinUrl: z.string().url().optional().or(z.literal('')),
+  githubUrl: z.string().url().optional().or(z.literal('')),
+  portfolioUrl: z.string().url().optional().or(z.literal('')),
+  source: candidateSourceSchema,
   resumeUrl: z.string().optional(),
+  status: z.enum(['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected', 'dropped']).optional(),
 });
 
 export const updateCandidateSchema = createCandidateSchema.partial();

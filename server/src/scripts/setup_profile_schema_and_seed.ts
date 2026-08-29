@@ -9,17 +9,6 @@ import { logger } from '../common/lib/logger';
  */
 export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
   try {
-    logger.info('Checking and upgrading database schema for organization-level admin credentials...');
-
-    // Diagnose existing tables
-    try {
-      const [tables] = await db.raw('SHOW TABLES') as any;
-      const tableNames = tables.map((t: any) => Object.values(t)[0]);
-      logger.info(`Existing tables in database (${tableNames.length}): ${tableNames.join(', ')}`);
-    } catch (err: any) {
-      logger.error('Error diagnosing database tables:', err.message);
-    }
-
     // ──────── MASTER RECRUITMENT & PORTAL SCHEMA ALIGNMENT ────────
     try {
       // 1. candidates table repair
@@ -100,13 +89,67 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
         }
       }
 
-      // 5. notification_templates table (template_code fix)
+      // 5. notification_templates table repair
       if (await db.schema.hasTable('notification_templates')) {
+        const notifTemplateCols = [
+          { name: 'template_code', type: (t: any) => t.string('template_code', 100).nullable() },
+          { name: 'template_name', type: (t: any) => t.string('template_name', 255).nullable() },
+          { name: 'template_description', type: (t: any) => t.text('template_description').nullable() },
+          { name: 'category', type: (t: any) => t.string('category', 100).nullable() },
+          { name: 'channels', type: (t: any) => t.json('channels').nullable() },
+          { name: 'subject_line', type: (t: any) => t.string('subject_line', 500).nullable() },
+          { name: 'subject', type: (t: any) => t.string('subject', 500).nullable() },
+          { name: 'body_text', type: (t: any) => t.text('body_text').nullable() },
+          { name: 'body_html', type: (t: any) => t.text('body_html').nullable() },
+          { name: 'email_notification', type: (t: any) => t.text('email_notification').nullable() },
+          { name: 'sms_text', type: (t: any) => t.string('sms_text', 160).nullable() },
+          { name: 'whatsapp_template_name', type: (t: any) => t.string('whatsapp_template_name', 100).nullable() },
+          { name: 'variables', type: (t: any) => t.json('variables').nullable() },
+          { name: 'version_number', type: (t: any) => t.integer('version_number').defaultTo(1) },
+          { name: 'is_published', type: (t: any) => t.boolean('is_published').defaultTo(true) },
+          { name: 'is_active', type: (t: any) => t.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes') },
+          { name: 'status', type: (t: any) => t.string('status', 50).defaultTo('published') },
+          { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+          { name: 'deleted_at', type: (t: any) => t.timestamp('deleted_at').nullable() },
+        ];
+        for (const col of notifTemplateCols) {
+          if (!(await db.schema.hasColumn('notification_templates', col.name))) {
+            await db.schema.table('notification_templates', col.type).catch(() => {});
+            logger.info(`Added missing column ${col.name} to notification_templates table`);
+          }
+        }
         if (await db.schema.hasColumn('notification_templates', 'template_code')) {
           try {
             await db.raw('ALTER TABLE notification_templates MODIFY COLUMN template_code VARCHAR(100) NULL');
             logger.info('Modified template_code column to be NULLABLE in notification_templates');
           } catch (e: any) {}
+        }
+      }
+
+      // 6. notification_events table repair
+      if (await db.schema.hasTable('notification_events')) {
+        const notifEventCols = [
+          { name: 'uuid', type: (t: any) => t.uuid('uuid').nullable() },
+          { name: 'event_code', type: (t: any) => t.string('event_code', 100).nullable() },
+          { name: 'event_name', type: (t: any) => t.string('event_name', 255).nullable() },
+          { name: 'event_description', type: (t: any) => t.text('event_description').nullable() },
+          { name: 'default_template_id', type: (t: any) => t.bigInteger('default_template_id').unsigned().nullable() },
+          { name: 'is_enabled', type: (t: any) => t.boolean('is_enabled').defaultTo(true) },
+          { name: 'retry_count', type: (t: any) => t.integer('retry_count').defaultTo(3) },
+          { name: 'retry_interval_minutes', type: (t: any) => t.integer('retry_interval_minutes').defaultTo(5) },
+          { name: 'max_queue_delay_hours', type: (t: any) => t.integer('max_queue_delay_hours').defaultTo(1) },
+          { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+          { name: 'deleted_at', type: (t: any) => t.timestamp('deleted_at').nullable() },
+        ];
+        for (const col of notifEventCols) {
+          if (!(await db.schema.hasColumn('notification_events', col.name))) {
+            await db.schema.table('notification_events', col.type).catch(() => {});
+            logger.info(`Added missing column ${col.name} to notification_events table`);
+          }
         }
       }
     } catch (deepSchemaErr: any) {
@@ -1211,6 +1254,159 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       logger.info('ID Card templates schema verified and applied.');
     } catch (err: any) {
       logger.error('Error upgrading ID card templates tables schema:', err.message);
+    }
+
+    // Ensure letter_templates and generated_letters schema is created and upgraded with LONGTEXT
+    try {
+      const hasTemplates = await db.schema.hasTable('letter_templates');
+      if (!hasTemplates) {
+        await db.schema.createTable('letter_templates', (table) => {
+          table.bigIncrements('id').primary();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
+
+          table.string('template_name', 255).notNullable();
+          table.string('template_code', 100).notNullable();
+
+          table.enum('letter_category', ['hiring', 'onboarding', 'employment', 'exit']).notNullable();
+          table.enum('letter_type', [
+            'interview_call', 'intent_to_offer', 'offer_letter',
+            'appointment', 'nda', 'code_of_conduct',
+            'confirmation', 'increment', 'promotion', 'warning',
+            'resignation_acceptance', 'relieving', 'experience',
+            'custom'
+          ]).notNullable();
+
+          table.string('subject', 500).nullable();
+
+          // Company branding
+          table.text('header_html', 'longtext').nullable();
+          table.text('footer_html', 'longtext').nullable();
+          table.text('logo_url', 'longtext').nullable();
+          table.string('company_name_override', 255).nullable();
+          table.text('company_address_override').nullable();
+          table.string('signatory_name', 255).nullable();
+          table.string('signatory_designation', 255).nullable();
+
+          // Template content
+          table.text('body_content', 'longtext').notNullable();
+          table.text('terms_and_conditions', 'longtext').nullable();
+          table.text('custom_clause', 'longtext').nullable();
+
+          // Merge codes tracking
+          table.json('merge_codes_used').nullable();
+
+          // Flags
+          table.boolean('is_default').defaultTo(false);
+          table.boolean('is_active').defaultTo(true);
+          table.boolean('bgv_mandatory').defaultTo(false);
+          table.boolean('nda_mandatory').defaultTo(false);
+          table.boolean('non_compete').defaultTo(false);
+          table.boolean('relieving_letter_required').defaultTo(false);
+
+          table.bigInteger('created_by').unsigned().nullable();
+          table.bigInteger('updated_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+          table.timestamp('deleted_at').nullable();
+
+          // Indexes
+          table.index('organization_id');
+          table.index('company_id');
+          table.index('letter_type');
+          table.index('letter_category');
+          table.index('is_active');
+        });
+        logger.info('letter_templates table created with LONGTEXT columns.');
+      } else {
+        await db.raw('ALTER TABLE letter_templates MODIFY logo_url LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY header_html LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY footer_html LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY body_content LONGTEXT NOT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY terms_and_conditions LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY custom_clause LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY company_address_override TEXT NULL');
+        logger.info('letter_templates columns upgraded to LONGTEXT successfully.');
+      }
+
+      const hasLetters = await db.schema.hasTable('generated_letters');
+      if (!hasLetters) {
+        await db.schema.createTable('generated_letters', (table) => {
+          table.bigIncrements('id').primary();
+          table.string('uuid', 36).notNullable().unique();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
+
+          table.bigInteger('letter_template_id').unsigned().nullable();
+          table.string('letter_code', 50).notNullable();
+
+          table.enum('letter_type', [
+            'interview_call', 'intent_to_offer', 'offer_letter',
+            'appointment', 'nda', 'code_of_conduct',
+            'confirmation', 'increment', 'promotion', 'warning',
+            'resignation_acceptance', 'relieving', 'experience',
+            'custom'
+          ]).notNullable();
+
+          table.string('letter_category', 50).nullable();
+
+          // Recipient
+          table.bigInteger('employee_id').unsigned().nullable();
+          table.bigInteger('candidate_id').unsigned().nullable();
+          table.string('recipient_name', 255).notNullable();
+          table.string('recipient_email', 255).nullable();
+
+          table.string('subject', 500).nullable();
+
+          // Rendered content
+          table.text('rendered_html', 'longtext').notNullable();
+          table.text('rendered_pdf_url', 'longtext').nullable();
+
+          // Snapshot of merge data used
+          table.json('merge_data').nullable();
+
+          // Status tracking
+          table.enum('status', ['draft', 'sent', 'acknowledged', 'signed', 'revoked']).defaultTo('draft');
+          table.timestamp('sent_at').nullable();
+          table.timestamp('acknowledged_at').nullable();
+          table.timestamp('signed_at').nullable();
+          table.timestamp('revoked_at').nullable();
+
+          // Digital signature
+          table.text('digital_signature_url', 'longtext').nullable();
+          table.text('acknowledgment_note').nullable();
+
+          table.bigInteger('created_by').unsigned().nullable();
+          table.bigInteger('updated_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+          table.timestamp('deleted_at').nullable();
+
+          // Indexes
+          table.index('organization_id');
+          table.index('employee_id');
+          table.index('candidate_id');
+          table.index('letter_type');
+          table.index('status');
+          table.index('letter_template_id');
+        });
+        logger.info('generated_letters table created with LONGTEXT columns.');
+      } else {
+        await db.raw('ALTER TABLE generated_letters MODIFY rendered_html LONGTEXT NOT NULL');
+        await db.raw('ALTER TABLE generated_letters MODIFY digital_signature_url LONGTEXT NULL');
+        await db.raw('ALTER TABLE generated_letters MODIFY rendered_pdf_url LONGTEXT NULL');
+        logger.info('generated_letters columns upgraded to LONGTEXT successfully.');
+      }
+    } catch (err: any) {
+      logger.error('Error upgrading letter management tables schema:', err.message);
+    }
+
+    // ──────── RECRUITMENT NOTIFICATION EVENTS & TEMPLATES SEED ────────
+    try {
+      const { seedRecruitmentNotificationEvents } = await import('./seed_recruitment_notification_events');
+      await seedRecruitmentNotificationEvents();
+    } catch (err: any) {
+      logger.error('Error seeding recruitment notification events:', err.message);
     }
 
   } catch (error: any) {

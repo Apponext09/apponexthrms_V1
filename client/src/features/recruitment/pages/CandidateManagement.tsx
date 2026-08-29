@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCandidates, useCreateCandidate, useUpdateCandidate, useDeleteCandidate, useJobs } from '../hooks';
 import { useRecruitmentStore } from '../store/useRecruitmentStore';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,10 +14,11 @@ import { Label } from '@/components/ui/label';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Users, Eye, Clipboard, CheckCircle, Link2,
-  FileText, ExternalLink, FileSpreadsheet, Sparkles
+  FileText, ExternalLink, FileSpreadsheet, Sparkles, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { downloadCsvFile } from '@/lib/downloadCsv';
 import { BulkCandidateImportModal } from '../components/BulkCandidateImportModal';
 import { AiAnalysisModal } from '../components/AiAnalysisModal';
 
@@ -36,6 +37,31 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
   { key: 'jd_match_score', label: 'JD Match Score' },
 ];
 
+const pipelineRank = (status: string) => {
+  const s = String(status || 'applied').toLowerCase();
+  if (['rejected', 'dropped', 'withdrawn'].includes(s)) return 4;
+  if (['offer', 'offered', 'hired'].includes(s)) return 3;
+  if (['interview', 'interviewing', 'assessment'].includes(s)) return 2;
+  return 1;
+};
+
+const canMovePipelineStatus = (fromStatus: string, toStatus: string) => {
+  if (fromStatus === toStatus) return true;
+  const fromRank = pipelineRank(fromStatus);
+  const toRank = pipelineRank(toStatus);
+  if (fromRank >= 4) return false;
+  if (toStatus === 'rejected') return fromRank < 4;
+  return toRank > fromRank;
+};
+
+const tabForStatus = (status: string): 'applied' | 'interview' | 'offer' | 'rejected' => {
+  const rank = pipelineRank(status);
+  if (rank >= 4) return 'rejected';
+  if (rank === 3) return 'offer';
+  if (rank === 2) return 'interview';
+  return 'applied';
+};
+
 export const CandidateManagement: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
@@ -51,9 +77,10 @@ export const CandidateManagement: React.FC = () => {
   const updateCandidate = useUpdateCandidate(editingCandidate?.id || 0);
   const deleteCandidate = useDeleteCandidate();
   const { data: jobsResponse } = useJobs();
+  const queryClient = useQueryClient();
   
   // Table State
-  const [activeTab, setActiveTab] = useState<'all' | 'applied' | 'interview' | 'offer'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'applied' | 'interview' | 'offer' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -194,9 +221,58 @@ export const CandidateManagement: React.FC = () => {
     });
   };
 
-  const handleExport = () => {
-    toast.success('Export started');
-    // Implement CSV export logic here
+  const handleExport = async () => {
+    try {
+      const res = await apiClient.get('/recruitment/candidates', {
+        params: {
+          page: 1,
+          pageSize: 1000,
+          search: searchQuery || undefined,
+          status: activeTab === 'all' ? undefined : activeTab,
+        },
+      });
+      const rows = res.data?.data || [];
+      if (!rows.length) {
+        toast.error('No candidate records available to export');
+        return;
+      }
+      downloadCsvFile(
+        `candidate_management_${activeTab}_export.csv`,
+        ['First Name', 'Last Name', 'Email', 'Phone', 'Status', 'Source', 'Company', 'Experience', 'ATS Score'],
+        rows.map((c: any) => [
+          c.firstName || c.first_name || '',
+          c.lastName || c.last_name || '',
+          c.email || '',
+          c.phone || '',
+          c.status || '',
+          c.source || '',
+          c.currentCompany || c.current_company || '',
+          c.yearsOfExperience ?? c.years_of_experience ?? '',
+          c.atsScore ?? c.ats_score ?? '',
+        ])
+      );
+      toast.success('Candidates CSV downloaded');
+    } catch (err) {
+      console.error('Failed to export candidates', err);
+      toast.error('Failed to export candidates');
+    }
+  };
+
+  const handlePipelineStatusChange = async (candidateId: number, currentStatus: string, status: string) => {
+    if (!canMovePipelineStatus(currentStatus, status)) {
+      toast.error('Pipeline can only move forward. Offered / rejected candidates cannot return to Interview.');
+      return;
+    }
+    try {
+      await apiClient.patch(`/recruitment/candidates/${candidateId}`, { status });
+      await queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      setActiveTab(tabForStatus(status));
+      setCurrentPage(1);
+      toast.success(`Candidate moved to ${status}`);
+    } catch (err: any) {
+      console.error('Failed to update candidate status', err);
+      toast.error(err?.response?.data?.error?.message || 'Failed to update candidate pipeline status');
+    }
   };
 
   return (
@@ -210,7 +286,7 @@ export const CandidateManagement: React.FC = () => {
           </div>
           <div className="space-y-0.5">
             <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-              Candidate Management Roster
+              Candidate Management
             </h1>
             <p className="text-xs text-muted-foreground">
               Manage, review ATS profiles, and link candidates to published job requisitions.
@@ -318,6 +394,17 @@ export const CandidateManagement: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Offered
             </button>
+            <button
+              onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'rejected'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Rejected
+            </button>
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
@@ -372,7 +459,7 @@ export const CandidateManagement: React.FC = () => {
                     <td colSpan={5 + visibleColumns.length} className="p-12 text-center">
                       <div className="flex items-center justify-center gap-2 text-muted-foreground">
                         <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                        Loading candidates roster...
+                        Loading candidates...
                       </div>
                     </td>
                   </tr>
@@ -439,15 +526,22 @@ export const CandidateManagement: React.FC = () => {
                           {item.phone && <div className="text-[10px] text-muted-foreground/80 mt-0.5">{item.phone}</div>}
                         </td>
                         <td className="py-3.5 px-5 text-center">
-                          <Badge variant="outline" className={cn(
-                            "px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full",
-                            ['offer', 'hired'].includes(statusStr) ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' :
-                            ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30' :
-                            statusStr === 'interview' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30' :
-                            'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
-                          )}>
-                            {item.status || 'Applied'}
-                          </Badge>
+                          <select
+                            value={['applied', 'screening', 'interview', 'offer', 'hired', 'rejected', 'dropped'].includes(statusStr) ? (statusStr === 'screening' ? 'applied' : statusStr === 'dropped' ? 'rejected' : statusStr) : 'applied'}
+                            onChange={(e) => handlePipelineStatusChange(item.id, statusStr, e.target.value)}
+                            className={cn(
+                              "px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full border bg-transparent cursor-pointer",
+                              ['offer', 'hired'].includes(statusStr) ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30' :
+                              ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'text-rose-600 dark:text-rose-400 border-rose-500/30' :
+                              statusStr === 'interview' ? 'text-amber-600 dark:text-amber-400 border-amber-500/30' :
+                              'text-blue-600 dark:text-blue-400 border-blue-500/30'
+                            )}
+                          >
+                            <option value="applied" disabled={!canMovePipelineStatus(statusStr, 'applied')}>Applied</option>
+                            <option value="interview" disabled={!canMovePipelineStatus(statusStr, 'interview')}>Interview</option>
+                            <option value="offer" disabled={!canMovePipelineStatus(statusStr, 'offer')}>Offered</option>
+                            <option value="rejected" disabled={!canMovePipelineStatus(statusStr, 'rejected')}>Rejected</option>
+                          </select>
                         </td>
 
                         {/* Dynamic Columns */}
@@ -706,28 +800,52 @@ interface CandidateFormModalProps {
   jobs?: any[];
 }
 
+const pickValue = (...values: any[]) => values.find((v) => v !== undefined && v !== null && v !== '') ?? '';
+const toDateInputValue = (value: any) => (value ? String(value).slice(0, 10) : '');
+
 const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubmit, initialData, jobs }) => {
+  const existingResumeUrl = pickValue(initialData?.resumeUrl, initialData?.resume_url);
+  const [resumeFileName, setResumeFileName] = useState(
+    existingResumeUrl ? String(existingResumeUrl).split('/').pop() || 'Resume on file' : ''
+  );
   const [formData, setFormData] = useState({
-    firstName: initialData?.first_name || '',
-    lastName: initialData?.last_name || '',
-    email: initialData?.email || '',
-    phone: initialData?.phone || '',
-    alternativePhone: initialData?.alternative_phone || '',
-    gender: initialData?.gender || 'Male',
-    maritalStatus: initialData?.marital_status || initialData?.maritalStatus || 'Unmarried',
-    qualification: initialData?.qualification || '',
-    skills: initialData?.skills || '',
-    dateOfBirth: initialData?.dob || initialData?.date_of_birth || '',
-    yearsOfExperience: initialData?.years_of_experience || 0,
-    currentCompany: initialData?.current_company || '',
-    currentSalary: initialData?.current_salary || '',
-    expectedSalary: initialData?.expected_salary || '',
-    noticePeriodDays: initialData?.notice_period_days || 0,
-    linkedinUrl: initialData?.linkedin_url || '',
-    portfolioUrl: initialData?.portfolio_url || '',
-    source: initialData?.source || 'direct_apply',
+    firstName: pickValue(initialData?.firstName, initialData?.first_name),
+    lastName: pickValue(initialData?.lastName, initialData?.last_name),
+    email: pickValue(initialData?.email),
+    phone: pickValue(initialData?.phone),
+    alternativePhone: pickValue(initialData?.alternativePhone, initialData?.alternative_phone),
+    gender: pickValue(initialData?.gender, 'Male'),
+    maritalStatus: pickValue(initialData?.maritalStatus, initialData?.marital_status, 'Unmarried'),
+    qualification: pickValue(initialData?.qualification),
+    skills: pickValue(initialData?.skills),
+    dateOfBirth: toDateInputValue(pickValue(initialData?.dateOfBirth, initialData?.dob, initialData?.date_of_birth)),
+    yearsOfExperience: initialData?.yearsOfExperience ?? initialData?.years_of_experience ?? 0,
+    currentCompany: pickValue(initialData?.currentCompany, initialData?.current_company),
+    currentSalary: pickValue(initialData?.currentSalary, initialData?.current_salary),
+    expectedSalary: pickValue(initialData?.expectedSalary, initialData?.expected_salary),
+    noticePeriodDays: initialData?.noticePeriodDays ?? initialData?.notice_period_days ?? 0,
+    linkedinUrl: pickValue(initialData?.linkedinUrl, initialData?.linkedin_url),
+    portfolioUrl: pickValue(initialData?.portfolioUrl, initialData?.portfolio_url),
+    source: pickValue(initialData?.source, 'direct_apply'),
+    resumeUrl: existingResumeUrl || '',
   });
   const [selectedJobId, setSelectedJobId] = useState<string>('');
+
+  const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type) && !/\.(pdf|doc|docx)$/i.test(file.name)) {
+      toast.error('Please upload a PDF or Word resume');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData((prev) => ({ ...prev, resumeUrl: String(reader.result || '') }));
+      setResumeFileName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -877,6 +995,8 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <option value="job_board">Job Board (LinkedIn, Naukri, etc)</option>
                     <option value="employee_referral">Employee Referral</option>
                     <option value="recruitment_agency">Recruitment Agency</option>
+                    <option value="bulk_import">Bulk Import</option>
+                    <option value="resume_bank">Resume Bank</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -887,6 +1007,38 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Resume / Portfolio Link</label>
                   <Input type="url" name="portfolioUrl" placeholder="Google Drive, Dropbox, Portfolio link..." value={formData.portfolioUrl} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
                 </div>
+                <div className="space-y-1.5 md:col-span-3">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Candidate Resume</label>
+                  <label className="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 cursor-pointer hover:border-blue-400 hover:bg-blue-50/40 transition-colors">
+                    <Upload className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800">
+                        {resumeFileName ? 'Resume selected' : 'Upload PDF or Word resume'}
+                      </p>
+                      <p className={cn('text-[11px] truncate', resumeFileName ? 'text-emerald-600 font-medium' : 'text-slate-500')}>
+                        {resumeFileName || 'No file uploaded yet'}
+                      </p>
+                    </div>
+                    <input type="file" accept=".pdf,.doc,.docx,application/pdf" className="hidden" onChange={handleResumeUpload} />
+                  </label>
+                </div>
+                {!initialData && jobs && jobs.length > 0 && (
+                  <div className="space-y-1.5 md:col-span-3">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Link to Job Opening</label>
+                    <select
+                      value={selectedJobId}
+                      onChange={(e) => setSelectedJobId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
+                    >
+                      <option value="">-- Optional: choose a published job --</option>
+                      {jobs.map((job: any) => (
+                        <option key={job.id} value={job.id}>
+                          {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -923,7 +1075,7 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ candi
         </div>
         <h3 className="text-lg font-bold text-slate-800 mb-2">Delete Candidate?</h3>
         <p className="text-sm text-slate-500 mb-6">
-          Are you sure you want to delete <strong>{candidate.first_name} {candidate.last_name}</strong>? This action cannot be undone.
+          Are you sure you want to delete <strong>{candidate.firstName || candidate.first_name} {candidate.lastName || candidate.last_name}</strong>? This permanently removes the candidate from the database.
         </p>
         <div className="flex justify-center gap-3">
           <Button variant="outline" onClick={onClose} className="px-6">Cancel</Button>
@@ -1123,7 +1275,7 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Name</p>
-                  <p className="font-medium text-slate-800">{candidate.first_name} {candidate.last_name}</p>
+                  <p className="font-medium text-slate-800">{candidate.firstName || candidate.first_name} {candidate.lastName || candidate.last_name}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Email</p>

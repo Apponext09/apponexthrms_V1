@@ -138,13 +138,15 @@ export class CandidateRepository extends BaseRepository<Candidate> {
       if (options.filters.status) {
         const st = String(options.filters.status).toLowerCase();
         if (st.includes('applied')) {
-          query.whereIn(this.db.raw('LOWER(candidates.status)'), ['applied', 'new', 'screening']);
+          query.whereRaw("LOWER(candidates.status) IN ('applied', 'new', 'screening')");
         } else if (st.includes('interview')) {
-          query.whereIn(this.db.raw('LOWER(candidates.status)'), ['interview', 'interviewing']);
+          query.whereRaw("LOWER(candidates.status) IN ('interview', 'interviewing', 'assessment')");
         } else if (st.includes('offer')) {
-          query.whereIn(this.db.raw('LOWER(candidates.status)'), ['offer', 'offered', 'hired']);
+          query.whereRaw("LOWER(candidates.status) IN ('offer', 'offered', 'hired')");
+        } else if (st.includes('reject')) {
+          query.whereRaw("LOWER(candidates.status) IN ('rejected', 'dropped', 'withdrawn')");
         } else {
-          query.where(this.db.raw('LOWER(candidates.status)'), st);
+          query.whereRaw('LOWER(candidates.status) = ?', [st]);
         }
       }
       if (options.filters.source) {

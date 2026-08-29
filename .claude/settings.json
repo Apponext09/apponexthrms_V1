@@ -6,7 +6,13 @@
       "Bash(npx tsc *)",
       "Bash(echo \"BUILD_EXIT:$?\")",
       "Bash(cp /tmp/test_employee_services.ts ./_tmp_test_employee.ts)",
-      "Bash(npx tsx *)"
+      "Bash(npx tsx *)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(cat > *)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

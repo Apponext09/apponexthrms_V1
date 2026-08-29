@@ -71,6 +71,7 @@ export class RecruitmentController {
       currency: validated.currency || 'INR',
       employmentType: validated.employmentType || 'onsite',
       noOfPositions: validated.noOfPositions,
+      expiryDate: validated.expiryDate,
       jobTemplateId: validated.jobTemplateId,
       skills: validated.skills,
       locations: validated.locations,
@@ -91,6 +92,9 @@ export class RecruitmentController {
   listJobs = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { page = 1, pageSize = 20, search, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
+
+    const { recruitmentExpiryService } = await import('../services/RecruitmentExpiryService');
+    await recruitmentExpiryService.closeExpiredRecords(ctx);
 
     const result = await this.jobService.listJobs(ctx, {
       page: parseInt(page as string, 10),
@@ -160,6 +164,11 @@ export class RecruitmentController {
       email: validated.email,
       phone: validated.phone,
       alternativePhone: validated.alternativePhone,
+      gender: validated.gender,
+      maritalStatus: validated.maritalStatus,
+      qualification: validated.qualification,
+      skills: validated.skills,
+      dateOfBirth: validated.dateOfBirth,
       currentLocation: validated.currentLocation,
       preferredLocation: validated.preferredLocation,
       currentSalary: validated.currentSalary,
@@ -171,7 +180,8 @@ export class RecruitmentController {
       linkedinUrl: validated.linkedinUrl,
       githubUrl: validated.githubUrl,
       portfolioUrl: validated.portfolioUrl,
-      source: validated.source,
+      source: validated.source || 'direct_apply',
+      resumeUrl: validated.resumeUrl,
     });
 
     res.status(201).json({ success: true, data: candidate });
@@ -293,6 +303,12 @@ export class RecruitmentController {
     );
 
     res.json({ success: true, data: application });
+  });
+
+  listPipelineStages = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const stages = await this.recruitmentService.getPipelineStages(ctx);
+    res.json({ success: true, data: stages });
   });
 
   // ==================== Interview Endpoints ====================
@@ -1087,18 +1103,36 @@ export class RecruitmentController {
 
   getDashboard = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
     res.json({ success: true, data: dashboard });
   });
 
   getMetrics = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
-    res.json({ success: true, data: metrics });
+    res.json({ success: true, data: dashboard });
   });
 
   // ==================== Additional Candidate Endpoints ====================
@@ -1200,6 +1234,34 @@ export class RecruitmentController {
       success: true,
       data: result,
       message: `Interview decision '${decision}' recorded successfully`,
+    });
+  });
+
+  completeInterview = asyncHandler(async (req: Request, res: Response) => {
+    const rawId = req.params.interviewId || req.body.interviewId;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      updated_at: new Date(),
+    });
+
+    const updated = await db('interviews').where('id', interviewId).first();
+    res.json({
+      success: true,
+      message: 'Interview marked as completed successfully',
+      data: updated,
     });
   });
 
@@ -1793,6 +1855,8 @@ export class RecruitmentController {
     if (validated.currency !== undefined) updateData.currency = validated.currency;
     if (validated.employmentType !== undefined) updateData.employment_type = validated.employmentType;
     if (validated.noOfPositions !== undefined) updateData.no_of_positions = validated.noOfPositions;
+    if (validated.expiryDate !== undefined) updateData.expiry_date = validated.expiryDate;
+    if (validated.jobCode !== undefined) updateData.job_code = validated.jobCode;
 
     const job = await this.jobService.updateJob(ctx, parseInt(id, 10), updateData);
 
@@ -2509,20 +2573,6 @@ export class RecruitmentController {
 
     const skills = await skillMasterService.listSkills(ctx);
     res.json({ success: true, data: skills });
-  });
-
-  // ==================== Dashboard & Analytics ====================
-
-  getDashboard = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const dashboard = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: dashboard });
-  });
-
-  getMetrics = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: metrics });
   });
 
   getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {

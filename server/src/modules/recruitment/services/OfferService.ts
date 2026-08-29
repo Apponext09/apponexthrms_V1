@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { OfferRepository, type Offer } from '../repositories/OfferRepository';
 import { ApplicationRepository } from '../repositories/ApplicationRepository';
 import { NotificationService } from '../../notifications/services/notification.service';
+import { RecruitmentNotificationHelper } from './RecruitmentNotificationHelper';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import { sendMail } from '../../../common/lib/mail';
@@ -109,6 +110,35 @@ export class OfferService {
     };
 
     const offer = await this.offerRepo.create(ctx, payload);
+
+    // 🔔 Notify HR admins and Hiring Manager about generated offer
+    try {
+      const db = getKnex();
+      let candidateName = 'Unknown';
+      if (application?.candidate_id) {
+        const candidate = await db('candidates').where('id', application.candidate_id).first();
+        if (candidate) {
+          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim() || candidate.email || 'Unknown';
+        }
+      }
+
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+      const jobId = application.job_id || (application as any).job_posting_id;
+      const managerId = jobId ? await RecruitmentNotificationHelper.getHiringManagerUserId(ctx, jobId) : null;
+      const recipientIds = [...new Set([...hrAdmins, ...(managerId ? [managerId] : [])])];
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, recipientIds, {
+        eventCode: 'OFFER_GENERATED',
+        variables: {
+          candidateName,
+          positionTitle: input.positionTitle || 'Position',
+          salary: `${input.costToCompany} ${input.currency || 'INR'}`,
+          joiningDate: input.offerStartDate || 'TBD',
+        },
+        priority: 'normal',
+      });
+    } catch { /* notification failure is non-critical */ }
+
     return offer;
   }
 
@@ -398,6 +428,34 @@ Executive HR
       console.error('Failed to auto-provision employee during offer acceptance:', onboardingError);
       throw onboardingError;
     }
+
+    // 🔔 Notify HR admins and Hiring Manager about accepted offer
+    try {
+      const db = getKnex();
+      const application = appId ? await db('applications').where('id', appId).first() : null;
+      let candidateName = 'Unknown';
+      if (application?.candidate_id) {
+        const candidate = await db('candidates').where('id', application.candidate_id).first();
+        if (candidate) {
+          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim() || candidate.email || 'Unknown';
+        }
+      }
+
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+      const jobId = application?.job_id || application?.job_posting_id;
+      const managerId = jobId ? await RecruitmentNotificationHelper.getHiringManagerUserId(ctx, jobId) : null;
+      const recipientIds = [...new Set([...hrAdmins, ...(managerId ? [managerId] : [])])];
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, recipientIds, {
+        eventCode: 'OFFER_ACCEPTED',
+        variables: {
+          candidateName,
+          positionTitle: offer.positionTitle || (offer as any).position_title || 'Position',
+          joiningDate: offer.offerStartDate || (offer as any).offer_start_date || 'TBD',
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
 
     return updated;
   }

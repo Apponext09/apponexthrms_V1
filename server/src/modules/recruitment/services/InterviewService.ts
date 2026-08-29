@@ -162,7 +162,7 @@ export class InterviewService {
     // Save panel records to interview_panel table safely
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
-    
+
     const validPanelRecords: any[] = [];
     for (const rawId of input.interviewerIds) {
       let numEmpId = Number(rawId);
@@ -209,22 +209,32 @@ export class InterviewService {
       }
     );
 
-    // Send in-app notification to interviewers
-    for (const interviewerId of input.interviewerIds) {
-      try {
-        await this.notificationService.sendNotification(ctx, {
-          eventCode: 'INTERVIEW_SCHEDULED',
-          recipientId: interviewerId,
-          variables: {
-            interviewId: interview.id,
-            applicationId: input.applicationId,
-            scheduledDate: input.scheduledDate,
-          },
-        } as any);
-      } catch (error) {
-        // Silently skip if eventCode template is not seeded in notification_events table
+    // 🔔 Send in-app notification to assigned interviewers
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interview.id);
+      const interviewerUserIds = await RecruitmentNotificationHelper.getInterviewerUserIds(ctx, interview.id);
+
+      if (interviewerUserIds.length === 0) {
+        for (const rawId of input.interviewerIds) {
+          const user = await db('users').where({ employee_id: rawId, organization_id: ctx.organizationId }).first()
+            || await db('users').where({ id: rawId, organization_id: ctx.organizationId }).first();
+          if (user) interviewerUserIds.push(user.id);
+        }
       }
-    }
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, interviewerUserIds, {
+        eventCode: 'INTERVIEW_SCHEDULED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          scheduledDate: input.scheduledDate,
+          round: String(input.interviewRound || 1),
+          interviewType: input.interviewType || 'Video',
+          interviewId: interview.id,
+          applicationId: input.applicationId,
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
 
     // =========================================================================
     // Send Email Notifications to Candidate & Assigned Interviewers
@@ -284,10 +294,10 @@ export class InterviewService {
           ? `${dateFormatted} at ${timeFormatted}`
           : input.scheduledDate;
 
-        const modeText = input.interviewType === 'video' 
-          ? 'Online Video Call' 
-          : input.interviewType === 'phone' 
-            ? 'Phone Screening' 
+        const modeText = input.interviewType === 'video'
+          ? 'Online Video Call'
+          : input.interviewType === 'phone'
+            ? 'Phone Screening'
             : 'In-Person (Office)';
 
         const commonVars: Record<string, string> = {
@@ -445,7 +455,7 @@ HR Management System
       .where({ interview_id: interviewId, organization_id: ctx.organizationId })
       .count('id as count')
       .first();
-    
+
     let expectedCount = Number(panelCountRes?.count || 0);
     if (expectedCount === 0) {
       try {
@@ -473,6 +483,25 @@ HR Management System
         updated_at: nowStr,
       } as any);
     }
+
+    // 🔔 Notify HR admins about feedback submission
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const submitterName = await RecruitmentNotificationHelper.getUserDisplayName(ctx.userId);
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, hrAdmins, {
+        eventCode: 'INTERVIEW_FEEDBACK_SUBMITTED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          round: candidateInfo.round,
+          rating: String(input.overallRating),
+          recommendation: input.wouldRecommend !== false ? 'Recommended' : 'Not Recommended',
+          submittedBy: submitterName,
+        },
+        priority: 'normal',
+      });
+    } catch { /* notification failure is non-critical */ }
 
     return feedback;
   }
@@ -592,6 +621,25 @@ HR Management System
       });
     }
 
+    // 🔔 Notify HR admins about interview decision
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const deciderName = await RecruitmentNotificationHelper.getUserDisplayName(ctx.userId);
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, hrAdmins, {
+        eventCode: 'INTERVIEW_DECISION_MADE',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          decision: input.decision.charAt(0).toUpperCase() + input.decision.slice(1),
+          round: candidateInfo.round,
+          decisionBy: deciderName,
+          notes: input.notes || 'None',
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
+
     return {
       decision: input.decision,
       interviewId,
@@ -606,11 +654,32 @@ HR Management System
       throw new NotFoundError('Interview not found');
     }
 
-    return this.interviewRepo.update(ctx, interviewId, {
+    const updated = await this.interviewRepo.update(ctx, interviewId, {
       status: 'completed',
       recording_url: recordingUrl || null,
       updated_by: ctx.userId,
     } as any);
+
+    // 🔔 Notify HR admins that interview was completed
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const completedByName = await RecruitmentNotificationHelper.getUserDisplayName(ctx.userId);
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, hrAdmins, {
+        eventCode: 'INTERVIEW_COMPLETED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          round: candidateInfo.round,
+          interviewType: candidateInfo.interviewType,
+          scheduledDate: candidateInfo.scheduledDate,
+          completedBy: completedByName,
+        },
+        priority: 'normal',
+      });
+    } catch { /* notification failure is non-critical */ }
+
+    return updated;
   }
 
   async rescheduleInterview(
@@ -632,11 +701,30 @@ HR Management System
       ? dateObj.toISOString().replace('T', ' ').substring(0, 19)
       : newScheduledDate;
 
-    return this.interviewRepo.update(ctx, interviewId, {
+    const updated = await this.interviewRepo.update(ctx, interviewId, {
       scheduled_date: dbFormattedDate,
       status: 'rescheduled',
       updated_by: ctx.userId,
     } as any);
+
+    // 🔔 Notify all panel interviewers about the reschedule
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const interviewerUserIds = await RecruitmentNotificationHelper.getInterviewerUserIds(ctx, interviewId);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, interviewerUserIds, {
+        eventCode: 'INTERVIEW_RESCHEDULED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          newDate: newScheduledDate,
+          round: candidateInfo.round,
+          interviewType: candidateInfo.interviewType,
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
+
+    return updated;
   }
 
   async cancelInterview(ctx: TenantContext, interviewId: number): Promise<Interview> {
@@ -645,10 +733,29 @@ HR Management System
       throw new NotFoundError('Interview not found');
     }
 
-    return this.interviewRepo.update(ctx, interviewId, {
+    const updated = await this.interviewRepo.update(ctx, interviewId, {
       status: 'cancelled',
       updated_by: ctx.userId,
     } as any);
+
+    // 🔔 Notify all panel interviewers about the cancellation
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const interviewerUserIds = await RecruitmentNotificationHelper.getInterviewerUserIds(ctx, interviewId);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, interviewerUserIds, {
+        eventCode: 'INTERVIEW_CANCELLED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          scheduledDate: candidateInfo.scheduledDate,
+          round: candidateInfo.round,
+          interviewType: candidateInfo.interviewType,
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
+
+    return updated;
   }
 
   async getInterview(ctx: TenantContext, interviewId: number): Promise<any> {
@@ -680,7 +787,7 @@ HR Management System
 
     const interviews = await db('interviews')
       .where('application_id', applicationId)
-      .where(function() {
+      .where(function () {
         this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
       })
       .orderBy('interview_round', 'asc')
@@ -792,7 +899,7 @@ HR Management System
       templates = await db('notification_templates')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .where(function() {
+        .where(function () {
           this.where('template_name', 'like', '%Interview%')
             .orWhere('template_name', 'like', '%Recruitment%');
         });

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import {
-  Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight, FileText,
+  Download, Search, Upload, Briefcase, CheckCircle2, ArrowRight, FileText,
   ExternalLink, Sparkles, Cpu, Zap, Eye, Sliders, Filter, CheckCircle, AlertCircle, FileUp, History
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -692,13 +692,6 @@ export const ResumeBankPage: React.FC = () => {
 
         <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
           <Button 
-            size="sm" 
-            onClick={() => setIsAddModalOpen(true)} 
-            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add Candidate
-          </Button>
-          <Button 
             variant="outline" 
             size="sm" 
             onClick={handleExportResumes} 
@@ -735,11 +728,10 @@ export const ResumeBankPage: React.FC = () => {
             <CardHeader className="py-4 px-6 border-b border-border/60 bg-muted/30 rounded-t-2xl">
               <CardTitle className="text-sm font-extrabold text-foreground">Resume Bank Search & Filters</CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-4 overflow-visible relative z-30">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-4">
-                
+            <CardContent className="p-6 overflow-visible relative z-30">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Tracker ID</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Tracker ID</label>
                   <Input 
                     placeholder="Search Tracker ID..."
                     value={filters.trackerId} 
@@ -748,8 +740,8 @@ export const ResumeBankPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="space-y-1.5 lg:col-span-2">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate / Skill Search</label>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Candidate / Skill Search</label>
                   <Input 
                     placeholder="Candidate Name, Email, or Skill Keywords..."
                     value={filters.search} 
@@ -759,7 +751,7 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Application Source</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Application Source</label>
                   <Select value={filters.source} onValueChange={(val) => handleFilterChange('source', val)}>
                     <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Select Source" />
@@ -781,7 +773,7 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Position Title</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Position Title</label>
                   <Select value={filters.position} onValueChange={(val) => handleFilterChange('position', val)}>
                     <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Choose Position" />
@@ -798,7 +790,7 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate Status</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Candidate Status</label>
                   <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
                     <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Choose Status" />
@@ -814,15 +806,17 @@ export const ResumeBankPage: React.FC = () => {
                   </Select>
                 </div>
                 
-                <div className="flex items-center gap-2 pt-2 lg:col-span-4">
-                  <Button onClick={handleSearch} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs cursor-pointer">
-                    Apply Search Filters
-                  </Button>
-                  <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground cursor-pointer">
-                    Reset Filter
-                  </Button>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4 invisible">Actions</label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Button onClick={handleSearch} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs cursor-pointer">
+                      Apply Search Filters
+                    </Button>
+                    <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground cursor-pointer">
+                      Reset Filter
+                    </Button>
+                  </div>
                 </div>
-
               </div>
             </CardContent>
           </Card>

@@ -113,7 +113,15 @@ export const ApplicantTrackerPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [pageSize, setPageSize] = useState('10');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pipelineStages, setPipelineStages] = useState<any[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<any[]>([
+    { id: 1, stageName: 'Applied', stage_name: 'Applied', stage_code: 'applied' },
+    { id: 2, stageName: 'Screening', stage_name: 'Screening', stage_code: 'screening' },
+    { id: 3, stageName: 'Assessment', stage_name: 'Assessment', stage_code: 'assessment' },
+    { id: 4, stageName: 'Interview', stage_name: 'Interview', stage_code: 'interview' },
+    { id: 5, stageName: 'Offer', stage_name: 'Offer', stage_code: 'offer' },
+    { id: 6, stageName: 'Hired', stage_name: 'Hired', stage_code: 'hired' },
+    { id: 7, stageName: 'Rejected', stage_name: 'Rejected', stage_code: 'rejected' },
+  ]);
 
   // Assessment, Offer & Interview Schedule States
   const [assessments, setAssessments] = useState<any[]>([]);
@@ -967,10 +975,16 @@ export const ApplicantTrackerPage: React.FC = () => {
                         <TableCell className="py-3 px-4">
                           <div className="relative">
                             {(() => {
-                              const activeStage = pipelineStages.find((s) => s.id === Number(candidate.pipelineStageId));
+                              const candidateStatusNorm = String(candidate.status || '').toLowerCase().trim();
+                              const matchedStage = pipelineStages.find((s) => 
+                                s.id === Number(candidate.pipelineStageId) || 
+                                String(s.stage_code || s.stageName || s.stage_name || '').toLowerCase().trim() === candidateStatusNorm
+                              );
+                              const selectedVal = candidate.pipelineStageId || (matchedStage ? matchedStage.id : '');
+
                               return (
                                 <select
-                                  value={candidate.pipelineStageId || ''}
+                                  value={selectedVal}
                                   onChange={(e) => handleMoveStage(candidate.id, Number(e.target.value))}
                                   className="w-full text-xs font-semibold rounded-lg bg-background border border-border px-2 py-1 pr-6 focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs text-foreground cursor-pointer"
                                 >

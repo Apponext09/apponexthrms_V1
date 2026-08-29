@@ -69,8 +69,111 @@ class AppErrorBoundary extends Component<
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [securityEnabled, setSecurityEnabled] = useState(false);
 
-  // Initialize theme and current user on mount
+  // OPTIMIZED: Lazy load security checks after 2 seconds (after login page renders)
+  useEffect(() => {
+    const securityTimer = setTimeout(() => {
+      setSecurityEnabled(true);
+    }, 2000);
+
+    return () => clearTimeout(securityTimer);
+  }, []);
+
+  // OPTIMIZED: Only setup security when needed (after login page loads)
+  useEffect(() => {
+    if (!securityEnabled) return;
+
+    // 1. Block right-click context menu
+    const disableRightClick = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // 2. Block keyboard shortcuts for DevTools
+    const disableKeys = (e: KeyboardEvent) => {
+      if (e.key === 'F12') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+        e.preventDefault();
+        return false;
+      }
+      if (e.ctrlKey && e.key === 'I') {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    // 3. Block copy/paste
+    const disableCopyPaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // 4. OPTIMIZED: Check DevTools every 2000ms instead of 100ms
+    let isDevToolsOpen = false;
+    const checkDevToolsSize = () => {
+      const threshold = 160;
+      const isOpen = window.outerWidth - window.innerWidth > threshold ||
+                     window.outerHeight - window.innerHeight > threshold;
+
+      if (isOpen && !isDevToolsOpen) {
+        isDevToolsOpen = true;
+        window.location.href = '/login';
+        return;
+      }
+      isDevToolsOpen = isOpen;
+    };
+
+    // Setup event listeners with passive flags where possible
+    document.addEventListener('contextmenu', disableRightClick, { passive: false });
+    document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
+    document.addEventListener('copy', disableCopyPaste, { passive: false });
+    document.addEventListener('cut', disableCopyPaste, { passive: false });
+    document.addEventListener('paste', disableCopyPaste, { passive: false });
+
+    // OPTIMIZED: Check every 2000ms (20x less frequent than before)
+    const devToolsCheckInterval = setInterval(checkDevToolsSize, 2000);
+
+    // Disable text selection
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    (document.body as any).style.msUserSelect = 'none';
+    (document.body as any).style.mozUserSelect = 'none';
+
+    // Block inspect element via developer tools protocol
+    try {
+      (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = undefined;
+      (window as any).__REDUX_DEVTOOLS_EXTENSION__ = undefined;
+    } catch (e) {
+      // Ignore errors
+    }
+
+    return () => {
+      document.removeEventListener('contextmenu', disableRightClick);
+      document.removeEventListener('keydown', disableKeys, true);
+      document.removeEventListener('copy', disableCopyPaste);
+      document.removeEventListener('cut', disableCopyPaste);
+      document.removeEventListener('paste', disableCopyPaste);
+      clearInterval(devToolsCheckInterval);
+    };
+  }, [securityEnabled]);
+
+  // OPTIMIZED: Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
 
@@ -78,7 +181,6 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     const token = localStorage.getItem('accessToken');
     if (token) {
       setIsLoading(true);
-      // Fetch user data in background without blocking navigation
       useAuthStore.getState().fetchCurrentUser()
         .catch((err) => {
           console.warn('Failed to fetch user:', err);
@@ -87,27 +189,53 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
           setIsLoading(false);
         });
     }
+  }, []);
 
-    // Track last user ID and logout time to detect session changes
-    let lastUserId: number | null = null;
-    let lastLogoutTime = localStorage.getItem('last-logout-time');
+  // OPTIMIZED: Defer session validation listeners until after 3 seconds
+  useEffect(() => {
+    const validationTimer = setTimeout(() => {
+      let lastUserId: number | null = null;
+      let lastLogoutTime = localStorage.getItem('last-logout-time');
 
-    // Re-validate auth when tab becomes visible (back from other tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+      // Re-validate auth when tab becomes visible
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          const { isAuthenticated, user, fetchCurrentUser } = useAuthStore.getState();
 
-        // Check if logout happened in another tab
+          const currentLogoutTime = localStorage.getItem('last-logout-time');
+          if (currentLogoutTime && currentLogoutTime !== lastLogoutTime && !localStorage.getItem('accessToken')) {
+            useAuthStore.getState().logout();
+            return;
+          }
+
+          if (user && lastUserId && user.id !== lastUserId) {
+            window.location.href = '/login?' + new Date().getTime();
+            return;
+          }
+
+          if (lastUserId === null && user) {
+            lastUserId = user.id;
+          }
+
+          if (isAuthenticated && localStorage.getItem('accessToken')) {
+            fetchCurrentUser().catch((err) => {
+              console.warn('Session revalidation skipped:', err);
+            });
+          }
+        }
+      };
+
+      // Check on window focus
+      const handleFocus = () => {
+        const { isAuthenticated, user, fetchCurrentUser } = useAuthStore.getState();
+
         const currentLogoutTime = localStorage.getItem('last-logout-time');
-        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
-          // Logout happened elsewhere - logout this session too
-          logout();
+        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime && !localStorage.getItem('accessToken')) {
+          useAuthStore.getState().logout();
           return;
         }
 
-        // Check if different user logged in
         if (user && lastUserId && user.id !== lastUserId) {
-          // Different user - force redirect
           window.location.href = '/login?' + new Date().getTime();
           return;
         }
@@ -117,60 +245,32 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (isAuthenticated && localStorage.getItem('accessToken')) {
-          // Re-validate token is still valid
-          fetchCurrentUser().catch(() => {
-            // Token invalid, logout
-            logout();
+          fetchCurrentUser().catch((err) => {
+            console.warn('Session revalidation skipped:', err);
           });
         }
-      }
-    };
+      };
 
-    // Check on window focus
-    const handleFocus = () => {
-      const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+      // Prevent back button navigation
+      const handlePopState = () => {
+        const { isAuthenticated } = useAuthStore.getState();
+        if (!isAuthenticated) {
+          window.history.pushState(null, '', '/login');
+        }
+      };
 
-      // Check if logout happened
-      const currentLogoutTime = localStorage.getItem('last-logout-time');
-      if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
-        logout();
-        return;
-      }
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      window.addEventListener('popstate', handlePopState);
 
-      // Check if different user logged in
-      if (user && lastUserId && user.id !== lastUserId) {
-        window.location.href = '/login?' + new Date().getTime();
-        return;
-      }
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+        window.removeEventListener('popstate', handlePopState);
+      };
+    }, 3000);
 
-      if (lastUserId === null && user) {
-        lastUserId = user.id;
-      }
-
-      if (isAuthenticated && localStorage.getItem('accessToken')) {
-        fetchCurrentUser().catch(() => {
-          logout();
-        });
-      }
-    };
-
-    // Prevent back button navigation
-    const handlePopState = (e: PopStateEvent) => {
-      const { isAuthenticated } = useAuthStore.getState();
-      if (!isAuthenticated) {
-        window.history.pushState(null, '', '/login');
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => clearTimeout(validationTimer);
   }, []);
 
   return (

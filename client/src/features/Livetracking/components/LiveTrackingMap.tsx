@@ -406,35 +406,49 @@ export const LiveTrackingMap: React.FC<Props> = ({
 
           const breaks = emp.breakPoints || [];
           const isSelected = selectedEmployee?.employee_id === emp.employee_id;
-          const strokeColor = isSelected ? '#ea580c' : '#dc2626'; // Vibrant bright crimson red (Swiggy/Zomato style)
+          const strokeColor = isSelected ? '#f97316' : '#ef4444';
+          const glowColor = isSelected ? '#fb923c' : '#fca5a5';
 
           return (
             <React.Fragment key={`route-${emp.employee_id}`}>
-              {/* Route Polyline Path Line (Clean 6px aesthetic width) */}
+              {/* Route Polyline Path Line - Zomato/Swiggy delivery style */}
               {positions.length >= 2 && (
                 <>
-                  {/* Soft outer glow stroke */}
+                  {/* Outer glow for depth (Swiggy style) */}
                   <Polyline
                     positions={positions}
                     pathOptions={{
-                      color: strokeColor,
-                      weight: 10,
-                      opacity: 0.25,
+                      color: glowColor,
+                      weight: 12,
+                      opacity: 0.2,
                       lineCap: 'round',
                       lineJoin: 'round',
                     }}
                   />
-                  {/* Main clean crimson red polyline path (6px width) */}
+                  {/* Main vibrant delivery route line */}
                   <Polyline
                     positions={positions}
                     pathOptions={{
                       color: strokeColor,
-                      weight: 6,
-                      opacity: 0.95,
+                      weight: 7,
+                      opacity: 0.9,
                       lineCap: 'round',
                       lineJoin: 'round',
                     }}
                   />
+                  {/* Highlight edge for selected employee */}
+                  {isSelected && (
+                    <Polyline
+                      positions={positions}
+                      pathOptions={{
+                        color: '#fbbf24',
+                        weight: 3,
+                        opacity: 0.6,
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                      }}
+                    />
+                  )}
 
                   {/* Start Point Badge (Point A) */}
                   <Marker

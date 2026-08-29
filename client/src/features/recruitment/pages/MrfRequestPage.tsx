@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
 import { cn } from '@/lib/utils';
+import { downloadCsvFile } from '@/lib/downloadCsv';
 
 interface MRFRequest {
   id: number;
@@ -260,7 +261,7 @@ export const MrfRequestPage: React.FC = () => {
     try {
       setLoading(true);
       const [mrfRes, appsRes] = await Promise.allSettled([
-        apiClient.get('/recruitment/mrf'),
+        apiClient.get('/recruitment/mrf', { params: { pageSize: 500 } }),
         apiClient.get('/recruitment/applications')
       ]);
 
@@ -1670,7 +1671,10 @@ export const MrfRequestPage: React.FC = () => {
     const safeData = Array.isArray(data) ? data : [];
     let result = safeData.filter(item => {
       if (!item) return false;
-      const matchStatus = activeTab === 'open' ? item.status === 'Open' : item.status === 'Closed';
+      const status = (item.status || '').toLowerCase();
+      const stage = (item.stage || '').toLowerCase();
+      const isClosed = status === 'closed' || stage === 'completed';
+      const matchStatus = activeTab === 'open' ? !isClosed : isClosed;
       
       const matchMrNumber = mrNum.trim() === '' || 
         (item.mrNumber && item.mrNumber.toLowerCase().includes(mrNum.toLowerCase()));
@@ -1772,6 +1776,7 @@ export const MrfRequestPage: React.FC = () => {
         const response = await apiClient.delete(`/recruitment/mrf/${id}`);
         if (response.data?.success) {
           toast.success(`${recordToDelete?.mrNumber} deleted successfully`);
+          setDataList(prev => (Array.isArray(prev) ? prev.filter((item: any) => item.id !== id) : []));
           fetchMrfs();
         } else {
           toast.error(response.data?.message || 'Failed to delete MRF request');
@@ -1855,30 +1860,22 @@ export const MrfRequestPage: React.FC = () => {
       toast.error('No data available to export');
       return;
     }
-    const headers = ['MR Number', 'Stage', 'Position Title', 'Company', 'Requested By', 'Requested On', 'Positions', 'Department', 'Status', 'Applicants'];
-    const rows = filteredData.map(item => [
-      item.mrNumber,
-      item.stage,
-      item.positionTitle,
-      item.company,
-      item.requestedBy,
-      item.requestedOn,
-      item.numberOfPositions,
-      item.department,
-      item.status,
-      item.applicants
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `MRF_Requests_Export_${activeTab}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCsvFile(
+      `MRF_Requests_Export_${activeTab}.csv`,
+      ['MR Number', 'Stage', 'Position Title', 'Company', 'Requested By', 'Requested On', 'Positions', 'Department', 'Status', 'Applicants'],
+      filteredData.map((item) => [
+        item.mrNumber,
+        item.stage,
+        item.positionTitle,
+        item.company,
+        item.requestedBy,
+        item.requestedOn,
+        item.numberOfPositions,
+        item.department,
+        item.status,
+        item.applicants,
+      ])
+    );
     toast.success('Data exported to CSV successfully');
   };
 
@@ -2492,7 +2489,11 @@ export const MrfRequestPage: React.FC = () => {
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            Open Requests ({data.filter(d => (d.status || '').toLowerCase() === 'open').length})
+            Open Requests ({data.filter(d => {
+              const status = (d.status || '').toLowerCase();
+              const stage = (d.stage || '').toLowerCase();
+              return status !== 'closed' && stage !== 'completed';
+            }).length})
           </button>
           <button
             onClick={() => setActiveTab('closed')}
@@ -2503,7 +2504,11 @@ export const MrfRequestPage: React.FC = () => {
             }`}
           >
             <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-            Closed Requests ({data.filter(d => (d.status || '').toLowerCase() === 'closed').length})
+            Closed Requests ({data.filter(d => {
+              const status = (d.status || '').toLowerCase();
+              const stage = (d.stage || '').toLowerCase();
+              return status === 'closed' || stage === 'completed';
+            }).length})
           </button>
         </div>
 

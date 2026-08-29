@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '../features/auth/store/authStore';
+import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from '../features/auth/store/authStore';
 import { usePendingPolicies } from '../features/policy/api/usePolicies';
 import type { Role } from '@/config/roles';
 import { hasAnyRole } from '@/lib/rbac';
@@ -17,11 +17,12 @@ export function ProtectedRoute({
   requiredPermissions
 }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore();
+  const authHydrated = useAuthHydrated();
   const [sessionValid, setSessionValid] = useState(true);
   const [lastUserId, setLastUserId] = useState<number | null>(null);
 
-  // Aggressive cache prevention and session validation
   useEffect(() => {
+    if (!authHydrated) return;
     // Get current user ID from store
     const currentUserId = user?.id;
 
@@ -68,7 +69,9 @@ export function ProtectedRoute({
 
         // If not authenticated, redirect immediately
         if (!currentAuth || !currentUser) {
-          window.location.href = '/login?' + new Date().getTime();
+          if (!hasStoredAccessToken()) {
+            window.location.href = '/login?' + new Date().getTime();
+          }
           return;
         }
 
@@ -96,7 +99,9 @@ export function ProtectedRoute({
       const { isAuthenticated: currentAuth, user: currentUser } = useAuthStore.getState();
 
       if (!currentAuth || !currentUser) {
-        window.location.href = '/login?' + new Date().getTime();
+        if (!hasStoredAccessToken()) {
+          window.location.href = '/login?' + new Date().getTime();
+        }
         return;
       }
 
@@ -120,10 +125,19 @@ export function ProtectedRoute({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [allowedRoles, lastUserId, user?.id]);
+  }, [allowedRoles, lastUserId, user?.id, authHydrated]);
+
+  if (!authHydrated) {
+    return null;
+  }
+
+  const hasToken = hasStoredAccessToken();
 
   // 1. Check if user is authenticated
   if (!isAuthenticated || !user) {
+    if (hasToken) {
+      return null;
+    }
     console.warn('[ProtectedRoute] Access denied: User not authenticated', {
       pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
       timestamp: new Date().toISOString(),
@@ -134,6 +148,8 @@ export function ProtectedRoute({
   // 2. Check role-based access
   if (allowedRoles && allowedRoles.length > 0) {
     const userRoles = user.roles || [];
+
+    // User must have at least one of the allowed roles
     if (!hasAnyRole(userRoles, allowedRoles)) {
       console.warn('[ProtectedRoute] Access denied: Insufficient role', {
         userRoles,

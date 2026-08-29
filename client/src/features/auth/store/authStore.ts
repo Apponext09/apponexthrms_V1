@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/config/api';
@@ -36,6 +37,11 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
   logout: () => void;
+}
+
+export function hasStoredAccessToken(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(localStorage.getItem('accessToken'));
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -99,6 +105,7 @@ export const useAuthStore = create<AuthState>()(
           if (loginData.refreshToken) {
             localStorage.setItem('refreshToken', loginData.refreshToken);
           }
+          localStorage.removeItem('last-logout-time');
 
           // If logging in as a company/branch admin, set the companyStore active company context automatically
           if (compId) {
@@ -123,21 +130,21 @@ export const useAuthStore = create<AuthState>()(
           const data = response.data?.data || response.data;
           if (data?.user) {
             set((state) => {
-              if (!state.user) return state;
+              const previous = state.user;
               return {
+                isAuthenticated: true,
                 user: {
-                  ...state.user,
+                  ...(previous || {}),
                   ...data.user,
-                  // roles/permissions are top-level siblings of `user` in the
-                  // /auth/me response, not nested inside it — spreading only
-                  // data.user silently left whatever roles/permissions were
-                  // already in the store untouched (e.g. left over from a
-                  // previous session's login in the same tab). Always take
-                  // the freshly-fetched values, defaulting to no access.
-                  roles: data.roles || [],
-                  permissions: data.permissions || [],
-                  departmentName: data.user.departmentName || state.user.departmentName || 'Finance',
-                },
+                  id: data.user.id || previous?.id,
+                  email: data.user.email || previous?.email,
+                  firstName: data.user.firstName || data.user.first_name || previous?.firstName || '',
+                  lastName: data.user.lastName || data.user.last_name || previous?.lastName || '',
+                  organizationId: data.user.organizationId || data.user.organization_id || previous?.organizationId,
+                  roles: data.roles || data.user.roles || previous?.roles || [],
+                  permissions: data.permissions || data.user.permissions || previous?.permissions || [],
+                  departmentName: data.user.departmentName || previous?.departmentName || '',
+                } as User,
               };
             });
           }
@@ -191,6 +198,24 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );
+
+export function useAuthHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+
+  useEffect(() => {
+    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
+    if (useAuthStore.persist.hasHydrated()) {
+      setHydrated(true);
+    }
+    return unsub;
+  }, []);
+
+  return hydrated;
+}
