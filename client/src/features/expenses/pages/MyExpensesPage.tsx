@@ -516,10 +516,10 @@ export const MyExpensesPage: React.FC = () => {
 
       {/* CREATE / EDIT CLAIM MODAL */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-4 sm:my-8 mx-auto">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                 {editingClaimId ? 'Edit / Resubmit Expense Claim' : 'Create New Expense Claim'}
               </h2>
@@ -532,9 +532,9 @@ export const MyExpensesPage: React.FC = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+            <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-h-[80vh] overflow-y-auto">
               {/* Claim Header Inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Claim Title *
@@ -652,7 +652,7 @@ export const MyExpensesPage: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <div>
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                           Category
@@ -699,7 +699,7 @@ export const MyExpensesPage: React.FC = () => {
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                           Receipt Upload (Max 10MB)
                         </label>
-                        <div className="flex items-center gap-2">
+                         <div className="flex flex-wrap items-center gap-2">
                           <div>
                             <button
                               type="button"
@@ -804,7 +804,7 @@ export const MyExpensesPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
