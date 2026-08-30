@@ -646,7 +646,6 @@ export class GeoFenceService {
               latitude: 19.0760,
               longitude: 72.8777,
               is_primary: false,
-              is_active: true,
               created_by: ctx.userId,
               updated_by: ctx.userId,
               created_at: new Date(),

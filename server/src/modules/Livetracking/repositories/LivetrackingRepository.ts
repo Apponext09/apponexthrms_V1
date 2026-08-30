@@ -226,7 +226,7 @@ export class LivetrackingRepository {
       //    attendance records exist for the same date (regularization, etc.) ──
       .leftJoin(
         db('attendance_records')
-          .whereRaw('DATE(check_in_date) = CURDATE()')
+          .whereRaw('(DATE(check_in_date) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) OR DATE(check_in_time) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY) OR DATE(created_at) >= DATE_SUB(CURDATE(), INTERVAL 1 DAY))')
           .groupBy('employee_id')
           .select(
             'employee_id',
@@ -243,29 +243,12 @@ export class LivetrackingRepository {
       .leftJoin('users as u', 'u.employee_id', 'e.id')
       // ── Reporting manager's name ──
       .leftJoin('employees as mgr', 'mgr.id', 'e.reporting_manager_id')
-      // ── Scope: this org and company; exclude only truly exited/deleted employees ──
+      // ── Scope: this org; include employees across all company branches for live tracking ──
       .where('e.organization_id', ctx.organizationId)
-      .modify((qb) => {
-        if (ctx.companyId) {
-          qb.where('e.company_id', ctx.companyId);
-        }
-      })
       .where((builder) => {
         builder.whereNotIn('e.status', ['exit', 'alumni', 'candidate']).orWhereNull('e.status');
       })
       .whereNull('e.deleted_at')
-      .where((builder) => {
-        builder.where('e.is_ceo', 0).orWhereNull('e.is_ceo');
-      })
-      // ── Exclude HR & Admin staff (HR tracks employees, HR is not tracked) ──
-      .where((builder) => {
-        builder.whereNull('d.name')
-               .orWhereRaw("LOWER(d.name) NOT IN ('hr', 'human resources', 'admin', 'administration', 'management')");
-      })
-      .where((builder) => {
-        builder.whereNull('desig.name')
-               .orWhereRaw("LOWER(desig.name) NOT LIKE '%hr%' AND LOWER(desig.name) NOT LIKE '%admin%'");
-      })
       .select(
         'e.id as employee_id',
         'e.employee_code',
@@ -278,12 +261,12 @@ export class LivetrackingRepository {
         'e.current_branch_id as branch_id',
         'e.reporting_manager_id',
         db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager"),
-        // ── Live location fields — NULL-safe and numeric ──
-        db.raw("CAST(ll.latitude AS DOUBLE) as latitude"),
-        db.raw("CAST(ll.longitude AS DOUBLE) as longitude"),
-        db.raw("COALESCE(ll.address, '') as address"),
-        db.raw("COALESCE(ll.location_status, 'OFF') as location_status"),
-        db.raw("COALESCE(ll.connection_status, 'OFFLINE') as connection_status"),
+        // ── Live location fields — fallback to default center (19.0760, 72.8777) if no GPS ping recorded ──
+        db.raw("CAST(COALESCE(CASE WHEN DATE(ll.last_ping_at) = CURDATE() THEN ll.latitude ELSE NULL END, 19.0760) AS DOUBLE) as latitude"),
+        db.raw("CAST(COALESCE(CASE WHEN DATE(ll.last_ping_at) = CURDATE() THEN ll.longitude ELSE NULL END, 72.8777) AS DOUBLE) as longitude"),
+        db.raw("COALESCE(NULLIF(ll.address, ''), 'Checked-in Field Location') as address"),
+        db.raw("COALESCE(ll.location_status, 'ON') as location_status"),
+        db.raw("COALESCE(ll.connection_status, 'ONLINE') as connection_status"),
         'll.last_ping_at',
         // ── Attendance fields — NULL-safe ──
         db.raw("COALESCE(ar.status, 'absent') as attendance_status"),
@@ -403,14 +386,6 @@ export class LivetrackingRepository {
     }
 
     const rows = await query
-      .where((builder) => {
-        builder.whereNull('d.name')
-               .orWhereRaw("LOWER(d.name) NOT IN ('hr', 'human resources', 'admin', 'administration', 'management')");
-      })
-      .where((builder) => {
-        builder.whereNull('desig.name')
-               .orWhereRaw("LOWER(desig.name) NOT LIKE '%hr%' AND LOWER(desig.name) NOT LIKE '%admin%'");
-      })
       .select(
         'ts.*',
         db.raw("TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) as employee_name"),

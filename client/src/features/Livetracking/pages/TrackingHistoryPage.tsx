@@ -150,15 +150,9 @@ export const TrackingHistoryPage: React.FC = () => {
   };
 
   const filtered = useMemo(() => {
-    const validSessions = sessions.filter((s) => {
-      const name = getEmpName(s).toLowerCase();
-      const dept = getDept(s).toLowerCase();
-      if (name.includes('aditya joshi') || dept === 'hr' || dept === 'human resources') return false;
-      return true;
-    });
-    if (!search.trim()) return validSessions;
+    if (!search.trim()) return sessions;
     const q = search.trim().toLowerCase();
-    return validSessions.filter(
+    return sessions.filter(
       (s) =>
         getEmpName(s).toLowerCase().includes(q) ||
         getEmpCode(s).toLowerCase().includes(q) ||
