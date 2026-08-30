@@ -30,14 +30,19 @@ export async function sendMail(options: {
           pass = org.smtp_pass;
         }
         if (org.sender_email || org.name) {
-          const senderName = org.sender_name || org.name || 'HR Team';
-          const senderMail = org.sender_email || org.email || user || 'noreply@apponexthrms.com';
+          const senderName = org.sender_name || org.name || 'Apponext HRMS';
+          const senderMail = (host.includes('gmail') && user) ? user : (org.sender_email || org.email || user || 'noreply@apponexthrms.com');
           from = options.from || `"${senderName}" <${senderMail}>`;
         }
       }
     } catch (e) {
       logger.warn('[MailService] Failed to load tenant custom mail settings, using default transport:', e);
     }
+  }
+
+  if (host.includes('gmail') && user && !from.includes(user)) {
+    const displayName = from.split('<')[0].replace(/"/g, '').trim() || 'Apponext HRMS';
+    from = `"${displayName}" <${user}>`;
   }
 
   const recipients = Array.isArray(options.to) ? options.to.join(', ') : options.to;
@@ -50,14 +55,18 @@ export async function sendMail(options: {
   }
 
   try {
+    const cleanPass = (host.includes('gmail') || port === 465 || port === 587) ? pass.replace(/\s+/g, '') : pass;
     const transporter = nodemailer.createTransport({
       host,
       port,
-      secure: port === 465, // true for 465, false for other ports
+      secure: port === 465,
       auth: {
         user,
-        pass,
+        pass: cleanPass,
       },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
     const info = await transporter.sendMail({
@@ -66,14 +75,15 @@ export async function sendMail(options: {
       to: options.to,
       subject: options.subject,
       html: options.html,
-      text: options.text || options.html.replace(/<[^>]*>/g, ''), // Strip tags for plain text fallback
+      text: options.text || options.html.replace(/<[^>]*>/g, ''),
     });
 
+    console.log(`[MailService] Email successfully sent to: ${recipients} | MessageId: ${info.messageId}`);
     logger.info(`[MailService] Email sent successfully: ${info.messageId}`);
     return true;
   } catch (error) {
+    console.error(`[MailService] Failed to send email via SMTP to [${recipients}]:`, error instanceof Error ? error.message : String(error));
     logger.error('[MailService] Failed to send email via SMTP:', error instanceof Error ? error.message : String(error));
-    // Do not fail the flow if email sending fails, as we want to keep the application resilient
     return false;
   }
 }

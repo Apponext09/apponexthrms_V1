@@ -91,6 +91,7 @@ router.get('/candidates/:id/score/:jobId', requirePermission('recruitment.candid
 // ==================== Application Routes ====================
 router.post('/applications', requirePermission('recruitment.application.write'), recruitmentController.createApplication);
 router.get('/applications', requirePermission('recruitment.application.read'), recruitmentController.listApplications);
+router.get('/applications/hired', requirePermission('recruitment.application.read'), recruitmentController.listHiredCandidates);
 router.patch('/applications/:applicationId/move-stage', requirePermission('recruitment.application.write'), recruitmentController.moveApplicationStage);
 router.patch('/applications/:applicationId/assign-recruiter', requirePermission('recruitment.application.write'), recruitmentController.assignRecruiter);
 router.get('/applications/:applicationId/history', requirePermission('recruitment.application.read'), recruitmentController.getApplicationHistory);

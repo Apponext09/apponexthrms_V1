@@ -8,21 +8,25 @@ import {
   User, Briefcase, DollarSign, Calendar, ShieldCheck, 
   Building2, CheckCircle2, FileText, ArrowRight, ArrowLeft,
   Sparkles, RefreshCw, Send, Check, Eye, Search, ChevronDown, CheckCheck,
-  FileCheck
+  FileCheck, UserPlus, Users, Award, TrendingUp, Mail
 } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { DEFAULT_FRONTEND_TEMPLATES, LetterTemplateRecord } from '../../settings/components/OfferTemplateMasterForm';
+import { useHiredCandidates, useCreateEmployeeLetter } from '../hooks/useOffers';
 
 interface GenerateOfferModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: any) => Promise<void>;
   isSubmitting: boolean;
-  applicationList: any[];
-  departmentList: any[];
-  designationList: any[];
+  applicationList?: any[];
+  departmentList?: any[];
+  designationList?: any[];
+  initialApplicationId?: number | string | null;
+  initialCandidate?: any | null;
+  initialRecipientMode?: 'new_candidate' | 'existing_employee';
 }
 
 export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
@@ -33,9 +37,15 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   applicationList = [],
   departmentList = [],
   designationList = [],
+  initialApplicationId = null,
+  initialCandidate = null,
+  initialRecipientMode = 'new_candidate',
 }) => {
   // 2-Step Flow: 1: Configure Mandatory Offer Details, 2: Live Letterhead Review & Dispatch
   const [step, setStep] = useState<1 | 2>(1);
+
+  // ── Recipient Mode ──────────────────────────────────────────────
+  const [recipientMode, setRecipientMode] = useState<'new_candidate' | 'existing_employee'>('new_candidate');
 
   // Master Templates & Database Options
   const [offerTemplates, setOfferTemplates] = useState<LetterTemplateRecord[]>([]);
@@ -53,8 +63,28 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   const [candidateSearchQuery, setCandidateSearchQuery] = useState('');
   const [candidateFilterTab, setCandidateFilterTab] = useState<'interview_cleared' | 'all'>('interview_cleared');
 
+  // ── Existing Employee Selection State ───────────────────────────
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+  const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [isEmployeeDropdownOpen, setIsEmployeeDropdownOpen] = useState(false);
+  const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+  const [employeeList, setEmployeeList] = useState<any[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const employeeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Hired candidates hook ──────────────────────────────────────
+  const { data: hiredResponse } = useHiredCandidates();
+  const hiredCandidateList = useMemo(() => {
+    const items = hiredResponse?.data || [];
+    return Array.isArray(items) ? items : [];
+  }, [hiredResponse]);
+
+  // ── Create Employee Letter mutation ────────────────────────────
+  const createEmployeeLetterMutation = useCreateEmployeeLetter();
+
   // Mandatory Form Fields
   const [positionTitle, setPositionTitle] = useState('');
+  const [candidateEmail, setCandidateEmail] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [designationId, setDesignationId] = useState('');
   const [locationId, setLocationId] = useState('');
@@ -88,86 +118,134 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   const activeDeptList = (departmentList && departmentList.length > 0) ? departmentList : internalDepts;
   const activeDesgList = (designationList && designationList.length > 0) ? designationList : internalDesgs;
 
-  // Filter candidates who applied and cleared interview
-  const filteredCandidates = useMemo(() => {
-    return applicationList.filter((app: any) => {
+  // Filter hired candidates for "New Candidate" mode
+  const filteredHiredCandidates = useMemo(() => {
+    // Use the API-fetched hired candidates (already filtered server-side)
+    const sourceList = hiredCandidateList.length > 0 ? hiredCandidateList : applicationList.filter((app: any) => {
       const status = (app.application_status || app.applicationStatus || app.status || '').toLowerCase();
-      const screeningStatus = (app.initial_screening_status || app.initialScreeningStatus || '').toLowerCase();
-      const candStatus = (app.candidate_status || app.candidateStatus || '').toLowerCase();
-      
-      // Exclude explicitly rejected or withdrawn
-      if (status === 'rejected' || status === 'withdrawn' || screeningStatus === 'failed') {
-        return false;
-      }
+      return status === 'hired' || status === 'offer';
+    });
 
-      const isInterviewCleared = 
-        status === 'interview' || 
-        status === 'offer' || 
-        status === 'shortlisted' || 
-        status === 'selected' ||
-        candStatus === 'interview_cleared' ||
-        candStatus === 'shortlisted' ||
-        candStatus === 'selected' ||
-        screeningStatus === 'passed';
-
-      if (candidateFilterTab === 'interview_cleared' && !isInterviewCleared) {
-        return false;
-      }
-
-      // Search match
-      if (!candidateSearchQuery.trim()) return true;
-      const q = candidateSearchQuery.toLowerCase();
+    if (!candidateSearchQuery.trim()) return sourceList;
+    const q = candidateSearchQuery.toLowerCase();
+    return sourceList.filter((app: any) => {
       const name = (app.candidateName || app.candidate_name || app.name || `${app.first_name || ''} ${app.last_name || ''}`).toLowerCase();
       const email = (app.candidateEmail || app.candidate_email || '').toLowerCase();
       const job = (app.jobTitle || app.position_title || app.job_title || '').toLowerCase();
-
       return name.includes(q) || email.includes(q) || job.includes(q);
     });
-  }, [applicationList, candidateFilterTab, candidateSearchQuery]);
+  }, [hiredCandidateList, applicationList, candidateSearchQuery]);
+
+  // Filter employees for "Existing Employee" mode
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearchQuery.trim()) return employeeList;
+    const q = employeeSearchQuery.toLowerCase();
+    return employeeList.filter((emp: any) => {
+      const constructedName = `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim();
+      const name = (emp.full_name || emp.fullName || emp.name || constructedName).toLowerCase();
+      const code = (emp.employee_code || emp.employeeCode || '').toLowerCase();
+      const email = (emp.official_email || emp.officialEmail || emp.email || '').toLowerCase();
+      const dept = (emp.department_name || emp.departmentName || emp.department || '').toLowerCase();
+      return name.includes(q) || code.includes(q) || email.includes(q) || dept.includes(q);
+    });
+  }, [employeeList, employeeSearchQuery]);
+
+  // Legacy alias for backward compatibility within the modal
+  const filteredCandidates = filteredHiredCandidates;
 
   // Load and normalize templates from API / Fallback
-  const loadTemplates = async () => {
+  const loadTemplates = async (mode: 'new_candidate' | 'existing_employee' = 'new_candidate') => {
     try {
       const res = await apiClient.get('/letters/templates');
       const allTemplates = res.data?.data || (Array.isArray(res.data) ? res.data : []);
       
-      let hiringList: any[] = [];
+      let filteredList: any[] = [];
       if (Array.isArray(allTemplates) && allTemplates.length > 0) {
-        hiringList = allTemplates.filter((t: any) => {
-          const cat = (t.letter_category || t.letterCategory || '').toLowerCase();
-          const typ = (t.letter_type || t.letterType || '').toLowerCase();
-          return cat === 'hiring' || typ === 'offer_letter' || typ === 'intent_to_offer' || typ === 'interview_call';
-        });
-        if (hiringList.length === 0) {
-          hiringList = allTemplates;
+        if (mode === 'new_candidate') {
+          // Hiring-stage templates: Offer Letter, Intent to Offer, Interview Call
+          filteredList = allTemplates.filter((t: any) => {
+            const cat = (t.letter_category || t.letterCategory || '').toLowerCase();
+            const typ = (t.letter_type || t.letterType || '').toLowerCase();
+            return cat === 'hiring' || typ === 'offer_letter' || typ === 'intent_to_offer' || typ === 'interview_call';
+          });
+        } else {
+          // Employment-stage templates: Increment, Promotion, Confirmation, Appointment, Warning, etc.
+          filteredList = allTemplates.filter((t: any) => {
+            const cat = (t.letter_category || t.letterCategory || '').toLowerCase();
+            return cat === 'employment' || cat === 'onboarding' || cat === 'exit';
+          });
+        }
+        if (filteredList.length === 0) {
+          filteredList = allTemplates;
         }
       }
 
-      if (hiringList.length === 0) {
-        hiringList = DEFAULT_FRONTEND_TEMPLATES.filter(t => t.letter_category === 'hiring');
+      if (filteredList.length === 0) {
+        const targetCat = mode === 'new_candidate' ? 'hiring' : 'employment';
+        filteredList = DEFAULT_FRONTEND_TEMPLATES.filter(t => t.letter_category === targetCat);
+        if (filteredList.length === 0) {
+          filteredList = DEFAULT_FRONTEND_TEMPLATES.filter(t => t.letter_category === 'hiring');
+        }
       }
 
-      setOfferTemplates(hiringList);
+      setOfferTemplates(filteredList);
       
-      // Auto select the primary offer letter template
-      const primaryOffer = hiringList.find((t: any) => {
+      // Auto select the primary template
+      const primaryType = mode === 'new_candidate' ? 'offer_letter' : 'increment';
+      const primaryTemplate = filteredList.find((t: any) => {
         const typ = (t.letter_type || t.letterType || '').toLowerCase();
-        return typ === 'offer_letter';
-      }) || hiringList[0];
+        return typ === primaryType;
+      }) || filteredList[0];
 
-      if (primaryOffer) {
-        setSelectedTemplateId(String(primaryOffer.id));
-        setBgvMandatory(!!(primaryOffer.bgv_mandatory ?? (primaryOffer as any).bgvMandatory));
-        setNdaMandatory(!!(primaryOffer.nda_mandatory ?? (primaryOffer as any).ndaMandatory));
-        setNonCompete(!!(primaryOffer.non_compete ?? (primaryOffer as any).nonCompete));
-        setRelievingLetter(!!(primaryOffer.relieving_letter_required ?? (primaryOffer as any).relievingLetterRequired));
+      if (primaryTemplate) {
+        setSelectedTemplateId(String(primaryTemplate.id));
+        setBgvMandatory(!!(primaryTemplate.bgv_mandatory ?? (primaryTemplate as any).bgvMandatory));
+        setNdaMandatory(!!(primaryTemplate.nda_mandatory ?? (primaryTemplate as any).ndaMandatory));
+        setNonCompete(!!(primaryTemplate.non_compete ?? (primaryTemplate as any).nonCompete));
+        setRelievingLetter(!!(primaryTemplate.relieving_letter_required ?? (primaryTemplate as any).relievingLetterRequired));
       }
     } catch (err) {
       console.warn('Fallback to local default templates', err);
-      const fallbackList = DEFAULT_FRONTEND_TEMPLATES.filter(t => t.letter_category === 'hiring');
+      const targetCat = mode === 'new_candidate' ? 'hiring' : 'employment';
+      let fallbackList = DEFAULT_FRONTEND_TEMPLATES.filter(t => t.letter_category === targetCat);
+      if (fallbackList.length === 0) fallbackList = DEFAULT_FRONTEND_TEMPLATES.filter(t => t.letter_category === 'hiring');
       setOfferTemplates(fallbackList);
-      const def = fallbackList.find(t => t.letter_type === 'offer_letter') || fallbackList[0];
+      const def = fallbackList[0];
       if (def) setSelectedTemplateId(String(def.id));
+    }
+  };
+
+  // Load employees for "Existing Employee" mode
+  const loadEmployees = async () => {
+    setIsLoadingEmployees(true);
+    try {
+      const res = await apiClient.get('/employees?pageSize=500&status=active');
+      const items = res.data?.data?.items || res.data?.data || res.data?.items || (Array.isArray(res.data) ? res.data : []);
+      setEmployeeList(items);
+    } catch {
+      setEmployeeList([]);
+    } finally {
+      setIsLoadingEmployees(false);
+    }
+  };
+
+  // Handle recipient mode switch
+  const handleModeSwitch = (mode: 'new_candidate' | 'existing_employee') => {
+    setRecipientMode(mode);
+    // Clear selections
+    setSelectedAppId('');
+    setSelectedApp(null);
+    setSelectedEmployeeId('');
+    setSelectedEmployee(null);
+    setIsCandidateDropdownOpen(false);
+    setIsEmployeeDropdownOpen(false);
+    setPositionTitle('');
+    setDepartmentId('');
+    setDesignationId('');
+    // Reload templates for the new mode
+    loadTemplates(mode);
+    if (mode === 'existing_employee' && employeeList.length === 0) {
+      loadEmployees();
     }
   };
 
@@ -175,13 +253,20 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   useEffect(() => {
     if (open) {
       setStep(1);
+      setRecipientMode('new_candidate');
       setIsCandidateDropdownOpen(false);
       setIsTemplateDropdownOpen(false);
+      setIsEmployeeDropdownOpen(false);
       setCandidateSearchQuery('');
+      setEmployeeSearchQuery('');
+      setSelectedAppId('');
+      setSelectedApp(null);
+      setSelectedEmployeeId('');
+      setSelectedEmployee(null);
       setIsLoadingMasterData(true);
 
       // 1. Fetch Hiring Templates from Master
-      loadTemplates();
+      loadTemplates('new_candidate');
 
       // 2. Fetch Locations / Branches from DB
       apiClient.get('/settings/locations')
@@ -211,20 +296,36 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
         }).catch(() => {});
       }
 
-      // Default target joining date (30 days) & expiry date (7 days)
-      const joinDate = new Date();
-      joinDate.setDate(joinDate.getDate() + 30);
-      setOfferStartDate(joinDate.toISOString().substring(0, 10));
-
-      const expiry = new Date();
-      expiry.setDate(expiry.getDate() + 7);
-      setOfferExpiryDate(expiry.toISOString().substring(0, 10));
+      // Initially blank dates as requested
+      setOfferStartDate('');
+      setOfferExpiryDate('');
 
       setIsLoadingMasterData(false);
     }
   }, [open]);
 
-  // Click outside to close candidate/template dropdowns
+  // Pre-select initial candidate or employee if provided via props
+  useEffect(() => {
+    if (open) {
+      if (initialRecipientMode) {
+        setRecipientMode(initialRecipientMode);
+      }
+      if (initialCandidate) {
+        handleSelectCandidate(initialCandidate);
+      } else if (initialApplicationId) {
+        const appIdStr = String(initialApplicationId);
+        const found = (applicationList || []).find((a: any) => String(a.id) === appIdStr) ||
+                      (hiredCandidateList || []).find((a: any) => String(a.id) === appIdStr);
+        if (found) {
+          handleSelectCandidate(found);
+        } else {
+          setSelectedAppId(appIdStr);
+        }
+      }
+    }
+  }, [open, initialApplicationId, initialCandidate, initialRecipientMode, applicationList, hiredCandidateList]);
+
+  // Click outside to close candidate/template/employee dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (candidateDropdownRef.current && !candidateDropdownRef.current.contains(event.target as Node)) {
@@ -232,6 +333,9 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       }
       if (templateDropdownRef.current && !templateDropdownRef.current.contains(event.target as Node)) {
         setIsTemplateDropdownOpen(false);
+      }
+      if (employeeDropdownRef.current && !employeeDropdownRef.current.contains(event.target as Node)) {
+        setIsEmployeeDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -243,6 +347,14 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
     setSelectedAppId(String(app.id));
     setSelectedApp(app);
     setIsCandidateDropdownOpen(false);
+
+    // Auto-fill email
+    const email = (app.candidateEmail || app.candidate_email || app.email || '').trim();
+    if (email && email !== 'N/A') {
+      setCandidateEmail(email);
+    } else {
+      setCandidateEmail('');
+    }
 
     // Auto-fill role parameters
     const title = app.jobTitle || app.position_title || app.positionTitle || app.job_title || '';
@@ -256,6 +368,44 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
     }
   };
 
+  // Handle Employee Selection
+  const handleSelectEmployee = (emp: any) => {
+    setSelectedEmployeeId(String(emp.id));
+    setSelectedEmployee(emp);
+    setIsEmployeeDropdownOpen(false);
+
+    // Auto-fill email
+    const email = (emp.official_email || emp.officialEmail || emp.personal_email || emp.email || '').trim();
+    if (email && email !== 'N/A') {
+      setCandidateEmail(email);
+    } else {
+      setCandidateEmail('');
+    }
+
+    // Auto-fill from employee data
+    const desgName = emp.designation_name || emp.designationName || emp.designation || '';
+    if (desgName) setPositionTitle(desgName);
+    if (emp.department_id || emp.departmentId) {
+      setDepartmentId(String(emp.department_id || emp.departmentId));
+    }
+    if (emp.designation_id || emp.designationId) {
+      setDesignationId(String(emp.designation_id || emp.designationId));
+    }
+    // Auto-fill CTC if available
+    const ctc = emp.current_ctc || emp.currentCtc || emp.salary || '';
+    if (ctc) setAnnualCTC(String(ctc));
+  };
+
+  const getEmployeeName = (emp: any) => {
+    if (!emp) return 'N/A';
+    const constructedName = `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim();
+    return emp.full_name || emp.fullName || emp.name || constructedName || emp.official_email || emp.officialEmail || emp.email || `Employee #${emp.id}`;
+  };
+
+  const getEmployeeCode = (emp: any) => {
+    return emp.employee_code || emp.employeeCode || `EMP-${emp.id}`;
+  };
+
   // Active Template
   const activeTemplate = useMemo(() => {
     if (offerTemplates.length === 0) return DEFAULT_FRONTEND_TEMPLATES[2];
@@ -263,6 +413,32 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
     if (found) return found;
     return offerTemplates[0] || DEFAULT_FRONTEND_TEMPLATES[2];
   }, [offerTemplates, selectedTemplateId]);
+
+  // Check if compensation section is needed for this template / mode
+  const isCompensationRequired = useMemo(() => {
+    if (recipientMode === 'new_candidate') return true;
+    if (!activeTemplate) return false;
+
+    const typ = (activeTemplate.letter_type || (activeTemplate as any).letterType || '').toLowerCase();
+    const cat = (activeTemplate.letter_category || (activeTemplate as any).letterCategory || '').toLowerCase();
+    const name = (activeTemplate.template_name || (activeTemplate as any).templateName || '').toLowerCase();
+
+    return (
+      cat === 'hiring' ||
+      typ === 'offer_letter' ||
+      typ === 'intent_to_offer' ||
+      typ === 'increment' ||
+      typ === 'promotion' ||
+      typ === 'appointment' ||
+      typ === 'salary_revision' ||
+      name.includes('increment') ||
+      name.includes('salary') ||
+      name.includes('compensation') ||
+      name.includes('ctc') ||
+      name.includes('remuneration') ||
+      name.includes('revision')
+    );
+  }, [recipientMode, activeTemplate]);
 
   // Handle template selection change
   const handleSelectTemplate = (tpl: any) => {
@@ -289,8 +465,14 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
 
   // Compile and generate Live Letterhead HTML
   const buildPreviewHtml = () => {
-    const candName = selectedApp ? getCandidateName(selectedApp) : 'Candidate Name';
-    const candEmail = selectedApp ? (selectedApp.candidateEmail || selectedApp.candidate_email || 'candidate@example.com') : 'candidate@example.com';
+    const candName = recipientMode === 'existing_employee'
+      ? (selectedEmployee ? getEmployeeName(selectedEmployee) : 'Employee Name')
+      : (selectedApp ? getCandidateName(selectedApp) : 'Candidate Name');
+
+    const candEmail = recipientMode === 'existing_employee'
+      ? (selectedEmployee ? (selectedEmployee.official_email || selectedEmployee.officialEmail || selectedEmployee.email || 'employee@company.com') : 'employee@company.com')
+      : (selectedApp ? (selectedApp.candidateEmail || selectedApp.candidate_email || 'candidate@example.com') : 'candidate@example.com');
+
     const candPhone = selectedApp ? (selectedApp.candidatePhone || selectedApp.candidate_phone || '+91 98765 43210') : '+91 98765 43210';
     
     const dept = activeDeptList.find((d: any) => String(d.id) === String(departmentId));
@@ -310,7 +492,9 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
 
     const vars: Record<string, string> = {
       '{{candidate_name}}': candName,
+      '{{employee_name}}': candName,
       '{{candidate_email}}': candEmail,
+      '{{employee_email}}': candEmail,
       '{{candidate_phone}}': candPhone,
       '{{position_title}}': positionTitle || desgName,
       '{{department_name}}': deptName,
@@ -324,6 +508,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       '{{currency}}': currency,
       '{{joining_bonus}}': joiningBonus ? parseFloat(joiningBonus).toLocaleString('en-IN') : '0',
       '{{offer_start_date}}': formattedStartDate,
+      '{{effective_date}}': formattedStartDate,
       '{{offer_expiry_date}}': formattedExpiryDate,
       '{{probation_period}}': probationPeriod,
       '{{notice_period}}': noticePeriod,
@@ -332,11 +517,11 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       '{{signatory_name}}': activeTemplate.signatory_name || (activeTemplate as any).signatoryName || 'Priya Sharma',
       '{{signatory_designation}}': activeTemplate.signatory_designation || (activeTemplate as any).signatoryDesignation || 'Director - Human Resources',
       '{{current_date}}': new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
-      '{{letter_code}}': `OFFER-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      '{{letter_code}}': `${recipientMode === 'existing_employee' ? 'LTR' : 'OFFER'}-2026-${Math.floor(1000 + Math.random() * 9000)}`,
     };
 
     let renderedBody = activeTemplate.body_content || (activeTemplate as any).bodyContent || '';
-    let renderedSubject = activeTemplate.subject || 'Letter of Offer & Employment Agreement';
+    let renderedSubject = activeTemplate.subject || (recipientMode === 'existing_employee' ? 'Official Corporate Letter' : 'Letter of Offer & Employment Agreement');
     let renderedTerms = activeTemplate.terms_and_conditions || (activeTemplate as any).termsAndConditions || '';
     let renderedCustom = activeTemplate.custom_clause || (activeTemplate as any).customClause || '';
 
@@ -347,6 +532,9 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       renderedTerms = renderedTerms.replace(reg, val);
       renderedCustom = renderedCustom.replace(reg, val);
     }
+
+    const docTagLabel = recipientMode === 'existing_employee' ? 'OFFICIAL EMPLOYEE LETTER' : 'OFFICIAL OFFER OF EMPLOYMENT';
+    const recipientSigLabel = recipientMode === 'existing_employee' ? 'Employee Acknowledgment Signature' : 'Candidate Acceptance Signature';
 
     return `<!DOCTYPE html>
 <html>
@@ -384,7 +572,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
         <div class="company-sub">${activeTemplate.company_address_override || (activeTemplate as any).companyAddressOverride || 'Level 6, Tech Park Phase 2, Outer Ring Road, Bengaluru, 560103'}</div>
       </div>
       <div style="text-align: right;">
-        <div class="doc-tag">OFFICIAL OFFER OF EMPLOYMENT</div>
+        <div class="doc-tag">${docTagLabel}</div>
         <div style="font-size: 12px; color: #64748b; margin-top: 8px;">Date: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
       </div>
     </div>
@@ -414,7 +602,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       </div>
       <div class="sign-box" style="text-align: right;">
         <div class="sign-line">
-          <div style="font-weight: 700; color: #0f172a;">Candidate Acceptance Signature</div>
+          <div style="font-weight: 700; color: #0f172a;">${recipientSigLabel}</div>
           <div style="font-size: 12px; color: #64748b;">Digitally Signed & Accepted</div>
           <div style="font-size: 11px; color: #94a3b8;">Date: __________________</div>
         </div>
@@ -423,7 +611,7 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
 
     <div class="footer">
       This is a confidential corporate document generated by ${activeTemplate.company_name_override || (activeTemplate as any).companyNameOverride || 'Apponext Technologies'} HRMS.<br/>
-      Strictly Private & Confidential • Authorized Candidate Communication
+      Strictly Private & Confidential • Authorized Communication
     </div>
   </div>
 </div>
@@ -432,15 +620,19 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   };
 
   const handleProceedToPreview = () => {
-    if (!selectedAppId) {
-      toast.error('Please select a candidate application');
+    if (recipientMode === 'new_candidate' && !selectedAppId) {
+      toast.error('Please select a hired candidate');
+      return;
+    }
+    if (recipientMode === 'existing_employee' && !selectedEmployeeId) {
+      toast.error('Please select an existing employee');
       return;
     }
     if (!positionTitle.trim()) {
       toast.error('Please enter the official position title');
       return;
     }
-    if (!annualCTC || parseFloat(annualCTC) <= 0) {
+    if (isCompensationRequired && (!annualCTC || parseFloat(annualCTC) <= 0)) {
       toast.error('Please enter a valid Annual CTC amount');
       return;
     }
@@ -451,6 +643,30 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
   };
 
   const handleFinalSubmit = async () => {
+    if (recipientMode === 'existing_employee') {
+      // Submit via Letters module for existing employees
+      try {
+        await createEmployeeLetterMutation.mutateAsync({
+          templateId: parseInt(selectedTemplateId, 10),
+          employeeId: parseInt(selectedEmployeeId, 10),
+          overrides: {
+            position_title: positionTitle.trim(),
+            cost_to_company: annualCTC || '0',
+            revised_ctc: annualCTC || '0',
+            currency: currency || 'INR',
+            effective_date: offerStartDate || '',
+            reporting_manager: reportingManager.trim(),
+          },
+        });
+        toast.success('Employee letter generated successfully!');
+        onOpenChange(false);
+      } catch (err: any) {
+        toast.error(err?.response?.data?.message || 'Failed to generate employee letter.');
+      }
+      return;
+    }
+
+    // Default: New candidate offer letter flow
     const ctcNum = parseFloat(annualCTC) || 1200000;
     const baseNum = Math.round(ctcNum * 0.5);
 
@@ -464,8 +680,11 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
       currency: currency || 'INR',
       offerStartDate,
       offerExpiryDate,
+      candidateEmail: candidateEmail?.trim() || undefined,
       meta: {
         templateId: selectedTemplateId,
+        candidateName: selectedApp ? getCandidateName(selectedApp) : undefined,
+        candidateEmail: candidateEmail?.trim() || undefined,
         locationId,
         locationName,
         reportingManager: reportingManager.trim(),
@@ -496,10 +715,12 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
               </div>
               <div>
                 <DialogTitle className="text-base font-extrabold text-slate-900 dark:text-white">
-                  Create Candidate Offer Letter
+                  {recipientMode === 'existing_employee' ? 'Generate Employee Letter' : 'Create Candidate Offer Letter'}
                 </DialogTitle>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Select candidate application, configure role parameters, and generate executive offer letterhead.
+                  {recipientMode === 'existing_employee' 
+                    ? 'Select an active employee, choose letter format (Confirmation, Increment, etc.), and generate letterhead.'
+                    : 'Select hired candidate application, configure role parameters, and generate executive offer letterhead.'}
                 </p>
               </div>
             </div>
@@ -527,142 +748,271 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
         {step === 1 && (
           <div className="space-y-6 py-4">
             
-            {/* Section A: Candidate Application & Master Template */}
+            {/* Mode Selection Tabs: New Candidate vs Existing Employee */}
+            <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-2xl border border-slate-200/80 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => handleModeSwitch('new_candidate')}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer",
+                  recipientMode === 'new_candidate'
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-800"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>🆕 New Candidate (Hired)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeSwitch('existing_employee')}
+                className={cn(
+                  "flex-1 py-2 px-4 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer",
+                  recipientMode === 'existing_employee'
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/60 dark:border-slate-800"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                )}
+              >
+                <Users className="w-4 h-4" />
+                <span>👤 Existing Employee (On-Roll)</span>
+              </button>
+            </div>
+
+            {/* Section A: Candidate / Employee Selection & Master Template */}
             <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-indigo-600" />
-                  <span>Candidate Selection & Master Format</span>
+                  {recipientMode === 'new_candidate' ? (
+                    <>
+                      <User className="w-4 h-4 text-indigo-600" />
+                      <span>Hired Candidate Selection & Master Format</span>
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      <span>Employee Selection & Letter Template</span>
+                    </>
+                  )}
                 </span>
                 <span className="text-[11px] text-slate-400">Live Database Records</span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* Custom Robust Candidate Dropdown with Search & Filter */}
-                <div className="space-y-1.5 relative" ref={candidateDropdownRef}>
-                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Select Candidate Application <span className="text-rose-500">*</span>
-                  </Label>
+                {/* 1. NEW CANDIDATE DROPDOWN */}
+                {recipientMode === 'new_candidate' && (
+                  <div className="space-y-1.5 relative" ref={candidateDropdownRef}>
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Select Hired Candidate <span className="text-rose-500">*</span>
+                    </Label>
 
-                  {/* Trigger Box */}
-                  <div
-                    onClick={() => {
-                      setIsCandidateDropdownOpen(!isCandidateDropdownOpen);
-                      setIsTemplateDropdownOpen(false);
-                    }}
-                    className={cn(
-                      "w-full h-11 px-3.5 py-2 rounded-xl border bg-white dark:bg-slate-900 flex items-center justify-between cursor-pointer transition-all text-xs font-semibold shadow-2xs",
-                      isCandidateDropdownOpen ? "border-indigo-500 ring-2 ring-indigo-500/20" : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                    )}
-                  >
-                    <div className="truncate">
-                      {selectedApp ? (
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span className="text-slate-900 dark:text-white font-extrabold">
-                            {getCandidateName(selectedApp)}
-                          </span>
-                          <span className="text-slate-400 font-normal truncate">
-                            • {selectedApp.jobTitle || selectedApp.position_title || 'Applicant'}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 font-normal">Choose candidate (interview cleared)...</span>
+                    {/* Trigger Box */}
+                    <div
+                      onClick={() => {
+                        setIsCandidateDropdownOpen(!isCandidateDropdownOpen);
+                        setIsTemplateDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full h-11 px-3.5 py-2 rounded-xl border bg-white dark:bg-slate-900 flex items-center justify-between cursor-pointer transition-all text-xs font-semibold shadow-2xs",
+                        isCandidateDropdownOpen ? "border-indigo-500 ring-2 ring-indigo-500/20" : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
                       )}
-                    </div>
-                    <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
-                  </div>
-
-                  {/* Candidate Dropdown Menu */}
-                  {isCandidateDropdownOpen && (
-                    <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in-50 zoom-in-95">
-                      
-                      {/* Search in Dropdown */}
-                      <div className="relative">
-                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
-                        <Input
-                          placeholder="Search candidate name, email, role..."
-                          value={candidateSearchQuery}
-                          onChange={(e) => setCandidateSearchQuery(e.target.value)}
-                          className="h-8 text-xs pl-8 rounded-lg bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                          autoFocus
-                        />
-                      </div>
-
-                      {/* Filter Stage Pills */}
-                      <div className="flex items-center gap-1.5 pt-0.5">
-                        <button
-                          type="button"
-                          onClick={() => setCandidateFilterTab('interview_cleared')}
-                          className={cn(
-                            "px-2.5 py-1 rounded-lg text-[10.5px] font-bold cursor-pointer transition-all border",
-                            candidateFilterTab === 'interview_cleared'
-                              ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                              : "bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
-                          )}
-                        >
-                          <CheckCheck className="w-3 h-3 inline mr-1" />
-                          Interview Cleared / Eligible
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setCandidateFilterTab('all')}
-                          className={cn(
-                            "px-2.5 py-1 rounded-lg text-[10.5px] font-bold cursor-pointer transition-all border",
-                            candidateFilterTab === 'all'
-                              ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
-                              : "bg-slate-50 dark:bg-slate-800 text-slate-600 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
-                          )}
-                        >
-                          All Applicants ({applicationList.length})
-                        </button>
-                      </div>
-
-                      {/* Candidates List */}
-                      <div className="max-h-56 overflow-y-auto space-y-1 pr-1 pt-1">
-                        {filteredCandidates.length === 0 ? (
-                          <div className="text-center py-6 text-slate-400 text-xs">
-                            No candidates matching filter.
+                    >
+                      <div className="truncate">
+                        {selectedApp ? (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-slate-900 dark:text-white font-extrabold">
+                              {getCandidateName(selectedApp)}
+                            </span>
+                            <span className="text-slate-400 font-normal truncate">
+                              • {selectedApp.jobTitle || selectedApp.position_title || 'Applicant'}
+                            </span>
                           </div>
                         ) : (
-                          filteredCandidates.map((app: any) => {
-                            const isSelected = String(app.id) === String(selectedAppId);
-                            const name = getCandidateName(app);
-                            const job = app.jobTitle || app.position_title || app.job_title || 'Applied Job';
-                            const status = (app.application_status || app.applicationStatus || app.status || 'applied').toUpperCase();
-
-                            return (
-                              <div
-                                key={app.id}
-                                onClick={() => handleSelectCandidate(app)}
-                                className={cn(
-                                  "p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2",
-                                  isSelected
-                                    ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 font-bold"
-                                    : "bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200"
-                                )}
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-bold text-slate-900 dark:text-white truncate">{name}</span>
-                                    <span className="text-[9.5px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      {status}
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                    {job} • {app.candidateEmail || app.candidate_email || 'No email'}
-                                  </div>
-                                </div>
-                                {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
-                              </div>
-                            );
-                          })
+                          <span className="text-slate-400 font-normal">Choose candidate (Hired status)...</span>
                         )}
                       </div>
+                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
                     </div>
-                  )}
-                </div>
+
+                    {/* Candidate Dropdown Menu */}
+                    {isCandidateDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in-50 zoom-in-95">
+                        
+                        {/* Search in Dropdown */}
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                          <Input
+                            placeholder="Search candidate name, email, role..."
+                            value={candidateSearchQuery}
+                            onChange={(e) => setCandidateSearchQuery(e.target.value)}
+                            className="h-8 text-xs pl-8 rounded-lg bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                            autoFocus
+                          />
+                        </div>
+
+                        {/* Status Header */}
+                        <div className="flex items-center justify-between px-1 pt-1">
+                          <span className="text-[10.5px] font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                            <CheckCheck className="w-3 h-3" />
+                            Finally Hired Candidates ({filteredHiredCandidates.length})
+                          </span>
+                        </div>
+
+                        {/* Candidates List */}
+                        <div className="max-h-56 overflow-y-auto space-y-1 pr-1 pt-1">
+                          {filteredHiredCandidates.length === 0 ? (
+                            <div className="text-center py-6 text-slate-400 text-xs">
+                              No hired candidates found (or all have been added as employees).
+                            </div>
+                          ) : (
+                            filteredHiredCandidates.map((app: any) => {
+                              const isSelected = String(app.id) === String(selectedAppId);
+                              const name = getCandidateName(app);
+                              const job = app.jobTitle || app.position_title || app.job_code || 'Hired Role';
+                              const status = (app.application_status || app.candidate_status || 'HIRED').toUpperCase();
+
+                              return (
+                                <div
+                                  key={app.id}
+                                  onClick={() => handleSelectCandidate(app)}
+                                  className={cn(
+                                    "p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2",
+                                    isSelected
+                                      ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 font-bold"
+                                      : "bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200"
+                                  )}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-slate-900 dark:text-white truncate">{name}</span>
+                                      <span className="text-[9.5px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        {status}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                      {job} • {app.candidateEmail || app.candidate_email || 'No email'}
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 2. EXISTING EMPLOYEE DROPDOWN */}
+                {recipientMode === 'existing_employee' && (
+                  <div className="space-y-1.5 relative" ref={employeeDropdownRef}>
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Select Active Employee <span className="text-rose-500">*</span>
+                    </Label>
+
+                    {/* Trigger Box */}
+                    <div
+                      onClick={() => {
+                        setIsEmployeeDropdownOpen(!isEmployeeDropdownOpen);
+                        setIsTemplateDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full h-11 px-3.5 py-2 rounded-xl border bg-white dark:bg-slate-900 flex items-center justify-between cursor-pointer transition-all text-xs font-semibold shadow-2xs",
+                        isEmployeeDropdownOpen ? "border-indigo-500 ring-2 ring-indigo-500/20" : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                      )}
+                    >
+                      <div className="truncate">
+                        {selectedEmployee ? (
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="text-slate-900 dark:text-white font-extrabold">
+                              {getEmployeeName(selectedEmployee)}
+                            </span>
+                            <span className="text-slate-400 font-normal truncate">
+                              ({getEmployeeCode(selectedEmployee)})
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 font-normal">Choose existing employee...</span>
+                        )}
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-slate-400 shrink-0 ml-2" />
+                    </div>
+
+                    {/* Employee Dropdown Menu */}
+                    {isEmployeeDropdownOpen && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl z-50 p-2.5 space-y-2 animate-in fade-in-50 zoom-in-95">
+                        
+                        {/* Search in Dropdown */}
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                          <Input
+                            placeholder="Search by employee name, code, department..."
+                            value={employeeSearchQuery}
+                            onChange={(e) => setEmployeeSearchQuery(e.target.value)}
+                            className="h-8 text-xs pl-8 rounded-lg bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                            autoFocus
+                          />
+                        </div>
+
+                        {/* Status Header */}
+                        <div className="flex items-center justify-between px-1 pt-1">
+                          <span className="text-[10.5px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            On-Roll Employees ({filteredEmployees.length})
+                          </span>
+                        </div>
+
+                        {/* Employees List */}
+                        <div className="max-h-56 overflow-y-auto space-y-1 pr-1 pt-1">
+                          {isLoadingEmployees ? (
+                            <div className="text-center py-6 text-slate-400 text-xs">
+                              Loading employee roster...
+                            </div>
+                          ) : filteredEmployees.length === 0 ? (
+                            <div className="text-center py-6 text-slate-400 text-xs">
+                              No employees matching search.
+                            </div>
+                          ) : (
+                            filteredEmployees.map((emp: any) => {
+                              const isSelected = String(emp.id) === String(selectedEmployeeId);
+                              const name = getEmployeeName(emp);
+                              const code = getEmployeeCode(emp);
+                              const dept = emp.department_name || emp.departmentName || 'General';
+                              const desg = emp.designation_name || emp.designationName || emp.designation || '';
+
+                              return (
+                                <div
+                                  key={emp.id}
+                                  onClick={() => handleSelectEmployee(emp)}
+                                  className={cn(
+                                    "p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2",
+                                    isSelected
+                                      ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-800 text-indigo-950 dark:text-indigo-200 font-bold"
+                                      : "bg-white dark:bg-slate-900 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-200"
+                                  )}
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-slate-900 dark:text-white truncate">{name}</span>
+                                      <span className="text-[9.5px] font-mono px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        {code}
+                                      </span>
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                                      {desg ? `${desg} • ` : ''}{dept} • {emp.official_email || emp.officialEmail || emp.personal_email || emp.email || 'No email'}
+                                    </div>
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-indigo-600 shrink-0" />}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Offer Letter Master Template Custom Dropdown */}
                 <div className="space-y-1.5 relative" ref={templateDropdownRef}>
@@ -739,25 +1089,29 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
                 </div>
               </div>
 
-              {/* Selected Candidate Quick Profile Bar */}
-              {selectedApp && (
-                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div>
-                    <span className="font-bold text-slate-900 dark:text-white">
-                      {getCandidateName(selectedApp)}
-                    </span>
-                    <span className="text-slate-400 ml-2 font-mono">
-                      {selectedApp.candidateEmail || selectedApp.candidate_email || 'No email'}
-                    </span>
-                    <span className="text-slate-400 ml-2">
-                      • {selectedApp.candidatePhone || selectedApp.candidate_phone || 'No phone'}
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10.5px] font-bold">
-                    Profile Data Linked & Verified
-                  </Badge>
-                </div>
-              )}
+              {/* Recipient Email Confirmation & Dispatch Destination Field */}
+              <div className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-indigo-100 dark:border-indigo-900/60 shadow-2xs space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-indigo-950 dark:text-indigo-200">
+                    <Mail className="w-4 h-4 text-indigo-600" />
+                    <span>{recipientMode === 'new_candidate' ? 'Candidate Email Address (Dispatch Destination)' : 'Employee Official Email'} <span className="text-rose-500">*</span></span>
+                  </span>
+                  <span className="text-[10.5px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-md border border-indigo-200 dark:border-indigo-800">
+                    Direct Email Delivery
+                  </span>
+                </Label>
+                <Input
+                  type="email"
+                  value={candidateEmail}
+                  onChange={(e) => setCandidateEmail(e.target.value)}
+                  placeholder="e.g. narendra.gaikwad@example.com"
+                  className="h-9 text-xs font-mono font-medium rounded-xl border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:border-indigo-500"
+                  required
+                />
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Official offer letter, compensation breakdown, and secure e-Sign link will be sent directly to this address upon dispatch.
+                </p>
+              </div>
             </div>
 
             {/* Section B: Position & Organizational Placement */}
@@ -845,83 +1199,85 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
               </div>
             </div>
 
-            {/* Section C: Compensation & Remuneration */}
-            <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <DollarSign className="w-4 h-4 text-indigo-600" />
-                  <span>Compensation & CTC Structure</span>
-                </span>
+            {/* Section C: Compensation & Remuneration (Shown only when applicable) */}
+            {isCompensationRequired && (
+              <div className="p-4 bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <DollarSign className="w-4 h-4 text-indigo-600" />
+                    <span>Compensation & CTC Structure</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Annual Cost to Company (CTC) <span className="text-rose-500">*</span>
+                    </Label>
+                    <Input
+                      type="number"
+                      value={annualCTC}
+                      onChange={(e) => setAnnualCTC(e.target.value)}
+                      placeholder="e.g. 1500000"
+                      className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900 font-bold"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Currency</Label>
+                    <select
+                      value={currency}
+                      onChange={(e) => setCurrency(e.target.value)}
+                      className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold"
+                    >
+                      <option value="INR">INR (₹)</option>
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="AED">AED (د.إ)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sign-on / Joining Bonus (Optional)</Label>
+                    <Input
+                      type="number"
+                      value={joiningBonus}
+                      onChange={(e) => setJoiningBonus(e.target.value)}
+                      placeholder="e.g. 50000"
+                      className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900"
+                    />
+                  </div>
+                </div>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Annual Cost to Company (CTC) <span className="text-rose-500">*</span>
-                  </Label>
-                  <Input
-                    type="number"
-                    value={annualCTC}
-                    onChange={(e) => setAnnualCTC(e.target.value)}
-                    placeholder="e.g. 1500000"
-                    className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900 font-bold"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Currency</Label>
-                  <select
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
-                    className="w-full h-9 px-3 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold"
-                  >
-                    <option value="INR">INR (₹)</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
-                    <option value="AED">AED (د.إ)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Sign-on / Joining Bonus (Optional)</Label>
-                  <Input
-                    type="number"
-                    value={joiningBonus}
-                    onChange={(e) => setJoiningBonus(e.target.value)}
-                    placeholder="e.g. 50000"
-                    className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900"
-                  />
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Section D: Key Dates & Employment Terms */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Target Joining Date <span className="text-rose-500">*</span>
+                  {recipientMode === 'new_candidate' ? 'Target Joining Date' : 'Effective Date'} <span className="text-rose-500">*</span>
                 </Label>
                 <Input
                   type="date"
                   value={offerStartDate}
                   onChange={(e) => setOfferStartDate(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
+                  className="h-9 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold cursor-pointer text-slate-900 dark:text-white [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:filter-none dark:[&::-webkit-calendar-picker-indicator]:invert"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Offer Expiry Date <span className="text-rose-500">*</span>
+                  {recipientMode === 'new_candidate' ? 'Offer Expiry Date' : 'Expiry / Valid Till Date (Optional)'} {recipientMode === 'new_candidate' && <span className="text-rose-500">*</span>}
                 </Label>
                 <Input
                   type="date"
                   value={offerExpiryDate}
                   onChange={(e) => setOfferExpiryDate(e.target.value)}
-                  className="h-9 text-xs rounded-xl"
-                  required
+                  className="h-9 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold cursor-pointer text-slate-900 dark:text-white [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:filter-none dark:[&::-webkit-calendar-picker-indicator]:invert"
+                  required={recipientMode === 'new_candidate'}
                 />
               </div>
 
@@ -958,12 +1314,14 @@ export const GenerateOfferModal: React.FC<GenerateOfferModalProps> = ({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-indigo-600" />
                 <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
-                  Ready to Issue Offer Letter: <strong>{positionTitle}</strong> for <strong>{selectedApp ? getCandidateName(selectedApp) : ''}</strong>
+                  Ready to Issue {recipientMode === 'existing_employee' ? 'Employee Letter' : 'Offer Letter'}: <strong>{positionTitle}</strong> for <strong>{recipientMode === 'existing_employee' ? (selectedEmployee ? getEmployeeName(selectedEmployee) : '') : (selectedApp ? getCandidateName(selectedApp) : '')}</strong>
                 </span>
               </div>
-              <Badge className="bg-indigo-600 text-white text-[10.5px]">
-                {currency} {parseFloat(annualCTC || '0').toLocaleString('en-IN')} / annum
-              </Badge>
+              {isCompensationRequired && (
+                <Badge className="bg-indigo-600 text-white text-[10.5px]">
+                  {currency} {parseFloat(annualCTC || '0').toLocaleString('en-IN')} / annum
+                </Badge>
+              )}
             </div>
 
             {/* Letterhead Rendered Iframe */}

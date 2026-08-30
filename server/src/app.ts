@@ -95,7 +95,7 @@ export function createApp() {
   // Request logging
   app.use(requestLogger);
 
-  // Serve static uploads directory
+  // Serve static uploads directory with inline disposition for PDFs & images
   const uploadsDir = path.join(__dirname, '../uploads');
   const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
   if (!fs.existsSync(uploadsDir)) {
@@ -104,8 +104,21 @@ export function createApp() {
   if (!fs.existsSync(publicUploadsDir)) {
     fs.mkdirSync(publicUploadsDir, { recursive: true });
   }
-  app.use('/uploads', express.static(uploadsDir));
-  app.use('/uploads', express.static(publicUploadsDir));
+
+  const staticOptions = {
+    setHeaders: (res: any, filePath: string) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      if (filePath.toLowerCase().endsWith('.pdf')) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline');
+      } else if (filePath.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|svg)$/)) {
+        res.setHeader('Content-Disposition', 'inline');
+      }
+    }
+  };
+
+  app.use('/uploads', express.static(uploadsDir, staticOptions));
+  app.use('/uploads', express.static(publicUploadsDir, staticOptions));
 
   // Swagger Documentation Endpoints
   const swaggerCustomOptions = {

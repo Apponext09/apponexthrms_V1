@@ -72,4 +72,58 @@ export const useSendOffer = (offerId: number) => {
   });
 };
 
+/**
+ * Fetch only hired candidates who have NOT been converted to employees yet.
+ * Powers the "New Candidate (Hired)" dropdown in offer creation.
+ */
+export const useHiredCandidates = (filters?: { search?: string }) => {
+  return useQuery({
+    queryKey: ['hired-candidates', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters?.search) params.append('search', filters.search);
+      const response = await api.get(`/recruitment/applications/hired?${params.toString()}`);
+      return response.data;
+    },
+  });
+};
 
+/**
+ * Fetch generated letters (employee letters like Increment, Promotion, etc.)
+ * for the unified Offer Management page view.
+ */
+export const useEmployeeLetters = (filters?: { letter_category?: string; status?: string }) => {
+  return useQuery({
+    queryKey: ['employee-letters', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters?.letter_category) params.append('letter_category', filters.letter_category);
+      if (filters?.status) params.append('status', filters.status);
+      const response = await api.get(`/letters?${params.toString()}`);
+      return response.data;
+    },
+  });
+};
+
+/**
+ * Mutation to generate a letter for an existing employee
+ * (Increment, Promotion, Confirmation, etc.) via the Letters module.
+ */
+export const useCreateEmployeeLetter = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { templateId: number; employeeId: number; overrides?: Record<string, string> }) => {
+      const response = await api.post('/letters/generate', {
+        template_id: input.templateId,
+        employee_id: input.employeeId,
+        overrides: input.overrides || {},
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['offers'] });
+      queryClient.invalidateQueries({ queryKey: ['employee-letters'] });
+    },
+  });
+};

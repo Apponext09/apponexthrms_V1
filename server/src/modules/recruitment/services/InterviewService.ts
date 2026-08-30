@@ -98,6 +98,7 @@ export class InterviewService {
     ctx: TenantContext,
     input: {
       applicationId: number;
+      candidateEmail?: string;
       interviewType: string;
       interviewRound: number;
       scheduledDate: string;
@@ -279,7 +280,14 @@ export class InterviewService {
         const candidateName = candidate
           ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
           : 'Candidate';
-        const candidateEmail = candidate ? (candidate.email || candidate.email_address || '') : '';
+        
+        const inputCandEmail = (input.candidateEmail || '').trim();
+        const dbCandEmail = candidate ? (candidate.email || candidate.email_address || '') : '';
+        const candidateEmail = inputCandEmail || dbCandEmail;
+
+        if (candidate?.id && inputCandEmail && dbCandEmail !== inputCandEmail) {
+          await db('candidates').where('id', candidate.id).update({ email: inputCandEmail }).catch(() => null);
+        }
 
         const dateObj = new Date(input.scheduledDate);
         const dateFormatted = !isNaN(dateObj.getTime())
@@ -795,38 +803,91 @@ HR Management System
 
     const interviewIds = interviews.map((i: any) => i.id);
 
-    const [panels, feedbacks, employees] = await Promise.all([
-      interviewIds.length > 0 ? db('interview_panel').whereIn('interview_id', interviewIds) : [],
-      interviewIds.length > 0 ? db('interview_feedback').whereIn('interview_id', interviewIds) : [],
-      db('employees').select('id', 'first_name', 'last_name', 'email')
+    const [panels, feedbacks, employees, users, designations] = await Promise.all([
+      interviewIds.length > 0 ? db('interview_panel').whereIn('interview_id', interviewIds).catch(() => []) : [],
+      interviewIds.length > 0 ? db('interview_feedback').whereIn('interview_id', interviewIds).catch(() => []) : [],
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => []),
+      db('designations').select('*').catch(() => [])
     ]);
 
-    const employeeMap: Record<number, string> = {};
+    const designationMap: Record<number | string, string> = {};
+    (designations || []).forEach((d: any) => {
+      if (d.id && d.name) designationMap[d.id] = d.name;
+    });
+
+    const formatNameFromEmail = (email?: string) => {
+      if (!email || !email.includes('@')) return '';
+      const handle = email.split('@')[0];
+      return handle
+        .split(/[\._\-]/)
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+    };
+
+    const employeeMap: Record<number | string, string> = {};
     (employees || []).forEach((e: any) => {
-      employeeMap[e.id] = [e.first_name, e.last_name].filter(Boolean).join(' ') || `Employee #${e.id}`;
+      const fn = (e.first_name || e.firstName || '').trim();
+      const ln = (e.last_name || e.lastName || '').trim();
+      let name = `${fn} ${ln}`.trim();
+      if (!name) name = e.name || e.full_name || e.fullName || formatNameFromEmail(e.email);
+      const desigId = e.current_designation_id || e.designation_id || e.designationId;
+      const desigName = e.designation || e.designation_name || e.job_title || e.jobTitle || (desigId ? designationMap[desigId] : '');
+      if (desigName) {
+        name = `${name || `Employee #${e.id}`} (${desigName})`;
+      } else if (!name) {
+        name = `Employee #${e.id}`;
+      }
+      employeeMap[e.id] = name;
+      employeeMap[String(e.id)] = name;
+    });
+
+    (users || []).forEach((u: any) => {
+      const fn = (u.first_name || u.firstName || '').trim();
+      const ln = (u.last_name || u.lastName || '').trim();
+      let name = `${fn} ${ln}`.trim();
+      if (!name) name = u.name || u.full_name || u.fullName || u.username || formatNameFromEmail(u.email);
+      if (name) {
+        if (!employeeMap[u.id] || employeeMap[u.id].startsWith('Employee #')) {
+          employeeMap[u.id] = name;
+          employeeMap[String(u.id)] = name;
+        }
+        employeeMap[`user_${u.id}`] = name;
+      }
     });
 
     const panelMap: Record<number, string[]> = {};
     (panels || []).forEach((p: any) => {
-      const intId = p.interviewId || p.interview_id;
-      const empId = p.employeeId || p.employee_id;
+      const intId = Number(p.interviewId || p.interview_id);
+      const empId = Number(p.employeeId || p.employee_id);
       if (intId && empId) {
         if (!panelMap[intId]) panelMap[intId] = [];
-        const empName = employeeMap[empId] || `Interviewer #${empId}`;
+        const empName = employeeMap[empId] || employeeMap[String(empId)] || `Interviewer #${empId}`;
         if (!panelMap[intId].includes(empName)) panelMap[intId].push(empName);
       }
     });
 
     const feedbackMap: Record<number, any> = {};
     (feedbacks || []).forEach((f: any) => {
-      const intId = f.interviewId || f.interview_id;
+      const intId = Number(f.interviewId || f.interview_id);
       if (intId) {
+        const interviewerId = f.interviewerId || f.interviewer_id;
+        const interviewerName = interviewerId ? (employeeMap[interviewerId] || employeeMap[String(interviewerId)] || '') : '';
+        const rawRec = f.wouldRecommend ?? f.would_recommend;
+        const recommendation = (rawRec === 1 || rawRec === '1' || rawRec === 'hire' || rawRec === 'strong_hire' || rawRec === true)
+          ? 'Hire'
+          : (rawRec === 0 || rawRec === '0' || rawRec === 'reject' || rawRec === false)
+            ? 'Reject'
+            : (rawRec || 'Hire');
+
         feedbackMap[intId] = {
-          overallRating: f.overallRating || f.overall_rating,
-          technicalScore: f.technicalScore || f.technical_score,
-          communicationScore: f.communicationScore || f.communication_score,
-          wouldRecommend: f.wouldRecommend || f.would_recommend,
-          feedbackText: f.feedbackText || f.feedback_text || f.comments,
+          overallRating: Number(f.overallRating || f.overall_rating || 0),
+          technicalScore: Number(f.technicalRating || f.technical_rating || f.technicalScore || f.technical_score || 0),
+          communicationScore: Number(f.communicationRating || f.communication_rating || f.communicationScore || f.communication_score || 0),
+          culturalFitScore: Number(f.culturalFitRating || f.cultural_fit_rating || 0),
+          wouldRecommend: recommendation,
+          feedbackText: f.feedbackText || f.feedback_text || f.comments || '',
+          interviewerName,
           submittedAt: f.createdAt || f.created_at,
         };
       }
@@ -851,7 +912,15 @@ HR Management System
         hasPending = true;
       }
 
-      const panelNames = panelMap[item.id] || [];
+      let panelNames = panelMap[item.id] || [];
+      if (panelNames.length === 0 && item.interviewer_ids) {
+        try {
+          const rawIds = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          if (Array.isArray(rawIds)) {
+            panelNames = rawIds.map((id: any) => employeeMap[id] || employeeMap[String(id)] || `Interviewer #${id}`);
+          }
+        } catch { /* ignore */ }
+      }
       const interviewerDisplay = panelNames.length > 0 ? panelNames.join(', ') : 'Assigned Interviewer';
 
       return {
