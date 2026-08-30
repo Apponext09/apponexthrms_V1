@@ -54,7 +54,7 @@ function getTimeVal(p: BreadcrumbRow): string {
 
 export function calculateSessionMetrics(
   breadcrumbs: BreadcrumbRow[],
-  minBreakDurationMs = 90_000,  // 90 seconds
+  minBreakDurationMs = 30_000,  // 30 seconds
   maxClusterRadiusMeters = 25   // 25 meters
 ): SessionMetrics {
   if (!breadcrumbs || breadcrumbs.length === 0) {

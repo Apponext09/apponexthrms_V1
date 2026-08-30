@@ -16,8 +16,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { apiClient } from '@/config/api';
-import { EmployeeLifecycleDetails, ChronologicalMilestoneEvent } from '@/features/hr/EmployeeLifecycle/api/lifecycleApi';
-import { ChronologicalLifecycleFlow } from '@/features/hr/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
+import { EmployeeLifecycleDetails, ChronologicalMilestoneEvent } from '@/features/HR/EmployeeLifecycle/api/lifecycleApi';
+import { ChronologicalLifecycleFlow } from '@/features/HR/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
 
 const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   candidate: { label: 'Candidate', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
