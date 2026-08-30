@@ -65,6 +65,21 @@ export class LeaveController {
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
 
+    // Normalized employee facts context
+    const empCtx: any = {
+      ...(employee || {}),
+      gender: (employee.gender || '').toString().toLowerCase().trim(),
+      marital_status: (employee.marital_status || employee.maritalStatus || employee.marital || '').toString().toLowerCase().trim(),
+      current_department_id: employee.current_department_id || employee.currentDepartmentId || employee.department_id || employee.departmentId,
+      current_location_id: employee.current_location_id || employee.currentLocationId || employee.location_id || employee.locationId || employee.branch_id || employee.branchId,
+      current_grade_id: employee.current_grade_id || employee.currentGradeId || employee.grade_id || employee.gradeId || employee.grade,
+      current_designation_id: employee.current_designation_id || employee.currentDesignationId || employee.designation_id || employee.designationId,
+      employment_type: (employee.employment_type || employee.employmentType || '').toString(),
+      status: (employee.status || '').toString(),
+      date_of_joining: employee.date_of_joining || employee.dateOfJoining,
+      date_of_confirmation: employee.date_of_confirmation || employee.dateOfConfirmation || employee.confirmation_date || employee.confirmationDate,
+    };
+
     // Robust overlap helper — matches the logic in LeaveService.checkEmploymentEligibility
     const hasOverlap = (employeeVal: any, ruleArray: any[]): boolean => {
       const cleanRules = (ruleArray || []).filter(
@@ -104,25 +119,25 @@ export class LeaveController {
       // ── 2. Gender applicability (leave-type level + allocation settings) ──
       const genderApplicable = (
         t.gender_applicable || t.genderApplicable || allocSettings.gender || 'all'
-      ).toString().toLowerCase();
-      if (genderApplicable !== 'all' && genderApplicable !== 'both') {
-        const empGender = (employee.gender || '').toLowerCase();
+      ).toString().toLowerCase().trim();
+      if (genderApplicable !== 'all' && genderApplicable !== 'both' && genderApplicable !== '') {
+        const empGender = (empCtx.gender || '').toLowerCase().trim();
         if (empGender && empGender !== genderApplicable) return false;
       }
 
       // ── 3. Marital status ──
-      const maritalReq = (allocSettings.maritalStatus || '').toLowerCase();
-      if (maritalReq && maritalReq !== 'all') {
-        const empMarital = (employee.marital_status || employee.maritalStatus || '').toLowerCase();
+      const maritalReq = (allocSettings.maritalStatus || '').toLowerCase().trim();
+      if (maritalReq && maritalReq !== 'all' && maritalReq !== '') {
+        const empMarital = (empCtx.marital_status || '').toLowerCase().trim();
         if (empMarital && empMarital !== maritalReq) return false;
       }
 
       // ── 4. onlyWhen rule trees (allocation + application) ──
       if (allocSettings.onlyWhen || allocSettings.only_when) {
-        if (!evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, employee)) return false;
+        if (!evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, empCtx)) return false;
       }
       if (appSettings.onlyWhen || appSettings.only_when) {
-        if (!evaluateConditionGroup(appSettings.onlyWhen || appSettings.only_when, employee)) return false;
+        if (!evaluateConditionGroup(appSettings.onlyWhen || appSettings.only_when, empCtx)) return false;
       }
 
       // ── 5. Employment Allocation scope (comprehensive) ──
