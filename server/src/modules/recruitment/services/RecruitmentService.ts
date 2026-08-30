@@ -458,7 +458,24 @@ Hiring Panel & HR Team
       }
     };
 
-    // 1. Open published jobs count
+    const toNumber = (row: any, ...keys: string[]): number => {
+      if (row == null) return 0;
+      for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+          const n = Number(row[key]);
+          if (!Number.isNaN(n)) return n;
+        }
+      }
+      const first = Object.values(row).find((v) => v !== undefined && v !== null && v !== '');
+      const n = Number(first);
+      return Number.isNaN(n) ? 0 : n;
+    };
+
+    const todayStr = new Date().toISOString().substring(0, 10);
+    const openJobStatusSql = "LOWER(COALESCE(jobs.status, '')) IN ('published', 'active', 'open')";
+
+    // 1. Open positions = remaining seats on published jobs + openings on Open MRFs
+    //    that do not yet have a published job (MRF number_of_positions, e.g. 5 openings).
     let jobsQuery = db('jobs')
       .where('jobs.organization_id', ctx.organizationId)
       .whereNull('jobs.deleted_at');
@@ -472,15 +489,46 @@ Hiring Panel & HR Team
     }
     applyDateFilter(jobsQuery, 'jobs.created_at');
 
-    const totalOpenJobsRes = await jobsQuery.clone()
-      .where(function() {
-        this.where('jobs.status', 'published')
-          .orWhere('jobs.status', 'active')
-          .orWhere('jobs.status', 'open');
-      })
-      .count('jobs.id as count')
+    const jobOpeningsRes = await jobsQuery.clone()
+      .whereRaw(openJobStatusSql)
+      .clearSelect()
+      .select(db.raw('COALESCE(SUM(`jobs`.`no_of_positions`), 0) as total'))
       .first();
-    const totalOpenJobs = Number(totalOpenJobsRes?.count || (totalOpenJobsRes as any)?.count || 0);
+    const jobOpenings = toNumber(jobOpeningsRes, 'total');
+
+    let mrfOpeningsQuery = db('mrf_requests as mrf')
+      .where('mrf.organization_id', ctx.organizationId)
+      .whereNull('mrf.deleted_at')
+      .where(function () {
+        this.whereRaw("LOWER(COALESCE(mrf.status, '')) = 'open'").orWhereNull('mrf.status');
+      })
+      .andWhere(function () {
+        this.whereNull('mrf.target_closure_date').orWhere('mrf.target_closure_date', '>=', todayStr);
+      });
+
+    if (departmentId) mrfOpeningsQuery = mrfOpeningsQuery.where('mrf.department_id', departmentId);
+    if (gradeId) mrfOpeningsQuery = mrfOpeningsQuery.where('mrf.grade_id', gradeId);
+    if (jobId) {
+      mrfOpeningsQuery = mrfOpeningsQuery.whereIn(
+        'mrf.id',
+        db('jobs').select('mrf_request_id').where('id', jobId).whereNotNull('mrf_request_id')
+      );
+    }
+    applyDateFilter(mrfOpeningsQuery, 'mrf.created_at');
+
+    const mrfIdsWithOpenJobs = db('jobs')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .whereRaw("LOWER(COALESCE(status, '')) IN ('published', 'active', 'open')")
+      .whereNotNull('mrf_request_id')
+      .select('mrf_request_id');
+
+    const mrfOpeningsRes = await mrfOpeningsQuery
+      .whereNotIn('mrf.id', mrfIdsWithOpenJobs)
+      .clearSelect()
+      .select(db.raw('COALESCE(SUM(`mrf`.`number_of_positions`), 0) as total'))
+      .first();
+    const totalOpenJobs = jobOpenings + toNumber(mrfOpeningsRes, 'total');
 
     // 2. Applications query with full joins
     let appsQuery = db('applications')
@@ -773,15 +821,31 @@ Hiring Panel & HR Team
         const dId = dept.id;
         const dName = dept.name;
 
-        const openPos = await db('jobs')
+        const openJobPos = await db('jobs')
           .where({ organization_id: ctx.organizationId, department_id: dId })
-          .where(function() {
-            this.where('status', 'published')
-              .orWhere('status', 'active')
-              .orWhere('status', 'open');
-          })
+          .whereRaw("LOWER(COALESCE(status, '')) IN ('published', 'active', 'open')")
           .whereNull('deleted_at')
-          .count('id as count')
+          .select(db.raw('COALESCE(SUM(`no_of_positions`), 0) as total'))
+          .first();
+
+        const deptMrfIdsWithOpenJobs = db('jobs')
+          .where({ organization_id: ctx.organizationId })
+          .whereNull('deleted_at')
+          .whereRaw("LOWER(COALESCE(status, '')) IN ('published', 'active', 'open')")
+          .whereNotNull('mrf_request_id')
+          .select('mrf_request_id');
+
+        const openMrfPos = await db('mrf_requests')
+          .where({ organization_id: ctx.organizationId, department_id: dId })
+          .whereNull('deleted_at')
+          .where(function () {
+            this.whereRaw("LOWER(COALESCE(status, '')) = 'open'").orWhereNull('status');
+          })
+          .andWhere(function () {
+            this.whereNull('target_closure_date').orWhere('target_closure_date', '>=', todayStr);
+          })
+          .whereNotIn('id', deptMrfIdsWithOpenJobs)
+          .select(db.raw('COALESCE(SUM(`number_of_positions`), 0) as total'))
           .first();
 
         const deptApps = await db('applications')
@@ -806,7 +870,7 @@ Hiring Panel & HR Team
         return {
           departmentId: dId,
           departmentName: dName,
-          openPositions: Number(openPos?.count || (openPos as any)?.count || 0),
+          openPositions: toNumber(openJobPos, 'total') + toNumber(openMrfPos, 'total'),
           applications: Number(deptApps?.count || (deptApps as any)?.count || 0),
           hires: Number(deptHires?.count || (deptHires as any)?.count || 0),
         };
