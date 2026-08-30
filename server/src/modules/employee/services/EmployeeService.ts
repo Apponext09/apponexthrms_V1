@@ -720,8 +720,9 @@ export class EmployeeService {
       }
     }
 
+    const targetAccessRole = input.accessRole || input.access_role || input.role || '';
+
     // Default Manager ('department_head', 'cto', etc.) and HR ('hr_manager') to Admin only if no reporting manager was provided
-    const targetAccessRole = input.accessRole || input.role || input.roleCode || input.role_code;
     if (targetAccessRole && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
