@@ -131,11 +131,14 @@ export class ResumeScreeningEngine {
     // 3. Compile Candidate Skills & Resume Text
     const extractedCandidateSkills: string[] = [];
     if (candidate.skills) {
-      extractedCandidateSkills.push(...String(candidate.skills).split(/[,|\n\r]+/));
+      extractedCandidateSkills.push(...skillMasterService.normalizeSkillList(candidate.skills));
     }
     for (const s of candidateSkillsRows) {
       const skName = s.skill_name || s.skillName;
       if (skName) extractedCandidateSkills.push(skName);
+    }
+    if (candidate.ai_summary) {
+      extractedCandidateSkills.push(...skillMasterService.extractSkillsFromText(candidate.ai_summary));
     }
 
     // 4. Compile Job Requirements
@@ -146,18 +149,24 @@ export class ResumeScreeningEngine {
       const skName = js.skill_name || js.skillName;
       const isMand = js.is_mandatory ?? js.isMandatory;
       if (skName) {
-        requiredSkills.push(skName);
-        if (isMand) {
-          mandatorySkillsList.push(skName);
+        const norm = skillMasterService.normalizeSkill(skName);
+        if (norm) {
+          requiredSkills.push(norm);
+          if (isMand) {
+            mandatorySkillsList.push(norm);
+          }
         }
       }
     }
 
-    // Extract skills from JD text if job_skills is empty
-    if (requiredSkills.length === 0 && jobDesc) {
-      const rawText = jobDesc.replace(/<[^>]*>?/gm, ' ');
-      const candidateMatches = skillMasterService.normalizeSkillList(rawText);
-      requiredSkills.push(...candidateMatches);
+    // Extract skills from JD text if job_skills is empty or complement with recognized JD skills
+    if (jobDesc) {
+      const jdExtracted = skillMasterService.extractSkillsFromText(jobDesc);
+      for (const sk of jdExtracted) {
+        if (!requiredSkills.includes(sk)) {
+          requiredSkills.push(sk);
+        }
+      }
     }
 
     // Check configured mandatory skills in aiSettings
@@ -167,7 +176,12 @@ export class ResumeScreeningEngine {
         ? JSON.parse(mandField)
         : mandField;
       if (Array.isArray(configuredMandatory)) {
-        mandatorySkillsList.push(...configuredMandatory);
+        for (const m of configuredMandatory) {
+          const norm = skillMasterService.normalizeSkill(m);
+          if (norm && !mandatorySkillsList.includes(norm)) {
+            mandatorySkillsList.push(norm);
+          }
+        }
       }
     }
 
@@ -197,18 +211,13 @@ export class ResumeScreeningEngine {
     const skillMatchResult = skillMasterService.matchSkills(requiredSkills, extractedCandidateSkills);
     const skillScore = skillMatchResult.matchPercentage;
 
-    // JD Keyword Alignment includes technical keywords + position keywords
+    // JD Keyword Alignment includes technical keywords
     const matchedKeywords = [...skillMatchResult.matched];
     const missingKeywords = [...skillMatchResult.missing];
 
-    // Check position/job title keyword alignment
-    if (jobTitle && candCompany) {
-      matchedKeywords.push('Professional History');
-    }
-
     let keywordScore = skillScore;
-    if (candidateExpRows.length > 0) keywordScore = Math.min(100, keywordScore + 5);
-    if (candidateEduRows.length > 0) keywordScore = Math.min(100, keywordScore + 5);
+    if (candidateExpRows.length > 0 || Boolean(candCompany)) keywordScore = Math.min(100, keywordScore + 5);
+    if (candidateEduRows.length > 0 || Boolean(candQual)) keywordScore = Math.min(100, keywordScore + 5);
 
     // Factor D: Resume Structure & Sections (10%)
     const sections = {

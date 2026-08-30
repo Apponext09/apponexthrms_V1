@@ -117,6 +117,10 @@ export class RecruitmentService {
     return this.applicationRepo.list(ctx, options);
   }
 
+  async getHiredCandidates(ctx: TenantContext, options?: ListQueryOptions) {
+    return this.applicationRepo.listHiredNotOnboarded(ctx, options);
+  }
+
   async getJobApplications(ctx: TenantContext, jobId: number, options?: ListQueryOptions) {
     return this.applicationRepo.getByJob(ctx, jobId, options);
   }

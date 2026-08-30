@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Building2, Calendar, FileText, Send, CheckCircle2, 
   XCircle, Clock, Link, Printer, Copy, User, HelpCircle, 
-  MapPin, ShieldAlert, Award, FileCheck, ArrowRight
+  MapPin, ShieldAlert, Award, FileCheck, ArrowRight, Mail, Edit3
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -15,7 +16,7 @@ interface OfferDetailsModalProps {
   offer: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSend: (offer: any) => Promise<void>;
+  onSend: (offer: any, customEmail?: string) => Promise<void>;
   isSending: boolean;
   departmentList: any[];
   designationList: any[];
@@ -31,6 +32,16 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
   designationList,
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [targetEmail, setTargetEmail] = useState('');
+  const [isEmailEditOpen, setIsEmailEditOpen] = useState(false);
+
+  useEffect(() => {
+    if (offer) {
+      const email = offer.candidate_email || offer.candidateEmail || offer.meta?.candidateEmail || '';
+      setTargetEmail(email && email !== 'N/A' ? email : '');
+      setIsEmailEditOpen(!email || email === 'N/A' || email.includes('example.com'));
+    }
+  }, [offer]);
 
   if (!offer) return null;
 
@@ -38,7 +49,7 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
   const id = offer.id || 0;
   const refCode = offer.offer_code || offer.offerCode || `AN-OFFER-${id}`;
   const candidateName = offer.candidate_name || offer.candidateName || 'N/A';
-  const candidateEmail = offer.candidate_email || offer.candidateEmail || 'N/A';
+  const candidateEmail = targetEmail || offer.candidate_email || offer.candidateEmail || (offer.meta?.candidateEmail) || 'N/A';
   const positionTitle = offer.position_title || offer.positionTitle || 'N/A';
   const status = offer.status || 'draft';
   const ctc = parseFloat(offer.cost_to_company || offer.costToCompany) || 0;
@@ -199,20 +210,42 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
                 <span>•</span>
                 <span>{departmentName} / {designationName}</span>
                 <span>•</span>
-                <span className="text-slate-400">Ref: {refCode}</span>
+                <span className="text-slate-400 font-mono">Ref: {refCode}</span>
               </p>
+              
+              {/* Prominent Candidate Email Badge & Change Button */}
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                  <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>{targetEmail ? targetEmail : 'No Email Specified'}</span>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  type="button"
+                  onClick={() => setIsEmailEditOpen(!isEmailEditOpen)} 
+                  className="h-6 px-2 text-[11px] text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 font-bold"
+                >
+                  <Edit3 className="w-3 h-3 mr-1" /> {isEmailEditOpen ? 'Hide Input' : 'Edit Email'}
+                </Button>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-end md:self-center">
-            {status === 'draft' && (
-              <Button 
-                onClick={() => onSend(offer)} 
-                disabled={isSending}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs flex items-center gap-1.5 shadow-sm"
-              >
-                <Send className="h-3.5 w-3.5" /> Send Offer
-              </Button>
-            )}
+          <div className="flex items-center gap-2 self-end md:self-center flex-wrap">
+            <Button 
+              onClick={() => {
+                if (!targetEmail.trim() || !targetEmail.includes('@')) {
+                  setIsEmailEditOpen(true);
+                  toast.error('Please verify or enter candidate destination email before sending.');
+                  return;
+                }
+                onSend(offer, targetEmail.trim());
+              }} 
+              disabled={isSending}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs flex items-center gap-1.5 shadow-sm font-bold"
+            >
+              <Send className="h-3.5 w-3.5" /> {status === 'draft' ? 'Send Offer' : 'Resend Email'}
+            </Button>
             <Button variant="outline" size="sm" onClick={copyPublicLink} className="text-xs border-slate-200 bg-white hover:bg-slate-50">
               <Link className="h-3.5 w-3.5 mr-1" /> Copy Share Link
             </Button>
@@ -221,6 +254,43 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
             </Button>
           </div>
         </div>
+
+        {/* Interactive Candidate Destination Email Bar */}
+        {isEmailEditOpen && (
+          <div className="bg-indigo-50/90 border-b border-indigo-200 px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs animate-in fade-in-50">
+            <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <span className="font-bold text-slate-800 shrink-0 flex items-center gap-1.5">
+                <Mail className="w-4 h-4 text-indigo-600" />
+                Dispatch Email Destination:
+              </span>
+              <Input
+                type="email"
+                value={targetEmail}
+                onChange={(e) => setTargetEmail(e.target.value)}
+                placeholder="e.g. narendra.gaikwad@gmail.com"
+                className="h-8 text-xs font-mono font-bold w-full sm:w-80 bg-white border-indigo-300 focus:border-indigo-600"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                type="button"
+                onClick={() => {
+                  if (!targetEmail.trim() || !targetEmail.includes('@')) {
+                    toast.error('Please enter a valid candidate email address.');
+                    return;
+                  }
+                  onSend(offer, targetEmail.trim());
+                }}
+                disabled={isSending}
+                className="h-8 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                {isSending ? 'Sending...' : 'Send Now to this Address'}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Tabbed interface container */}
         <div className="flex-1 overflow-hidden min-h-0 flex flex-col">

@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AiAnalysisModal } from '../components/AiAnalysisModal';
 import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
+import { ResumeViewerModal } from '../components/ResumeViewerModal';
 
 const INITIAL_FILTERS = {
   trackerId: '',
@@ -153,6 +154,10 @@ export const ResumeBankPage: React.FC = () => {
   const [selectedResumeForShortlist, setSelectedResumeForShortlist] = useState<any | null>(null);
   const [quickJobId, setQuickJobId] = useState<string>('');
   const [shortlistingId, setShortlistingId] = useState<number | null>(null);
+
+  // Resume Document Viewer State
+  const [selectedResumeForModal, setSelectedResumeForModal] = useState<any | null>(null);
+  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -909,7 +914,10 @@ export const ResumeBankPage: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => window.open(getResumeViewUrl(item.resumeUrl), '_blank')}
+                                  onClick={() => {
+                                    setSelectedResumeForModal(item);
+                                    setIsResumeModalOpen(true);
+                                  }}
                                   className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer"
                                 >
                                   <FileText className="w-3.5 h-3.5 mr-1" /> View CV
@@ -1754,17 +1762,16 @@ export const ResumeBankPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Country</label>
-                <Select value={formData.country} onValueChange={(val) => setFormData({...formData, country: val})}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Choose" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Choose">Choose</SelectItem>
-                    <SelectItem value="US">United States</SelectItem>
-                    <SelectItem value="UK">United Kingdom</SelectItem>
-                    <SelectItem value="IN">India</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.country}
+                  onChange={(e) => setFormData({...formData, country: e.target.value})}
+                  className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Choose">Choose</option>
+                  <option value="US">United States</option>
+                  <option value="UK">United Kingdom</option>
+                  <option value="IN">India</option>
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Zipcode</label>
@@ -1788,16 +1795,15 @@ export const ResumeBankPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Marital Status <span className="text-red-500">*</span></label>
-                <Select value={formData.maritalStatus} onValueChange={(val) => setFormData({...formData, maritalStatus: val})}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Single" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Single">Single</SelectItem>
-                    <SelectItem value="Married">Married</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.maritalStatus}
+                  onChange={(e) => setFormData({...formData, maritalStatus: e.target.value})}
+                  className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Current Company</label>
@@ -1868,24 +1874,24 @@ export const ResumeBankPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="font-semibold text-slate-800">Select Job Opening *</label>
-                <Select value={quickJobId} onValueChange={setQuickJobId}>
-                  <SelectTrigger className="h-8 text-xs bg-background">
-                    <SelectValue placeholder="-- Choose Job Opening --" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {jobsList.map((job: any) => {
-                      const id = getJobId(job);
-                      const title = getJobTitle(job);
-                      const code = getJobCode(job);
-                      if (!id) return null;
-                      return (
-                        <SelectItem key={id} value={id}>
-                          {code ? `[${code}] ` : ''}{title}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={quickJobId}
+                  onChange={(e) => setQuickJobId(e.target.value)}
+                  className="w-full h-9 text-xs bg-background border border-input rounded-md px-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold cursor-pointer"
+                >
+                  <option value="">-- Choose Job Opening --</option>
+                  {jobsList.map((job: any) => {
+                    const id = getJobId(job);
+                    const title = getJobTitle(job);
+                    const code = getJobCode(job);
+                    if (!id) return null;
+                    return (
+                      <option key={id} value={id}>
+                        {code ? `[${code}] ` : ''}{title}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <DialogFooter className="pt-2">
@@ -2006,6 +2012,16 @@ export const ResumeBankPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Resume Document Viewer Modal */}
+      <ResumeViewerModal
+        open={isResumeModalOpen}
+        onOpenChange={setIsResumeModalOpen}
+        resumeUrl={selectedResumeForModal?.resumeUrl}
+        candidateName={selectedResumeForModal?.name}
+        candidateEmail={selectedResumeForModal?.email}
+        qualification={selectedResumeForModal?.qualification}
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,13 @@ export const InterviewCalendarPage: React.FC = () => {
 
   const isEmployeeView = !isAdminOrHr || location.pathname.startsWith('/employee');
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(location.state?.candidateName || '');
+
+  useEffect(() => {
+    if (location.state?.candidateName) {
+      setSearchQuery(location.state.candidateName);
+    }
+  }, [location.state]);
   const [scheduleTab, setScheduleTab] = useState<'upcoming' | 'past'>('upcoming');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');

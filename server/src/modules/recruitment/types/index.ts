@@ -78,6 +78,7 @@ export const assignRecruiterSchema = z.object({
 // Interview schemas
 export const scheduleInterviewSchema = z.object({
   applicationId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  candidateEmail: z.string().optional().nullable(),
   interviewType: z.string().optional().default('video'),
   interviewRound: z.union([z.number(), z.string()]).transform(val => Number(val) || 1).optional().default(1),
   scheduledDate: z.string(),

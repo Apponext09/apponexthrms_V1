@@ -120,6 +120,23 @@ export const AiAnalysisModal: React.FC<AiAnalysisModalProps> = ({
     setTimeout(() => setIsCopied(false), 2500);
   };
 
+  const getCleanCandidateName = (name?: string) => {
+    if (!name) return 'Candidate Profile';
+    return name
+      .replace(/^resume[_\s-]*(\d+pct|\d+%)?[_\s-]*(match)?[_\s-]*/i, '')
+      .replace(/[_\-]+/g, ' ')
+      .trim() || name;
+  };
+
+  const cleanKeywords = (arr: any[]) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((k: any) => typeof k === 'string' && k.trim().length > 0 && k.trim().length <= 35 && k.trim().split(/\s+/).length <= 3);
+  };
+
+  const matchedKeywordsList = cleanKeywords(atsBreakdown?.matchedKeywords);
+  const missingKeywordsList = cleanKeywords(atsBreakdown?.missingKeywords);
+  const displayName = getCleanCandidateName(candidate?.name || candidateName);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[92vh] overflow-hidden p-0 border border-border shadow-2xl rounded-xl flex flex-col">
@@ -142,7 +159,7 @@ export const AiAnalysisModal: React.FC<AiAnalysisModalProps> = ({
                 </span>
               </div>
               <h2 className="text-xl font-bold tracking-tight text-white pt-1">
-                {candidate?.name || candidateName || 'Candidate Profile'}
+                {displayName}
               </h2>
               <p className="text-xs text-slate-300">
                 Target Opening: <span className="font-semibold text-indigo-200">{data?.job?.jobTitle || jobTitle || 'Job Opening'}</span>
@@ -338,29 +355,29 @@ export const AiAnalysisModal: React.FC<AiAnalysisModalProps> = ({
                 <div className="p-3.5 rounded-lg border border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-900 space-y-2">
                   <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    Matched Skills & Keywords ({atsBreakdown?.matchedKeywords?.length || 0})
+                    Matched Skills & Keywords ({matchedKeywordsList.length})
                   </p>
-                  {atsBreakdown?.matchedKeywords?.length > 0 ? (
+                  {matchedKeywordsList.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {atsBreakdown.matchedKeywords.map((k: string, i: number) => (
+                      {matchedKeywordsList.map((k: string, i: number) => (
                         <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 rounded text-xs font-medium">
                           ✓ {k}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-muted-foreground italic">No matching keywords detected</p>
+                    <p className="text-xs text-muted-foreground italic">No direct skill keywords matched yet</p>
                   )}
                 </div>
 
                 <div className="p-3.5 rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-900 space-y-2">
                   <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                     <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    Missing Job Requirements ({atsBreakdown?.missingKeywords?.length || 0})
+                    Missing Job Requirements ({missingKeywordsList.length})
                   </p>
-                  {atsBreakdown?.missingKeywords?.length > 0 ? (
+                  {missingKeywordsList.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {atsBreakdown.missingKeywords.map((k: string, i: number) => (
+                      {missingKeywordsList.map((k: string, i: number) => (
                         <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 rounded text-xs font-medium">
                           • {k}
                         </span>

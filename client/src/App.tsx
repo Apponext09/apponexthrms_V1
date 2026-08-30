@@ -84,31 +84,27 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!securityEnabled) return;
 
-    // 1. Block right-click context menu
+    const isInputElement = (target: EventTarget | null): boolean => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toLowerCase();
+      return tag === 'input' || tag === 'textarea' || target.isContentEditable || !!target.closest('input, textarea, [contenteditable="true"]');
+    };
+
+    // 1. Block right-click context menu outside form inputs
     const disableRightClick = (e: MouseEvent) => {
+      if (isInputElement(e.target)) return;
       e.preventDefault();
       return false;
     };
 
     // 2. Block keyboard shortcuts for DevTools
     const disableKeys = (e: KeyboardEvent) => {
+      if (import.meta.env.DEV) return;
       if (e.key === 'F12') {
         e.preventDefault();
         return false;
       }
-      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
-      }
-      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        return false;
-      }
-      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
-        e.preventDefault();
-        return false;
-      }
-      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'K')) {
         e.preventDefault();
         return false;
       }
@@ -118,15 +114,19 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // 3. Block copy/paste
+    // 3. Block copy/paste on static text, but allow inside inputs/textareas
     const disableCopyPaste = (e: ClipboardEvent) => {
+      if (isInputElement(e.target)) {
+        return; // Allow copy/cut/paste in form inputs & textareas
+      }
       e.preventDefault();
       return false;
     };
 
-    // 4. OPTIMIZED: Check DevTools every 2000ms instead of 100ms
+    // 4. Check DevTools size only in production
     let isDevToolsOpen = false;
     const checkDevToolsSize = () => {
+      if (import.meta.env.DEV) return;
       const threshold = 160;
       const isOpen = window.outerWidth - window.innerWidth > threshold ||
                      window.outerHeight - window.innerHeight > threshold;
@@ -146,22 +146,7 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener('cut', disableCopyPaste, { passive: false });
     document.addEventListener('paste', disableCopyPaste, { passive: false });
 
-    // OPTIMIZED: Check every 2000ms (20x less frequent than before)
     const devToolsCheckInterval = setInterval(checkDevToolsSize, 2000);
-
-    // Disable text selection
-    document.body.style.userSelect = 'none';
-    document.body.style.webkitUserSelect = 'none';
-    (document.body as any).style.msUserSelect = 'none';
-    (document.body as any).style.mozUserSelect = 'none';
-
-    // Block inspect element via developer tools protocol
-    try {
-      (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = undefined;
-      (window as any).__REDUX_DEVTOOLS_EXTENSION__ = undefined;
-    } catch (e) {
-      // Ignore errors
-    }
 
     return () => {
       document.removeEventListener('contextmenu', disableRightClick);

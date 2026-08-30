@@ -158,10 +158,11 @@ export default function EmployeeLifecyclePage() {
         departmentId: deptFilter !== 'all' ? Number(deptFilter) : undefined,
         companyId: effectiveCompanyId,
       });
-      setEmployees(data);
+      setEmployees(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      toast.error('Failed to load employee lifecycle directory');
+      toast.error(err.response?.data?.message || 'Failed to load employee lifecycle directory');
       console.error(err);
+      setEmployees([]);
     } finally {
       setLoading(false);
     }
