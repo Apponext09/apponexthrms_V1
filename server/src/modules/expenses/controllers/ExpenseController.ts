@@ -58,11 +58,13 @@ export class ExpenseController {
 
   // --- CLAIMS ---
   async getClaims(req: Request, res: Response) {
-    const { employeeId, status, departmentId, categoryId, search, mode } = req.query;
+    const { employeeId, status, departmentId, designationId, locationId, categoryId, search, mode } = req.query;
     const claims = await this.expenseService.getClaims(req.ctx!, {
       employeeId: employeeId ? Number(employeeId) : undefined,
       status: status as string,
       departmentId: departmentId ? Number(departmentId) : undefined,
+      designationId: designationId ? Number(designationId) : undefined,
+      locationId: locationId ? Number(locationId) : undefined,
       categoryId: categoryId ? Number(categoryId) : undefined,
       search: search as string,
       mode: mode as string
@@ -106,6 +108,23 @@ export class ExpenseController {
       res.json({ success: true, data: claim });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message || 'Failed to approve claim' });
+    }
+  }
+
+  async bulkApproveClaims(req: Request, res: Response) {
+    try {
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+      if (ids.length === 0) {
+        return res.status(400).json({ success: false, message: 'Select at least one claim to approve' });
+      }
+      const result = await this.expenseService.bulkApproveClaims(
+        req.ctx!,
+        ids,
+        req.body?.comments || 'Bulk approved'
+      );
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Bulk approval failed' });
     }
   }
 
@@ -157,8 +176,12 @@ export class ExpenseController {
   }
 
   async createTravelRequest(req: Request, res: Response) {
-    const request = await this.expenseService.createTravelRequest(req.ctx!, req.body);
-    res.status(201).json({ success: true, data: request });
+    try {
+      const request = await this.expenseService.createTravelRequest(req.ctx!, req.body);
+      res.status(201).json({ success: true, data: request });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Failed to create travel request' });
+    }
   }
 
   async updateTravelRequestStatus(req: Request, res: Response) {
@@ -173,8 +196,12 @@ export class ExpenseController {
   }
 
   async createTravelAdvance(req: Request, res: Response) {
-    const advance = await this.expenseService.createTravelAdvance(req.ctx!, req.body);
-    res.status(201).json({ success: true, data: advance });
+    try {
+      const advance = await this.expenseService.createTravelAdvance(req.ctx!, req.body);
+      res.status(201).json({ success: true, data: advance });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Failed to create travel advance' });
+    }
   }
 
   // --- MILEAGE ---
@@ -185,8 +212,12 @@ export class ExpenseController {
   }
 
   async createMileageClaim(req: Request, res: Response) {
-    const claim = await this.expenseService.createMileageClaim(req.ctx!, req.body);
-    res.status(201).json({ success: true, data: claim });
+    try {
+      const claim = await this.expenseService.createMileageClaim(req.ctx!, req.body);
+      res.status(201).json({ success: true, data: claim });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Failed to create mileage claim' });
+    }
   }
 
   // --- DASHBOARD & REPORTS ---

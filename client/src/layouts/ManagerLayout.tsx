@@ -87,9 +87,11 @@ const MANAGER_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Approvals', href: '/manager/expenses/approvals', icon: FileText },
+      { name: 'Expense Approvals', href: '/manager/expenses/approvals', icon: CheckCircle2 },
       { name: 'My Expenses', href: '/manager/expenses/my-expenses', icon: FileText },
       { name: 'Travel Requests', href: '/manager/expenses/travel-requests', icon: Clock },
+      { name: 'Travel Advances', href: '/manager/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/manager/expenses/mileage-claims', icon: Navigation },
     ],
   },
   {

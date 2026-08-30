@@ -24,6 +24,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
   const [spendingLimit, setSpendingLimit] = useState<number>(0);
   const [isReceiptMandatory, setIsReceiptMandatory] = useState(true);
   const [minAmountForReceipt, setMinAmountForReceipt] = useState<number>(500);
+  const [autoApprovalThreshold, setAutoApprovalThreshold] = useState<number>(0);
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -52,6 +53,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setSpendingLimit(cat.spendingLimit);
       setIsReceiptMandatory(cat.isReceiptMandatory);
       setMinAmountForReceipt(cat.minAmountForReceipt);
+      setAutoApprovalThreshold(Number(cat.autoApprovalThreshold ?? (cat as any).auto_approval_threshold ?? 0));
       setIsActive(cat.isActive);
     } else {
       setEditingCategory(null);
@@ -61,6 +63,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setSpendingLimit(10000);
       setIsReceiptMandatory(true);
       setMinAmountForReceipt(500);
+      setAutoApprovalThreshold(0);
       setIsActive(true);
     }
     setIsModalOpen(true);
@@ -80,6 +83,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
         spendingLimit,
         isReceiptMandatory,
         minAmountForReceipt,
+        autoApprovalThreshold,
         isActive
       };
 
@@ -235,6 +239,19 @@ export const ExpenseCategoriesPage: React.FC = () => {
                   onChange={(e) => setSpendingLimit(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Auto-approve up to (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="0 = always need manager approval"
+                  value={autoApprovalThreshold}
+                  onChange={(e) => setAutoApprovalThreshold(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">At or below this amount, manager approval is skipped. 0 disables auto-approval.</p>
               </div>
 
               <div className="flex items-center gap-2 pt-1">

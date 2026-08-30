@@ -41,8 +41,7 @@ export const MileageClaimsPage: React.FC = () => {
         path.startsWith('/manager') ||
         path.startsWith('/team-lead') ||
         path.startsWith('/hr') ||
-        path.startsWith('/admin') ||
-        path.startsWith('/expenses');
+        path.startsWith('/admin');
 
       // For managers/HR/CEO/Admin: fetch all employee mileage claims across org/team
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
@@ -207,8 +206,8 @@ export const MileageClaimsPage: React.FC = () => {
                       <td className="py-3.5 px-4 font-bold text-amber-600 dark:text-amber-400">
                         ₹{calcAmt.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
                           {mc.status || 'Pending'}
                         </span>
                       </td>

@@ -8,6 +8,7 @@ export interface ExpenseCategory {
   spendingLimit: number;
   isReceiptMandatory: boolean;
   minAmountForReceipt: number;
+  autoApprovalThreshold?: number;
   isActive: boolean;
 }
 
@@ -73,6 +74,7 @@ export interface ExpenseClaim {
   employeeCode?: string;
   departmentName?: string;
   designationName?: string;
+  locationName?: string;
   title: string;
   categoryId?: number;
   categoryName?: string;
@@ -165,6 +167,7 @@ export interface MileageClaim {
 export interface ExpenseSettings {
   id: number;
   autoApprovalThreshold: number;
+  categoryThresholds?: Array<{ id: number; name?: string; autoApprovalThreshold: number }>;
   mileageRateCar: number;
   mileageRateBike: number;
   requireManagerApproval: boolean;
@@ -218,6 +221,8 @@ export const expenseApi = {
 
   // Actions
   managerApproveClaim: (id: number, comments?: string) => apiClient.post(`/expenses/claims/${id}/manager-approve`, { comments }).then((res) => res.data.data),
+  bulkApproveClaims: (ids: number[], comments?: string) =>
+    apiClient.post('/expenses/claims/bulk-approve', { ids, comments }).then((res) => res.data.data),
   financeVerifyClaim: (id: number, data: { items?: any[]; comments?: string }) => apiClient.post(`/expenses/claims/${id}/finance-verify`, data).then((res) => res.data.data),
   rejectClaim: (id: number, reason: string) => apiClient.post(`/expenses/claims/${id}/reject`, { reason }).then((res) => res.data.data),
   returnClaim: (id: number, comments: string) => apiClient.post(`/expenses/claims/${id}/return`, { comments }).then((res) => res.data.data),

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { expenseApi, ExpensePolicy, ExpenseCategory } from '../api/expenseApi';
+import { apiClient } from '@/config/api';
 import {
   ShieldCheck,
   Plus,
@@ -24,6 +25,9 @@ export const ExpensePoliciesPage: React.FC = () => {
   const [grade, setGrade] = useState('All');
   const [designation, setDesignation] = useState('All');
   const [location, setLocation] = useState('All');
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationOpen, setLocationOpen] = useState(false);
+  const [orgLocations, setOrgLocations] = useState<Array<{ id: number; name: string }>>([]);
   const [maxLimitPerClaim, setMaxLimitPerClaim] = useState<number>(25000);
   const [maxLimitPerMonth, setMaxLimitPerMonth] = useState<number>(75000);
   const [requireReceiptAbove, setRequireReceiptAbove] = useState<number>(500);
@@ -49,6 +53,17 @@ export const ExpensePoliciesPage: React.FC = () => {
 
   useEffect(() => {
     fetchPoliciesAndCategories();
+    apiClient.get('/settings/locations', { params: { pageSize: 200 } })
+      .then((res: any) => {
+        const raw = res?.data?.data || res?.data || [];
+        setOrgLocations(
+          (Array.isArray(raw) ? raw : []).map((l: any) => ({
+            id: Number(l.id),
+            name: l.name || l.code || String(l.id),
+          })).filter((l: { id: number; name: string }) => l.id)
+        );
+      })
+      .catch(() => setOrgLocations([]));
   }, []);
 
   const openModal = (pol?: ExpensePolicy) => {
@@ -59,6 +74,8 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade(pol.grade || 'All');
       setDesignation(pol.designation || 'All');
       setLocation(pol.location || 'All');
+      setLocationSearch('');
+      setLocationOpen(false);
       setMaxLimitPerClaim(pol.maxLimitPerClaim);
       setMaxLimitPerMonth(pol.maxLimitPerMonth);
       setRequireReceiptAbove(pol.requireReceiptAbove);
@@ -71,6 +88,8 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade('All');
       setDesignation('All');
       setLocation('All');
+      setLocationSearch('');
+      setLocationOpen(false);
       setMaxLimitPerClaim(25000);
       setMaxLimitPerMonth(75000);
       setRequireReceiptAbove(500);
@@ -290,15 +309,56 @@ export const ExpensePoliciesPage: React.FC = () => {
                   />
                 </div>
 
-                <div>
+                <div className="relative">
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Location</label>
                   <input
                     type="text"
-                    placeholder="All / Mumbai / Onsite"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Search location..."
+                    value={locationOpen ? locationSearch : location}
+                    onFocus={() => {
+                      setLocationOpen(true);
+                      setLocationSearch(location === 'All' ? '' : location);
+                    }}
+                    onChange={(e) => {
+                      setLocationSearch(e.target.value);
+                      setLocationOpen(true);
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                   />
+                  {locationOpen && (
+                    <div className="absolute z-20 mt-1 w-full max-h-44 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+                        onClick={() => {
+                          setLocation('All');
+                          setLocationSearch('');
+                          setLocationOpen(false);
+                        }}
+                      >
+                        All locations
+                      </button>
+                      {orgLocations
+                        .filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase()))
+                        .map((l) => (
+                          <button
+                            type="button"
+                            key={l.id}
+                            className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+                            onClick={() => {
+                              setLocation(l.name);
+                              setLocationSearch(l.name);
+                              setLocationOpen(false);
+                            }}
+                          >
+                            {l.name}
+                          </button>
+                        ))}
+                      {orgLocations.filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-[11px] text-slate-400">No matching location</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

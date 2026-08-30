@@ -56,16 +56,116 @@ export class ExpenseService {
         if (emp) return emp;
       }
     }
-    return await db('employees').where('organization_id', ctx.organizationId).first().catch(() => null);
+    return null;
+  }
+
+  private async requireEmployeeForCtx(ctx: TenantContext) {
+    const emp = await this.getEmployeeForCtx(ctx);
+    if (!emp) {
+      throw new Error('Your login is not linked to an employee profile. Ask HR to link your user to an employee, then try again.');
+    }
+    return emp;
+  }
+
+  private async getPeopleVisibility(ctx: TenantContext, employeeIdColumn: string, employeeId?: number): Promise<{
+    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees';
+    column?: string;
+    value?: number;
+  }> {
+    if (employeeId) {
+      return { type: 'eq', column: employeeIdColumn, value: employeeId };
+    }
+
+    const db = getKnex();
+    const roleRows = await db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.user_id', ctx.userId)
+      .where('user_roles.organization_id', ctx.organizationId)
+      .select('roles.code')
+      .catch(() => []);
+    const roleCodes = (roleRows || []).map((r: any) => String(r.code || r.Code || '').toLowerCase());
+    const isHrOrAdmin = roleCodes.some((c: string) =>
+      ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'].includes(c)
+    );
+    if (isHrOrAdmin) return { type: 'all' };
+
+    const emp = await this.getEmployeeForCtx(ctx);
+    if (!emp) return { type: 'none' };
+
+    const deptId = emp.current_department_id ?? emp.currentDepartmentId;
+    const isDeptHead = roleCodes.some((c: string) => ['department_head', 'dept_head'].includes(c));
+    if (isDeptHead && deptId) {
+      return { type: 'dept', value: Number(deptId) };
+    }
+    const isManagerLike = roleCodes.some((c: string) => ['manager', 'team_lead'].includes(c));
+    if (isManagerLike) {
+      return { type: 'reportees', value: Number(emp.id) };
+    }
+    return { type: 'eq', column: employeeIdColumn, value: Number(emp.id) };
+  }
+
+  private applyVisibilityToQuery(query: any, vis: {
+    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees';
+    column?: string;
+    value?: number;
+  }) {
+    if (vis.type === 'all') return query;
+    if (vis.type === 'none') return query.whereRaw('1 = 0');
+    if (vis.type === 'dept') return query.where('e.current_department_id', vis.value);
+    if (vis.type === 'reportees') return query.where('e.reporting_manager_id', vis.value);
+    if (vis.type === 'eq' && vis.column) return query.where(vis.column, vis.value);
+    return query;
+  }
+
+  private async assertCanManageEmployeeClaim(ctx: TenantContext, claim: any) {
+    if (!claim) throw new Error('Claim not found');
+    if (Number(claim.organization_id ?? claim.organizationId) !== Number(ctx.organizationId)) {
+      throw new Error('Claim not found');
+    }
+    const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id');
+    if (vis.type === 'all') return;
+    const db = getKnex();
+    const claimEmpId = Number(claim.employee_id ?? claim.employeeId);
+    const emp = await db('employees').where('id', claimEmpId).where('organization_id', ctx.organizationId).first();
+    if (!emp) throw new Error('You can only act on claims for your team.');
+    const deptId = emp.current_department_id ?? emp.currentDepartmentId;
+    const managerId = emp.reporting_manager_id ?? emp.reportingManagerId;
+    if (vis.type === 'dept' && Number(deptId) === vis.value) return;
+    if (vis.type === 'reportees' && Number(managerId) === vis.value) return;
+    if (vis.type === 'eq' && claimEmpId === vis.value) return;
+    throw new Error('You can only act on claims for your team.');
+  }
+
+  private mapCategory(row: any) {
+    if (!row) return row;
+    return {
+      ...row,
+      spendingLimit: Number(row.spending_limit ?? row.spendingLimit ?? 0),
+      isReceiptMandatory: Boolean(row.is_receipt_mandatory ?? row.isReceiptMandatory),
+      minAmountForReceipt: Number(row.min_amount_for_receipt ?? row.minAmountForReceipt ?? 0),
+      autoApprovalThreshold: Number(row.auto_approval_threshold ?? row.autoApprovalThreshold ?? 0),
+      isActive: row.is_active !== undefined ? Boolean(row.is_active) : Boolean(row.isActive ?? true),
+    };
   }
 
   // --- EXPENSE CATEGORIES ---
   async getCategories(ctx: TenantContext) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    return db('expense_categories')
+    const rows = await db('expense_categories')
       .where('organization_id', ctx.organizationId)
+      .where('is_active', true)
       .orderBy('id', 'asc');
+    const mapped = (rows || []).map((r: any) => this.mapCategory(r));
+    const unique: any[] = [];
+    const seen = new Set<string>();
+    for (const cat of mapped) {
+      const key = String(cat.code || cat.name || cat.id).trim().toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(cat);
+    }
+    return unique;
   }
 
   async createCategory(ctx: TenantContext, data: any) {
@@ -80,11 +180,12 @@ export class ExpenseService {
       spending_limit: data.spendingLimit || 0,
       is_receipt_mandatory: Boolean(data.isReceiptMandatory),
       min_amount_for_receipt: data.minAmountForReceipt || 0,
+      auto_approval_threshold: data.autoApprovalThreshold ?? 0,
       is_active: data.isActive !== undefined ? Boolean(data.isActive) : true,
       created_at: new Date(),
       updated_at: new Date()
     });
-    return db('expense_categories').where('id', id).first();
+    return this.mapCategory(await db('expense_categories').where('id', id).first());
   }
 
   async updateCategory(ctx: TenantContext, categoryId: number, data: any) {
@@ -100,10 +201,13 @@ export class ExpenseService {
         spending_limit: data.spendingLimit,
         is_receipt_mandatory: Boolean(data.isReceiptMandatory),
         min_amount_for_receipt: data.minAmountForReceipt,
+        ...(data.autoApprovalThreshold !== undefined
+          ? { auto_approval_threshold: Number(data.autoApprovalThreshold) || 0 }
+          : {}),
         is_active: data.isActive,
         updated_at: new Date()
       });
-    return db('expense_categories').where('id', categoryId).first();
+    return this.mapCategory(await db('expense_categories').where('id', categoryId).first());
   }
 
   async deleteCategory(ctx: TenantContext, categoryId: number) {
@@ -274,6 +378,7 @@ export class ExpenseService {
       employeeCode: claim.employee_code || claim.employeeCode,
       departmentName: claim.department_name || claim.departmentName,
       designationName: claim.designation_name || claim.designationName,
+      locationName: claim.location_name || claim.locationName,
       categoryName: claim.category_name || claim.categoryName,
       createdAt: claim.created_at || claim.createdAt,
       updatedAt: claim.updated_at || claim.updatedAt,
@@ -299,13 +404,24 @@ export class ExpenseService {
     };
   }
 
-  async getClaims(ctx: TenantContext, params: { employeeId?: number; status?: string; departmentId?: number; categoryId?: number; search?: string; mode?: string }) {
+  async getClaims(ctx: TenantContext, params: {
+    employeeId?: number;
+    status?: string;
+    departmentId?: number;
+    designationId?: number;
+    locationId?: number;
+    categoryId?: number;
+    search?: string;
+    mode?: string;
+  }) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
 
     let query = db('expense_claims as ec')
       .leftJoin('employees as e', 'ec.employee_id', 'e.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
+      .leftJoin('locations as loc', 'e.current_location_id', 'loc.id')
       .leftJoin('expense_categories as cat', 'ec.category_id', 'cat.id')
       .where('ec.organization_id', ctx.organizationId)
       .select(
@@ -315,6 +431,8 @@ export class ExpenseService {
         'e.email',
         'e.employee_code',
         'd.name as department_name',
+        'des.name as designation_name',
+        'loc.name as location_name',
         'cat.name as category_name'
       )
       .orderBy('ec.created_at', 'desc');
@@ -322,15 +440,16 @@ export class ExpenseService {
     if (params.mode === 'my_expenses') {
       const emp = await this.getEmployeeForCtx(ctx, params.employeeId);
       query = query.where('ec.employee_id', emp ? emp.id : (params.employeeId || 0));
-    } else if (params.employeeId) {
-      query = query.where('ec.employee_id', params.employeeId);
+    } else {
+      const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id', params.employeeId);
+      query = this.applyVisibilityToQuery(query, vis);
     }
 
     if (params.status && params.status !== 'all') {
       if (params.status === 'pending_manager') {
         query = query.whereIn('ec.status', ['submitted', 'pending_manager']);
       } else if (params.status === 'pending_finance') {
-        query = query.whereIn('ec.status', ['pending_finance', 'submitted', 'pending_manager']);
+        query = query.where('ec.status', 'pending_finance');
       } else if (params.status === 'pending_approvals') {
         query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending_finance']);
       } else {
@@ -340,6 +459,14 @@ export class ExpenseService {
 
     if (params.departmentId) {
       query = query.where('e.current_department_id', params.departmentId);
+    }
+
+    if (params.designationId) {
+      query = query.where('e.current_designation_id', params.designationId);
+    }
+
+    if (params.locationId) {
+      query = query.where('e.current_location_id', params.locationId);
     }
 
     if (params.categoryId) {
@@ -426,15 +553,41 @@ export class ExpenseService {
     return fallback;
   }
 
+  private async resolveSubmitStatus(
+    ctx: TenantContext,
+    items: Array<{ categoryId?: number | null; claimedAmount: number; policyValidated?: boolean }>,
+    isDraft: boolean
+  ): Promise<string> {
+    if (isDraft) return 'draft';
+    const settings = await this.getSettings(ctx);
+    if (!settings.requireManagerApproval) {
+      return settings.requireFinanceApproval ? 'pending_finance' : 'payment_pending';
+    }
+
+    const db = getKnex();
+    for (const item of items) {
+      if (item.policyValidated === false) return 'pending_manager';
+      let threshold = 0;
+      if (item.categoryId) {
+        const cat = await db('expense_categories').where('id', item.categoryId).first().catch(() => null);
+        threshold = Number(cat?.auto_approval_threshold ?? cat?.autoApprovalThreshold ?? 0);
+      }
+      if (threshold <= 0 || Number(item.claimedAmount) > threshold) {
+        return 'pending_manager';
+      }
+    }
+
+    return settings.requireFinanceApproval ? 'pending_finance' : 'payment_pending';
+  }
+
   async createClaim(ctx: TenantContext, input: ClaimInput) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.getEmployeeForCtx(ctx);
-    const empId = emp ? emp.id : 1;
+    const emp = await this.requireEmployeeForCtx(ctx);
+    const empId = emp.id;
 
     const claimNumber = `EXP-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const isDraft = Boolean(input.isDraft);
-    const status = isDraft ? 'draft' : 'pending_manager';
 
     const itemsInput: ExpenseItemInput[] = input.items && input.items.length > 0 ? input.items : [
       {
@@ -474,21 +627,21 @@ export class ExpenseService {
       });
     }
 
-    const orgId = ctx?.organizationId || 1;
-    const safeEmpId = empId || 1;
+    const orgId = ctx.organizationId;
+    const status = await this.resolveSubmitStatus(ctx, validatedItems, isDraft);
 
     const res = await db('expense_claims').insert({
       uuid: uuidv4(),
       claim_number: claimNumber,
       organization_id: orgId,
-      employee_id: safeEmpId,
+      employee_id: empId,
       title: input.title || 'Expense Claim',
       category_id: input.categoryId || (validatedItems[0]?.categoryId || null),
       claim_date: input.claimDate || new Date().toISOString().slice(0, 10),
       total_claimed_amount: totalClaimed,
       total_approved_amount: isDraft ? 0 : totalClaimed,
       total_rejected_amount: 0,
-      payment_method: input.paymentMethod || 'payroll',
+      payment_method: input.paymentMethod || 'bank_transfer',
       merchant_name: input.merchantName || null,
       description: input.description || null,
       project_cost_center: input.projectCostCenter || null,
@@ -534,7 +687,9 @@ export class ExpenseService {
       approver_name: empName,
       approver_role: 'Employee',
       action: isDraft ? 'Draft Created' : 'Claim Submitted',
-      comments: isDraft ? 'Saved as draft' : 'Claim submitted for approval',
+      comments: isDraft
+        ? 'Saved as draft'
+        : (status === 'pending_manager' ? 'Claim submitted for approval' : 'Claim auto-approved based on category threshold'),
       created_at: new Date()
     });
 
@@ -548,7 +703,7 @@ export class ExpenseService {
     if (!existing) throw new Error('Claim not found');
 
     const isSubmit = Boolean(!input.isDraft);
-    const newStatus = isSubmit ? 'pending_manager' : 'draft';
+    let newStatus = isSubmit ? 'pending_manager' : 'draft';
 
     const itemsInput: ExpenseItemInput[] = input.items && input.items.length > 0 ? input.items : [
       {
@@ -567,6 +722,7 @@ export class ExpenseService {
     ];
 
     let totalClaimed = 0;
+    const validatedItems: Array<{ categoryId?: number | null; claimedAmount: number; policyValidated?: boolean }> = [];
     await db('expense_claim_items').where('claim_id', claimId).delete();
 
     for (const item of itemsInput) {
@@ -576,6 +732,7 @@ export class ExpenseService {
       const catId = item.categoryId || input.categoryId || null;
       const receiptProvided = Boolean(item.receiptUrl || input.receiptUrl);
       const validation = await this.validatePolicyForClaim(ctx, catId || 0, amt, receiptProvided);
+      validatedItems.push({ categoryId: catId, claimedAmount: amt, policyValidated: validation.isValid });
 
       await db('expense_claim_items').insert({
         claim_id: claimId,
@@ -599,6 +756,8 @@ export class ExpenseService {
         updated_at: new Date()
       });
     }
+
+    newStatus = await this.resolveSubmitStatus(ctx, validatedItems, !isSubmit);
 
     await db('expense_claims')
       .where('id', claimId)
@@ -641,6 +800,7 @@ export class ExpenseService {
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
+    await this.assertCanManageEmployeeClaim(ctx, claim);
 
     const nextStatus = 'pending_finance';
     await db('expense_claims')
@@ -666,11 +826,63 @@ export class ExpenseService {
     return this.getClaimById(ctx, claimId);
   }
 
+  async bulkApproveClaims(ctx: TenantContext, ids: number[], comments?: string) {
+    const approved: number[] = [];
+    const failed: Array<{ id: number; message: string }> = [];
+
+    for (const id of ids) {
+      try {
+        const db = getKnex();
+        const claim = await db('expense_claims').where('id', id).first();
+        if (!claim) throw new Error('Claim not found');
+        const status = claim.status;
+        if (['submitted', 'pending_manager'].includes(status)) {
+          await this.approveClaimByManager(ctx, id, comments);
+        } else if (status === 'pending_finance') {
+          await this.verifyAndApproveByFinance(ctx, id, {
+            comments: comments || 'Bulk verified by finance',
+          });
+        } else {
+          throw new Error(`Claim is not pending approval (status: ${status})`);
+        }
+        approved.push(id);
+      } catch (err: any) {
+        failed.push({ id, message: err.message || 'Failed to approve' });
+      }
+    }
+
+    return { approved, failed };
+  }
+
   async verifyAndApproveByFinance(ctx: TenantContext, claimId: number, body: { items?: Array<{ id: number; approvedAmount: number; adjustmentReason?: string }>; comments?: string }) {
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
+    await this.assertCanManageEmployeeClaim(ctx, claim);
+
+    const comments = String(body.comments || '').trim();
+    if (comments.length < 5) {
+      throw new Error('Finance comments are required (at least 5 characters).');
+    }
+
+    if (body.items && body.items.length > 0) {
+      for (const itemUpdate of body.items) {
+        const existingItem = await db('expense_claim_items').where('id', itemUpdate.id).first();
+        if (!existingItem) continue;
+        const itemClaimed = Number(existingItem.claimedAmount ?? existingItem.claimed_amount ?? 0);
+        const appAmt = Number(itemUpdate.approvedAmount);
+        if (Number.isNaN(appAmt) || appAmt < 0) {
+          throw new Error('Approved amount must be a number greater than or equal to 0.');
+        }
+        if (appAmt > itemClaimed) {
+          throw new Error('Approved amount cannot exceed the claimed amount for any line item.');
+        }
+        if (appAmt !== itemClaimed && !String(itemUpdate.adjustmentReason || '').trim()) {
+          throw new Error('Adjustment reason is required when the approved amount differs from the claimed amount.');
+        }
+      }
+    }
 
     const rawClaimed = claim.totalClaimedAmount ?? claim.total_claimed_amount;
     const claimedVal = Number(rawClaimed || 0);
@@ -761,6 +973,9 @@ export class ExpenseService {
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     if (!reason || !reason.trim()) throw new Error('Rejection reason is mandatory');
+    const claim = await db('expense_claims').where('id', claimId).first();
+    if (!claim) throw new Error('Claim not found');
+    await this.assertCanManageEmployeeClaim(ctx, claim);
 
     await db('expense_claims')
       .where('id', claimId)
@@ -798,6 +1013,9 @@ export class ExpenseService {
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     if (!comments || !comments.trim()) throw new Error('Correction comments are mandatory');
+    const claim = await db('expense_claims').where('id', claimId).first();
+    if (!claim) throw new Error('Claim not found');
+    await this.assertCanManageEmployeeClaim(ctx, claim);
 
     await db('expense_claims')
       .where('id', claimId)
@@ -833,6 +1051,7 @@ export class ExpenseService {
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
     if (!claim) throw new Error('Claim not found');
+    await this.assertCanManageEmployeeClaim(ctx, claim);
 
     const rawAmt = claim.totalApprovedAmount ?? claim.total_approved_amount ?? claim.totalClaimedAmount ?? claim.total_claimed_amount;
     const numAmt = Number(rawAmt || 0);
@@ -942,9 +1161,8 @@ export class ExpenseService {
       .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
       .orderBy('tr.created_at', 'desc');
 
-    if (employeeId) {
-      query = query.where('tr.employee_id', employeeId);
-    }
+    const vis = await this.getPeopleVisibility(ctx, 'tr.employee_id', employeeId);
+    query = this.applyVisibilityToQuery(query, vis);
     const rows = await query;
     return (rows || []).map((r: any) => this.mapTravelRequest(r));
   }
@@ -952,14 +1170,14 @@ export class ExpenseService {
   async createTravelRequest(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.getEmployeeForCtx(ctx);
+    const emp = await this.requireEmployeeForCtx(ctx);
     const reqNum = `TRV-${Date.now().toString().slice(-6)}`;
 
     const [id] = await db('travel_requests').insert({
       uuid: uuidv4(),
       request_number: reqNum,
       organization_id: ctx.organizationId,
-      employee_id: emp ? emp.id : 1,
+      employee_id: emp?.id,
       from_location: data.fromLocation,
       to_location: data.toLocation,
       purpose: data.purpose,
@@ -1010,9 +1228,8 @@ export class ExpenseService {
       .select('ta.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'tr.request_number', 'tr.purpose as travel_purpose')
       .orderBy('ta.created_at', 'desc');
 
-    if (employeeId) {
-      query = query.where('ta.employee_id', employeeId);
-    }
+    const vis = await this.getPeopleVisibility(ctx, 'ta.employee_id', employeeId);
+    query = this.applyVisibilityToQuery(query, vis);
     const rows = await query;
     return (rows || []).map((r: any) => this.mapTravelAdvance(r));
   }
@@ -1020,7 +1237,7 @@ export class ExpenseService {
   async createTravelAdvance(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.getEmployeeForCtx(ctx);
+    const emp = await this.requireEmployeeForCtx(ctx);
     const advNum = `ADV-${Date.now().toString().slice(-6)}`;
     const amt = Number(data.advanceAmount || 0);
 
@@ -1028,7 +1245,7 @@ export class ExpenseService {
       uuid: uuidv4(),
       advance_number: advNum,
       organization_id: ctx.organizationId,
-      employee_id: emp ? emp.id : 1,
+      employee_id: emp?.id,
       travel_request_id: data.travelRequestId || null,
       advance_amount: amt,
       approved_amount: amt,
@@ -1058,7 +1275,8 @@ export class ExpenseService {
       .select('mc.*', 'e.first_name', 'e.last_name', 'e.employee_code')
       .orderBy('mc.created_at', 'desc');
 
-    if (employeeId) query = query.where('mc.employee_id', employeeId);
+    const vis = await this.getPeopleVisibility(ctx, 'mc.employee_id', employeeId);
+    query = this.applyVisibilityToQuery(query, vis);
     const rows = await query;
     return (rows || []).map((r: any) => this.mapMileageClaim(r));
   }
@@ -1066,21 +1284,25 @@ export class ExpenseService {
   async createMileageClaim(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.getEmployeeForCtx(ctx);
+    const emp = await this.requireEmployeeForCtx(ctx);
 
     const settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
-    const carRate = settings ? Number(settings.mileage_rate_car) : 12.00;
-    const bikeRate = settings ? Number(settings.mileage_rate_bike) : 6.00;
+    const numOr = (v: any, fallback: number) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const carRate = settings ? numOr(settings.mileageRateCar ?? settings.mileage_rate_car, 12) : 12;
+    const bikeRate = settings ? numOr(settings.mileageRateBike ?? settings.mileage_rate_bike, 6) : 6;
 
     const vehicle = (data.vehicleType || 'car').toLowerCase();
-    const rate = data.ratePerKm || (vehicle === 'bike' ? bikeRate : carRate);
-    const distance = Number(data.distanceKm || 0);
-    const calculatedAmount = distance * rate;
+    const rate = numOr(data.ratePerKm, vehicle === 'bike' ? bikeRate : carRate);
+    const distance = numOr(data.distanceKm, 0);
+    const calculatedAmount = Number((distance * rate).toFixed(2));
 
     const [id] = await db('mileage_claims').insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      employee_id: emp ? emp.id : 1,
+      employee_id: emp?.id,
       trip_date: data.tripDate || new Date().toISOString().slice(0, 10),
       from_location: data.fromLocation,
       to_location: data.toLocation,
@@ -1307,6 +1529,24 @@ export class ExpenseService {
         .where('organization_id', ctx.organizationId)
         .update(updateData);
     }
+
+    if (Array.isArray(data.categoryThresholds)) {
+      const hasAutoCol = await db.schema.hasColumn('expense_categories', 'auto_approval_threshold').catch(() => false);
+      if (hasAutoCol) {
+        for (const row of data.categoryThresholds) {
+          const id = Number(row.id);
+          if (!id) continue;
+          await db('expense_categories')
+            .where('id', id)
+            .where('organization_id', ctx.organizationId)
+            .update({
+              auto_approval_threshold: Math.max(0, Number(row.autoApprovalThreshold) || 0),
+              updated_at: new Date(),
+            });
+        }
+      }
+    }
+
     return this.getSettings(ctx);
   }
 

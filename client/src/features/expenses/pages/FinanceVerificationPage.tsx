@@ -22,6 +22,7 @@ export const FinanceVerificationPage: React.FC = () => {
     Array<{ id: number; claimedAmount: number; approvedAmount: number; adjustmentReason: string }>
   >([]);
   const [financeComments, setFinanceComments] = useState('');
+  const [formErrors, setFormErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchFinanceQueue = async () => {
@@ -55,6 +56,7 @@ export const FinanceVerificationPage: React.FC = () => {
         );
       }
       setFinanceComments('');
+      setFormErrors([]);
     } catch (err) {
       console.error(err);
     }
@@ -74,16 +76,44 @@ export const FinanceVerificationPage: React.FC = () => {
 
   const handleVerifySubmit = async () => {
     if (!selectedClaim) return;
+    const errors: string[] = [];
+    if (financeComments.trim().length < 5) {
+      errors.push('Finance comments are required (at least 5 characters).');
+    }
+    if (!itemAdjustments.length) {
+      errors.push('This claim has no line items to verify.');
+    }
+    itemAdjustments.forEach((adj, idx) => {
+      const claimed = Number(adj.claimedAmount || 0);
+      if (Number.isNaN(Number(adj.approvedAmount))) {
+        errors.push(`Line ${idx + 1}: approved amount must be a number.`);
+        return;
+      }
+      if (adj.approvedAmount < 0) {
+        errors.push(`Line ${idx + 1}: approved amount cannot be negative.`);
+      }
+      if (adj.approvedAmount > claimed) {
+        errors.push(`Line ${idx + 1}: approved amount cannot exceed claimed amount (₹${claimed.toLocaleString('en-IN')}).`);
+      }
+      if (adj.approvedAmount !== claimed && !adj.adjustmentReason.trim()) {
+        errors.push(`Line ${idx + 1}: adjustment reason is required for partial approval or rejection.`);
+      }
+    });
+    if (errors.length > 0) {
+      setFormErrors(errors);
+      return;
+    }
     try {
+      setFormErrors([]);
       setSubmitting(true);
       await expenseApi.financeVerifyClaim(selectedClaim.id, {
         items: itemAdjustments,
-        comments: financeComments || 'Finance verified and queued for payout.'
+        comments: financeComments.trim()
       });
       setSelectedClaim(null);
       fetchFinanceQueue();
     } catch (err: any) {
-      alert(err.message || 'Finance verification failed');
+      setFormErrors([err.response?.data?.message || err.message || 'Finance verification failed']);
     } finally {
       setSubmitting(false);
     }
@@ -135,7 +165,7 @@ export const FinanceVerificationPage: React.FC = () => {
                   const cNum = claim.claimNumber || claim.claim_number || `EXP-${claim.id}`;
                   const cDate = claim.submittedAt || claim.submitted_at || claim.claimDate || claim.claim_date;
                   const totClaimed = Number(claim.totalClaimedAmount ?? claim.total_claimed_amount ?? 0);
-                  const payMethod = claim.paymentMethod || claim.payment_method || 'Payroll';
+                  const payMethod = claim.paymentMethod || claim.payment_method || 'Bank Transfer';
 
                   const formattedDate = cDate ? new Date(cDate).toLocaleDateString() : 'N/A';
 
@@ -291,7 +321,7 @@ export const FinanceVerificationPage: React.FC = () => {
 
               <div>
                 <label className="block font-bold text-slate-900 dark:text-white mb-1">
-                  Finance Verification Comments
+                  Finance Verification Comments *
                 </label>
                 <textarea
                   rows={2}
@@ -301,6 +331,14 @@ export const FinanceVerificationPage: React.FC = () => {
                   className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
+
+              {formErrors.length > 0 && (
+                <div className="p-3 rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/30 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs space-y-1">
+                  {formErrors.map((err, i) => (
+                    <p key={i}>• {err}</p>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-end gap-3">

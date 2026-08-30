@@ -4,10 +4,24 @@ export class ExpenseDbService {
   private static isInitialized = false;
 
   public static async ensureTablesAndSeed(organizationId: number = 1): Promise<void> {
-    if (this.isInitialized) return;
-
     try {
       const db = getKnex();
+
+      const hasCategoriesTable = await db.schema.hasTable('expense_categories');
+      if (hasCategoriesTable) {
+        const hasAutoCol = await db.schema.hasColumn('expense_categories', 'auto_approval_threshold').catch(() => false);
+        if (!hasAutoCol) {
+          await db.schema.alterTable('expense_categories', (table) => {
+            table.decimal('auto_approval_threshold', 15, 2).defaultTo(0);
+          });
+        }
+        await this.deactivateDuplicateCategories(db, organizationId);
+      }
+
+      if (this.isInitialized) {
+        await this.seedOrgDefaults(db, organizationId);
+        return;
+      }
 
       // 1. Expense Categories Table
       const hasCategories = await db.schema.hasTable('expense_categories');
@@ -21,6 +35,7 @@ export class ExpenseDbService {
           table.decimal('spending_limit', 15, 2).defaultTo(0);
           table.boolean('is_receipt_mandatory').defaultTo(false);
           table.decimal('min_amount_for_receipt', 15, 2).defaultTo(0);
+          table.decimal('auto_approval_threshold', 15, 2).defaultTo(0);
           table.boolean('is_active').defaultTo(true);
           table.timestamps(true, true);
           table.index(['organization_id']);
@@ -66,7 +81,7 @@ export class ExpenseDbService {
           table.decimal('total_claimed_amount', 15, 2).defaultTo(0);
           table.decimal('total_approved_amount', 15, 2).defaultTo(0);
           table.decimal('total_rejected_amount', 15, 2).defaultTo(0);
-          table.string('payment_method', 50).defaultTo('payroll');
+          table.string('payment_method', 50).defaultTo('bank_transfer');
           table.string('merchant_name', 150).nullable();
           table.text('description').nullable();
           table.string('project_cost_center', 100).nullable();
@@ -282,125 +297,144 @@ export class ExpenseDbService {
         });
       }
 
-      // --- SEED DEFAULT CATEGORIES IF NONE EXIST ---
-      const categoryCount = await db('expense_categories')
-        .where('organization_id', organizationId)
-        .count({ count: '*' })
-        .first();
-
-      const count = categoryCount ? Number(categoryCount.count || (categoryCount as any)['count(*)'] || 0) : 0;
-
-      if (count === 0) {
-        const defaultCategories = [
-          { name: 'Travel', code: 'TRAVEL', description: 'Flight, train, cab and local travel expenses', spendingLimit: 50000, isReceiptMandatory: true, minAmountForReceipt: 500 },
-          { name: 'Food', code: 'FOOD', description: 'Client entertainment, team lunches, and meals during business trips', spendingLimit: 5000, isReceiptMandatory: true, minAmountForReceipt: 300 },
-          { name: 'Hotel', code: 'HOTEL', description: 'Accommodation during official business trips', spendingLimit: 30000, isReceiptMandatory: true, minAmountForReceipt: 1000 },
-          { name: 'Fuel', code: 'FUEL', description: 'Fuel reimbursements for official field visits', spendingLimit: 8000, isReceiptMandatory: true, minAmountForReceipt: 500 },
-          { name: 'Mobile Bill', code: 'MOBILE', description: 'Official mobile & communication bill reimbursements', spendingLimit: 2000, isReceiptMandatory: true, minAmountForReceipt: 200 },
-          { name: 'Internet', code: 'INTERNET', description: 'Work-from-home internet allowances & Broadband bills', spendingLimit: 2500, isReceiptMandatory: true, minAmountForReceipt: 500 },
-          { name: 'Training', code: 'TRAINING', description: 'Professional certifications, courses, and workshops', spendingLimit: 25000, isReceiptMandatory: true, minAmountForReceipt: 1000 },
-          { name: 'Parking', code: 'PARKING', description: 'Official parking tickets & toll charges', spendingLimit: 2000, isReceiptMandatory: false, minAmountForReceipt: 200 },
-          { name: 'Office Purchase', code: 'OFFICE_SUPPLIES', description: 'Stationery, hardware accessories, and office supplies', spendingLimit: 15000, isReceiptMandatory: true, minAmountForReceipt: 500 },
-          { name: 'Other', code: 'OTHER', description: 'Miscellaneous work-related expense claims', spendingLimit: 10000, isReceiptMandatory: true, minAmountForReceipt: 500 }
-        ];
-
-        for (const cat of defaultCategories) {
-          await db('expense_categories').insert({
-            organization_id: organizationId,
-            name: cat.name,
-            code: cat.code,
-            description: cat.description,
-            spending_limit: cat.spendingLimit,
-            is_receipt_mandatory: cat.isReceiptMandatory,
-            min_amount_for_receipt: cat.minAmountForReceipt,
-            is_active: true,
-            created_at: new Date(),
-            updated_at: new Date()
-          });
-        }
-      }
-
-      // --- SEED DEFAULT EXPENSE SETTINGS IF NONE EXIST ---
-      const existingSettings = await db('expense_settings').where('organization_id', organizationId).first();
-      if (!existingSettings) {
-        await db('expense_settings').insert({
-          organization_id: organizationId,
-          auto_approval_threshold: 500.00,
-          mileage_rate_car: 12.00,
-          mileage_rate_bike: 6.00,
-          require_manager_approval: true,
-          require_finance_approval: true,
-          multi_level_approval: true,
-          updated_at: new Date()
-        });
-      }
-
-      // --- SEED DEFAULT POLICIES IF NONE EXIST ---
-      const policyCount = await db('expense_policies').where('organization_id', organizationId).count({ count: '*' }).first();
-      const pCount = policyCount ? Number(policyCount.count || (policyCount as any)['count(*)'] || 0) : 0;
-
-      if (pCount === 0) {
-        await db('expense_policies').insert({
-          organization_id: organizationId,
-          policy_name: 'Standard Employee Expense Limit Policy',
-          category_id: null,
-          grade: 'All',
-          designation: 'All',
-          department_id: null,
-          location: 'All',
-          max_limit_per_claim: 25000.00,
-          max_limit_per_month: 75000.00,
-          require_receipt_above: 500.00,
-          allow_exception: true,
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date()
-        });
-      }
-
-      // --- SEED DEFAULT WORKFLOW IF NONE EXIST ---
-      const wfCount = await db('expense_workflows').where('organization_id', organizationId).count({ count: '*' }).first();
-      const wCount = wfCount ? Number(wfCount.count || (wfCount as any)['count(*)'] || 0) : 0;
-
-      if (wCount === 0) {
-        const [wfId] = await db('expense_workflows').insert({
-          organization_id: organizationId,
-          name: 'Standard HRMS Expense Approval Workflow',
-          description: 'Default 2-stage dynamic approval workflow: Reporting Manager -> HR & Finance Verification',
-          min_amount: 0,
-          max_amount: 10000000,
-          is_active: true,
-          created_at: new Date(),
-          updated_at: new Date()
-        });
-
-        await db('expense_workflow_levels').insert([
-          {
-            workflow_id: wfId,
-            level_order: 1,
-            approver_type: 'reporting_manager',
-            approver_role: 'Reporting Manager',
-            step_name: 'Manager Approval',
-            is_mandatory: true,
-            created_at: new Date(),
-            updated_at: new Date()
-          },
-          {
-            workflow_id: wfId,
-            level_order: 2,
-            approver_type: 'hr',
-            approver_role: 'Finance / HR Officer',
-            step_name: 'Finance Verification',
-            is_mandatory: true,
-            created_at: new Date(),
-            updated_at: new Date()
-          }
-        ]);
-      }
-
+      await this.seedOrgDefaults(db, organizationId);
       this.isInitialized = true;
     } catch (error) {
       console.error('Failed to initialize Expense DB schema and seed data:', error);
+    }
+  }
+
+  private static async seedOrgDefaults(db: any, organizationId: number): Promise<void> {
+    const existingCodes = new Set(
+      (await db('expense_categories').where('organization_id', organizationId).select('code'))
+        .map((r: any) => String(r.code || '').toUpperCase())
+    );
+
+    const defaultCategories = [
+      { name: 'Travel', code: 'TRAVEL', description: 'Flight, train, cab and local travel expenses', spendingLimit: 50000, isReceiptMandatory: true, minAmountForReceipt: 500 },
+      { name: 'Food', code: 'FOOD', description: 'Client entertainment, team lunches, and meals during business trips', spendingLimit: 5000, isReceiptMandatory: true, minAmountForReceipt: 300 },
+      { name: 'Hotel', code: 'HOTEL', description: 'Accommodation during official business trips', spendingLimit: 30000, isReceiptMandatory: true, minAmountForReceipt: 1000 },
+      { name: 'Fuel', code: 'FUEL', description: 'Fuel reimbursements for official field visits', spendingLimit: 8000, isReceiptMandatory: true, minAmountForReceipt: 500 },
+      { name: 'Mobile Bill', code: 'MOBILE', description: 'Official mobile & communication bill reimbursements', spendingLimit: 2000, isReceiptMandatory: true, minAmountForReceipt: 200 },
+      { name: 'Internet', code: 'INTERNET', description: 'Work-from-home internet allowances & Broadband bills', spendingLimit: 2500, isReceiptMandatory: true, minAmountForReceipt: 500 },
+      { name: 'Training', code: 'TRAINING', description: 'Professional certifications, courses, and workshops', spendingLimit: 25000, isReceiptMandatory: true, minAmountForReceipt: 1000 },
+      { name: 'Parking', code: 'PARKING', description: 'Official parking tickets & toll charges', spendingLimit: 2000, isReceiptMandatory: false, minAmountForReceipt: 200 },
+      { name: 'Office Purchase', code: 'OFFICE_SUPPLIES', description: 'Stationery, hardware accessories, and office supplies', spendingLimit: 15000, isReceiptMandatory: true, minAmountForReceipt: 500 },
+      { name: 'Other', code: 'OTHER', description: 'Miscellaneous work-related expense claims', spendingLimit: 10000, isReceiptMandatory: true, minAmountForReceipt: 500 }
+    ];
+
+    for (const cat of defaultCategories) {
+      if (existingCodes.has(cat.code)) continue;
+      await db('expense_categories').insert({
+        organization_id: organizationId,
+        name: cat.name,
+        code: cat.code,
+        description: cat.description,
+        spending_limit: cat.spendingLimit,
+        is_receipt_mandatory: cat.isReceiptMandatory,
+        min_amount_for_receipt: cat.minAmountForReceipt,
+        auto_approval_threshold: 0,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      existingCodes.add(cat.code);
+    }
+
+    const existingSettings = await db('expense_settings').where('organization_id', organizationId).first();
+    if (!existingSettings) {
+      await db('expense_settings').insert({
+        organization_id: organizationId,
+        auto_approval_threshold: 500.00,
+        mileage_rate_car: 12.00,
+        mileage_rate_bike: 6.00,
+        require_manager_approval: true,
+        require_finance_approval: true,
+        multi_level_approval: true,
+        updated_at: new Date()
+      });
+    }
+
+    const policyCount = await db('expense_policies').where('organization_id', organizationId).count({ count: '*' }).first();
+    const pCount = policyCount ? Number(policyCount.count || (policyCount as any)['count(*)'] || 0) : 0;
+    if (pCount === 0) {
+      await db('expense_policies').insert({
+        organization_id: organizationId,
+        policy_name: 'Standard Employee Expense Limit Policy',
+        category_id: null,
+        grade: 'All',
+        designation: 'All',
+        department_id: null,
+        location: 'All',
+        max_limit_per_claim: 25000.00,
+        max_limit_per_month: 75000.00,
+        require_receipt_above: 500.00,
+        allow_exception: true,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+    }
+
+    const wfCount = await db('expense_workflows').where('organization_id', organizationId).count({ count: '*' }).first();
+    const wCount = wfCount ? Number(wfCount.count || (wfCount as any)['count(*)'] || 0) : 0;
+    if (wCount === 0) {
+      const [wfId] = await db('expense_workflows').insert({
+        organization_id: organizationId,
+        name: 'Standard HRMS Expense Approval Workflow',
+        description: 'Default 2-stage approval: Reporting Manager then Finance Verification',
+        min_amount: 0,
+        max_amount: 10000000,
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      await db('expense_workflow_levels').insert([
+        {
+          workflow_id: wfId,
+          level_order: 1,
+          approver_type: 'reporting_manager',
+          approver_role: 'Reporting Manager',
+          step_name: 'Manager Approval',
+          is_mandatory: true,
+          created_at: new Date(),
+          updated_at: new Date()
+        },
+        {
+          workflow_id: wfId,
+          level_order: 2,
+          approver_type: 'hr',
+          approver_role: 'Finance / HR Officer',
+          step_name: 'Finance Verification',
+          is_mandatory: true,
+          created_at: new Date(),
+          updated_at: new Date()
+        }
+      ]);
+    }
+  }
+
+  private static async deactivateDuplicateCategories(db: any, organizationId: number): Promise<void> {
+    try {
+      const rows = await db('expense_categories')
+        .where('organization_id', organizationId)
+        .select('id', 'code')
+        .orderBy('id', 'asc');
+      const seen = new Set<string>();
+      const duplicateIds: number[] = [];
+      for (const row of rows) {
+        const key = String(row.code || '').trim().toUpperCase();
+        if (!key) continue;
+        if (seen.has(key)) duplicateIds.push(row.id);
+        else seen.add(key);
+      }
+      if (duplicateIds.length > 0) {
+        await db('expense_categories')
+          .whereIn('id', duplicateIds)
+          .update({ is_active: false, updated_at: new Date() });
+      }
+    } catch (err) {
+      console.error('Failed to deactivate duplicate expense categories:', err);
     }
   }
 }

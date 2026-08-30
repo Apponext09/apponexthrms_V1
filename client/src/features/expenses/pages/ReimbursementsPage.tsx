@@ -42,7 +42,7 @@ export const ReimbursementsPage: React.FC = () => {
     setSelectedClaim(claim);
     setPaymentDate(new Date().toISOString().slice(0, 10));
     setPaidAmount(claim.totalApprovedAmount || claim.totalClaimedAmount);
-    setPaymentMethod(claim.paymentMethod || 'bank_transfer');
+    setPaymentMethod(claim.paymentMethod === 'payroll' ? 'bank_transfer' : (claim.paymentMethod || 'bank_transfer'));
     setPaymentReference(`TXN-${Date.now().toString().slice(-6)}`);
   };
 
@@ -73,7 +73,7 @@ export const ReimbursementsPage: React.FC = () => {
           Reimbursements & Disbursal Queue
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Process verified expense payouts via Payroll, Bank Transfer, or Manual Disbursal
+          Process verified expense payouts via bank transfer or manual disbursal
         </p>
       </div>
 
@@ -207,7 +207,6 @@ export const ReimbursementsPage: React.FC = () => {
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                 >
-                  <option value="payroll">Payroll Reimbursement</option>
                   <option value="bank_transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
                   <option value="manual">Manual Payment (Cash / Cheque)</option>
                 </select>

@@ -41,8 +41,7 @@ export const TravelRequestsPage: React.FC = () => {
         path.startsWith('/manager') ||
         path.startsWith('/team-lead') ||
         path.startsWith('/hr') ||
-        path.startsWith('/admin') ||
-        path.startsWith('/expenses');
+        path.startsWith('/admin');
 
       // For managers/HR/CEO/Admin: fetch all employee travel requests across org/team
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
@@ -97,13 +96,14 @@ export const TravelRequestsPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
+    const base = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap';
     switch (status) {
       case 'approved':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Approved</span>;
+        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Approved</span>;
       case 'rejected':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">Rejected</span>;
+        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
       default:
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">Pending Approval</span>;
+        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>Pending</span>;
     }
   };
 
@@ -190,7 +190,7 @@ export const TravelRequestsPage: React.FC = () => {
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
                         ₹{budget.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4">{getStatusBadge(tr.status)}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(tr.status)}</td>
                       <td className="py-3.5 px-4 text-right">
                         {tr.status === 'pending' && (
                           <div className="flex items-center justify-end gap-1.5">

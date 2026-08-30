@@ -60,8 +60,6 @@ const TeamSettlementsPage = lazy(() => import('./features/payroll/pages/TeamSett
 const AdminDashboard = lazy(() => import('./features/payroll/pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const MassSalaryStructureUploadPage = lazy(() => import('./features/payroll/pages/MassSalaryStructureUploadPage').then(m => ({ default: m.MassSalaryStructureUploadPage })));
 const EmployeeLoanRequest = lazy(() => import('./features/payroll/components/EmployeeLoanRequest').then(m => ({ default: m.EmployeeLoanRequest })));
-const AdminExpenseClaims = lazy(() => import('./features/payroll/pages/AdminExpenseClaims').then(m => ({ default: m.AdminExpenseClaims })));
-const AdminTravelRequests = lazy(() => import('./features/payroll/pages/AdminTravelRequests').then(m => ({ default: m.AdminTravelRequests })));
 const EmployeePayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.EmployeePayrollPortal })));
 const TeamLeadPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.TeamLeadPayrollPortal })));
 const ManagerPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.ManagerPayrollPortal })));
@@ -161,7 +159,6 @@ const HolidayCalendarPage = lazy(() => import('./features/employee/portal-pages/
 const TimesheetPage = lazy(() => import('./features/employee/portal-pages/TimesheetPage'));
 const PayrollPage = lazy(() => import('./features/employee/portal-pages/PayrollPage'));
 const TaxDeclarationPage = lazy(() => import('./features/employee/portal-pages/TaxDeclarationPage'));
-const ExpensePage = lazy(() => import('./features/employee/portal-pages/ExpensePage'));
 const TravelPage = lazy(() => import('./features/employee/portal-pages/TravelPage'));
 const AssetPage = lazy(() => import('./features/employee/portal-pages/AssetPage'));
 const DocumentsPage = lazy(() => import('./features/employee/portal-pages/DocumentsPage'));
@@ -317,8 +314,8 @@ export function AppRoutes() {
           <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
           <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
           <Route path="/hr/payroll/processing" element={<PayrollProcessing />} />
-          <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
-          <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
+          <Route path="/hr/expense-claims" element={<Navigate to="/expenses/approvals" replace />} />
+          <Route path="/hr/travel-requests" element={<Navigate to="/expenses/travel-requests" replace />} />
           <Route path="/hr/loans" element={<LoanManagement />} />
           <Route path="/hr/loan-types" element={<LoanManagement />} />
           <Route path="/hr/payslips" element={<PayslipViewer />} />
@@ -800,12 +797,12 @@ export function AppRoutes() {
         <Route path="/payroll" element={<PayrollDashboard />} />
         <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
         <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
-        <Route path="/payroll/expense-claims" element={<AdminExpenseClaims />} />
-        <Route path="/payroll/travel-requests" element={<AdminTravelRequests />} />
-        <Route path="/payroll/reimbursements" element={<AdminExpenseClaims />} />
-        <Route path="/expense-claims" element={<AdminExpenseClaims />} />
-        <Route path="/travel-requests" element={<AdminTravelRequests />} />
-        <Route path="/reimbursements" element={<AdminExpenseClaims />} />
+        <Route path="/payroll/expense-claims" element={<Navigate to="/expenses/approvals" replace />} />
+        <Route path="/payroll/travel-requests" element={<Navigate to="/expenses/travel-requests" replace />} />
+        <Route path="/payroll/reimbursements" element={<Navigate to="/expenses/reimbursements" replace />} />
+        <Route path="/expense-claims" element={<Navigate to="/expenses/approvals" replace />} />
+        <Route path="/travel-requests" element={<Navigate to="/expenses/travel-requests" replace />} />
+        <Route path="/reimbursements" element={<Navigate to="/expenses/reimbursements" replace />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
         <Route path="/payroll/master-settings" element={<PayrollSettingsPage />} />
@@ -1073,7 +1070,7 @@ export function AppRoutes() {
           <Route path="/consultant/attendance" element={<AttendancePage />} />
           <Route path="/consultant/leaves" element={<LeavePage />} />
           <Route path="/consultant/payslips" element={<PayslipViewer />} />
-          <Route path="/consultant/expenses" element={<ExpensePage />} />
+          <Route path="/consultant/expenses" element={<MyExpensesPage />} />
           <Route path="/consultant/travel" element={<TravelPage />} />
           <Route path="/consultant/documents" element={<DocumentsPage />} />
           <Route path="/consultant/holiday-calendar" element={<HolidayCalendarPage />} />

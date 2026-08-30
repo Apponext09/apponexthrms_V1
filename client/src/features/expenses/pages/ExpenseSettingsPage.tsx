@@ -24,6 +24,7 @@ export const ExpenseSettingsPage: React.FC = () => {
 
   // Form State
   const [autoApprovalThreshold, setAutoApprovalThreshold] = useState<number>(500);
+  const [categoryThresholds, setCategoryThresholds] = useState<Array<{ id: number; name: string; code?: string; autoApprovalThreshold: number }>>([]);
   const [mileageRateCar, setMileageRateCar] = useState<number>(12.00);
   const [mileageRateBike, setMileageRateBike] = useState<number>(6.00);
   const [requireManagerApproval, setRequireManagerApproval] = useState(true);
@@ -48,9 +49,10 @@ export const ExpenseSettingsPage: React.FC = () => {
   const fetchSettingsAndWorkflows = async () => {
     try {
       setLoading(true);
-      const [settingsRes, wfRes] = await Promise.all([
+      const [settingsRes, wfRes, catRes] = await Promise.all([
         expenseApi.getSettings(),
-        expenseApi.getWorkflows()
+        expenseApi.getWorkflows(),
+        expenseApi.getCategories()
       ]);
       if (settingsRes) {
         setAutoApprovalThreshold(settingsRes.autoApprovalThreshold || 500);
@@ -62,6 +64,21 @@ export const ExpenseSettingsPage: React.FC = () => {
         setEnableTravelModule(settingsRes.enableTravelModule !== undefined ? Boolean(settingsRes.enableTravelModule) : true);
         setEnableMileageModule(settingsRes.enableMileageModule !== undefined ? Boolean(settingsRes.enableMileageModule) : true);
       }
+      setCategoryThresholds(
+        (catRes || [])
+          .filter((c: any) => c.isActive !== false && c.is_active !== false)
+          .reduce((acc: Array<{ id: number; name: string; code?: string; autoApprovalThreshold: number }>, c: any) => {
+            const code = String(c.code || c.name || c.id).trim().toUpperCase();
+            if (acc.some((row) => String(row.code || '').toUpperCase() === code)) return acc;
+            acc.push({
+              id: c.id,
+              name: c.name,
+              code: c.code,
+              autoApprovalThreshold: Number(c.autoApprovalThreshold ?? c.auto_approval_threshold ?? 0),
+            });
+            return acc;
+          }, [])
+      );
       setWorkflows(wfRes || []);
     } catch (err) {
       console.error('Failed to load expense settings:', err);
@@ -79,6 +96,7 @@ export const ExpenseSettingsPage: React.FC = () => {
       setSaving(true);
       await expenseApi.updateSettings({
         autoApprovalThreshold,
+        categoryThresholds,
         mileageRateCar,
         mileageRateBike,
         requireManagerApproval,
@@ -223,26 +241,51 @@ export const ExpenseSettingsPage: React.FC = () => {
 
       {activeTab === 'general' ? (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-          {/* Auto Approval Threshold */}
+          {/* Auto Approval Threshold per category */}
           <div className="space-y-2">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Zap className="w-4 h-4 text-amber-500" />
-              Auto-Approval Threshold
+              Auto-Approval Threshold by Category
             </h3>
             <p className="text-xs text-slate-500">
-              Claims equal to or below this amount without policy violations can bypass manager approval if configured.
+              Claims in a category at or below this amount, with no policy violations, skip manager approval. Set 0 to always require manager approval for that category.
             </p>
-            <div className="w-64">
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                Threshold Amount (₹)
-              </label>
-              <input
-                type="number"
-                value={autoApprovalThreshold}
-                onChange={(e) => setAutoApprovalThreshold(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-              />
-            </div>
+            {categoryThresholds.length === 0 ? (
+              <p className="text-xs text-slate-400">No expense categories found. Create categories first, then set thresholds here.</p>
+            ) : (
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase">
+                    <tr>
+                      <th className="py-2.5 px-3">Category</th>
+                      <th className="py-2.5 px-3">Code</th>
+                      <th className="py-2.5 px-3 w-48">Auto-approve up to (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {categoryThresholds.map((cat, idx) => (
+                      <tr key={cat.id}>
+                        <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">{cat.name}</td>
+                        <td className="py-2 px-3 text-slate-500 font-mono">{cat.code || '—'}</td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            min={0}
+                            value={cat.autoApprovalThreshold}
+                            onChange={(e) => {
+                              const next = [...categoryThresholds];
+                              next[idx] = { ...next[idx], autoApprovalThreshold: Number(e.target.value) };
+                              setCategoryThresholds(next);
+                            }}
+                            className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <hr className="border-slate-200 dark:border-slate-800" />

@@ -41,7 +41,7 @@ export const MyExpensesPage: React.FC = () => {
   const [formTitle, setFormTitle] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
   const [formCategoryId, setFormCategoryId] = useState<number | undefined>(undefined);
-  const [formPaymentMethod, setFormPaymentMethod] = useState('payroll');
+  const [formPaymentMethod, setFormPaymentMethod] = useState('bank_transfer');
   const [formMerchant, setFormMerchant] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formProject, setFormProject] = useState('');
@@ -194,7 +194,7 @@ export const MyExpensesPage: React.FC = () => {
       setFormTitle(claimToEdit.title);
       setFormDate(claimToEdit.claimDate ? claimToEdit.claimDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
       setFormCategoryId(claimToEdit.categoryId || categories[0]?.id);
-      setFormPaymentMethod(claimToEdit.paymentMethod || 'payroll');
+      setFormPaymentMethod(claimToEdit.paymentMethod === 'payroll' ? 'bank_transfer' : (claimToEdit.paymentMethod || 'bank_transfer'));
       setFormMerchant(claimToEdit.merchantName || '');
       setFormDescription(claimToEdit.description || '');
       setFormProject(claimToEdit.projectCostCenter || '');
@@ -218,7 +218,7 @@ export const MyExpensesPage: React.FC = () => {
       setFormTitle('');
       setFormDate(new Date().toISOString().slice(0, 10));
       setFormCategoryId(categories[0]?.id);
-      setFormPaymentMethod('payroll');
+      setFormPaymentMethod('bank_transfer');
       setFormMerchant('');
       setFormDescription('');
       setFormProject('');
@@ -243,15 +243,46 @@ export const MyExpensesPage: React.FC = () => {
       alert('Please enter a claim title.');
       return;
     }
-    const total = calculateTotal();
+    if (!formCategoryId) {
+      alert('Please select an expense category.');
+      return;
+    }
+    const normalizedItems = items.map((item) => ({
+      ...item,
+      categoryId: item.categoryId || formCategoryId
+    }));
+    const total = normalizedItems.reduce((sum, item) => sum + Number(item.claimedAmount || 0), 0);
     if (total <= 0) {
       alert('Please enter valid expense item amounts.');
       return;
     }
 
+    for (let i = 0; i < normalizedItems.length; i++) {
+      const item = normalizedItems[i];
+      const cat = categories.find((c) => c.id === item.categoryId);
+      if (!item.categoryId) {
+        alert(`Item #${i + 1} needs a category.`);
+        return;
+      }
+      if (Number(item.claimedAmount || 0) <= 0) {
+        alert(`Item #${i + 1} needs an amount greater than 0.`);
+        return;
+      }
+      if (
+        !isDraft &&
+        cat &&
+        cat.isReceiptMandatory &&
+        Number(item.claimedAmount) >= Number(cat.minAmountForReceipt || 0) &&
+        !String(item.receiptUrl || '').trim()
+      ) {
+        alert(`${cat.name} requires a receipt for this amount. Attach a receipt on item #${i + 1} before submitting.`);
+        return;
+      }
+    }
+
     if (!isDraft) {
-      for (let i = 0; i < items.length; i++) {
-        if (policyWarnings[i] && policyWarnings[i].length > 0 && !items[i].employeeJustification?.trim()) {
+      for (let i = 0; i < normalizedItems.length; i++) {
+        if (policyWarnings[i] && policyWarnings[i].length > 0 && !normalizedItems[i].employeeJustification?.trim()) {
           alert(`Item #${i + 1} triggers policy violation rules (${policyWarnings[i].join(', ')}). Please provide an employee justification before submitting for approval.`);
           return;
         }
@@ -269,7 +300,7 @@ export const MyExpensesPage: React.FC = () => {
         description: formDescription,
         projectCostCenter: formProject,
         isDraft,
-        items
+        items: normalizedItems
       };
 
       if (editingClaimId) {
@@ -307,25 +338,26 @@ export const MyExpensesPage: React.FC = () => {
   });
 
   const getStatusBadge = (status: string) => {
+    const base = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap';
     switch (status) {
       case 'draft':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>;
+        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>Draft</span>;
       case 'submitted':
       case 'pending_manager':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">Pending Manager Approval</span>;
+        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>Pending manager</span>;
       case 'pending_finance':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">Pending Finance Verification</span>;
+        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
       case 'approved':
       case 'payment_pending':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">Payment Pending</span>;
+        return <span className={`${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300`}>Payment pending</span>;
       case 'returned':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">Returned for Correction</span>;
+        return <span className={`${base} bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300`}>Returned</span>;
       case 'rejected':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">Rejected</span>;
+        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
       case 'paid':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Paid</span>;
+        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Paid</span>;
       default:
-        return <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">{status}</span>;
+        return <span className={`${base} bg-slate-100 text-slate-700`}>{status}</span>;
     }
   };
 
@@ -395,7 +427,9 @@ export const MyExpensesPage: React.FC = () => {
             <FileText className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-3" />
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No Expense Claims Found</h3>
             <p className="text-xs text-slate-500 max-w-sm mt-1">
-              You haven't submitted any expense claims matching the selected filters.
+              {categories.length === 0
+                ? 'No expense categories are set up for this organization yet. Ask HR/admin to open Expense Settings once so default categories (Travel, Food, Hotel) are created.'
+                : "You haven't submitted any expense claims matching the selected filters."}
             </p>
             <button
               onClick={() => openCreateModal()}
@@ -552,7 +586,6 @@ export const MyExpensesPage: React.FC = () => {
                     onChange={(e) => setFormPaymentMethod(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
-                    <option value="payroll">Payroll Reimbursement</option>
                     <option value="bank_transfer">Direct Bank Transfer</option>
                     <option value="manual">Manual Cash / Cheque</option>
                   </select>

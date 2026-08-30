@@ -38,8 +38,7 @@ export const TravelAdvancesPage: React.FC = () => {
         path.startsWith('/manager') ||
         path.startsWith('/team-lead') ||
         path.startsWith('/hr') ||
-        path.startsWith('/admin') ||
-        path.startsWith('/expenses');
+        path.startsWith('/admin');
 
       // For managers/HR/CEO/Admin: fetch all employee advances across org/team
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
@@ -162,8 +161,8 @@ export const TravelAdvancesPage: React.FC = () => {
                       <td className="py-3.5 px-4 font-bold text-indigo-600 dark:text-indigo-400">
                         ₹{bal.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                           {adv.status || 'Requested'}
                         </span>
                       </td>

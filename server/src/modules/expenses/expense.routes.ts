@@ -55,6 +55,7 @@ router.post('/claims', asyncHandler((req, res) => controller.submitClaim(req, re
 router.put('/claims/:id', asyncHandler((req, res) => controller.updateClaim(req, res)));
 
 // Approvals & Workflow Actions
+router.post('/claims/bulk-approve', asyncHandler((req, res) => controller.bulkApproveClaims(req, res)));
 router.post('/claims/:id/manager-approve', asyncHandler((req, res) => controller.approveClaimByManager(req, res)));
 router.post('/claims/:id/finance-verify', asyncHandler((req, res) => controller.verifyAndApproveByFinance(req, res)));
 router.post('/claims/:id/approve', asyncHandler((req, res) => controller.approveClaimByManager(req, res)));

@@ -86,9 +86,11 @@ const TEAM_LEAD_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Approvals', href: '/team-lead/expenses/approvals', icon: FileText },
+      { name: 'Expense Approvals', href: '/team-lead/expenses/approvals', icon: CheckCircle2 },
       { name: 'My Expenses', href: '/team-lead/expenses/my-expenses', icon: FileText },
       { name: 'Travel Requests', href: '/team-lead/expenses/travel-requests', icon: Clock },
+      { name: 'Travel Advances', href: '/team-lead/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/team-lead/expenses/mileage-claims', icon: Navigation },
     ],
   },
   {
