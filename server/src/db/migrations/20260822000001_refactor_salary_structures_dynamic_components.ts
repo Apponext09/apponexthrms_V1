@@ -12,6 +12,18 @@ export async function up(knex: Knex): Promise<void> {
     'description'
   ];
 
+  const fkNames = [
+    'salary_structures_applicable_to_designation_id_foreign',
+    'salary_structures_applicable_to_location_id_foreign',
+  ];
+  for (const fk of fkNames) {
+    try {
+      await knex.raw(`ALTER TABLE salary_structures DROP FOREIGN KEY \`${fk}\``);
+    } catch {
+      /* constraint may already be gone */
+    }
+  }
+
   for (const col of columnsToDrop) {
     const hasCol = await knex.schema.hasColumn('salary_structures', col);
     if (hasCol) {
