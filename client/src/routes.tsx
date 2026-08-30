@@ -685,7 +685,7 @@ export function AppRoutes() {
           <Route path="/workflow/builder" element={<WorkflowBuilderPage />} />
           <Route path="/workflow/approvals" element={<ApprovalInboxPage />} />
 
-          {/* Notifications */}
+          {/* Notifications code*/}
           <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
 
@@ -731,6 +731,7 @@ export function AppRoutes() {
             <Route index element={<Navigate to="/settings/general" replace />} />
             <Route path="general" element={<GeneralSettingsPage />} />
             <Route path="company-profile" element={<CompanyProfilePage />} />
+            
             <Route path="branches" element={<BranchesPage />} />
             <Route path="locations" element={<LocationsPage />} />
             <Route path="branding" element={<BrandingPage />} />
