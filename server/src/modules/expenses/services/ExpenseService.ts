@@ -59,16 +59,8 @@ export class ExpenseService {
     return null;
   }
 
-  private async requireEmployeeForCtx(ctx: TenantContext) {
-    const emp = await this.getEmployeeForCtx(ctx);
-    if (!emp) {
-      throw new Error('Your login is not linked to an employee profile. Ask HR to link your user to an employee, then try again.');
-    }
-    return emp;
-  }
-
   private async getPeopleVisibility(ctx: TenantContext, employeeIdColumn: string, employeeId?: number): Promise<{
-    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees';
+    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees' | 'submitter';
     column?: string;
     value?: number;
   }> {
@@ -81,23 +73,37 @@ export class ExpenseService {
       .join('roles', 'user_roles.role_id', 'roles.id')
       .where('user_roles.user_id', ctx.userId)
       .where('user_roles.organization_id', ctx.organizationId)
-      .select('roles.code')
+      .select('roles.code as role_code', 'roles.name as role_name')
       .catch(() => []);
-    const roleCodes = (roleRows || []).map((r: any) => String(r.code || r.Code || '').toLowerCase());
-    const isHrOrAdmin = roleCodes.some((c: string) =>
-      ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'].includes(c)
+    const roleCodes = (roleRows || []).map((r: any) =>
+      String(r.roleCode || r.role_code || r.code || r.roleName || r.role_name || r.name || '').toLowerCase()
+    );
+    const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase());
+    const allRoles = [...roleCodes, ...ctxRoles];
+    const isHrOrAdmin = allRoles.some((c: string) =>
+      ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'admin', 'finance', 'finance_manager', 'accounts'].includes(c)
+      || c.includes('ceo')
+      || c.includes('finance')
+      || (c.includes('admin') && !c.includes('company_employee'))
+      || c.startsWith('hr')
     );
     if (isHrOrAdmin) return { type: 'all' };
 
     const emp = await this.getEmployeeForCtx(ctx);
-    if (!emp) return { type: 'none' };
+    if (!emp) {
+      return {
+        type: 'submitter',
+        column: employeeIdColumn.replace('employee_id', 'submitted_by_user_id'),
+        value: Number(ctx.userId),
+      };
+    }
 
     const deptId = emp.current_department_id ?? emp.currentDepartmentId;
-    const isDeptHead = roleCodes.some((c: string) => ['department_head', 'dept_head'].includes(c));
+    const isDeptHead = allRoles.some((c: string) => ['department_head', 'dept_head'].includes(c) || c.includes('department_head'));
     if (isDeptHead && deptId) {
       return { type: 'dept', value: Number(deptId) };
     }
-    const isManagerLike = roleCodes.some((c: string) => ['manager', 'team_lead'].includes(c));
+    const isManagerLike = allRoles.some((c: string) => ['manager', 'team_lead'].includes(c) || c.includes('team_lead') || c.includes('manager'));
     if (isManagerLike) {
       return { type: 'reportees', value: Number(emp.id) };
     }
@@ -105,7 +111,7 @@ export class ExpenseService {
   }
 
   private applyVisibilityToQuery(query: any, vis: {
-    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees';
+    type: 'all' | 'eq' | 'none' | 'dept' | 'reportees' | 'submitter';
     column?: string;
     value?: number;
   }) {
@@ -113,6 +119,7 @@ export class ExpenseService {
     if (vis.type === 'none') return query.whereRaw('1 = 0');
     if (vis.type === 'dept') return query.where('e.current_department_id', vis.value);
     if (vis.type === 'reportees') return query.where('e.reporting_manager_id', vis.value);
+    if (vis.type === 'submitter' && vis.column) return query.where(vis.column, vis.value);
     if (vis.type === 'eq' && vis.column) return query.where(vis.column, vis.value);
     return query;
   }
@@ -372,9 +379,9 @@ export class ExpenseService {
       paymentDate: claim.payment_date || claim.paymentDate,
       paidAmount: claim.paid_amount ?? claim.paidAmount,
       paymentReference: claim.payment_reference || claim.paymentReference,
-      firstName: claim.first_name || claim.firstName,
-      lastName: claim.last_name || claim.lastName,
-      email: claim.email,
+      firstName: claim.first_name || claim.firstName || claim.submitter_first_name || claim.submitterFirstName,
+      lastName: claim.last_name || claim.lastName || claim.submitter_last_name || claim.submitterLastName,
+      email: claim.email || claim.submitter_email || claim.submitterEmail,
       employeeCode: claim.employee_code || claim.employeeCode,
       departmentName: claim.department_name || claim.departmentName,
       designationName: claim.designation_name || claim.designationName,
@@ -419,6 +426,7 @@ export class ExpenseService {
 
     let query = db('expense_claims as ec')
       .leftJoin('employees as e', 'ec.employee_id', 'e.id')
+      .leftJoin('users as u', 'ec.submitted_by_user_id', 'u.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
       .leftJoin('locations as loc', 'e.current_location_id', 'loc.id')
@@ -433,13 +441,25 @@ export class ExpenseService {
         'd.name as department_name',
         'des.name as designation_name',
         'loc.name as location_name',
-        'cat.name as category_name'
+        'cat.name as category_name',
+        'u.first_name as submitter_first_name',
+        'u.last_name as submitter_last_name',
+        'u.email as submitter_email'
       )
       .orderBy('ec.created_at', 'desc');
 
     if (params.mode === 'my_expenses') {
       const emp = await this.getEmployeeForCtx(ctx, params.employeeId);
-      query = query.where('ec.employee_id', emp ? emp.id : (params.employeeId || 0));
+      query = query.where(function () {
+        if (emp) this.where('ec.employee_id', emp.id);
+        if (ctx.userId) this.orWhere('ec.submitted_by_user_id', ctx.userId);
+        if (!emp && !ctx.userId) this.whereRaw('1 = 0');
+      });
+    } else if (params.mode === 'finance' || params.mode === 'payout' || params.status === 'pending_finance' || params.status === 'payment_pending') {
+      const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id', params.employeeId);
+      if (vis.type !== 'all') {
+        query = this.applyVisibilityToQuery(query, vis);
+      }
     } else {
       const vis = await this.getPeopleVisibility(ctx, 'ec.employee_id', params.employeeId);
       query = this.applyVisibilityToQuery(query, vis);
@@ -449,9 +469,9 @@ export class ExpenseService {
       if (params.status === 'pending_manager') {
         query = query.whereIn('ec.status', ['submitted', 'pending_manager']);
       } else if (params.status === 'pending_finance') {
-        query = query.where('ec.status', 'pending_finance');
+        query = query.whereIn('ec.status', ['pending_finance', 'approved']);
       } else if (params.status === 'pending_approvals') {
-        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending_finance']);
+        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending_finance', 'approved']);
       } else {
         query = query.where('ec.status', params.status);
       }
@@ -505,6 +525,7 @@ export class ExpenseService {
 
     const claim = await db('expense_claims as ec')
       .leftJoin('employees as e', 'ec.employee_id', 'e.id')
+      .leftJoin('users as u', 'ec.submitted_by_user_id', 'u.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .leftJoin('designations as des', 'e.current_designation_id', 'des.id')
       .leftJoin('expense_categories as cat', 'ec.category_id', 'cat.id')
@@ -520,6 +541,9 @@ export class ExpenseService {
         'd.name as department_name',
         'des.name as designation_name',
         'cat.name as category_name',
+        'u.first_name as submitter_first_name',
+        'u.last_name as submitter_last_name',
+        'u.email as submitter_email',
         'tr.request_number as travel_request_number',
         'ta.advance_number as travel_advance_number',
         'ta.advance_amount as travel_advance_amount'
@@ -583,8 +607,8 @@ export class ExpenseService {
   async createClaim(ctx: TenantContext, input: ClaimInput) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.requireEmployeeForCtx(ctx);
-    const empId = emp.id;
+    const emp = await this.getEmployeeForCtx(ctx);
+    const empId = emp ? emp.id : null;
 
     const claimNumber = `EXP-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
     const isDraft = Boolean(input.isDraft);
@@ -635,6 +659,7 @@ export class ExpenseService {
       claim_number: claimNumber,
       organization_id: orgId,
       employee_id: empId,
+      submitted_by_user_id: ctx.userId || null,
       title: input.title || 'Expense Claim',
       category_id: input.categoryId || (validatedItems[0]?.categoryId || null),
       claim_date: input.claimDate || new Date().toISOString().slice(0, 10),
@@ -1098,8 +1123,8 @@ export class ExpenseService {
       startDate: row.start_date || row.startDate,
       endDate: row.end_date || row.endDate,
       estimatedBudget: row.estimated_budget ?? row.estimatedBudget,
-      firstName: row.first_name || row.firstName,
-      lastName: row.last_name || row.lastName,
+      firstName: row.first_name || row.firstName || row.submitter_first_name || row.submitterFirstName,
+      lastName: row.last_name || row.lastName || row.submitter_last_name || row.submitterLastName,
       employeeCode: row.employee_code || row.employeeCode,
       departmentName: row.department_name || row.departmentName,
       approverNotes: row.approver_notes || row.approverNotes,
@@ -1120,8 +1145,8 @@ export class ExpenseService {
       balanceAmount: row.balance_amount ?? row.balanceAmount,
       purpose: row.purpose,
       status: row.status,
-      firstName: row.first_name || row.firstName,
-      lastName: row.last_name || row.lastName,
+      firstName: row.first_name || row.firstName || row.submitter_first_name || row.submitterFirstName,
+      lastName: row.last_name || row.lastName || row.submitter_last_name || row.submitterLastName,
       employeeCode: row.employee_code || row.employeeCode,
       requestNumber: row.request_number || row.requestNumber,
       travelPurpose: row.travel_purpose || row.travelPurpose,
@@ -1144,8 +1169,8 @@ export class ExpenseService {
       calculatedAmount: row.calculated_amount ?? row.calculatedAmount,
       purpose: row.purpose,
       status: row.status,
-      firstName: row.first_name || row.firstName,
-      lastName: row.last_name || row.lastName,
+      firstName: row.first_name || row.firstName || row.submitter_first_name || row.submitterFirstName,
+      lastName: row.last_name || row.lastName || row.submitter_last_name || row.submitterLastName,
       employeeCode: row.employee_code || row.employeeCode,
       createdAt: row.created_at || row.createdAt
     };
@@ -1156,9 +1181,10 @@ export class ExpenseService {
     const db = getKnex();
     let query = db('travel_requests as tr')
       .leftJoin('employees as e', 'tr.employee_id', 'e.id')
+      .leftJoin('users as u', 'tr.submitted_by_user_id', 'u.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
       .where('tr.organization_id', ctx.organizationId)
-      .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
+      .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name', 'u.first_name as submitter_first_name', 'u.last_name as submitter_last_name')
       .orderBy('tr.created_at', 'desc');
 
     const vis = await this.getPeopleVisibility(ctx, 'tr.employee_id', employeeId);
@@ -1170,14 +1196,15 @@ export class ExpenseService {
   async createTravelRequest(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.requireEmployeeForCtx(ctx);
+    const emp = await this.getEmployeeForCtx(ctx);
     const reqNum = `TRV-${Date.now().toString().slice(-6)}`;
 
     const [id] = await db('travel_requests').insert({
       uuid: uuidv4(),
       request_number: reqNum,
       organization_id: ctx.organizationId,
-      employee_id: emp?.id,
+      employee_id: emp?.id ?? null,
+      submitted_by_user_id: ctx.userId || null,
       from_location: data.fromLocation,
       to_location: data.toLocation,
       purpose: data.purpose,
@@ -1200,11 +1227,23 @@ export class ExpenseService {
   async updateTravelRequestStatus(ctx: TenantContext, id: number, status: string, notes?: string) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
+    const existing = await db('travel_requests')
+      .where('id', id)
+      .where('organization_id', ctx.organizationId)
+      .first();
+    if (!existing) throw new Error('Travel request not found');
+
+    let nextStatus = status;
+    const current = String(existing.status || '').toLowerCase();
+    if (status === 'approved' && (current === 'pending' || current === 'submitted')) {
+      nextStatus = 'pending_finance';
+    }
+
     await db('travel_requests')
       .where('id', id)
       .where('organization_id', ctx.organizationId)
       .update({
-        status,
+        status: nextStatus,
         approver_id: ctx.userId || null,
         approver_notes: notes || null,
         updated_at: new Date()
@@ -1237,7 +1276,7 @@ export class ExpenseService {
   async createTravelAdvance(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.requireEmployeeForCtx(ctx);
+    const emp = await this.getEmployeeForCtx(ctx);
     const advNum = `ADV-${Date.now().toString().slice(-6)}`;
     const amt = Number(data.advanceAmount || 0);
 
@@ -1245,7 +1284,8 @@ export class ExpenseService {
       uuid: uuidv4(),
       advance_number: advNum,
       organization_id: ctx.organizationId,
-      employee_id: emp?.id,
+      employee_id: emp?.id ?? null,
+      submitted_by_user_id: ctx.userId || null,
       travel_request_id: data.travelRequestId || null,
       advance_amount: amt,
       approved_amount: amt,
@@ -1284,7 +1324,7 @@ export class ExpenseService {
   async createMileageClaim(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
-    const emp = await this.requireEmployeeForCtx(ctx);
+    const emp = await this.getEmployeeForCtx(ctx);
 
     const settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
     const numOr = (v: any, fallback: number) => {
@@ -1302,7 +1342,8 @@ export class ExpenseService {
     const [id] = await db('mileage_claims').insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      employee_id: emp?.id,
+      employee_id: emp?.id ?? null,
+      submitted_by_user_id: ctx.userId || null,
       trip_date: data.tripDate || new Date().toISOString().slice(0, 10),
       from_location: data.fromLocation,
       to_location: data.toLocation,

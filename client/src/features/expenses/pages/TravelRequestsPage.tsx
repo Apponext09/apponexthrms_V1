@@ -100,6 +100,8 @@ export const TravelRequestsPage: React.FC = () => {
     switch (status) {
       case 'approved':
         return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Approved</span>;
+      case 'pending_finance':
+        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
       case 'rejected':
         return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
       default:
