@@ -516,25 +516,25 @@ export const MyExpensesPage: React.FC = () => {
 
       {/* CREATE / EDIT CLAIM MODAL */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[92dvh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-auto">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60">
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60 shrink-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate">
                 {editingClaimId ? 'Edit / Resubmit Expense Claim' : 'Create New Expense Claim'}
               </h2>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg shrink-0 ml-2"
               >
                 ✕
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
               {/* Claim Header Inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     Claim Title *
@@ -620,15 +620,15 @@ export const MyExpensesPage: React.FC = () => {
 
               {/* Multiple Expense Items Section */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <FileCheck className="w-4 h-4 text-blue-500" />
+                    <FileCheck className="w-4 h-4 text-blue-500 shrink-0" />
                     Expense Line Items
                   </h3>
                   <button
                     type="button"
                     onClick={handleAddItem}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Item
                   </button>
@@ -637,7 +637,7 @@ export const MyExpensesPage: React.FC = () => {
                 {items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3 relative"
+                    className="p-3.5 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3 relative"
                   >
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
                       <span>Item #{idx + 1}</span>
@@ -645,14 +645,14 @@ export const MyExpensesPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(idx)}
-                          className="text-rose-500 hover:text-rose-700 p-1"
+                          className="text-rose-500 hover:text-rose-700 p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       <div>
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                           Category
@@ -699,37 +699,35 @@ export const MyExpensesPage: React.FC = () => {
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
                           Receipt Upload (Max 10MB)
                         </label>
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const inputEl = document.getElementById(`receipt-file-input-${idx}`);
-                                if (inputEl) inputEl.click();
-                              }}
-                              className="cursor-pointer px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors"
-                            >
-                              <Upload className="w-4 h-4" />
-                              {item.receiptUrl ? 'Change Receipt' : 'Upload Receipt'}
-                            </button>
-                            <input
-                              id={`receipt-file-input-${idx}`}
-                              type="file"
-                              accept="image/png,image/jpeg,image/jpg,application/pdf"
-                              onChange={(e) => handleFileUpload(idx, e)}
-                              className="hidden"
-                            />
-                          </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const inputEl = document.getElementById(`receipt-file-input-${idx}`);
+                              if (inputEl) inputEl.click();
+                            }}
+                            className="cursor-pointer px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors shrink-0"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            {item.receiptUrl ? 'Change' : 'Upload'}
+                          </button>
+                          <input
+                            id={`receipt-file-input-${idx}`}
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,application/pdf"
+                            onChange={(e) => handleFileUpload(idx, e)}
+                            className="hidden"
+                          />
                           {item.receiptUrl ? (
-                            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-lg text-[11px] font-medium">
+                            <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-lg text-[11px] font-medium min-w-0 max-w-full">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                              <span className="max-w-[90px] truncate" title={item.receiptFileName || 'Receipt Attached'}>
+                              <span className="truncate max-w-[80px] sm:max-w-[100px]" title={item.receiptFileName || 'Receipt Attached'}>
                                 {item.receiptFileName || 'Uploaded'}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => setPreviewReceiptUrl(item.receiptUrl!)}
-                                className="p-0.5 text-emerald-600 hover:text-emerald-900 rounded"
+                                className="p-0.5 text-emerald-600 hover:text-emerald-900 rounded shrink-0"
                                 title="Preview Receipt"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -740,7 +738,7 @@ export const MyExpensesPage: React.FC = () => {
                                   handleItemChange(idx, 'receiptUrl', '');
                                   handleItemChange(idx, 'receiptFileName', '');
                                 }}
-                                className="p-0.5 text-rose-500 hover:text-rose-700 rounded"
+                                className="p-0.5 text-rose-500 hover:text-rose-700 rounded shrink-0"
                                 title="Remove Receipt"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -752,7 +750,7 @@ export const MyExpensesPage: React.FC = () => {
                     </div>
 
                     {/* Description & Justification */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <input
                         type="text"
                         placeholder="Item description / merchant details..."
@@ -792,10 +790,10 @@ export const MyExpensesPage: React.FC = () => {
               </div>
 
               {/* Total Summary Banner */}
-              <div className="p-4 bg-slate-900 text-white rounded-xl flex items-center justify-between">
+              <div className="p-3.5 sm:p-4 bg-slate-900 text-white rounded-xl flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="text-xs text-slate-400">Total Claimed Amount</span>
-                  <div className="text-xl font-bold">₹{calculateTotal().toLocaleString('en-IN')}</div>
+                  <div className="text-lg sm:text-xl font-bold">₹{calculateTotal().toLocaleString('en-IN')}</div>
                 </div>
                 <div className="text-xs text-slate-400 text-right">
                   <span>Items: {items.length}</span>
@@ -804,11 +802,11 @@ export const MyExpensesPage: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-end gap-3">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex flex-wrap items-center justify-end gap-2 sm:gap-3 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -816,7 +814,7 @@ export const MyExpensesPage: React.FC = () => {
                 type="button"
                 disabled={submitting}
                 onClick={() => handleSaveClaim(true)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-sm"
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors disabled:opacity-50"
               >
                 Save as Draft
               </button>
@@ -824,7 +822,7 @@ export const MyExpensesPage: React.FC = () => {
                 type="button"
                 disabled={submitting}
                 onClick={() => handleSaveClaim(false)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
               >
                 {submitting ? 'Submitting...' : 'Submit Claim'}
               </button>
