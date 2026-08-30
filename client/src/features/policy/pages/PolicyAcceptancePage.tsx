@@ -236,21 +236,32 @@ export function PolicyAcceptancePage() {
     navigate('/login');
   };
 
-  // Automatically redirect to destination dashboard if no policies are pending
   useEffect(() => {
     if (!isLoading && totalPending === 0) {
-      const targetDashboard = getDestinationDashboard();
-      navigate(targetDashboard, { replace: true });
+      navigate(getDestinationDashboard(), { replace: true });
     }
-  }, [isLoading, totalPending, user, navigate]);
+  }, [isLoading, totalPending]);
 
-  if (isLoading || totalPending === 0) {
+  if (isLoading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4">
         <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-        <p className="text-sm font-medium text-slate-500">
-          {isLoading ? 'Loading compliance policies...' : 'Redirecting to Dashboard...'}
-        </p>
+        <p className="text-sm font-medium text-slate-500">Loading compliance policies...</p>
+      </div>
+    );
+  }
+
+  if (totalPending === 0) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800 p-4 text-center">
+        <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
+        <p className="text-sm font-medium text-slate-500 mb-4">Redirecting to Dashboard...</p>
+        <Button
+          onClick={() => navigate(getDestinationDashboard(), { replace: true })}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 h-10 rounded-xl gap-2 shadow-md shadow-blue-500/20 cursor-pointer"
+        >
+          Proceed to Dashboard
+        </Button>
       </div>
     );
   }
@@ -275,9 +286,6 @@ export function PolicyAcceptancePage() {
                 <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
                   Mandatory Policy Acceptance
                 </h1>
-                <span className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-md tracking-wide uppercase shadow-2xs">
-                  {formatRoleLabel(primaryRoleCode)}
-                </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 Step <span className="text-blue-600 font-bold">{safeActiveIndex + 1} of {totalPending}</span>: Accept all policies to unlock system access

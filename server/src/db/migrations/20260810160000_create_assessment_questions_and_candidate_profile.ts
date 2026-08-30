@@ -18,9 +18,9 @@ export async function up(knex: Knex): Promise<void> {
     await knex.schema.createTable('assessment_questions', (table) => {
       table.bigIncrements('id').primary();
       table.string('uuid', 36).notNullable().unique();
-      table.bigInteger('organization_id').unsigned().notNullable();
+      table.integer('organization_id').unsigned().notNullable();
 
-      table.bigInteger('assessment_id').unsigned().notNullable();
+      table.integer('assessment_id').unsigned().notNullable();
       table.integer('question_number').notNullable().defaultTo(1);
       table.text('question_text').notNullable();
       table.enum('question_type', ['mcq', 'coding', 'text', 'boolean']).defaultTo('mcq');
@@ -29,7 +29,7 @@ export async function up(knex: Knex): Promise<void> {
       table.integer('marks').defaultTo(1);
       table.text('explanation').nullable();
 
-      table.bigInteger('created_by').unsigned().nullable();
+      table.integer('created_by').unsigned().nullable();
       table.timestamp('created_at').defaultTo(knex.fn.now());
       table.timestamp('updated_at').defaultTo(knex.fn.now());
       table.timestamp('deleted_at').nullable();
@@ -49,9 +49,9 @@ export async function up(knex: Knex): Promise<void> {
     await knex.schema.createTable('candidate_skills', (table) => {
       table.bigIncrements('id').primary();
       table.string('uuid', 36).notNullable().unique();
-      table.bigInteger('organization_id').unsigned().notNullable();
+      table.integer('organization_id').unsigned().notNullable();
 
-      table.bigInteger('candidate_id').unsigned().notNullable();
+      table.integer('candidate_id').unsigned().notNullable();
       table.string('skill_name', 150).notNullable();
       table.enum('proficiency', ['beginner', 'intermediate', 'advanced', 'expert']).defaultTo('intermediate');
       table.decimal('years_of_experience', 4, 1).nullable();
@@ -73,9 +73,9 @@ export async function up(knex: Knex): Promise<void> {
     await knex.schema.createTable('candidate_education', (table) => {
       table.bigIncrements('id').primary();
       table.string('uuid', 36).notNullable().unique();
-      table.bigInteger('organization_id').unsigned().notNullable();
+      table.integer('organization_id').unsigned().notNullable();
 
-      table.bigInteger('candidate_id').unsigned().notNullable();
+      table.integer('candidate_id').unsigned().notNullable();
       table.string('degree', 255).notNullable();
       table.string('field_of_study', 255).nullable();
       table.string('institution', 255).nullable();
@@ -99,9 +99,9 @@ export async function up(knex: Knex): Promise<void> {
     await knex.schema.createTable('candidate_experience', (table) => {
       table.bigIncrements('id').primary();
       table.string('uuid', 36).notNullable().unique();
-      table.bigInteger('organization_id').unsigned().notNullable();
+      table.integer('organization_id').unsigned().notNullable();
 
-      table.bigInteger('candidate_id').unsigned().notNullable();
+      table.integer('candidate_id').unsigned().notNullable();
       table.string('company_name', 255).notNullable();
       table.string('job_title', 255).nullable();
       table.date('start_date').nullable();

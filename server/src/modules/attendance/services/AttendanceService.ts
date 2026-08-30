@@ -1269,6 +1269,7 @@ export class AttendanceService {
         });
       }
       const departmentRows = await departmentQuery.select('id', 'name').orderBy('name', 'asc').catch(() => []);
+      const departmentIds = departmentRows.map((d: any) => d.id);
       const formattedDepartments = departmentRows.map((d: any) => ({
         id: String(d.id),
         name: d.name || `Department ${d.id}`,

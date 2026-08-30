@@ -1,4 +1,5 @@
 import { Router } from 'express';
+// @ts-ignore
 import swaggerUi from 'swagger-ui-express';
 import { swaggerDocument } from './swaggerDoc';
 

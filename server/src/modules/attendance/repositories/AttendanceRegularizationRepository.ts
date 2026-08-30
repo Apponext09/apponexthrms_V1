@@ -43,7 +43,7 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
         qb.where('employee_id', employeeId);
       })
       .andWhere((qb) => {
-        qb.where('organization_id', orgId).orWhere('company_id', orgId);
+        qb.where('organization_id', orgId);
       })
       .orderBy('request_date', 'desc');
 
@@ -92,8 +92,7 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
       .join('employees', 'attendance_regularizations.employee_id', 'employees.id')
       .leftJoin('departments', 'employees.current_department_id', 'departments.id')
       .where((qb) => {
-        qb.where('attendance_regularizations.organization_id', orgId)
-          .orWhere('attendance_regularizations.company_id', orgId);
+        qb.where('attendance_regularizations.organization_id', orgId);
       })
       .whereIn('attendance_regularizations.status', ['pending_manager', 'pending'])
       .where((qb) => {
@@ -126,8 +125,7 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
       .join('employees', 'attendance_regularizations.employee_id', 'employees.id')
       .leftJoin('departments', 'employees.current_department_id', 'departments.id')
       .where((qb) => {
-        qb.where('attendance_regularizations.organization_id', orgId)
-          .orWhere('attendance_regularizations.company_id', orgId);
+        qb.where('attendance_regularizations.organization_id', orgId);
       })
       .whereIn('attendance_regularizations.status', ['pending_hr', 'manager_approved', 'pending_manager', 'pending'])
       .orderBy('attendance_regularizations.created_at', 'desc');
@@ -157,8 +155,7 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
       .join('employees', 'attendance_regularizations.employee_id', 'employees.id')
       .leftJoin('departments', 'employees.current_department_id', 'departments.id')
       .where((qb) => {
-        qb.where('attendance_regularizations.organization_id', orgId)
-          .orWhere('attendance_regularizations.company_id', orgId);
+        qb.where('attendance_regularizations.organization_id', orgId);
       });
 
     if (options.employeeId) {

@@ -55,12 +55,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
-      {
-        name: 'Company Policies',
-        href: '/settings/policies',
-        icon: 'ShieldCheck',
-        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
-      },
     ],
   },
 
@@ -275,16 +269,18 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'expense_management',
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/expense-claims', icon: 'Receipt' },
-    ],
-  },
-
-  // ── 10. Travel Management ─────────────────────────────────────────────────
-  {
-    id: 'travel_management',
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/travel-requests', icon: 'Compass' },
+      { name: 'Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp' },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'Receipt' },
+      { name: 'Approvals', href: '/expenses/approvals', icon: 'CheckCircle' },
+      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: 'FileCheck' },
+      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: 'CreditCard' },
+      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: 'Compass' },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: 'DollarSign' },
+      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: 'Car' },
+      { name: 'Expense Categories', href: '/expenses/categories', icon: 'Tag', minRoles: ['organization_admin', 'hr_manager', 'super_admin'] },
+      { name: 'Expense Policies', href: '/expenses/policies', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr_manager', 'super_admin'] },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet' },
+      { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin'] },
     ],
   },
 

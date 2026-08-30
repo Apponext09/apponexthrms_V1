@@ -150,7 +150,7 @@ export class PolicyController {
   getMyPolicies = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
-      const jwtRoles = req.user?.roles;
+      const jwtRoles = (req.user as any)?.roles;
       const policies = await this.policyService.getMyPolicies(req.ctx, jwtRoles);
       res.json({
         success: true,
@@ -168,7 +168,7 @@ export class PolicyController {
   getPendingPolicies = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
-      const jwtRoles = req.user?.roles;
+      const jwtRoles = (req.user as any)?.roles;
       const pendingPolicies = await this.policyService.getPendingPolicies(req.ctx, jwtRoles);
       res.json({
         success: true,

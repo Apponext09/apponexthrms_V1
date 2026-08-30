@@ -10,7 +10,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -86,13 +86,9 @@ const TEAM_LEAD_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/team-lead/expenses', icon: FileText },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/team-lead/travel', icon: Clock },
+      { name: 'Expense Approvals', href: '/team-lead/expenses/approvals', icon: FileText },
+      { name: 'My Expenses', href: '/team-lead/expenses/my-expenses', icon: FileText },
+      { name: 'Travel Requests', href: '/team-lead/expenses/travel-requests', icon: Clock },
     ],
   },
   {
@@ -110,9 +106,10 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'APPROVALS',
+    label: 'APPROVALS & GOVERNANCE',
     items: [
       { name: 'My Approvals', href: '/approvals', icon: CheckCircle2 },
+      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
     ],
   },
 ];

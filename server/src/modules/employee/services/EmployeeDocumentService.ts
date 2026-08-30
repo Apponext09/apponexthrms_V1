@@ -70,12 +70,12 @@ export class EmployeeDocumentService {
       verified_at: new Date(),
     } as any);
 
-    await this.auditService.log(ctx, {
+    await (this.auditService as any).log(ctx, {
       action: 'UPDATE',
       entityType: 'DOCUMENT',
       entityId: documentId,
-      changeDescription: `Document ${approved ? 'verified' : 'rejected'}. Reason: ${reason || 'N/A'}`,
-    });
+      afterState: updated,
+    } as any);
 
     return updated;
   }

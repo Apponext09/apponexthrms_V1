@@ -127,8 +127,8 @@ export class LicensingService {
       access_type: 'view',
       granted,
       reason_denied: reason,
-      request_path: ctx.requestPath || '',
-      ip_address: ctx.ipAddress || '',
+      request_path: (ctx as any).requestPath || '',
+      ip_address: (ctx as any).ipAddress || '',
       created_at: new Date(),
     });
   }

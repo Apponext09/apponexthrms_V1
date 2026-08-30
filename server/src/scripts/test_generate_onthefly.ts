@@ -13,11 +13,11 @@ async function testGenerate() {
   const result = await service.getOrGenerateFromProcessedRun(ctx, emp.id, '2026-08');
   
   const ps = result.payslip;
-  console.log(`• Payslip Number : ${ps.payslip_number || ps.payslipNumber}`);
-  console.log(`• Gross Salary   : ₹${ps.gross_salary || ps.grossSalary}`);
-  console.log(`• Basic Salary   : ₹${ps.basic_salary || ps.basicSalary}`);
-  console.log(`• Total Deduct   : ₹${ps.total_deductions || ps.totalDeductions}`);
-  console.log(`• Net Salary     : ₹${ps.net_salary || ps.netSalary}`);
+  console.log(`• Payslip Number : ${ps.payslip_number || (ps as any).payslipNumber}`);
+  console.log(`• Gross Salary   : ₹${ps.gross_salary || (ps as any).grossSalary}`);
+  console.log(`• Basic Salary   : ₹${ps.basic_salary || (ps as any).basicSalary}`);
+  console.log(`• Total Deduct   : ₹${ps.total_deductions || (ps as any).totalDeductions}`);
+  console.log(`• Net Salary     : ₹${ps.net_salary || (ps as any).netSalary}`);
   console.log(`• Annual CTC     : ₹${ps.ctc}`);
   console.log(`• Earnings Count : ${result.earnings.length}`);
   console.log(`• Deduct Count   : ${result.deductions.length}`);

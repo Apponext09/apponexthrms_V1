@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+// @ts-ignore
 import Editor from '@monaco-editor/react';
 import {
   AlertCircle, Clock, Play, Send, CheckCircle, ChevronLeft, ChevronRight,
@@ -1054,7 +1055,7 @@ const TakeAssessmentPageInner: React.FC = () => {
                     height="100%"
                     language={LANGUAGE_OPTIONS.find(l => l.value === selectedLanguage)?.monacoId || 'javascript'}
                     value={codeValue}
-                    onChange={(val) => handleAnswerChange(activeQNum, val || '')}
+                    onChange={(val: any) => handleAnswerChange(activeQNum, val || '')}
                     theme="vs-dark"
                     options={{
                       fontSize: 13,

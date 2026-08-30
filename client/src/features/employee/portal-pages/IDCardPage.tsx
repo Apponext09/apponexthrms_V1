@@ -51,7 +51,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
     const rawCode = employee?.employeeCode || (employee as any)?.employee_code || (user as any)?.employeeCode || (user as any)?.employee_code || (user as any)?.code || (user?.id ? `EMP${String(user.id).padStart(3, '0')}` : '');
     const rawDesig = employee?.designation || (employee as any)?.designation_name || (employee as any)?.jobTitle || (employee as any)?.job_title || (user as any)?.designation || (user as any)?.designation_name || (user as any)?.role || 'TEAM MEMBER';
     const rawDept = employee?.department || (employee as any)?.department_name || (user as any)?.department || (user as any)?.department_name || 'CORPORATE';
-    const rawEmail = employee?.workEmail || (employee as any)?.work_email || (employee as any)?.email || user?.email || (user as any)?.work_email || '';
+    const rawEmail = (employee as any)?.workEmail || (employee as any)?.work_email || (employee as any)?.email || user?.email || (user as any)?.work_email || '';
 
     return {
       ...user,
@@ -169,7 +169,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
         backgroundColor: '#ffffff',
         logging: false,
         imageTimeout: 15000,
-        onclone: (clonedDoc) => {
+        onclone: (clonedDoc: Document) => {
           const el = clonedDoc.getElementById('print-section');
           if (el) {
             el.style.position = 'static';
