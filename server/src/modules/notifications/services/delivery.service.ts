@@ -86,26 +86,51 @@ export class DeliveryService {
   }
 
   /**
-   * Send via Email
+   * Send via Email — real SMTP delivery via nodemailer transport
    */
   async sendViaEmail(ctx: TenantContext, queueItem: any): Promise<void> {
-    logger.info(`Sending email to ${queueItem.recipient_email}`);
+    const recipientEmail = queueItem.recipient_email;
+    if (!recipientEmail) {
+      throw new Error('No recipient email address for queue item');
+    }
 
-    // TODO: Implement actual email provider integration (SendGrid, AWS SES, etc.)
-    // Placeholder implementation
+    logger.info(`[DeliveryService] Sending email to ${recipientEmail}`);
+
     const startTime = Date.now();
 
-    // Simulate email sending
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Resolve notification content for the email body / subject
+    const notification = await this.db('notifications')
+      .where('id', queueItem.notification_id)
+      .first()
+      .catch(() => null);
+
+    const subjectLine = notification?.subject_line || 'Notification from Apponext HRMS';
+    const bodyText = notification?.body_text || '';
+
+    // Build a clean HTML email wrapper
+    const htmlBody = this.wrapNotificationHtml(subjectLine, bodyText, ctx.organizationId);
+
+    // Send via the central mail utility (uses SMTP_HOST/USER/PASS from .env)
+    const { sendMail } = await import('../../../common/lib/mail');
+    const success = await sendMail({
+      to: recipientEmail,
+      subject: subjectLine,
+      html: htmlBody,
+      organizationId: ctx.organizationId,
+    });
 
     const executionTime = Date.now() - startTime;
+
+    if (!success) {
+      throw new Error(`sendMail returned false for ${recipientEmail}`);
+    }
 
     // Log the delivery
     await this.logRepo.create(ctx, {
       uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'email',
-      recipient_address: queueItem.recipient_email,
+      recipient_address: recipientEmail,
       status: 'sent',
       attempt_number: queueItem.attempt_count + 1,
       provider_response_code: 200,
@@ -113,6 +138,37 @@ export class DeliveryService {
     } as any);
 
     await this.handleDeliverySuccess(ctx, queueItem);
+  }
+
+  /**
+   * Wrap plain-text notification body into a professional HTML template
+   */
+  private wrapNotificationHtml(subject: string, bodyText: string, _orgId?: number): string {
+    if (bodyText.includes('<div style=') || bodyText.includes('<table')) {
+      return bodyText; // already formatted
+    }
+    const lines = bodyText.split('\n');
+    let innerHtml = '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        innerHtml += '<div style="height:10px;"></div>';
+      } else if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+        innerHtml += `<div style="margin:4px 0 4px 12px;font-size:14px;color:#334155;">• ${trimmed.substring(1).trim()}</div>`;
+      } else {
+        innerHtml += `<p style="margin:4px 0;font-size:14px;color:#334155;line-height:1.6;">${trimmed}</p>`;
+      }
+    }
+    return `<!DOCTYPE html><html><body style="background:#f1f5f9;font-family:sans-serif;padding:30px 10px;">
+<table width="100%" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+<tr><td style="background:linear-gradient(135deg,#1e293b,#0f172a);padding:24px;color:#fff;">
+<h2 style="margin:0;font-size:18px;">Apponext HRMS</h2>
+<p style="margin:4px 0 0;font-size:12px;color:#94a3b8;">${subject}</p>
+</td></tr>
+<tr><td style="padding:28px;">${innerHtml}</td></tr>
+<tr><td style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">
+Automated notification from <strong>Apponext HRMS</strong>.
+</td></tr></table></body></html>`;
   }
 
   /**

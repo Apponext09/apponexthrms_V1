@@ -10,13 +10,14 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 
@@ -85,13 +86,11 @@ const TEAM_LEAD_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/team-lead/expenses', icon: FileText },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/team-lead/travel', icon: Clock },
+      { name: 'Expense Approvals', href: '/team-lead/expenses/approvals', icon: CheckCircle2 },
+      { name: 'My Expenses', href: '/team-lead/expenses/my-expenses', icon: FileText },
+      { name: 'Travel Requests', href: '/team-lead/expenses/travel-requests', icon: Clock },
+      { name: 'Travel Advances', href: '/team-lead/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/team-lead/expenses/mileage-claims', icon: Navigation },
     ],
   },
   {
@@ -109,9 +108,10 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'APPROVALS',
+    label: 'APPROVALS & GOVERNANCE',
     items: [
       { name: 'My Approvals', href: '/approvals', icon: CheckCircle2 },
+      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
     ],
   },
 ];
@@ -401,14 +401,7 @@ export function TeamLeadLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
             <div className="w-px h-5 bg-border mx-1" />
 

@@ -71,6 +71,7 @@ export class RecruitmentController {
       currency: validated.currency || 'INR',
       employmentType: validated.employmentType || 'onsite',
       noOfPositions: validated.noOfPositions,
+      expiryDate: validated.expiryDate,
       jobTemplateId: validated.jobTemplateId,
       skills: validated.skills,
       locations: validated.locations,
@@ -91,6 +92,9 @@ export class RecruitmentController {
   listJobs = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { page = 1, pageSize = 20, search, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
+
+    const { recruitmentExpiryService } = await import('../services/RecruitmentExpiryService');
+    await recruitmentExpiryService.closeExpiredRecords(ctx);
 
     const result = await this.jobService.listJobs(ctx, {
       page: parseInt(page as string, 10),
@@ -160,6 +164,11 @@ export class RecruitmentController {
       email: validated.email,
       phone: validated.phone,
       alternativePhone: validated.alternativePhone,
+      gender: validated.gender,
+      maritalStatus: validated.maritalStatus,
+      qualification: validated.qualification,
+      skills: validated.skills,
+      dateOfBirth: validated.dateOfBirth,
       currentLocation: validated.currentLocation,
       preferredLocation: validated.preferredLocation,
       currentSalary: validated.currentSalary,
@@ -171,7 +180,8 @@ export class RecruitmentController {
       linkedinUrl: validated.linkedinUrl,
       githubUrl: validated.githubUrl,
       portfolioUrl: validated.portfolioUrl,
-      source: validated.source,
+      source: validated.source || 'direct_apply',
+      resumeUrl: validated.resumeUrl,
     });
 
     res.status(201).json({ success: true, data: candidate });
@@ -233,7 +243,7 @@ export class RecruitmentController {
     const ctx = req.ctx!;
     const {
       page = 1,
-      pageSize = 20,
+      pageSize = 100,
       sortBy = 'created_at',
       sortOrder = 'desc',
       companyId,
@@ -260,6 +270,49 @@ export class RecruitmentController {
       sortBy: sortBy as string,
       sortOrder: sortOrder as 'asc' | 'desc',
       filters
+    });
+
+    const rawItems = Array.isArray(result.items) ? result.items : [];
+
+    // Filter out dummy orphan test records (e.g. positionTitle === 'Job Position')
+    const cleanItems = rawItems.filter((item: any) => {
+      const pos = String(item.position_title || item.positionTitle || '').toLowerCase().trim();
+      const email = String(item.candidate_email || item.candidateEmail || '').trim();
+      return pos !== 'job position' && email.length > 0;
+    });
+
+    // Auto-calculate missing ATS/JD scores asynchronously for real candidates
+    (async () => {
+      try {
+        const { resumeScreeningEngine } = await import('../services/ResumeScreeningEngine');
+        for (const item of cleanItems) {
+          const candId = item.candidate_id || item.candidateId;
+          const jId = item.job_id || item.jobId;
+          if (candId && jId && (item.ats_score == null || item.jd_match_score == null)) {
+            await resumeScreeningEngine.screenCandidateForJob(ctx, Number(candId), Number(jId), { persist: true }).catch(() => {});
+          }
+        }
+      } catch (e) {}
+    })();
+
+    res.json({ success: true, data: cleanItems, meta: result.meta });
+  });
+
+  /**
+   * GET /applications/hired
+   * Returns only hired candidates not yet converted to employees.
+   */
+  listHiredCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = (req as any).ctx!;
+    const { page = 1, pageSize = 200, search } = req.query;
+
+    const filters: any = {};
+    if (search) filters.search = search as string;
+
+    const result = await this.recruitmentService.getHiredCandidates(ctx, {
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+      filters,
     });
 
     res.json({ success: true, data: result.items, meta: result.meta });
@@ -295,6 +348,12 @@ export class RecruitmentController {
     res.json({ success: true, data: application });
   });
 
+  listPipelineStages = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const stages = await this.recruitmentService.getPipelineStages(ctx);
+    res.json({ success: true, data: stages });
+  });
+
   // ==================== Interview Endpoints ====================
 
   scheduleInterview = asyncHandler(async (req: Request, res: Response) => {
@@ -303,6 +362,7 @@ export class RecruitmentController {
 
     const interview = await this.interviewService.scheduleInterview(ctx, {
       applicationId: validated.applicationId,
+      candidateEmail: validated.candidateEmail || undefined,
       interviewType: validated.interviewType,
       interviewRound: validated.interviewRound,
       scheduledDate: validated.scheduledDate,
@@ -501,7 +561,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    (items as any[]).forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -575,10 +635,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items as any[];
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = (items as any[]).filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -797,7 +857,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    (items as any[]).forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -871,10 +931,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items as any[];
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = (items as any[]).filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -933,7 +993,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    (resultItems as any[]).forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -1009,37 +1069,6 @@ export class RecruitmentController {
     res.json({ success: true, message: 'Assessment deleted successfully' });
   });
 
-  getAttemptsByAssessment = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const assessmentId = parseInt(req.params.assessmentId, 10);
-    const db = (await import('../../../db/knex')).getKnex();
-
-    const attempts = await db('assessment_attempts')
-      .where({ assessment_id: assessmentId, organization_id: ctx.organizationId })
-      .orderBy('created_at', 'desc');
-
-    // Enrich with candidate info
-    const enriched = await Promise.all(attempts.map(async (attempt: any) => {
-      const application = await db('applications').where('id', attempt.application_id).first();
-      let candidateName = `App #${attempt.application_id}`;
-      let candidateEmail = '';
-      if (application) {
-        const candidate = await db('candidates').where('id', application.candidate_id).first();
-        if (candidate) {
-          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim();
-          candidateEmail = candidate.email || '';
-        }
-      }
-      return {
-        ...attempt,
-        candidate_name: candidateName,
-        candidate_email: candidateEmail,
-      };
-    }));
-
-    res.json({ success: true, data: enriched });
-  });
-
   // ==================== Offer Endpoints ====================
 
   generateOffer = asyncHandler(async (req: Request, res: Response) => {
@@ -1087,18 +1116,36 @@ export class RecruitmentController {
 
   getDashboard = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
     res.json({ success: true, data: dashboard });
   });
 
   getMetrics = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
-    res.json({ success: true, data: metrics });
+    res.json({ success: true, data: dashboard });
   });
 
   // ==================== Additional Candidate Endpoints ====================
@@ -1173,15 +1220,6 @@ export class RecruitmentController {
 
   // ==================== Additional Interview Endpoints ====================
 
-  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const validated = validate(req.body, submitFeedbackSchema);
-
-    const feedback = await this.interviewService.submitFeedback(ctx, validated.interviewId, validated);
-
-    res.status(201).json({ success: true, data: feedback });
-  });
-
   recordInterviewDecision = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { interviewId } = req.params;
@@ -1200,6 +1238,34 @@ export class RecruitmentController {
       success: true,
       data: result,
       message: `Interview decision '${decision}' recorded successfully`,
+    });
+  });
+
+  completeInterview = asyncHandler(async (req: Request, res: Response) => {
+    const rawId = req.params.interviewId || req.body.interviewId;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      updated_at: new Date(),
+    });
+
+    const updated = await db('interviews').where('id', interviewId).first();
+    res.json({
+      success: true,
+      message: 'Interview marked as completed successfully',
+      data: updated,
     });
   });
 
@@ -1234,7 +1300,7 @@ export class RecruitmentController {
       .where('interview_id', interviewId)
       .andWhere(function () {
         this.where('interviewer_id', ctx.userId)
-          .orWhere('interviewer_id', ctx.employeeId || 0);
+          .orWhere('interviewer_id', (ctx as any).employeeId || 0);
       })
       .first();
 
@@ -1257,7 +1323,7 @@ export class RecruitmentController {
         uuid: newUuid,
         organization_id: interview.organization_id || ctx.organizationId,
         interview_id: interviewId,
-        interviewer_id: ctx.userId || ctx.employeeId || 1,
+        interviewer_id: ctx.userId || (ctx as any).employeeId || 1,
         overall_rating: overallRating,
         technical_rating: technicalRating,
         communication_rating: communicationRating,
@@ -1687,10 +1753,17 @@ export class RecruitmentController {
   sendOffer = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { offerId } = req.params;
+    const { recipientEmail, candidateEmail, customRecipientEmail, customSubject, customBody } = req.body || {};
 
-    const offer = await this.offerService.sendOffer(ctx, parseInt(offerId, 10));
+    const targetRecipient = (recipientEmail || candidateEmail || customRecipientEmail || '').trim();
 
-    res.json({ success: true, data: offer });
+    const offer = await this.offerService.sendOffer(ctx, parseInt(offerId, 10), {
+      customRecipientEmail: targetRecipient || undefined,
+      customSubject,
+      customBody,
+    });
+
+    res.json({ success: true, data: offer, recipientEmail: targetRecipient });
   });
 
   getPublicOffer = asyncHandler(async (req: Request, res: Response) => {
@@ -1704,22 +1777,50 @@ export class RecruitmentController {
       return;
     }
 
-    const application = await db('applications').where('id', offer.application_id).first();
-    const candidate = await db('candidates').where('id', application.candidate_id).first();
-    const org = await db('organizations').where('id', offer.organization_id).first();
+    const appId = offer.application_id || (offer as any).applicationId;
+    const application = appId ? await db('applications').where('id', appId).first().catch(() => null) : null;
+    
+    let candidate: any = null;
+    if (application?.candidate_id) {
+      candidate = await db('candidates').where('id', application.candidate_id).first().catch(() => null);
+    }
+    if (!candidate && (offer as any).candidate_id) {
+      candidate = await db('candidates').where('id', (offer as any).candidate_id).first().catch(() => null);
+    }
+
+    const org = offer.organization_id 
+      ? await db('organizations').where('id', offer.organization_id).first().catch(() => null) 
+      : null;
 
     let departmentName = 'N/A';
-    if (offer.department_id) {
-      const dept = await db('departments').where('id', offer.department_id).first();
+    const deptId = offer.department_id || (offer as any).departmentId;
+    if (deptId) {
+      const dept = await db('departments').where('id', deptId).first().catch(() => null);
       departmentName = dept?.name || 'N/A';
     }
+
+    let meta: any = {};
+    try {
+      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
+    } catch {
+      meta = {};
+    }
+
+    const candidateName = candidate
+      ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
+      : (meta.candidateName || (offer as any).candidate_name || 'Candidate');
+    
+    const candidateEmail = candidate?.email || meta.candidateEmail || (offer as any).candidate_email || '';
 
     res.json({
       success: true,
       data: {
-        offer,
-        candidateName: `${candidate.first_name} ${candidate.last_name || ''}`.trim(),
-        candidateEmail: candidate.email,
+        offer: {
+          ...offer,
+          meta
+        },
+        candidateName,
+        candidateEmail,
         companyName: org?.name || 'Apponext Organization',
         departmentName
       }
@@ -1793,6 +1894,8 @@ export class RecruitmentController {
     if (validated.currency !== undefined) updateData.currency = validated.currency;
     if (validated.employmentType !== undefined) updateData.employment_type = validated.employmentType;
     if (validated.noOfPositions !== undefined) updateData.no_of_positions = validated.noOfPositions;
+    if (validated.expiryDate !== undefined) updateData.expiry_date = validated.expiryDate;
+    if (validated.jobCode !== undefined) updateData.job_code = validated.jobCode;
 
     const job = await this.jobService.updateJob(ctx, parseInt(id, 10), updateData);
 
@@ -2511,25 +2614,6 @@ export class RecruitmentController {
     res.json({ success: true, data: skills });
   });
 
-  // ==================== Dashboard & Analytics ====================
-
-  getDashboard = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const dashboard = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: dashboard });
-  });
-
-  getMetrics = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
-    res.json({ success: true, data: metrics });
-  });
-
-  getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const funnel = await this.analyticsService.generateHiringFunnel(ctx);
-    res.json({ success: true, data: funnel });
-  });
 }
 
 export const recruitmentController = new RecruitmentController();

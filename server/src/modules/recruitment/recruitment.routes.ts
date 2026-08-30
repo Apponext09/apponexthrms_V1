@@ -91,6 +91,7 @@ router.get('/candidates/:id/score/:jobId', requirePermission('recruitment.candid
 // ==================== Application Routes ====================
 router.post('/applications', requirePermission('recruitment.application.write'), recruitmentController.createApplication);
 router.get('/applications', requirePermission('recruitment.application.read'), recruitmentController.listApplications);
+router.get('/applications/hired', requirePermission('recruitment.application.read'), recruitmentController.listHiredCandidates);
 router.patch('/applications/:applicationId/move-stage', requirePermission('recruitment.application.write'), recruitmentController.moveApplicationStage);
 router.patch('/applications/:applicationId/assign-recruiter', requirePermission('recruitment.application.write'), recruitmentController.assignRecruiter);
 router.get('/applications/:applicationId/history', requirePermission('recruitment.application.read'), recruitmentController.getApplicationHistory);
@@ -117,6 +118,7 @@ router.get('/interviews/templates', requirePermission('recruitment.interview.rea
 router.post('/interviews', requirePermission('recruitment.interview.write'), recruitmentController.scheduleInterview);
 router.post('/interviews/:interviewId/decision', requirePermission('recruitment.interview.write'), recruitmentController.recordInterviewDecision);
 router.patch('/interviews/:interviewId/reschedule', requirePermission('recruitment.interview.write'), recruitmentController.rescheduleInterview);
+router.post('/interviews/:interviewId/complete', requireInterviewFeedbackPermission, recruitmentController.completeInterview);
 router.post('/interviews/:interviewId/cancel', requirePermission('recruitment.interview.write'), recruitmentController.cancelInterview);
 router.get('/applications/:applicationId/interviews', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewsByApplication);
 router.get('/applications/:applicationId/interview-rounds', requireInterviewReadOrAssigned, recruitmentController.getCandidateRoundsSummary);

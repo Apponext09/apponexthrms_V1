@@ -170,28 +170,79 @@ export class SkillMasterService {
   }
 
   /**
-   * Normalize any skill text / alias to its canonical skill name
+   * Normalize any skill text / alias to its canonical skill name.
+   * Returns empty string if text is not a valid skill (e.g. sentences or descriptions).
    */
   normalizeSkill(skill: string): string {
     if (!skill) return '';
     const clean = skill.trim().toLowerCase();
+    
+    // Ignore long sentences, descriptions or irrelevant stopwords
+    if (clean.length > 35 || clean.split(/\s+/).length > 3) {
+      // If it's a long sentence, check if it matches a known canonical or alias exactly, otherwise skip
+      if (this.cache.has(clean)) {
+        return this.cache.get(clean)!;
+      }
+      return '';
+    }
+
+    const invalidStopwords = ['depending on', 'reporting to', 'experience level', 'fresher', '0-3 years', 'years of experience', 'job position', 'job description', 'responsibilities', 'qualifications', 'benefits', 'salary'];
+    if (invalidStopwords.some(sw => clean.includes(sw))) {
+      return '';
+    }
     
     // Exact match in cache
     if (this.cache.has(clean)) {
       return this.cache.get(clean)!;
     }
 
-    // Substring / word boundary check
+    // Substring / word boundary check for known aliases (alias must be at least 3 chars or exact word)
     for (const [alias, canonical] of this.cache.entries()) {
-      if (clean === alias || clean.includes(alias) || alias.includes(clean)) {
-        if (alias.length >= 3 || clean.length >= 3) {
+      if (alias.length >= 3) {
+        const regex = new RegExp(`\\b${alias.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(clean)) {
           return canonical;
         }
       }
     }
 
-    // Capitalize first letters as fallback
-    return skill.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    // If clean is a short valid skill keyword (1-3 words, 2-25 chars)
+    if (clean.length >= 2 && clean.length <= 25 && clean.split(/\s+/).length <= 3 && /^[a-zA-Z0-9+#./\s-]+$/.test(clean)) {
+      return skill.trim().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+
+    return '';
+  }
+
+  /**
+   * Extract recognized skills directly from free-form text (Job Descriptions, Resumes, etc.)
+   */
+  extractSkillsFromText(text: string): string[] {
+    if (!text) return [];
+    const cleanText = text.replace(/<[^>]*>?/gm, ' ').replace(/\r\n/g, '\n');
+    const matchedSkills = new Set<string>();
+
+    // 1. Scan against all known cache aliases & canonical names
+    for (const [alias, canonical] of this.cache.entries()) {
+      if (alias.length >= 2) {
+        const regex = new RegExp(`\\b${alias.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(cleanText)) {
+          matchedSkills.add(canonical);
+        }
+      }
+    }
+
+    // 2. Scan bullet points or comma lists for concise skills
+    const lines = cleanText.split(/[\n,;•·▪]+/).map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      const words = line.split(/\s+/);
+      if (words.length <= 3 && line.length >= 2 && line.length <= 25 && !/\d{4}/.test(line)) {
+        const norm = this.normalizeSkill(line);
+        if (norm) matchedSkills.add(norm);
+      }
+    }
+
+    return Array.from(matchedSkills);
   }
 
   /**
@@ -201,12 +252,15 @@ export class SkillMasterService {
     if (!skills) return [];
     const list = Array.isArray(skills) 
       ? skills 
-      : String(skills).split(/[,|\n\r]+/).map(s => s.trim()).filter(Boolean);
+      : String(skills).split(/[,|\n\r;•·]+/).map(s => s.trim()).filter(Boolean);
 
     const canonicalSet = new Set<string>();
     for (const s of list) {
       if (s) {
-        canonicalSet.add(this.normalizeSkill(s));
+        const norm = this.normalizeSkill(s);
+        if (norm) {
+          canonicalSet.add(norm);
+        }
       }
     }
     return Array.from(canonicalSet);

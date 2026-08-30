@@ -192,10 +192,17 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .join('roles', 'user_roles.role_id', 'roles.id')
         .where('user_roles.organization_id', ctx.organizationId)
         .where('user_roles.user_id', user.id)
-        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'intern', 'consultant'])
+        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'])
         .select('roles.code');
       if (userRoles.length > 0) {
         const rolePriority: Record<string, number> = {
+          ceo: 8,
+          organization_admin: 8,
+          super_admin: 8,
+          cto: 6,
+          cfo: 6,
+          coo: 6,
+          cxo: 6,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,
@@ -465,10 +472,17 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           .join('roles', 'user_roles.role_id', 'roles.id')
           .where('user_roles.organization_id', ctx.organizationId)
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'intern', 'consultant'])
+          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
+          ceo: 8,
+          organization_admin: 8,
+          super_admin: 8,
+          cto: 6,
+          cfo: 6,
+          coo: 6,
+          cxo: 6,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,

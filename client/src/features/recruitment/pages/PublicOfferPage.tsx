@@ -70,7 +70,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to accept offer', err);
-        toast.error('Failed to accept job offer.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to accept job offer.';
+        toast.error(msg);
       })
       .finally(() => setSubmitting(false));
   };
@@ -94,7 +96,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to decline offer', err);
-        toast.error('Failed to decline offer.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to decline offer.';
+        toast.error(msg);
       })
       .finally(() => setSubmitting(false));
   };
@@ -176,8 +180,8 @@ export const PublicOfferPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 py-10 px-4 md:px-6">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="h-screen w-full overflow-y-auto bg-muted/30 py-10 px-4 md:px-6">
+      <div className="max-w-3xl mx-auto space-y-6 pb-24">
         
         {/* Header Branding */}
         <div className="flex items-center justify-between border-b pb-4 border-muted">
@@ -215,7 +219,7 @@ export const PublicOfferPage: React.FC = () => {
                 <TableBody>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20 w-44">Position Title</TableCell>
-                    <TableCell>{offer.position_title}</TableCell>
+                    <TableCell>{offer.position_title || offer.positionTitle || '-'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Department</TableCell>
@@ -223,19 +227,23 @@ export const PublicOfferPage: React.FC = () => {
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Cost to Company (CTC)</TableCell>
-                    <TableCell className="font-semibold text-foreground">{offer.cost_to_company} {offer.currency}</TableCell>
+                    <TableCell className="font-semibold text-foreground">
+                      {offer.cost_to_company || offer.costToCompany ? `${parseFloat(offer.cost_to_company || offer.costToCompany).toLocaleString()} ${offer.currency || 'INR'}` : '—'}
+                    </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Base Salary</TableCell>
-                    <TableCell>{offer.base_salary} {offer.currency}</TableCell>
+                    <TableCell>
+                      {offer.base_salary || offer.baseSalary ? `${parseFloat(offer.base_salary || offer.baseSalary).toLocaleString()} ${offer.currency || 'INR'}` : '—'}
+                    </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Joining Date</TableCell>
-                    <TableCell>{offer.offer_start_date ? new Date(offer.offer_start_date).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell>{(offer.offer_start_date || offer.offerStartDate) ? new Date(offer.offer_start_date || offer.offerStartDate).toLocaleDateString() : '—'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Offer Expiry Date</TableCell>
-                    <TableCell>{offer.offer_expiry_date ? new Date(offer.offer_expiry_date).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell>{(offer.offer_expiry_date || offer.offerExpiryDate) ? new Date(offer.offer_expiry_date || offer.offerExpiryDate).toLocaleDateString() : '—'}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

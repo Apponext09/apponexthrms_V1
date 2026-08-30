@@ -269,16 +269,18 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'expense_management',
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/expense-claims', icon: 'Receipt' },
-    ],
-  },
-
-  // ── 10. Travel Management ─────────────────────────────────────────────────
-  {
-    id: 'travel_management',
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/travel-requests', icon: 'Compass' },
+      { name: 'Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'Receipt' },
+      { name: 'Approvals', href: '/expenses/approvals', icon: 'CheckCircle', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager', 'team_lead'] },
+      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: 'FileCheck', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: 'CreditCard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: 'Compass' },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: 'DollarSign' },
+      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: 'Car' },
+      { name: 'Expense Categories', href: '/expenses/categories', icon: 'Tag', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
+      { name: 'Expense Policies', href: '/expenses/policies', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
+      { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo'] },
     ],
   },
 
@@ -377,7 +379,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Employee Status', href: '/masters?tab=employee-status', icon: 'Users' },
       { name: 'Emp. Type', href: '/masters?tab=emp-type', icon: 'Users' },
       { name: 'Events', href: '/masters?tab=events', icon: 'CalendarDays' },
-      { name: 'Offer Letter Master', href: '/masters?tab=offer-templates', icon: 'FileText' },
+      { name: 'Letter & Offer Master', href: '/masters?tab=offer-templates', icon: 'FileText', badge: 'MNC' },
       { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
       { name: 'Notification Merge Codes', href: '/masters?tab=notification-merge-codes', icon: 'Code2' },
       { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },

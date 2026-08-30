@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Eye, DollarSign, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { Plus, Eye, Trash2, CheckCircle, Clock, NotebookPen } from 'lucide-react';
 import { useReferrals, useCreateReferral, useRewardReferral, useDeleteReferral } from '../hooks/useReferrals';
 import { useCandidates } from '../hooks/useCandidates';
 import { apiClient } from '@/lib/api';
@@ -110,7 +110,7 @@ export const ReferralManagementPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
           <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 border border-emerald-500/20 shadow-xs">
-            <DollarSign className="w-5 h-5" />
+            <NotebookPen className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
             <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
@@ -165,7 +165,7 @@ export const ReferralManagementPage: React.FC = () => {
               <h3 className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{rewardPaidCount}</h3>
             </div>
             <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <DollarSign className="w-6 h-6" />
+              <NotebookPen className="w-6 h-6" />
             </div>
           </CardContent>
         </Card>
@@ -278,7 +278,7 @@ export const ReferralManagementPage: React.FC = () => {
                                 }}
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-3 rounded-lg shadow-2xs cursor-pointer gap-1"
                               >
-                                <DollarSign className="h-3 w-3" /> Pay Reward
+                                <NotebookPen className="h-3 w-3" /> Pay Reward
                               </Button>
                             )}
                             <Button 

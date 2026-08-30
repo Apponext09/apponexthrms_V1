@@ -77,6 +77,21 @@ export const LiveTrackingDashboardPage: React.FC = () => {
     );
   }, [user]);
 
+  // Get history route based on current user role
+  const getHistoryRoute = useMemo(() => {
+    const roles: string[] = Array.isArray(user?.roles) ? [...user.roles] : [];
+    const roleStr = roles.map((r) => String(r).toLowerCase().replace(/[\s-]+/g, '_')).join(',');
+
+    if (roleStr.includes('hr_manager') || roleStr.includes('hr_admin') || roleStr.includes('organization_admin') || roleStr.includes('super_admin')) {
+      return '/admin/live-tracking/history';
+    } else if (roleStr.includes('manager') || roleStr.includes('department_head')) {
+      return '/manager/live-tracking/history';
+    } else if (roleStr.includes('team_lead')) {
+      return '/team-lead/live-tracking/history';
+    }
+    return '/admin/live-tracking/history';
+  }, [user]);
+
   const [employees, setEmployees] = useState<LiveEmployee[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());

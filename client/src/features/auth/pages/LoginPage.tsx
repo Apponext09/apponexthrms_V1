@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, useAuthHydrated } from '../store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -15,7 +15,19 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated, user } = useAuthStore();
+  const authHydrated = useAuthHydrated();
+
+  useEffect(() => {
+    if (!authHydrated || !isAuthenticated || !user) return;
+    const roles = user.roles || [];
+    if (roles.includes('super_admin')) navigate('/superadmin/dashboard', { replace: true });
+    else if (roles.includes('organization_admin') || roles.includes('ceo')) navigate('/dashboard', { replace: true });
+    else if (roles.includes('hr_manager') || roles.includes('hr_admin')) navigate('/hr/dashboard', { replace: true });
+    else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard', { replace: true });
+    else if (roles.includes('team_lead')) navigate('/team-lead/dashboard', { replace: true });
+    else navigate('/dashboard', { replace: true });
+  }, [authHydrated, isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -39,6 +39,7 @@ export class MrfService {
       comment: input.comment || null,
       job_description: input.jobDescription || null,
       target_closure_date: (input as any).targetClosureDate || (input as any).expiryDate || null,
+      expiry_date: (input as any).expiryDate || (input as any).targetClosureDate || null,
       stage: input.stage || 'Pending Approval',
       status: input.status || (input.listInJobPage === 'No' ? 'Closed' : 'Open'),
       requested_by: ctx.userId,
@@ -130,7 +131,9 @@ export class MrfService {
     if (input.comment !== undefined) updateData.comment = input.comment;
     if (input.jobDescription !== undefined) updateData.job_description = input.jobDescription;
     if ((input as any).targetClosureDate !== undefined || (input as any).expiryDate !== undefined) {
-      updateData.target_closure_date = (input as any).targetClosureDate || (input as any).expiryDate || null;
+      const nextDate = (input as any).targetClosureDate || (input as any).expiryDate || null;
+      updateData.target_closure_date = nextDate;
+      updateData.expiry_date = nextDate;
     }
 
     const oldMrf = await this.mrfRepo.getById(ctx, id);

@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import pdfParse from 'pdf-parse';
 import * as xlsx from 'xlsx';
+// @ts-ignore
 import mammoth from 'mammoth';
+// @ts-ignore
 import AdmZip from 'adm-zip';
 
 export interface ParsedCandidateEntry {
@@ -58,38 +60,39 @@ export function extractCandidateFromText(rawText: string, fileName: string): Par
 
   // 3. Name extraction
   let name = '';
-  // Try clean filename first if it looks like a person's name (e.g. "John_Doe_Resume.pdf" -> "John Doe")
-  const cleanBaseName = path.basename(fileName, path.extname(fileName))
-    .replace(/[_\-.]/g, ' ')
-    .replace(/\b(resume|cv|biodata|profile|updated|final|latest|draft|202[0-9])\b/gi, '')
-    .trim();
-  
-  if (cleanBaseName.length >= 3 && cleanBaseName.length <= 40 && !/\d{4}/.test(cleanBaseName)) {
-    name = cleanBaseName.split(' ')
-      .filter(w => w.length > 0)
-      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
+  // Check first 5 non-empty lines for a real name header first
+  for (let i = 0; i < Math.min(5, lines.length); i++) {
+    const line = lines[i];
+    if (
+      !line.includes('@') && 
+      !/\d{5,}/.test(line) && 
+      !/http|www|github|linkedin|curriculum|resume|biodata|profile|summary|skills|experience/i.test(line) &&
+      line.length >= 3 && 
+      line.length <= 40 &&
+      /^[a-zA-Z\s.'-]+$/.test(line) &&
+      line.split(/\s+/).length <= 4
+    ) {
+      name = line.split(' ')
+        .filter(w => w.length > 0)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+      break;
+    }
   }
 
-  // If filename wasn't conclusive, check first 5 non-empty lines
+  // If text header wasn't conclusive, try cleaned filename
   if (!name || name.length < 2) {
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
-      const line = lines[i];
-      // Skip if contains email, phone, url, or common resume header keywords
-      if (
-        !line.includes('@') && 
-        !/\d{5,}/.test(line) && 
-        !/http|www|github|linkedin|curriculum|resume|biodata|profile/i.test(line) &&
-        line.length >= 3 && 
-        line.length <= 50 &&
-        /^[a-zA-Z\s.'-]+$/.test(line)
-      ) {
-        name = line.split(' ')
-          .filter(w => w.length > 0)
-          .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-          .join(' ');
-        break;
-      }
+    const cleanBaseName = path.basename(fileName, path.extname(fileName))
+      .replace(/[_\-.]/g, ' ')
+      .replace(/\b(resume|cv|biodata|profile|updated|final|latest|draft|match|\d+pct|\d+%|202[0-9])\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (cleanBaseName.length >= 3 && cleanBaseName.length <= 40 && !/\d{3,}/.test(cleanBaseName)) {
+      name = cleanBaseName.split(' ')
+        .filter(w => w.length > 0)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
     }
   }
 

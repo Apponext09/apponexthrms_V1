@@ -88,6 +88,8 @@ venv/
 .venv/
 **/venv/
 **/.venv/
+**/venv_app/
+**/myenv/
 biometric/venv/
 
 # Server Uploads & Candidate Resumes

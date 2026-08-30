@@ -454,57 +454,36 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
       let pointsToUse: RoutePoint[] = [];
 
       if (data && data.length >= 2) {
-        // Use EXACT real breadcrumb history recorded in DB for this employee & date
         pointsToUse = data;
       } else if (employee.routeTrail && employee.routeTrail.length >= 2) {
         pointsToUse = employee.routeTrail;
-      } else {
-        // Fallback: If no DB breadcrumbs recorded yet for this date, anchor fallback path around current position
-        const hasLiveCoords = employee.latitude != null && Number(employee.latitude) !== 0 && employee.longitude != null && Number(employee.longitude) !== 0;
-        const curLat = hasLiveCoords ? Number(employee.latitude) : 20.0059;
-        const curLng = hasLiveCoords ? Number(employee.longitude) : 73.7898;
-        const now = new Date().toISOString();
+      }
 
-        pointsToUse = [
-          { latitude: curLat - 0.0060, longitude: curLng - 0.0050, speed: 12, recorded_at: new Date(Date.now() - 3600_000).toISOString() }, // Start (Point A)
-          { latitude: curLat - 0.0035, longitude: curLng - 0.0028, speed: 18, recorded_at: new Date(Date.now() - 2400_000).toISOString() },
-          { latitude: curLat - 0.0018, longitude: curLng - 0.0012, speed: 22, recorded_at: new Date(Date.now() - 1200_000).toISOString() },
-          { latitude: curLat, longitude: curLng, speed: 0, recorded_at: now },                                                               // Destination (Point B)
-        ];
+      if (pointsToUse.length === 0) {
+        setRawRoute([]);
+        setInterpolatedRoute([]);
+        setIsPlaying(false);
+        return;
       }
 
       setRawRoute(pointsToUse);
-
       const smoothPoints = interpolateRoutePoints(pointsToUse, 25);
       setInterpolatedRoute(smoothPoints);
 
       if (smoothPoints.length > 1) {
-        setIsPlaying(true); // Automatically start frame-by-frame walking animation
+        setIsPlaying(true);
       }
-    } catch {
-      const hasLiveCoords = employee.latitude != null && Number(employee.latitude) !== 0 && employee.longitude != null && Number(employee.longitude) !== 0;
-      const curLat = hasLiveCoords ? Number(employee.latitude) : 20.0059;
-      const curLng = hasLiveCoords ? Number(employee.longitude) : 73.7898;
-      const now = new Date().toISOString();
-
-      const fallback = [
-        { latitude: curLat - 0.0060, longitude: curLng - 0.0050, speed: 12, recorded_at: new Date(Date.now() - 3600_000).toISOString() },
-        { latitude: curLat - 0.0035, longitude: curLng - 0.0028, speed: 18, recorded_at: new Date(Date.now() - 2400_000).toISOString() },
-        { latitude: curLat - 0.0018, longitude: curLng - 0.0012, speed: 22, recorded_at: new Date(Date.now() - 1200_000).toISOString() },
-        { latitude: curLat, longitude: curLng, speed: 0, recorded_at: now },
-      ];
-      setRawRoute(fallback);
-      const smooth = interpolateRoutePoints(fallback, 25);
-      setInterpolatedRoute(smooth);
-      if (smooth.length > 1) setIsPlaying(true);
+    } catch (error) {
+      console.error('[RoutePlayback] Failed to load route history:', error);
+      setRawRoute([]);
+      setInterpolatedRoute([]);
+      setIsPlaying(false);
     } finally {
       setLoading(false);
     }
   }, [
     employee.employee_id,
     employee.routeTrail,
-    employee.latitude,
-    employee.longitude,
     date,
   ]);
 

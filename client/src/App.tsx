@@ -67,217 +67,217 @@ class AppErrorBoundary extends Component<
   }
 }
 
-function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [isLoading, setIsLoading] = useState(false);
+// function ThemeProvider({ children }: { children: React.ReactNode }) {
+//   const [isLoading, setIsLoading] = useState(false);
 
-  // Disable DevTools and Inspection - Multiple methods
-  useEffect(() => {
-    // 1. Block right-click context menu
-    const disableRightClick = (e: MouseEvent) => {
-      e.preventDefault();
-      return false;
-    };
+//   // Disable DevTools and Inspection - Multiple methods
+//   useEffect(() => {
+//     // 1. Block right-click context menu
+//     const disableRightClick = (e: MouseEvent) => {
+//       e.preventDefault();
+//       return false;
+//     };
 
-    // 2. Block keyboard shortcuts for DevTools
-    const disableKeys = (e: KeyboardEvent) => {
-      // F12 - DevTools
-      if (e.key === 'F12') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+I - Inspect (Chrome)
-      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+C - Inspect (Firefox)
-      if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+J - Console (Chrome)
-      if (e.ctrlKey && e.shiftKey && e.key === 'J') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+Shift+K - Console (Firefox)
-      if (e.ctrlKey && e.shiftKey && e.key === 'K') {
-        e.preventDefault();
-        return false;
-      }
-      // Ctrl+I - Inspect (some browsers)
-      if (e.ctrlKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
-      }
-    };
+//     // 2. Block keyboard shortcuts for DevTools
+//     const disableKeys = (e: KeyboardEvent) => {
+//       // F12 - DevTools
+//       if (e.key === 'F12') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+I - Inspect (Chrome)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+C - Inspect (Firefox)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+J - Console (Chrome)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+K - Console (Firefox)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+I - Inspect (some browsers)
+//       if (e.ctrlKey && e.key === 'I') {
+//         e.preventDefault();
+//         return false;
+//       }
+//     };
 
-    // 3. Block copy/paste
-    const disableCopyPaste = (e: ClipboardEvent) => {
-      e.preventDefault();
-      return false;
-    };
+//     // 3. Block copy/paste
+//     const disableCopyPaste = (e: ClipboardEvent) => {
+//       e.preventDefault();
+//       return false;
+//     };
 
-    // 4. Detect if DevTools is opened (via size check - immediately close)
-    let isDevToolsOpen = false;
-    const checkDevToolsSize = () => {
-      const threshold = 160;
-      const isOpen = window.outerWidth - window.innerWidth > threshold ||
-                     window.outerHeight - window.innerHeight > threshold;
+//     // 4. Detect if DevTools is opened (via size check - immediately close)
+//     let isDevToolsOpen = false;
+//     const checkDevToolsSize = () => {
+//       const threshold = 160;
+//       const isOpen = window.outerWidth - window.innerWidth > threshold ||
+//                      window.outerHeight - window.innerHeight > threshold;
 
-      if (isOpen && !isDevToolsOpen) {
-        isDevToolsOpen = true;
-        // Immediately redirect to prevent any access
-        window.location.href = '/login';
-        return;
-      }
-      isDevToolsOpen = isOpen;
-    };
+//       if (isOpen && !isDevToolsOpen) {
+//         isDevToolsOpen = true;
+//         // Immediately redirect to prevent any access
+//         window.location.href = '/login';
+//         return;
+//       }
+//       isDevToolsOpen = isOpen;
+//     };
 
-    // Setup event listeners
-    document.addEventListener('contextmenu', disableRightClick, { passive: false });
-    document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
-    document.addEventListener('copy', disableCopyPaste, { passive: false });
-    document.addEventListener('cut', disableCopyPaste, { passive: false });
-    document.addEventListener('paste', disableCopyPaste, { passive: false });
+//     // Setup event listeners
+//     document.addEventListener('contextmenu', disableRightClick, { passive: false });
+//     document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
+//     document.addEventListener('copy', disableCopyPaste, { passive: false });
+//     document.addEventListener('cut', disableCopyPaste, { passive: false });
+//     document.addEventListener('paste', disableCopyPaste, { passive: false });
 
-    // Check for DevTools every 100ms (very aggressive)
-    const devToolsCheckInterval = setInterval(checkDevToolsSize, 100);
+//     // Check for DevTools every 100ms (very aggressive)
+//     const devToolsCheckInterval = setInterval(checkDevToolsSize, 100);
 
-    // Disable text selection
-    document.body.style.userSelect = 'none';
-    document.body.style.webkitUserSelect = 'none';
-    (document.body as any).style.msUserSelect = 'none';
-    (document.body as any).style.mozUserSelect = 'none';
+//     // Disable text selection
+//     document.body.style.userSelect = 'none';
+//     document.body.style.webkitUserSelect = 'none';
+//     (document.body as any).style.msUserSelect = 'none';
+//     (document.body as any).style.mozUserSelect = 'none';
 
-    // Block inspect element via developer tools protocol
-    try {
-      (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = undefined;
-      (window as any).__REDUX_DEVTOOLS_EXTENSION__ = undefined;
-    } catch (e) {
-      // Ignore errors
-    }
+//     // Block inspect element via developer tools protocol
+//     try {
+//       (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = undefined;
+//       (window as any).__REDUX_DEVTOOLS_EXTENSION__ = undefined;
+//     } catch (e) {
+//       // Ignore errors
+//     }
 
-    return () => {
-      document.removeEventListener('contextmenu', disableRightClick);
-      document.removeEventListener('keydown', disableKeys, true);
-      document.removeEventListener('copy', disableCopyPaste);
-      document.removeEventListener('cut', disableCopyPaste);
-      document.removeEventListener('paste', disableCopyPaste);
-      clearInterval(devToolsCheckInterval);
-    };
-  }, []);
+//     return () => {
+//       document.removeEventListener('contextmenu', disableRightClick);
+//       document.removeEventListener('keydown', disableKeys, true);
+//       document.removeEventListener('copy', disableCopyPaste);
+//       document.removeEventListener('cut', disableCopyPaste);
+//       document.removeEventListener('paste', disableCopyPaste);
+//       clearInterval(devToolsCheckInterval);
+//     };
+//   }, []);
 
-  // Initialize theme and current user on mount
-  useEffect(() => {
-    useThemeStore.getState(); // Trigger persist middleware initialization
+//   // Initialize theme and current user on mount
+//   useEffect(() => {
+//     useThemeStore.getState(); // Trigger persist middleware initialization
 
-    // Show loading screen while fetching user data
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      setIsLoading(true);
-      // Fetch user data in background without blocking navigation
-      useAuthStore.getState().fetchCurrentUser()
-        .catch((err) => {
-          console.warn('Failed to fetch user:', err);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
+//     // Show loading screen while fetching user data
+//     const token = localStorage.getItem('accessToken');
+//     if (token) {
+//       setIsLoading(true);
+//       // Fetch user data in background without blocking navigation
+//       useAuthStore.getState().fetchCurrentUser()
+//         .catch((err) => {
+//           console.warn('Failed to fetch user:', err);
+//         })
+//         .finally(() => {
+//           setIsLoading(false);
+//         });
+//     }
 
-    // Track last user ID and logout time to detect session changes
-    let lastUserId: number | null = null;
-    let lastLogoutTime = localStorage.getItem('last-logout-time');
+//     // Track last user ID and logout time to detect session changes
+//     let lastUserId: number | null = null;
+//     let lastLogoutTime = localStorage.getItem('last-logout-time');
 
-    // Re-validate auth when tab becomes visible (back from other tab)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+//     // Re-validate auth when tab becomes visible (back from other tab)
+//     const handleVisibilityChange = () => {
+//       if (document.visibilityState === 'visible') {
+//         const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
 
-        // Check if logout happened in another tab
-        const currentLogoutTime = localStorage.getItem('last-logout-time');
-        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
-          // Logout happened elsewhere - logout this session too
-          logout();
-          return;
-        }
+//         // Check if logout happened in another tab
+//         const currentLogoutTime = localStorage.getItem('last-logout-time');
+//         if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+//           // Logout happened elsewhere - logout this session too
+//           logout();
+//           return;
+//         }
 
-        // Check if different user logged in
-        if (user && lastUserId && user.id !== lastUserId) {
-          // Different user - force redirect
-          window.location.href = '/login?' + new Date().getTime();
-          return;
-        }
+//         // Check if different user logged in
+//         if (user && lastUserId && user.id !== lastUserId) {
+//           // Different user - force redirect
+//           window.location.href = '/login?' + new Date().getTime();
+//           return;
+//         }
 
-        if (lastUserId === null && user) {
-          lastUserId = user.id;
-        }
+//         if (lastUserId === null && user) {
+//           lastUserId = user.id;
+//         }
 
-        if (isAuthenticated && localStorage.getItem('accessToken')) {
-          // Re-validate token is still valid
-          fetchCurrentUser().catch(() => {
-            // Token invalid, logout
-            logout();
-          });
-        }
-      }
-    };
+//         if (isAuthenticated && localStorage.getItem('accessToken')) {
+//           // Re-validate token is still valid
+//           fetchCurrentUser().catch(() => {
+//             // Token invalid, logout
+//             logout();
+//           });
+//         }
+//       }
+//     };
 
-    // Check on window focus
-    const handleFocus = () => {
-      const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
+//     // Check on window focus
+//     const handleFocus = () => {
+//       const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
 
-      // Check if logout happened
-      const currentLogoutTime = localStorage.getItem('last-logout-time');
-      if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
-        logout();
-        return;
-      }
+//       // Check if logout happened
+//       const currentLogoutTime = localStorage.getItem('last-logout-time');
+//       if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+//         logout();
+//         return;
+//       }
 
-      // Check if different user logged in
-      if (user && lastUserId && user.id !== lastUserId) {
-        window.location.href = '/login?' + new Date().getTime();
-        return;
-      }
+//       // Check if different user logged in
+//       if (user && lastUserId && user.id !== lastUserId) {
+//         window.location.href = '/login?' + new Date().getTime();
+//         return;
+//       }
 
-      if (lastUserId === null && user) {
-        lastUserId = user.id;
-      }
+//       if (lastUserId === null && user) {
+//         lastUserId = user.id;
+//       }
 
-      if (isAuthenticated && localStorage.getItem('accessToken')) {
-        fetchCurrentUser().catch(() => {
-          logout();
-        });
-      }
-    };
+//       if (isAuthenticated && localStorage.getItem('accessToken')) {
+//         fetchCurrentUser().catch(() => {
+//           logout();
+//         });
+//       }
+//     };
 
-    // Prevent back button navigation
-    const handlePopState = (e: PopStateEvent) => {
-      const { isAuthenticated } = useAuthStore.getState();
-      if (!isAuthenticated) {
-        window.history.pushState(null, '', '/login');
-      }
-    };
+//     // Prevent back button navigation
+//     const handlePopState = (e: PopStateEvent) => {
+//       const { isAuthenticated } = useAuthStore.getState();
+//       if (!isAuthenticated) {
+//         window.history.pushState(null, '', '/login');
+//       }
+//     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    window.addEventListener('popstate', handlePopState);
+//     document.addEventListener('visibilitychange', handleVisibilityChange);
+//     window.addEventListener('focus', handleFocus);
+//     window.addEventListener('popstate', handlePopState);
 
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, []);
+//     return () => {
+//       document.removeEventListener('visibilitychange', handleVisibilityChange);
+//       window.removeEventListener('focus', handleFocus);
+//       window.removeEventListener('popstate', handlePopState);
+//     };
+//   }, []);
 
-  return (
-    <>
-      {isLoading && <LoadingScreen />}
-      {children}
-    </>
-  );
-}
+//   return (
+//     <>
+//       {isLoading && <LoadingScreen />}
+//       {children}
+//     </>
+//   );
+// }
 
 /**
  * BreakOverlayProvider — syncs break state from DB and renders overlay at root.
@@ -300,11 +300,11 @@ export default function App() {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <ThemeProvider>
-            <BreakOverlayProvider>
-              <AppRoutes />
-            </BreakOverlayProvider>
-          </ThemeProvider>
+          {/* <ThemeProvider> */}
+          <BreakOverlayProvider>
+            <AppRoutes />
+          </BreakOverlayProvider>
+          {/* </ThemeProvider> */}
         </BrowserRouter>
       </QueryClientProvider>
     </AppErrorBoundary>

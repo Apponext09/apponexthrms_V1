@@ -15,6 +15,8 @@ export const useCandidates = (filters?: any) => {
       const response = await api.get(`/recruitment/candidates?${params.toString()}`);
       return response.data;
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 };
 

@@ -27,6 +27,16 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
   } else if (accessRole === 'team_lead' || roles.includes('team_lead') || accessRole.includes('team_lead') || designation.includes('team lead') || designation.includes('team_lead')) {
     roleTitle = 'Team Lead';
     roleCode = 'team_lead';
+  } else if (
+    ['cto', 'cfo', 'coo', 'cxo'].includes(accessRole) ||
+    roles.some(r => ['cto', 'cfo', 'coo', 'cxo'].includes(r)) ||
+    designation.includes('cto') || designation.includes('cfo') || designation.includes('coo') || designation.includes('chief')
+  ) {
+    roleTitle = designation.includes('cto') || accessRole === 'cto' ? 'CTO' :
+                designation.includes('cfo') || accessRole === 'cfo' ? 'CFO' :
+                designation.includes('coo') || accessRole === 'coo' ? 'COO' : 'CXO';
+    roleCode = ['cto', 'cfo', 'coo', 'cxo'].includes(accessRole) ? accessRole : 'cxo';
+    defaultDept = 'Executive Leadership';
   } else if (accessRole === 'department_head' || accessRole === 'manager' || roles.includes('department_head') || designation.includes('department head') || designation.includes('manager')) {
     roleTitle = 'Manager';
     roleCode = 'department_head';

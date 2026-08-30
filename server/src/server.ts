@@ -1,5 +1,5 @@
 import http from 'http';
-// reload trigger comment #29 - clean reload for master routes
+// reload trigger comment #37 - SMTP email delivery wired up
 import { Server } from 'socket.io';
 import fs from 'fs';
 import { createApp } from './app';
@@ -33,9 +33,6 @@ async function start() {
 
 
 
-    // Automatically run schema checks and profile seeding
-    await setupProfileSchemaAndSeed(getKnex());
-
     // Create Express app
     const app = createApp();
 
@@ -58,23 +55,13 @@ async function start() {
     // Initialize live tracking socket
     initializeLiveTrackingSocket(io);
 
-    // Auto check-out service disabled as requested
-    // startAutoCheckOutCron();
-
-    server.on('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        logger.error(`Port ${env.PORT} is already in use. Exiting process so supervisor can restart cleanly...`);
-        setTimeout(() => process.exit(1), 1000);
-      } else {
-        logger.error('Server error:', err);
-      }
-    });
-
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
-    server.listen(env.PORT, '0.0.0.0', () => {
-      logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0)`, {
-        environment: env.NODE_ENV,
-        corsOrigin: env.CORS_ORIGIN,
+      server.listen(env.PORT, '0.0.0.0', () => {
+      logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
+
+      // Run schema checks and profile seeding asynchronously in background
+      setupProfileSchemaAndSeed(getKnex()).catch((err) => {
+        logger.error('Background setupProfileSchemaAndSeed error:', err?.message || err);
       });
 
       // Start automatic Leave & Comp-off Expiry Scheduler (runs every 12 hours)

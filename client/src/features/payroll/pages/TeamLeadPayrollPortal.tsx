@@ -6,7 +6,6 @@ import {
   Clock,
   FileText,
   DollarSign,
-  Receipt,
   Lock,
   UserX,
 } from 'lucide-react';
@@ -16,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { TeamSettlementsPage } from './TeamSettlementsPage';
 
 export const TeamLeadPayrollPortal: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'loans' | 'reimbursements' | 'attendance' | 'settlements' | 'payslips'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'attendance' | 'settlements' | 'payslips'>('loans');
   const [loanRequests, setLoanRequests] = useState([
     {
       id: 101,
@@ -44,12 +43,6 @@ export const TeamLeadPayrollPortal: React.FC = () => {
     }
   ]);
 
-  const [teamClaims, setTeamClaims] = useState([
-    { id: 1, name: 'Mot Sharma', code: 'EMP202', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', desc: 'Client visit travel & conveyance reimbursement', status: 'pending' },
-    { id: 2, name: 'Team Lead', code: 'EMP2002', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', desc: 'Client visit travel & conveyance reimbursement', status: 'pending' },
-    { id: 3, name: 'NN Employee', code: 'EMP702', type: 'Medical Claim', amount: 3200, date: '2026-07-18', desc: 'Health checkup & consultations', status: 'approved' }
-  ]);
-
   const handleApprove = (id: number) => {
     setLoanRequests((prev) =>
       prev.map((item) => (item.id === id ? { ...item, status: 'approved' } : item))
@@ -62,16 +55,7 @@ export const TeamLeadPayrollPortal: React.FC = () => {
     );
   };
 
-  const handleApproveClaim = (id: number) => {
-    setTeamClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'approved' } : c));
-  };
-
-  const handleRejectClaim = (id: number) => {
-    setTeamClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'rejected' } : c));
-  };
-
   const pendingLoans = loanRequests.filter(r => r.status === 'pending').length;
-  const pendingClaims = teamClaims.filter(c => c.status === 'pending').length;
 
   return (
     <div className="space-y-6 pb-12">
@@ -87,7 +71,7 @@ export const TeamLeadPayrollPortal: React.FC = () => {
               <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 text-[10px] font-bold">Team Lead</Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Review and approve loan requests, expense claims, and attendance locks for assigned team members
+              Review and approve loan requests and attendance locks for assigned team members
             </p>
           </div>
         </div>
@@ -98,7 +82,6 @@ export const TeamLeadPayrollPortal: React.FC = () => {
         <div className="flex items-center gap-1 overflow-x-auto">
           {[
             { key: 'loans', label: 'Loans', badgeCount: pendingLoans, icon: DollarSign },
-            { key: 'reimbursements', label: 'Reimbursements', badgeCount: pendingClaims, icon: Receipt },
             { key: 'attendance', label: 'Attendance & OT Lock', badgeCount: 0, icon: Lock },
             { key: 'settlements', label: 'Team Exit Clearances', badgeCount: 0, icon: UserX },
             { key: 'payslips', label: 'Team Payslips', badgeCount: 0, icon: FileText },
@@ -195,61 +178,6 @@ export const TeamLeadPayrollPortal: React.FC = () => {
                                 <Button size="sm" variant="outline" onClick={() => handleReject(req.id)} className="h-6 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5">
                                   Reject
                                 </Button>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">Processed</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === 'reimbursements' && (
-            <Card className="border border-border/80 shadow-xs">
-              <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-bold">Team Reimbursement Claim Approvals</CardTitle>
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-                  {pendingClaims} Pending
-                </Badge>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
-                      <tr>
-                        <th className="px-4 py-2.5">Team Member</th>
-                        <th className="px-4 py-2.5">Type</th>
-                        <th className="px-4 py-2.5">Amount</th>
-                        <th className="px-4 py-2.5">Purpose</th>
-                        <th className="px-4 py-2.5">Status</th>
-                        <th className="px-4 py-2.5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/60">
-                      {teamClaims.map((c) => (
-                        <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 font-semibold text-xs text-foreground">
-                            <div>{c.name}</div>
-                            <div className="text-[10px] text-muted-foreground font-mono">{c.code}</div>
-                          </td>
-                          <td className="px-4 py-3 text-xs text-foreground">{c.type}</td>
-                          <td className="px-4 py-3 text-xs font-bold text-emerald-600">₹{c.amount.toLocaleString('en-IN')}</td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">{c.desc}</td>
-                          <td className="px-4 py-3">
-                            {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>}
-                            {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Approved</Badge>}
-                            {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">Rejected</Badge>}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            {c.status === 'pending' ? (
-                              <div className="flex items-center justify-end gap-1.5">
-                                <Button size="sm" onClick={() => handleApproveClaim(c.id)} className="h-6 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5">Approve</Button>
-                                <Button size="sm" variant="outline" onClick={() => handleRejectClaim(c.id)} className="h-6 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5">Reject</Button>
                               </div>
                             ) : (
                               <span className="text-[10px] text-muted-foreground">Processed</span>

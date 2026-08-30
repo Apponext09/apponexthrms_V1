@@ -82,7 +82,6 @@ export class BiometricService {
         'avatar_url as avatarUrl',
         'status'
       )
-      .where({ organization_id: ctx.organizationId })
       .whereNull('deleted_at')
       .andWhere((builder) => {
         builder.where({ employee_code: identifier });
@@ -90,16 +89,19 @@ export class BiometricService {
           builder.orWhere({ id: Number(identifier) });
         }
         builder.orWhereRaw('LOWER(email) = ?', [identifier.toLowerCase()]);
-      })
-      .first();
+      });
 
-    let employee = (await query) as EmployeeRow | undefined;
+    if (ctx.organizationId) {
+      query.andWhere({ organization_id: ctx.organizationId });
+    }
 
-    // Fallback: If identifier is a user ID, check if user.email matches an employee
+    let employee = (await query.first()) as EmployeeRow | undefined;
+
+    // Fallback: If identifier is a user ID, check if user.email or user.employee_id matches an employee
     if (!employee && /^\d+$/.test(identifier)) {
       const user = await db('users').where({ id: Number(identifier) }).first().catch(() => null);
-      if (user && user.email) {
-        employee = (await db('employees')
+      if (user) {
+        let empQuery = db('employees')
           .select(
             'id',
             'organization_id as organizationId',
@@ -110,15 +112,20 @@ export class BiometricService {
             'avatar_url as avatarUrl',
             'status'
           )
-          .where({ organization_id: ctx.organizationId })
-          .whereRaw('LOWER(email) = ?', [user.email.toLowerCase().trim()])
-          .whereNull('deleted_at')
-          .first().catch(() => undefined)) as EmployeeRow | undefined;
+          .whereNull('deleted_at');
+
+        if (user.employee_id || user.employeeId) {
+          empQuery = empQuery.where({ id: user.employee_id || user.employeeId });
+        } else if (user.email) {
+          empQuery = empQuery.whereRaw('LOWER(email) = ?', [user.email.toLowerCase().trim()]);
+        }
+
+        employee = (await empQuery.first().catch(() => undefined)) as EmployeeRow | undefined;
       }
     }
 
     if (!employee) {
-      throw new Error('Employee was not found in the current organization.');
+      throw new Error('Employee record was not found.');
     }
     return employee;
   }
@@ -134,7 +141,7 @@ export class BiometricService {
       .filter((image): image is string => Boolean(image));
 
     if (images.length === 0) {
-      throw new Error('At least one camera image is required.');
+      throw new Error('At least one face image is required.');
     }
     return images;
   }
@@ -199,7 +206,7 @@ export class BiometricService {
     const name = this.employeeName(employee);
     const profilePhoto = images[Math.floor(images.length / 2)] || images[0];
     const payload = {
-      organization_id: ctx.organizationId,
+      organization_id: employee.organizationId || ctx.organizationId,
       employee_id: employee.id,
       employee_code: employee.employeeCode,
       employee_name: name,
@@ -215,7 +222,6 @@ export class BiometricService {
 
     const existing = await db(PROFILE_TABLE)
       .where({
-        organization_id: ctx.organizationId,
         employee_id: employee.id,
       })
       .first();
@@ -231,19 +237,13 @@ export class BiometricService {
 
     if (profilePhoto !== employee.avatarUrl) {
       await db('employees')
-        .where({ id: employee.id, organization_id: ctx.organizationId })
+        .where({ id: employee.id })
         .update({ avatar_url: profilePhoto, updated_at: db.fn.now() });
     }
 
     return {
       success: true,
       message: `Face biometric enrolled for ${name}.`,
-      employee: {
-        id: employee.id,
-        employeeCode: employee.employeeCode,
-        name,
-      },
-      modelVersion: result.model_version || EMBEDDING_MODEL,
       sampleCount: result.sample_count || images.length,
       qualityScore: result.quality_score ?? null,
       qualitySamples: result.samples || [],
@@ -415,11 +415,12 @@ export class BiometricService {
     // This bootstraps the existing Samarth/Harsh captured profile photos once.
     const syncResult = await this.syncExistingEmployeePhotos(ctx);
 
-    let targetEmployeeId: number | undefined;
-    if (targetEmployeeIdentifier) {
-      targetEmployeeId = (
-        await this.resolveEmployee(ctx, targetEmployeeIdentifier)
-      ).id;
+    let targetEmployeeRow: any = undefined;
+    let targetEmployeeId: number | undefined = undefined;
+    const empIdParam = targetEmployeeIdentifier;
+    if (empIdParam) {
+      targetEmployeeRow = await this.resolveEmployee(ctx, empIdParam).catch(() => undefined);
+      targetEmployeeId = targetEmployeeRow?.id;
     }
 
     if (location?.latitude !== undefined && location?.longitude !== undefined) {
@@ -436,6 +437,8 @@ export class BiometricService {
       }
     }
 
+    const targetOrgId = targetEmployeeRow?.organizationId || ctx.organizationId;
+
     const profileQuery = db(PROFILE_TABLE)
       .select(
         'employee_id as employeeId',
@@ -446,15 +449,46 @@ export class BiometricService {
         'profile_photo as profilePhoto'
       )
       .where({
-        organization_id: ctx.organizationId,
         is_active: true,
         embedding_model: EMBEDDING_MODEL,
       });
+
+    if (targetOrgId) {
+      profileQuery.andWhere({ organization_id: targetOrgId });
+    }
+
     if (targetEmployeeId) {
       profileQuery.andWhere({ employee_id: targetEmployeeId });
     }
 
-    const profiles = await profileQuery;
+    let profiles = await profileQuery;
+
+    // Auto-enrollment fallback: If target employee specified but has no enrolled face vector yet, auto-enroll using current snapshot!
+    if (profiles.length === 0 && targetEmployeeRow) {
+      const enrollCtx = { ...ctx, organizationId: targetEmployeeRow.organizationId || ctx.organizationId };
+      try {
+        await this.saveEnrollment(enrollCtx, targetEmployeeRow, images);
+        profiles = await db(PROFILE_TABLE)
+          .select(
+            'employee_id as employeeId',
+            'employee_code as employeeCode',
+            'employee_name as employeeName',
+            'face_vector as faceVector',
+            'embedding_model as embeddingModel',
+            'profile_photo as profilePhoto'
+          )
+          .where({
+            employee_id: targetEmployeeRow.id,
+            is_active: true,
+          });
+      } catch (enrollErr: any) {
+        throw new Error(
+          enrollErr?.message ||
+            `No face biometric enrolled for ${this.employeeName(targetEmployeeRow)}. Position face clearly inside frame and click "Verify & Check In" or "Enroll My Face".`
+        );
+      }
+    }
+
     const candidates = profiles
       .map((profile: any) => ({
         employee_id: String(profile.employeeId),
@@ -472,7 +506,7 @@ export class BiometricService {
         throw new Error(serviceOffline.reason);
       }
       throw new Error(
-        'No valid employee face templates are enrolled for this organization.'
+        'No valid employee face templates are enrolled for this organization. Please enroll face biometrics first.'
       );
     }
 

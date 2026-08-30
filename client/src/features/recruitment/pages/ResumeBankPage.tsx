@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import {
-  Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight, FileText,
+  Download, Search, Upload, Briefcase, CheckCircle2, ArrowRight, FileText,
   ExternalLink, Sparkles, Cpu, Zap, Eye, Sliders, Filter, CheckCircle, AlertCircle, FileUp, History
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AiAnalysisModal } from '../components/AiAnalysisModal';
 import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
+import { ResumeViewerModal } from '../components/ResumeViewerModal';
 
 const INITIAL_FILTERS = {
   trackerId: '',
@@ -153,6 +154,10 @@ export const ResumeBankPage: React.FC = () => {
   const [selectedResumeForShortlist, setSelectedResumeForShortlist] = useState<any | null>(null);
   const [quickJobId, setQuickJobId] = useState<string>('');
   const [shortlistingId, setShortlistingId] = useState<number | null>(null);
+
+  // Resume Document Viewer State
+  const [selectedResumeForModal, setSelectedResumeForModal] = useState<any | null>(null);
+  const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -389,14 +394,23 @@ export const ResumeBankPage: React.FC = () => {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
       .then(res => {
-        if (res.data?.success) {
+        const result = res.data?.data;
+        const failed = Number(result?.failedCount ?? 0);
+        const ok = Number(result?.successCount ?? 0);
+        const firstErr = Array.isArray(result?.errors) && result.errors[0]
+          ? `${result.errors[0].file || 'file'}: ${result.errors[0].error}`
+          : '';
+
+        if (res.data?.success && failed === 0) {
           toast.success(res.data.message || 'Resumes uploaded & parsed successfully!');
-          setBulkFiles([]);
-          setActiveTab('logs');
-          fetchLogs();
+        } else if (ok > 0 && failed > 0) {
+          toast.warning(res.data.message || `Partial upload: ${ok} ok, ${failed} failed. ${firstErr}`);
         } else {
-          toast.error(res.data?.message || 'Failed to process bulk file upload');
+          toast.error(firstErr || res.data?.message || 'Bulk upload failed. Open Upload Logs for details.');
         }
+        setBulkFiles([]);
+        setActiveTab('logs');
+        fetchLogs();
       })
       .catch(err => {
         console.error('Failed to upload files', err);
@@ -683,13 +697,6 @@ export const ResumeBankPage: React.FC = () => {
 
         <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
           <Button 
-            size="sm" 
-            onClick={() => setIsAddModalOpen(true)} 
-            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add Candidate
-          </Button>
-          <Button 
             variant="outline" 
             size="sm" 
             onClick={handleExportResumes} 
@@ -726,11 +733,10 @@ export const ResumeBankPage: React.FC = () => {
             <CardHeader className="py-4 px-6 border-b border-border/60 bg-muted/30 rounded-t-2xl">
               <CardTitle className="text-sm font-extrabold text-foreground">Resume Bank Search & Filters</CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-4 overflow-visible relative z-30">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-4">
-                
+            <CardContent className="p-6 overflow-visible relative z-30">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-end">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Tracker ID</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Tracker ID</label>
                   <Input 
                     placeholder="Search Tracker ID..."
                     value={filters.trackerId} 
@@ -739,8 +745,8 @@ export const ResumeBankPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="space-y-1.5 lg:col-span-2">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate / Skill Search</label>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Candidate / Skill Search</label>
                   <Input 
                     placeholder="Candidate Name, Email, or Skill Keywords..."
                     value={filters.search} 
@@ -750,7 +756,7 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Application Source</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Application Source</label>
                   <Select value={filters.source} onValueChange={(val) => handleFilterChange('source', val)}>
                     <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Select Source" />
@@ -772,7 +778,7 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Position Title</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Position Title</label>
                   <Select value={filters.position} onValueChange={(val) => handleFilterChange('position', val)}>
                     <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Choose Position" />
@@ -789,7 +795,7 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Candidate Status</label>
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4">Candidate Status</label>
                   <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
                     <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-bold">
                       <SelectValue placeholder="Choose Status" />
@@ -805,15 +811,17 @@ export const ResumeBankPage: React.FC = () => {
                   </Select>
                 </div>
                 
-                <div className="flex items-center gap-2 pt-2 lg:col-span-4">
-                  <Button onClick={handleSearch} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs cursor-pointer">
-                    Apply Search Filters
-                  </Button>
-                  <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground cursor-pointer">
-                    Reset Filter
-                  </Button>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider block leading-4 invisible">Actions</label>
+                  <div className="flex items-center gap-2 h-9">
+                    <Button onClick={handleSearch} className="h-9 px-5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold rounded-xl shadow-xs cursor-pointer">
+                      Apply Search Filters
+                    </Button>
+                    <Button onClick={handleReset} variant="outline" className="h-9 px-4 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground cursor-pointer">
+                      Reset Filter
+                    </Button>
+                  </div>
                 </div>
-
               </div>
             </CardContent>
           </Card>
@@ -909,7 +917,10 @@ export const ResumeBankPage: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => window.open(getResumeViewUrl(item.resumeUrl), '_blank')}
+                                  onClick={() => {
+                                    setSelectedResumeForModal(item);
+                                    setIsResumeModalOpen(true);
+                                  }}
                                   className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer"
                                 >
                                   <FileText className="w-3.5 h-3.5 mr-1" /> View CV
@@ -1754,17 +1765,16 @@ export const ResumeBankPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Country</label>
-                <Select value={formData.country} onValueChange={(val) => setFormData({...formData, country: val})}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Choose" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Choose">Choose</SelectItem>
-                    <SelectItem value="US">United States</SelectItem>
-                    <SelectItem value="UK">United Kingdom</SelectItem>
-                    <SelectItem value="IN">India</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.country}
+                  onChange={(e) => setFormData({...formData, country: e.target.value})}
+                  className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Choose">Choose</option>
+                  <option value="US">United States</option>
+                  <option value="UK">United Kingdom</option>
+                  <option value="IN">India</option>
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Zipcode</label>
@@ -1788,16 +1798,15 @@ export const ResumeBankPage: React.FC = () => {
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Marital Status <span className="text-red-500">*</span></label>
-                <Select value={formData.maritalStatus} onValueChange={(val) => setFormData({...formData, maritalStatus: val})}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Single" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Single">Single</SelectItem>
-                    <SelectItem value="Married">Married</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.maritalStatus}
+                  onChange={(e) => setFormData({...formData, maritalStatus: e.target.value})}
+                  className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="Single">Single</option>
+                  <option value="Married">Married</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold">Current Company</label>
@@ -1868,24 +1877,24 @@ export const ResumeBankPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="font-semibold text-slate-800">Select Job Opening *</label>
-                <Select value={quickJobId} onValueChange={setQuickJobId}>
-                  <SelectTrigger className="h-8 text-xs bg-background">
-                    <SelectValue placeholder="-- Choose Job Opening --" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {jobsList.map((job: any) => {
-                      const id = getJobId(job);
-                      const title = getJobTitle(job);
-                      const code = getJobCode(job);
-                      if (!id) return null;
-                      return (
-                        <SelectItem key={id} value={id}>
-                          {code ? `[${code}] ` : ''}{title}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={quickJobId}
+                  onChange={(e) => setQuickJobId(e.target.value)}
+                  className="w-full h-9 text-xs bg-background border border-input rounded-md px-3 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-semibold cursor-pointer"
+                >
+                  <option value="">-- Choose Job Opening --</option>
+                  {jobsList.map((job: any) => {
+                    const id = getJobId(job);
+                    const title = getJobTitle(job);
+                    const code = getJobCode(job);
+                    if (!id) return null;
+                    return (
+                      <option key={id} value={id}>
+                        {code ? `[${code}] ` : ''}{title}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <DialogFooter className="pt-2">
@@ -2006,6 +2015,16 @@ export const ResumeBankPage: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Resume Document Viewer Modal */}
+      <ResumeViewerModal
+        open={isResumeModalOpen}
+        onOpenChange={setIsResumeModalOpen}
+        resumeUrl={selectedResumeForModal?.resumeUrl}
+        candidateName={selectedResumeForModal?.name}
+        candidateEmail={selectedResumeForModal?.email}
+        qualification={selectedResumeForModal?.qualification}
+      />
     </div>
   );
 };

@@ -10,6 +10,7 @@ import { useNotifications } from '@/features/notifications/hooks/useNotification
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Toaster } from '@/components/ui/toast';
 import { InternSidebar } from './InternSidebar';
 import { cn } from '@/lib/utils';
@@ -122,24 +123,7 @@ export function InternLayout() {
             </Button>
 
             {/* Notifications bell */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative"
-              onClick={() => setDrawerOpen(true)}
-              title="Notifications"
-            >
-              <Bell size={16} />
-              {unreadCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-white"
-                >
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </motion.span>
-              )}
-            </Button>
+            <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
             {/* Avatar */}
             <Avatar

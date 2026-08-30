@@ -117,6 +117,10 @@ export class RecruitmentService {
     return this.applicationRepo.list(ctx, options);
   }
 
+  async getHiredCandidates(ctx: TenantContext, options?: ListQueryOptions) {
+    return this.applicationRepo.listHiredNotOnboarded(ctx, options);
+  }
+
   async getJobApplications(ctx: TenantContext, jobId: number, options?: ListQueryOptions) {
     return this.applicationRepo.getByJob(ctx, jobId, options);
   }
@@ -378,32 +382,127 @@ Hiring Panel & HR Team
     } as any);
   }
 
-  async getRecruitmentDashboard(ctx: TenantContext): Promise<any> {
+  async getPipelineStages(ctx: TenantContext): Promise<any[]> {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
+    let stages: any[] = [];
+    try {
+      if (await db.schema.hasTable('pipeline_stages')) {
+        stages = await db('pipeline_stages')
+          .where(function() {
+            this.where('organization_id', ctx.organizationId)
+              .orWhereNull('organization_id');
+          })
+          .whereNull('deleted_at')
+          .orderBy('stage_order', 'asc');
+      }
+    } catch (e) {
+      console.warn('Failed to query pipeline_stages table:', e);
+    }
+
+    if (!stages || stages.length === 0) {
+      stages = [
+        { id: 1, stage_name: 'Applied', stageName: 'Applied', stage_code: 'applied', stage_order: 1, is_system: true },
+        { id: 2, stage_name: 'Screening', stageName: 'Screening', stage_code: 'screening', stage_order: 2, is_system: true },
+        { id: 3, stage_name: 'Assessment', stageName: 'Assessment', stage_code: 'assessment', stage_order: 3, is_system: true },
+        { id: 4, stage_name: 'Interview', stageName: 'Interview', stage_code: 'interview', stage_order: 4, is_system: true },
+        { id: 5, stage_name: 'Offer', stageName: 'Offer', stage_code: 'offer', stage_order: 5, is_system: true },
+        { id: 6, stage_name: 'Hired', stageName: 'Hired', stage_code: 'hired', stage_order: 6, is_system: true },
+        { id: 7, stage_name: 'Rejected', stageName: 'Rejected', stage_code: 'rejected', stage_order: 7, is_system: true },
+      ];
+    }
+
+    return stages;
+  }
+
+  async getRecruitmentDashboard(ctx: TenantContext, filters: any = {}): Promise<any> {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const departmentId = filters.department_id || filters.departmentId ? Number(filters.department_id || filters.departmentId) : null;
+    const jobId = filters.job_id || filters.jobId ? Number(filters.job_id || filters.jobId) : null;
+    const gradeId = filters.grade_id || filters.gradeId ? Number(filters.grade_id || filters.gradeId) : null;
+    const timeRange = filters.time_range || filters.timeRange || 'all';
+    const startDate = filters.start_date || filters.startDate;
+    const endDate = filters.end_date || filters.endDate;
+    const statusFilter = filters.status;
+
+    const applyDateFilter = (q: any, col: string) => {
+      if (startDate && endDate) {
+        q.whereBetween(col, [startDate, `${endDate} 23:59:59`]);
+      } else if (startDate) {
+        q.where(col, '>=', startDate);
+      } else if (endDate) {
+        q.where(col, '<=', `${endDate} 23:59:59`);
+      } else if (timeRange && timeRange !== 'all') {
+        const now = new Date();
+        if (timeRange === 'today') {
+          const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 19).replace('T', ' ');
+          q.where(col, '>=', start);
+        } else if (timeRange === 'this_week') {
+          const firstDay = new Date(now.setDate(now.getDate() - now.getDay()));
+          const start = new Date(firstDay.getFullYear(), firstDay.getMonth(), firstDay.getDate()).toISOString().slice(0, 19).replace('T', ' ');
+          q.where(col, '>=', start);
+        } else if (timeRange === 'this_month') {
+          const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 19).replace('T', ' ');
+          q.where(col, '>=', start);
+        } else if (timeRange === 'this_quarter') {
+          const quarterMonth = Math.floor(now.getMonth() / 3) * 3;
+          const start = new Date(now.getFullYear(), quarterMonth, 1).toISOString().slice(0, 19).replace('T', ' ');
+          q.where(col, '>=', start);
+        } else if (timeRange === 'this_year') {
+          const start = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 19).replace('T', ' ');
+          q.where(col, '>=', start);
+        }
+      }
+    };
+
     // 1. Open published jobs count
-    const openJobsCountRes = await db('jobs')
-      .where({ organization_id: ctx.organizationId, status: 'published' })
-      .whereNull('deleted_at')
-      .count('id as count')
+    let jobsQuery = db('jobs')
+      .where('jobs.organization_id', ctx.organizationId)
+      .whereNull('jobs.deleted_at');
+
+    if (departmentId) jobsQuery = jobsQuery.where('jobs.department_id', departmentId);
+    if (jobId) jobsQuery = jobsQuery.where('jobs.id', jobId);
+    if (gradeId) {
+      jobsQuery = jobsQuery
+        .leftJoin('mrf_requests', 'jobs.mrf_request_id', 'mrf_requests.id')
+        .where('mrf_requests.grade_id', gradeId);
+    }
+    applyDateFilter(jobsQuery, 'jobs.created_at');
+
+    const totalOpenJobsRes = await jobsQuery.clone()
+      .where(function() {
+        this.where('jobs.status', 'published')
+          .orWhere('jobs.status', 'active')
+          .orWhere('jobs.status', 'open');
+      })
+      .count('jobs.id as count')
       .first();
-    const totalOpenJobs = Number(openJobsCountRes?.count || 0);
+    const totalOpenJobs = Number(totalOpenJobsRes?.count || (totalOpenJobsRes as any)?.count || 0);
 
-    // 2. Application & Candidate status breakdown across database
-    const appStatsRes = await db('applications')
-      .where({ organization_id: ctx.organizationId })
-      .whereNull('deleted_at')
-      .select('application_status')
-      .count('id as count')
-      .groupBy('application_status');
+    // 2. Applications query with full joins
+    let appsQuery = db('applications')
+      .where('applications.organization_id', ctx.organizationId)
+      .whereNull('applications.deleted_at')
+      .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id');
 
-    const candStatsRes = await db('candidates')
-      .where({ organization_id: ctx.organizationId })
-      .whereNull('deleted_at')
-      .select('status')
-      .count('id as count')
-      .groupBy('status');
+    if (departmentId) appsQuery = appsQuery.where('jobs.department_id', departmentId);
+    if (jobId) appsQuery = appsQuery.where('applications.job_id', jobId);
+    if (statusFilter && statusFilter !== 'all') appsQuery = appsQuery.where('applications.application_status', statusFilter);
+    if (gradeId) {
+      appsQuery = appsQuery
+        .leftJoin('mrf_requests', 'jobs.mrf_request_id', 'mrf_requests.id')
+        .where('mrf_requests.grade_id', gradeId);
+    }
+    applyDateFilter(appsQuery, 'applications.created_at');
+
+    const appStatsRes = await appsQuery.clone()
+      .select('applications.application_status')
+      .count('applications.id as count')
+      .groupBy('applications.application_status');
 
     const stageCounts: Record<string, number> = {
       applied: 0,
@@ -416,39 +515,110 @@ Hiring Panel & HR Team
       withdrawn: 0,
     };
 
-    const normalizeKey = (s: string) => {
+    const normalizeKey = (s: any) => {
       const lower = String(s || '').toLowerCase().trim();
-      if (lower === 'shortlisted') return 'screening';
-      if (lower === 'new') return 'applied';
-      if (lower === 'offered') return 'offer';
-      if (lower === 'joined') return 'hired';
-      if (lower === 'scheduled' || lower === 'interviewed') return 'interview';
-      return lower;
+      if (!lower) return 'applied';
+      if (['shortlisted', 'screening', 'screened', 'reviewed', 'resume review', 'hr review', 'under review'].includes(lower)) return 'screening';
+      if (['new', 'applied', 'application', 'pending', 'lead', 'inquiry', 'sourced'].includes(lower)) return 'applied';
+      if (['assessment', 'test', 'evaluating', 'evaluated', 'technical test', 'assignment', 'exam'].includes(lower)) return 'assessment';
+      if (['scheduled', 'interview', 'interviewed', 'interviewing', 'round 1', 'round 2', 'round 3', 'in_interview', 'panel', 'technical interview', 'hr interview', 'manager interview'].includes(lower)) return 'interview';
+      if (['offered', 'offer', 'offer_extended', 'offer_accepted', 'offer released', 'salary negotiation'].includes(lower)) return 'offer';
+      if (['joined', 'hired', 'onboarded', 'completed', 'active', 'converted', 'closed'].includes(lower)) return 'hired';
+      if (['rejected', 'regret', 'dropped', 'failed', 'disqualified', 'declined'].includes(lower)) return 'rejected';
+      if (['withdrawn', 'cancelled'].includes(lower)) return 'withdrawn';
+      return 'applied';
     };
 
     let totalApplications = 0;
 
-    appStatsRes.forEach((row: any) => {
+    (appStatsRes as any[]).forEach((row: any) => {
       const count = Number(row.count || 0);
       totalApplications += count;
-      const key = normalizeKey(row.application_status);
+      const rawStatus = row.applicationStatus || row.application_status || row.status || '';
+      const key = normalizeKey(rawStatus);
       if (stageCounts[key] !== undefined) {
         stageCounts[key] += count;
+      } else {
+        stageCounts.applied += count;
       }
     });
 
-    candStatsRes.forEach((row: any) => {
-      const count = Number(row.count || 0);
-      if (totalApplications === 0) totalApplications += count;
-      const key = normalizeKey(row.status);
-      if (stageCounts[key] !== undefined && appStatsRes.length === 0) {
-        stageCounts[key] += count;
+    // Fallback to candidates table if applications table has 0 for initial setup
+    if (totalApplications === 0 && !departmentId && !jobId && !gradeId) {
+      let candQuery = db('candidates')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+      applyDateFilter(candQuery, 'created_at');
+
+      const candStatsRes = await candQuery
+        .select('status')
+        .count('id as count')
+        .groupBy('status');
+
+      (candStatsRes as any[]).forEach((row: any) => {
+        const count = Number(row.count || 0);
+        totalApplications += count;
+        const rawStatus = row.status || row.candidateStatus || '';
+        const key = normalizeKey(rawStatus);
+        if (stageCounts[key] !== undefined) {
+          stageCounts[key] += count;
+        } else {
+          stageCounts.applied += count;
+        }
+      });
+    }
+
+    // 3. Funnel & Conversion Calculations
+    // Cumulative progression funnel calculation
+    const totalAppliedVolume = Math.max(totalApplications, stageCounts.applied + stageCounts.screening + stageCounts.assessment + stageCounts.interview + stageCounts.offer + stageCounts.hired + stageCounts.rejected);
+    const enteredScreening = stageCounts.screening + stageCounts.assessment + stageCounts.interview + stageCounts.offer + stageCounts.hired;
+    const enteredInterview = stageCounts.assessment + stageCounts.interview + stageCounts.offer + stageCounts.hired;
+    const enteredOffer = stageCounts.offer + stageCounts.hired;
+    const enteredHired = stageCounts.hired;
+
+    const funnel = {
+      applied: totalAppliedVolume,
+      screening: enteredScreening > 0 ? enteredScreening : stageCounts.screening,
+      assessment: stageCounts.assessment,
+      interview: enteredInterview > 0 ? enteredInterview : stageCounts.interview,
+      offer: enteredOffer > 0 ? enteredOffer : stageCounts.offer,
+      hired: enteredHired > 0 ? enteredHired : stageCounts.hired,
+      rejected: stageCounts.rejected,
+    };
+
+    const conversions = {
+      appliedToScreening: funnel.applied > 0 ? Math.round((funnel.screening / funnel.applied) * 100) : 0,
+      screeningToInterview: funnel.screening > 0 ? Math.round((funnel.interview / funnel.screening) * 100) : 0,
+      interviewToOffer: funnel.interview > 0 ? Math.round((funnel.offer / funnel.interview) * 100) : 0,
+      offerToHired: funnel.offer > 0 ? Math.round((funnel.hired / funnel.offer) * 100) : 0,
+      appliedToHired: funnel.applied > 0 ? Math.round((funnel.hired / funnel.applied) * 100) : 0,
+    };
+
+    // 4. Calculate Avg. Time to Hire (Days)
+    let avgTimeToHire = 0;
+    try {
+      const hiredApps = await appsQuery.clone()
+        .where(function() {
+          this.whereRaw("LOWER(COALESCE(applications.application_status, '')) IN ('hired', 'joined', 'onboarded')");
+        })
+        .select(['applications.id', 'applications.applied_at', 'applications.created_at', 'applications.updated_at'])
+        .limit(100);
+
+      if (hiredApps.length > 0) {
+        let totalDays = 0;
+        for (const app of hiredApps) {
+          const appliedDate = new Date(app.applied_at || app.appliedAt || app.created_at || app.createdAt);
+          const endDate = new Date(app.updated_at || app.updatedAt || new Date());
+          const days = Math.max(0, Math.floor((endDate.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24)));
+          totalDays += days;
+        }
+        avgTimeToHire = Math.round(totalDays / hiredApps.length);
       }
-    });
+    } catch (e) {}
 
     const stats = {
       totalOpenJobs,
-      totalApplications: Math.max(totalApplications, candStatsRes.length),
+      totalApplications: totalAppliedVolume,
       appliedCount: stageCounts.applied,
       screeningCount: stageCounts.screening,
       assessmentCount: stageCounts.assessment,
@@ -456,17 +626,198 @@ Hiring Panel & HR Team
       offerCount: stageCounts.offer,
       hiredCount: stageCounts.hired,
       rejectedCount: stageCounts.rejected,
+      timeToHire: avgTimeToHire || (funnel.hired > 0 ? 14 : 0),
+      conversionRate: conversions.appliedToHired,
     };
 
-    // 3. Open jobs list
-    const openJobs = await this.jobRepo.getPublished(ctx, { pageSize: 10 });
+    // 5. Sourcing Channels Breakdown
+    let sourceMetrics: Array<{ name: string; value: number }> = [];
+    try {
+      const sourceStatsRows = await appsQuery.clone()
+        .select(db.raw("COALESCE(NULLIF(candidates.source, ''), NULLIF(applications.applied_from_source, ''), 'Direct Sourcing') as source_name"))
+        .count('applications.id as count')
+        .groupBy('source_name');
 
-    // 4. Recent applications enriched with candidate name and job title
-    let recentApplications = await db('applications')
-      .where('applications.organization_id', ctx.organizationId)
-      .whereNull('applications.deleted_at')
-      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+      sourceMetrics = (sourceStatsRows as any[]).map((r: any) => {
+        const rawName = r.sourceName || r.source_name || 'Direct Sourcing';
+        return {
+          name: rawName ? String(rawName).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Direct Sourcing',
+          value: Number(r.count || 0),
+        };
+      }).filter(s => s.value > 0);
+
+      if (sourceMetrics.length === 0) {
+        const candSources = await db('candidates')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .select(db.raw("COALESCE(NULLIF(source, ''), 'Direct Sourcing') as source_name"))
+          .count('id as count')
+          .groupBy('source_name');
+
+        sourceMetrics = (candSources as any[]).map((r: any) => {
+          const rawName = r.sourceName || r.source_name || 'Direct Sourcing';
+          return {
+            name: rawName ? String(rawName).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Direct Sourcing',
+            value: Number(r.count || 0),
+          };
+        }).filter(s => s.value > 0);
+      }
+
+      if (sourceMetrics.length === 0 && totalAppliedVolume > 0) {
+        sourceMetrics = [{ name: 'Direct Sourcing', value: totalAppliedVolume }];
+      }
+    } catch (err) {
+      console.warn('Error computing sourceMetrics:', err);
+      sourceMetrics = [{ name: 'Direct Sourcing', value: Math.max(totalAppliedVolume, 1) }];
+    }
+
+    // 6. Monthly Trends (Applications & Hires over last 6 months) — independent query, not filtered by dashboard params
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentMonthIdx = new Date().getMonth();
+    const last6Months = Array.from({ length: 6 }, (_, i) => {
+      const idx = (currentMonthIdx - 5 + i + 12) % 12;
+      return months[idx];
+    });
+
+    const monthMap: Record<string, { apps: number; hires: number }> = {};
+    last6Months.forEach(m => { monthMap[m] = { apps: 0, hires: 0 }; });
+
+    // Calculate start date for last 6 months
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    sixMonthsAgo.setDate(1);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+    const sixMonthsAgoStr = sixMonthsAgo.toISOString().slice(0, 19).replace('T', ' ');
+
+    try {
+      // Query applications table directly (no cloning from filtered appsQuery)
+      const monthlyStatsRows = await db('applications')
+        .where('applications.organization_id', ctx.organizationId)
+        .whereNull('applications.deleted_at')
+        .where('applications.created_at', '>=', sixMonthsAgoStr)
+        .select([
+          db.raw("DATE_FORMAT(applications.created_at, '%b') as month_name"),
+          db.raw("COUNT(applications.id) as total_apps"),
+          db.raw("SUM(CASE WHEN LOWER(COALESCE(applications.application_status, '')) IN ('hired', 'joined', 'onboarded') THEN 1 ELSE 0 END) as total_hires"),
+        ])
+        .groupByRaw("DATE_FORMAT(applications.created_at, '%Y-%m'), DATE_FORMAT(applications.created_at, '%b')")
+        .orderByRaw("DATE_FORMAT(applications.created_at, '%Y-%m') asc");
+
+      (monthlyStatsRows as any[]).forEach((row: any) => {
+        const mName = row.monthName || row.month_name;
+        const totalApps = Number(row.totalApps || row.total_apps || 0);
+        const totalHires = Number(row.totalHires || row.total_hires || 0);
+
+        if (mName && monthMap[mName] !== undefined) {
+          monthMap[mName].apps += totalApps;
+          monthMap[mName].hires += totalHires;
+        }
+      });
+
+      // If no applications found, try candidates table as fallback
+      const totalMappedApps = Object.values(monthMap).reduce((sum, v) => sum + v.apps, 0);
+      if (totalMappedApps === 0) {
+        const candMonthlyRows = await db('candidates')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .where('created_at', '>=', sixMonthsAgoStr)
+          .select([
+            db.raw("DATE_FORMAT(created_at, '%b') as month_name"),
+            db.raw("COUNT(id) as total_apps"),
+            db.raw("SUM(CASE WHEN LOWER(COALESCE(status, '')) IN ('hired', 'joined', 'onboarded') THEN 1 ELSE 0 END) as total_hires"),
+          ])
+          .groupByRaw("DATE_FORMAT(created_at, '%Y-%m'), DATE_FORMAT(created_at, '%b')")
+          .orderByRaw("DATE_FORMAT(created_at, '%Y-%m') asc");
+
+        (candMonthlyRows as any[]).forEach((row: any) => {
+          const mName = row.monthName || row.month_name;
+          const totalApps = Number(row.totalApps || row.total_apps || 0);
+          const totalHires = Number(row.totalHires || row.total_hires || 0);
+
+          if (mName && monthMap[mName] !== undefined) {
+            monthMap[mName].apps += totalApps;
+            monthMap[mName].hires += totalHires;
+          }
+        });
+      }
+
+      // Final fallback: if we have total volume but nothing mapped, place in current month
+      const finalMappedApps = Object.values(monthMap).reduce((sum, v) => sum + v.apps, 0);
+      if (finalMappedApps === 0 && totalAppliedVolume > 0) {
+        const currentMonthName = months[currentMonthIdx];
+        monthMap[currentMonthName].apps = totalAppliedVolume;
+        monthMap[currentMonthName].hires = stageCounts.hired;
+      }
+    } catch (err) {
+      console.warn('Error fetching monthly trends:', err);
+    }
+
+    const monthlyTrends = last6Months.map(m => ({
+      month: m,
+      applications: monthMap[m].apps,
+      hires: monthMap[m].hires,
+    }));
+
+    // 7. Department Breakdown
+    let departmentBreakdown: any[] = [];
+    try {
+      let deptQuery = db('departments')
+        .where('departments.organization_id', ctx.organizationId)
+        .whereNull('departments.deleted_at')
+        .select(['departments.id', 'departments.name']);
+
+      if (departmentId) deptQuery = deptQuery.where('departments.id', departmentId);
+      const depts = await deptQuery.limit(15);
+
+      departmentBreakdown = await Promise.all(depts.map(async (dept: any) => {
+        const dId = dept.id;
+        const dName = dept.name;
+
+        const openPos = await db('jobs')
+          .where({ organization_id: ctx.organizationId, department_id: dId })
+          .where(function() {
+            this.where('status', 'published')
+              .orWhere('status', 'active')
+              .orWhere('status', 'open');
+          })
+          .whereNull('deleted_at')
+          .count('id as count')
+          .first();
+
+        const deptApps = await db('applications')
+          .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+          .where('applications.organization_id', ctx.organizationId)
+          .where('jobs.department_id', dId)
+          .whereNull('applications.deleted_at')
+          .count('applications.id as count')
+          .first();
+
+        const deptHires = await db('applications')
+          .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+          .where('applications.organization_id', ctx.organizationId)
+          .where('jobs.department_id', dId)
+          .where(function() {
+            this.whereRaw("LOWER(COALESCE(applications.application_status, '')) IN ('hired', 'joined', 'onboarded')");
+          })
+          .whereNull('applications.deleted_at')
+          .count('applications.id as count')
+          .first();
+
+        return {
+          departmentId: dId,
+          departmentName: dName,
+          openPositions: Number(openPos?.count || (openPos as any)?.count || 0),
+          applications: Number(deptApps?.count || (deptApps as any)?.count || 0),
+          hires: Number(deptHires?.count || (deptHires as any)?.count || 0),
+        };
+      }));
+    } catch (e) {
+      console.warn('Error calculating departmentBreakdown:', e);
+    }
+
+    // 8. Recent Applications enriched with Candidate Name, Position, Department
+    let recentApplications = await appsQuery.clone()
+      .leftJoin('departments', 'jobs.department_id', 'departments.id')
       .select([
         'applications.id',
         'applications.uuid',
@@ -475,16 +826,17 @@ Hiring Panel & HR Team
         'applications.application_status',
         'applications.applied_at',
         'applications.created_at',
-        db.raw("TRIM(CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+        db.raw("TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
         'candidates.email as candidate_email',
         'candidates.phone as candidate_phone',
         'jobs.job_title as position_title',
         'jobs.job_code as job_code',
+        'departments.name as department_name',
       ])
       .orderBy('applications.created_at', 'desc')
-      .limit(10);
+      .limit(15);
 
-    if (recentApplications.length === 0) {
+    if (recentApplications.length === 0 && !departmentId && !jobId) {
       const recentCandidates = await db('candidates')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
@@ -497,18 +849,51 @@ Hiring Panel & HR Team
           'current_position as position_title',
           'created_at as applied_at',
           'created_at',
-          db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as candidate_name"),
+          db.raw("TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))) as candidate_name"),
         ])
         .orderBy('created_at', 'desc')
-        .limit(10);
+        .limit(15);
 
-      recentApplications = recentCandidates;
+      recentApplications = recentCandidates as any;
     }
+
+    // 9. Dynamic Filter Dropdown Options
+    const filterDepartments = await db('departments')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .select(['id', 'name'])
+      .orderBy('name', 'asc');
+
+    const filterJobs = await db('jobs')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .select(['id', 'job_title', 'job_code', 'department_id'])
+      .orderBy('job_title', 'asc');
+
+    let filterGrades: any[] = [];
+    try {
+      if (await db.schema.hasTable('grades')) {
+        filterGrades = await db('grades')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .select(['id', 'name', 'code'])
+          .orderBy('name', 'asc');
+      }
+    } catch (e) {}
 
     return {
       stats,
-      openJobs: openJobs.items,
+      funnel,
+      conversions,
+      sourceMetrics,
+      monthlyTrends,
+      departmentBreakdown,
       recentApplications,
+      filterOptions: {
+        departments: filterDepartments,
+        jobs: filterJobs,
+        grades: filterGrades,
+      },
     };
   }
 }

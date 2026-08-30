@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -337,8 +337,23 @@ function ModuleCard({
  */
 export function ModuleManagementPage(): JSX.Element {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const moduleParam = searchParams.get('module')?.toLowerCase();
+
+  const getModuleParam = (): string | null => {
+    const pathSegments = location.pathname.split('/').filter(Boolean);
+    let moduleFromPath = null;
+
+    if (pathSegments.includes('modules')) {
+      const moduleIndex = pathSegments.indexOf('modules');
+      moduleFromPath = pathSegments[moduleIndex + 1];
+    }
+
+    if (moduleFromPath) return moduleFromPath.toLowerCase();
+    return searchParams.get('module')?.toLowerCase() || null;
+  };
+
+  const moduleParam = getModuleParam();
 
   const resolveRole = (param?: string | null): RoleType => {
     if (param === 'ceo' || param === 'admin') return 'ceo';
@@ -364,7 +379,7 @@ export function ModuleManagementPage(): JSX.Element {
   // Sync state when role or moduleParam changes
   useEffect(() => {
     setActiveRole(resolveRole(moduleParam));
-  }, [moduleParam]);
+  }, [moduleParam, location.pathname]);
 
   useEffect(() => {
     if (roleModules.length > 0) {

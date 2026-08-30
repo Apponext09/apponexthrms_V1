@@ -109,12 +109,14 @@ export interface MobileTrackingRecord {
 // Accepts an optional companyId — when provided, the backend cascades
 // departments / employees / reporting officers to that company scope.
 // React Query re-fetches automatically whenever companyId changes.
-export function useReportFilterOptions(companyId?: string | null) {
+export function useReportFilterOptions(companyId?: string | null, departmentIds?: string[]) {
+  const deptKey = departmentIds && departmentIds.length > 0 ? [...departmentIds].sort().join(',') : null;
   return useQuery({
-    queryKey: ['reportFilterOptions', companyId ?? null],
+    queryKey: ['reportFilterOptions', companyId ?? null, deptKey],
     queryFn: async () => {
       const params: Record<string, any> = {};
       if (companyId) params.companyId = companyId;
+      if (deptKey) params.departmentIds = deptKey;
       const res = await apiClient.get('/attendance/reports/options', { params });
       if (res.data?.success && res.data?.data) {
         return res.data.data;

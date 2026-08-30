@@ -44,6 +44,9 @@ export class MrfController {
       search,
     } = req.query;
 
+    const { recruitmentExpiryService } = await import('../services/RecruitmentExpiryService');
+    await recruitmentExpiryService.closeExpiredRecords(ctx);
+
     const result = await this.mrfService.listMrfs(ctx, {
       page: parseInt(page as string, 10),
       pageSize: parseInt(pageSize as string, 10),

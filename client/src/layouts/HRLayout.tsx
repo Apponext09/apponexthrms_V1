@@ -11,7 +11,7 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
   FilePlus, LineChart, ListChecks, UploadCloud, Palette
 } from 'lucide-react';
@@ -20,6 +20,7 @@ import { useNotifications } from '@/features/notifications/hooks/useNotification
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 // ── Accent palette for HR (rose/pink) ────────────────────────────────────────
@@ -95,13 +96,18 @@ const HR_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/expense-claims', icon: Receipt },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/travel-requests', icon: Compass },
+      { name: 'Dashboard', href: '/expenses/dashboard', icon: TrendingUp },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: Receipt },
+      { name: 'Approvals', href: '/expenses/approvals', icon: CheckCircle2 },
+      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: FileCheck },
+      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: CreditCard },
+      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: Compass },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: Navigation },
+      { name: 'Expense Categories', href: '/expenses/categories', icon: Layers },
+      { name: 'Expense Policies', href: '/expenses/policies', icon: ShieldCheck },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: LineChart },
+      { name: 'Settings', href: '/expenses/settings', icon: Sliders },
     ],
   },
   {
@@ -132,6 +138,7 @@ const HR_NAV = [
       { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
       { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
       { name: 'Assessment Management', href: '/hr/recruitment/assessments', icon: Code2 },
+      { name: 'Offer Management', href: '/recruitment/offers', icon: FileCheck },
       { name: 'Interview Schedule', href: '/hr/recruitment/interview-schedule', icon: Calendar },
       { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
     ],
@@ -146,30 +153,33 @@ const HR_NAV = [
   {
     label: 'MASTERS',
     items: [
-      { name: 'Company', href: '/hr/masters?tab=company', icon: Building2 },
-      { name: 'Location', href: '/hr/masters?tab=location', icon: MapPin },
-      { name: 'Department', href: '/hr/masters?tab=department', icon: Layers },
-      { name: 'Designation', href: '/hr/masters?tab=designation', icon: Briefcase },
-      { name: 'General Shift', href: '/hr/masters?tab=general-shift', icon: Clock },
-      { name: 'Roster Shift', href: '/hr/masters?tab=roster-shift', icon: Clock },
-      { name: 'OT Rule', href: '/hr/masters?tab=ot-rule', icon: Sliders },
-      { name: 'Grade', href: '/hr/masters?tab=grade', icon: Award },
-      { name: 'Holiday', href: '/hr/masters?tab=holiday', icon: Calendar },
-      { name: 'Employee Status', href: '/hr/masters?tab=employee-status', icon: Users },
-      { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
-      { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
-      { name: 'Offer Letter Master', href: '/hr/masters?tab=offer-templates', icon: FileText },
-      { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
-      { name: 'Notification Merge Codes', href: '/hr/masters?tab=notification-merge-codes', icon: Code2 },
-      { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
-      { name: 'Roles & Responsibility', href: '/hr/masters?tab=roles-responsibility', icon: ShieldCheck },
-      { name: 'KRA Form', href: '/hr/masters?tab=kra', icon: FileText },
-      { name: 'Resource Plan', href: '/hr/masters?tab=resource-plan', icon: Grid },
+      { name: 'Company', href: '/hr/masters/company', icon: Building2 },
+      { name: 'Location', href: '/hr/masters/location', icon: MapPin },
+      { name: 'Department', href: '/hr/masters/department', icon: Layers },
+      { name: 'Designation', href: '/hr/masters/designation', icon: Briefcase },
+      { name: 'General Shift', href: '/hr/masters/general-shift', icon: Clock },
+      { name: 'Roster Shift', href: '/hr/masters/roster-shift', icon: Clock },
+      { name: 'OT Rule', href: '/hr/masters/ot-rule', icon: Sliders },
+      { name: 'Grade', href: '/hr/masters/grade', icon: Award },
+      { name: 'Holiday', href: '/hr/masters/holiday', icon: Calendar },
+      { name: 'Employee Status', href: '/hr/masters/employee-status', icon: Users },
+      { name: 'Emp. Type', href: '/hr/masters/emp-type', icon: Users },
+      { name: 'Events', href: '/hr/masters/events', icon: Calendar },
+      { name: 'Offer Letter Master', href: '/hr/masters/offer-templates', icon: FileText },
+      { name: 'Notification Templates', href: '/hr/masters/notification-templates', icon: Bell },
+      { name: 'Notification Merge Codes', href: '/hr/masters/notification-merge-codes', icon: Code2 },
+      { name: 'Break', href: '/hr/masters/break', icon: Coffee },
+      { name: 'Roles & Responsibility', href: '/hr/masters/roles-responsibility', icon: ShieldCheck },
+      { name: 'KRA Form', href: '/hr/masters/kra', icon: FileText },
+      { name: 'Resource Plan', href: '/hr/masters/resource-plan', icon: Grid },
     ],
   },
   {
     label: 'OPERATIONS',
     items: [
+      { name: 'Policy Management', href: '/policies/manage', icon: Shield },
+      { name: 'My Policies', href: '/employee/policies', icon: FileText },
+
       { name: 'Workflows', href: '/hr/workflow', icon: GitBranch },
       { name: 'Settings', href: '/hr/settings', icon: Settings },
     ],
@@ -503,14 +513,7 @@ export function HRLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
             <div className="w-px h-5 bg-border mx-1" />
 

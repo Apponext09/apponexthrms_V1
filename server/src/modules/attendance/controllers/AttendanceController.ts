@@ -763,7 +763,10 @@ export class AttendanceController {
     // companyId is passed as a query param by the frontend when a company is selected.
     // When absent (no company selected yet) the service returns empty dependent lists.
     const companyId = req.query.companyId ? Number(req.query.companyId) : null;
-    const options = await this.attendanceService.getReportFilterOptions(ctx, companyId);
+    const departmentIds = req.query.departmentIds
+      ? String(req.query.departmentIds).split(',').map((x) => parseInt(x, 10)).filter((n) => !isNaN(n))
+      : [];
+    const options = await (this.attendanceService as any).getReportFilterOptions(ctx, companyId, departmentIds);
     res.json({ success: true, data: options });
   });
 

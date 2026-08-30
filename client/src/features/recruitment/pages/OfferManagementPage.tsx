@@ -3,8 +3,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, FileText, Send, CheckCircle, XCircle, Eye, FileSpreadsheet, TrendingUp } from 'lucide-react';
-import { useOffers, useCreateOffer } from '../hooks/useOffers';
+import { Plus, Search, FileText, Send, CheckCircle, XCircle, Eye, FileSpreadsheet, TrendingUp, Users, UserPlus } from 'lucide-react';
+import { useOffers, useCreateOffer, useEmployeeLetters } from '../hooks/useOffers';
 import { useApplications } from '../hooks/useApplications';
 import { useDepartments, useDesignations } from '@/features/settings/hooks';
 import { GenerateOfferModal } from '../components/GenerateOfferModal';
@@ -15,15 +15,18 @@ import { toast } from 'sonner';
 export const OfferManagementPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'offers' | 'employee_letters'>('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
 
   // Queries
-  const { data: offersResponse, isLoading, refetch } = useOffers({
+  const { data: offersResponse, isLoading: isLoadingOffers, refetch } = useOffers({
     status: statusFilter === 'all' ? undefined : statusFilter,
   });
+
+  const { data: employeeLettersResponse } = useEmployeeLetters();
 
   const { data: appsResponse } = useApplications({ pageSize: 100 });
   const { data: departmentsResponse } = useDepartments(1, 100);
@@ -32,9 +35,30 @@ export const OfferManagementPage: React.FC = () => {
   const createOfferMutation = useCreateOffer();
 
   // Data processing
-  const offersList = Array.isArray(offersResponse?.data) 
+  const rawOffersList = Array.isArray(offersResponse?.data) 
     ? offersResponse.data 
     : (Array.isArray(offersResponse?.data?.items) ? offersResponse.data.items : (Array.isArray(offersResponse?.items) ? offersResponse.items : []));
+
+  const offersList = rawOffersList.map((o: any) => ({ ...o, record_type: 'offer' }));
+
+  const rawLettersList = Array.isArray(employeeLettersResponse?.data?.items)
+    ? employeeLettersResponse.data.items
+    : (Array.isArray(employeeLettersResponse?.items) ? employeeLettersResponse.items : (Array.isArray(employeeLettersResponse?.data) ? employeeLettersResponse.data : []));
+
+  const employeeLettersList = rawLettersList.map((l: any) => ({
+    id: `letter_${l.id}`,
+    offer_code: l.letter_code || `LTR-${l.id}`,
+    candidate_name: l.recipient_name || 'Employee',
+    candidate_email: l.recipient_email || 'N/A',
+    position_title: l.letter_type ? l.letter_type.replace(/_/g, ' ').toUpperCase() : (l.subject || 'Employee Letter'),
+    cost_to_company: null,
+    currency: 'INR',
+    offer_start_date: l.created_at,
+    offer_expiry_date: null,
+    status: l.status || 'sent',
+    record_type: 'letter',
+    raw_letter: l
+  }));
 
   const applicationList = Array.isArray(appsResponse?.items) 
     ? appsResponse.items 
@@ -54,7 +78,7 @@ export const OfferManagementPage: React.FC = () => {
   const sentOffersCount = allOffers.filter((o: any) => o.status === 'sent').length;
   const acceptedOffersCount = allOffers.filter((o: any) => o.status === 'accepted').length;
   const draftOffersCount = allOffers.filter((o: any) => o.status === 'draft').length;
-  const expiredOffersCount = allOffers.filter((o: any) => o.status === 'expired' || o.status === 'rejected').length;
+  const totalEmployeeLettersCount = employeeLettersList.length;
   const acceptanceRate = totalOffersCount > 0 
     ? Math.round((acceptedOffersCount / (totalOffersCount - draftOffersCount || totalOffersCount)) * 100) 
     : 0;
@@ -72,14 +96,24 @@ export const OfferManagementPage: React.FC = () => {
     }
   };
 
-  const handleSendOffer = async (offer: any) => {
+  const handleSendOffer = async (offer: any, customEmail?: string) => {
     setIsActionPending(true);
+    const targetEmail = (customEmail || offer.candidate_email || offer.candidateEmail || offer.meta?.candidateEmail || '').trim();
     try {
-      await apiClient.post(`/recruitment/offers/${offer.id}/send`);
-      toast.success(`Offer Ref: ${offer.offer_code || offer.offerCode} sent successfully to candidate email!`);
+      const res = await apiClient.post(`/recruitment/offers/${offer.id}/send`, {
+        recipientEmail: targetEmail || undefined
+      });
+      const sentTo = res.data?.recipientEmail || targetEmail || 'candidate email';
+      toast.success(`Offer Ref: ${offer.offer_code || offer.offerCode} sent successfully to ${sentTo}!`);
       refetch();
       if (selectedOffer && selectedOffer.id === offer.id) {
-        setSelectedOffer({ ...selectedOffer, status: 'sent' });
+        setSelectedOffer({ 
+          ...selectedOffer, 
+          status: 'sent',
+          candidate_email: sentTo,
+          candidateEmail: sentTo,
+          meta: { ...(selectedOffer.meta || {}), candidateEmail: sentTo }
+        });
       }
     } catch (err: any) {
       console.error(err);
@@ -101,11 +135,25 @@ export const OfferManagementPage: React.FC = () => {
       case 'accepted': return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Accepted</Badge>;
       case 'rejected': return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Declined</Badge>;
       case 'expired': return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Expired</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
+      default: return <Badge variant="outline" className="capitalize">{status}</Badge>;
     }
   };
 
-  const filteredOffers = allOffers.filter((o: any) => {
+  const getRecordTypeBadge = (type: string) => {
+    if (type === 'letter') {
+      return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-extrabold text-[10px]">Employee Letter</Badge>;
+    }
+    return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-extrabold text-[10px]">Offer Letter</Badge>;
+  };
+
+  // Combine offers and employee letters based on categoryFilter
+  const rawCombinedItems = categoryFilter === 'offers' 
+    ? allOffers 
+    : categoryFilter === 'employee_letters' 
+    ? employeeLettersList 
+    : [...allOffers, ...employeeLettersList];
+
+  const filteredOffers = rawCombinedItems.filter((o: any) => {
     if (!o) return false;
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
@@ -199,34 +247,80 @@ export const OfferManagementPage: React.FC = () => {
       </div>
 
       {/* ── Filter Row & Segmented Status Pills ──────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-center justify-between bg-card p-4 rounded-2xl border border-border/80 shadow-2xs">
-        <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 w-full max-w-sm bg-background">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-          <input
-            type="text"
-            placeholder="Search candidate, role, or ref..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="outline-none w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground"
-          />
-        </div>
+      <div className="flex flex-col gap-4 bg-card p-4 rounded-2xl border border-border/80 shadow-2xs">
         
-        {/* Status Pills */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
-          {['all', 'draft', 'sent', 'accepted', 'rejected', 'expired'].map((status) => (
+        {/* Row 1: Search & Category Selection */}
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+          <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 w-full max-w-md bg-background">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              placeholder="Search candidate/employee, role, ref..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="outline-none w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground"
+            />
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/80 shrink-0">
             <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`text-xs px-3.5 py-1.5 rounded-xl font-bold capitalize transition-all cursor-pointer ${
-                statusFilter === status 
-                  ? 'bg-primary text-primary-foreground shadow-xs' 
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted border border-border/80'
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer ${
+                categoryFilter === 'all'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {status}
+              All Records ({allOffers.length + employeeLettersList.length})
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('offers')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                categoryFilter === 'offers'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Offer Letters ({allOffers.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('employee_letters')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                categoryFilter === 'employee_letters'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Employee Letters ({employeeLettersList.length})
+            </button>
+          </div>
         </div>
+
+        {/* Row 2: Status Pills (Only when viewing offers or all) */}
+        {categoryFilter !== 'employee_letters' && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none pt-2 border-t border-border/40">
+            <span className="text-[11px] font-bold text-muted-foreground flex items-center mr-2">Status:</span>
+            {['all', 'draft', 'sent', 'accepted', 'rejected', 'expired'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`text-xs px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                  statusFilter === status 
+                    ? 'bg-primary text-primary-foreground shadow-xs' 
+                    : 'bg-muted/40 text-muted-foreground hover:bg-muted border border-border/60'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Data Table ───────────────────────────────────────────────────────── */}
@@ -236,29 +330,29 @@ export const OfferManagementPage: React.FC = () => {
             <Table className="min-w-[1000px] border-collapse">
               <TableHeader className="bg-muted/50 border-b border-border/60">
                 <TableRow className="border-border/60">
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Candidate & Code</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Offered Role</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Recipient & Code</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Type</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Offered Role / Subject</TableHead>
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Annual CTC</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Joining Target</TableHead>
-                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Expiry Date</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Target / Date</TableHead>
                   <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Status</TableHead>
                   <TableHead className="text-right text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border/60">
-                {isLoading ? (
+                {isLoadingOffers ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs bg-background">
                       <div className="flex items-center justify-center gap-2">
                         <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        <span>Loading official recruitment records...</span>
+                        <span>Loading official recruitment & letter records...</span>
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : filteredOffers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs bg-background">
-                      No offer records match the search parameters.
+                      No offer or letter records match the search parameters.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -266,16 +360,16 @@ export const OfferManagementPage: React.FC = () => {
                     const rawCTC = o.cost_to_company || o.costToCompany;
                     const formattedCTC = rawCTC && !isNaN(parseFloat(rawCTC)) && parseFloat(rawCTC) > 0
                       ? `${o.currency || 'INR'} ${parseFloat(rawCTC).toLocaleString()}`
-                      : 'N/A';
+                      : '—';
 
-                    const candidateName = o.candidate_name || o.candidateName || 'Candidate';
+                    const candidateName = o.candidate_name || o.candidateName || 'Recipient';
                     const candidateEmail = o.candidate_email || o.candidateEmail || 'No Email';
                     const positionTitle = o.position_title || o.positionTitle || 'General Position';
                     const offerCode = o.offer_code || o.offerCode || 'DRAFT';
                     const initials = candidateName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
                     const formatDate = (dateVal: any) => {
-                      if (!dateVal) return 'N/A';
+                      if (!dateVal) return '—';
                       const str = String(dateVal);
                       return str.includes('T') ? str.split('T')[0] : str;
                     };
@@ -295,6 +389,9 @@ export const OfferManagementPage: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell className="py-3.5 px-4 text-xs font-semibold text-foreground">
+                          {getRecordTypeBadge(o.record_type)}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs font-semibold text-foreground">
                           {positionTitle}
                         </TableCell>
                         <TableCell className="py-3.5 px-4">
@@ -305,39 +402,44 @@ export const OfferManagementPage: React.FC = () => {
                         <TableCell className="py-3.5 px-4 text-xs text-muted-foreground font-mono">
                           {formatDate(o.offer_start_date || o.offerStartDate)}
                         </TableCell>
-                        <TableCell className="py-3.5 px-4 text-xs text-muted-foreground font-mono">
-                          {formatDate(o.offer_expiry_date || o.offerExpiryDate)}
-                        </TableCell>
                         <TableCell className="py-3.5 px-4 text-center">
                           {getStatusBadge(o.status)}
                         </TableCell>
                         <TableCell className="text-right py-3.5 px-5">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button 
-                              variant="outline" 
-                              size="icon" 
-                              onClick={() => handleViewDetails(o)}
-                              className="h-8 w-8 rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground shadow-2xs"
-                              title="View Offer Details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {o.status === 'draft' && (
-                              <Button 
-                                variant="default" 
-                                size="sm" 
-                                onClick={() => handleSendOffer(o)}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg shadow-2xs gap-1"
-                              >
-                                <Send className="h-3 w-3" /> Dispatch
-                              </Button>
+                            {o.record_type === 'offer' && (
+                              <>
+                                <Button 
+                                  variant="outline" 
+                                  size="icon" 
+                                  onClick={() => handleViewDetails(o)}
+                                  className="h-8 w-8 rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground shadow-2xs"
+                                  title="View Offer Details"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {o.status === 'draft' && (
+                                  <Button 
+                                    variant="default" 
+                                    size="sm" 
+                                    onClick={() => handleSendOffer(o)}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg shadow-2xs gap-1"
+                                  >
+                                    <Send className="h-3 w-3" /> Dispatch
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            {o.record_type === 'letter' && (
+                              <Badge variant="outline" className="text-[10.5px] text-purple-700 bg-purple-50 border-purple-200">
+                                Letter Generated
+                              </Badge>
                             )}
                           </div>
                         </TableCell>
                       </TableRow>
                     );
-                  })
-                )}
+                  }))}
               </TableBody>
             </Table>
           </div>

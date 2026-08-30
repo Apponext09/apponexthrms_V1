@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Filter } from 'lucide-react';
+import { AlertTriangle, ListFilter } from 'lucide-react';
 import { AttendanceReportFilter } from '../components/AttendanceReportFilter';
 import { AttendanceReportTable } from '../components/AttendanceReportTable';
 import { AttendanceVisualization } from '../components/AttendanceVisualization';
@@ -44,8 +44,8 @@ const defaultFilters: AttendanceReportFilterParams = {
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 
-  // Initialize with defaultFilters so data is fetched and displayed directly on page load.
-  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>(defaultFilters);
+  // No filters applied yet — the report only loads once the admin/HR clicks Apply Filter.
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams | null>(null);
 
   const { data: fetchedRows, isLoading: isSubmitting, isError } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
@@ -88,7 +88,17 @@ export function AttendanceReportsPage() {
               Could not load attendance report data. Please check your connection and try again.
             </div>
           )}
-          {currentFilters.isTabularView ? (
+          {!currentFilters ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center bg-card border border-border/80 rounded-xl shadow-2xs space-y-3">
+              <div className="p-3 bg-primary/10 rounded-full text-primary">
+                <ListFilter className="w-8 h-8" />
+              </div>
+              <h3 className="text-base font-bold text-foreground">No Filter Applied</h3>
+              <p className="text-xs text-muted-foreground max-w-md">
+                Select your company and filter criteria above, then click <strong className="text-foreground">Apply Filter</strong> to generate the attendance report.
+              </p>
+            </div>
+          ) : currentFilters.isTabularView ? (
             <AttendanceReportTable
               data={reportRows}
               onOpenTimeline={(row) => setSelectedTimelineRow(row)}

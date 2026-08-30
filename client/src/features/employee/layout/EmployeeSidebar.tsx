@@ -194,21 +194,28 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       label: 'EXPENSE MANAGEMENT',
       items: [
         {
-          name: 'Expense Claims',
-          href: '/employee/expenses',
+          name: 'My Expenses',
+          href: '/employee/my-expenses',
           icon: Receipt,
           color: 'text-amber-500',
         },
-      ],
-    },
-    {
-      label: 'TRAVEL MANAGEMENT',
-      items: [
         {
-          name: 'Travel requests',
-          href: '/employee/travel',
+          name: 'Travel Requests',
+          href: '/employee/travel-requests',
           icon: Compass,
           color: 'text-rose-500',
+        },
+        {
+          name: 'Travel Advances',
+          href: '/employee/travel-advances',
+          icon: CreditCard,
+          color: 'text-emerald-500',
+        },
+        {
+          name: 'Mileage Claims',
+          href: '/employee/mileage-claims',
+          icon: Activity,
+          color: 'text-purple-500',
         },
       ],
     },

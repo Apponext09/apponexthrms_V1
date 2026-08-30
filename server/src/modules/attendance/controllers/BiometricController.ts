@@ -17,7 +17,7 @@ export class BiometricController {
     if (!message) return fallback;
 
     const containsTechnicalDetails =
-      /(select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|sql|query|knex|bindings?|errno|er_[a-z_]+|unknown column|doesn't exist|econnrefused|database)/i.test(
+      /(select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|sql|query|knex|bindings?|errno|er_[a-z_]+|unknown column|doesn't exist|database)/i.test(
         message
       );
 

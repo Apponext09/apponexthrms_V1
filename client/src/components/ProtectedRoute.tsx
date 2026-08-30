@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '../features/auth/store/authStore';
+import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from '../features/auth/store/authStore';
 import type { Role } from '@/config/roles';
 import { hasAnyRole } from '@/lib/rbac';
+import { PolicyAcceptanceModal } from '../features/auth/components/PolicyAcceptanceModal';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -16,17 +17,12 @@ export function ProtectedRoute({
   requiredPermissions
 }: ProtectedRouteProps) {
   const { isAuthenticated, user } = useAuthStore();
+  const authHydrated = useAuthHydrated();
   const [sessionValid, setSessionValid] = useState(true);
   const [lastUserId, setLastUserId] = useState<number | null>(null);
 
-  // Define role hierarchy to prevent cross-portal access
-  const ADMIN_ROLES = ['organization_admin', 'ceo', 'super_admin', 'hr_admin', 'hr', 'hr_manager'];
-  const MANAGER_ROLES = ['department_head', 'manager'];
-  const TEAM_LEAD_ROLES = ['team_lead'];
-  const EMPLOYEE_ROLES = ['employee', 'intern', 'consultant'];
-
-  // Aggressive cache prevention and session validation
   useEffect(() => {
+    if (!authHydrated) return;
     // Get current user ID from store
     const currentUserId = user?.id;
 
@@ -73,7 +69,9 @@ export function ProtectedRoute({
 
         // If not authenticated, redirect immediately
         if (!currentAuth || !currentUser) {
-          window.location.href = '/login?' + new Date().getTime();
+          if (!hasStoredAccessToken()) {
+            window.location.href = '/login?' + new Date().getTime();
+          }
           return;
         }
 
@@ -101,7 +99,9 @@ export function ProtectedRoute({
       const { isAuthenticated: currentAuth, user: currentUser } = useAuthStore.getState();
 
       if (!currentAuth || !currentUser) {
-        window.location.href = '/login?' + new Date().getTime();
+        if (!hasStoredAccessToken()) {
+          window.location.href = '/login?' + new Date().getTime();
+        }
         return;
       }
 
@@ -125,10 +125,19 @@ export function ProtectedRoute({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
     };
-  }, [allowedRoles, lastUserId, user?.id]);
+  }, [allowedRoles, lastUserId, user?.id, authHydrated]);
+
+  if (!authHydrated) {
+    return null;
+  }
+
+  const hasToken = hasStoredAccessToken();
 
   // 1. Check if user is authenticated
   if (!isAuthenticated || !user) {
+    if (hasToken) {
+      return null;
+    }
     console.warn('[ProtectedRoute] Access denied: User not authenticated', {
       pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
       timestamp: new Date().toISOString(),
@@ -136,59 +145,13 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  // 2. Check role-based access with STRICT portal isolation
+  // 2. Check role-based access
   if (allowedRoles && allowedRoles.length > 0) {
     const userRoles = user.roles || [];
 
-    // First check: user must have at least one allowed role
+    // User must have at least one of the allowed roles
     if (!hasAnyRole(userRoles, allowedRoles)) {
       console.warn('[ProtectedRoute] Access denied: Insufficient role', {
-        userRoles,
-        allowedRoles,
-        pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
-        userId: user.id,
-        timestamp: new Date().toISOString(),
-      });
-      return <Navigate to="/unauthorized" replace />;
-    }
-
-    // SECOND CHECK: STRICT PORTAL ISOLATION
-    // Prevent admin from accessing employee portal and vice versa
-    const userHasAdminRole = userRoles.some(r => ADMIN_ROLES.includes(r));
-    const userHasManagerRole = userRoles.some(r => MANAGER_ROLES.includes(r));
-    const userHasTeamLeadRole = userRoles.some(r => TEAM_LEAD_ROLES.includes(r));
-    const userHasEmployeeRole = userRoles.some(r => EMPLOYEE_ROLES.includes(r));
-
-    // If accessing employee portal, user MUST NOT have admin/manager roles
-    const allowedHasEmployee = allowedRoles.some(r => EMPLOYEE_ROLES.includes(r));
-    if (allowedHasEmployee && (userHasAdminRole || userHasManagerRole || userHasTeamLeadRole)) {
-      console.warn('[ProtectedRoute] Access denied: Portal isolation violation (admin trying to access employee portal)', {
-        userRoles,
-        allowedRoles,
-        pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
-        userId: user.id,
-        timestamp: new Date().toISOString(),
-      });
-      return <Navigate to="/unauthorized" replace />;
-    }
-
-    // If accessing manager portal, user MUST NOT have admin roles
-    const allowedHasManager = allowedRoles.some(r => MANAGER_ROLES.includes(r));
-    if (allowedHasManager && userHasAdminRole) {
-      console.warn('[ProtectedRoute] Access denied: Portal isolation violation (admin trying to access manager portal)', {
-        userRoles,
-        allowedRoles,
-        pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
-        userId: user.id,
-        timestamp: new Date().toISOString(),
-      });
-      return <Navigate to="/unauthorized" replace />;
-    }
-
-    // If accessing team lead portal, user MUST NOT have admin/manager roles
-    const allowedHasTeamLead = allowedRoles.some(r => TEAM_LEAD_ROLES.includes(r));
-    if (allowedHasTeamLead && (userHasAdminRole || userHasManagerRole)) {
-      console.warn('[ProtectedRoute] Access denied: Portal isolation violation (admin/manager trying to access team lead portal)', {
         userRoles,
         allowedRoles,
         pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
@@ -222,5 +185,10 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <PolicyAcceptanceModal />
+      {children}
+    </>
+  );
 }

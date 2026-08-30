@@ -25,6 +25,103 @@ function formatDateISO(val: any): string | null {
 }
 
 export class LifecycleService {
+  private async ensureTables(db: any) {
+    try {
+      const hasTransfers = await db.schema.hasTable('employee_transfers');
+      if (!hasTransfers) {
+        await db.schema.createTable('employee_transfers', (table: any) => {
+          table.bigIncrements('id').primary();
+          table.uuid('uuid').notNullable();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('employee_id').unsigned().notNullable();
+          table.bigInteger('from_department_id').unsigned().nullable();
+          table.bigInteger('to_department_id').unsigned().nullable();
+          table.bigInteger('from_designation_id').unsigned().nullable();
+          table.bigInteger('to_designation_id').unsigned().nullable();
+          table.bigInteger('from_location_id').unsigned().nullable();
+          table.bigInteger('to_location_id').unsigned().nullable();
+          table.bigInteger('from_reporting_manager_id').unsigned().nullable();
+          table.bigInteger('to_reporting_manager_id').unsigned().nullable();
+          table.date('effective_date').notNullable();
+          table.string('transfer_type', 100).notNullable().defaultTo('department_change');
+          table.text('transfer_reason').nullable();
+          table.text('notes').nullable();
+          table.bigInteger('created_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+        });
+      }
+
+      const hasOnboarding = await db.schema.hasTable('employee_onboarding_records');
+      if (!hasOnboarding) {
+        await db.schema.createTable('employee_onboarding_records', (table: any) => {
+          table.bigIncrements('id').primary();
+          table.uuid('uuid').notNullable();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('employee_id').unsigned().notNullable();
+          table.string('interviewer_name').nullable();
+          table.bigInteger('interviewer_id').unsigned().nullable();
+          table.string('onboarded_by_name').nullable();
+          table.bigInteger('onboarded_by_id').unsigned().nullable();
+          table.date('interview_date').nullable();
+          table.string('interview_rating', 50).nullable();
+          table.text('interview_notes').nullable();
+          table.date('joining_date').nullable();
+          table.date('probation_end_date').nullable();
+          table.boolean('orientation_completed').defaultTo(false);
+          table.boolean('documents_verified').defaultTo(false);
+          table.boolean('welcome_kit_issued').defaultTo(false);
+          table.text('notes').nullable();
+          table.bigInteger('created_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+        });
+      }
+
+      const hasOffboarding = await db.schema.hasTable('employee_offboarding_records');
+      if (!hasOffboarding) {
+        await db.schema.createTable('employee_offboarding_records', (table: any) => {
+          table.bigIncrements('id').primary();
+          table.uuid('uuid').notNullable();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('employee_id').unsigned().notNullable();
+          table.string('exit_type', 100).notNullable().defaultTo('resignation');
+          table.date('resignation_date').nullable();
+          table.integer('notice_period_days').defaultTo(30);
+          table.date('relieving_date').nullable();
+          table.date('last_working_day').nullable();
+          table.string('exit_interviewer_name').nullable();
+          table.bigInteger('exit_interviewer_id').unsigned().nullable();
+          table.text('exit_reason').nullable();
+          table.text('exit_notes').nullable();
+          table.boolean('assets_returned').defaultTo(false);
+          table.string('fnf_status', 50).defaultTo('pending');
+          table.bigInteger('created_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+        });
+      }
+
+      const hasLifecycle = await db.schema.hasTable('employee_lifecycle');
+      if (!hasLifecycle) {
+        await db.schema.createTable('employee_lifecycle', (table: any) => {
+          table.bigIncrements('id').primary();
+          table.uuid('uuid').notNullable();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('employee_id').unsigned().notNullable();
+          table.string('event_type', 100).notNullable();
+          table.string('from_status', 50).nullable();
+          table.string('to_status', 50).notNullable();
+          table.date('effective_date').notNullable();
+          table.text('notes').nullable();
+          table.bigInteger('created_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+        });
+      }
+    } catch (e) {
+      console.warn('[LifecycleService] ensureTables non-fatal notice:', e);
+    }
+  }
+
   /**
    * Get list of all employees with their lifecycle summaries (onboarding, transfers count, offboarding)
    */
@@ -34,6 +131,7 @@ export class LifecycleService {
   ) {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+    await this.ensureTables(db);
 
     let effectiveCompanyId = filters?.companyId;
 
@@ -45,7 +143,8 @@ export class LifecycleService {
           .where('organization_id', ctx.organizationId)
           .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
           .whereNull('deleted_at')
-          .first();
+          .first()
+          .catch(() => null);
         if (parentComp) {
           effectiveCompanyId = Number(parentComp.company_id || parentComp.companyId || parentComp.id);
         }
@@ -265,6 +364,7 @@ export class LifecycleService {
   async getEmployeeLifecycleDetails(ctx: TenantContext, employeeId: number) {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+    await this.ensureTables(db);
 
     // 1. Helper query for basic employee join
     const buildEmpQuery = () => db('employees')

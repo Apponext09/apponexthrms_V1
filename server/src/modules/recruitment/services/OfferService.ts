@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { OfferRepository, type Offer } from '../repositories/OfferRepository';
 import { ApplicationRepository } from '../repositories/ApplicationRepository';
 import { NotificationService } from '../../notifications/services/notification.service';
+import { RecruitmentNotificationHelper } from './RecruitmentNotificationHelper';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import { sendMail } from '../../../common/lib/mail';
@@ -109,6 +110,35 @@ export class OfferService {
     };
 
     const offer = await this.offerRepo.create(ctx, payload);
+
+    // 🔔 Notify HR admins and Hiring Manager about generated offer
+    try {
+      const db = getKnex();
+      let candidateName = 'Unknown';
+      if (application?.candidate_id) {
+        const candidate = await db('candidates').where('id', application.candidate_id).first();
+        if (candidate) {
+          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim() || candidate.email || 'Unknown';
+        }
+      }
+
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+      const jobId = application.job_id || (application as any).job_posting_id;
+      const managerId = jobId ? await RecruitmentNotificationHelper.getHiringManagerUserId(ctx, jobId) : null;
+      const recipientIds = [...new Set([...hrAdmins, ...(managerId ? [managerId] : [])])];
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, recipientIds, {
+        eventCode: 'OFFER_GENERATED',
+        variables: {
+          candidateName,
+          positionTitle: input.positionTitle || 'Position',
+          salary: `${input.costToCompany} ${input.currency || 'INR'}`,
+          joiningDate: input.offerStartDate || 'TBD',
+        },
+        priority: 'normal',
+      });
+    } catch { /* notification failure is non-critical */ }
+
     return offer;
   }
 
@@ -181,23 +211,42 @@ export class OfferService {
         .where('organization_id', ctx.organizationId)
         .where('template_name', 'Job Offer Letter')
         .whereNull('deleted_at')
-        .first();
+        .first()
+        .catch(() => null);
+
+      let meta: any = {};
+      try {
+        meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
+      } catch {
+        meta = {};
+      }
 
       const appId = offer.applicationId || (offer as any).application_id;
-      const application = appId ? await db('applications').where('id', appId).first() : null;
-      const candidate = application?.candidate_id ? await db('candidates').where('id', application.candidate_id).first() : null;
-      const org = ctx.organizationId ? await db('organizations').where('id', ctx.organizationId).first() : null;
+      const application = appId ? await db('applications').where('id', appId).first().catch(() => null) : null;
+      let candidate = application?.candidate_id ? await db('candidates').where('id', application.candidate_id).first().catch(() => null) : null;
+      if (!candidate && (offer as any).candidate_id) {
+        candidate = await db('candidates').where('id', (offer as any).candidate_id).first().catch(() => null);
+      }
+      const org = ctx.organizationId ? await db('organizations').where('id', ctx.organizationId).first().catch(() => null) : null;
 
       let departmentName = 'N/A';
-      if (offer.department_id || (offer as any).department_id) {
-        const deptId = offer.department_id || (offer as any).department_id;
-        const dept = await db('departments').where('id', deptId).first();
+      const deptId = offer.department_id || (offer as any).department_id;
+      if (deptId) {
+        const dept = await db('departments').where('id', deptId).first().catch(() => null);
         departmentName = dept?.name || 'N/A';
       }
 
       const candidateName = candidate
         ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
-        : 'Candidate';
+        : (meta.candidateName || (offer as any).candidate_name || 'Candidate');
+
+      const targetEmail = 
+        options?.customRecipientEmail || 
+        meta?.candidateEmail || 
+        meta?.recipientEmail || 
+        candidate?.email || 
+        (offer as any).candidate_email || 
+        (offer as any).candidateEmail;
 
       const variables: Record<string, string> = {
         candidateName,
@@ -280,13 +329,27 @@ HR Recruiting Team
         return `<!DOCTYPE html><html><body style="background:#f1f5f9;font-family:sans-serif;padding:30px 10px;"><table width="100%" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;"><tr><td style="background:linear-gradient(135deg,#1e293b,#0f172a);padding:24px;color:#fff;"><h2 style="margin:0;font-size:18px;">${company}</h2><p style="margin:4px 0 0 0;font-size:12px;color:#94a3b8;">Employment Offer Letter</p></td></tr><tr><td style="padding:28px;">${innerHtml}</td></tr><tr><td style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">Official offer communication from <strong>${company}</strong>.</td></tr></table></body></html>`;
       };
 
-      if (candidate?.email) {
+      if (targetEmail && targetEmail.includes('@') && targetEmail !== 'N/A') {
+        console.log(`[OfferService] Dispathing offer letter email to: ${targetEmail}`);
+        if (candidate?.id) {
+          await db('candidates').where('id', candidate.id).update({ email: targetEmail }).catch(() => {});
+        }
+
+        // Also sync into offer meta for persistent resolution
+        meta.candidateEmail = targetEmail;
+        await db('offers').where('id', offerId).update({
+          meta: JSON.stringify(meta)
+        }).catch(() => {});
+
         await sendMail({
-          to: candidate.email,
+          to: targetEmail,
           subject: rawSubject,
           html: wrapInExecutiveHtml(rawSubject, rawBody, org?.name || 'Apponext HRMS'),
           organizationId: ctx.organizationId,
         });
+        console.log(`[OfferService] Email successfully sent to: ${targetEmail}`);
+      } else {
+        console.warn(`[OfferService] No valid recipient email found for offer ID ${offerId}`);
       }
     } catch (mailError) {
       console.error('Failed to compile or send offer letter email:', mailError);
@@ -398,6 +461,34 @@ Executive HR
       console.error('Failed to auto-provision employee during offer acceptance:', onboardingError);
       throw onboardingError;
     }
+
+    // 🔔 Notify HR admins and Hiring Manager about accepted offer
+    try {
+      const db = getKnex();
+      const application = appId ? await db('applications').where('id', appId).first() : null;
+      let candidateName = 'Unknown';
+      if (application?.candidate_id) {
+        const candidate = await db('candidates').where('id', application.candidate_id).first();
+        if (candidate) {
+          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim() || candidate.email || 'Unknown';
+        }
+      }
+
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+      const jobId = application?.job_id || application?.job_posting_id;
+      const managerId = jobId ? await RecruitmentNotificationHelper.getHiringManagerUserId(ctx, jobId) : null;
+      const recipientIds = [...new Set([...hrAdmins, ...(managerId ? [managerId] : [])])];
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, recipientIds, {
+        eventCode: 'OFFER_ACCEPTED',
+        variables: {
+          candidateName,
+          positionTitle: offer.positionTitle || (offer as any).position_title || 'Position',
+          joiningDate: offer.offerStartDate || (offer as any).offer_start_date || 'TBD',
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
 
     return updated;
   }
@@ -658,5 +749,80 @@ Executive HR
     }
 
     await this.offerRepo.delete(ctx, offerId);
+  }
+
+  async acceptOfferByUuid(uuid: string, signature: string): Promise<any> {
+    const db = getKnex();
+    const offer = await db('offers').where('uuid', uuid).first();
+    if (!offer) {
+      throw new NotFoundError('Offer letter not found or link has expired');
+    }
+
+    let meta: any = {};
+    try {
+      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
+    } catch {
+      meta = {};
+    }
+
+    meta.digitalSignature = signature;
+    meta.acceptedAt = new Date().toISOString();
+
+    await db('offers').where('id', offer.id).update({
+      status: 'accepted',
+      meta: JSON.stringify(meta),
+      updated_at: new Date(),
+    });
+
+    if (offer.application_id) {
+      await db('applications').where('id', offer.application_id).update({
+        status: 'accepted',
+        stage: 'offered',
+        updated_at: new Date(),
+      }).catch(() => {});
+    }
+
+    return {
+      ...offer,
+      status: 'accepted',
+      meta,
+    };
+  }
+
+  async rejectOfferByUuid(uuid: string, comments?: string): Promise<any> {
+    const db = getKnex();
+    const offer = await db('offers').where('uuid', uuid).first();
+    if (!offer) {
+      throw new NotFoundError('Offer letter not found or link has expired');
+    }
+
+    let meta: any = {};
+    try {
+      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
+    } catch {
+      meta = {};
+    }
+
+    meta.declineReason = comments || '';
+    meta.declinedAt = new Date().toISOString();
+
+    await db('offers').where('id', offer.id).update({
+      status: 'rejected',
+      meta: JSON.stringify(meta),
+      updated_at: new Date(),
+    });
+
+    if (offer.application_id) {
+      await db('applications').where('id', offer.application_id).update({
+        status: 'rejected',
+        updated_at: new Date(),
+      }).catch(() => {});
+    }
+
+    return {
+      ...offer,
+      status: 'rejected',
+      meta,
+    };
   }
 }

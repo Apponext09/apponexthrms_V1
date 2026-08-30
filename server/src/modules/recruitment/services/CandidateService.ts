@@ -186,22 +186,69 @@ export class CandidateService {
     return candidate;
   }
 
-  async updateCandidateProfile(ctx: TenantContext, candidateId: number, input: Partial<Candidate> & { resumeUrl?: string }): Promise<Candidate> {
+  async updateCandidateProfile(ctx: TenantContext, candidateId: number, input: Partial<Candidate> & Record<string, any>): Promise<Candidate> {
     const candidate = await this.candidateRepo.getById(ctx, candidateId);
     if (!candidate) {
       throw new NotFoundError('Candidate not found');
     }
 
-    const updateData: any = { ...input };
-    if (input.resumeUrl) {
-      updateData.resume_url = this.saveBase64Resume(input.resumeUrl, candidate.first_name.toLowerCase());
-      delete updateData.resumeUrl;
+    const updateData: any = { updated_by: ctx.userId };
+    const assign = (column: string, ...keys: string[]) => {
+      for (const key of keys) {
+        if (input[key] !== undefined) {
+          updateData[column] = input[key] === '' ? null : input[key];
+          return;
+        }
+      }
+    };
+
+    assign('first_name', 'firstName', 'first_name');
+    assign('last_name', 'lastName', 'last_name');
+    assign('email', 'email');
+    assign('phone', 'phone');
+    assign('alternative_phone', 'alternativePhone', 'alternative_phone');
+    assign('gender', 'gender');
+    assign('marital_status', 'maritalStatus', 'marital_status');
+    assign('qualification', 'qualification');
+    assign('skills', 'skills');
+    assign('dob', 'dateOfBirth', 'dob');
+    assign('current_salary', 'currentSalary', 'current_salary');
+    assign('expected_salary', 'expectedSalary', 'expected_salary');
+    assign('notice_period_days', 'noticePeriodDays', 'notice_period_days');
+    assign('current_company', 'currentCompany', 'current_company');
+    assign('years_of_experience', 'yearsOfExperience', 'years_of_experience');
+    assign('linkedin_url', 'linkedinUrl', 'linkedin_url');
+    assign('github_url', 'githubUrl', 'github_url');
+    assign('portfolio_url', 'portfolioUrl', 'portfolio_url');
+    assign('source', 'source');
+
+    if (input.status !== undefined) {
+      const nextStatus = String(input.status).toLowerCase();
+      const currentStatus = String(candidate.status || 'applied').toLowerCase();
+      const rank = (status: string) => {
+        if (['rejected', 'dropped', 'withdrawn'].includes(status)) return 4;
+        if (['offer', 'offered', 'hired'].includes(status)) return 3;
+        if (['interview', 'interviewing', 'assessment'].includes(status)) return 2;
+        return 1;
+      };
+      const fromRank = rank(currentStatus);
+      const toRank = rank(nextStatus);
+      const isSame = currentStatus === nextStatus;
+      const canReject = nextStatus === 'rejected' && fromRank < 4;
+      const isForward = toRank > fromRank;
+      if (!isSame && !canReject && !isForward) {
+        throw new ValidationError('Candidate pipeline can only move forward. Offered candidates cannot return to Interview.');
+      }
+      updateData.status = nextStatus;
     }
 
-    const updated = await this.candidateRepo.update(ctx, candidateId, {
-      ...updateData,
-      updated_by: ctx.userId,
-    } as any);
+    const resumePayload = input.resumeUrl || input.resume_url;
+    if (resumePayload) {
+      const firstName = candidate.firstName || candidate.first_name || 'candidate';
+      updateData.resume_url = this.saveBase64Resume(resumePayload, String(firstName).toLowerCase());
+    }
+
+    const updated = await this.candidateRepo.update(ctx, candidateId, updateData as any);
 
     await this.auditService.log(ctx, {
       action: 'UPDATE',
@@ -347,7 +394,70 @@ export class CandidateService {
       throw new NotFoundError('Candidate not found');
     }
 
-    await this.candidateRepo.delete(ctx, candidateId);
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const applicationIds: number[] = await db('applications')
+      .where({ candidate_id: candidateId, organization_id: ctx.organizationId })
+      .pluck('id');
+
+    if (applicationIds.length > 0) {
+      const applicationTables = ['interview_feedback', 'interview_panel', 'interviewers', 'interviews', 'offers', 'offer_versions', 'assessments', 'application_stage_history'];
+      for (const table of applicationTables) {
+        try {
+          if (await db.schema.hasTable(table)) {
+            const hasAppId = await db.schema.hasColumn(table, 'application_id');
+            if (hasAppId) {
+              await db(table).whereIn('application_id', applicationIds).del();
+            }
+          }
+        } catch (err) {
+          console.warn(`[deleteCandidate] Could not clear ${table}:`, err);
+        }
+      }
+      await db('applications').whereIn('id', applicationIds).del();
+    }
+
+    try {
+      if (await db.schema.hasTable('employees') && await db.schema.hasColumn('employees', 'source_candidate_id')) {
+        await db('employees').where('source_candidate_id', candidateId).update({
+          source_candidate_id: null,
+          source_application_id: null,
+        });
+      }
+    } catch (err) {
+      console.warn('[deleteCandidate] Could not unlink employees:', err);
+    }
+
+    try {
+      if (await db.schema.hasTable('resume_bank') && await db.schema.hasColumn('resume_bank', 'candidate_id')) {
+        await db('resume_bank').where('candidate_id', candidateId).update({ candidate_id: null });
+      }
+    } catch (err) {
+      console.warn('[deleteCandidate] Could not unlink resume bank:', err);
+    }
+
+    const relatedTables = [
+      'candidate_documents',
+      'candidate_skills',
+      'candidate_education',
+      'candidate_experience',
+      'candidate_notes',
+      'candidate_certifications',
+      'candidate_resumes',
+      'referrals',
+    ];
+    for (const table of relatedTables) {
+      try {
+        if (await db.schema.hasTable(table)) {
+          await db(table).where('candidate_id', candidateId).del();
+        }
+      } catch (err) {
+        console.warn(`[deleteCandidate] Could not clear ${table}:`, err);
+      }
+    }
+
+    await this.candidateRepo.hardDelete(ctx, candidateId);
     await this.auditService.log(ctx, {
       action: 'DELETE',
       entityType: 'CANDIDATE',
@@ -435,8 +545,17 @@ export class CandidateService {
           .first();
 
         if (existing) {
-          skippedCount++;
-          continue;
+          if (existing.deleted_at || existing.deletedAt) {
+            try {
+              await db('candidates').where('id', existing.id).del();
+            } catch {
+              skippedCount++;
+              continue;
+            }
+          } else {
+            skippedCount++;
+            continue;
+          }
         }
 
         const firstName = parseStr(item.firstName) || cleanEmail.split('@')[0] || 'Candidate';

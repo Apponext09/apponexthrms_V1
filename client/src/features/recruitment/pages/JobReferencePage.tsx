@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/lib/api';
+import { formatApiError } from '@/lib/apiError';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 type ModalType = 'main' | 'existing_refer' | 'new_options' | 'new_form' | null;
@@ -344,7 +345,7 @@ export const JobReferencePage: React.FC = () => {
         });
       }
     } catch (err: any) {
-      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error while submitting referral';
+      const errMsg = formatApiError(err, 'Server error while submitting referral');
       toast.error(`Referral Error: ${errMsg}`);
       setStatusModal({
         isOpen: true,
@@ -423,7 +424,7 @@ export const JobReferencePage: React.FC = () => {
         });
       }
     } catch (err: any) {
-      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error while saving application';
+      const errMsg = formatApiError(err, 'Server error while saving application');
       toast.error(`Application Error: ${errMsg}`);
       setStatusModal({
         isOpen: true,

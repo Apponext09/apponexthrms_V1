@@ -18,7 +18,8 @@ export async function up(knex: Knex): Promise<void> {
   if ((hasEarningsFk[0] as any[]).length > 0) {
     await knex.raw('ALTER TABLE payroll_earnings DROP FOREIGN KEY payroll_earnings_component_id_foreign');
   }
-  await knex.raw('ALTER TABLE payroll_earnings MODIFY COLUMN component_id BIGINT UNSIGNED NULL');
+  await knex.raw('ALTER TABLE payroll_earnings MODIFY COLUMN component_id INT NULL');
+  await knex.raw('UPDATE payroll_earnings SET component_id = NULL WHERE component_id IS NOT NULL AND component_id NOT IN (SELECT id FROM payroll_components)');
   await knex.raw(
     `ALTER TABLE payroll_earnings
      ADD CONSTRAINT payroll_earnings_component_id_foreign
@@ -33,7 +34,8 @@ export async function up(knex: Knex): Promise<void> {
   if ((hasDeductionsFk[0] as any[]).length > 0) {
     await knex.raw('ALTER TABLE payroll_deductions DROP FOREIGN KEY payroll_deductions_component_id_foreign');
   }
-  await knex.raw('ALTER TABLE payroll_deductions MODIFY COLUMN component_id BIGINT UNSIGNED NULL');
+  await knex.raw('ALTER TABLE payroll_deductions MODIFY COLUMN component_id INT NULL');
+  await knex.raw('UPDATE payroll_deductions SET component_id = NULL WHERE component_id IS NOT NULL AND component_id NOT IN (SELECT id FROM payroll_components)');
   await knex.raw(
     `ALTER TABLE payroll_deductions
      ADD CONSTRAINT payroll_deductions_component_id_foreign

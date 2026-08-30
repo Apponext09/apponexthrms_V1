@@ -1,4 +1,4 @@
-import { db, initializeKnex } from '../db/knex.ts';
+import { db, initializeKnex } from '../db/knex';
 
 async function fullPayrollSystemAudit() {
   console.log('================================================================');

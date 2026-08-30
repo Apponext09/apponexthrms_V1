@@ -294,7 +294,7 @@ export class LeaveAccrualService {
       actualValue = lopCount ? parseFloat(String((lopCount as any).sum || 0)) : 0;
     } else if (conditionOn === 'leave_balance') {
       const balance = await this.balanceService.getBalance(ctx, assignment.employee_id, assignment.leave_type_id);
-      actualValue = balance ? parseFloat(String(balance.current_balance || 0)) : 0;
+      actualValue = balance ? parseFloat(String((balance as any).current_balance || (balance as any).closing_balance || (balance as any).balance || 0)) : 0;
     }
 
     let conditionMet = false;
