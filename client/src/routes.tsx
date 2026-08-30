@@ -379,6 +379,7 @@ export function AppRoutes() {
 
           {/* Operations */}
           <Route path="/hr/masters" element={<MastersHubPage />} />
+          <Route path="/hr/masters/*" element={<MastersHubPage />} />
           <Route path="/hr/workflow" element={<WorkflowListPage />} />
           <Route path="/hr/workflows" element={<WorkflowListPage />} />
           <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
@@ -723,13 +724,8 @@ export function AppRoutes() {
           <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
           <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
           <Route path="/settings/modules" element={<ModuleManagementPage />} />
-          <Route
-            element={
-              <ProtectedRoute allowedRoles={['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'team_lead', 'super_admin']}>
-                <AppShellLayout />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/masters" element={<MastersHubPage />} />
+          <Route path="/masters/*" element={<MastersHubPage />} />
           <Route path="/modules" element={<ModuleManagementPage />} />
           <Route path="/settings-group" element={<SettingsLayout />}>
             <Route index element={<Navigate to="/settings/general" replace />} />
@@ -922,13 +918,15 @@ export function AppRoutes() {
         <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
-          path="/masters"
           element={
-            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin']}>
-              <MastersHubPage />
+            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin', 'hr', 'hr_admin']}>
+              <AppShellLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route path="/masters" element={<MastersHubPage />} />
+          <Route path="/masters/*" element={<MastersHubPage />} />
+        </Route>
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings-group" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/general" replace />} />
