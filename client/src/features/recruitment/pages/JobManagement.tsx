@@ -416,35 +416,33 @@ export const JobManagement: React.FC = () => {
                             </button>
                           </div>
                         </td>
-                        <td className="py-3.5 px-5 text-center relative">
+                        <td className="py-3.5 px-5 text-center">
                           {/* Status Button / Popover trigger */}
-                          <div 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveStatusPopoverId(prev => prev === item.id ? null : item.id);
-                            }}
-                            className={cn(
-                              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase shadow-2xs cursor-pointer transition-transform hover:scale-105",
-                              item.status === 'published' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
-                              item.status === 'draft' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30' :
-                              'bg-muted text-muted-foreground border border-border'
-                            )}
-                            title="Change Status"
-                          >
-                            <span className={cn(
-                              "w-1.5 h-1.5 rounded-full",
-                              item.status === 'published' ? 'bg-emerald-500' :
-                              item.status === 'draft' ? 'bg-amber-500' :
-                              'bg-slate-400'
-                            )} />
-                            {item.status || 'Active'}
-                          </div>
-
-                          {/* Status Popover */}
-                          {activeStatusPopoverId === item.id && (
-                            <div 
-                              onClick={(e) => e.stopPropagation()}
-                              className="absolute left-[70%] top-[40%] bg-card border border-border rounded-xl shadow-2xl p-4 text-left z-50 min-w-[220px] text-foreground select-none animate-in fade-in zoom-in-95 duration-150"
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <div 
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase shadow-2xs cursor-pointer transition-transform hover:scale-105",
+                                  item.status === 'published' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' :
+                                  item.status === 'draft' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30' :
+                                  'bg-muted text-muted-foreground border border-border'
+                                )}
+                                title="Change Status"
+                              >
+                                <span className={cn(
+                                  "w-1.5 h-1.5 rounded-full",
+                                  item.status === 'published' ? 'bg-emerald-500' :
+                                  item.status === 'draft' ? 'bg-amber-500' :
+                                  'bg-slate-400'
+                                )} />
+                                {item.status || 'Active'}
+                              </div>
+                            </PopoverTrigger>
+                            <PopoverContent 
+                              align="center" 
+                              side="top" 
+                              sideOffset={8}
+                              className="w-56 p-4 rounded-xl border border-border bg-card shadow-2xl z-50 text-left text-foreground"
                             >
                               <h4 className="text-xs font-black text-foreground uppercase border-b border-border pb-2 mb-3">Job Status</h4>
                               <div className="space-y-2 text-xs">
@@ -464,8 +462,8 @@ export const JobManagement: React.FC = () => {
                                   </button>
                                 </div>
                               )}
-                            </div>
-                          )}
+                            </PopoverContent>
+                          </Popover>
                         </td>
 
                         {/* Dynamic Columns */}
