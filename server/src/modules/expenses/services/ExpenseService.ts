@@ -1739,8 +1739,8 @@ export class ExpenseService {
     if (filters.employeeId) query = query.where('ec.employee_id', filters.employeeId);
     if (filters.categoryId) query = query.where('ec.category_id', filters.categoryId);
     if (filters.status) query = query.where('ec.status', filters.status);
-
-    return query;
+    const rows = await query;
+    return (rows || []).map((r: any) => this.mapClaim(r));
   }
 
   // --- SETTINGS ---
