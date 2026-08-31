@@ -28,21 +28,21 @@ export const TravelRequestsPage: React.FC = () => {
 
   const { user } = useAuthStore();
 
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user?.role || user?.accessRole || (user as any)?.roleCode || '').toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+
+  const isManagement =
+    userRoles.some((r: string) => ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(r.toLowerCase())) ||
+    ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(singleRole) ||
+    path.startsWith('/manager') ||
+    path.startsWith('/team-lead') ||
+    path.startsWith('/hr') ||
+    path.startsWith('/admin');
+
   const fetchTravelRequests = async () => {
     try {
       setLoading(true);
-      const userRoles = Array.isArray(user?.roles) ? user.roles : [];
-      const singleRole = (user?.role || user?.accessRole || (user as any)?.roleCode || '').toLowerCase();
-      const path = window.location.pathname.toLowerCase();
-
-      const isManagement =
-        userRoles.some((r: string) => ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(r.toLowerCase())) ||
-        ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(singleRole) ||
-        path.startsWith('/manager') ||
-        path.startsWith('/team-lead') ||
-        path.startsWith('/hr') ||
-        path.startsWith('/admin');
-
       // For managers/HR/CEO/Admin: fetch all employee travel requests across org/team
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
       const res = await expenseApi.getTravelRequests(empId);
@@ -56,7 +56,7 @@ export const TravelRequestsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTravelRequests();
-  }, []);
+  }, [user]);
 
   const handleCreateRequest = async () => {
     if (!fromLocation.trim() || !toLocation.trim() || !purpose.trim()) {
@@ -100,6 +100,8 @@ export const TravelRequestsPage: React.FC = () => {
     switch (status) {
       case 'approved':
         return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Approved</span>;
+      case 'pending_finance':
+        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
       case 'rejected':
         return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
       default:
@@ -150,7 +152,7 @@ export const TravelRequestsPage: React.FC = () => {
                   <th className="py-3.5 px-4">Dates</th>
                   <th className="py-3.5 px-4">Estimated Budget</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                  {isManagement && <th className="py-3.5 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -237,11 +239,11 @@ export const TravelRequestsPage: React.FC = () => {
 
       {/* CREATE MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Create Travel Request</h2>
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[92dvh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-auto p-4 sm:p-6 space-y-4">
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white shrink-0">Create Travel Request</h2>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">From Location *</label>
                 <input
@@ -284,7 +286,7 @@ export const TravelRequestsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Estimated Budget (₹)</label>
                 <input
                   type="number"
@@ -295,7 +297,7 @@ export const TravelRequestsPage: React.FC = () => {
                 />
               </div>
 
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Purpose of Travel *</label>
                 <textarea
                   rows={3}

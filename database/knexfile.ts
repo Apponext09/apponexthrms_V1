@@ -21,6 +21,8 @@ const config: Record<string, Knex.Config> = {
     migrations: {
       extension: 'ts',
       directory: './migrations',
+      loadExtensions: ['.ts'],
+      disableMigrationsListValidation: true,
     },
     seeds: {
       extension: 'ts',
@@ -40,6 +42,8 @@ const config: Record<string, Knex.Config> = {
     migrations: {
       extension: 'ts',
       directory: './migrations',
+      loadExtensions: ['.ts'],
+      disableMigrationsListValidation: true,
     },
   },
   production: {
@@ -55,6 +59,8 @@ const config: Record<string, Knex.Config> = {
     migrations: {
       extension: 'ts',
       directory: './migrations',
+      loadExtensions: ['.ts'],
+      disableMigrationsListValidation: true,
     },
   },
 };

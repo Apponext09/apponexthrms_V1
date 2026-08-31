@@ -1,19 +1,24 @@
 // ============================================================
-// useEmployeeLocationTracker — Silent Background GPS Tracker
+// useEmployeeLocationTracker — Background GPS & Laptop/Desktop Realtime Tracker
 // client/src/features/Livetracking/hooks/useEmployeeLocationTracker.ts
 //
-// PURPOSE: Runs headlessly after employee login.
-//          NO map UI is shown to the employee.
-//          Emits location pings to /live-tracking socket.
-//          Detects GPS ON/OFF changes and notifies server instantly.
+// FEATURES:
+//  - Dedicated 2.5-second background interval engine calling getCurrentPosition
+//  - High accuracy GPS on mobile + Wi-Fi/IP instant location on laptop browsers (Firefox, Brave, Chrome)
+//  - Automatic fallback to cached fix if fresh query times out
+//  - 1D Kalman filter for smooth coordinate transitions
+//  - Screen Wake Lock to keep background tracking alive when tab is minimized
 // ============================================================
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
-const MIN_DISTANCE_METERS = 20;
-const FORCE_PING_INTERVAL_MS = 12_000; // 12 seconds
+const MIN_DISTANCE_METERS = 0; // 0 meters — emit on every 2.5s tick for continuous live streaming
+const FORCE_PING_INTERVAL_MS = 2_500; // 2.5 seconds automatic high-frequency emission
+const MAX_ACCEPTABLE_ACCURACY_METERS = 10000; // Support laptop Wi-Fi/IP geolocation
+const WAKE_LOCK_HEARTBEAT_MS = 30_000; // Re-acquire Wake Lock every 30s
 
+// ── Haversine distance ────────────────────────────────────────────────────────
 function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -26,10 +31,75 @@ function haversineDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ── 1D Kalman Filter ──────────────────────────────────────────────────────────
+interface KalmanState {
+  estimate: number;
+  errorCovariance: number;
+}
+
+function kalmanUpdate(
+  state: KalmanState,
+  measurement: number,
+  Q = 0.0001,
+  R = 3
+): KalmanState {
+  const predicted = state.estimate;
+  const predictedErr = state.errorCovariance + Q;
+  const K = predictedErr / (predictedErr + R);
+  return {
+    estimate: predicted + K * (measurement - predicted),
+    errorCovariance: (1 - K) * predictedErr,
+  };
+}
+
+// ── Screen Wake Lock manager ──────────────────────────────────────────────────
+class WakeLockManager {
+  private sentinel: WakeLockSentinel | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  async acquire(): Promise<void> {
+    if (!('wakeLock' in navigator)) return;
+    try {
+      this.sentinel = await (navigator as any).wakeLock.request('screen');
+      if (import.meta.env.DEV) {
+        console.info('[LocationTracker] Screen Wake Lock acquired');
+      }
+    } catch {
+      // Wake Lock denied — non-fatal
+    }
+  }
+
+  startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(async () => {
+      if (!this.sentinel || this.sentinel.released) {
+        await this.acquire();
+      }
+    }, WAKE_LOCK_HEARTBEAT_MS);
+  }
+
+  stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  async release(): Promise<void> {
+    this.stopHeartbeat();
+    if (this.sentinel && !this.sentinel.released) {
+      try {
+        await this.sentinel.release();
+      } catch {
+        // Ignore
+      }
+    }
+    this.sentinel = null;
+  }
+}
+
 interface TrackerOptions {
-  /** The JWT access token of the logged-in employee */
   token: string | null;
-  /** Whether the user is an employee (tracking runs for all roles silently) */
   enabled: boolean;
 }
 
@@ -38,56 +108,83 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
   const watchIdRef = useRef<number | null>(null);
   const lastPositionRef = useRef<{ lat: number; lng: number; time: number } | null>(null);
   const permissionListenerRef = useRef<AbortController | null>(null);
+  const wakeLockRef = useRef<WakeLockManager>(new WakeLockManager());
 
-  const emitLocationStatus = useCallback(
-    (status: 'ON' | 'OFF') => {
-      if (socketRef.current?.connected) {
-        socketRef.current.emit('employee:location_status_change', { status });
-      }
-    },
-    []
-  );
+  const kalmanLatRef = useRef<KalmanState | null>(null);
+  const kalmanLngRef = useRef<KalmanState | null>(null);
 
+  const emitLocationStatus = useCallback((status: 'ON' | 'OFF') => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('employee:location_status_change', { status });
+    }
+  }, []);
+
+  // Process and emit geolocation fix
+  const processFix = useCallback((coords: GeolocationCoordinates) => {
+    const { latitude, longitude, accuracy, speed, heading } = coords;
+    const now = Date.now();
+    const last = lastPositionRef.current;
+
+    // Skip pings with accuracy > 10000m
+    if (accuracy != null && accuracy > MAX_ACCEPTABLE_ACCURACY_METERS) return;
+
+    // Kalman Filter
+    if (kalmanLatRef.current === null || kalmanLngRef.current === null) {
+      kalmanLatRef.current = { estimate: latitude, errorCovariance: 1 };
+      kalmanLngRef.current = { estimate: longitude, errorCovariance: 1 };
+    } else {
+      kalmanLatRef.current = kalmanUpdate(kalmanLatRef.current, latitude);
+      kalmanLngRef.current = kalmanUpdate(kalmanLngRef.current, longitude);
+    }
+
+    const smoothLat = kalmanLatRef.current.estimate;
+    const smoothLng = kalmanLngRef.current.estimate;
+
+    const shouldEmit =
+      !last ||
+      now - last.time >= FORCE_PING_INTERVAL_MS ||
+      haversineDistance(last.lat, last.lng, smoothLat, smoothLng) >= MIN_DISTANCE_METERS;
+
+    if (shouldEmit && socketRef.current?.connected) {
+      socketRef.current.emit('employee:ping_location', {
+        latitude: smoothLat,
+        longitude: smoothLng,
+        accuracy: accuracy ?? undefined,
+        speed: speed ?? undefined,
+        heading: heading ?? undefined,
+      });
+      lastPositionRef.current = { lat: smoothLat, lng: smoothLng, time: now };
+    }
+  }, []);
+
+  // Primary watchPosition setup
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) return;
 
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+    }
+
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude, accuracy, speed, heading } = position.coords;
-        const now = Date.now();
-        const last = lastPositionRef.current;
-
-        // Only emit if moved enough OR enough time has passed
-        const shouldEmit =
-          !last ||
-          now - last.time >= FORCE_PING_INTERVAL_MS ||
-          haversineDistance(last.lat, last.lng, latitude, longitude) >= MIN_DISTANCE_METERS;
-
-        if (shouldEmit && socketRef.current?.connected) {
-          socketRef.current.emit('employee:ping_location', {
-            latitude,
-            longitude,
-            accuracy: accuracy ?? undefined,
-            speed: speed ?? undefined,
-            heading: heading ?? undefined,
-          });
-          lastPositionRef.current = { lat: latitude, lng: longitude, time: now };
-        }
+        emitLocationStatus('ON');
+        processFix(position.coords);
       },
       (error) => {
-        // GeolocationPositionError — GPS was denied or turned off
-        console.warn('[LocationTracker] GPS error:', error.code, error.message);
-        if (error.code === 1 /* PERMISSION_DENIED */ || error.code === 2 /* POSITION_UNAVAILABLE */) {
+        if (import.meta.env.DEV) {
+          console.warn('[LocationTracker] Geolocation error:', error.code, error.message);
+        }
+        if (error.code === 1 /* PERMISSION_DENIED */) {
           emitLocationStatus('OFF');
         }
       },
       {
-        enableHighAccuracy: true,
-        maximumAge: 5000,
-        timeout: 10000,
+        enableHighAccuracy: false, // Use fast Wi-Fi/IP location on laptops & desktops
+        maximumAge: 3000,
+        timeout: 6000,
       }
     );
-  }, [emitLocationStatus]);
+  }, [emitLocationStatus, processFix]);
 
   const stopTracking = useCallback(() => {
     if (watchIdRef.current !== null) {
@@ -96,10 +193,8 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     }
   }, []);
 
-  // Monitor browser permission state for real-time ON/OFF detection
   const watchPermission = useCallback(() => {
     if (!navigator.permissions) return;
-
     permissionListenerRef.current?.abort();
     const controller = new AbortController();
     permissionListenerRef.current = controller;
@@ -109,7 +204,7 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
         if (permStatus.state === 'granted') {
           emitLocationStatus('ON');
           startTracking();
-        } else {
+        } else if (permStatus.state === 'denied') {
           emitLocationStatus('OFF');
           stopTracking();
         }
@@ -118,47 +213,88 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     });
   }, [emitLocationStatus, startTracking, stopTracking]);
 
-  useEffect(() => {
-    if (!enabled || !token) return;
+  const handleVisibilityChange = useCallback(async () => {
+    if (document.visibilityState === 'visible') {
+      await wakeLockRef.current.acquire();
+      if (socketRef.current?.connected) {
+        startTracking();
+        emitLocationStatus('ON');
+      }
+    }
+  }, [startTracking, emitLocationStatus]);
 
-    // Connect to /live-tracking socket namespace
+  // Socket connection & tracking lifecycle
+  useEffect(() => {
+    const activeToken = token || localStorage.getItem('accessToken');
+    if (!enabled || !activeToken) return;
+
     const socket = io(`${SOCKET_URL}/live-tracking`, {
-      auth: { token },
-      transports: ['websocket'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
+      auth: { token: activeToken },
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
     });
 
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      if (import.meta.env.DEV) {
-        console.info('[LocationTracker] Socket connected, starting GPS tracking...');
-      }
+    socket.on('connect', async () => {
+      await wakeLockRef.current.acquire();
+      wakeLockRef.current.startHeartbeat();
       startTracking();
       watchPermission();
+      emitLocationStatus('ON');
     });
 
     socket.on('disconnect', () => {
-      if (import.meta.env.DEV) {
-        console.info('[LocationTracker] Socket disconnected');
-      }
       stopTracking();
     });
 
-    socket.on('connect_error', (err) => {
-      if (import.meta.env.DEV) {
-        console.warn('[LocationTracker] Socket connection error:', err.message);
-      }
-    });
+    socket.on('connect_error', () => {});
 
-    // Cleanup on logout or unmount
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       stopTracking();
       permissionListenerRef.current?.abort();
+      wakeLockRef.current.release();
       socket.disconnect();
       socketRef.current = null;
       lastPositionRef.current = null;
+      kalmanLatRef.current = null;
+      kalmanLngRef.current = null;
     };
-  }, [enabled, token, startTracking, stopTracking, watchPermission]);
+  }, [enabled, token, startTracking, stopTracking, watchPermission, handleVisibilityChange, emitLocationStatus]);
+
+  // ── DEDICATED 2.5-SECOND BACKGROUND LOCATION TRIGGER ENGINE ────────────────
+  // Forces a fresh getCurrentPosition query every 2.5s in the background
+  useEffect(() => {
+    const activeToken = token || localStorage.getItem('accessToken');
+    if (!enabled || !activeToken) return;
+
+    const backgroundTrigger = setInterval(() => {
+      if (!navigator.geolocation || !socketRef.current?.connected) return;
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          emitLocationStatus('ON');
+          processFix(pos.coords);
+        },
+        () => {
+          // Fallback: request cached fix if fresh fix times out
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              emitLocationStatus('ON');
+              processFix(pos.coords);
+            },
+            () => {},
+            { enableHighAccuracy: false, maximumAge: 60000, timeout: 2000 }
+          );
+        },
+        { enableHighAccuracy: false, maximumAge: 0, timeout: 3000 }
+      );
+    }, FORCE_PING_INTERVAL_MS);
+
+    return () => clearInterval(backgroundTrigger);
+  }, [enabled, token, emitLocationStatus, processFix]);
 }

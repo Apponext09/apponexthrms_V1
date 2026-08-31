@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Calculator, UserX, BarChart2, Download, Clock } from 'lucide-react';
+import { Calculator, UserX, BarChart2, Download, Clock, RefreshCw } from 'lucide-react';
 import { Payroll10StepFlow } from '../components/Payroll10StepFlow';
 import { FullFinalSettlement } from './FullFinalSettlement';
 import { showToast } from '@/components/ui/toast';

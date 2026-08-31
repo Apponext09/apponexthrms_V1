@@ -39,11 +39,12 @@ async function start() {
     // Create HTTP server
     const server = http.createServer(app);
 
-    // Create Socket.io server
+    // Create Socket.io server with flexible CORS
     const io = new Server(server, {
       cors: {
-        origin: env.CORS_ORIGIN ? env.CORS_ORIGIN.split(',') : ['http://localhost:5173', 'http://localhost:5174'],
+        origin: (origin, callback) => callback(null, true),
         methods: ['GET', 'POST'],
+        allowedHeaders: ['Authorization', 'Content-Type', 'X-Company-Id', 'x-company-id'],
         credentials: true
       }
     });

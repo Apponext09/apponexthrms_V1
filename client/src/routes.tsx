@@ -22,12 +22,12 @@ const EmployeeEditPage = lazy(() => import('./features/employee/pages/EmployeeEd
 const OnboardingDashboardPage = lazy(() => import('./features/employee/pages/OnboardingDashboardPage').then(m => ({ default: m.OnboardingDashboardPage })));
 const EmployeeDashboardPage = lazy(() => import('./features/employee/Dashboard/EmployeeDashboardPage').then(m => ({ default: m.EmployeeDashboardPage })));
 const OrgStructurePage = lazy(() => import('./features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
-const EmployeeLifecyclePage = lazy(() => import('./features/hr/EmployeeLifecycle/EmployeeLifecyclePage'));
+const EmployeeLifecyclePage = lazy(() => import('./features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
 const MyLifecyclePage = lazy(() => import('./features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const AttendanceDashboard = lazy(() => import('./features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
 const AttendancePoliciesPage = lazy(() => import('./features/attendance/pages/AttendancePoliciesPage').then(m => ({ default: m.AttendancePoliciesPage })));
 const LocationManagementPage = lazy(() => import('./features/attendance/pages/LocationManagementPage').then(m => ({ default: m.LocationManagementPage })));
-const HRAttendanceLocationPage = lazy(() => import('./features/hr/Attendance').then(m => ({ default: m.HRAttendanceLocationPage })));
+const HRAttendanceLocationPage = lazy(() => import('./features/HR/Attendance').then(m => ({ default: m.HRAttendanceLocationPage })));
 const ShiftManagementPage = lazy(() => import('./features/attendance/pages/ShiftManagementPage').then(m => ({ default: m.ShiftManagementPage })));
 const BreakLogsPage = lazy(() => import('./features/attendance/pages/BreakLogsPage').then(m => ({ default: m.BreakLogsPage })));
 const ManagerHRRegularizationApprovals = lazy(() => import('./features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
@@ -41,8 +41,8 @@ const LeaveBalancePage = lazy(() => import('./features/leaves/pages/LeaveBalance
 const LeaveEncashmentPage = lazy(() => import('./features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
 const ApprovalInboxPage = lazy(() => import('./features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
 const CustomReportBuilder = lazy(() => import('./features/leaves/pages/CustomReportBuilder').then(m => ({ default: m.CustomReportBuilder })));
-const BurnoutRiskDashboard = lazy(() => import('./features/hr/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
-const EmployeeRequestsPage = lazy(() => import('./features/hr/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
+const BurnoutRiskDashboard = lazy(() => import('./features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
+const EmployeeRequestsPage = lazy(() => import('./features/HR/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
 const PayrollDashboard = lazy(() => import('./features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const PayslipViewer = lazy(() => import('./features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
 const SalaryStructureManagement = lazy(() => import('./features/payroll/pages/SalaryStructureManagement').then(m => ({ default: m.SalaryStructureManagement })));
@@ -138,7 +138,7 @@ const NotFoundPage = lazy(() => import('./features/common/pages/NotFoundPage').t
 const UnauthorizedPage = lazy(() => import('./features/common/pages/UnauthorizedPage').then(m => ({ default: m.UnauthorizedPage })));
 const TeamDashboard = lazy(() => import('./features/team-lead/pages/TeamDashboard').then(m => ({ default: m.TeamDashboard })));
 const DepartmentDashboard = lazy(() => import('./features/manager/pages/DepartmentDashboard').then(m => ({ default: m.DepartmentDashboard })));
-const HRDashboardPage = lazy(() => import('./features/hr/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
+const HRDashboardPage = lazy(() => import('./features/HR/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
 const ManagerDashboardPage = lazy(() => import('./features/manager/pages/ManagerDashboardPage').then(m => ({ default: m.ManagerDashboardPage })));
 const MyTeamPage = lazy(() => import('./features/manager/pages/MyTeamPage').then(m => ({ default: m.MyTeamPage })));
 const TeamLeadDashboardPage = lazy(() => import('./features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
@@ -379,6 +379,7 @@ export function AppRoutes() {
 
           {/* Operations */}
           <Route path="/hr/masters" element={<MastersHubPage />} />
+          <Route path="/hr/masters/*" element={<MastersHubPage />} />
           <Route path="/hr/workflow" element={<WorkflowListPage />} />
           <Route path="/hr/workflows" element={<WorkflowListPage />} />
           <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
@@ -496,6 +497,8 @@ export function AppRoutes() {
           <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
           <Route path="/team-lead/interview-schedule" element={<InterviewCalendarPage />} />
           <Route path="/team-lead/interviewer-rating" element={<InterviewerRatingPage />} />
+          <Route path="/team-lead/mrf-request" element={<MrfRequestPage />} />
+          <Route path="/team-lead/mrf" element={<MrfRequestPage />} />
           <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
         </Route>
 
@@ -684,7 +687,7 @@ export function AppRoutes() {
           <Route path="/workflow/builder" element={<WorkflowBuilderPage />} />
           <Route path="/workflow/approvals" element={<ApprovalInboxPage />} />
 
-          {/* Notifications */}
+          {/* Notifications code*/}
           <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
 
@@ -723,18 +726,14 @@ export function AppRoutes() {
           <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
           <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
           <Route path="/settings/modules" element={<ModuleManagementPage />} />
-          <Route
-            element={
-              <ProtectedRoute allowedRoles={['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'team_lead', 'super_admin']}>
-                <AppShellLayout />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/masters" element={<MastersHubPage />} />
+          <Route path="/masters/*" element={<MastersHubPage />} />
           <Route path="/modules" element={<ModuleManagementPage />} />
           <Route path="/settings-group" element={<SettingsLayout />}>
             <Route index element={<Navigate to="/settings/general" replace />} />
             <Route path="general" element={<GeneralSettingsPage />} />
             <Route path="company-profile" element={<CompanyProfilePage />} />
+            
             <Route path="branches" element={<BranchesPage />} />
             <Route path="locations" element={<LocationsPage />} />
             <Route path="branding" element={<BrandingPage />} />
@@ -922,13 +921,15 @@ export function AppRoutes() {
         <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route
-          path="/masters"
           element={
-            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin']}>
-              <MastersHubPage />
+            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin', 'hr', 'hr_admin']}>
+              <AppShellLayout />
             </ProtectedRoute>
           }
-        />
+        >
+          <Route path="/masters" element={<MastersHubPage />} />
+          <Route path="/masters/*" element={<MastersHubPage />} />
+        </Route>
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings-group" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/general" replace />} />

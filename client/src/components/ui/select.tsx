@@ -12,6 +12,24 @@ const getChildrenText = (children: React.ReactNode): string => {
   return '';
 };
 
+// Helper to pre-extract itemsMap from children tree before/without opening dropdown
+const extractItemsMap = (node: React.ReactNode, map: Record<string, string> = {}): Record<string, string> => {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return;
+    
+    if (child.props && (child.props as any).value !== undefined) {
+      const val = String((child.props as any).value);
+      const label = getChildrenText((child.props as any).children).trim() || val;
+      map[val] = label;
+    }
+    
+    if (child.props && (child.props as any).children) {
+      extractItemsMap((child.props as any).children, map);
+    }
+  });
+  return map;
+};
+
 interface SelectContextValue {
   value?: string;
   isOpen: boolean;
@@ -45,6 +63,14 @@ function Select({ value, defaultValue, onValueChange, disabled, children }: Sele
   const contentRef = React.useRef<HTMLDivElement | null>(null);
 
   const selectedValue = value !== undefined ? value : internalValue;
+
+  const extractedMap = React.useMemo(() => {
+    return extractItemsMap(children);
+  }, [children]);
+
+  const mergedItemsMap = React.useMemo(() => {
+    return { ...extractedMap, ...itemsMap };
+  }, [extractedMap, itemsMap]);
 
   const handleSelect = (nextValue: string) => {
     if (disabled) return;
@@ -151,7 +177,7 @@ function Select({ value, defaultValue, onValueChange, disabled, children }: Sele
         setIsOpen, 
         onSelect: handleSelect, 
         registerItem, 
-        itemsMap,
+        itemsMap: mergedItemsMap,
         disabled,
         triggerRef,
         contentRef,
@@ -221,7 +247,19 @@ interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 function SelectValue({ placeholder, className, ...props }: SelectValueProps) {
   const context = React.useContext(SelectContext);
-  const displayLabel = context?.value ? context.itemsMap[context.value] : '';
+  const rawVal = context?.value;
+  const valStr = rawVal !== undefined && rawVal !== null ? String(rawVal) : '';
+  
+  let displayLabel = '';
+  if (valStr && context?.itemsMap) {
+    displayLabel = context.itemsMap[valStr] || (context.itemsMap as any)[rawVal as any] || '';
+  }
+
+  // Fallback: if value is set and not empty, and not 'Choose' or 'Select', display the value itself
+  if (!displayLabel && valStr && valStr !== 'Choose' && valStr !== 'Select') {
+    displayLabel = valStr;
+  }
+
   return (
     <span className={cn("truncate block", className)} {...props}>
       {displayLabel || placeholder || ''}

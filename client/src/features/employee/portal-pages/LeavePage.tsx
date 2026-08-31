@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -757,7 +757,21 @@ export default function LeavePage() {
   };
 
   // Processed Balances array (handles backend properties & defaults)
-  const currentEmpGender = employee?.gender || (user as any)?.gender || (user as any)?.personal_info?.gender || '';
+  const employeeContext = useMemo(() => ({
+    ...(user || {}),
+    ...(employee || {}),
+    gender: (employee?.gender || (user as any)?.gender || (user as any)?.personal_info?.gender || '').toString().trim().toLowerCase(),
+    marital_status: ((employee as any)?.marital_status || (employee as any)?.maritalStatus || (user as any)?.marital_status || (user as any)?.maritalStatus || '').toString().trim().toLowerCase(),
+    current_department_id: employee?.current_department_id || employee?.currentDepartmentId || (user as any)?.department_id || (user as any)?.departmentId,
+    current_location_id: employee?.current_location_id || employee?.currentLocationId || (user as any)?.location_id || (user as any)?.locationId,
+    current_grade_id: employee?.current_grade_id || employee?.currentGradeId || (employee as any)?.grade_id || (employee as any)?.gradeId,
+    current_designation_id: employee?.current_designation_id || employee?.currentDesignationId || (employee as any)?.designation_id || (employee as any)?.designationId,
+    employment_type: (employee?.employment_type || employee?.employmentType || '').toString(),
+    status: (employee?.status || '').toString(),
+    date_of_joining: employee?.date_of_joining || employee?.dateOfJoining,
+    date_of_confirmation: employee?.date_of_confirmation || employee?.dateOfConfirmation || (employee as any)?.confirmation_date || (employee as any)?.confirmationDate,
+  }), [user, employee]);
+
   const displayBalances = balances.filter(b => {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
     if (code === 'LOP') return false; // Keep main quota cards clean (exclude LOP 0-day quota)
@@ -777,7 +791,7 @@ export default function LeavePage() {
         }
       : bAny;
 
-    return isLeaveTypeApplicableForGender(mergedItem, currentEmpGender);
+    return isLeaveTypeApplicableForGender(mergedItem, employeeContext);
   }).map(b => {
     const quotaFallback = parseFloat(String((b as any).annual_quota ?? (b as any).annualQuota ?? 0)) || 0;
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', quotaFallback);
@@ -795,7 +809,7 @@ export default function LeavePage() {
   });
 
   const allLeaveTypes = leaveTypes.filter(t => {
-    return isLeaveTypeApplicableForGender(t, currentEmpGender);
+    return isLeaveTypeApplicableForGender(t, employeeContext);
   });
 
   // Stats Calculations
@@ -864,7 +878,7 @@ export default function LeavePage() {
                     leave_code: t.leave_code || t.leaveCode,
                     available_balance: t.default_allowance_days || t.defaultAllowanceDays || 0,
                   })))
-                    .filter((b) => isLeaveTypeApplicableForGender(b, currentEmpGender))
+                    .filter((b) => isLeaveTypeApplicableForGender(b, employeeContext))
                     .map((b) => {
                       const bAny = b as any;
                       const name = bAny.leave_name || bAny.leaveName || 'Leave';

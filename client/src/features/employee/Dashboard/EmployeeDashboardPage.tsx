@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
@@ -78,7 +78,76 @@ export function EmployeeDashboardPage() {
   const [isLocationSending, setIsLocationSending] = useState(false);
   const [lastLocationPingTime, setLastLocationPingTime] = useState<string | null>(null);
 
-  const handleLocationAccessClick = async () => {
+  // Core location ping transmitter function (used by both manual button click and automatic 2.5s background interval)
+  const sendLocationPingUpdate = useCallback(async (isManual = false) => {
+    if (checkInStatus === 'not_started' || !navigator.geolocation) return;
+
+    if (isManual) setIsLocationSending(true);
+
+    const sendFix = async (pos: GeolocationPosition) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const accuracy = pos.coords.accuracy;
+      const speed = pos.coords.speed || 0;
+
+      setUserCoords({ latitude: lat, longitude: lng });
+
+      try {
+        await apiClient.post('/livetracking/ping', {
+          latitude: lat,
+          longitude: lng,
+          accuracy,
+          speed,
+        });
+
+        const timeStr = new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        });
+        setLastLocationPingTime(timeStr);
+
+        if (isManual) {
+          showToast.success(
+            'Location Access Active 📍',
+            `Live GPS location update sent successfully at ${timeStr}! (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+          );
+        }
+      } catch (err: any) {
+        console.error('Failed to send location ping:', err);
+        if (isManual) {
+          showToast.error('Location Update Failed', 'Could not transmit location ping to server.');
+        }
+      } finally {
+        if (isManual) setIsLocationSending(false);
+      }
+    };
+
+    // Primary attempt: Wi-Fi/IP fast-location on laptop (enableHighAccuracy: false)
+    navigator.geolocation.getCurrentPosition(
+      sendFix,
+      () => {
+        // Fallback: cached fix if fresh query times out
+        navigator.geolocation.getCurrentPosition(
+          sendFix,
+          (err) => {
+            if (isManual) {
+              setIsLocationSending(false);
+              showToast.error(
+                'Location Permission Denied',
+                err.message || 'Please grant browser location permissions to enable tracking.'
+              );
+            }
+          },
+          { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
+        );
+      },
+      { enableHighAccuracy: false, maximumAge: 0, timeout: 4000 }
+    );
+  }, [checkInStatus]);
+
+  const handleLocationAccessClick = () => {
     if (checkInStatus === 'not_started') {
       showToast.error(
         'Location Access Blocked 🔒',
@@ -86,54 +155,24 @@ export function EmployeeDashboardPage() {
       );
       return;
     }
-
-    if (!navigator.geolocation) {
-      showToast.error('GPS Error', 'Geolocation is not supported by your browser.');
-      return;
-    }
-
-    setIsLocationSending(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy;
-        const speed = pos.coords.speed || 0;
-
-        setUserCoords({ latitude: lat, longitude: lng });
-
-        try {
-          await apiClient.post('/livetracking/ping', {
-            latitude: lat,
-            longitude: lng,
-            accuracy,
-            speed,
-          });
-
-          const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          setLastLocationPingTime(timeStr);
-
-          showToast.success(
-            'Location Access Active 📍',
-            `Live GPS location update sent successfully at ${timeStr}! (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-          );
-        } catch (err: any) {
-          console.error('Failed to send location ping:', err);
-          showToast.error('Location Update Failed', 'Could not transmit location ping to server.');
-        } finally {
-          setIsLocationSending(false);
-        }
-      },
-      (err) => {
-        setIsLocationSending(false);
-        showToast.error(
-          'Location Permission Denied',
-          err.message || 'Please grant browser location permissions to enable tracking.'
-        );
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    sendLocationPingUpdate(true);
   };
+
+  // ── Automatic 2.5-Second Background Location Trigger ─────────────────────
+  // Automatically triggers the Send Manual Location Access Update action every 2.5 seconds in the background
+  useEffect(() => {
+    if (checkInStatus === 'not_started') return;
+
+    // Trigger immediate location ping on check-in
+    sendLocationPingUpdate(false);
+
+    // Continuous 2.5-second background interval loop
+    const intervalId = setInterval(() => {
+      sendLocationPingUpdate(false);
+    }, 2500);
+
+    return () => clearInterval(intervalId);
+  }, [checkInStatus, sendLocationPingUpdate]);
 
   // Expanded Calendar State
   const [calendarDate, setCalendarDate] = useState(new Date());

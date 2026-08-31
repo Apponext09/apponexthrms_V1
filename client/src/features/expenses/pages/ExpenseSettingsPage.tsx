@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { expenseApi, ExpenseSettings, ExpenseWorkflow, ExpenseWorkflowLevel } from '../api/expenseApi';
+import { expenseApi, ExpenseWorkflow, ExpenseWorkflowLevel, MileageDesignationRate } from '../api/expenseApi';
 import {
   Sliders,
   Car,
@@ -27,6 +27,7 @@ export const ExpenseSettingsPage: React.FC = () => {
   const [categoryThresholds, setCategoryThresholds] = useState<Array<{ id: number; name: string; code?: string; autoApprovalThreshold: number }>>([]);
   const [mileageRateCar, setMileageRateCar] = useState<number>(12.00);
   const [mileageRateBike, setMileageRateBike] = useState<number>(6.00);
+  const [mileageRatesByDesignation, setMileageRatesByDesignation] = useState<MileageDesignationRate[]>([]);
   const [requireManagerApproval, setRequireManagerApproval] = useState(true);
   const [requireFinanceApproval, setRequireFinanceApproval] = useState(true);
   const [multiLevelApproval, setMultiLevelApproval] = useState(true);
@@ -58,6 +59,31 @@ export const ExpenseSettingsPage: React.FC = () => {
         setAutoApprovalThreshold(settingsRes.autoApprovalThreshold || 500);
         setMileageRateCar(settingsRes.mileageRateCar || 12.00);
         setMileageRateBike(settingsRes.mileageRateBike || 6.00);
+        setMileageRatesByDesignation(
+          (settingsRes.mileageRatesByDesignation || []).reduce((acc: MileageDesignationRate[], row) => {
+            const key = String(row.designationName || '').trim().toLowerCase();
+            if (!key) return acc;
+            const existing = acc.find((r) => r.designationName.trim().toLowerCase() === key);
+            const extraIds = [
+              ...(row.designationIds || []),
+              row.designationId,
+            ].filter((id): id is number => Boolean(id));
+            if (existing) {
+              existing.designationIds = Array.from(new Set([...(existing.designationIds || [existing.designationId]), ...extraIds]));
+              if (row.hasCustomRate && !existing.hasCustomRate) {
+                existing.rateCar = row.rateCar;
+                existing.rateBike = row.rateBike;
+                existing.hasCustomRate = true;
+              }
+              return acc;
+            }
+            acc.push({
+              ...row,
+              designationIds: Array.from(new Set(extraIds)),
+            });
+            return acc;
+          }, [])
+        );
         setRequireManagerApproval(settingsRes.requireManagerApproval !== undefined ? Boolean(settingsRes.requireManagerApproval) : true);
         setRequireFinanceApproval(settingsRes.requireFinanceApproval !== undefined ? Boolean(settingsRes.requireFinanceApproval) : true);
         setMultiLevelApproval(settingsRes.multiLevelApproval !== undefined ? Boolean(settingsRes.multiLevelApproval) : true);
@@ -99,6 +125,7 @@ export const ExpenseSettingsPage: React.FC = () => {
         categoryThresholds,
         mileageRateCar,
         mileageRateBike,
+        mileageRatesByDesignation,
         requireManagerApproval,
         requireFinanceApproval,
         multiLevelApproval,
@@ -290,24 +317,25 @@ export const ExpenseSettingsPage: React.FC = () => {
 
           <hr className="border-slate-200 dark:border-slate-800" />
 
-          {/* Mileage Per-KM Rates */}
+          {/* Mileage Per-KM Rates by Designation */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Car className="w-4 h-4 text-blue-500" />
               Mileage Per-Kilometer Rates
             </h3>
             <p className="text-xs text-slate-500">
-              Default rate per kilometer calculated when employees submit official mileage claims.
+              Set car and bike rates for each designation. Employees see and claim only the rates assigned to their designation.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  4-Wheeler / Car Rate (₹ / km)
+                  Default 4-Wheeler / Car Rate (₹ / km)
                 </label>
                 <input
                   type="number"
                   step="0.5"
+                  min={0}
                   value={mileageRateCar}
                   onChange={(e) => setMileageRateCar(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-amber-600"
@@ -316,17 +344,76 @@ export const ExpenseSettingsPage: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  2-Wheeler / Motorcycle Rate (₹ / km)
+                  Default 2-Wheeler / Motorcycle Rate (₹ / km)
                 </label>
                 <input
                   type="number"
                   step="0.5"
+                  min={0}
                   value={mileageRateBike}
                   onChange={(e) => setMileageRateBike(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-blue-600"
                 />
               </div>
             </div>
+            <p className="text-[11px] text-slate-400">
+              Default rates apply when a designation has no row below, or when an employee has no designation.
+            </p>
+
+            {mileageRatesByDesignation.length === 0 ? (
+              <p className="text-xs text-slate-400">
+                No designations found. Create designations in Settings first, then assign mileage rates here.
+              </p>
+            ) : (
+              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase">
+                    <tr>
+                      <th className="py-2.5 px-3">Designation</th>
+                      <th className="py-2.5 px-3 w-44">4-Wheeler (₹ / km)</th>
+                      <th className="py-2.5 px-3 w-44">2-Wheeler (₹ / km)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {mileageRatesByDesignation.map((row, idx) => (
+                      <tr key={row.designationName.toLowerCase()}>
+                        <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                          {row.designationName}
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.5"
+                            value={row.rateCar}
+                            onChange={(e) => {
+                              const next = [...mileageRatesByDesignation];
+                              next[idx] = { ...next[idx], rateCar: Number(e.target.value) };
+                              setMileageRatesByDesignation(next);
+                            }}
+                            className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-amber-600"
+                          />
+                        </td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.5"
+                            value={row.rateBike}
+                            onChange={(e) => {
+                              const next = [...mileageRatesByDesignation];
+                              next[idx] = { ...next[idx], rateBike: Number(e.target.value) };
+                              setMileageRatesByDesignation(next);
+                            }}
+                            className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-blue-600"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <hr className="border-slate-200 dark:border-slate-800" />
