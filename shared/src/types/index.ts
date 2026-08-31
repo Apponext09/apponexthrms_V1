@@ -7,6 +7,11 @@ export interface JwtClaims {
   oid: string;  // organization UUID
   sid: string;  // session UUID
   cid?: string; // company_id — set when logging in as a company/branch admin (branch-lock)
+  roles?: string[];
+  role?: string;
+  id?: number | string;
+  userId?: number | string;
+  email?: string;
   iat: number;
   exp: number;
 }

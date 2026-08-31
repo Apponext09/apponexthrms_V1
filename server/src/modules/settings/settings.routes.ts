@@ -2175,7 +2175,32 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   if (leave_classification !== undefined) updateData.leave_classification = leave_classification;
   if (status !== undefined) updateData.status = status;
   if (description !== undefined) updateData.description = description;
-  if (gender_applicable !== undefined) updateData.gender_applicable = gender_applicable;
+  // Helper to extract gender from condition groups if dynamic rules are used
+  const extractGenderFromGroup = (group: any): string | null => {
+    if (!group) return null;
+    const conditions = group.conditions || group.rules;
+    if (!Array.isArray(conditions) || conditions.length === 0) return null;
+    for (const c of conditions) {
+      if (c.conjunction || c.conditions || c.rules) {
+        const nested = extractGenderFromGroup(c);
+        if (nested) return nested;
+      }
+      const fact = (c.fact || c.field || '').toString().toLowerCase().replace(/[\s_-]+/g, '');
+      if (fact === 'gender' && (c.operator === 'equals' || c.operator === '=' || c.operator === 'is equal to (=)')) {
+        const val = (c.value || '').toString().toLowerCase().trim();
+        if (val === 'male' || val === 'female' || val === 'other') return val;
+      }
+    }
+    return null;
+  };
+
+  const onlyWhenGender = extractGenderFromGroup(allocation_settings?.onlyWhen || allocation_settings?.only_when || application_settings?.onlyWhen || application_settings?.only_when);
+
+  if (gender_applicable !== undefined) {
+    updateData.gender_applicable = gender_applicable;
+  } else if (onlyWhenGender) {
+    updateData.gender_applicable = onlyWhenGender;
+  }
   if (sandwich_rule_enabled !== undefined) updateData.sandwich_rule_enabled = Boolean(sandwich_rule_enabled);
   if (allow_negative_balance !== undefined) updateData.allow_negative_balance = isAllowNeg;
   if (negative_balance_action !== undefined) updateData.negative_balance_action = action;
