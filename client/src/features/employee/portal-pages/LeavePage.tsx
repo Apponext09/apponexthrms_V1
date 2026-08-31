@@ -880,10 +880,11 @@ export default function LeavePage() {
                   })))
                     .filter((b) => isLeaveTypeApplicableForGender(b, employeeContext))
                     .map((b) => {
-                      const name = b.leave_name || b.leaveName || 'Leave';
-                      const code = b.leave_code || b.leaveCode || 'PTO';
-                      const targetId = b.leave_type_id || b.leaveTypeId || b.id;
-                      const avail = b.available_balance ?? 0;
+                      const bAny = b as any;
+                      const name = bAny.leave_name || bAny.leaveName || 'Leave';
+                      const code = bAny.leave_code || bAny.leaveCode || 'PTO';
+                      const targetId = bAny.leave_type_id || bAny.leaveTypeId || bAny.id;
+                      const avail = bAny.available_balance ?? 0;
 
                       return (
                         <option key={targetId} value={targetId}>

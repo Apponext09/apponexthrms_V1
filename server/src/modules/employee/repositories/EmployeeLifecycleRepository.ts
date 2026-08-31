@@ -28,10 +28,10 @@ export class EmployeeLifecycleRepository extends BaseRepository<EmployeeLifecycl
     const [id] = await this.query(ctx).insert({
       ...data,
       organization_id: ctx.organizationId,
-      created_at: new Date(),
+      created_at: new Date() as any,
     });
 
-    const created = await this.getById(ctx, id);
+    const created = await this.getById(ctx, id as any);
     if (!created) {
       throw new Error(`Failed to create ${this.tableName}`);
     }

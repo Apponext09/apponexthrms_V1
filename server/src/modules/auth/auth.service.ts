@@ -667,6 +667,8 @@ export class AuthService {
         lastName: user.lastName || (user as any).last_name || '',
         orgName: org?.name || '',
         roles,
+        policyAccepted: Boolean((user as any).policy_accepted || (user as any).policyAccepted),
+        policyAcceptedAt: (user as any).policy_accepted_at || (user as any).policyAcceptedAt || null,
       } as any,
       roles,
     };
@@ -925,6 +927,8 @@ export class AuthService {
         organizationName: org?.name || '',
         organizationCode: org?.code || '',
         organizationLocation: org?.location || org?.address_line1 || '',
+        policyAccepted: Boolean(rawUser.policy_accepted || rawUser.policyAccepted),
+        policyAcceptedAt: rawUser.policy_accepted_at || rawUser.policyAcceptedAt || null,
       },
       organization: org
         ? {

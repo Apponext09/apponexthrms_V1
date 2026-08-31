@@ -7,8 +7,7 @@ export async function up(knex: Knex): Promise<void> {
   // Modify the status column to VARCHAR(50) to support all statuses without truncation
   await knex.raw(`
     ALTER TABLE leave_applications 
-    MODIFY COLUMN status ENUM('draft', 'submitted', 'pending', 'approved', 'rejected', 'cancelled', 'withdrawn', 'pending_hr_override') 
-    DEFAULT 'draft'
+    MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'draft'
   `);
 
   // Add admin_notes/remarks to leave_applications

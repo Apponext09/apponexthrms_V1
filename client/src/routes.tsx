@@ -22,12 +22,12 @@ const EmployeeEditPage = lazy(() => import('./features/employee/pages/EmployeeEd
 const OnboardingDashboardPage = lazy(() => import('./features/employee/pages/OnboardingDashboardPage').then(m => ({ default: m.OnboardingDashboardPage })));
 const EmployeeDashboardPage = lazy(() => import('./features/employee/Dashboard/EmployeeDashboardPage').then(m => ({ default: m.EmployeeDashboardPage })));
 const OrgStructurePage = lazy(() => import('./features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
-const EmployeeLifecyclePage = lazy(() => import('./features/hr/EmployeeLifecycle/EmployeeLifecyclePage'));
+const EmployeeLifecyclePage = lazy(() => import('./features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
 const MyLifecyclePage = lazy(() => import('./features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const AttendanceDashboard = lazy(() => import('./features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
 const AttendancePoliciesPage = lazy(() => import('./features/attendance/pages/AttendancePoliciesPage').then(m => ({ default: m.AttendancePoliciesPage })));
 const LocationManagementPage = lazy(() => import('./features/attendance/pages/LocationManagementPage').then(m => ({ default: m.LocationManagementPage })));
-const HRAttendanceLocationPage = lazy(() => import('./features/hr/Attendance').then(m => ({ default: m.HRAttendanceLocationPage })));
+const HRAttendanceLocationPage = lazy(() => import('./features/HR/Attendance').then(m => ({ default: m.HRAttendanceLocationPage })));
 const ShiftManagementPage = lazy(() => import('./features/attendance/pages/ShiftManagementPage').then(m => ({ default: m.ShiftManagementPage })));
 const BreakLogsPage = lazy(() => import('./features/attendance/pages/BreakLogsPage').then(m => ({ default: m.BreakLogsPage })));
 const ManagerHRRegularizationApprovals = lazy(() => import('./features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
@@ -41,8 +41,8 @@ const LeaveBalancePage = lazy(() => import('./features/leaves/pages/LeaveBalance
 const LeaveEncashmentPage = lazy(() => import('./features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
 const ApprovalInboxPage = lazy(() => import('./features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
 const CustomReportBuilder = lazy(() => import('./features/leaves/pages/CustomReportBuilder').then(m => ({ default: m.CustomReportBuilder })));
-const BurnoutRiskDashboard = lazy(() => import('./features/hr/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
-const EmployeeRequestsPage = lazy(() => import('./features/hr/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
+const BurnoutRiskDashboard = lazy(() => import('./features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
+const EmployeeRequestsPage = lazy(() => import('./features/HR/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
 const PayrollDashboard = lazy(() => import('./features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const PayslipViewer = lazy(() => import('./features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
 const SalaryStructureManagement = lazy(() => import('./features/payroll/pages/SalaryStructureManagement').then(m => ({ default: m.SalaryStructureManagement })));
@@ -60,8 +60,6 @@ const TeamSettlementsPage = lazy(() => import('./features/payroll/pages/TeamSett
 const AdminDashboard = lazy(() => import('./features/payroll/pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const MassSalaryStructureUploadPage = lazy(() => import('./features/payroll/pages/MassSalaryStructureUploadPage').then(m => ({ default: m.MassSalaryStructureUploadPage })));
 const EmployeeLoanRequest = lazy(() => import('./features/payroll/components/EmployeeLoanRequest').then(m => ({ default: m.EmployeeLoanRequest })));
-const AdminExpenseClaims = lazy(() => import('./features/payroll/pages/AdminExpenseClaims').then(m => ({ default: m.AdminExpenseClaims })));
-const AdminTravelRequests = lazy(() => import('./features/payroll/pages/AdminTravelRequests').then(m => ({ default: m.AdminTravelRequests })));
 const EmployeePayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.EmployeePayrollPortal })));
 const TeamLeadPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.TeamLeadPayrollPortal })));
 const ManagerPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.ManagerPayrollPortal })));
@@ -140,7 +138,7 @@ const NotFoundPage = lazy(() => import('./features/common/pages/NotFoundPage').t
 const UnauthorizedPage = lazy(() => import('./features/common/pages/UnauthorizedPage').then(m => ({ default: m.UnauthorizedPage })));
 const TeamDashboard = lazy(() => import('./features/team-lead/pages/TeamDashboard').then(m => ({ default: m.TeamDashboard })));
 const DepartmentDashboard = lazy(() => import('./features/manager/pages/DepartmentDashboard').then(m => ({ default: m.DepartmentDashboard })));
-const HRDashboardPage = lazy(() => import('./features/hr/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
+const HRDashboardPage = lazy(() => import('./features/HR/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
 const ManagerDashboardPage = lazy(() => import('./features/manager/pages/ManagerDashboardPage').then(m => ({ default: m.ManagerDashboardPage })));
 const MyTeamPage = lazy(() => import('./features/manager/pages/MyTeamPage').then(m => ({ default: m.MyTeamPage })));
 const TeamLeadDashboardPage = lazy(() => import('./features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
@@ -161,7 +159,6 @@ const HolidayCalendarPage = lazy(() => import('./features/employee/portal-pages/
 const TimesheetPage = lazy(() => import('./features/employee/portal-pages/TimesheetPage'));
 const PayrollPage = lazy(() => import('./features/employee/portal-pages/PayrollPage'));
 const TaxDeclarationPage = lazy(() => import('./features/employee/portal-pages/TaxDeclarationPage'));
-const ExpensePage = lazy(() => import('./features/employee/portal-pages/ExpensePage'));
 const TravelPage = lazy(() => import('./features/employee/portal-pages/TravelPage'));
 const AssetPage = lazy(() => import('./features/employee/portal-pages/AssetPage'));
 const DocumentsPage = lazy(() => import('./features/employee/portal-pages/DocumentsPage'));
@@ -187,6 +184,23 @@ const ApprovalsPage = lazy(() => import('./features/employee/portal-pages/Approv
 const SettingsSecurityPage = lazy(() => import('./features/employee/portal-pages/SettingsSecurityPage'));
 const InternDashboardPage = lazy(() => import('./features/intern/pages/InternDashboardPage').then(m => ({ default: m.InternDashboardPage })));
 const ConsultantDashboardPage = lazy(() => import('./features/consultant/pages/ConsultantDashboardPage').then(m => ({ default: m.ConsultantDashboardPage })));
+
+// ── Expense Management Module Pages ─────────────────────────────────────────
+import { ExpenseDashboardPage } from './features/expenses/pages/ExpenseDashboardPage';
+import { MyExpensesPage } from './features/expenses/pages/MyExpensesPage';
+import { ExpenseApprovalsPage } from './features/expenses/pages/ExpenseApprovalsPage';
+import { FinanceVerificationPage } from './features/expenses/pages/FinanceVerificationPage';
+import { ReimbursementsPage } from './features/expenses/pages/ReimbursementsPage';
+import { TravelRequestsPage } from './features/expenses/pages/TravelRequestsPage';
+import { TravelAdvancesPage } from './features/expenses/pages/TravelAdvancesPage';
+import { MileageClaimsPage } from './features/expenses/pages/MileageClaimsPage';
+import { ExpenseCategoriesPage } from './features/expenses/pages/ExpenseCategoriesPage';
+import { ExpensePoliciesPage } from './features/expenses/pages/ExpensePoliciesPage';
+import { ExpenseReportsPage } from './features/expenses/pages/ExpenseReportsPage';
+import { ExpenseSettingsPage } from './features/expenses/pages/ExpenseSettingsPage';
+import { AdminPolicyDashboardPage } from './features/policies/pages/AdminPolicyDashboardPage';
+import { CreatePolicyPage } from './features/policies/pages/CreatePolicyPage';
+import { PolicyAcknowledgementReportPage } from './features/policies/pages/PolicyAcknowledgementReportPage';
 
 // ── Page Loading Fallback Spinner ──────────────────────────────────────────
 function PageLoader() {
@@ -275,7 +289,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin', 'super_admin']}>
+            <ProtectedRoute allowedRoles={['hr_manager']}>
               <HRLayout />
             </ProtectedRoute>
           }
@@ -300,8 +314,8 @@ export function AppRoutes() {
           <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
           <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
           <Route path="/hr/payroll/processing" element={<PayrollProcessing />} />
-          <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
-          <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
+          <Route path="/hr/expense-claims" element={<Navigate to="/expenses/approvals" replace />} />
+          <Route path="/hr/travel-requests" element={<Navigate to="/expenses/travel-requests" replace />} />
           <Route path="/hr/loans" element={<LoanManagement />} />
           <Route path="/hr/loan-types" element={<LoanManagement />} />
           <Route path="/hr/payslips" element={<PayslipViewer />} />
@@ -315,6 +329,11 @@ export function AppRoutes() {
           <Route path="/hr/settlements" element={<FullFinalSettlement />} />
           <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
           <Route path="/hr/payroll/gratuity" element={<GratuityPolicyPage />} />
+
+          <Route path="/policies/manage" element={<AdminPolicyDashboardPage />} />
+          <Route path="/policies/create" element={<CreatePolicyPage />} />
+          <Route path="/policies/edit/:id" element={<CreatePolicyPage />} />
+          <Route path="/policies/reports" element={<PolicyAcknowledgementReportPage />} />
 
           {/* Leave & Time */}
           <Route path="/hr/attendance" element={<AttendanceDashboard />} />
@@ -360,6 +379,7 @@ export function AppRoutes() {
 
           {/* Operations */}
           <Route path="/hr/masters" element={<MastersHubPage />} />
+          <Route path="/hr/masters/*" element={<MastersHubPage />} />
           <Route path="/hr/workflow" element={<WorkflowListPage />} />
           <Route path="/hr/workflows" element={<WorkflowListPage />} />
           <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
@@ -404,7 +424,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
+            <ProtectedRoute allowedRoles={['department_head', 'manager']}>
               <ManagerLayout />
             </ProtectedRoute>
           }
@@ -424,8 +444,13 @@ export function AppRoutes() {
           <Route path="/manager/interviewer-rating" element={<InterviewerRatingPage />} />
           <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
           <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
-          <Route path="/manager/expenses" element={<ExpensePage />} />
-          <Route path="/manager/travel" element={<TravelPage />} />
+          <Route path="/manager/expenses" element={<ExpenseApprovalsPage />} />
+          <Route path="/manager/expenses/approvals" element={<ExpenseApprovalsPage />} />
+          <Route path="/manager/expenses/my-expenses" element={<MyExpensesPage />} />
+          <Route path="/manager/expenses/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/manager/expenses/travel-advances" element={<TravelAdvancesPage />} />
+          <Route path="/manager/expenses/mileage-claims" element={<MileageClaimsPage />} />
+          <Route path="/manager/travel" element={<TravelRequestsPage />} />
           <Route path="/manager/payslips" element={<PayslipViewer />} />
           <Route path="/manager/salary-revisions" element={<SalaryRevisionManagement />} />
           <Route path="/manager/salary-revision" element={<SalaryRevisionManagement />} />
@@ -445,7 +470,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
+            <ProtectedRoute allowedRoles={['team_lead']}>
               <TeamLeadLayout />
             </ProtectedRoute>
           }
@@ -457,8 +482,13 @@ export function AppRoutes() {
           <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
           <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
           <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
-          <Route path="/team-lead/expenses" element={<ExpensePage />} />
-          <Route path="/team-lead/travel" element={<TravelPage />} />
+          <Route path="/team-lead/expenses" element={<ExpenseApprovalsPage />} />
+          <Route path="/team-lead/expenses/approvals" element={<ExpenseApprovalsPage />} />
+          <Route path="/team-lead/expenses/my-expenses" element={<MyExpensesPage />} />
+          <Route path="/team-lead/expenses/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/team-lead/expenses/travel-advances" element={<TravelAdvancesPage />} />
+          <Route path="/team-lead/expenses/mileage-claims" element={<MileageClaimsPage />} />
+          <Route path="/team-lead/travel" element={<TravelRequestsPage />} />
           <Route path="/team-lead/payslips" element={<PayslipViewer />} />
           <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
           <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
@@ -479,26 +509,42 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'team_lead', 'super_admin', 'employee'] as any}>
+            <ProtectedRoute
+              allowedRoles={[
+                'employee',
+                'manager',
+                'department_head',
+                'team_lead',
+                'hr',
+                'hr_admin',
+                'hr_manager',
+                'organization_admin',
+                'ceo',
+                'super_admin',
+                'support',
+                'intern',
+                'consultant'
+              ]}
+            >
               <AppShellLayout />
             </ProtectedRoute>
           }
         >
-          {/* Approvals generic shortcut */}
+          {/* Approvals generic shortcut - Admin only */}
           <Route path="/approvals" element={<ApprovalInboxPage />} />
           <Route path="/approvals/dashboard" element={<ApprovalsDashboardPage />} />
 
-          {/* Dashboard — smart redirects by role */}
+          {/* Dashboard — ADMIN ONLY */}
           <Route path="/dashboard" element={<DashboardPage />} />
 
-          {/* Employee Management */}
+          {/* Employee Management — ADMIN ONLY */}
           <Route path="/employees" element={<EmployeeListPage />} />
           <Route path="/employees/:id" element={<EmployeeProfilePage />} />
           <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
           <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
           <Route path="/org-structure" element={<OrgStructurePage />} />
 
-          {/* Attendance Admin & Self-Service */}
+          {/* Attendance Admin — ADMIN ONLY */}
           <Route path="/attendance" element={<AttendanceDashboard />} />
           <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
           <Route path="/attendance/locations" element={<HRAttendanceLocationPage />} />
@@ -511,14 +557,12 @@ export function AppRoutes() {
           <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
           <Route path="/attendance/regularization-logs" element={<AdminRegularizationLogsPage />} />
           <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
-          <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
-          <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
           <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
           <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
           {/* CEO Face Punch Terminal */}
           <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
 
-          {/* Leaves */}
+          {/* Leaves Self-Service */}
           <Route path="/leaves" element={<MyLeavesPage />} />
           <Route path="/leaves/my-leaves" element={<MyLeavesPage />} />
           <Route path="/leaves/history" element={<MyLeavesPage />} />
@@ -529,20 +573,42 @@ export function AppRoutes() {
           <Route path="/leaves/balances" element={<LeaveBalancePage />} />
           <Route path="/leaves/encashment" element={<LeaveEncashmentPage />} />
 
+          {/* Leave Admin Reports — ADMIN ONLY */}
           <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
           <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
           <Route path="/holidays" element={<HolidayCalendarsPage />} />
 
-          {/* Payroll Admin */}
+          {/* Payroll Admin — ADMIN ONLY */}
           <Route path="/payroll" element={<PayrollDashboard />} />
           <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
           <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
-          <Route path="/payroll/expense-claims" element={<AdminExpenseClaims />} />
-          <Route path="/payroll/travel-requests" element={<AdminTravelRequests />} />
-          <Route path="/payroll/reimbursements" element={<AdminExpenseClaims />} />
-          <Route path="/expense-claims" element={<AdminExpenseClaims />} />
-          <Route path="/travel-requests" element={<AdminTravelRequests />} />
-          <Route path="/reimbursements" element={<AdminExpenseClaims />} />
+          {/* Expense Management Module */}
+          <Route path="/expenses" element={<Navigate to="/expenses/dashboard" replace />} />
+          <Route path="/expenses/dashboard" element={<ExpenseDashboardPage />} />
+          <Route path="/expenses/my-expenses" element={<MyExpensesPage />} />
+          <Route path="/expenses/approvals" element={<ExpenseApprovalsPage />} />
+          <Route path="/expenses/finance-verification" element={<FinanceVerificationPage />} />
+          <Route path="/expenses/reimbursements" element={<ReimbursementsPage />} />
+          <Route path="/expenses/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/expenses/travel-advances" element={<TravelAdvancesPage />} />
+          <Route path="/expenses/mileage-claims" element={<MileageClaimsPage />} />
+          <Route path="/expenses/categories" element={<ExpenseCategoriesPage />} />
+          <Route path="/expenses/policies" element={<ExpensePoliciesPage />} />
+          <Route path="/expenses/reports" element={<ExpenseReportsPage />} />
+          <Route path="/expenses/settings" element={<ExpenseSettingsPage />} />
+
+          <Route path="/policies/manage" element={<AdminPolicyDashboardPage />} />
+          <Route path="/policies/create" element={<CreatePolicyPage />} />
+          <Route path="/policies/edit/:id" element={<CreatePolicyPage />} />
+          <Route path="/policies/reports" element={<PolicyAcknowledgementReportPage />} />
+
+          {/* Expense Aliases for HR & Employee Portals */}
+          <Route path="/payroll/expense-claims" element={<ExpenseApprovalsPage />} />
+          <Route path="/payroll/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/payroll/reimbursements" element={<ReimbursementsPage />} />
+          <Route path="/expense-claims" element={<ExpenseApprovalsPage />} />
+          <Route path="/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/reimbursements" element={<ReimbursementsPage />} />
           <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
           <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
           <Route path="/payroll/master-settings" element={<PayrollSettingsPage />} />
@@ -551,7 +617,6 @@ export function AppRoutes() {
           <Route path="/payroll/processing" element={<PayrollProcessing />} />
           <Route path="/payroll-processing" element={<PayrollProcessing />} />
           <Route path="/payroll/reports" element={<PayrollReportsPage />} />
-          <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
           <Route path="/payroll/loans" element={<LoanManagement />} />
           <Route path="/payroll/loan-types" element={<LoanManagement />} />
           <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
@@ -560,14 +625,12 @@ export function AppRoutes() {
           <Route path="/payroll/gratuity" element={<GratuityPolicyPage />} />
           <Route path="/gratuity" element={<GratuityPolicyPage />} />
           <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
-          <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
-          <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
           <Route path="/payroll/payslips" element={<PayslipViewer />} />
           <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
           <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
           <Route path="/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
 
-          {/* Recruitment */}
+          {/* Recruitment Admin — ADMIN ONLY */}
           <Route path="/recruitment" element={<Navigate to="/recruitment/dashboard" replace />} />
           <Route path="/recruitment/dashboard" element={<RecruitmentDashboard />} />
           <Route path="/recruitment/mrf-request" element={<MrfRequestPage />} />
@@ -585,7 +648,7 @@ export function AppRoutes() {
           <Route path="/recruitment/referrals" element={<ReferralManagementPage />} />
           <Route path="/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
 
-          {/* Asset Management Admin */}
+          {/* Asset Management Admin — ADMIN ONLY */}
           <Route path="/assets" element={<AssetDashboard />} />
           <Route path="/assets/list" element={<AssetList />} />
           <Route path="/assets/:id" element={<AssetDetails />} />
@@ -597,7 +660,7 @@ export function AppRoutes() {
           <Route path="/assets/reports" element={<Reports />} />
           <Route path="/assets/analytics" element={<Analytics />} />
 
-          {/* Performance Admin */}
+          {/* Performance Admin — ADMIN ONLY */}
           <Route path="/performance" element={<PerformanceDashboard />} />
           <Route path="/performance/goals" element={<GoalManagementPage />} />
           <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
@@ -609,7 +672,7 @@ export function AppRoutes() {
           <Route path="/performance/recognition" element={<RecognitionDashboardPage />} />
           <Route path="/performance/analytics" element={<PerformanceAnalyticsPage />} />
 
-          {/* Workflow */}
+          {/* Workflow Admin — ADMIN ONLY */}
           <Route path="/workflow" element={<WorkflowSettingsPage />} />
           <Route path="/workflows" element={<WorkflowSettingsPage />} />
           <Route path="/workflows/list" element={<WorkflowListPage />} />
@@ -624,11 +687,11 @@ export function AppRoutes() {
           <Route path="/workflow/builder" element={<WorkflowBuilderPage />} />
           <Route path="/workflow/approvals" element={<ApprovalInboxPage />} />
 
-          {/* Notifications */}
+          {/* Notifications code*/}
           <Route path="/notifications" element={<NotificationCenterPage />} />
           <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
 
-          {/* HR Operations — Requests & Configuration (stays within CEO/HR admin shell) */}
+          {/* HR Operations & Configuration — ADMIN ONLY */}
           <Route path="/hr-operations/requests" element={<EmployeeRequestsPage />} />
           <Route path="/requests" element={<EmployeeRequestsPage />} />
           <Route path="/configuration" element={<AdminConfigurationPage />} />
@@ -636,7 +699,7 @@ export function AppRoutes() {
           <Route path="/settings/configuration" element={<AdminConfigurationPage />} />
           <Route path="/admin/configuration" element={<AdminConfigurationPage />} />
 
-          {/* Reports & Analytics */}
+          {/* Reports & Analytics — ADMIN ONLY */}
           <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
           <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
           <Route path="/analytics/timelog" element={<TimelogReportPage />} />
@@ -647,7 +710,7 @@ export function AppRoutes() {
           <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
           <Route path="/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
 
-          {/* Settings & Profile */}
+          {/* Settings & Configuration — ADMIN ONLY */}
           <Route path="/profile" element={<CompanyProfilePage />} />
           <Route path="/settings" element={<GeneralSettingsPage />} />
           <Route path="/settings/general" element={<GeneralSettingsPage />} />
@@ -663,19 +726,14 @@ export function AppRoutes() {
           <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
           <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
           <Route path="/settings/modules" element={<ModuleManagementPage />} />
-          <Route
-            path="/masters"
-            element={
-              <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin']}>
-                <MastersHubPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/masters" element={<MastersHubPage />} />
+          <Route path="/masters/*" element={<MastersHubPage />} />
           <Route path="/modules" element={<ModuleManagementPage />} />
           <Route path="/settings-group" element={<SettingsLayout />}>
             <Route index element={<Navigate to="/settings/general" replace />} />
             <Route path="general" element={<GeneralSettingsPage />} />
             <Route path="company-profile" element={<CompanyProfilePage />} />
+            
             <Route path="branches" element={<BranchesPage />} />
             <Route path="locations" element={<LocationsPage />} />
             <Route path="branding" element={<BrandingPage />} />
@@ -687,6 +745,206 @@ export function AppRoutes() {
             <Route path="modules" element={<ModuleManagementPage />} />
             <Route path="*" element={<Navigate to="company-profile" replace />} />
           </Route>
+        </Route>
+
+        {/* Dashboard — smart redirects by role */}
+        <Route path="/dashboard" element={<DashboardPage />} />
+
+        {/* Employee Management */}
+        <Route path="/employees" element={<EmployeeListPage />} />
+        <Route path="/employees/:id" element={<EmployeeProfilePage />} />
+        <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
+        <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
+        <Route path="/org-structure" element={<OrgStructurePage />} />
+
+        {/* Attendance Admin & Self-Service */}
+        <Route path="/attendance" element={<AttendanceDashboard />} />
+        <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
+        <Route path="/attendance/locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/attendance/location-mapping" element={<HRAttendanceLocationPage />} />
+        <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
+        <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
+        <Route path="/attendance/reports" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-report" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/attendance/regularization-logs" element={<AdminRegularizationLogsPage />} />
+        <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
+        <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
+        {/* CEO Face Punch Terminal */}
+        <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
+
+        {/* Leaves */}
+        <Route path="/leaves" element={<MyLeavesPage />} />
+        <Route path="/leaves/my-leaves" element={<MyLeavesPage />} />
+        <Route path="/leaves/history" element={<MyLeavesPage />} />
+        <Route path="/leaves/apply" element={<ApplyLeavePage />} />
+        <Route path="/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/leaves/approval" element={<ApprovalInboxPage />} />
+        <Route path="/leaves/balance" element={<LeaveBalancePage />} />
+        <Route path="/leaves/balances" element={<LeaveBalancePage />} />
+        <Route path="/leaves/encashment" element={<LeaveEncashmentPage />} />
+
+        <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
+        <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
+        <Route path="/holidays" element={<HolidayCalendarsPage />} />
+
+        {/* Payroll Admin */}
+        <Route path="/payroll" element={<PayrollDashboard />} />
+        <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
+        <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
+        <Route path="/payroll/expense-claims" element={<Navigate to="/expenses/approvals" replace />} />
+        <Route path="/payroll/travel-requests" element={<Navigate to="/expenses/travel-requests" replace />} />
+        <Route path="/payroll/reimbursements" element={<Navigate to="/expenses/reimbursements" replace />} />
+        <Route path="/expense-claims" element={<Navigate to="/expenses/approvals" replace />} />
+        <Route path="/travel-requests" element={<Navigate to="/expenses/travel-requests" replace />} />
+        <Route path="/reimbursements" element={<Navigate to="/expenses/reimbursements" replace />} />
+        <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
+        <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/master-settings" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/salary-revision" element={<SalaryRevisionManagement />} />
+        <Route path="/payroll/salary-revisions" element={<SalaryRevisionManagement />} />
+        <Route path="/payroll/processing" element={<PayrollProcessing />} />
+        <Route path="/payroll-processing" element={<PayrollProcessing />} />
+        <Route path="/payroll/reports" element={<PayrollReportsPage />} />
+        <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
+        <Route path="/payroll/loans" element={<LoanManagement />} />
+        <Route path="/payroll/loan-types" element={<LoanManagement />} />
+        <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
+        <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
+        <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
+        <Route path="/payroll/gratuity" element={<GratuityPolicyPage />} />
+        <Route path="/gratuity" element={<GratuityPolicyPage />} />
+        <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
+        <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
+        <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
+        <Route path="/payroll/payslips" element={<PayslipViewer />} />
+        <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
+        <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+        <Route path="/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+
+        {/* Recruitment */}
+        <Route path="/recruitment" element={<Navigate to="/recruitment/dashboard" replace />} />
+        <Route path="/recruitment/dashboard" element={<RecruitmentDashboard />} />
+        <Route path="/recruitment/mrf-request" element={<MrfRequestPage />} />
+        <Route path="/recruitment/jobs" element={<JobManagement />} />
+        <Route path="/recruitment/candidates" element={<CandidateManagement />} />
+        <Route path="/recruitment/candidate-report" element={<CandidateReportPage />} />
+        <Route path="/recruitment/resume-bank" element={<ResumeBankPage />} />
+        <Route path="/recruitment/applicant-tracker" element={<ApplicantTrackerPage />} />
+        <Route path="/recruitment/assessments" element={<AssessmentManagementPage />} />
+        <Route path="/recruitment/offers" element={<OfferManagementPage />} />
+        <Route path="/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
+        <Route path="/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
+        <Route path="/recruitment/referrals" element={<ReferralManagementPage />} />
+        <Route path="/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
+
+        {/* Asset Management Admin */}
+        <Route path="/assets" element={<AssetDashboard />} />
+        <Route path="/assets/list" element={<AssetList />} />
+        <Route path="/assets/:id" element={<AssetDetails />} />
+        <Route path="/assets/assign" element={<AssignAsset />} />
+        <Route path="/assets/transfer" element={<TransferAsset />} />
+        <Route path="/assets/return" element={<ReturnAsset />} />
+        <Route path="/assets/maintenance" element={<Maintenance />} />
+        <Route path="/assets/licenses" element={<Licenses />} />
+        <Route path="/assets/reports" element={<Reports />} />
+        <Route path="/assets/analytics" element={<Analytics />} />
+
+        {/* Performance Admin */}
+        <Route path="/performance" element={<PerformanceDashboard />} />
+        <Route path="/performance/goals" element={<GoalManagementPage />} />
+        <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
+        <Route path="/performance/okrs" element={<OKRManagementPage />} />
+        <Route path="/performance/review-form" element={<PerformanceReviewPage />} />
+        <Route path="/performance/competencies" element={<CompetencyDashboardPage />} />
+        <Route path="/performance/pips" element={<PIPDashboardPage />} />
+        <Route path="/performance/succession" element={<SuccessionPlanningPage />} />
+        <Route path="/performance/recognition" element={<RecognitionDashboardPage />} />
+        <Route path="/performance/analytics" element={<PerformanceAnalyticsPage />} />
+
+        {/* Workflow */}
+        <Route path="/workflow" element={<WorkflowSettingsPage />} />
+        <Route path="/workflows" element={<WorkflowSettingsPage />} />
+        <Route path="/workflows/list" element={<WorkflowListPage />} />
+        <Route path="/workflows/create" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/new" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+        <Route path="/workflows/:id/edit" element={<WorkflowBuilderPage />} />
+        <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/workflow/create" element={<WorkflowBuilderPage />} />
+        <Route path="/workflow/new" element={<WorkflowBuilderPage />} />
+        <Route path="/workflow/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/workflow/approvals" element={<ApprovalInboxPage />} />
+
+        {/* Notifications */}
+        <Route path="/notifications" element={<NotificationCenterPage />} />
+        <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
+
+        {/* HR Operations — Requests & Configuration (stays within CEO/HR admin shell) */}
+        <Route path="/hr-operations/requests" element={<EmployeeRequestsPage />} />
+        <Route path="/requests" element={<EmployeeRequestsPage />} />
+        <Route path="/configuration" element={<AdminConfigurationPage />} />
+        <Route path="/hr-operations/configuration" element={<AdminConfigurationPage />} />
+        <Route path="/settings/configuration" element={<AdminConfigurationPage />} />
+        <Route path="/admin/configuration" element={<AdminConfigurationPage />} />
+
+        {/* Reports & Analytics */}
+        <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
+        <Route path="/analytics/timelog" element={<TimelogReportPage />} />
+        <Route path="/analytics/ceo-attendance" element={<CeoAttendanceReportPage />} />
+        <Route path="/analytics/report-engine" element={<ReportEnginePage />} />
+
+        {/* Employee Lifecycle */}
+        <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
+        <Route path="/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
+
+        {/* Settings & Profile */}
+        <Route path="/profile" element={<CompanyProfilePage />} />
+        <Route path="/settings" element={<GeneralSettingsPage />} />
+        <Route path="/settings/general" element={<GeneralSettingsPage />} />
+        <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
+        <Route path="/settings/branches" element={<BranchesPage />} />
+        <Route path="/settings/locations" element={<LocationsPage />} />
+        <Route path="/settings/branding" element={<BrandingPage />} />
+        <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
+        <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
+        <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
+        <Route path="/settings/id-card-designer" element={<IdCardDesignerPage />} />
+        <Route path="/settings/id-card-templates" element={<IdCardDesignerPage />} />
+        <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
+        <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
+        <Route path="/settings/modules" element={<ModuleManagementPage />} />
+        <Route
+          element={
+            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin', 'hr', 'hr_admin']}>
+              <AppShellLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/masters" element={<MastersHubPage />} />
+          <Route path="/masters/*" element={<MastersHubPage />} />
+        </Route>
+        <Route path="/modules" element={<ModuleManagementPage />} />
+        <Route path="/settings-group" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="/settings/general" replace />} />
+          <Route path="general" element={<GeneralSettingsPage />} />
+          <Route path="company-profile" element={<CompanyProfilePage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="branding" element={<BrandingPage />} />
+          <Route path="leave-policies" element={<LeavePoliciesPage />} />
+          <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
+          <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="workflows" element={<WorkflowSettingsPage />} />
+          <Route path="id-card-designer" element={<IdCardDesignerPage />} />
+          <Route path="modules" element={<ModuleManagementPage />} />
+          <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -708,19 +966,19 @@ export function AppRoutes() {
         </Route>
 
         {/* ─────────────────────────────────────────────────
-          EMPLOYEE + SHARED PORTAL ROUTES
-          (EmployeeLayout — used by all roles for self-service)
+          EMPLOYEE PORTAL ROUTES
+          (EmployeeLayout — self-service for employees only)
+          Excludes: organization_admin, ceo, hr_admin, hr, hr_manager
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['employee', 'intern', 'consultant']}>
               <EmployeeLayout />
             </ProtectedRoute>
           }
         >
           <Route path="/employee" element={<Navigate to="/employee/dashboard" replace />} />
           <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
-          <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
           <Route path="/employee/profile" element={<ProfilePage />} />
           <Route path="/employee/lifecycle" element={<MyLifecyclePage />} />
           <Route path="/employee/lifecycle/*" element={<MyLifecyclePage />} />
@@ -740,8 +998,12 @@ export function AppRoutes() {
           <Route path="/employee/salary-revisions" element={<PayrollPage />} />
           <Route path="/employee/salary-revision" element={<PayrollPage />} />
           <Route path="/employee/tax-declaration" element={<TaxDeclarationPage />} />
-          <Route path="/employee/expenses" element={<ExpensePage />} />
-          <Route path="/employee/travel" element={<TravelPage />} />
+          <Route path="/employee/expenses" element={<MyExpensesPage />} />
+          <Route path="/employee/my-expenses" element={<MyExpensesPage />} />
+          <Route path="/employee/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/employee/travel-advances" element={<TravelAdvancesPage />} />
+          <Route path="/employee/travel" element={<TravelRequestsPage />} />
+          <Route path="/employee/mileage-claims" element={<MileageClaimsPage />} />
           <Route path="/employee/assets" element={<AssetPage />} />
           <Route path="/employee/documents" element={<DocumentsPage />} />
           <Route path="/employee/id-card" element={<IDCardPage />} />
@@ -809,7 +1071,7 @@ export function AppRoutes() {
           <Route path="/consultant/attendance" element={<AttendancePage />} />
           <Route path="/consultant/leaves" element={<LeavePage />} />
           <Route path="/consultant/payslips" element={<PayslipViewer />} />
-          <Route path="/consultant/expenses" element={<ExpensePage />} />
+          <Route path="/consultant/expenses" element={<MyExpensesPage />} />
           <Route path="/consultant/travel" element={<TravelPage />} />
           <Route path="/consultant/documents" element={<DocumentsPage />} />
           <Route path="/consultant/holiday-calendar" element={<HolidayCalendarPage />} />

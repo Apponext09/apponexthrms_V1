@@ -21,6 +21,9 @@ export interface LiveEmployee {
   location_status: 'ON' | 'OFF';
   connection_status: 'ONLINE' | 'OFFLINE';
   last_ping_at: string | null;
+  speed?: number | null;
+  heading?: number | null;
+  accuracy?: number | null;
   attendance_status: string | null;
   face_attendance_status: string | null;
   check_in_time: string | null;

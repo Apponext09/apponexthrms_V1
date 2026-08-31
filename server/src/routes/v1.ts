@@ -30,6 +30,7 @@ import dashboardRoutes from '../modules/dashboard/dashboard.routes';
 import reportRoutes from '../modules/reports/reports.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
+import policyRoutes from '../modules/policy/policy.routes';
 
 const router = Router();
 
@@ -68,7 +69,7 @@ router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
-router.use('/letters', lettersRouter);
+router.use('/policies', policyRoutes);
 router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
 
 /**

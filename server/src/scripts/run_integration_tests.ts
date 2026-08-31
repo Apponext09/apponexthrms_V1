@@ -133,10 +133,11 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
       noOfPositions: 2,
       jobType: 'full_time',
       experienceLevel: 'mid',
-      employmentType: 'remote',
+      employmentType: 'full_time',
+      currency: 'INR',
       isInternal: false,
       isPublishedExternal: true,
-    });
+    } as any);
     log(`✅ Job Created: ID=${job.id}, Code=${job.job_code}, Title="${job.job_title}"`);
 
     // 3. Create Candidate Profile (Verify Email Deduplication)

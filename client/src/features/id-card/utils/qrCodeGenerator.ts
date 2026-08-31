@@ -1,3 +1,4 @@
+// @ts-ignore
 import QRCode from 'qrcode';
 
 export type QRErrorCorrectionLevel = 'L' | 'M' | 'Q' | 'H';

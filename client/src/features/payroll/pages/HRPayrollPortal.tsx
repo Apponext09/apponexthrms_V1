@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Calculator, Receipt, UserX, BarChart2, Download, CheckCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { Calculator, UserX, BarChart2, Download, Clock, RefreshCw } from 'lucide-react';
 import { Payroll10StepFlow } from '../components/Payroll10StepFlow';
 import { FullFinalSettlement } from './FullFinalSettlement';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 
-type TabKey = 'processing' | 'reimbursements' | 'settlements' | 'reports';
+type TabKey = 'processing' | 'settlements' | 'reports';
 
 const TABS = [
   { key: 'processing' as TabKey,     label: 'Run Payroll',       icon: Calculator },
-  { key: 'reimbursements' as TabKey, label: 'Reimbursements',    icon: Receipt },
   { key: 'settlements' as TabKey,    label: 'Exit Settlements',  icon: UserX },
   { key: 'reports' as TabKey,        label: 'Reports',           icon: BarChart2 },
 ];
@@ -22,13 +21,6 @@ const REPORTS = [
   { key: 'tds',      label: 'TDS / Form 24Q Summary',       sub: 'Quarterly income tax deduction data',  btn: 'Download CSV' },
 ];
 
-const statusBadge = (s: string) => {
-  const st = s?.toLowerCase();
-  if (st === 'approved') return { label: 'Approved', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' };
-  if (st === 'rejected') return { label: 'Rejected', cls: 'text-rose-700 bg-rose-50 border-rose-200' };
-  return { label: 'Pending', cls: 'text-amber-700 bg-amber-50 border-amber-200' };
-};
-
 export const HRPayrollPortal: React.FC = () => {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabKey>('processing');
@@ -36,30 +28,9 @@ export const HRPayrollPortal: React.FC = () => {
   // Auto-switch tab based on URL
   useEffect(() => {
     const p = location.pathname.toLowerCase();
-    if (p.includes('reimbursements') || p.includes('expense') || p.includes('travel')) setActiveTab('reimbursements');
+    if (p.includes('settlement')) setActiveTab('settlements');
+    if (p.includes('report')) setActiveTab('reports');
   }, [location.pathname]);
-
-  // ── Reimbursements ────────────────────────────────────────────────────────────
-  const [claims, setClaims] = useState<any[]>([]);
-  const [claimsLoading, setClaimsLoading] = useState(false);
-
-  useEffect(() => {
-    setClaimsLoading(true);
-    apiClient.get('/payroll/reimbursements').then((res: any) => {
-      const list = res?.data?.data || res?.data || [];
-      setClaims(Array.isArray(list) ? list : []);
-    }).catch(() => setClaims([])).finally(() => setClaimsLoading(false));
-  }, []);
-
-  const handleAction = (id: number | string, action: 'approve' | 'reject') => {
-    const method = action === 'approve' ? 'put' : 'put';
-    const endpoint = action === 'approve'
-      ? `/payroll/reimbursements/${id}/approve`
-      : `/payroll/reimbursements/${id}/reject`;
-    apiClient[method](endpoint).catch(() => {});
-    setClaims(prev => prev.map(c => c.id === id ? { ...c, status: action === 'approve' ? 'approved' : 'rejected' } : c));
-    showToast.success(action === 'approve' ? 'Approved ✅' : 'Rejected', `Claim #${id} updated.`);
-  };
 
   // ── Reports ───────────────────────────────────────────────────────────────────
   const [latestRunId, setLatestRunId] = useState<number | null>(null);
@@ -138,7 +109,7 @@ export const HRPayrollPortal: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Payroll</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Manage monthly payroll processing, reimbursements and reports</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Manage monthly payroll processing and reports</p>
         </div>
       </div>
 
@@ -162,67 +133,6 @@ export const HRPayrollPortal: React.FC = () => {
 
       {/* ── Run Payroll ── */}
       {activeTab === 'processing' && <Payroll10StepFlow />}
-
-      {/* ── Reimbursements ── */}
-      {activeTab === 'reimbursements' && (
-        <div className="border border-border rounded-xl bg-card overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-muted/30">
-            <h2 className="text-sm font-bold text-foreground">Employee Reimbursement Claims</h2>
-            <p className="text-xs text-muted-foreground">Approve or reject employee expense and travel claims</p>
-          </div>
-          {claimsLoading ? (
-            <div className="flex items-center justify-center h-32 text-xs text-muted-foreground gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin" /> Loading claims...
-            </div>
-          ) : claims.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
-              No reimbursement claims found.
-            </div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead className="bg-muted/30 border-b border-border">
-                <tr>
-                  {['Employee', 'Type', 'Amount', 'Date', 'Status', 'Action'].map(h => (
-                    <th key={h} className="px-4 py-2.5 text-left font-bold text-muted-foreground uppercase text-[10px] tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {claims.map((c: any) => {
-                  const sb = statusBadge(c.status);
-                  return (
-                    <tr key={c.id} className="hover:bg-muted/20">
-                      <td className="px-4 py-3 font-medium text-foreground">
-                        {c.empName || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `EMP-${c.employee_id}`}
-                      </td>
-                      <td className="px-4 py-3 text-foreground">{c.claim_type || c.type || '—'}</td>
-                      <td className="px-4 py-3 font-bold text-foreground">₹{Number(c.amount || 0).toLocaleString('en-IN')}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{c.claim_date || c.date || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${sb.cls}`}>{sb.label}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {(c.status === 'pending' || !c.status) && (
-                          <div className="flex gap-2">
-                            <button onClick={() => handleAction(c.id, 'approve')} className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 font-semibold text-[11px]">
-                              <CheckCircle className="w-3.5 h-3.5" /> Approve
-                            </button>
-                            <button onClick={() => handleAction(c.id, 'reject')} className="flex items-center gap-1 text-rose-600 hover:text-rose-700 font-semibold text-[11px]">
-                              <XCircle className="w-3.5 h-3.5" /> Reject
-                            </button>
-                          </div>
-                        )}
-                        {c.status === 'approved' && <span className="text-emerald-600 text-[11px] font-semibold">Approved</span>}
-                        {c.status === 'rejected' && <span className="text-rose-600 text-[11px] font-semibold">Rejected</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
 
       {/* ── Exit Settlements ── */}
       {activeTab === 'settlements' && <FullFinalSettlement />}

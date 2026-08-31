@@ -67,204 +67,217 @@ class AppErrorBoundary extends Component<
   }
 }
 
-function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [securityEnabled, setSecurityEnabled] = useState(false);
+// function ThemeProvider({ children }: { children: React.ReactNode }) {
+//   const [isLoading, setIsLoading] = useState(false);
 
-  // OPTIMIZED: Lazy load security checks after 2 seconds (after login page renders)
-  useEffect(() => {
-    const securityTimer = setTimeout(() => {
-      setSecurityEnabled(true);
-    }, 2000);
+//   // Disable DevTools and Inspection - Multiple methods
+//   useEffect(() => {
+//     // 1. Block right-click context menu
+//     const disableRightClick = (e: MouseEvent) => {
+//       e.preventDefault();
+//       return false;
+//     };
 
-    return () => clearTimeout(securityTimer);
-  }, []);
+//     // 2. Block keyboard shortcuts for DevTools
+//     const disableKeys = (e: KeyboardEvent) => {
+//       // F12 - DevTools
+//       if (e.key === 'F12') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+I - Inspect (Chrome)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+C - Inspect (Firefox)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+J - Console (Chrome)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'J') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+Shift+K - Console (Firefox)
+//       if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+//         e.preventDefault();
+//         return false;
+//       }
+//       // Ctrl+I - Inspect (some browsers)
+//       if (e.ctrlKey && e.key === 'I') {
+//         e.preventDefault();
+//         return false;
+//       }
+//     };
 
-  // OPTIMIZED: Only setup security when needed (after login page loads)
-  useEffect(() => {
-    if (!securityEnabled) return;
+//     // 3. Block copy/paste
+//     const disableCopyPaste = (e: ClipboardEvent) => {
+//       e.preventDefault();
+//       return false;
+//     };
 
-    const isInputElement = (target: EventTarget | null): boolean => {
-      if (!target || !(target instanceof HTMLElement)) return false;
-      const tag = target.tagName.toLowerCase();
-      return tag === 'input' || tag === 'textarea' || target.isContentEditable || !!target.closest('input, textarea, [contenteditable="true"]');
-    };
+//     // 4. Detect if DevTools is opened (via size check - immediately close)
+//     let isDevToolsOpen = false;
+//     const checkDevToolsSize = () => {
+//       const threshold = 160;
+//       const isOpen = window.outerWidth - window.innerWidth > threshold ||
+//                      window.outerHeight - window.innerHeight > threshold;
 
-    // 1. Block right-click context menu outside form inputs
-    const disableRightClick = (e: MouseEvent) => {
-      if (isInputElement(e.target)) return;
-      e.preventDefault();
-      return false;
-    };
+//       if (isOpen && !isDevToolsOpen) {
+//         isDevToolsOpen = true;
+//         // Immediately redirect to prevent any access
+//         window.location.href = '/login';
+//         return;
+//       }
+//       isDevToolsOpen = isOpen;
+//     };
 
-    // 2. Block keyboard shortcuts for DevTools
-    const disableKeys = (e: KeyboardEvent) => {
-      if (import.meta.env.DEV) return;
-      if (e.key === 'F12') {
-        e.preventDefault();
-        return false;
-      }
-      if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C' || e.key === 'J' || e.key === 'K')) {
-        e.preventDefault();
-        return false;
-      }
-      if (e.ctrlKey && e.key === 'I') {
-        e.preventDefault();
-        return false;
-      }
-    };
+//     // Setup event listeners
+//     document.addEventListener('contextmenu', disableRightClick, { passive: false });
+//     document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
+//     document.addEventListener('copy', disableCopyPaste, { passive: false });
+//     document.addEventListener('cut', disableCopyPaste, { passive: false });
+//     document.addEventListener('paste', disableCopyPaste, { passive: false });
 
-    // 3. Block copy/paste on static text, but allow inside inputs/textareas
-    const disableCopyPaste = (e: ClipboardEvent) => {
-      if (isInputElement(e.target)) {
-        return; // Allow copy/cut/paste in form inputs & textareas
-      }
-      e.preventDefault();
-      return false;
-    };
+//     // Check for DevTools every 100ms (very aggressive)
+//     const devToolsCheckInterval = setInterval(checkDevToolsSize, 100);
 
-    // 4. Check DevTools size only in production
-    let isDevToolsOpen = false;
-    const checkDevToolsSize = () => {
-      if (import.meta.env.DEV) return;
-      const threshold = 160;
-      const isOpen = window.outerWidth - window.innerWidth > threshold ||
-                     window.outerHeight - window.innerHeight > threshold;
+//     // Disable text selection
+//     document.body.style.userSelect = 'none';
+//     document.body.style.webkitUserSelect = 'none';
+//     (document.body as any).style.msUserSelect = 'none';
+//     (document.body as any).style.mozUserSelect = 'none';
 
-      if (isOpen && !isDevToolsOpen) {
-        isDevToolsOpen = true;
-        window.location.href = '/login';
-        return;
-      }
-      isDevToolsOpen = isOpen;
-    };
+//     // Block inspect element via developer tools protocol
+//     try {
+//       (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__ = undefined;
+//       (window as any).__REDUX_DEVTOOLS_EXTENSION__ = undefined;
+//     } catch (e) {
+//       // Ignore errors
+//     }
 
-    // Setup event listeners with passive flags where possible
-    document.addEventListener('contextmenu', disableRightClick, { passive: false });
-    document.addEventListener('keydown', disableKeys, { capture: true, passive: false });
-    document.addEventListener('copy', disableCopyPaste, { passive: false });
-    document.addEventListener('cut', disableCopyPaste, { passive: false });
-    document.addEventListener('paste', disableCopyPaste, { passive: false });
+//     return () => {
+//       document.removeEventListener('contextmenu', disableRightClick);
+//       document.removeEventListener('keydown', disableKeys, true);
+//       document.removeEventListener('copy', disableCopyPaste);
+//       document.removeEventListener('cut', disableCopyPaste);
+//       document.removeEventListener('paste', disableCopyPaste);
+//       clearInterval(devToolsCheckInterval);
+//     };
+//   }, []);
 
-    const devToolsCheckInterval = setInterval(checkDevToolsSize, 2000);
+//   // Initialize theme and current user on mount
+//   useEffect(() => {
+//     useThemeStore.getState(); // Trigger persist middleware initialization
 
-    return () => {
-      document.removeEventListener('contextmenu', disableRightClick);
-      document.removeEventListener('keydown', disableKeys, true);
-      document.removeEventListener('copy', disableCopyPaste);
-      document.removeEventListener('cut', disableCopyPaste);
-      document.removeEventListener('paste', disableCopyPaste);
-      clearInterval(devToolsCheckInterval);
-    };
-  }, [securityEnabled]);
+//     // Show loading screen while fetching user data
+//     const token = localStorage.getItem('accessToken');
+//     if (token) {
+//       setIsLoading(true);
+//       // Fetch user data in background without blocking navigation
+//       useAuthStore.getState().fetchCurrentUser()
+//         .catch((err) => {
+//           console.warn('Failed to fetch user:', err);
+//         })
+//         .finally(() => {
+//           setIsLoading(false);
+//         });
+//     }
 
-  // OPTIMIZED: Initialize theme and current user on mount
-  useEffect(() => {
-    useThemeStore.getState(); // Trigger persist middleware initialization
+//     // Track last user ID and logout time to detect session changes
+//     let lastUserId: number | null = null;
+//     let lastLogoutTime = localStorage.getItem('last-logout-time');
 
-    // Show loading screen while fetching user data
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      setIsLoading(true);
-      useAuthStore.getState().fetchCurrentUser()
-        .catch((err) => {
-          console.warn('Failed to fetch user:', err);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-  }, []);
+//     // Re-validate auth when tab becomes visible (back from other tab)
+//     const handleVisibilityChange = () => {
+//       if (document.visibilityState === 'visible') {
+//         const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
 
-  // OPTIMIZED: Defer session validation listeners until after 3 seconds
-  useEffect(() => {
-    const validationTimer = setTimeout(() => {
-      let lastUserId: number | null = null;
-      let lastLogoutTime = localStorage.getItem('last-logout-time');
+//         // Check if logout happened in another tab
+//         const currentLogoutTime = localStorage.getItem('last-logout-time');
+//         if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+//           // Logout happened elsewhere - logout this session too
+//           logout();
+//           return;
+//         }
 
-      // Re-validate auth when tab becomes visible
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          const { isAuthenticated, user, fetchCurrentUser } = useAuthStore.getState();
+//         // Check if different user logged in
+//         if (user && lastUserId && user.id !== lastUserId) {
+//           // Different user - force redirect
+//           window.location.href = '/login?' + new Date().getTime();
+//           return;
+//         }
 
-          const currentLogoutTime = localStorage.getItem('last-logout-time');
-          if (currentLogoutTime && currentLogoutTime !== lastLogoutTime && !localStorage.getItem('accessToken')) {
-            useAuthStore.getState().logout();
-            return;
-          }
+//         if (lastUserId === null && user) {
+//           lastUserId = user.id;
+//         }
 
-          if (user && lastUserId && user.id !== lastUserId) {
-            window.location.href = '/login?' + new Date().getTime();
-            return;
-          }
+//         if (isAuthenticated && localStorage.getItem('accessToken')) {
+//           // Re-validate token is still valid
+//           fetchCurrentUser().catch(() => {
+//             // Token invalid, logout
+//             logout();
+//           });
+//         }
+//       }
+//     };
 
-          if (lastUserId === null && user) {
-            lastUserId = user.id;
-          }
+//     // Check on window focus
+//     const handleFocus = () => {
+//       const { isAuthenticated, user, fetchCurrentUser, logout } = useAuthStore.getState();
 
-          if (isAuthenticated && localStorage.getItem('accessToken')) {
-            fetchCurrentUser().catch((err) => {
-              console.warn('Session revalidation skipped:', err);
-            });
-          }
-        }
-      };
+//       // Check if logout happened
+//       const currentLogoutTime = localStorage.getItem('last-logout-time');
+//       if (currentLogoutTime && currentLogoutTime !== lastLogoutTime) {
+//         logout();
+//         return;
+//       }
 
-      // Check on window focus
-      const handleFocus = () => {
-        const { isAuthenticated, user, fetchCurrentUser } = useAuthStore.getState();
+//       // Check if different user logged in
+//       if (user && lastUserId && user.id !== lastUserId) {
+//         window.location.href = '/login?' + new Date().getTime();
+//         return;
+//       }
 
-        const currentLogoutTime = localStorage.getItem('last-logout-time');
-        if (currentLogoutTime && currentLogoutTime !== lastLogoutTime && !localStorage.getItem('accessToken')) {
-          useAuthStore.getState().logout();
-          return;
-        }
+//       if (lastUserId === null && user) {
+//         lastUserId = user.id;
+//       }
 
-        if (user && lastUserId && user.id !== lastUserId) {
-          window.location.href = '/login?' + new Date().getTime();
-          return;
-        }
+//       if (isAuthenticated && localStorage.getItem('accessToken')) {
+//         fetchCurrentUser().catch(() => {
+//           logout();
+//         });
+//       }
+//     };
 
-        if (lastUserId === null && user) {
-          lastUserId = user.id;
-        }
+//     // Prevent back button navigation
+//     const handlePopState = (e: PopStateEvent) => {
+//       const { isAuthenticated } = useAuthStore.getState();
+//       if (!isAuthenticated) {
+//         window.history.pushState(null, '', '/login');
+//       }
+//     };
 
-        if (isAuthenticated && localStorage.getItem('accessToken')) {
-          fetchCurrentUser().catch((err) => {
-            console.warn('Session revalidation skipped:', err);
-          });
-        }
-      };
+//     document.addEventListener('visibilitychange', handleVisibilityChange);
+//     window.addEventListener('focus', handleFocus);
+//     window.addEventListener('popstate', handlePopState);
 
-      // Prevent back button navigation
-      const handlePopState = () => {
-        const { isAuthenticated } = useAuthStore.getState();
-        if (!isAuthenticated) {
-          window.history.pushState(null, '', '/login');
-        }
-      };
+//     return () => {
+//       document.removeEventListener('visibilitychange', handleVisibilityChange);
+//       window.removeEventListener('focus', handleFocus);
+//       window.removeEventListener('popstate', handlePopState);
+//     };
+//   }, []);
 
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('focus', handleFocus);
-      window.addEventListener('popstate', handlePopState);
-
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('focus', handleFocus);
-        window.removeEventListener('popstate', handlePopState);
-      };
-    }, 3000);
-
-    return () => clearTimeout(validationTimer);
-  }, []);
-
-  return (
-    <>
-      {isLoading && <LoadingScreen />}
-      {children}
-    </>
-  );
-}
+//   return (
+//     <>
+//       {isLoading && <LoadingScreen />}
+//       {children}
+//     </>
+//   );
+// }
 
 /**
  * BreakOverlayProvider — syncs break state from DB and renders overlay at root.
@@ -287,11 +300,11 @@ export default function App() {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-          <ThemeProvider>
-            <BreakOverlayProvider>
-              <AppRoutes />
-            </BreakOverlayProvider>
-          </ThemeProvider>
+          {/* <ThemeProvider> */}
+          <BreakOverlayProvider>
+            <AppRoutes />
+          </BreakOverlayProvider>
+          {/* </ThemeProvider> */}
         </BrowserRouter>
       </QueryClientProvider>
     </AppErrorBoundary>

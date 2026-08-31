@@ -60,9 +60,9 @@ async function resolveEmployeeId(
   return null;
 }
 
-/** Determine if user is HR or Admin by inspecting JWT claims and DB user_roles */
+/** Determine if user is HR, Admin, or CEO by inspecting JWT claims and DB user_roles */
 async function checkIsHROrAdmin(organizationId: number, userId: number, userClaims: any): Promise<boolean> {
-  const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin'];
+  const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
 
   // Check claims / JWT if present
   const claimsRoles: string[] = Array.isArray(userClaims?.roles) ? userClaims.roles : [];
@@ -123,33 +123,9 @@ export class LivetrackingController {
       const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
       console.log('[LiveTracking] getLiveLocations - userId:', ctx.userId, 'isHROrAdmin:', isHROrAdmin);
 
-      let employees;
-
-      if (isHROrAdmin) {
-        employees = await repo.getLiveLocationsForOrg(ctx);
-        console.log('[LiveTracking] HR/Admin path - fetched', employees.length, 'employees');
-      } else {
-        // Manager / Team Lead — resolve their employee_id from DB
-        const employeeId = await resolveEmployeeId(ctx.organizationId, ctx.userId);
-        console.log('[LiveTracking] Manager path - resolved employeeId:', employeeId);
-
-        if (!employeeId) {
-          // Fallback: return all org employees if employee mapping not found
-          employees = await repo.getLiveLocationsForOrg(ctx);
-          console.log('[LiveTracking] Fallback path - fetched', employees.length, 'employees');
-        } else {
-          // Resolve department
-          const empRow = await getKnex()('employees')
-            .where('id', employeeId)
-            .select('current_department_id')
-            .first()
-            .catch(() => null);
-
-          const departmentId: number | null = empRow?.current_department_id ?? null;
-          employees = await repo.getLiveLocationsForTeam(ctx, employeeId, departmentId);
-          console.log('[LiveTracking] Team path - fetched', employees.length, 'employees');
-        }
-      }
+      // Return organization-wide live locations for full visibility in live tracking dashboard
+      const employees = await repo.getLiveLocationsForOrg(ctx);
+      console.log('[LiveTracking] Fetched', employees.length, 'total employee location snapshots');
 
       res.json({ success: true, data: employees });
     } catch (error: any) {

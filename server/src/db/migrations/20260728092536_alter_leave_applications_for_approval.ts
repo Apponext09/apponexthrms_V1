@@ -15,10 +15,11 @@ export async function up(knex: Knex): Promise<void> {
       table.bigInteger('l2_approved_by').unsigned().nullable();
       table.timestamp('l2_approval_date').nullable();
 
-    table.foreign('pool_leave_type_id').references('leave_types.id');
-    table.foreign('l1_approved_by').references('users.id');
-    table.foreign('l2_approved_by').references('users.id');
-  });
+      table.foreign('pool_leave_type_id').references('leave_types.id');
+      table.foreign('l1_approved_by').references('users.id');
+      table.foreign('l2_approved_by').references('users.id');
+    });
+  }
 
   // 2. Modify status enum to VARCHAR(50)
   await knex.raw(`

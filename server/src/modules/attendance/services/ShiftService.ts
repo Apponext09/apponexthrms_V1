@@ -970,7 +970,7 @@ export class ShiftService {
       return null;
     }
 
-    const shiftId = assignment.shiftId || assignment.shift_id;
+    const shiftId = (assignment as any).shiftId || assignment.shift_id;
     const shift = await this.shiftRepo.getById(ctx, shiftId);
     if (!shift || !shift.roster_pattern) {
       return null;

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from '../features/auth/store/authStore';
-import { usePendingPolicies } from '../features/policy/api/usePolicies';
 import type { Role } from '@/config/roles';
 import { hasAnyRole } from '@/lib/rbac';
+import { PolicyAcceptanceModal } from '../features/auth/components/PolicyAcceptanceModal';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -185,5 +185,10 @@ export function ProtectedRoute({
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <PolicyAcceptanceModal />
+      {children}
+    </>
+  );
 }

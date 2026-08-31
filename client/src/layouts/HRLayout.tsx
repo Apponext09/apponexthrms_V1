@@ -11,7 +11,7 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
   FilePlus, LineChart, ListChecks, UploadCloud, Palette
 } from 'lucide-react';
@@ -96,13 +96,18 @@ const HR_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/expense-claims', icon: Receipt },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/travel-requests', icon: Compass },
+      { name: 'Dashboard', href: '/expenses/dashboard', icon: TrendingUp },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: Receipt },
+      { name: 'Approvals', href: '/expenses/approvals', icon: CheckCircle2 },
+      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: FileCheck },
+      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: CreditCard },
+      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: Compass },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: Navigation },
+      { name: 'Expense Categories', href: '/expenses/categories', icon: Layers },
+      { name: 'Expense Policies', href: '/expenses/policies', icon: ShieldCheck },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: LineChart },
+      { name: 'Settings', href: '/expenses/settings', icon: Sliders },
     ],
   },
   {
@@ -172,7 +177,9 @@ const HR_NAV = [
   {
     label: 'OPERATIONS',
     items: [
-      { name: 'Company Policies', href: '/hr/policies', icon: ShieldCheck },
+      { name: 'Policy Management', href: '/policies/manage', icon: Shield },
+      { name: 'My Policies', href: '/employee/policies', icon: FileText },
+
       { name: 'Workflows', href: '/hr/workflow', icon: GitBranch },
       { name: 'Settings', href: '/hr/settings', icon: Settings },
     ],

@@ -27,6 +27,8 @@ export interface User {
   designation?: string;
   companyId?: number | null;
   companyName?: string | null;
+  policyAccepted?: boolean;
+  policyAcceptedAt?: string | null;
 }
 
 interface AuthState {
@@ -36,6 +38,7 @@ interface AuthState {
   updateUser: (partialUser: Partial<User>) => void;
   login: (email: string, password: string) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  acceptPolicy: () => Promise<void>;
   logout: () => void;
 }
 
@@ -97,6 +100,8 @@ export const useAuthStore = create<AuthState>()(
             designation: userObj.designation || (isDemoKot ? 'Finance Manager' : 'Organization Admin'),
             companyId: compId,
             companyName: compName,
+            policyAccepted: Boolean(userObj.policyAccepted ?? userObj.policy_accepted ?? loginData.policyAccepted ?? false),
+            policyAcceptedAt: userObj.policyAcceptedAt || userObj.policy_accepted_at || loginData.policyAcceptedAt || null,
           };
 
           if (loginData.accessToken) {
@@ -144,12 +149,35 @@ export const useAuthStore = create<AuthState>()(
                   roles: data.roles || data.user.roles || previous?.roles || [],
                   permissions: data.permissions || data.user.permissions || previous?.permissions || [],
                   departmentName: data.user.departmentName || previous?.departmentName || '',
+                  policyAccepted: Boolean(data.user.policyAccepted ?? data.user.policy_accepted ?? previous?.policyAccepted ?? false),
+                  policyAcceptedAt: data.user.policyAcceptedAt || data.user.policy_accepted_at || previous?.policyAcceptedAt || null,
                 } as User,
               };
             });
           }
         } catch (error) {
           console.warn('fetchCurrentUser skipped:', error);
+        }
+      },
+
+      acceptPolicy: async () => {
+        try {
+          const res = await apiClient.post('/auth/accept-policy');
+          if (res.data?.success || res.data?.policyAccepted) {
+            set((state) => {
+              if (!state.user) return state;
+              return {
+                user: {
+                  ...state.user,
+                  policyAccepted: true,
+                  policyAcceptedAt: new Date().toISOString(),
+                },
+              };
+            });
+          }
+        } catch (error) {
+          console.error('acceptPolicy failed:', error);
+          throw error;
         }
       },
 

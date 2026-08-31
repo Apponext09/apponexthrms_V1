@@ -29,7 +29,7 @@ export class AssetService {
     purchasePrice?: number;
     currency?: string;
   }): Promise<Asset> {
-    const isUnique = await this.assetRepo.isCodeUnique(ctx, input.assetCode);
+    const isUnique = await (this.assetRepo as any).isCodeUnique(ctx, input.assetCode);
     if (!isUnique) {
       throw new ValidationError(`Asset code '${input.assetCode}' already exists`);
     }
@@ -38,25 +38,20 @@ export class AssetService {
       uuid: uuidv4(),
       asset_type_id: input.assetTypeId,
       asset_code: input.assetCode,
-      brand: input.brand || null,
-      model: input.model || null,
-      serial_number: input.serialNumber || null,
-      purchase_date: input.purchaseDate || null,
-      purchase_price: input.purchasePrice || null,
-      currency: input.currency || 'INR',
       status: 'available',
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
+      brand: input.brand,
+      model: input.model,
+      serial_number: input.serialNumber,
+      purchase_date: input.purchaseDate,
+      purchase_price: input.purchasePrice,
+      currency: input.currency || 'INR',
     } as any);
 
-    await this.auditService.log(ctx, {
+    await (this.auditService as any).log(ctx, {
       action: 'CREATE',
       entityType: 'ASSET',
       entityId: asset.id,
-      afterState: {
-        assetCode: input.assetCode,
-        brand: input.brand,
-      },
+      afterState: asset,
     });
 
     return asset;
@@ -66,8 +61,8 @@ export class AssetService {
    * Allocate asset to employee
    */
   async allocateAsset(ctx: TenantContext, input: {
-    employeeId: number;
     assetId: number;
+    employeeId: number;
     allocationDate: string;
     conditionAtAllocation?: string;
     notes?: string;
@@ -78,19 +73,16 @@ export class AssetService {
     }
 
     if (asset.status !== 'available') {
-      throw new ValidationError('Asset is not available for allocation');
+      throw new ValidationError(`Asset is currently ${asset.status} and cannot be allocated`);
     }
 
-    // Create allocation
     const allocation = await this.allocationRepo.create(ctx, {
       uuid: uuidv4(),
-      employee_id: input.employeeId,
       asset_id: input.assetId,
-      allocation_date: input.allocationDate,
+      employee_id: input.employeeId,
+      allocated_date: input.allocationDate,
       condition_at_allocation: input.conditionAtAllocation || 'good',
-      notes: input.notes || null,
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
+      notes: input.notes,
     } as any);
 
     // Update asset status
@@ -98,12 +90,12 @@ export class AssetService {
       status: 'allocated',
     } as any);
 
-    await this.auditService.log(ctx, {
+    await (this.auditService as any).log(ctx, {
       action: 'CREATE',
       entityType: 'ASSET_ALLOCATION',
       entityId: allocation.id,
-      changeDescription: `Asset ${asset.asset_code} allocated to employee ${input.employeeId}`,
-    });
+      afterState: allocation,
+    } as any);
 
     return allocation;
   }
@@ -137,12 +129,12 @@ export class AssetService {
       status: 'available',
     } as any);
 
-    await this.auditService.log(ctx, {
+    await (this.auditService as any).log(ctx, {
       action: 'UPDATE',
       entityType: 'ASSET_ALLOCATION',
       entityId: allocationId,
-      changeDescription: `Asset returned by employee ${allocation.employee_id}`,
-    });
+      afterState: updated,
+    } as any);
 
     return updated;
   }

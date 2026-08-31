@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -87,13 +87,11 @@ const MANAGER_NAV = [
   {
     label: 'EXPENSE MANAGEMENT',
     items: [
-      { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
-    ],
-  },
-  {
-    label: 'TRAVEL MANAGEMENT',
-    items: [
-      { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
+      { name: 'Expense Approvals', href: '/manager/expenses/approvals', icon: CheckCircle2 },
+      { name: 'My Expenses', href: '/manager/expenses/my-expenses', icon: FileText },
+      { name: 'Travel Requests', href: '/manager/expenses/travel-requests', icon: Clock },
+      { name: 'Travel Advances', href: '/manager/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/manager/expenses/mileage-claims', icon: Navigation },
     ],
   },
   {
@@ -113,9 +111,10 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'APPROVALS',
+    label: 'APPROVALS & GOVERNANCE',
     items: [
       { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
+      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
     ],
   },
 ];

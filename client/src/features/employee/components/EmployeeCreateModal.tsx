@@ -662,14 +662,57 @@ export function EmployeeCreateModal({
 
                       {/* Mapped Policy Preview */}
                       {(() => {
-                        const targetRole = formData.accessRole || 'employee';
+                        const targetRole = (formData.accessRole || 'employee').toLowerCase().trim();
+                        const expandRoleCodes = (role: string): string[] => {
+                          const norm = role.toLowerCase().trim();
+                          const set = new Set<string>([norm]);
+                          if (['organization_admin', 'org_admin', 'ceo', 'admin'].includes(norm)) {
+                            set.add('organization_admin');
+                            set.add('org_admin');
+                            set.add('ceo');
+                            set.add('admin');
+                          }
+                          if (['hr_manager', 'hr', 'hr_admin', 'support'].includes(norm)) {
+                            set.add('hr_manager');
+                            set.add('hr');
+                            set.add('hr_admin');
+                            set.add('support');
+                          }
+                          if (['department_head', 'manager', 'dept_head', 'dept_manager'].includes(norm)) {
+                            set.add('department_head');
+                            set.add('manager');
+                            set.add('dept_head');
+                            set.add('dept_manager');
+                          }
+                          if (['team_lead', 'teamlead', 'lead'].includes(norm)) {
+                            set.add('team_lead');
+                            set.add('teamlead');
+                            set.add('lead');
+                          }
+                          set.add('all');
+                          return Array.from(set);
+                        };
+
+                        const expandedTargetRoles = expandRoleCodes(targetRole);
                         const mappedPolicies = allOrgPolicies.filter((p) => {
                           if (!p.isActive) return false;
                           const roleCodes = p.roleMappings?.map((rm) => rm.roleCode.toLowerCase()) || [];
-                          return roleCodes.includes('all') || roleCodes.includes(targetRole.toLowerCase());
+                          return roleCodes.some((r) => expandedTargetRoles.includes(r));
                         });
 
-                        if (mappedPolicies.length === 0) return null;
+                        if (mappedPolicies.length === 0) {
+                          return (
+                            <div className="mt-2.5 p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1">
+                              <div className="flex items-center gap-1.5 font-bold text-muted-foreground">
+                                <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                                <span>No mandatory policies currently assigned for this role.</span>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground">
+                                Role-specific policies can be assigned in Policy & Governance Master settings.
+                              </p>
+                            </div>
+                          );
+                        }
 
                         return (
                           <div className="mt-2.5 p-3 rounded-xl bg-primary/5 border border-primary/20 text-xs space-y-1.5">
