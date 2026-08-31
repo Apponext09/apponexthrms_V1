@@ -169,6 +169,23 @@ export const TravelRequestsPage: React.FC = () => {
                   const formattedStartDate = sDate ? new Date(sDate).toLocaleDateString() : 'N/A';
                   const formattedEndDate = eDate ? new Date(eDate).toLocaleDateString() : 'N/A';
 
+                  const currentEmpId = Number(user?.employeeId || (user as any)?.employee_id || 0);
+                  const currentUserId = Number(user?.id || 0);
+                  const currentUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
+                  const currentUserEmail = (user?.email || '').toLowerCase();
+
+                  const reqEmpId = Number(tr.employeeId || tr.employee_id || 0);
+                  const reqUserId = Number(tr.userId || tr.user_id || 0);
+                  const reqEmpName = `${fName} ${lName}`.trim().toLowerCase();
+                  const reqEmail = (tr.email || '').toLowerCase();
+
+                  const isOwnRequest =
+                    (currentEmpId > 0 && reqEmpId > 0 && currentEmpId === reqEmpId) ||
+                    (currentUserId > 0 && reqUserId > 0 && currentUserId === reqUserId) ||
+                    (currentUserId > 0 && reqEmpId > 0 && currentUserId === reqEmpId) ||
+                    (!!reqEmail && reqEmail === currentUserEmail) ||
+                    (!!reqEmpName && !!currentUserName && reqEmpName === currentUserName);
+
                   return (
                     <tr key={tr.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">
@@ -192,7 +209,7 @@ export const TravelRequestsPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(tr.status)}</td>
                       <td className="py-3.5 px-4 text-right">
-                        {tr.status === 'pending' && (
+                        {tr.status === 'pending' && !isOwnRequest && (
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => handleStatusUpdate(tr.id, 'approved')}

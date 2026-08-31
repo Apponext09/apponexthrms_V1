@@ -1200,6 +1200,21 @@ export class ExpenseService {
   async updateTravelRequestStatus(ctx: TenantContext, id: number, status: string, notes?: string) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
+
+    const travelReq = await db('travel_requests')
+      .where('id', id)
+      .where('organization_id', ctx.organizationId)
+      .first();
+
+    if (!travelReq) {
+      throw new Error('Travel request not found');
+    }
+
+    const emp = await this.getEmployeeForCtx(ctx);
+    if (emp && travelReq.employee_id && Number(travelReq.employee_id) === Number(emp.id)) {
+      throw new Error('Employees cannot approve or reject their own travel requests.');
+    }
+
     await db('travel_requests')
       .where('id', id)
       .where('organization_id', ctx.organizationId)
