@@ -7,6 +7,7 @@ export class ExpenseDbService {
     try {
       const db = getKnex();
       await this.ensureSubmitterColumns(db);
+      await this.ensureMileageDesignationRatesTable(db);
 
       const hasCategoriesTable = await db.schema.hasTable('expense_categories');
       if (hasCategoriesTable) {
@@ -303,6 +304,22 @@ export class ExpenseDbService {
     } catch (error) {
       console.error('Failed to initialize Expense DB schema and seed data:', error);
     }
+  }
+
+  private static async ensureMileageDesignationRatesTable(db: any): Promise<void> {
+    const hasTable = await db.schema.hasTable('expense_mileage_designation_rates').catch(() => false);
+    if (hasTable) return;
+    await db.schema.createTable('expense_mileage_designation_rates', (table: any) => {
+      table.bigIncrements('id').primary();
+      table.bigInteger('organization_id').unsigned().notNullable();
+      table.bigInteger('designation_id').unsigned().notNullable();
+      table.decimal('rate_car', 10, 2).notNullable().defaultTo(12.0);
+      table.decimal('rate_bike', 10, 2).notNullable().defaultTo(6.0);
+      table.timestamps(true, true);
+      table.unique(['organization_id', 'designation_id']);
+      table.index(['organization_id']);
+      table.index(['designation_id']);
+    });
   }
 
   private static async ensureSubmitterColumns(db: any): Promise<void> {

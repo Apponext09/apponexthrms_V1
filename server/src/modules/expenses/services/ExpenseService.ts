@@ -1321,22 +1321,120 @@ export class ExpenseService {
     return (rows || []).map((r: any) => this.mapMileageClaim(r));
   }
 
+  private numOr(v: any, fallback: number) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  private async listMileageRatesByDesignation(db: any, organizationId: number, fallbackCar: number, fallbackBike: number) {
+    const designations = await db('designations')
+      .where('organization_id', organizationId)
+      .whereNull('deleted_at')
+      .select('id', 'name', 'code', 'status')
+      .orderBy('name', 'asc')
+      .catch(() => []);
+
+    const rateRows = await db('expense_mileage_designation_rates')
+      .where('organization_id', organizationId)
+      .catch(() => []);
+
+    const rateMap = new Map<number, any>();
+    for (const row of rateRows || []) {
+      const id = Number(row.designationId ?? row.designation_id);
+      if (id) rateMap.set(id, row);
+    }
+
+    const grouped = new Map<string, {
+      designationId: number;
+      designationIds: number[];
+      designationName: string;
+      rateCar: number;
+      rateBike: number;
+      hasCustomRate: boolean;
+    }>();
+
+    for (const d of designations || []) {
+      if (String(d.status || 'active').toLowerCase() === 'inactive') continue;
+      const name = String(d.name || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const id = Number(d.id);
+      const saved = rateMap.get(id);
+      const rateCar = saved ? this.numOr(saved.rateCar ?? saved.rate_car, fallbackCar) : fallbackCar;
+      const rateBike = saved ? this.numOr(saved.rateBike ?? saved.rate_bike, fallbackBike) : fallbackBike;
+      const hasCustomRate = Boolean(saved);
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, {
+          designationId: id,
+          designationIds: [id],
+          designationName: name,
+          rateCar,
+          rateBike,
+          hasCustomRate,
+        });
+        continue;
+      }
+      existing.designationIds.push(id);
+      if (hasCustomRate && !existing.hasCustomRate) {
+        existing.rateCar = rateCar;
+        existing.rateBike = rateBike;
+        existing.hasCustomRate = true;
+      }
+    }
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.designationName.localeCompare(b.designationName, undefined, { sensitivity: 'base' })
+    );
+  }
+
+  private async resolveEmployeeMileageRates(
+    ctx: TenantContext,
+    db: any,
+    fallbackCar: number,
+    fallbackBike: number,
+    emp?: any
+  ) {
+    const employee = emp ?? (await this.getEmployeeForCtx(ctx));
+    const designationId = Number(employee?.currentDesignationId ?? employee?.current_designation_id ?? 0) || null;
+    if (!designationId) {
+      return {
+        rateCar: fallbackCar,
+        rateBike: fallbackBike,
+        designationId: null,
+        designationName: null,
+      };
+    }
+
+    const saved = await db('expense_mileage_designation_rates')
+      .where('organization_id', ctx.organizationId)
+      .where('designation_id', designationId)
+      .first()
+      .catch(() => null);
+
+    const desig = await db('designations').where('id', designationId).select('id', 'name').first().catch(() => null);
+
+    return {
+      rateCar: saved ? this.numOr(saved.rateCar ?? saved.rate_car, fallbackCar) : fallbackCar,
+      rateBike: saved ? this.numOr(saved.rateBike ?? saved.rate_bike, fallbackBike) : fallbackBike,
+      designationId,
+      designationName: desig?.name || null,
+    };
+  }
+
   async createMileageClaim(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     const emp = await this.getEmployeeForCtx(ctx);
 
     const settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
-    const numOr = (v: any, fallback: number) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : fallback;
-    };
-    const carRate = settings ? numOr(settings.mileageRateCar ?? settings.mileage_rate_car, 12) : 12;
-    const bikeRate = settings ? numOr(settings.mileageRateBike ?? settings.mileage_rate_bike, 6) : 6;
+    const fallbackCar = settings ? this.numOr(settings.mileageRateCar ?? settings.mileage_rate_car, 12) : 12;
+    const fallbackBike = settings ? this.numOr(settings.mileageRateBike ?? settings.mileage_rate_bike, 6) : 6;
+    const resolved = await this.resolveEmployeeMileageRates(ctx, db, fallbackCar, fallbackBike, emp);
 
     const vehicle = (data.vehicleType || 'car').toLowerCase();
-    const rate = numOr(data.ratePerKm, vehicle === 'bike' ? bikeRate : carRate);
-    const distance = numOr(data.distanceKm, 0);
+    const rate = vehicle === 'bike' ? resolved.rateBike : resolved.rateCar;
+    const distance = this.numOr(data.distanceKm, 0);
     const calculatedAmount = Number((distance * rate).toFixed(2));
 
     const [id] = await db('mileage_claims').insert({
@@ -1532,7 +1630,19 @@ export class ExpenseService {
       await db('expense_settings').insert(initData);
       settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
     }
-    return this.mapExpenseSettings(settings);
+    const mapped = this.mapExpenseSettings(settings);
+    const fallbackCar = this.numOr(mapped.mileageRateCar, 12);
+    const fallbackBike = this.numOr(mapped.mileageRateBike, 6);
+    const mileageRatesByDesignation = await this.listMileageRatesByDesignation(db, ctx.organizationId, fallbackCar, fallbackBike);
+    const myMileage = await this.resolveEmployeeMileageRates(ctx, db, fallbackCar, fallbackBike);
+    return {
+      ...mapped,
+      mileageRatesByDesignation,
+      myMileageRateCar: myMileage.rateCar,
+      myMileageRateBike: myMileage.rateBike,
+      myDesignationId: myMileage.designationId,
+      myDesignationName: myMileage.designationName,
+    };
   }
 
   async updateSettings(ctx: TenantContext, data: any) {
@@ -1585,6 +1695,39 @@ export class ExpenseService {
               updated_at: new Date(),
             });
         }
+      }
+    }
+
+    if (Array.isArray(data.mileageRatesByDesignation)) {
+      const rows: Array<{ designationId: number; rateCar: number; rateBike: number }> = [];
+      const seen = new Set<number>();
+      for (const row of data.mileageRatesByDesignation) {
+        const rateCar = Math.max(0, this.numOr(row.rateCar ?? row.rate_car, data.mileageRateCar ?? 12));
+        const rateBike = Math.max(0, this.numOr(row.rateBike ?? row.rate_bike, data.mileageRateBike ?? 6));
+        const ids = [
+          ...(Array.isArray(row.designationIds) ? row.designationIds : []),
+          row.designationId ?? row.designation_id,
+        ]
+          .map((id: any) => Number(id))
+          .filter((id: number) => id && !seen.has(id));
+        for (const designationId of ids) {
+          seen.add(designationId);
+          rows.push({ designationId, rateCar, rateBike });
+        }
+      }
+
+      await db('expense_mileage_designation_rates').where('organization_id', ctx.organizationId).del();
+      if (rows.length > 0) {
+        await db('expense_mileage_designation_rates').insert(
+          rows.map((row) => ({
+            organization_id: ctx.organizationId,
+            designation_id: row.designationId,
+            rate_car: row.rateCar,
+            rate_bike: row.rateBike,
+            created_at: new Date(),
+            updated_at: new Date(),
+          }))
+        );
       }
     }
 

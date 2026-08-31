@@ -164,12 +164,27 @@ export interface MileageClaim {
   createdAt: string;
 }
 
+export interface MileageDesignationRate {
+  designationId: number;
+  designationIds?: number[];
+  designationName: string;
+  designationCode?: string;
+  rateCar: number;
+  rateBike: number;
+  hasCustomRate?: boolean;
+}
+
 export interface ExpenseSettings {
   id: number;
   autoApprovalThreshold: number;
   categoryThresholds?: Array<{ id: number; name?: string; autoApprovalThreshold: number }>;
   mileageRateCar: number;
   mileageRateBike: number;
+  mileageRatesByDesignation?: MileageDesignationRate[];
+  myMileageRateCar?: number;
+  myMileageRateBike?: number;
+  myDesignationId?: number | null;
+  myDesignationName?: string | null;
   requireManagerApproval: boolean;
   requireFinanceApproval: boolean;
   multiLevelApproval: boolean;
