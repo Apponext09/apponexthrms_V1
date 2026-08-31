@@ -230,18 +230,18 @@ export const expenseApi = {
 
   // Claims
   getClaims: (params?: Record<string, any>) => apiClient.get('/expenses/claims', { params }).then((res) => res.data.data),
-  getClaimById: (id: number) => apiClient.get(`/expenses/claims/${id}`).then((res) => res.data.data),
+  getClaimById: (id: number | string) => apiClient.get(`/expenses/claims/${id}`).then((res) => res.data.data),
   createClaim: (data: any) => apiClient.post('/expenses/claims', data).then((res) => res.data.data),
-  updateClaim: (id: number, data: any) => apiClient.put(`/expenses/claims/${id}`, data).then((res) => res.data.data),
+  updateClaim: (id: number | string, data: any) => apiClient.put(`/expenses/claims/${id}`, data).then((res) => res.data.data),
 
   // Actions
-  managerApproveClaim: (id: number, comments?: string) => apiClient.post(`/expenses/claims/${id}/manager-approve`, { comments }).then((res) => res.data.data),
-  bulkApproveClaims: (ids: number[], comments?: string) =>
+  managerApproveClaim: (id: number | string, comments?: string) => apiClient.post(`/expenses/claims/${id}/manager-approve`, { comments }).then((res) => res.data.data),
+  bulkApproveClaims: (ids: (number | string)[], comments?: string) =>
     apiClient.post('/expenses/claims/bulk-approve', { ids, comments }).then((res) => res.data.data),
-  financeVerifyClaim: (id: number, data: { items?: any[]; comments?: string }) => apiClient.post(`/expenses/claims/${id}/finance-verify`, data).then((res) => res.data.data),
-  rejectClaim: (id: number, reason: string) => apiClient.post(`/expenses/claims/${id}/reject`, { reason }).then((res) => res.data.data),
-  returnClaim: (id: number, comments: string) => apiClient.post(`/expenses/claims/${id}/return`, { comments }).then((res) => res.data.data),
-  processReimbursement: (id: number, data: { paymentDate: string; paidAmount: number; paymentMethod: string; paymentReference: string }) =>
+  financeVerifyClaim: (id: number | string, data: { items?: any[]; comments?: string }) => apiClient.post(`/expenses/claims/${id}/finance-verify`, data).then((res) => res.data.data),
+  rejectClaim: (id: number | string, reason: string) => apiClient.post(`/expenses/claims/${id}/reject`, { reason }).then((res) => res.data.data),
+  returnClaim: (id: number | string, comments: string) => apiClient.post(`/expenses/claims/${id}/return`, { comments }).then((res) => res.data.data),
+  processReimbursement: (id: number | string, data: { paymentDate: string; paidAmount: number; paymentMethod: string; paymentReference: string }) =>
     apiClient.post(`/expenses/claims/${id}/reimburse`, data).then((res) => res.data.data),
 
   // Travel
