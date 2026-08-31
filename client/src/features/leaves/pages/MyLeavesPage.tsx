@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '@/lib/api';
+import { useAuthStore } from '@/features/auth/authStore';
 import {
   Calendar, Plus, RefreshCw, FileText, CheckCircle2, Clock, XCircle,
   AlertCircle, Ban, Palmtree, Trophy, Flame, Briefcase, Info, Loader2
@@ -67,14 +68,31 @@ interface LeaveApplicationItem {
 }
 
 export function MyLeavesPage() {
+  const { user } = useAuthStore();
   const [balances, setBalances] = useState<LeaveBalanceItem[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [employeeGender, setEmployeeGender] = useState<string>('');
+  const [employeeProfile, setEmployeeProfile] = useState<any>(null);
   const [applications, setApplications] = useState<LeaveApplicationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [optionalHolidays, setOptionalHolidays] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'history' | 'optional-holidays'>('history');
+
+  const employeeContext = useMemo(() => ({
+    ...(user || {}),
+    ...(employeeProfile || {}),
+    gender: (employeeProfile?.gender || (user as any)?.gender || (user as any)?.personal_info?.gender || employeeGender || '').toString().trim().toLowerCase(),
+    marital_status: ((employeeProfile as any)?.marital_status || (employeeProfile as any)?.maritalStatus || (user as any)?.marital_status || (user as any)?.maritalStatus || '').toString().trim().toLowerCase(),
+    current_department_id: employeeProfile?.current_department_id || (user as any)?.department_id || (user as any)?.departmentId,
+    current_location_id: employeeProfile?.current_location_id || (user as any)?.location_id || (user as any)?.locationId,
+    current_grade_id: employeeProfile?.current_grade_id || (user as any)?.grade_id,
+    current_designation_id: employeeProfile?.current_designation_id || (user as any)?.designation_id,
+    employment_type: (employeeProfile?.employment_type || (user as any)?.employment_type || '').toString(),
+    status: (employeeProfile?.status || (user as any)?.status || '').toString(),
+    date_of_joining: employeeProfile?.date_of_joining || (user as any)?.date_of_joining,
+    date_of_confirmation: employeeProfile?.date_of_confirmation || (user as any)?.date_of_confirmation,
+  }), [user, employeeProfile, employeeGender]);
 
   // Apply Leave Modal State
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
@@ -103,6 +121,7 @@ export function MyLeavesPage() {
         setBalances(balRes.data.data);
       }
       if (balRes.data?.employee) {
+        setEmployeeProfile(balRes.data.employee);
         setEmployeeGender(balRes.data.employee.gender || '');
       }
       if (typesRes.data?.data) {
@@ -321,11 +340,9 @@ export function MyLeavesPage() {
           ) : (
             balances
               .filter((bal: any) => {
-                const leaveGender = (bal.gender_applicable || bal.genderApplicable || 'all').toLowerCase();
-                if (leaveGender === 'all') return true;
-                const empGender = (employeeGender || '').toLowerCase();
-                if (!empGender) return true;
-                return empGender === leaveGender;
+                const matchingType = leaveTypes.find(t => String(t.id) === String(bal.leave_type_id || bal.leaveTypeId || bal.id));
+                const mergedItem = matchingType ? { ...matchingType, ...bal } : bal;
+                return isLeaveTypeApplicableForGender(mergedItem, employeeContext);
               })
               .map((bal: any) => {
                 const theme = getCardTheme(bal.leave_code);
@@ -597,7 +614,7 @@ export function MyLeavesPage() {
               >
                 <option value="">Select Leave Category...</option>
                 {leaveTypes
-                  .filter((t) => isLeaveTypeApplicableForGender(t, employeeGender))
+                  .filter((t) => isLeaveTypeApplicableForGender(t, employeeContext))
                   .map((t) => {
                     const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
                     const avail = balanceItem ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0) : 0;
