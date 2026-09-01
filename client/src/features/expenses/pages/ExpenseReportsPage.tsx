@@ -48,50 +48,103 @@ export const ExpenseReportsPage: React.FC = () => {
     fetchReports();
   }, [startDate, endDate, selectedCategory, selectedStatus]);
 
-  const filteredReports = reports.filter((r) => {
+  const filteredReports = reports.filter((rawR: any) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      const cNum = (rawR.claimNumber || rawR.claim_number || '').toLowerCase();
+      const title = (rawR.title || '').toLowerCase();
+      const fName = (rawR.firstName || rawR.first_name || '').toLowerCase();
+      const lName = (rawR.lastName || rawR.last_name || '').toLowerCase();
+      const dept = (rawR.departmentName || rawR.department_name || '').toLowerCase();
+      const cat = (rawR.categoryName || rawR.category_name || '').toLowerCase();
       return (
-        r.title.toLowerCase().includes(q) ||
-        r.claimNumber.toLowerCase().includes(q) ||
-        (r.firstName && r.firstName.toLowerCase().includes(q)) ||
-        (r.lastName && r.lastName.toLowerCase().includes(q))
+        cNum.includes(q) ||
+        title.includes(q) ||
+        fName.includes(q) ||
+        lName.includes(q) ||
+        dept.includes(q) ||
+        cat.includes(q)
       );
     }
     return true;
   });
 
-  const totalClaimedSum = filteredReports.reduce((acc, r) => acc + Number(r.totalClaimedAmount || 0), 0);
-  const totalApprovedSum = filteredReports.reduce((acc, r) => acc + Number(r.totalApprovedAmount || 0), 0);
-  const totalPaidSum = filteredReports.reduce((acc, r) => acc + Number(r.paidAmount || 0), 0);
+  const totalClaimedSum = filteredReports.reduce((acc, r: any) => acc + Number(r.totalClaimedAmount ?? r.total_claimed_amount ?? 0), 0);
+  const totalApprovedSum = filteredReports.reduce((acc, r: any) => acc + Number(r.totalApprovedAmount ?? r.total_approved_amount ?? 0), 0);
+  const totalPaidSum = filteredReports.reduce((acc, r: any) => acc + Number(r.paidAmount ?? r.paid_amount ?? 0), 0);
 
   const exportToCSV = () => {
     if (filteredReports.length === 0) {
       alert('No report data to export.');
       return;
     }
-    const headers = ['Claim #', 'Employee', 'Department', 'Title', 'Category', 'Date', 'Claimed Amount', 'Approved Amount', 'Status', 'Payment Reference'];
-    const rows = filteredReports.map((r) => [
-      r.claimNumber,
-      `"${r.firstName || ''} ${r.lastName || ''}"`,
-      `"${r.departmentName || ''}"`,
-      `"${r.title}"`,
-      `"${r.categoryName || ''}"`,
-      r.claimDate ? r.claimDate.slice(0, 10) : '',
-      r.totalClaimedAmount,
-      r.totalApprovedAmount || 0,
-      r.status,
-      r.paymentReference || ''
-    ]);
+    const headers = [
+      'Claim #',
+      'Employee Code',
+      'Employee Name',
+      'Department',
+      'Title',
+      'Category',
+      'Claim Date',
+      'Claimed Amount (INR)',
+      'Approved Amount (INR)',
+      'Paid Amount (INR)',
+      'Status',
+      'Payment Reference'
+    ];
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const escapeCsvField = (field: any) => {
+      if (field === null || field === undefined) return '""';
+      const str = String(field).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows = filteredReports.map((rawR: any) => {
+      const r = rawR;
+      const cNum = r.claimNumber || r.claim_number || `EXP-${r.id}`;
+      const empCode = r.employeeCode || r.employee_code || '';
+      const fName = r.firstName || r.first_name || '';
+      const lName = r.lastName || r.last_name || '';
+      const empName = `${fName} ${lName}`.trim() || 'Employee';
+      const dept = r.departmentName || r.department_name || '';
+      const title = r.title || '';
+      const cat = r.categoryName || r.category_name || 'General';
+      const rawDate = r.claimDate || r.claim_date;
+      const cDate = rawDate ? new Date(rawDate).toLocaleDateString() : '';
+      const claimed = Number(r.totalClaimedAmount ?? r.total_claimed_amount ?? 0);
+      const approved = Number(r.totalApprovedAmount ?? r.total_approved_amount ?? 0);
+      const paid = Number(r.paidAmount ?? r.paid_amount ?? 0);
+      const status = r.status || '';
+      const payRef = r.paymentReference || r.payment_reference || '';
+
+      return [
+        escapeCsvField(cNum),
+        escapeCsvField(empCode),
+        escapeCsvField(empName),
+        escapeCsvField(dept),
+        escapeCsvField(title),
+        escapeCsvField(cat),
+        escapeCsvField(cDate),
+        escapeCsvField(claimed),
+        escapeCsvField(approved),
+        escapeCsvField(paid),
+        escapeCsvField(status),
+        escapeCsvField(payRef)
+      ];
+    });
+
+    const csvLines = [headers.map((h) => `"${h}"`).join(','), ...rows.map((row) => row.join(','))];
+    const csvString = '\uFEFF' + csvLines.join('\r\n');
+
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.href = url;
     link.setAttribute('download', `Expense_Report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -236,31 +289,44 @@ export const ExpenseReportsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredReports.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">
-                      {r.claimNumber}
-                    </td>
-                    <td className="py-3.5 px-4 font-medium text-slate-800 dark:text-slate-200">
-                      {r.firstName} {r.lastName}
-                      <span className="block text-[11px] text-slate-400">{r.departmentName}</span>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-800 dark:text-slate-200 font-semibold">{r.title}</td>
-                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{r.categoryName || 'General'}</td>
-                    <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
-                      {new Date(r.claimDate).toLocaleDateString()}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                      ₹{Number(r.totalClaimedAmount).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">
-                      ₹{Number(r.totalApprovedAmount || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-3.5 px-4 uppercase font-semibold text-slate-700 dark:text-slate-300">
-                      {r.status}
-                    </td>
-                  </tr>
-                ))}
+                {filteredReports.map((rawR: any) => {
+                  const r = rawR;
+                  const cNum = r.claimNumber || r.claim_number || `EXP-${r.id}`;
+                  const fName = r.firstName || r.first_name || '';
+                  const lName = r.lastName || r.last_name || '';
+                  const dept = r.departmentName || r.department_name || '';
+                  const title = r.title || '';
+                  const cat = r.categoryName || r.category_name || 'General';
+                  const cDate = r.claimDate || r.claim_date;
+                  const claimed = Number(r.totalClaimedAmount ?? r.total_claimed_amount ?? 0);
+                  const approved = Number(r.totalApprovedAmount ?? r.total_approved_amount ?? 0);
+                  const status = r.status || '';
+                  const formattedDate = cDate ? new Date(cDate).toLocaleDateString() : 'N/A';
+
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">
+                        {cNum}
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-slate-800 dark:text-slate-200">
+                        {fName || lName ? `${fName} ${lName}`.trim() : 'Employee'}
+                        {dept && <span className="block text-[11px] text-slate-400">{dept}</span>}
+                      </td>
+                      <td className="py-3.5 px-4 text-slate-800 dark:text-slate-200 font-semibold">{title}</td>
+                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{cat}</td>
+                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{formattedDate}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                        ₹{claimed.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-emerald-600 dark:text-emerald-400">
+                        ₹{approved.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3.5 px-4 uppercase font-semibold text-slate-700 dark:text-slate-300">
+                        {status}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -72,8 +72,14 @@ export class ExpenseController {
     res.json({ success: true, data: claims });
   }
 
+  private parseClaimId(val: any): number | string {
+    if (typeof val === 'string' && val.startsWith('tr_')) return val;
+    const num = Number(val);
+    return isNaN(num) ? String(val) : num;
+  }
+
   async getClaimById(req: Request, res: Response) {
-    const claim = await this.expenseService.getClaimById(req.ctx!, Number(req.params.id));
+    const claim = await this.expenseService.getClaimById(req.ctx!, this.parseClaimId(req.params.id));
     if (!claim) {
       return res.status(404).json({ success: false, message: 'Expense claim not found' });
     }
@@ -92,7 +98,7 @@ export class ExpenseController {
 
   async updateClaim(req: Request, res: Response) {
     try {
-      const claim = await this.expenseService.updateClaim(req.ctx!, Number(req.params.id), req.body);
+      const claim = await this.expenseService.updateClaim(req.ctx!, this.parseClaimId(req.params.id) as any, req.body);
       res.json({ success: true, data: claim });
     } catch (err: any) {
       console.error('[ExpenseController] updateClaim error:', err);
@@ -103,7 +109,7 @@ export class ExpenseController {
   // --- APPROVAL ACTIONS ---
   async approveClaimByManager(req: Request, res: Response) {
     try {
-      const claimId = Number(req.params.id);
+      const claimId = this.parseClaimId(req.params.id);
       const claim = await this.expenseService.approveClaimByManager(req.ctx!, claimId, req.body?.comments || req.body?.notes);
       res.json({ success: true, data: claim });
     } catch (err: any) {
@@ -113,7 +119,7 @@ export class ExpenseController {
 
   async bulkApproveClaims(req: Request, res: Response) {
     try {
-      const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Boolean) : [];
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.map((x: any) => this.parseClaimId(x)) : [];
       if (ids.length === 0) {
         return res.status(400).json({ success: false, message: 'Select at least one claim to approve' });
       }
@@ -130,8 +136,8 @@ export class ExpenseController {
 
   async verifyAndApproveByFinance(req: Request, res: Response) {
     try {
-      const claimId = Number(req.params.id);
-      const claim = await this.expenseService.verifyAndApproveByFinance(req.ctx!, claimId, req.body || {});
+      const claimId = this.parseClaimId(req.params.id);
+      const claim = await this.expenseService.verifyAndApproveByFinance(req.ctx!, claimId as any, req.body || {});
       res.json({ success: true, data: claim });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message || 'Failed to verify claim' });
@@ -140,7 +146,7 @@ export class ExpenseController {
 
   async rejectClaim(req: Request, res: Response) {
     try {
-      const claimId = Number(req.params.id);
+      const claimId = this.parseClaimId(req.params.id);
       const claim = await this.expenseService.rejectClaim(req.ctx!, claimId, req.body?.reason || req.body?.remarks || 'Rejected');
       res.json({ success: true, data: claim });
     } catch (err: any) {
@@ -150,7 +156,7 @@ export class ExpenseController {
 
   async returnClaimForCorrection(req: Request, res: Response) {
     try {
-      const claimId = Number(req.params.id);
+      const claimId = this.parseClaimId(req.params.id);
       const claim = await this.expenseService.returnClaimForCorrection(req.ctx!, claimId, req.body?.comments || req.body?.notes || 'Returned');
       res.json({ success: true, data: claim });
     } catch (err: any) {
@@ -160,8 +166,8 @@ export class ExpenseController {
 
   async processReimbursement(req: Request, res: Response) {
     try {
-      const claimId = Number(req.params.id);
-      const claim = await this.expenseService.processReimbursement(req.ctx!, claimId, req.body || {});
+      const claimId = this.parseClaimId(req.params.id);
+      const claim = await this.expenseService.processReimbursement(req.ctx!, claimId as any, req.body || {});
       res.json({ success: true, data: claim });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message || 'Failed to process reimbursement' });

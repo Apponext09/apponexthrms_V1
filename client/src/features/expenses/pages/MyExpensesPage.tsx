@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { expenseApi, ExpenseClaim, ExpenseCategory, ExpenseItemInput } from '../api/expenseApi';
+import { apiClient } from '@/config/api';
+import { useAuthStore } from '../../auth/store/authStore';
 import {
   Plus,
   Search,
@@ -20,17 +22,24 @@ import {
   Building,
   Info,
   ChevronRight,
-  FileCheck
+  FileCheck,
+  Filter
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 export const MyExpensesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuthStore();
+  const isManagement = ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes((user?.role || '').toLowerCase());
+
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState<ExpenseClaim[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedDepartment, setSelectedDepartment] = useState<string>('');
+  const [departments, setDepartments] = useState<Array<{ id: string | number; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [processingId, setProcessingId] = useState<number | string | null>(null);
 
   // Modal / Drawer state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -68,12 +77,31 @@ export const MyExpensesPage: React.FC = () => {
   const fetchClaimsAndCategories = async () => {
     try {
       setLoading(true);
-      const [claimsRes, catRes] = await Promise.all([
-        expenseApi.getClaims({ mode: 'my_expenses' }),
-        expenseApi.getCategories()
+      const [claimsRes, catRes, deptRes] = await Promise.all([
+        expenseApi.getClaims({ mode: isManagement ? undefined : 'my_expenses' }),
+        expenseApi.getCategories(),
+        apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: { data: [] } }))
       ]);
-      setClaims(claimsRes || []);
+
+      const fetchedClaims = claimsRes || [];
+      setClaims(fetchedClaims);
       setCategories(catRes || []);
+
+      const rawDepts = deptRes.data?.data || deptRes.data || [];
+      const deptMap = new Map<string, string>();
+      if (Array.isArray(rawDepts)) {
+        rawDepts.forEach((d: any) => {
+          if (d.name) deptMap.set(String(d.id || d.name), d.name);
+        });
+      }
+      fetchedClaims.forEach((c: any) => {
+        const dName = c.departmentName || c.department_name;
+        if (dName && !Array.from(deptMap.values()).includes(dName)) {
+          deptMap.set(dName, dName);
+        }
+      });
+      setDepartments(Array.from(deptMap.entries()).map(([id, name]) => ({ id, name })));
+
       if (catRes && catRes.length > 0) {
         setFormCategoryId(catRes[0].id);
       }
@@ -81,6 +109,36 @@ export const MyExpensesPage: React.FC = () => {
       console.error('Error fetching expenses:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleQuickApprove = async (claim: any) => {
+    try {
+      setProcessingId(claim.id);
+      if (claim.status === 'pending_finance') {
+        await expenseApi.financeVerifyClaim(claim.id, { comments: 'Verified and approved by Finance' });
+      } else {
+        await expenseApi.managerApproveClaim(claim.id, 'Approved by Reporting Manager');
+      }
+      fetchClaimsAndCategories();
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to approve claim');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleQuickReject = async (claim: any) => {
+    const reason = prompt('Please enter reason for rejection:', 'Does not comply with expense policy');
+    if (reason === null) return;
+    try {
+      setProcessingId(claim.id);
+      await expenseApi.rejectClaim(claim.id, reason);
+      fetchClaimsAndCategories();
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Failed to reject claim');
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -320,19 +378,39 @@ export const MyExpensesPage: React.FC = () => {
     }
   };
 
-  const filteredClaims = claims.filter((claim) => {
+  const filteredClaims = claims.filter((claim: any) => {
     if (selectedStatus === 'drafts' && claim.status !== 'draft') return false;
-    if (selectedStatus === 'pending' && !['submitted', 'pending_manager', 'pending_finance'].includes(claim.status)) return false;
+    if (selectedStatus === 'pending' && !['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status)) return false;
     if (selectedStatus === 'approved' && !['approved', 'payment_pending'].includes(claim.status)) return false;
     if (selectedStatus === 'returned' && claim.status !== 'returned') return false;
     if (selectedStatus === 'paid' && claim.status !== 'paid') return false;
 
+    if (selectedDepartment) {
+      const deptName = String(claim.departmentName || claim.department_name || '').toLowerCase();
+      const deptId = String(claim.departmentId || claim.department_id || '');
+      if (deptId !== selectedDepartment && !deptName.includes(selectedDepartment.toLowerCase())) {
+        return false;
+      }
+    }
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      const title = String(claim.title || '').toLowerCase();
+      const claimNum = String(claim.claimNumber || claim.claim_number || '').toLowerCase();
+      const fName = String(claim.firstName || claim.first_name || '').toLowerCase();
+      const lName = String(claim.lastName || claim.last_name || '').toLowerCase();
+      const empCode = String(claim.employeeCode || claim.employee_code || '').toLowerCase();
+      const merchant = String(claim.merchantName || claim.merchant_name || '').toLowerCase();
+      const dept = String(claim.departmentName || claim.department_name || '').toLowerCase();
+
       return (
-        claim.title.toLowerCase().includes(q) ||
-        claim.claimNumber.toLowerCase().includes(q) ||
-        (claim.merchantName && claim.merchantName.toLowerCase().includes(q))
+        title.includes(q) ||
+        claimNum.includes(q) ||
+        fName.includes(q) ||
+        lName.includes(q) ||
+        empCode.includes(q) ||
+        merchant.includes(q) ||
+        dept.includes(q)
       );
     }
     return true;
@@ -382,9 +460,9 @@ export const MyExpensesPage: React.FC = () => {
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
         {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
           {[
             { id: 'all', label: 'All Claims' },
             { id: 'drafts', label: 'Drafts' },
@@ -406,16 +484,32 @@ export const MyExpensesPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative min-w-[240px]">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by title, claim #..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Department Filter Dropdown */}
+          <select
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+            className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 dark:text-slate-300 min-w-[150px]"
+          >
+            <option value="">All Departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.name}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Search */}
+          <div className="relative min-w-[220px]">
+            <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search employee, title, claim #..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
       </div>
 
@@ -430,7 +524,7 @@ export const MyExpensesPage: React.FC = () => {
             <p className="text-xs text-slate-500 max-w-sm mt-1">
               {categories.length === 0
                 ? 'No expense categories are set up for this organization yet. Ask HR/admin to open Expense Settings once so default categories (Travel, Food, Hotel) are created.'
-                : "You haven't submitted any expense claims matching the selected filters."}
+                : "No expense claims match the selected status, department, or search query."}
             </p>
             <button
               onClick={() => openCreateModal()}
@@ -461,6 +555,11 @@ export const MyExpensesPage: React.FC = () => {
                   const cDate = claim.claimDate || claim.claim_date;
                   const totClaimed = Number(claim.totalClaimedAmount ?? claim.total_claimed_amount ?? 0);
                   const totApproved = Number(claim.totalApprovedAmount ?? claim.total_approved_amount ?? 0);
+                  const fName = claim.firstName || claim.first_name || '';
+                  const lName = claim.lastName || claim.last_name || '';
+                  const empCode = claim.employeeCode || claim.employee_code || '';
+                  const deptName = claim.departmentName || claim.department_name || '';
+                  const applicantName = `${fName} ${lName}`.trim();
 
                   const formattedDate = cDate ? new Date(cDate).toLocaleDateString() : 'N/A';
 
@@ -468,7 +567,15 @@ export const MyExpensesPage: React.FC = () => {
                     <tr key={claim.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900 dark:text-white">{claim.title}</div>
-                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">{cNum}</div>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px]">
+                          <span className="font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-100 dark:border-blue-900/50">
+                            Applicant: {applicantName || 'Self / Employee'} {empCode ? `(${empCode})` : ''}
+                          </span>
+                          {deptName && (
+                            <span className="text-slate-500 dark:text-slate-400 font-medium">• {deptName}</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">{cNum}</div>
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-700 dark:text-slate-300">
                         {catName}
@@ -484,7 +591,29 @@ export const MyExpensesPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4">{getStatusBadge(claim.status)}</td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isManagement && ['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status) && (
+                            <button
+                              disabled={processingId === claim.id}
+                              onClick={() => handleQuickApprove(claim)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs transition-colors"
+                              title="Approve Claim Immediately"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                              {processingId === claim.id ? 'Approving...' : claim.status === 'pending_finance' ? 'Approve (Finance)' : 'Approve'}
+                            </button>
+                          )}
+                          {isManagement && ['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status) && (
+                            <button
+                              disabled={processingId === claim.id}
+                              onClick={() => handleQuickReject(claim)}
+                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                              title="Reject Claim"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              Reject
+                            </button>
+                          )}
                           <button
                             onClick={async () => {
                               const full = await expenseApi.getClaimById(claim.id);
@@ -929,15 +1058,15 @@ export const MyExpensesPage: React.FC = () => {
 
       {/* RECEIPT PREVIEW MODAL */}
       {previewReceiptUrl && (
-        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 max-w-4xl w-full rounded-2xl overflow-hidden shadow-2xl p-4 flex flex-col">
-            <div className="w-full flex justify-end mb-2">
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-white dark:bg-slate-900 max-w-3xl w-full rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl p-3 sm:p-4 flex flex-col items-center">
+            <div className="w-full flex justify-end">
               <button
                 onClick={() => {
                   setPreviewReceiptUrl(null);
                   setPreviewReceiptType(null);
                 }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 text-lg font-bold"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 text-xs font-semibold"
               >
                 ✕
               </button>

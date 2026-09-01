@@ -20,7 +20,7 @@ export const ExpenseApprovalsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState<ExpenseClaim[]>([]);
   const [selectedClaim, setSelectedClaim] = useState<ExpenseClaim | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Array<number | string>>([]);
 
   const [departments, setDepartments] = useState<FilterOption[]>([]);
   const [designations, setDesignations] = useState<FilterOption[]>([]);
@@ -33,9 +33,9 @@ export const ExpenseApprovalsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('pending_approvals');
 
   const [actionType, setActionType] = useState<'reject' | 'return' | null>(null);
-  const [targetClaimId, setTargetClaimId] = useState<number | null>(null);
+  const [targetClaimId, setTargetClaimId] = useState<number | string | null>(null);
   const [reasonText, setReasonText] = useState('');
-  const [processingId, setProcessingId] = useState<number | null>(null);
+  const [processingId, setProcessingId] = useState<number | string | null>(null);
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
   const fetchFilterOptions = async () => {
@@ -87,10 +87,13 @@ export const ExpenseApprovalsPage: React.FC = () => {
     fetchApprovals();
   }, [departmentId, designationId, locationId, statusFilter]);
 
-  const visibleIds = useMemo(() => claims.map((c) => c.id), [claims]);
+  const visibleIds = useMemo(
+    () => claims.filter((c) => !['approved', 'payment_pending', 'paid', 'rejected'].includes(c.status)).map((c) => c.id),
+    [claims]
+  );
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: number | string) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
@@ -249,6 +252,9 @@ export const ExpenseApprovalsPage: React.FC = () => {
               <option value="pending_approvals">All pending</option>
               <option value="pending_manager">Manager pending</option>
               <option value="pending_finance">Finance pending</option>
+              <option value="approved">Approved claims</option>
+              <option value="rejected">Rejected claims</option>
+              <option value="all">All claims</option>
             </select>
           </div>
         </div>
@@ -304,7 +310,8 @@ export const ExpenseApprovalsPage: React.FC = () => {
                   const hasViolations = claim.items?.some((it: any) => (it.policyValidated ?? it.policy_validated) === false);
                   const isProcessing = processingId === claim.id;
                   const isPendingFinance = claim.status === 'pending_finance';
-                  const isApprovedOrPaid = ['approved', 'payment_pending', 'paid'].includes(claim.status);
+                  const isApprovedOrPaid = ['approved', 'payment_pending', 'paid', 'rejected'].includes(claim.status);
+                  const isRejected = claim.status === 'rejected';
                   const formattedDate = cDate ? new Date(cDate).toLocaleDateString() : 'N/A';
 
                   return (
@@ -356,14 +363,18 @@ export const ExpenseApprovalsPage: React.FC = () => {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {isApprovedOrPaid ? (
+                          {isRejected ? (
+                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 flex items-center gap-1">
+                              <XCircle className="w-3.5 h-3.5" /> Rejected
+                            </span>
+                          ) : isApprovedOrPaid ? (
                             <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
                               <Check className="w-3.5 h-3.5" /> Approved
                             </span>
                           ) : (
                             <>
                               <button
-                                disabled={isProcessing}
+                                disabled={Boolean(isProcessing)}
                                 onClick={() => handleApprove(claim)}
                                 className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1 cursor-pointer transition-colors"
                               >
@@ -371,14 +382,14 @@ export const ExpenseApprovalsPage: React.FC = () => {
                                 {isProcessing ? 'Processing...' : isPendingFinance ? 'Approve (Finance)' : 'Approve'}
                               </button>
                               <button
-                                disabled={isProcessing}
+                                disabled={Boolean(isProcessing)}
                                 onClick={() => { setTargetClaimId(claim.id); setActionType('return'); setReasonText(''); }}
                                 className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" /> Return
                               </button>
                               <button
-                                disabled={isProcessing}
+                                disabled={Boolean(isProcessing)}
                                 onClick={() => { setTargetClaimId(claim.id); setActionType('reject'); setReasonText(''); }}
                                 className="px-2.5 py-1 bg-rose-100 hover:bg-rose-200 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
                               >

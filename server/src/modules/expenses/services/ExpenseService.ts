@@ -467,11 +467,15 @@ export class ExpenseService {
 
     if (params.status && params.status !== 'all') {
       if (params.status === 'pending_manager') {
-        query = query.whereIn('ec.status', ['submitted', 'pending_manager']);
+        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending']);
       } else if (params.status === 'pending_finance') {
-        query = query.whereIn('ec.status', ['pending_finance', 'approved']);
+        query = query.whereIn('ec.status', ['pending_finance']);
       } else if (params.status === 'pending_approvals') {
-        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending_finance', 'approved']);
+        query = query.whereIn('ec.status', ['submitted', 'pending_manager', 'pending_finance', 'pending']);
+      } else if (params.status === 'approved') {
+        query = query.whereIn('ec.status', ['approved', 'payment_pending', 'paid']);
+      } else if (params.status === 'rejected') {
+        query = query.whereIn('ec.status', ['rejected']);
       } else {
         query = query.where('ec.status', params.status);
       }
@@ -516,12 +520,130 @@ export class ExpenseService {
       claim.itemCount = items.length;
     }
 
-    return (claims || []).map((c: any) => this.mapClaim(c));
+    const mappedClaims = (claims || []).map((c: any) => this.mapClaim(c));
+
+    // Also include standalone Travel Requests if not filtered out
+    if (params.mode !== 'my_expenses') {
+      try {
+        const trs = await this.getTravelRequests(ctx, params.employeeId);
+        for (const tr of trs || []) {
+          const st = String(tr.status || '').toLowerCase();
+          let appStatus = 'pending_manager';
+          if (st === 'pending' || st === 'submitted') appStatus = 'pending_manager';
+          else if (st === 'pending_finance') appStatus = 'pending_finance';
+          else if (st === 'approved' || st === 'completed') appStatus = 'approved';
+          else if (st === 'rejected') appStatus = 'rejected';
+
+          if (params.status && params.status !== 'all') {
+            if (params.status === 'pending_manager' && appStatus !== 'pending_manager') continue;
+            if (params.status === 'pending_finance' && appStatus !== 'pending_finance') continue;
+            if (params.status === 'pending_approvals' && !['pending_manager', 'pending_finance'].includes(appStatus)) continue;
+            if (params.status === 'approved' && appStatus !== 'approved') continue;
+            if (params.status === 'rejected' && appStatus !== 'rejected') continue;
+          }
+
+          if (params.search) {
+            const s = params.search.toLowerCase();
+            const match =
+              (tr.requestNumber || tr.request_number || '').toLowerCase().includes(s) ||
+              (tr.fromLocation || tr.from_location || '').toLowerCase().includes(s) ||
+              (tr.toLocation || tr.to_location || '').toLowerCase().includes(s) ||
+              (tr.purpose || '').toLowerCase().includes(s) ||
+              (tr.firstName || tr.first_name || '').toLowerCase().includes(s) ||
+              (tr.lastName || tr.last_name || '').toLowerCase().includes(s) ||
+              (tr.employeeCode || tr.employee_code || '').toLowerCase().includes(s);
+            if (!match) continue;
+          }
+
+          const existsInClaims = mappedClaims.some((c: any) => c.travelRequestId === tr.id);
+          if (!existsInClaims) {
+            mappedClaims.push({
+              id: `tr_${tr.id}`,
+              uuid: tr.uuid || `tr-${tr.id}`,
+              claimNumber: tr.requestNumber || tr.request_number || `TRV-${tr.id}`,
+              title: `Business Travel: ${tr.fromLocation || tr.from_location || ''} → ${tr.toLocation || tr.to_location || ''}`,
+              description: `Travel purpose: ${tr.purpose || 'N/A'}. Dates: ${tr.startDate || tr.start_date || ''} to ${tr.endDate || tr.end_date || ''}`,
+              totalClaimedAmount: Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0),
+              totalApprovedAmount: Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0),
+              totalRejectedAmount: 0,
+              paymentMethod: 'N/A (Travel Request)',
+              status: appStatus,
+              categoryName: 'Travel',
+              claimDate: tr.startDate || tr.start_date || tr.createdAt,
+              submittedAt: tr.createdAt || tr.created_at,
+              firstName: tr.firstName || tr.first_name,
+              lastName: tr.lastName || tr.last_name,
+              employeeCode: tr.employeeCode || tr.employee_code,
+              departmentName: tr.departmentName || tr.department_name,
+              isTravelRequest: true,
+              travelRequestId: tr.id,
+              items: [
+                {
+                  id: `tr_item_${tr.id}`,
+                  categoryName: 'Travel',
+                  expenseDate: tr.startDate || tr.start_date,
+                  claimedAmount: Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0),
+                  description: `Travel from ${tr.fromLocation || tr.from_location} to ${tr.toLocation || tr.to_location}. Purpose: ${tr.purpose}`,
+                  policyValidated: true
+                }
+              ]
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to include travel requests in getClaims:', err);
+      }
+    }
+
+    return mappedClaims;
   }
 
-  async getClaimById(ctx: TenantContext, claimId: number) {
+  async getClaimById(ctx: TenantContext, claimId: number | string) {
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
+
+    if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
+      const trId = Number((claimId as string).replace('tr_', ''));
+      const trRow = await db('travel_requests as tr')
+        .leftJoin('employees as e', 'tr.employee_id', 'e.id')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .where('tr.id', trId)
+        .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
+        .first();
+      if (!trRow) return null;
+      const tr = this.mapTravelRequest(trRow);
+      return {
+        id: `tr_${tr.id}`,
+        claimNumber: tr.requestNumber || tr.request_number || `TRV-${tr.id}`,
+        title: `Business Travel: ${tr.fromLocation || tr.from_location || ''} → ${tr.toLocation || tr.to_location || ''}`,
+        description: `Travel purpose: ${tr.purpose || 'N/A'}. Dates: ${tr.startDate || tr.start_date || ''} to ${tr.endDate || tr.end_date || ''}`,
+        totalClaimedAmount: Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0),
+        totalApprovedAmount: Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0),
+        totalRejectedAmount: 0,
+        paymentMethod: 'N/A (Travel Request)',
+        status: tr.status === 'pending' ? 'pending_manager' : tr.status,
+        categoryName: 'Travel',
+        claimDate: tr.startDate || tr.start_date || tr.createdAt,
+        submittedAt: tr.createdAt || tr.created_at,
+        firstName: tr.firstName || tr.first_name,
+        lastName: tr.lastName || tr.last_name,
+        employeeCode: tr.employeeCode || tr.employee_code,
+        departmentName: tr.departmentName || tr.department_name,
+        items: [
+          {
+            id: `tr_item_${tr.id}`,
+            categoryName: 'Travel',
+            expenseDate: tr.startDate || tr.start_date,
+            claimedAmount: Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0),
+            description: `Travel from ${tr.fromLocation || tr.from_location} to ${tr.toLocation || tr.to_location}. Purpose: ${tr.purpose}`,
+            policyValidated: true
+          }
+        ]
+      };
+    }
+
+    const numericId = Number(claimId);
+    if (isNaN(numericId)) return null;
 
     const claim = await db('expense_claims as ec')
       .leftJoin('employees as e', 'ec.employee_id', 'e.id')
@@ -531,7 +653,7 @@ export class ExpenseService {
       .leftJoin('expense_categories as cat', 'ec.category_id', 'cat.id')
       .leftJoin('travel_requests as tr', 'ec.travel_request_id', 'tr.id')
       .leftJoin('travel_advances as ta', 'ec.travel_advance_id', 'ta.id')
-      .where('ec.id', claimId)
+      .where('ec.id', numericId)
       .select(
         'ec.*',
         'e.first_name',
@@ -820,7 +942,12 @@ export class ExpenseService {
   }
 
   // --- APPROVAL ACTIONS ---
-  async approveClaimByManager(ctx: TenantContext, claimId: number, comments?: string) {
+  async approveClaimByManager(ctx: TenantContext, claimId: number | string, comments?: string) {
+    if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
+      const trId = Number((claimId as string).replace('tr_', ''));
+      return this.updateTravelRequestStatus(ctx, trId, 'approved', comments);
+    }
+
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
@@ -851,20 +978,27 @@ export class ExpenseService {
     return this.getClaimById(ctx, claimId);
   }
 
-  async bulkApproveClaims(ctx: TenantContext, ids: number[], comments?: string) {
-    const approved: number[] = [];
-    const failed: Array<{ id: number; message: string }> = [];
+  async bulkApproveClaims(ctx: TenantContext, ids: (number | string)[], comments?: string) {
+    const approved: (number | string)[] = [];
+    const failed: Array<{ id: number | string; message: string }> = [];
 
     for (const id of ids) {
       try {
+        if (typeof id === 'string' && id.startsWith('tr_')) {
+          const trId = Number(id.replace('tr_', ''));
+          await this.updateTravelRequestStatus(ctx, trId, 'approved', comments || 'Bulk approved');
+          approved.push(id);
+          continue;
+        }
+
         const db = getKnex();
         const claim = await db('expense_claims').where('id', id).first();
         if (!claim) throw new Error('Claim not found');
         const status = claim.status;
-        if (['submitted', 'pending_manager'].includes(status)) {
-          await this.approveClaimByManager(ctx, id, comments);
+        if (['submitted', 'pending_manager', 'pending'].includes(status)) {
+          await this.approveClaimByManager(ctx, Number(id), comments);
         } else if (status === 'pending_finance') {
-          await this.verifyAndApproveByFinance(ctx, id, {
+          await this.verifyAndApproveByFinance(ctx, Number(id), {
             comments: comments || 'Bulk verified by finance',
           });
         } else {
@@ -879,7 +1013,12 @@ export class ExpenseService {
     return { approved, failed };
   }
 
-  async verifyAndApproveByFinance(ctx: TenantContext, claimId: number, body: { items?: Array<{ id: number; approvedAmount: number; adjustmentReason?: string }>; comments?: string }) {
+  async verifyAndApproveByFinance(ctx: TenantContext, claimId: number | string, body: { items?: Array<{ id: number; approvedAmount: number; adjustmentReason?: string }>; comments?: string }) {
+    if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
+      const trId = Number((claimId as string).replace('tr_', ''));
+      return this.updateTravelRequestStatus(ctx, trId, 'approved', body?.comments || 'Verified by Finance');
+    }
+
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
@@ -994,7 +1133,12 @@ export class ExpenseService {
     return this.getClaimById(ctx, claimId);
   }
 
-  async rejectClaim(ctx: TenantContext, claimId: number, reason: string) {
+  async rejectClaim(ctx: TenantContext, claimId: number | string, reason: string) {
+    if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
+      const trId = Number((claimId as string).replace('tr_', ''));
+      return this.updateTravelRequestStatus(ctx, trId, 'rejected', reason);
+    }
+
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     if (!reason || !reason.trim()) throw new Error('Rejection reason is mandatory');
@@ -1034,7 +1178,12 @@ export class ExpenseService {
     return this.getClaimById(ctx, claimId);
   }
 
-  async returnClaimForCorrection(ctx: TenantContext, claimId: number, comments: string) {
+  async returnClaimForCorrection(ctx: TenantContext, claimId: number | string, comments: string) {
+    if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
+      const trId = Number((claimId as string).replace('tr_', ''));
+      return this.updateTravelRequestStatus(ctx, trId, 'rejected', comments);
+    }
+
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     if (!comments || !comments.trim()) throw new Error('Correction comments are mandatory');
@@ -1071,7 +1220,12 @@ export class ExpenseService {
   }
 
   // --- REIMBURSEMENT PAYMENT RECORDING ---
-  async processReimbursement(ctx: TenantContext, claimId: number, body: { paymentDate: string; paidAmount: number; paymentMethod: string; paymentReference: string }) {
+  async processReimbursement(ctx: TenantContext, claimId: number | string, body: { paymentDate: string; paidAmount: number; paymentMethod: string; paymentReference: string }) {
+    if (typeof claimId === 'string' && (claimId as string).startsWith('tr_')) {
+      const trId = Number((claimId as string).replace('tr_', ''));
+      return this.updateTravelRequestStatus(ctx, trId, 'approved', `Paid via ${body.paymentMethod || 'bank_transfer'}. Ref #${body.paymentReference || 'N/A'}`);
+    }
+
     await this.ensureInitialized(ctx?.organizationId || 1);
     const db = getKnex();
     const claim = await db('expense_claims').where('id', claimId).first();
@@ -1321,22 +1475,120 @@ export class ExpenseService {
     return (rows || []).map((r: any) => this.mapMileageClaim(r));
   }
 
+  private numOr(v: any, fallback: number) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  private async listMileageRatesByDesignation(db: any, organizationId: number, fallbackCar: number, fallbackBike: number) {
+    const designations = await db('designations')
+      .where('organization_id', organizationId)
+      .whereNull('deleted_at')
+      .select('id', 'name', 'code', 'status')
+      .orderBy('name', 'asc')
+      .catch(() => []);
+
+    const rateRows = await db('expense_mileage_designation_rates')
+      .where('organization_id', organizationId)
+      .catch(() => []);
+
+    const rateMap = new Map<number, any>();
+    for (const row of rateRows || []) {
+      const id = Number(row.designationId ?? row.designation_id);
+      if (id) rateMap.set(id, row);
+    }
+
+    const grouped = new Map<string, {
+      designationId: number;
+      designationIds: number[];
+      designationName: string;
+      rateCar: number;
+      rateBike: number;
+      hasCustomRate: boolean;
+    }>();
+
+    for (const d of designations || []) {
+      if (String(d.status || 'active').toLowerCase() === 'inactive') continue;
+      const name = String(d.name || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const id = Number(d.id);
+      const saved = rateMap.get(id);
+      const rateCar = saved ? this.numOr(saved.rateCar ?? saved.rate_car, fallbackCar) : fallbackCar;
+      const rateBike = saved ? this.numOr(saved.rateBike ?? saved.rate_bike, fallbackBike) : fallbackBike;
+      const hasCustomRate = Boolean(saved);
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, {
+          designationId: id,
+          designationIds: [id],
+          designationName: name,
+          rateCar,
+          rateBike,
+          hasCustomRate,
+        });
+        continue;
+      }
+      existing.designationIds.push(id);
+      if (hasCustomRate && !existing.hasCustomRate) {
+        existing.rateCar = rateCar;
+        existing.rateBike = rateBike;
+        existing.hasCustomRate = true;
+      }
+    }
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      a.designationName.localeCompare(b.designationName, undefined, { sensitivity: 'base' })
+    );
+  }
+
+  private async resolveEmployeeMileageRates(
+    ctx: TenantContext,
+    db: any,
+    fallbackCar: number,
+    fallbackBike: number,
+    emp?: any
+  ) {
+    const employee = emp ?? (await this.getEmployeeForCtx(ctx));
+    const designationId = Number(employee?.currentDesignationId ?? employee?.current_designation_id ?? 0) || null;
+    if (!designationId) {
+      return {
+        rateCar: fallbackCar,
+        rateBike: fallbackBike,
+        designationId: null,
+        designationName: null,
+      };
+    }
+
+    const saved = await db('expense_mileage_designation_rates')
+      .where('organization_id', ctx.organizationId)
+      .where('designation_id', designationId)
+      .first()
+      .catch(() => null);
+
+    const desig = await db('designations').where('id', designationId).select('id', 'name').first().catch(() => null);
+
+    return {
+      rateCar: saved ? this.numOr(saved.rateCar ?? saved.rate_car, fallbackCar) : fallbackCar,
+      rateBike: saved ? this.numOr(saved.rateBike ?? saved.rate_bike, fallbackBike) : fallbackBike,
+      designationId,
+      designationName: desig?.name || null,
+    };
+  }
+
   async createMileageClaim(ctx: TenantContext, data: any) {
     await this.ensureInitialized(ctx.organizationId);
     const db = getKnex();
     const emp = await this.getEmployeeForCtx(ctx);
 
     const settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
-    const numOr = (v: any, fallback: number) => {
-      const n = Number(v);
-      return Number.isFinite(n) ? n : fallback;
-    };
-    const carRate = settings ? numOr(settings.mileageRateCar ?? settings.mileage_rate_car, 12) : 12;
-    const bikeRate = settings ? numOr(settings.mileageRateBike ?? settings.mileage_rate_bike, 6) : 6;
+    const fallbackCar = settings ? this.numOr(settings.mileageRateCar ?? settings.mileage_rate_car, 12) : 12;
+    const fallbackBike = settings ? this.numOr(settings.mileageRateBike ?? settings.mileage_rate_bike, 6) : 6;
+    const resolved = await this.resolveEmployeeMileageRates(ctx, db, fallbackCar, fallbackBike, emp);
 
     const vehicle = (data.vehicleType || 'car').toLowerCase();
-    const rate = numOr(data.ratePerKm, vehicle === 'bike' ? bikeRate : carRate);
-    const distance = numOr(data.distanceKm, 0);
+    const rate = vehicle === 'bike' ? resolved.rateBike : resolved.rateCar;
+    const distance = this.numOr(data.distanceKm, 0);
     const calculatedAmount = Number((distance * rate).toFixed(2));
 
     const [id] = await db('mileage_claims').insert({
@@ -1487,8 +1739,8 @@ export class ExpenseService {
     if (filters.employeeId) query = query.where('ec.employee_id', filters.employeeId);
     if (filters.categoryId) query = query.where('ec.category_id', filters.categoryId);
     if (filters.status) query = query.where('ec.status', filters.status);
-
-    return query;
+    const rows = await query;
+    return (rows || []).map((r: any) => this.mapClaim(r));
   }
 
   // --- SETTINGS ---
@@ -1532,7 +1784,19 @@ export class ExpenseService {
       await db('expense_settings').insert(initData);
       settings = await db('expense_settings').where('organization_id', ctx.organizationId).first();
     }
-    return this.mapExpenseSettings(settings);
+    const mapped = this.mapExpenseSettings(settings);
+    const fallbackCar = this.numOr(mapped.mileageRateCar, 12);
+    const fallbackBike = this.numOr(mapped.mileageRateBike, 6);
+    const mileageRatesByDesignation = await this.listMileageRatesByDesignation(db, ctx.organizationId, fallbackCar, fallbackBike);
+    const myMileage = await this.resolveEmployeeMileageRates(ctx, db, fallbackCar, fallbackBike);
+    return {
+      ...mapped,
+      mileageRatesByDesignation,
+      myMileageRateCar: myMileage.rateCar,
+      myMileageRateBike: myMileage.rateBike,
+      myDesignationId: myMileage.designationId,
+      myDesignationName: myMileage.designationName,
+    };
   }
 
   async updateSettings(ctx: TenantContext, data: any) {
@@ -1585,6 +1849,39 @@ export class ExpenseService {
               updated_at: new Date(),
             });
         }
+      }
+    }
+
+    if (Array.isArray(data.mileageRatesByDesignation)) {
+      const rows: Array<{ designationId: number; rateCar: number; rateBike: number }> = [];
+      const seen = new Set<number>();
+      for (const row of data.mileageRatesByDesignation) {
+        const rateCar = Math.max(0, this.numOr(row.rateCar ?? row.rate_car, data.mileageRateCar ?? 12));
+        const rateBike = Math.max(0, this.numOr(row.rateBike ?? row.rate_bike, data.mileageRateBike ?? 6));
+        const ids = [
+          ...(Array.isArray(row.designationIds) ? row.designationIds : []),
+          row.designationId ?? row.designation_id,
+        ]
+          .map((id: any) => Number(id))
+          .filter((id: number) => id && !seen.has(id));
+        for (const designationId of ids) {
+          seen.add(designationId);
+          rows.push({ designationId, rateCar, rateBike });
+        }
+      }
+
+      await db('expense_mileage_designation_rates').where('organization_id', ctx.organizationId).del();
+      if (rows.length > 0) {
+        await db('expense_mileage_designation_rates').insert(
+          rows.map((row) => ({
+            organization_id: ctx.organizationId,
+            designation_id: row.designationId,
+            rate_car: row.rateCar,
+            rate_bike: row.rateBike,
+            created_at: new Date(),
+            updated_at: new Date(),
+          }))
+        );
       }
     }
 
