@@ -72,6 +72,7 @@ export const MyExpensesPage: React.FC = () => {
 
   // Receipt Preview Modal
   const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [previewReceiptType, setPreviewReceiptType] = useState<string | null>(null);
 
   const fetchClaimsAndCategories = async () => {
     try {
@@ -857,7 +858,10 @@ export const MyExpensesPage: React.FC = () => {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => setPreviewReceiptUrl(item.receiptUrl!)}
+                                onClick={() => {
+                                  setPreviewReceiptUrl(item.receiptUrl!);
+                                  setPreviewReceiptType(item.receiptFileType || 'image/jpeg');
+                                }}
                                 className="p-0.5 text-emerald-600 hover:text-emerald-900 rounded shrink-0"
                                 title="Preview Receipt"
                               >
@@ -1017,7 +1021,10 @@ export const MyExpensesPage: React.FC = () => {
                       <p className="text-slate-500">{it.description || 'No description provided'}</p>
                       {it.receiptUrl && (
                         <button
-                          onClick={() => setPreviewReceiptUrl(it.receiptUrl!)}
+                          onClick={() => {
+                            setPreviewReceiptUrl(it.receiptUrl!);
+                            setPreviewReceiptType(it.receiptFileType || 'application/pdf');
+                          }}
                           className="text-blue-600 hover:underline flex items-center gap-1 mt-1 font-medium"
                         >
                           <Paperclip className="w-3 h-3" /> View Receipt
@@ -1055,14 +1062,31 @@ export const MyExpensesPage: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 max-w-3xl w-full rounded-xl sm:rounded-2xl overflow-hidden shadow-2xl p-3 sm:p-4 flex flex-col items-center">
             <div className="w-full flex justify-end">
               <button
-                onClick={() => setPreviewReceiptUrl(null)}
+                onClick={() => {
+                  setPreviewReceiptUrl(null);
+                  setPreviewReceiptType(null);
+                }}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 text-xs font-semibold"
               >
-                ✕ Close Preview
+                ✕
               </button>
             </div>
-            <div className="mt-2 max-h-[70vh] overflow-auto flex items-center justify-center">
-              <img src={previewReceiptUrl} alt="Receipt Preview" className="max-w-full h-auto rounded-lg shadow" />
+            <div className="flex-1 max-h-[75vh] overflow-auto flex items-center justify-center">
+              {previewReceiptType === 'application/pdf' ? (
+                <embed
+                  src={previewReceiptUrl}
+                  type="application/pdf"
+                  width="100%"
+                  height="600px"
+                  className="rounded-lg shadow"
+                />
+              ) : (
+                <img
+                  src={previewReceiptUrl}
+                  alt="Receipt Preview"
+                  className="max-w-full max-h-full h-auto rounded-lg shadow object-contain"
+                />
+              )}
             </div>
           </div>
         </div>

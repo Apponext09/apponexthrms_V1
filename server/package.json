@@ -22,6 +22,8 @@
     "seed:shifts": "tsx ./src/db/seeds/seed_shift_management.ts",
     "seed:locations": "tsx ./src/db/seeds/seed_location_management.ts",
     "seed:superadmin-tables": "tsx ./src/db/seeds/seed-superadmin-tables.ts",
+    "seed:expenses": "node justseed/expenseseed.cjs",
+    "seed:recruitment": "node justseed/recurseed.cjs",
     "db:seed": "node dbseed.js",
     "test": "vitest run",
     "test:watch": "vitest"

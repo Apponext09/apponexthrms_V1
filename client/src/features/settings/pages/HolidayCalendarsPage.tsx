@@ -18,6 +18,12 @@ import {
   ShieldCheck,
   Check,
   FileSpreadsheet,
+  LayoutGrid,
+  List,
+  ChevronLeft,
+  ChevronRight,
+  Sparkles,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -122,7 +128,12 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
 
   // ─── Main View State ───────────────────────────────────────────────────────
   const [selectedCalendarId, setSelectedCalendarId] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'holidays' | 'weekly-off' | 'assign'>('holidays');
+  const [activeTab, setActiveTab] = useState<'visual-calendar' | 'holidays' | 'weekly-off' | 'assign'>('visual-calendar');
+
+  // ─── Visual View Modes ──────────────────────────────────────────────────────
+  const [mainViewMode, setMainViewMode] = useState<'table' | 'cards'>('table');
+  const [holidayDetailViewMode, setHolidayDetailViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [visualMonth, setVisualMonth] = useState<number>(new Date().getMonth());
 
   // ─── List State ────────────────────────────────────────────────────────────
   const [calendars, setCalendars] = useState<HolidayCalendarItem[]>([]);
@@ -303,7 +314,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
     setIsCreateModalOpen(true);
   };
 
-  const handleOpenHolidayModal = (item: HolidayItem | null = null) => {
+  const handleOpenHolidayModal = (item: HolidayItem | null = null, defaultDate?: string) => {
     setHolidayToEdit(item);
     setHolidayError(null);
     if (item) {
@@ -315,7 +326,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
     } else {
       const year = calendarDetail?.calendar_year || calendarDetail?.year || currentYear;
       setHName('');
-      setHDate(`${year}-01-01`);
+      setHDate(defaultDate || `${year}-01-01`);
       setHType('National');
       setHIsOptional(false);
       setHDescription('');
@@ -468,57 +479,74 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
     }
   };
 
+  // Helper to normalize any ISO timestamp or YYYY-MM-DD string to local YYYY-MM-DD
+  const normalizeDateString = (rawDate: string | undefined | null): string => {
+    if (!rawDate) return '';
+    const str = String(rawDate).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      return str;
+    }
+    const d = new Date(str);
+    if (isNaN(d.getTime())) {
+      return str.split('T')[0];
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // Helper for computing Formatted Date from ISO / Date string
   const formatHolidayDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      const yyyy = date.getFullYear();
-      const mm = String(date.getMonth() + 1).padStart(2, '0');
-      const dd = String(date.getDate()).padStart(2, '0');
-      return `${dd}-${mm}-${yyyy}`;
-    } catch {
-      return dateStr;
+    const norm = normalizeDateString(dateStr);
+    if (!norm) return dateStr || '';
+    const parts = norm.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
+    return norm;
   };
 
   // Helper for computing Day of week from date
   const getDayName = (dateStr: string) => {
-    if (!dateStr) return '';
+    const norm = normalizeDateString(dateStr);
+    if (!norm) return '';
     try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', { weekday: 'short' });
+      const parts = norm.split('-');
+      if (parts.length === 3) {
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        return date.toLocaleDateString('en-US', { weekday: 'short' });
+      }
+      return new Date(norm).toLocaleDateString('en-US', { weekday: 'short' });
     } catch {
       return '';
     }
   };
 
   // Helper for Status Badge
-  const renderStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Published':
-        return (
-          <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[11px] font-semibold flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" />
-            Published
-          </Badge>
-        );
-      case 'Archived':
-        return (
-          <Badge className="bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700 text-[11px] font-semibold">
-            Archived
-          </Badge>
-        );
-      case 'Draft':
-      default:
-        return (
-          <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700 text-[11px] font-semibold flex items-center gap-1">
-            <Clock className="w-3 h-3 text-slate-500" />
-            Draft
-          </Badge>
-        );
+  const renderStatusBadge = (statusStr: string) => {
+    const s = String(statusStr || '').trim().toLowerCase();
+    if (s === 'published' || s === 'active') {
+      return (
+        <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[11px] font-semibold flex items-center gap-1">
+          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+          Published
+        </Badge>
+      );
     }
+    if (s === 'archived' || s === 'inactive') {
+      return (
+        <Badge className="bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700 text-[11px] font-semibold">
+          Archived
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700 text-[11px] font-semibold flex items-center gap-1">
+        <Clock className="w-3 h-3 text-slate-500" />
+        Draft
+      </Badge>
+    );
   };
 
   // Helper for Holiday Type Badge
@@ -559,6 +587,365 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // VISUAL CALENDAR RENDER HELPERS
+  // ═══════════════════════════════════════════════════════════════════════════
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const renderVisualMonthGrid = (calDetail: any, isLocked: boolean) => {
+    const calYear = calDetail?.calendar_year || calDetail?.year || currentYear;
+    const daysInMonth = new Date(calYear, visualMonth + 1, 0).getDate();
+    const firstDayObj = new Date(calYear, visualMonth, 1);
+    const firstDayOfWeek = (firstDayObj.getDay() + 6) % 7; // Mon = 0, Sun = 6
+
+    const gridCells: Array<{ isPadding: boolean; dayNum: number | null; dateStr: string }> = [];
+
+    // Padding for days before start of month
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      gridCells.push({ isPadding: true, dayNum: null, dateStr: '' });
+    }
+
+    // Actual month days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const monthStr = String(visualMonth + 1).padStart(2, '0');
+      const dayStr = String(day).padStart(2, '0');
+      const dateStr = `${calYear}-${monthStr}-${dayStr}`;
+      gridCells.push({ isPadding: false, dayNum: day, dateStr });
+    }
+
+    // Padding for end of month to complete last row
+    const totalCells = Math.ceil(gridCells.length / 7) * 7;
+    while (gridCells.length < totalCells) {
+      gridCells.push({ isPadding: true, dayNum: null, dateStr: '' });
+    }
+
+    // Map holidays by date string
+    const holidaysMap: Record<string, HolidayItem[]> = {};
+    if (Array.isArray(calDetail?.holidays)) {
+      calDetail.holidays.forEach((h: HolidayItem) => {
+        const normKey = normalizeDateString(h.holiday_date);
+        if (normKey) {
+          if (!holidaysMap[normKey]) holidaysMap[normKey] = [];
+          holidaysMap[normKey].push(h);
+        }
+      });
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    return (
+      <div className="space-y-4 animate-in fade-in-50 duration-200">
+        {/* Month Navigation & Selector Bar */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVisualMonth((prev) => (prev === 0 ? 11 : prev - 1))}
+              className="h-8 w-8 p-0 rounded-xl border-neutral-200 dark:border-neutral-800"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+
+            <span className="text-sm font-bold text-neutral-900 dark:text-white min-w-[160px] text-center">
+              {MONTH_NAMES[visualMonth]} {calYear}
+            </span>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVisualMonth((prev) => (prev === 11 ? 0 : prev + 1))}
+              className="h-8 w-8 p-0 rounded-xl border-neutral-200 dark:border-neutral-800"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Quick Month Chips */}
+          <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none">
+            {MONTH_NAMES.map((mName, idx) => (
+              <button
+                key={mName}
+                type="button"
+                onClick={() => setVisualMonth(idx)}
+                className={cn(
+                  'px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all shrink-0',
+                  visualMonth === idx
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                )}
+              >
+                {mName.substring(0, 3)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs px-2">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+              <span className="text-neutral-600 dark:text-neutral-400 font-medium">Mandatory / National</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" />
+              <span className="text-neutral-600 dark:text-neutral-400 font-medium">Floater / Optional</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+              <span className="text-neutral-600 dark:text-neutral-400 font-medium">Festival / Restricted</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-neutral-400 inline-block" />
+              <span className="text-neutral-600 dark:text-neutral-400 font-medium">Weekly Off</span>
+            </div>
+          </div>
+
+          <p className="text-neutral-400 text-[11px]">
+            💡 Click any date cell to add a holiday. Click holiday pills to edit.
+          </p>
+        </div>
+
+        {/* Month Grid */}
+        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden bg-white dark:bg-neutral-900 shadow-sm">
+          <div className="grid grid-cols-7 bg-neutral-50 dark:bg-neutral-800/60 border-b border-neutral-200 dark:border-neutral-800 text-center font-bold text-[11px] text-neutral-600 dark:text-neutral-400 uppercase tracking-wider py-2.5">
+            <div>Mon</div>
+            <div>Tue</div>
+            <div>Wed</div>
+            <div>Thu</div>
+            <div>Fri</div>
+            <div className="text-indigo-600 dark:text-indigo-400">Sat</div>
+            <div className="text-rose-600 dark:text-rose-400">Sun</div>
+          </div>
+
+          <div className="grid grid-cols-7 divide-x divide-y divide-neutral-100 dark:divide-neutral-800">
+            {gridCells.map((cell, idx) => {
+              if (cell.isPadding) {
+                return (
+                  <div
+                    key={`pad-${idx}`}
+                    className="min-h-[110px] bg-neutral-50/40 dark:bg-neutral-950/20 p-2 opacity-30 select-none"
+                  />
+                );
+              }
+
+              const cellHolidays = holidaysMap[cell.dateStr] || [];
+              const isToday = cell.dateStr === todayStr;
+
+              const cellDateObj = new Date(cell.dateStr);
+              const dayCodeMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+              const dayCode = dayCodeMap[cellDateObj.getDay()];
+              const isSun = dayCode === 'Sun';
+              const isSat = dayCode === 'Sat';
+
+              let isWeeklyOff = false;
+              if (weeklyOffRules[dayCode]?.enabled) {
+                if (isSat && weeklyOffRules.Sat?.is_alternate) {
+                  const dayNum = cell.dayNum!;
+                  const satWeekNum = Math.ceil(dayNum / 7);
+                  if (weeklyOffRules.Sat.alternate_weeks?.includes(String(satWeekNum))) {
+                    isWeeklyOff = true;
+                  }
+                } else {
+                  isWeeklyOff = true;
+                }
+              }
+
+              return (
+                <div
+                  key={cell.dateStr}
+                  onClick={() => {
+                    if (!isLocked) {
+                      handleOpenHolidayModal(null, cell.dateStr);
+                    }
+                  }}
+                  className={cn(
+                    'min-h-[110px] p-2.5 flex flex-col justify-between transition-all group relative cursor-pointer',
+                    isWeeklyOff ? 'bg-neutral-50/50 dark:bg-neutral-900/40' : 'bg-white dark:bg-neutral-900',
+                    'hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20'
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span
+                      className={cn(
+                        'text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center transition-colors',
+                        isToday
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : isSun || isSat
+                          ? 'text-neutral-500 font-semibold'
+                          : 'text-neutral-800 dark:text-neutral-200'
+                      )}
+                    >
+                      {cell.dayNum}
+                    </span>
+
+                    {isWeeklyOff && cellHolidays.length === 0 && (
+                      <span className="text-[10px] font-semibold text-neutral-400 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded">
+                        Off
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-1.5 space-y-1 flex-1">
+                    {cellHolidays.map((h) => {
+                      const isOpt = !!h.is_optional;
+                      const hCategory = h.holiday_type || 'National';
+
+                      return (
+                        <div
+                          key={h.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenHolidayModal(h);
+                          }}
+                          className={cn(
+                            'p-1.5 rounded-lg border text-[11px] font-semibold leading-tight transition-all hover:scale-[1.02] shadow-2xs',
+                            isOpt
+                              ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800'
+                              : hCategory === 'Festival'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800'
+                              : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800'
+                          )}
+                          title={`${h.holiday_name} (${hCategory}${isOpt ? ' - Optional' : ''})`}
+                        >
+                          <div className="truncate flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-current" />
+                            <span className="truncate">{h.holiday_name}</span>
+                          </div>
+                          {isOpt && (
+                            <span className="text-[9px] uppercase tracking-wider block text-purple-500 dark:text-purple-400 mt-0.5">
+                              Floater
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {!isLocked && cellHolidays.length === 0 && (
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-indigo-500 font-semibold flex items-center gap-1 mt-1">
+                      <Plus className="w-3 h-3" /> Add
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderVisualCardsList = () => {
+    if (loadingList) {
+      return (
+        <div className="py-16 text-center text-neutral-500 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+          <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-500 mb-2" />
+          Loading holiday calendars...
+        </div>
+      );
+    }
+
+    if (filteredCalendars.length === 0) {
+      return (
+        <div className="py-16 text-center text-neutral-500 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+          <Calendar className="w-10 h-10 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
+          <p className="text-sm font-semibold text-neutral-900 dark:text-white">No holiday calendars found</p>
+          <p className="text-xs text-neutral-400 mt-1">Try adjusting your filter parameters or create a new calendar.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in-50 duration-200">
+        {filteredCalendars.map((cal) => {
+          const compName = companies.find((c) => (c.company_id || c.id) === cal.company_id)?.name || 'All Companies';
+          const locName = locations.find((l) => l.id === cal.location_id)?.name || 'All Locations';
+          const yearVal = cal.calendar_year || cal.year;
+          const totalCount = cal.total_holidays ?? cal.holidays_count ?? 0;
+
+          return (
+            <div
+              key={cal.id}
+              onClick={() => setSelectedCalendarId(cal.id)}
+              className="group p-5 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-sm hover:shadow-md transition-all cursor-pointer relative flex flex-col justify-between hover:border-indigo-300 dark:hover:border-indigo-700"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="outline" className="font-mono text-xs px-2.5 py-0.5 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/40">
+                    Year {yearVal}
+                  </Badge>
+                  {renderStatusBadge(cal.status)}
+                </div>
+
+                <div>
+                  <h3 className="font-bold text-base text-neutral-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    {cal.calendar_name || cal.name}
+                  </h3>
+                  {cal.description ? (
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 line-clamp-2 mt-1">
+                      {cal.description}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-neutral-400 italic mt-1">Standard organization holiday schedule</p>
+                  )}
+                </div>
+
+                <div className="pt-2 flex flex-wrap gap-2 border-t border-neutral-100 dark:border-neutral-800 text-[11px] text-neutral-600 dark:text-neutral-400">
+                  <div className="flex items-center gap-1.5 bg-neutral-50 dark:bg-neutral-800/60 px-2.5 py-1 rounded-lg">
+                    <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+                    <span>{compName}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-neutral-50 dark:bg-neutral-800/60 px-2.5 py-1 rounded-lg">
+                    <MapPin className="w-3.5 h-3.5 text-neutral-400" />
+                    <span>{locName}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+                <div>
+                  <span className="text-lg font-extrabold text-neutral-900 dark:text-white">{totalCount}</span>
+                  <span className="text-[11px] text-neutral-400 ml-1.5">Holidays</span>
+                </div>
+
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedCalendarId(cal.id)}
+                    className="h-8 px-3 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-xl"
+                  >
+                    View & Manage
+                  </Button>
+
+                  {(!cal.status || String(cal.status).toLowerCase() === 'draft') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCalendarId(cal.id);
+                        setIsPublishConfirmOpen(true);
+                      }}
+                      className="h-8 px-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-xl"
+                      title="Publish Calendar"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // RENDER: CALENDAR DETAIL WORKSPACE VIEW
   // ═══════════════════════════════════════════════════════════════════════════
   if (selectedCalendarId && calendarDetail) {
@@ -587,7 +974,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
           </div>
 
           <div className="flex items-center gap-2">
-            {calendarDetail.status === 'Draft' && (
+            {(!calendarDetail.status || String(calendarDetail.status).toLowerCase() === 'draft') && (
               <Button
                 onClick={() => setIsPublishConfirmOpen(true)}
                 className="h-8 px-3.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5"
@@ -655,8 +1042,21 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
           </div>
         </div>
 
-        {/* ─── TABS HEADER ─────────────────────────────────────────────────── */}
+        {/* ─── TABS HEADER (4 MAIN TABS) ────────────────────────────────────── */}
         <div className="border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('visual-calendar')}
+            className={cn(
+              'px-4 py-2.5 text-xs font-semibold border-b-2 transition-all flex items-center gap-2',
+              activeTab === 'visual-calendar'
+                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                : 'border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
+            )}
+          >
+            <CalendarDays className="w-4 h-4" />
+            Visual Calendar
+          </button>
+
           <button
             onClick={() => setActiveTab('holidays')}
             className={cn(
@@ -666,7 +1066,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
                 : 'border-transparent text-neutral-500 hover:text-neutral-900 dark:hover:text-white'
             )}
           >
-            <CalendarDays className="w-4 h-4" />
+            <List className="w-4 h-4" />
             Holidays List
             <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-bold">
               {totalHolidays}
@@ -703,7 +1103,44 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
           </button>
         </div>
 
-        {/* ─── TAB 1: HOLIDAYS TAB ─────────────────────────────────────────── */}
+        {/* ─── TAB 1: VISUAL CALENDAR TAB ──────────────────────────────────── */}
+        {activeTab === 'visual-calendar' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h2 className="text-sm font-bold text-neutral-900 dark:text-white">Interactive Visual Calendar</h2>
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Month-wise visual grid schedule for Year {calendarDetail.calendar_year || calendarDetail.year}.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsBulkModalOpen(true)}
+                  disabled={isLocked}
+                  className="h-9 px-3 text-xs font-semibold rounded-xl border-neutral-200 dark:border-neutral-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
+                  Bulk Upload (Excel / CSV / PDF)
+                </Button>
+
+                <Button
+                  onClick={() => handleOpenHolidayModal(null)}
+                  disabled={isLocked}
+                  className="h-9 px-4 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />
+                  Add Holiday
+                </Button>
+              </div>
+            </div>
+
+            {renderVisualMonthGrid(calendarDetail, isLocked)}
+          </div>
+        )}
+
+        {/* ─── TAB 2: HOLIDAYS LIST TAB ────────────────────────────────────── */}
         {activeTab === 'holidays' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2">
@@ -738,77 +1175,77 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
 
             {/* Holidays Table */}
             <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden bg-white dark:bg-neutral-900 shadow-sm">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold uppercase tracking-wider text-[10px]">
-                  <tr>
-                    <th className="py-3 px-4">Date</th>
-                    <th className="py-3 px-3">Day</th>
-                    <th className="py-3 px-4">Holiday Name</th>
-                    <th className="py-3 px-3">Category / Type</th>
-                    <th className="py-3 px-3">Status</th>
-                    <th className="py-3 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                  {calendarDetail.holidays && calendarDetail.holidays.length > 0 ? (
-                    calendarDetail.holidays.map((h: HolidayItem) => (
-                      <tr key={h.id} className="hover:bg-neutral-50/60 dark:hover:bg-neutral-800/30 transition-colors">
-                        <td className="py-3 px-4 font-mono font-medium text-neutral-900 dark:text-white">
-                          {formatHolidayDate(h.holiday_date)}
-                        </td>
-                        <td className="py-3 px-3 text-neutral-600 dark:text-neutral-400 font-medium">
-                          {getDayName(h.holiday_date)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-semibold text-neutral-900 dark:text-white block">{h.holiday_name}</span>
-                          {h.description && (
-                            <span className="text-[11px] text-neutral-400 line-clamp-1">{h.description}</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3">{renderTypeBadge(h.holiday_type, h.is_optional)}</td>
-                        <td className="py-3 px-3">
-                          {h.is_optional ? (
-                            <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">Floater</span>
-                          ) : (
-                            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Mandatory</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => handleOpenHolidayModal(h)}
-                              disabled={isLocked}
-                              className="p-1.5 text-neutral-500 hover:text-indigo-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40"
-                              title="Edit Holiday"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteHoliday(h)}
-                              disabled={isLocked}
-                              className="p-1.5 text-neutral-500 hover:text-red-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40"
-                              title="Delete Holiday"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-3">Day</th>
+                      <th className="py-3 px-4">Holiday Name</th>
+                      <th className="py-3 px-3">Category / Type</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                    {calendarDetail.holidays && calendarDetail.holidays.length > 0 ? (
+                      calendarDetail.holidays.map((h: HolidayItem) => (
+                        <tr key={h.id} className="hover:bg-neutral-50/60 dark:hover:bg-neutral-800/30 transition-colors">
+                          <td className="py-3 px-4 font-mono font-medium text-neutral-900 dark:text-white">
+                            {formatHolidayDate(h.holiday_date)}
+                          </td>
+                          <td className="py-3 px-3 text-neutral-600 dark:text-neutral-400 font-medium">
+                            {getDayName(h.holiday_date)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-semibold text-neutral-900 dark:text-white block">{h.holiday_name}</span>
+                            {h.description && (
+                              <span className="text-[11px] text-neutral-400 line-clamp-1">{h.description}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">{renderTypeBadge(h.holiday_type, h.is_optional)}</td>
+                          <td className="py-3 px-3">
+                            {h.is_optional ? (
+                              <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">Floater</span>
+                            ) : (
+                              <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Mandatory</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                onClick={() => handleOpenHolidayModal(h)}
+                                disabled={isLocked}
+                                className="p-1.5 text-neutral-500 hover:text-indigo-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40"
+                                title="Edit Holiday"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteHoliday(h)}
+                                disabled={isLocked}
+                                className="p-1.5 text-neutral-500 hover:text-red-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors disabled:opacity-40"
+                                title="Delete Holiday"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-neutral-500 dark:text-neutral-400">
+                          <Calendar className="w-8 h-8 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
+                          <p className="text-sm font-semibold">No holidays added yet</p>
+                          <p className="text-xs text-neutral-400 mt-0.5">
+                            Click "+ Add Holiday" or "Bulk Upload" to populate Year {calendarDetail.calendar_year || calendarDetail.year}.
+                          </p>
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="py-12 text-center text-neutral-500 dark:text-neutral-400">
-                        <Calendar className="w-8 h-8 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
-                        <p className="text-sm font-semibold">No holidays added yet</p>
-                        <p className="text-xs text-neutral-400 mt-0.5">
-                          Click "+ Add Holiday" or "Bulk Upload" to populate Year {calendarDetail.calendar_year || calendarDetail.year}.
-                        </p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    )}
+                  </tbody>
+                </table>
+              </div>
           </div>
         )}
 
@@ -1254,13 +1691,15 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
           </p>
         </div>
 
-        <Button
-          onClick={() => handleOpenCreateModal(null)}
-          className="h-10 px-4 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Create Calendar
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => handleOpenCreateModal(null)}
+            className="h-10 px-4 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Create Calendar
+          </Button>
+        </div>
       </div>
 
       {/* ─── FILTER BAR ────────────────────────────────────────────────────── */}
@@ -1337,119 +1776,119 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
         </div>
       </div>
 
-      {/* ─── CALENDARS TABLE ───────────────────────────────────────────────── */}
+      {/* ─── CALENDARS MASTER DIRECTORY TABLE ─────────────────────────────── */}
       <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 overflow-hidden bg-white dark:bg-neutral-900 shadow-sm">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold uppercase tracking-wider text-[10px]">
-            <tr>
-              <th className="py-3.5 px-4">Calendar Name</th>
-              <th className="py-3.5 px-3">Year</th>
-              <th className="py-3.5 px-4">Company</th>
-              <th className="py-3.5 px-3">Region / Location</th>
-              <th className="py-3.5 px-3">Status</th>
-              <th className="py-3.5 px-3">Holidays</th>
-              <th className="py-3.5 px-4 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-            {loadingList ? (
+          <table className="w-full text-left text-xs">
+            <thead className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-400 font-semibold uppercase tracking-wider text-[10px]">
               <tr>
-                <td colSpan={7} className="py-12 text-center text-neutral-500">
-                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-500 mb-2" />
-                  Loading holiday calendars...
-                </td>
+                <th className="py-3.5 px-4">Calendar Name</th>
+                <th className="py-3.5 px-3">Year</th>
+                <th className="py-3.5 px-4">Company</th>
+                <th className="py-3.5 px-3">Region / Location</th>
+                <th className="py-3.5 px-3">Status</th>
+                <th className="py-3.5 px-3">Holidays</th>
+                <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
-            ) : filteredCalendars.length > 0 ? (
-              filteredCalendars.map((cal) => {
-                const compName = companies.find((c) => (c.company_id || c.id) === cal.company_id)?.name || 'All Companies';
-                const locName = locations.find((l) => l.id === cal.location_id)?.name || 'All Locations';
-                const yearVal = cal.calendar_year || cal.year;
+            </thead>
+            <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+              {loadingList ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-neutral-500">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-500 mb-2" />
+                    Loading holiday calendars...
+                  </td>
+                </tr>
+              ) : filteredCalendars.length > 0 ? (
+                filteredCalendars.map((cal) => {
+                  const compName = companies.find((c) => (c.company_id || c.id) === cal.company_id)?.name || 'All Companies';
+                  const locName = locations.find((l) => l.id === cal.location_id)?.name || 'All Locations';
+                  const yearVal = cal.calendar_year || cal.year;
 
-                return (
-                  <tr
-                    key={cal.id}
-                    onClick={() => setSelectedCalendarId(cal.id)}
-                    className="hover:bg-neutral-50/70 dark:hover:bg-neutral-800/30 transition-colors cursor-pointer group"
-                  >
-                    <td className="py-3.5 px-4">
-                      <div className="font-semibold text-neutral-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {cal.calendar_name || cal.name}
-                      </div>
-                      {cal.description && (
-                        <div className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">{cal.description}</div>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3 font-mono font-medium text-neutral-700 dark:text-neutral-300">
-                      {yearVal}
-                    </td>
-                    <td className="py-3.5 px-4 text-neutral-600 dark:text-neutral-400">{compName}</td>
-                    <td className="py-3.5 px-3 text-neutral-600 dark:text-neutral-400">{locName}</td>
-                    <td className="py-3.5 px-3">{renderStatusBadge(cal.status)}</td>
-                    <td className="py-3.5 px-3">
-                      <span className="font-bold text-neutral-900 dark:text-white">
-                        {cal.total_holidays ?? cal.holidays_count ?? 0}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedCalendarId(cal.id)}
-                          className="h-8 px-2.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg"
-                        >
-                          View & Manage
-                        </Button>
-
-                        {cal.status === 'Draft' && (
+                  return (
+                    <tr
+                      key={cal.id}
+                      onClick={() => setSelectedCalendarId(cal.id)}
+                      className="hover:bg-neutral-50/70 dark:hover:bg-neutral-800/30 transition-colors cursor-pointer group"
+                    >
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-neutral-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {cal.calendar_name || cal.name}
+                        </div>
+                        {cal.description && (
+                          <div className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">{cal.description}</div>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-3 font-mono font-medium text-neutral-700 dark:text-neutral-300">
+                        {yearVal}
+                      </td>
+                      <td className="py-3.5 px-4 text-neutral-600 dark:text-neutral-400">{compName}</td>
+                      <td className="py-3.5 px-3 text-neutral-600 dark:text-neutral-400">{locName}</td>
+                      <td className="py-3.5 px-3">{renderStatusBadge(cal.status)}</td>
+                      <td className="py-3.5 px-3">
+                        <span className="font-bold text-neutral-900 dark:text-white">
+                          {cal.total_holidays ?? cal.holidays_count ?? 0}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => {
-                              setSelectedCalendarId(cal.id);
-                              setIsPublishConfirmOpen(true);
-                            }}
-                            className="h-8 px-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg"
-                            title="Publish Calendar"
+                            onClick={() => setSelectedCalendarId(cal.id)}
+                            className="h-8 px-2.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg"
                           >
-                            <Send className="w-3.5 h-3.5" />
+                            View & Manage
                           </Button>
-                        )}
 
-                        <button
-                          onClick={() => handleOpenCreateModal(cal)}
-                          className="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
+                          {(!cal.status || String(cal.status).toLowerCase() === 'draft') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedCalendarId(cal.id);
+                                setIsPublishConfirmOpen(true);
+                              }}
+                              className="h-8 px-2 text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg"
+                              title="Publish Calendar"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
 
-                        <button
-                          onClick={() => setCalendarToDelete(cal)}
-                          className="p-1.5 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={7} className="py-14 text-center text-neutral-500">
-                  <Calendar className="w-8 h-8 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
-                  <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">No holiday calendars found</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">
-                    Click "+ Create Calendar" to set up a new yearly holiday policy.
-                  </p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                          <button
+                            onClick={() => handleOpenCreateModal(cal)}
+                            className="p-1.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => setCalendarToDelete(cal)}
+                            className="p-1.5 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-14 text-center text-neutral-500">
+                    <Calendar className="w-8 h-8 mx-auto text-neutral-300 dark:text-neutral-600 mb-2" />
+                    <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">No holiday calendars found</p>
+                    <p className="text-xs text-neutral-400 mt-0.5">
+                      Click "+ Create Calendar" to set up a new yearly holiday policy.
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
       {/* ─── CREATE / EDIT MODAL ────────────────────────────────────────────── */}
       <CreateHolidayCalendarModal
