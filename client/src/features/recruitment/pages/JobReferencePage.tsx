@@ -206,8 +206,9 @@ export const JobReferencePage: React.FC = () => {
       setOpeningsLoading(true);
       try {
         const params: any = {};
-        if (user?.organizationId) params.organizationId = user.organizationId;
-        if (selectedDept) params.departmentName = selectedDept;
+        const effectiveOrgId = user?.organizationId || mrfData?.organizationId || mrfData?.organization_id;
+        if (effectiveOrgId) params.organizationId = effectiveOrgId;
+        if (selectedDept && selectedDept !== 'All') params.departmentName = selectedDept;
         if (selectedType && selectedType !== 'All') params.employmentType = selectedType;
         if (activeTab !== 'All') params.employmentType = activeTab;
         if (searchText.trim()) params.search = searchText.trim();
@@ -226,7 +227,7 @@ export const JobReferencePage: React.FC = () => {
       }
     };
     fetchOpenings();
-  }, [user?.organizationId, selectedDept, selectedType, activeTab, searchText]);
+  }, [user?.organizationId, mrfData?.organizationId, mrfData?.organization_id, selectedDept, selectedType, activeTab, searchText]);
 
   // ────── Fetch candidates list (only candidates with uploaded resumes) ──────
   useEffect(() => {
@@ -256,43 +257,10 @@ export const JobReferencePage: React.FC = () => {
       });
   }, [user?.organizationId]);
 
-  // Combined displayed openings: ensures target MRF from URL is shown first if not already in openings
+  // Displayed openings directly from the backend published openings
   const displayedOpenings = useMemo(() => {
-    if (!mrfData) return openings;
-    const exists = openings.some(
-      (o) => o.id === mrfData.id || o.mr_number === (mrfData.mrNumber || mrfData.mr_number)
-    );
-    if (exists) return openings;
-
-    const title = mrfData.positionTitle || mrfData.position_title || '';
-    const mrNum = mrfData.mrNumber || mrfData.mr_number || requestId || '';
-    const deptName = mrfData.departmentName || mrfData.department_name || '';
-    const desigName = mrfData.designationName || mrfData.designation_name || '';
-    const empType = mrfData.employmentType || mrfData.employment_type || 'Full Time';
-    const qual = mrfData.qualificationRequired || mrfData.qualification_required || '';
-    const exp = mrfData.experienceDesired || mrfData.experience_desired || '';
-    const desc = mrfData.jobDescription || mrfData.job_description || '';
-    const closureDate = mrfData.targetClosureDate || mrfData.target_closure_date || null;
-    const createdDate = mrfData.createdAt || mrfData.created_at || new Date().toISOString();
-
-    const featuredOpening: Opening = {
-      id: mrfData.id || 999999,
-      mr_number: mrNum,
-      position_title: title || (mrNum ? `Position ${mrNum}` : 'Job Position'),
-      number_of_positions: mrfData.numberOfPositions || mrfData.number_of_positions || 1,
-      department_id: mrfData.departmentId || mrfData.department_id || 0,
-      department_name: deptName,
-      designation_name: desigName,
-      employment_type: empType,
-      qualification_required: qual,
-      experience_desired: exp,
-      skills: Array.isArray(mrfData.skills) ? mrfData.skills : (mrfData.skills ? [mrfData.skills] : []),
-      job_description: desc,
-      target_closure_date: closureDate,
-      created_at: createdDate,
-    };
-    return [featuredOpening, ...openings];
-  }, [openings, mrfData, requestId]);
+    return openings;
+  }, [openings]);
 
   const handleBackToHrms = () => {
     const roles = user?.roles || [];
@@ -505,7 +473,7 @@ export const JobReferencePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+    <div className="w-full h-screen overflow-y-auto overflow-x-hidden bg-slate-50 font-sans flex flex-col scroll-smooth">
 
       {/* ─── Top Navbar ──────────────────────────────────────── */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs transition-all">
