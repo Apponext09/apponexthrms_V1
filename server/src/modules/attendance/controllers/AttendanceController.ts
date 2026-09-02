@@ -1,6 +1,7 @@
 
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
+import { ValidationError } from '../../../common/errors/index';
 import { AttendanceService } from '../services/AttendanceService';
 import { ShiftService } from '../services/ShiftService';
 import { GeoFenceService } from '../services/GeoFenceService';

@@ -241,6 +241,7 @@ export class AttendanceService {
     isOptional?: boolean;
     isPunchAllowed: boolean;
     punchAllowedReason?: string;
+    hasPendingRequest?: boolean;
   }> {
     try {
       const db = getKnex();
