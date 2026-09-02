@@ -14,6 +14,7 @@ import type { LocationPingPayload, LocationStatusChangePayload } from '../types/
 import type { TenantContext } from '../../../db/types';
 import { calculateSessionMetrics } from '../utils/sessionCalculator';
 import { snapToRoad } from '../utils/roadSnapper';
+import { generateRoutedTrail, getRoutePolyline } from '../utils/routeGenerator';
 
 /** Resolve employee_id and role from the users table */
 async function resolveSocketUser(
@@ -122,6 +123,10 @@ interface SocketState {
   /** Server-side Kalman filter state (null until first valid ping) */
   kalmanLat: KalmanAxis | null;
   kalmanLng: KalmanAxis | null;
+  /** Routed trail for real-time updates (snapped coords) */
+  routedTrail: Array<{ latitude: number; longitude: number; recorded_at: string }>;
+  /** Last broadcast routed polyline to avoid redundant broadcasts */
+  lastRoutedPolyline: [number, number][] | null;
 }
 
 const socketState = new Map<string, SocketState>();
@@ -218,6 +223,8 @@ export class LiveTrackingSocket {
         lastBreadcrumbAt: 0,
         kalmanLat: null,
         kalmanLng: null,
+        routedTrail: [],
+        lastRoutedPolyline: null,
       });
 
       const ctx: TenantContext = {
@@ -233,6 +240,7 @@ export class LiveTrackingSocket {
 
       // ── Event: employee:ping_location ─────────────────────────────────────
       // Sent by employee app every 10-15 seconds or on significant movement
+      // NOW: Generates real-time routes like Swiggy/Zomato
       socket.on('employee:ping_location', async (payload: LocationPingPayload) => {
         if (!employeeId) return;
 
@@ -242,13 +250,13 @@ export class LiveTrackingSocket {
         try {
           const state = socketState.get(socket.id)!;
           const now = Date.now();
+          const nowIso = new Date().toISOString();
 
           // ── Server-side Kalman filter (2nd pass on top of client Kalman) ──────
           let smoothLat = latitude;
           let smoothLng = longitude;
 
           if (state.kalmanLat === null || state.kalmanLng === null) {
-            // Initialize on first ping
             state.kalmanLat = { estimate: latitude, errorCovariance: 1 };
             state.kalmanLng = { estimate: longitude, errorCovariance: 1 };
           } else {
@@ -259,8 +267,6 @@ export class LiveTrackingSocket {
           smoothLng = state.kalmanLng.estimate;
 
           // ── OSRM Road Snap (non-blocking, max 3s timeout, 60s cache) ──────────
-          // Road-snap the Kalman-smoothed coords. Falls back to smoothed coords
-          // if OSRM is unreachable or snap distance > 50m.
           let broadcastLat = smoothLat;
           let broadcastLng = smoothLng;
           let wasSnapped = false;
@@ -281,23 +287,72 @@ export class LiveTrackingSocket {
             longitude: broadcastLng,
           });
 
-          // Throttle breadcrumb inserts by distance and time (use raw coords for breadcrumbs
-          // so we preserve the actual GPS trail, not the road-projected one)
+          // Throttle breadcrumb inserts by distance and time
           const shouldSaveBreadcrumb =
             state.lastLat === null ||
             now - state.lastBreadcrumbAt >= MIN_PING_INTERVAL_MS ||
             haversineDistance(state.lastLat!, state.lastLng!, latitude, longitude) >= MIN_DISTANCE_METERS;
 
           if (shouldSaveBreadcrumb) {
-            // Store raw GPS in breadcrumbs (preserves original trail for playback accuracy)
-            await repo.addLocationBreadcrumb(ctx, employeeId, payload);
+            // ✅ FIXED: Store SNAPPED coordinates in breadcrumbs (not raw GPS)
+            // This ensures history playback shows actual roads, not zigzag GPS lines
+            await repo.addLocationBreadcrumb(ctx, employeeId, {
+              latitude: broadcastLat,
+              longitude: broadcastLng,
+              accuracy: payload.accuracy,
+              speed: payload.speed,
+            });
+
+            // Add to in-memory routed trail
+            state.routedTrail.push({
+              latitude: broadcastLat,
+              longitude: broadcastLng,
+              recorded_at: nowIso,
+            });
+
             state.lastLat = latitude;
             state.lastLng = longitude;
             state.lastBreadcrumbAt = now;
 
-            // Non-blocking session recalculation
+            // ✅ FIXED: Generate route for the last segment (real-time!)
+            // This creates smooth road-following trails like Swiggy delivery
             (async () => {
               try {
+                if (state.routedTrail.length >= 2) {
+                  const lastIdx = state.routedTrail.length - 1;
+                  const prevPoint = state.routedTrail[lastIdx - 1];
+                  const currPoint = state.routedTrail[lastIdx];
+
+                  const segmentRoute = await getRoutePolyline(
+                    prevPoint.latitude,
+                    prevPoint.longitude,
+                    currPoint.latitude,
+                    currPoint.longitude,
+                    3000
+                  );
+
+                  if (segmentRoute && segmentRoute.length > 0) {
+                    // Generate full routed trail from scratch periodically (every 10 points)
+                    if (state.routedTrail.length % 10 === 0) {
+                      const fullRoute = await generateRoutedTrail(state.routedTrail, { employeeId });
+                      if (fullRoute && fullRoute.length > 0) {
+                        state.lastRoutedPolyline = fullRoute;
+
+                        // Broadcast routed trail to viewers
+                        const routedEvent = {
+                          employee_id: employeeId,
+                          routedTrail: state.routedTrail,
+                          polyline: fullRoute,
+                        };
+
+                        nsp.to(`org:${orgId}`).emit('tracking:routed_trail_updated', routedEvent);
+                        this._broadcastToManagerRooms(nsp, orgId, routedEvent);
+                      }
+                    }
+                  }
+                }
+
+                // Non-blocking session recalculation using snapped breadcrumbs
                 const today = new Date().toISOString().slice(0, 10);
                 const breadcrumbs = await repo.getLocationHistory(ctx, employeeId, today);
                 if (breadcrumbs && breadcrumbs.length > 0) {
@@ -305,12 +360,12 @@ export class LiveTrackingSocket {
                   await repo.upsertTrackingSession(ctx, employeeId, today, metrics);
                 }
               } catch (err) {
-                logger.warn('[LiveTracking] session recalc failed:', err);
+                logger.warn('[LiveTracking] route/session recalc failed:', err);
               }
             })();
           }
 
-          // Broadcast road-snapped + Kalman-smoothed coordinates to authorized rooms
+          // Broadcast location update (snapped coordinates)
           const updateEvent = {
             employee_id: employeeId,
             latitude: broadcastLat,
@@ -320,15 +375,12 @@ export class LiveTrackingSocket {
             heading: payload.heading,
             location_status: 'ON',
             connection_status: 'ONLINE',
-            last_ping_at: new Date().toISOString(),
+            last_ping_at: nowIso,
             road_snapped: wasSnapped,
           };
 
-          // HR/Admin room (org-wide authorized viewers only)
           nsp.to(`org:${orgId}`).emit('tracking:location_updated', updateEvent);
-          // Manager / Team Lead rooms for this org
           this._broadcastToManagerRooms(nsp, orgId, updateEvent);
-          // Echo back to the employee's own room (so their own session tab stays in sync)
           nsp.to(`employee:${orgId}:${employeeId}`).emit('tracking:location_updated', updateEvent);
         } catch (err) {
           logger.error('[LiveTracking] ping_location error:', err);
