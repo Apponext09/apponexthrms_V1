@@ -62,10 +62,11 @@ export const MileageClaimsPage: React.FC = () => {
     fetchMileage();
   }, []);
 
-  const carRate = Number(settings?.mileageRateCar ?? 12);
-  const bikeRate = Number(settings?.mileageRateBike ?? 6);
+  const carRate = Number(settings?.myMileageRateCar ?? settings?.mileageRateCar ?? 12);
+  const bikeRate = Number(settings?.myMileageRateBike ?? settings?.mileageRateBike ?? 6);
   const currentRate = vehicleType === 'bike' ? (isNaN(bikeRate) ? 6 : bikeRate) : (isNaN(carRate) ? 12 : carRate);
   const calculatedAmount = (Number(distanceKm) || 0) * currentRate;
+  const designationLabel = settings?.myDesignationName || user?.designation || null;
 
   const handleCreateMileage = async () => {
     if (!fromLocation.trim() || !toLocation.trim() || distanceKm <= 0) {
@@ -106,6 +107,7 @@ export const MileageClaimsPage: React.FC = () => {
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Log official trips and automatically calculate distance-based per-kilometer rates
+            {designationLabel ? ` for ${designationLabel}` : ''}
           </p>
         </div>
         <button
@@ -117,7 +119,7 @@ export const MileageClaimsPage: React.FC = () => {
         </button>
       </div>
 
-      {/* Rate Banner */}
+      {/* Rate Banner — employee's designation rates only */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center gap-3">
           <Car className="w-8 h-8 text-amber-600" />
@@ -126,6 +128,11 @@ export const MileageClaimsPage: React.FC = () => {
             <div className="text-lg font-bold text-amber-900 dark:text-amber-200">
               ₹{carRate.toFixed(2)} / kilometer
             </div>
+            {designationLabel && (
+              <div className="text-[11px] text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                Assigned for {designationLabel}
+              </div>
+            )}
           </div>
         </div>
 
@@ -136,6 +143,11 @@ export const MileageClaimsPage: React.FC = () => {
             <div className="text-lg font-bold text-blue-900 dark:text-blue-200">
               ₹{bikeRate.toFixed(2)} / kilometer
             </div>
+            {designationLabel && (
+              <div className="text-[11px] text-blue-700/80 dark:text-blue-400/80 mt-0.5">
+                Assigned for {designationLabel}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -250,8 +250,8 @@ const USER_MAPPING_FIELDS = [
 export const MrfRequestPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  // Manager portal = view + create only; HR portal = full control (approve/reject/edit/delete/settings)
-  const isManagerPortal = location.pathname.startsWith('/manager');
+  // Manager / Team Lead portal = view + create only; HR portal = full control (approve/reject/edit/delete/settings)
+  const isManagerPortal = location.pathname.startsWith('/manager') || location.pathname.startsWith('/team-lead');
   const isHrPortal = !isManagerPortal;
 
   const [data, setData] = useState<MRFRequest[]>([]);
@@ -1782,6 +1782,7 @@ export const MrfRequestPage: React.FC = () => {
           toast.error(response.data?.message || 'Failed to delete MRF request');
         }
       } catch (err) {
+        console.error('Delete MRF Request error:', err);
         toast.error('Error deleting MRF request');
       }
     }
@@ -1913,6 +1914,9 @@ export const MrfRequestPage: React.FC = () => {
   // Open Edit Modal
   const handleOpenEditModal = (item: MRFRequest) => {
     setEditingMrf(item);
+    const rawDate = item.targetClosureDate || item.expiryDate || '';
+    const cleanDate = rawDate.includes('T') ? rawDate.split('T')[0] : (rawDate.includes(' ') ? rawDate.split(' ')[0] : rawDate);
+
     setFormFields({
       positionTitle: item.positionTitle || 'Choose',
       numberOfPositions: item.numberOfPositions || '' as any,
@@ -1932,7 +1936,7 @@ export const MrfRequestPage: React.FC = () => {
       skills: item.skills || '',
       comment: item.comment || '',
       jobDescription: item.jobDescription || '',
-      targetClosureDate: item.targetClosureDate || item.expiryDate || '',
+      targetClosureDate: cleanDate,
       requestedBy: item.requestedBy || 'sakshi shukla',
       stage: item.stage || 'Approved',
       applicants: item.applicants || 0,
@@ -1985,6 +1989,10 @@ export const MrfRequestPage: React.FC = () => {
     }
     if (!formFields.skills.trim()) {
       toast.error('Skills field is required');
+      return;
+    }
+    if (!formFields.targetClosureDate || !formFields.targetClosureDate.trim()) {
+      toast.error('Target Closure Date / Expiry Date is required');
       return;
     }
 
@@ -2403,17 +2411,6 @@ export const MrfRequestPage: React.FC = () => {
                       <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
                       <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">{item.interviewType}</div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <Button
-                        size="sm"
-                        className="text-[10px] font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 px-2.5 py-1 h-auto rounded-lg transition-all"
-                        onClick={() => {
-                          toast.info(`Submit feedback for ${item.candidateName || 'Candidate'}`);
-                        }}
-                      >
-                        Feedback
-                      </Button>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -2615,27 +2612,22 @@ export const MrfRequestPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-3.5 font-semibold text-slate-800">{item.mrNumber}</td>
-                    <td className="p-3.5 text-center relative overflow-visible">
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveStagePopoverId(prev => prev === item.id ? null : item.id);
-                        }}
-                        className="inline-flex items-center justify-center p-1.5 bg-red-100 rounded-full text-red-500 shadow-sm cursor-pointer transition-transform hover:scale-105"
-                        title=""
-                      >
-                        <User className="w-3.5 h-3.5" />
-                      </div>
-
-                      {activeStagePopoverId === item.id && (
-                        <div 
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute left-[70%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none animate-in fade-in zoom-in-95 duration-150"
+                    <td className="p-3.5 text-center">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <div 
+                            className="inline-flex items-center justify-center p-1.5 bg-red-100 rounded-full text-red-500 shadow-sm cursor-pointer transition-transform hover:scale-105"
+                            title="Reporting Officer"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent 
+                          align="center" 
+                          side="top" 
+                          sideOffset={8}
+                          className="bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none"
                         >
-                          {/* Arrow pointing to profile button */}
-                          <div className="absolute top-1/2 -translate-y-1/2 -left-2 w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-r-[7px] border-r-white z-50"></div>
-                          <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-r-[7px] border-r-slate-200"></div>
-
                           {/* Popover Header */}
                           <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100 mb-2">
                             <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Reporting Officer</span>
@@ -2672,8 +2664,8 @@ export const MrfRequestPage: React.FC = () => {
                               </button>
                             </div>
                           )}
-                        </div>
-                      )}
+                        </PopoverContent>
+                      </Popover>
                     </td>
 
                     {/* Dynamically configured column cells */}
@@ -3138,14 +3130,15 @@ export const MrfRequestPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="targetClosureDate" className="text-xs font-bold text-slate-700">
-                    Target Closure Date / Expiry Date
+                    Target Closure Date / Expiry Date <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="targetClosureDate"
                     type="date"
+                    required
                     value={formFields.targetClosureDate}
                     onChange={(e) => setFormFields(prev => ({ ...prev, targetClosureDate: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white"
+                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white text-slate-800 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
                   />
                 </div>
 

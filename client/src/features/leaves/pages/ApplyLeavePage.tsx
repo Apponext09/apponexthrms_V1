@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApplyLeave } from '../hooks/useLeave';
 import { useLeaveBalance } from '../hooks/useLeaveBalance';
@@ -57,14 +57,27 @@ export function ApplyLeavePage() {
     loadSettingsAndHolidays();
   }, []);
 
+  const employeeContext = useMemo(() => ({
+    ...(user || {}),
+    ...(employee || {}),
+    gender: ((employee as any)?.gender || (user as any)?.gender || '').toString().trim().toLowerCase(),
+    marital_status: ((employee as any)?.marital_status || (employee as any)?.maritalStatus || (user as any)?.marital_status || '').toString().trim().toLowerCase(),
+    current_department_id: (employee as any)?.current_department_id || (employee as any)?.currentDepartmentId || (user as any)?.department_id,
+    current_location_id: (employee as any)?.current_location_id || (employee as any)?.currentLocationId || (user as any)?.location_id,
+    current_grade_id: (employee as any)?.current_grade_id || (employee as any)?.currentGradeId,
+    employment_type: ((employee as any)?.employment_type || (employee as any)?.employmentType || '').toString(),
+    status: ((employee as any)?.status || '').toString(),
+    date_of_joining: (employee as any)?.date_of_joining || (employee as any)?.dateOfJoining,
+    date_of_confirmation: (employee as any)?.date_of_confirmation || (employee as any)?.dateOfConfirmation,
+  }), [user, employee]);
+
   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
-  const leaveGender = (selectedBalance?.gender_applicable || selectedBalance?.genderApplicable || 'all').toLowerCase();
-  const isGenderRestricted = leaveGender !== 'all' && employee?.gender && employee.gender !== leaveGender;
+  const isRuleRestricted = selectedBalance ? !isLeaveTypeApplicableForGender(selectedBalance, employeeContext) : false;
 
   const isProbationUser = employee?.status === 'probation' || (employee?.probationEndDate && new Date(employee.probationEndDate) > new Date());
   const isProbationRestricted = isProbationUser && Boolean(selectedBalance?.probation_excluded || selectedBalance?.probationExcluded);
 
-  const isBlocked = isGenderRestricted || isProbationRestricted;
+  const isBlocked = isRuleRestricted || isProbationRestricted;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -82,8 +95,8 @@ export function ApplyLeavePage() {
       return;
     }
 
-    if (isGenderRestricted) {
-      toast.error(`This leave type is only applicable for ${leaveGender} employees.`);
+    if (isBlocked || isRuleRestricted) {
+      toast.error('You do not meet the eligibility conditions configured for this leave category.');
       return;
     }
 
@@ -164,9 +177,15 @@ export function ApplyLeavePage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6">
-      <div className="max-w-3xl mx-auto space-y-5 w-full">
+      <div className="max-w-4xl mx-auto space-y-6 w-full">
         {/* Header */}
-        <div className="bg-card border border-border/80 p-4 sm:p-5 rounded-xl shadow-2xs">
+        <div className="flex items-center space-x-4 bg-card border border-border/80 p-4 sm:p-5 rounded-xl shadow-2xs">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-2 rounded-lg border border-border hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
           <div>
             <h1 className="text-xl font-black text-foreground tracking-tight">Apply for Leave</h1>
             <p className="text-xs text-muted-foreground">Submit a leave request for manager approval</p>
@@ -180,13 +199,12 @@ export function ApplyLeavePage() {
           </div>
         )}
 
-        {/* Main Form Card */}
-        <div className="bg-card rounded-xl border border-border/80 shadow-2xs p-5 sm:p-6 space-y-5">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Leave Type */}
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-bold text-foreground flex items-center space-x-1.5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 space-y-6">
+          <form onSubmit={handleSubmit} className="p-6 rounded-xl border border-border bg-card space-y-4 shadow-xs">
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-foreground flex items-center space-x-1.5 mb-1.5">
                   <FileText className="w-3.5 h-3.5 text-primary" />
                   <span>Leave Type *</span>
                 </label>
@@ -199,7 +217,7 @@ export function ApplyLeavePage() {
                 >
                   <option value="">Select Leave Category</option>
                   {balances
-                    .filter((b: any) => isLeaveTypeApplicableForGender(b, (employee as any)?.gender || (user as any)?.gender))
+                    .filter((b: any) => isLeaveTypeApplicableForGender(b, employeeContext))
                     .map((b: any) => (
                       <option key={b.leave_type_id || b.leaveTypeId} value={String(b.leave_type_id || b.leaveTypeId)}>
                         {b.leave_name || b.leaveName || `Category ${b.leave_type_id || b.leaveTypeId}`} ({b.leave_code || b.leaveCode})

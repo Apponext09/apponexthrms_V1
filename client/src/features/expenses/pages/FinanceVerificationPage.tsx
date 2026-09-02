@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { expenseApi, ExpenseClaim } from '../api/expenseApi';
+import { expenseApi, ExpenseClaim, TravelRequest } from '../api/expenseApi';
 import {
   FileCheck2,
   CheckCircle2,
@@ -15,6 +15,7 @@ import {
 export const FinanceVerificationPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState<ExpenseClaim[]>([]);
+  const [travelRequests, setTravelRequests] = useState<TravelRequest[]>([]);
   const [selectedClaim, setSelectedClaim] = useState<ExpenseClaim | null>(null);
 
   // Form for partial/full item adjustments
@@ -28,8 +29,15 @@ export const FinanceVerificationPage: React.FC = () => {
   const fetchFinanceQueue = async () => {
     try {
       setLoading(true);
-      const res = await expenseApi.getClaims({ status: 'pending_finance' });
-      setClaims(res || []);
+      const [claimsRes, travelRes] = await Promise.all([
+        expenseApi.getClaims({ status: 'pending_finance', mode: 'finance' }),
+        expenseApi.getTravelRequests(),
+      ]);
+      setClaims(claimsRes || []);
+      const travel = (travelRes || []).filter((tr: any) =>
+        ['approved', 'pending_finance'].includes(String(tr.status || '').toLowerCase())
+      );
+      setTravelRequests(travel);
     } catch (err) {
       console.error('Failed to load finance queue:', err);
     } finally {
@@ -119,6 +127,15 @@ export const FinanceVerificationPage: React.FC = () => {
     }
   };
 
+  const handleVerifyTravel = async (id: number) => {
+    try {
+      await expenseApi.updateTravelRequestStatus(id, 'approved', 'Verified by finance');
+      fetchFinanceQueue();
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Travel verification failed');
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div>
@@ -134,16 +151,21 @@ export const FinanceVerificationPage: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-sm text-slate-500">Loading finance queue...</div>
-        ) : claims.length === 0 ? (
+        ) : claims.length === 0 && travelRequests.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center justify-center">
             <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3" />
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Finance Queue Clear</h3>
             <p className="text-xs text-slate-500 max-w-sm mt-1">
-              There are no expense claims pending finance verification.
+              There are no expense claims or approved travel requests pending finance verification.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="space-y-0">
+            {claims.length > 0 && (
+            <div className="overflow-x-auto">
+            <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+              Expense claims pending finance
+            </div>
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
                 <tr>
@@ -205,6 +227,69 @@ export const FinanceVerificationPage: React.FC = () => {
                 })}
               </tbody>
             </table>
+            </div>
+            )}
+            {travelRequests.length > 0 && (
+            <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
+              <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+                Approved travel requests
+              </div>
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
+                  <tr>
+                    <th className="py-3.5 px-4">Employee</th>
+                    <th className="py-3.5 px-4">Request</th>
+                    <th className="py-3.5 px-4">From → To</th>
+                    <th className="py-3.5 px-4">Estimated Budget</th>
+                    <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {travelRequests.map((rawTr) => {
+                    const tr = rawTr as any;
+                    const fName = tr.firstName || tr.first_name || '';
+                    const lName = tr.lastName || tr.last_name || '';
+                    const reqNum = tr.requestNumber || tr.request_number || `TRV-${tr.id}`;
+                    const fromLoc = tr.fromLocation || tr.from_location || '';
+                    const toLoc = tr.toLocation || tr.to_location || '';
+                    const budget = Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0);
+                    const st = String(tr.status || '').toLowerCase();
+                    return (
+                      <tr key={`tr-${tr.id}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
+                          {fName || lName ? `${fName} ${lName}`.trim() : 'Employee'}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-semibold text-slate-800 dark:text-slate-200">{tr.purpose}</div>
+                          <div className="text-[11px] text-slate-400 font-mono">{reqNum}</div>
+                        </td>
+                        <td className="py-3.5 px-4">{fromLoc} → {toLoc}</td>
+                        <td className="py-3.5 px-4 font-bold">₹{budget.toLocaleString('en-IN')}</td>
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                            {st === 'pending_finance' ? 'Pending finance' : 'Approved'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          {st === 'pending_finance' ? (
+                            <button
+                              onClick={() => handleVerifyTravel(tr.id)}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
+                            >
+                              Verify travel
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-emerald-600 font-semibold">Manager approved</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            )}
           </div>
         )}
       </div>

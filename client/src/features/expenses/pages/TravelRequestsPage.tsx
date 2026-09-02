@@ -28,21 +28,21 @@ export const TravelRequestsPage: React.FC = () => {
 
   const { user } = useAuthStore();
 
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user?.role || user?.accessRole || (user as any)?.roleCode || '').toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+
+  const isManagement =
+    userRoles.some((r: string) => ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(r.toLowerCase())) ||
+    ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(singleRole) ||
+    path.startsWith('/manager') ||
+    path.startsWith('/team-lead') ||
+    path.startsWith('/hr') ||
+    path.startsWith('/admin');
+
   const fetchTravelRequests = async () => {
     try {
       setLoading(true);
-      const userRoles = Array.isArray(user?.roles) ? user.roles : [];
-      const singleRole = (user?.role || user?.accessRole || (user as any)?.roleCode || '').toLowerCase();
-      const path = window.location.pathname.toLowerCase();
-
-      const isManagement =
-        userRoles.some((r: string) => ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(r.toLowerCase())) ||
-        ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(singleRole) ||
-        path.startsWith('/manager') ||
-        path.startsWith('/team-lead') ||
-        path.startsWith('/hr') ||
-        path.startsWith('/admin');
-
       // For managers/HR/CEO/Admin: fetch all employee travel requests across org/team
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
       const res = await expenseApi.getTravelRequests(empId);
@@ -56,7 +56,7 @@ export const TravelRequestsPage: React.FC = () => {
 
   useEffect(() => {
     fetchTravelRequests();
-  }, []);
+  }, [user]);
 
   const handleCreateRequest = async () => {
     if (!fromLocation.trim() || !toLocation.trim() || !purpose.trim()) {
@@ -100,6 +100,8 @@ export const TravelRequestsPage: React.FC = () => {
     switch (status) {
       case 'approved':
         return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Approved</span>;
+      case 'pending_finance':
+        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
       case 'rejected':
         return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
       default:
@@ -150,7 +152,7 @@ export const TravelRequestsPage: React.FC = () => {
                   <th className="py-3.5 px-4">Dates</th>
                   <th className="py-3.5 px-4">Estimated Budget</th>
                   <th className="py-3.5 px-4">Status</th>
-                  <th className="py-3.5 px-4 text-right">Actions</th>
+                  {isManagement && <th className="py-3.5 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -191,24 +193,26 @@ export const TravelRequestsPage: React.FC = () => {
                         ₹{budget.toLocaleString('en-IN')}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(tr.status)}</td>
-                      <td className="py-3.5 px-4 text-right">
-                        {tr.status === 'pending' && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => handleStatusUpdate(tr.id, 'approved')}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleStatusUpdate(tr.id, 'rejected')}
-                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-semibold"
-                            >
-                              Reject
-                            </button>
-                          </div>
-                        )}
-                      </td>
+                      {isManagement && (
+                        <td className="py-3.5 px-4 text-right">
+                          {tr.status === 'pending' && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleStatusUpdate(tr.id, 'approved')}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold transition-colors"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleStatusUpdate(tr.id, 'rejected')}
+                                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-semibold transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

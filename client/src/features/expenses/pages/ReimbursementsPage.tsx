@@ -25,7 +25,7 @@ export const ReimbursementsPage: React.FC = () => {
   const fetchPayoutQueue = async () => {
     try {
       setLoading(true);
-      const res = await expenseApi.getClaims({ status: 'payment_pending' });
+      const res = await expenseApi.getClaims({ status: 'payment_pending', mode: 'payout' });
       setClaims(res || []);
     } catch (err) {
       console.error('Failed to load reimbursement queue:', err);

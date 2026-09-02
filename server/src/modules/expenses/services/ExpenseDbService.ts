@@ -6,6 +6,8 @@ export class ExpenseDbService {
   public static async ensureTablesAndSeed(organizationId: number = 1): Promise<void> {
     try {
       const db = getKnex();
+      await this.ensureSubmitterColumns(db);
+      await this.ensureMileageDesignationRatesTable(db);
 
       const hasCategoriesTable = await db.schema.hasTable('expense_categories');
       if (hasCategoriesTable) {
@@ -301,6 +303,41 @@ export class ExpenseDbService {
       this.isInitialized = true;
     } catch (error) {
       console.error('Failed to initialize Expense DB schema and seed data:', error);
+    }
+  }
+
+  private static async ensureMileageDesignationRatesTable(db: any): Promise<void> {
+    const hasTable = await db.schema.hasTable('expense_mileage_designation_rates').catch(() => false);
+    if (hasTable) return;
+    await db.schema.createTable('expense_mileage_designation_rates', (table: any) => {
+      table.bigIncrements('id').primary();
+      table.bigInteger('organization_id').unsigned().notNullable();
+      table.bigInteger('designation_id').unsigned().notNullable();
+      table.decimal('rate_car', 10, 2).notNullable().defaultTo(12.0);
+      table.decimal('rate_bike', 10, 2).notNullable().defaultTo(6.0);
+      table.timestamps(true, true);
+      table.unique(['organization_id', 'designation_id']);
+      table.index(['organization_id']);
+      table.index(['designation_id']);
+    });
+  }
+
+  private static async ensureSubmitterColumns(db: any): Promise<void> {
+    const tables = ['expense_claims', 'travel_requests', 'travel_advances', 'mileage_claims'];
+    for (const tableName of tables) {
+      const hasTable = await db.schema.hasTable(tableName).catch(() => false);
+      if (!hasTable) continue;
+      const hasSubmitter = await db.schema.hasColumn(tableName, 'submitted_by_user_id').catch(() => false);
+      if (!hasSubmitter) {
+        await db.schema.alterTable(tableName, (table: any) => {
+          table.bigInteger('submitted_by_user_id').unsigned().nullable();
+        });
+      }
+      try {
+        await db.raw(`ALTER TABLE \`${tableName}\` MODIFY COLUMN employee_id BIGINT UNSIGNED NULL`);
+      } catch {
+        // ignore if already nullable or engine mismatch
+      }
     }
   }
 
