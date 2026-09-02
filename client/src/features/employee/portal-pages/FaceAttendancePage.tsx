@@ -276,21 +276,13 @@ export default function FaceAttendancePage() {
     if (!navigator.geolocation) {
       const hasNoAssignedLocations = myLocations.length === 0;
       setGeofenceStatus({
-        isValid: hasNoAssignedLocations || import.meta.env.DEV,
+        isValid: hasNoAssignedLocations,
         distanceMeters: 0,
         nearestOfficeName: 'Geofence Check',
         message: hasNoAssignedLocations
           ? 'No specific geofence restriction assigned. Position face clearly inside frame.'
-          : import.meta.env.DEV
-          ? 'GPS geolocation not supported by browser. Auto-bypassed in DEV mode.'
           : 'GPS geolocation is not supported by your browser.',
       });
-      if (import.meta.env.DEV && myLocations.length > 0) {
-        const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
-        if (selectedLoc) {
-          setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
-        }
-      }
       setLocLoading(false);
       return;
     }
@@ -305,23 +297,13 @@ export default function FaceAttendancePage() {
       (err) => {
         console.warn('GPS location error:', err);
         const hasNoAssignedLocations = myLocations.length === 0;
-        const isDev = import.meta.env.DEV;
-
-        if (isDev && myLocations.length > 0) {
-          const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
-          if (selectedLoc) {
-            setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
-          }
-        }
 
         setGeofenceStatus({
-          isValid: hasNoAssignedLocations || isDev,
+          isValid: hasNoAssignedLocations,
           distanceMeters: 0,
           nearestOfficeName: 'Branch Location Check',
           message: hasNoAssignedLocations
             ? 'Unable to access GPS location, but no geofence restriction is assigned. You can check in.'
-            : isDev
-            ? 'Location permission blocked. Office location auto-applied for DEV/Testing mode.'
             : 'Unable to access GPS location. Click the tune/lock icon 🔒 in browser address bar to allow Location permission.',
         });
         setLocLoading(false);
@@ -343,12 +325,6 @@ export default function FaceAttendancePage() {
     }
 
     if (!gpsLocation) {
-      if (import.meta.env.DEV) {
-        const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
-        if (selectedLoc) {
-          setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
-        }
-      }
       return;
     }
 
@@ -368,10 +344,10 @@ export default function FaceAttendancePage() {
       });
     } else {
       setGeofenceStatus({
-        isValid: import.meta.env.DEV ? true : false,
+        isValid: false,
         distanceMeters: dist,
         nearestOfficeName: selectedLoc.name,
-        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.${import.meta.env.DEV ? ' (Allowed in DEV mode)' : ''}`,
+        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.`,
       });
     }
   }, [gpsLocation, selectedLocationId, myLocations]);
@@ -1121,17 +1097,6 @@ export default function FaceAttendancePage() {
                 >
                   <RefreshCw className={cn("w-3 h-3", locLoading && "animate-spin")} /> Re-check GPS
                 </Button>
-                {(!geofenceStatus.isValid || import.meta.env.DEV) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleUseOfficeLocationFallback}
-                    className="h-7 px-2.5 text-[10px] font-bold gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
-                    title="Apply assigned office location coordinates"
-                  >
-                    <Building2 className="w-3 h-3 text-amber-600" /> Use Office Location
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -1240,17 +1205,6 @@ export default function FaceAttendancePage() {
                     <Video className="w-3.5 h-3.5 mr-1 text-primary" /> Turn On Camera
                   </Button>
                 )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEnrollFace}
-                  disabled={biometricLoading}
-                  className="h-8 text-xs font-semibold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20"
-                  title="Enroll or update face biometric template"
-                >
-                  <Sparkles className="w-3.5 h-3.5 mr-1 text-indigo-600" /> Enroll My Face
-                </Button>
               </div>
 
               <Button

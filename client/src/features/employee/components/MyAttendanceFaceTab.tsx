@@ -134,17 +134,11 @@ export function MyAttendanceFaceTab({
       },
       (err) => {
         console.warn('GPS location error:', err);
-        const isDev = import.meta.env.DEV;
-        if (isDev) {
-          setGpsLocation({ lat: APPROVED_GEOFENCES[0].lat, lng: APPROVED_GEOFENCES[0].lng });
-        }
         setGeofenceStatus({
-          isValid: isDev,
+          isValid: false,
           distanceMeters: 0,
           nearestOfficeName: 'Arham IT Solution / Kosqu Technolab',
-          message: isDev
-            ? 'Location permission blocked. Office location auto-applied for DEV/Testing mode.'
-            : 'Unable to access GPS location. Click the tune/lock icon 🔒 in browser address bar to allow Location permission.',
+          message: 'Unable to access GPS location. Click the tune/lock icon 🔒 in browser address bar to allow Location permission.',
         });
         setLocLoading(false);
       },
