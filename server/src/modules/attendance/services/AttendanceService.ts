@@ -7,6 +7,7 @@ import { EmployeeShiftAssignmentRepository } from '../repositories/EmployeeShift
 import { AttendancePoliciesMappingRepository } from '../repositories/AttendancePoliciesMappingRepository';
 import { GeofenceRepository } from '../repositories/GeofenceRepository';
 import { GeoFenceService } from './GeoFenceService';
+import { HolidayCalendarService } from '../../master/services/HolidayCalendarService';
 import { ShiftService } from './ShiftService';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { LateMarkNotificationService } from '../../notifications/services/lateMarkNotificationService';
@@ -216,61 +217,153 @@ export class AttendanceService {
   }
 
   /**
-   * Resolve whether a given date is a public holiday for an employee,
-   * based on the holiday_calendars scoped to their location (or default calendar).
-   * Optional holidays (restricted/RH) are intentionally excluded — they do not
-   * auto-block check-in.
+   * Resolve whether a given date is a public holiday or weekly off for an employee,
+   * using the priority-based HolidayCalendarService which respects calendar assignments
+   * (location, department, company, org fallback).
+   *
+   * Also evaluates multi-tier punch permission:
+   *   1. Org-wide setting: allow_holiday_punch_by_default
+   *   2. Employee-level override: employee_attendance_locations.allow_holiday_punch / allow_weekoff_punch
+   *   3. Shift assigned for today (shift override implicitly allows)
+   *   4. Optional holidays (Restricted/RH) never block check-in
+   *
+   * Returns structured result with `isHoliday`, `isWeekOff`, `isPunchAllowed`, and `reason`.
    */
   private async resolveHolidayStatus(
     ctx: TenantContext,
     employeeId: number,
     date: string  // YYYY-MM-DD
-  ): Promise<{ isHoliday: boolean; holidayName?: string; holidayType?: string }> {
+  ): Promise<{
+    isHoliday: boolean;
+    isWeekOff: boolean;
+    holidayName?: string;
+    holidayType?: string;
+    isOptional?: boolean;
+    isPunchAllowed: boolean;
+    punchAllowedReason?: string;
+  }> {
     try {
       const db = getKnex();
-      const year = parseInt(date.split('-')[0], 10);
+      const holidayCalSvc = new HolidayCalendarService();
 
-      // 1. Resolve employee's current location
-      const emp = await db('employees')
-        .where({ id: employeeId, organization_id: ctx.organizationId })
-        .first('current_location_id')
-        .catch(() => null);
-      const locationId = emp?.current_location_id ?? null;
-
-      // 2. Find applicable holiday calendars (location-scoped + default fallback)
-      let calQuery = db('holiday_calendars')
-        .where('organization_id', ctx.organizationId)
-        .where('year', year);
-      if (locationId) {
-        calQuery = calQuery.where(function (this: any) {
-          this.where('applicable_location_id', locationId).orWhere('is_default', true);
-        });
-      } else {
-        calQuery = calQuery.where('is_default', true);
+      // 1. Resolve employee's assigned calendar using full priority chain
+      const calResult = await holidayCalSvc.getCalendarForEmployee(null, ctx, employeeId);
+      if (!calResult) {
+        // No calendar assigned — no restrictions
+        return { isHoliday: false, isWeekOff: false, isPunchAllowed: true, punchAllowedReason: 'No holiday calendar assigned' };
       }
-      const calendars = await calQuery.select('id').catch(() => []);
-      const calIds = calendars.map((c: any) => Number(c.id));
-      if (calIds.length === 0) return { isHoliday: false };
 
-      // 3. Check if the given date is a non-optional public holiday
-      const holiday = await db('holidays')
-        .whereIn('holiday_calendar_id', calIds)
-        .where('holiday_date', date)
-        .where('is_optional', false)
-        .first('holiday_name', 'holiday_type')
-        .catch(() => null);
+      // 2. Check if today is a holiday or week-off
+      const offDayResult = await holidayCalSvc.isHolidayOrWeekOff(null, ctx, calResult.calendarId, date);
 
-      if (holiday) {
+      if (!offDayResult.isOff) {
+        return { isHoliday: false, isWeekOff: false, isPunchAllowed: true };
+      }
+
+      const isHoliday = offDayResult.type === 'Holiday';
+      const isWeekOff = offDayResult.type === 'WeekOff';
+
+      // 3. Optional holidays (Restricted/RH) never block check-in
+      if (isHoliday && offDayResult.isOptional) {
         return {
           isHoliday: true,
-          holidayName: holiday.holiday_name || holiday.holidayName,
-          holidayType: holiday.holiday_type || holiday.holidayType,
+          isWeekOff: false,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isOptional: true,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Optional/Restricted Holiday does not block check-in',
         };
       }
-      return { isHoliday: false };
+
+      // 4. Check org-wide setting: allow_holiday_punch_by_default
+      const orgSetting = await db('organization_leave_settings')
+        .where('organization_id', ctx.organizationId)
+        .first('allow_holiday_punch_by_default')
+        .catch(() => null);
+      const orgAllowsHolidayPunch = !!(orgSetting?.allow_holiday_punch_by_default);
+
+      if (orgAllowsHolidayPunch) {
+        return {
+          isHoliday,
+          isWeekOff,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Org setting: Holiday punch allowed by default',
+        };
+      }
+
+      // 5. Check employee-level override in employee_attendance_locations
+      const empLocation = await db('employee_attendance_locations')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', employeeId)
+        .first('allow_holiday_punch', 'allow_weekoff_punch')
+        .catch(() => null);
+
+      const empAllowHoliday = !!(empLocation?.allow_holiday_punch);
+      const empAllowWeekOff = !!(empLocation?.allow_weekoff_punch);
+
+      if (isHoliday && empAllowHoliday) {
+        return {
+          isHoliday: true,
+          isWeekOff: false,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Employee granted holiday punch permission',
+          hasPendingRequest: false,
+        };
+      }
+
+      if (isWeekOff && empAllowWeekOff) {
+        return {
+          isHoliday: false,
+          isWeekOff: true,
+          holidayName: offDayResult.name,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Employee granted week-off punch permission',
+          hasPendingRequest: false,
+        };
+      }
+
+      // 6. Check approved or pending overtime/holiday work requests for today
+      const overtimeReq = await db('overtime_requests')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', employeeId)
+        .whereRaw('DATE(overtime_date) = ?', [date])
+        .whereNull('deleted_at')
+        .first('approval_status', 'reason_description')
+        .catch(() => null);
+
+      const statusVal = overtimeReq?.approvalStatus || overtimeReq?.approval_status;
+
+      if (statusVal === 'approved') {
+        return {
+          isHoliday,
+          isWeekOff,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Approved Holiday Work Request',
+          hasPendingRequest: false,
+        };
+      }
+
+      const hasPendingRequest = statusVal === 'pending';
+
+      // 7. Block punch — not authorized
+      return {
+        isHoliday,
+        isWeekOff,
+        holidayName: offDayResult.name,
+        holidayType: offDayResult.holidayType,
+        isPunchAllowed: false,
+        hasPendingRequest,
+      };
     } catch (e) {
       console.warn('[AttendanceService] resolveHolidayStatus error (non-fatal):', e);
-      return { isHoliday: false };
+      return { isHoliday: false, isWeekOff: false, isPunchAllowed: true, hasPendingRequest: false };
     }
   }
 
@@ -341,26 +434,32 @@ export class AttendanceService {
       }
     }
 
-    // ── Holiday & Shift Gate ──────────────────────────────────────────────────
+    // ── Holiday & Week-Off Punch Gate ─────────────────────────────────────────
     const holidayStatus = await this.resolveHolidayStatus(ctx, input.employeeId, today);
 
-    if (holidayStatus.isHoliday && !resolvedShift) {
-      // Public holiday AND no shift assigned → block check-in
+    // Determine if the punch is on a restricted day (holiday or week-off)
+    const isRestrictedDay = holidayStatus.isHoliday || holidayStatus.isWeekOff;
+
+    if (isRestrictedDay && !holidayStatus.isPunchAllowed) {
+      // Punch is blocked — employee/org has no permission override and no shift assigned
+      const dayLabel = holidayStatus.isHoliday
+        ? `public holiday (${holidayStatus.holidayName})`
+        : `weekly off (${holidayStatus.holidayName ?? 'Week Off'})`;
       throw new ValidationError(
-        `Today is a public holiday (${holidayStatus.holidayName}). No shift is assigned, so attendance cannot be marked.`
+        `Today is a ${dayLabel}. Attendance punch is disabled. Contact HR to enable holiday work permission.`
       );
     }
 
-    if (!resolvedShift && !holidayStatus.isHoliday) {
+    if (!isRestrictedDay && !resolvedShift) {
       // Normal working day but no shift assigned → block check-in
       throw new ValidationError(
         'No shift is assigned for today. Please contact HR to assign a shift before marking attendance.'
       );
     }
 
-    // If holiday but shift exists → allow (holiday working day), attach a note
-    const holidayNote = holidayStatus.isHoliday && resolvedShift
-      ? `Working on Holiday: ${holidayStatus.holidayName}`
+    // If punch is allowed on holiday/week-off → attach a note for payroll tracking
+    const holidayNote = isRestrictedDay && holidayStatus.isPunchAllowed
+      ? `${holidayStatus.isHoliday ? 'Holiday' : 'Week-Off'} Work: ${holidayStatus.holidayName ?? ''}`
       : null;
 
     // ── Grace Period + Half-Day Status Computation ────────────────────────────
@@ -1145,11 +1244,12 @@ export class AttendanceService {
       console.warn('[AttendanceService] getCheckInStatus shift error:', e);
     }
 
-    // Resolve holiday status for today
+    // Resolve holiday / week-off status for today with full permission check
     const holidayStatus = await this.resolveHolidayStatus(ctx, employeeId, today);
     const hasShift = !!resolvedShift;
-    // Attendance is blocked when: (a) holiday with no shift, OR (b) no shift on a working day
-    const isAttendanceBlocked = !hasShift;
+    const isRestrictedDay = holidayStatus.isHoliday || holidayStatus.isWeekOff;
+    // Punch is blocked when: restricted day without permission, OR no shift on a normal working day
+    const isAttendanceBlocked = (isRestrictedDay && !holidayStatus.isPunchAllowed) || (!hasShift && !isRestrictedDay);
 
     if (record) {
       try {
@@ -1190,10 +1290,14 @@ export class AttendanceService {
       checkOutTime: record ? (record.checkOutTime ?? record.check_out_time) : null,
       duration: record ? (record.durationMinutes ?? record.duration_minutes) : null,
       isOnBreak: !!activeBreak,
-      // ── Holiday & Shift Gate fields ──────────────────────────────────────────
+      // ── Holiday & Week-Off Gate fields ────────────────────────────────────────
       isHoliday: holidayStatus.isHoliday,
+      isWeekOff: holidayStatus.isWeekOff,
       holidayName: holidayStatus.holidayName ?? null,
       holidayType: holidayStatus.holidayType ?? null,
+      isPunchAllowedOnHoliday: holidayStatus.isPunchAllowed,
+      holidayPunchReason: holidayStatus.punchAllowedReason ?? null,
+      hasPendingRequest: holidayStatus.hasPendingRequest ?? false,
       hasShift,
       isAttendanceBlocked,
       isBreakPaused: activeBreak?.status === 'paused',

@@ -4,6 +4,7 @@ import { db } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import { AttendanceService } from './AttendanceService';
 import { GeoFenceService } from './GeoFenceService';
+import { HolidayCalendarService } from '../../master/services/HolidayCalendarService';
 
 const PROFILE_TABLE = 'employee_biometric_profiles';
 const BIOMETRIC_SERVICE_URL =
@@ -411,6 +412,75 @@ export class BiometricService {
   ) {
     await this.requireProfileTable();
     const images = this.normalizeImages(imageOrImages);
+
+    // ── Holiday / Week-Off Gate (pre-check before face ID pipeline) ──────────
+    // We resolve the employee early only if a targetEmployeeIdentifier is provided.
+    // This allows us to block punches before expensive face identification.
+    if (targetEmployeeIdentifier) {
+      try {
+        const preCheckEmp = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .where(function () {
+            this.where('id', targetEmployeeIdentifier)
+              .orWhere('employee_code', targetEmployeeIdentifier);
+          })
+          .whereNull('deleted_at')
+          .first('id');
+
+        if (preCheckEmp) {
+          const holidayCalSvc = new HolidayCalendarService();
+          const today = new Date().toISOString().split('T')[0];
+          const calResult = await holidayCalSvc.getCalendarForEmployee(null, ctx, preCheckEmp.id);
+          if (calResult) {
+            const offDay = await holidayCalSvc.isHolidayOrWeekOff(null, ctx, calResult.calendarId, today);
+            if (offDay.isOff && !offDay.isOptional) {
+              // Check employee permission override
+              const empLoc = await db('employee_attendance_locations')
+                .where('organization_id', ctx.organizationId)
+                .where('employee_id', preCheckEmp.id)
+                .first('allow_holiday_punch', 'allow_weekoff_punch')
+                .catch(() => null);
+              const orgSetting = await db('organization_leave_settings')
+                .where('organization_id', ctx.organizationId)
+                .first('allow_holiday_punch_by_default')
+                .catch(() => null);
+              const orgAllows = !!(orgSetting?.allow_holiday_punch_by_default);
+              const empAllowHoliday = !!(empLoc?.allow_holiday_punch);
+              const empAllowWeekOff = !!(empLoc?.allow_weekoff_punch);
+              // Check approved overtime/holiday work request for today
+              const approvedOt = await db('overtime_requests')
+                .where('organization_id', ctx.organizationId)
+                .where('employee_id', preCheckEmp.id)
+                .whereRaw('DATE(overtime_date) = ?', [today])
+                .where('approval_status', 'approved')
+                .whereNull('deleted_at')
+                .first('id')
+                .catch(() => null);
+
+              const isPunchAllowed = orgAllows ||
+                (offDay.type === 'Holiday' && empAllowHoliday) ||
+                (offDay.type === 'WeekOff' && empAllowWeekOff) ||
+                !!approvedOt;
+              if (!isPunchAllowed) {
+                const label = offDay.type === 'Holiday'
+                  ? `public holiday (${offDay.name})`
+                  : `weekly off (${offDay.name ?? 'Week Off'})`;
+                throw new Error(
+                  `Today is a ${label}. Attendance punch is disabled. Submit a work permission request to HR/Manager.`
+                );
+              }
+            }
+          }
+        }
+      } catch (e: any) {
+        // If this is a holiday/week-off gate error, re-throw to caller
+        if (e.message && (e.message.includes('holiday') || e.message.includes('week') || e.message.includes('Week Off'))) {
+          throw e;
+        }
+        // Otherwise non-fatal — allow face identification to proceed
+        console.warn('[BiometricService] Holiday pre-check warning (non-fatal):', e.message);
+      }
+    }
 
     // This bootstraps the existing Samarth/Harsh captured profile photos once.
     const syncResult = await this.syncExistingEmployeePhotos(ctx);
