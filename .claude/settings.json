@@ -11,10 +11,44 @@
       "Read(//tmp/**)",
       "Bash(cat > *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(node recurseed.cjs)",
+      "Bash(DB_PASSWORD=\"Harsh11@\" node recurseed.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node recurseed.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node expenseseed.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" npm run migrate)",
+      "Bash(npm run *)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" npx knex migrate:latest --knexfile database/knexfile.ts)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" npx knex migrate:latest --knexfile database/knexfile.ts --verbose)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" npx knex raw --knexfile database/knexfile.ts \"SHOW TABLES LIKE 'expense%'\")",
+      "Bash(DB_PASSWORD=\"Aqil@123\" npx knex migrate:rollback --knexfile database/knexfile.ts)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node \"C:\\\\hrms proper copied\\\\apponexthrms\\\\check_tables.cjs\")",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node safe_seed_data.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node \"C:\\\\hrms proper copied\\\\apponexthrms\\\\verify_seed.cjs\")",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node complete_seed.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node final_seed.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node verify_seed.cjs)",
+      "Bash(cd \"C:\\\\hrms proper copied\\\\apponexthrms\" && rm -f check_*.cjs verify_seed.cjs test_insert.cjs safe_seed_data.cjs complete_seed.cjs final_seed.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node seed_expenses.cjs)",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node seed_recruitment.cjs)",
+      "Bash(DB_PASSWORD=Aqil@123 node -e ' *)",
+      "Bash(git commit -m 'Merge branch '\\\\''shakyadita'\\\\'' - resolve MyExpensesPage conflict *)",
+      "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
+      "PowerShell(& \"C:\\\\Users\\\\HomePC\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--hrms-proper-copied-apponexthrms\\\\4c69d3ff-7185-4c80-97ad-fed61d8a5c25\\\\scratchpad\\\\generate_test_report.ps1\" -ErrorAction Continue 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\HomePC\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--hrms-proper-copied-apponexthrms\\\\4c69d3ff-7185-4c80-97ad-fed61d8a5c25\\\\scratchpad\\\\final_test_report.ps1\")",
+      "Bash(xargs grep -l \"WeeklyRosterGrid\\\\|class.*WeeklyRosterGrid\")",
+      "Bash(xargs grep -l \"useLeaveApprovals\\\\|useApproveLeave\\\\|useRejectLeave\")",
+      "Bash(grep -o \"\\\\/[a-zA-Z0-9/\\\\-_]*\" \"c:\\\\hrms proper copied\\\\apponexthrms\\\\client\\\\src\\\\features\\\\leaves\\\\pages\\\\ApprovalInboxPage.tsx\")",
+      "Bash(node seed_live_tracking_routes.cjs)",
+      "Bash(DB_PASSWORD=\"Harsh11@\" node seed_live_tracking_routes.cjs)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(node \"C:\\\\Users\\\\HomePC\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--hrms-proper-copied-apponexthrms\\\\f07b8709-97fb-411d-9150-7090474e9c22\\\\scratchpad\\\\test_routing_utility.cjs\")",
+      "Bash(DB_PASSWORD=\"Aqil@123\" node seed_live_tracking_routes.cjs)",
+      "Bash(node seed_yash_kale.cjs)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "C:\\hrms proper copied\\apponexthrms"
     ]
   }
 }

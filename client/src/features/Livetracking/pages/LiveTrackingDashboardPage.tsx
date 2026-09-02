@@ -127,6 +127,7 @@ export const LiveTrackingDashboardPage: React.FC = () => {
       const dataToUse = normalizedData.filter(isCheckedInEmployee);
 
       // Pre-fetch today's route trails safely for active employees
+      // ✅ FIXED: Now using server-generated routed trails
       const todayStr = new Date().toISOString().slice(0, 10);
       const enrichedData = await Promise.all(
         dataToUse.map(async (emp) => {
@@ -135,6 +136,8 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           try {
             const history = await fetchRouteHistory(empId, todayStr).catch(() => []);
             if (history && history.length > 0) {
+              // History now contains snapped coordinates from server
+              // Breaks will be detected by socket updates
               const breaks = detectBreakPoints(history);
               return { ...emp, routeTrail: history, breakPoints: breaks };
             }

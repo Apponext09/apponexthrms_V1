@@ -58,41 +58,51 @@ function isDarkModeActive(): boolean {
   return document.documentElement.classList.contains('dark');
 }
 
-// ── Convert employee route trails to GeoJSON lines ────────────────────────────
+// ── Convert employee route trails to GeoJSON lines ────
+// ✅ FIXED: Now just uses server-generated routed trails directly (no client-side OSRM)
+// Routes come from server with polylines already computed
 function routesToGeoJSON(employees: LiveEmployee[]): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+
+  for (const emp of employees) {
+    if (!isValidCoord(emp.latitude, emp.longitude)) continue;
+
+    const empId = emp.employee_id ?? (emp as any).id;
+    const routeTrail = (emp.routeTrail || []).filter((p) => isValidCoord(p.latitude, p.longitude));
+
+    if (routeTrail.length === 0) {
+      if (import.meta.env.DEV) console.log(`[Map] No trail for emp ${empId}`);
+      continue;
+    }
+
+    // Build coordinates from route trail (already routed by server)
+    let coords: [number, number][] = routeTrail.map((p) => [Number(p.longitude), Number(p.latitude)]);
+
+    // Fallback for single point
+    if (coords.length === 1) {
+      coords = [
+        coords[0],
+        [coords[0][0] + 0.00005, coords[0][1] + 0.00005],
+      ];
+    }
+
+    if (coords.length >= 2) {
+      features.push({
+        type: 'Feature' as const,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: coords,
+        },
+        properties: { employee_id: empId },
+      });
+    }
+  }
+
+  if (import.meta.env.DEV) console.log(`[Map] Generated ${features.length} route features`);
+
   return {
     type: 'FeatureCollection',
-    features: employees
-      .filter((e) => isValidCoord(e.latitude, e.longitude))
-      .map((emp) => {
-        const empId = emp.employee_id ?? (emp as any).id;
-        const rawTrail = (emp.routeTrail || []).filter((p) => isValidCoord(p.latitude, p.longitude));
-
-        let coords: [number, number][] = rawTrail.map((p) => [Number(p.longitude), Number(p.latitude)]);
-
-        if (isValidCoord(emp.latitude, emp.longitude)) {
-          const cur: [number, number] = [Number(emp.longitude), Number(emp.latitude)];
-          const last = coords[coords.length - 1];
-          if (!last || last[0] !== cur[0] || last[1] !== cur[1]) {
-            coords.push(cur);
-          }
-        }
-
-        // Generate a 2-point visual segment if only 1 point exists so the line is always visible
-        if (coords.length === 1) {
-          coords.push([coords[0][0] + 0.00005, coords[0][1] + 0.00005]);
-        }
-
-        return {
-          type: 'Feature' as const,
-          geometry: {
-            type: 'LineString' as const,
-            coordinates: coords,
-          },
-          properties: { employee_id: empId },
-        };
-      })
-      .filter((f) => (f.geometry as GeoJSON.LineString).coordinates.length >= 2),
+    features,
   };
 }
 
@@ -295,9 +305,15 @@ const InnerMap: React.FC<Props> = ({
       mapLoadedRef.current = true;
 
       try {
-        (map.getSource('routes') as maplibregl.GeoJSONSource)?.setData(routesToGeoJSON(employees) as any);
+        console.log('[LiveTrackingMap] Loading routes...');
+        const routeData = routesToGeoJSON(employees);
+        console.log('[LiveTrackingMap] Setting route data:', routeData.features.length, 'features');
+        (map.getSource('routes') as maplibregl.GeoJSONSource)?.setData(routeData as any);
         (map.getSource('breaks') as maplibregl.GeoJSONSource)?.setData(breaksToGeoJSON(employees) as any);
-      } catch {}
+        console.log('[LiveTrackingMap] Routes updated on map');
+      } catch (err) {
+        console.error('[LiveTrackingMap] Error updating routes:', err);
+      }
 
       if (validEmployees.length > 0) {
         fitMapToEmployees(map, validEmployees);
@@ -458,9 +474,15 @@ const InnerMap: React.FC<Props> = ({
     // Update GeoJSON route and break layers
     if (mapLoadedRef.current) {
       try {
-        (map.getSource('routes') as maplibregl.GeoJSONSource)?.setData(routesToGeoJSON(employees) as any);
+        console.log('[LiveTrackingMap] Updating routes for', employees.length, 'employees');
+        const routeData = routesToGeoJSON(employees);
+        console.log('[LiveTrackingMap] Setting', routeData.features.length, 'route features');
+        (map.getSource('routes') as maplibregl.GeoJSONSource)?.setData(routeData as any);
         (map.getSource('breaks') as maplibregl.GeoJSONSource)?.setData(breaksToGeoJSON(employees) as any);
-      } catch {}
+        console.log('[LiveTrackingMap] Routes updated');
+      } catch (err) {
+        console.error('[LiveTrackingMap] Error updating routes:', err);
+      }
     }
   }, [employees, validEmployees, selectedId, onSelectEmployee]);
 
