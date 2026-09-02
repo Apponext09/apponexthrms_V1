@@ -272,10 +272,18 @@ export class LifecycleService {
       }
     }
 
-    const adminUser = await db('users')
-      .where('organization_id', ctx.organizationId)
-      .where((b) => b.where('role', 'organization_admin').orWhere('role', 'super_admin').orWhere('email', 'harsh@gmail.com'))
-      .first();
+    const adminUser = await db('users as u')
+      .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
+      .leftJoin('roles as r', 'ur.role_id', 'r.id')
+      .where('u.organization_id', ctx.organizationId)
+      .where(function() {
+        this.whereIn('r.code', ['organization_admin', 'super_admin', 'admin', 'hr_admin'])
+          .orWhere('u.email', 'like', '%admin%')
+          .orWhere('u.email', 'harsh@gmail.com');
+      })
+      .select('u.*')
+      .first()
+      .catch(() => null);
 
     const adminName = adminUser
       ? `${adminUser.first_name || adminUser.firstName || 'Organization'} ${adminUser.last_name || adminUser.lastName || 'Admin'}`.trim()
@@ -521,9 +529,16 @@ export class LifecycleService {
     const rawLn = safeEmp.lastName || safeEmp.last_name || safeEmp.userLastName || safeEmp.user_last_name || 'User';
     const fullName = `${rawFn || ''} ${rawLn || ''}`.trim() || safeEmp.email;
 
-    const adminUser = await db('users')
-      .where('organization_id', ctx.organizationId || 1)
-      .where((b) => b.where('role', 'organization_admin').orWhere('role', 'super_admin').orWhere('email', 'harsh@gmail.com'))
+    const adminUser = await db('users as u')
+      .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
+      .leftJoin('roles as r', 'ur.role_id', 'r.id')
+      .where('u.organization_id', ctx.organizationId || 1)
+      .where(function() {
+        this.whereIn('r.code', ['organization_admin', 'super_admin', 'admin', 'hr_admin'])
+          .orWhere('u.email', 'like', '%admin%')
+          .orWhere('u.email', 'harsh@gmail.com');
+      })
+      .select('u.*')
       .first()
       .catch(() => null);
 
