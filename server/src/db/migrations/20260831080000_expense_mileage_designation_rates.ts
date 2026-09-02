@@ -10,7 +10,7 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('rate_car', 10, 2).notNullable().defaultTo(12.0);
     table.decimal('rate_bike', 10, 2).notNullable().defaultTo(6.0);
     table.timestamps(true, true);
-    table.unique(['organization_id', 'designation_id']);
+    table.unique(['organization_id', 'designation_id'], 'uniq_mileage_desig_rate');
     table.index(['organization_id']);
     table.index(['designation_id']);
   });

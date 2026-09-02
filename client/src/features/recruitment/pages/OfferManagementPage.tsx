@@ -3,12 +3,13 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, FileText, Send, CheckCircle, XCircle, Eye, FileSpreadsheet, TrendingUp, Users, UserPlus } from 'lucide-react';
+import { Plus, Search, FileText, Send, CheckCircle, XCircle, Eye, FileSpreadsheet, TrendingUp, Users, UserPlus, KeyRound, UserCheck } from 'lucide-react';
 import { useOffers, useCreateOffer, useEmployeeLetters } from '../hooks/useOffers';
 import { useApplications } from '../hooks/useApplications';
 import { useDepartments, useDesignations } from '@/features/settings/hooks';
 import { GenerateOfferModal } from '../components/GenerateOfferModal';
 import { OfferDetailsModal } from '../components/OfferDetailsModal';
+import { CandidateOnboardingModal } from '../components/CandidateOnboardingModal';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -19,6 +20,8 @@ export const OfferManagementPage: React.FC = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedOnboardingOffer, setSelectedOnboardingOffer] = useState<any>(null);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [isActionPending, setIsActionPending] = useState(false);
 
   // Queries
@@ -418,6 +421,20 @@ export const OfferManagementPage: React.FC = () => {
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
+                                {o.status === 'accepted' && (
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => {
+                                      setSelectedOnboardingOffer(o);
+                                      setIsOnboardingOpen(true);
+                                    }}
+                                    className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold text-xs h-8 px-2.5 rounded-lg shadow-2xs gap-1"
+                                    title="View Onboarding Credentials & Account"
+                                  >
+                                    <KeyRound className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> Onboarding
+                                  </Button>
+                                )}
                                 {o.status === 'draft' && (
                                   <Button 
                                     variant="default" 
@@ -466,6 +483,13 @@ export const OfferManagementPage: React.FC = () => {
         isSending={isActionPending}
         departmentList={departmentList}
         designationList={designationList}
+      />
+
+      {/* CANDIDATE ONBOARDING & CREDENTIALS DIALOG */}
+      <CandidateOnboardingModal
+        offer={selectedOnboardingOffer}
+        open={isOnboardingOpen}
+        onOpenChange={setIsOnboardingOpen}
       />
 
     </div>

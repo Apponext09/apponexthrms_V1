@@ -20,7 +20,7 @@ export async function requirePolicyAcceptance(
     }
 
     // 2. Exempt super_admin from policy gates
-    const roles = req.user.roles || [];
+    const roles = req.user.roles || req.ctx.roles || [];
     if (roles.includes('super_admin')) {
       next();
       return;

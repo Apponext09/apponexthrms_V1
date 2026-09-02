@@ -169,7 +169,7 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
         query.andWhere((q) => {
           q.where('resume_bank.mrf_request_id', mrfId);
           if (hasJobId) {
-            q.orWhereIn('resume_bank.job_id', function(this: any) {
+            q.orWhereIn('resume_bank.job_id', function() {
               this.select('id').from('jobs').where('mrf_request_id', mrfId);
             });
           }
