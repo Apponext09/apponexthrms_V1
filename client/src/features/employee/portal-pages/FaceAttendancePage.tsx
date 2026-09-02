@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Clock,
   UserCheck,
@@ -24,11 +25,24 @@ import {
   Pause,
   Square,
   Timer,
-  Palmtree,
+  Calendar,
+  CalendarOff,
+  Send,
+  FileText,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { apiClient } from '@/config/api';
 import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -131,8 +145,22 @@ export default function FaceAttendancePage() {
   });
 
   // Holiday & Shift Gate State
-  const [todayHoliday, setTodayHoliday] = useState<{ isHoliday: boolean; holidayName?: string } | null>(null);
+  const [todayHoliday, setTodayHoliday] = useState<{
+    isHoliday: boolean;
+    isWeekOff: boolean;
+    holidayName?: string;
+    holidayType?: string;
+    isPunchAllowed: boolean;
+  } | null>(null);
+  const [isAttendanceBlocked, setIsAttendanceBlocked] = useState<boolean>(false);
+  const [hasPendingRequest, setHasPendingRequest] = useState<boolean>(false);
   const [hasShift, setHasShift] = useState<boolean | null>(null);
+
+  // Request Holiday Work Modal State
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
+  const [requestReason, setRequestReason] = useState<string>('');
+  const [requestHours, setRequestHours] = useState<number>(8);
+  const [requestSubmitting, setRequestSubmitting] = useState<boolean>(false);
 
   // Live shift entry zone state (updated from /attendance/status)
   const [shiftStatusInfo, setShiftStatusInfo] = useState<{
@@ -276,21 +304,13 @@ export default function FaceAttendancePage() {
     if (!navigator.geolocation) {
       const hasNoAssignedLocations = myLocations.length === 0;
       setGeofenceStatus({
-        isValid: hasNoAssignedLocations || import.meta.env.DEV,
+        isValid: hasNoAssignedLocations,
         distanceMeters: 0,
         nearestOfficeName: 'Geofence Check',
         message: hasNoAssignedLocations
           ? 'No specific geofence restriction assigned. Position face clearly inside frame.'
-          : import.meta.env.DEV
-          ? 'GPS geolocation not supported by browser. Auto-bypassed in DEV mode.'
           : 'GPS geolocation is not supported by your browser.',
       });
-      if (import.meta.env.DEV && myLocations.length > 0) {
-        const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
-        if (selectedLoc) {
-          setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
-        }
-      }
       setLocLoading(false);
       return;
     }
@@ -305,23 +325,13 @@ export default function FaceAttendancePage() {
       (err) => {
         console.warn('GPS location error:', err);
         const hasNoAssignedLocations = myLocations.length === 0;
-        const isDev = import.meta.env.DEV;
-
-        if (isDev && myLocations.length > 0) {
-          const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
-          if (selectedLoc) {
-            setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
-          }
-        }
 
         setGeofenceStatus({
-          isValid: hasNoAssignedLocations || isDev,
+          isValid: hasNoAssignedLocations,
           distanceMeters: 0,
           nearestOfficeName: 'Branch Location Check',
           message: hasNoAssignedLocations
             ? 'Unable to access GPS location, but no geofence restriction is assigned. You can check in.'
-            : isDev
-            ? 'Location permission blocked. Office location auto-applied for DEV/Testing mode.'
             : 'Unable to access GPS location. Click the tune/lock icon 🔒 in browser address bar to allow Location permission.',
         });
         setLocLoading(false);
@@ -343,12 +353,6 @@ export default function FaceAttendancePage() {
     }
 
     if (!gpsLocation) {
-      if (import.meta.env.DEV) {
-        const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
-        if (selectedLoc) {
-          setGpsLocation({ lat: selectedLoc.latitude, lng: selectedLoc.longitude });
-        }
-      }
       return;
     }
 
@@ -368,10 +372,10 @@ export default function FaceAttendancePage() {
       });
     } else {
       setGeofenceStatus({
-        isValid: import.meta.env.DEV ? true : false,
+        isValid: false,
         distanceMeters: dist,
         nearestOfficeName: selectedLoc.name,
-        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.${import.meta.env.DEV ? ' (Allowed in DEV mode)' : ''}`,
+        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.`,
       });
     }
   }, [gpsLocation, selectedLocationId, myLocations]);
@@ -390,13 +394,50 @@ export default function FaceAttendancePage() {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
+  const handleHolidayWorkRequest = async () => {
+    if (!requestReason.trim()) {
+      toast.error('Please enter a reason for working on this holiday.');
+      return;
+    }
+    setRequestSubmitting(true);
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      await apiClient.post('/attendance/overtime', {
+        overtimeDate: todayStr,
+        overtimeHours: Number(requestHours) || 8,
+        overtimeType: todayHoliday?.isHoliday ? 'holiday_work' : 'weekend_work',
+        reason: requestReason,
+      });
+      toast.success('Holiday work permission request submitted successfully to HR/Manager!');
+      setHasPendingRequest(true);
+      setIsRequestModalOpen(false);
+      setRequestReason('');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to submit request. Please try again.');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
   const fetchTodayStatus = async () => {
     try {
       const res = await apiClient.get('/attendance/status');
       if (res.data?.data) {
         const st = res.data.data;
-        if (typeof st.isHoliday === 'boolean') {
-          setTodayHoliday({ isHoliday: st.isHoliday, holidayName: st.holidayName });
+        if (typeof st.isHoliday === 'boolean' || typeof st.isWeekOff === 'boolean') {
+          setTodayHoliday({
+            isHoliday: !!st.isHoliday,
+            isWeekOff: !!st.isWeekOff,
+            holidayName: st.holidayName,
+            holidayType: st.holidayType,
+            isPunchAllowed: st.isPunchAllowedOnHoliday !== false, // default to allowed
+          });
+        }
+        if (typeof st.isAttendanceBlocked === 'boolean') {
+          setIsAttendanceBlocked(st.isAttendanceBlocked);
+        }
+        if (typeof st.hasPendingRequest === 'boolean') {
+          setHasPendingRequest(st.hasPendingRequest);
         }
         if (typeof st.hasShift === 'boolean') {
           setHasShift(st.hasShift);
@@ -939,6 +980,78 @@ export default function FaceAttendancePage() {
         </div>
       </div>
 
+      {/* ── HOLIDAY / WEEK-OFF BLOCKED BANNER ────────────────────────────── */}
+      {todayHoliday && (todayHoliday.isHoliday || todayHoliday.isWeekOff) && (
+        <div className={cn(
+          'relative overflow-hidden rounded-2xl border-2 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md transition-all',
+          isAttendanceBlocked
+            ? todayHoliday.isHoliday
+              ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-200'
+              : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
+            : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200'
+        )}>
+          {/* Background subtle glow */}
+          <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full opacity-15 blur-2xl pointer-events-none"
+            style={{ background: isAttendanceBlocked ? (todayHoliday.isHoliday ? '#2563eb' : '#d97706') : '#059669' }} />
+
+          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+            <div className={cn(
+              'p-2.5 rounded-xl shrink-0 mt-0.5 border shadow-2xs',
+              isAttendanceBlocked
+                ? todayHoliday.isHoliday
+                  ? 'bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 border-blue-200 dark:border-blue-700'
+                  : 'bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-700'
+                : 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-600 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700'
+            )}>
+              {todayHoliday.isHoliday ? <Calendar className="w-5 h-5" /> : <CalendarOff className="w-5 h-5" />}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-black tracking-tight">
+                  {todayHoliday.isHoliday
+                    ? `Public Holiday — ${todayHoliday.holidayName}`
+                    : `Weekly Off — ${todayHoliday.holidayName ?? 'Rest Day'}`}
+                </h2>
+                <span className={cn(
+                  'text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider',
+                  isAttendanceBlocked
+                    ? 'bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-700'
+                    : 'bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700'
+                )}>
+                  {isAttendanceBlocked ? 'Punch Blocked' : 'Punch Allowed'}
+                </span>
+              </div>
+
+              <p className="text-xs font-medium opacity-85 mt-1">
+                {isAttendanceBlocked
+                  ? 'Attendance punch is disabled today. You can submit a work permission request for manager/HR approval.'
+                  : `You are permitted to punch attendance today (${todayHoliday.isHoliday ? 'holiday' : 'week-off'} work approved).`}
+              </p>
+            </div>
+          </div>
+
+          {/* RIGHT SIDE BUTTON / STATUS BADGE */}
+          {isAttendanceBlocked && (
+            <div className="shrink-0 z-10 w-full sm:w-auto">
+              {hasPendingRequest ? (
+                <div className="flex items-center gap-2 bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs">
+                  <Clock className="w-4 h-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>Request Pending HR Approval</span>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="h-9 px-4 text-xs font-bold gap-2 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm rounded-xl w-full sm:w-auto"
+                >
+                  <Send className="w-3.5 h-3.5" /> Request Permission to Work Today
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── SHIFT GRACE PERIOD STATUS BANNER ─────────────────────────────── */}
       {shiftStatusInfo && shiftStatusInfo.currentEntryStatus !== 'no_shift' && checkInStatus === 'not_started' && (
@@ -952,12 +1065,10 @@ export default function FaceAttendancePage() {
         )}>
           <div className="flex items-start gap-3">
             {/* Status icon */}
-            <div className={cn(
-              'text-2xl shrink-0 mt-0.5',
-            )}>
-              {shiftStatusInfo.currentEntryStatus === 'on_time'  && '🟢'}
-              {shiftStatusInfo.currentEntryStatus === 'late'     && '🟡'}
-              {shiftStatusInfo.currentEntryStatus === 'half_day' && '🔴'}
+            <div className="shrink-0 mt-0.5">
+              {shiftStatusInfo.currentEntryStatus === 'on_time'  && <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
+              {shiftStatusInfo.currentEntryStatus === 'late'     && <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+              {shiftStatusInfo.currentEntryStatus === 'half_day' && <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400" />}
             </div>
             <div>
               <p className="text-sm font-extrabold">
@@ -1121,17 +1232,6 @@ export default function FaceAttendancePage() {
                 >
                   <RefreshCw className={cn("w-3 h-3", locLoading && "animate-spin")} /> Re-check GPS
                 </Button>
-                {(!geofenceStatus.isValid || import.meta.env.DEV) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleUseOfficeLocationFallback}
-                    className="h-7 px-2.5 text-[10px] font-bold gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20"
-                    title="Apply assigned office location coordinates"
-                  >
-                    <Building2 className="w-3 h-3 text-amber-600" /> Use Office Location
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -1240,29 +1340,26 @@ export default function FaceAttendancePage() {
                     <Video className="w-3.5 h-3.5 mr-1 text-primary" /> Turn On Camera
                   </Button>
                 )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEnrollFace}
-                  disabled={biometricLoading}
-                  className="h-8 text-xs font-semibold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20"
-                  title="Enroll or update face biometric template"
-                >
-                  <Sparkles className="w-3.5 h-3.5 mr-1 text-indigo-600" /> Enroll My Face
-                </Button>
               </div>
 
               <Button
-                disabled={!geofenceStatus.isValid || locLoading || biometricLoading || checkInStatus === 'completed' || (todayHoliday?.isHoliday && !hasShift) || (!hasShift && hasShift !== null)}
+                disabled={!geofenceStatus.isValid || locLoading || biometricLoading || checkInStatus === 'completed' || isAttendanceBlocked}
                 onClick={handleBiometricPunch}
                 className={cn(
                   'h-8 text-xs font-bold px-6 gap-1.5 transition-all',
-                  (!geofenceStatus.isValid || (todayHoliday?.isHoliday && !hasShift) || (!hasShift && hasShift !== null))
+                  (!geofenceStatus.isValid || isAttendanceBlocked)
                     ? 'bg-muted text-muted-foreground cursor-not-allowed border border-rose-200'
                     : 'bg-primary hover:bg-primary/90 text-primary-foreground'
                 )}
-                title={todayHoliday?.isHoliday && !hasShift ? `Public Holiday (${todayHoliday.holidayName})` : !hasShift ? 'No Shift Assigned' : !geofenceStatus.isValid ? 'Check-in is disabled outside 700m office radius' : ''}
+                title={
+                  (todayHoliday?.isHoliday || todayHoliday?.isWeekOff) && isAttendanceBlocked
+                    ? `Blocked: ${todayHoliday?.isHoliday ? 'Public Holiday' : 'Weekly Off'} (${todayHoliday?.holidayName ?? ''}). Contact HR to allow.`
+                    : !hasShift && isAttendanceBlocked
+                    ? 'No Shift Assigned — contact HR'
+                    : !geofenceStatus.isValid
+                    ? 'Check-in is disabled outside office geofence'
+                    : ''
+                }
               >
                 {locLoading ? (
                   <>
@@ -1272,11 +1369,15 @@ export default function FaceAttendancePage() {
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying Face...
                   </>
-                ) : todayHoliday?.isHoliday && !hasShift ? (
+                ) : todayHoliday?.isHoliday && isAttendanceBlocked ? (
                   <>
-                    <Palmtree className="w-3.5 h-3.5 text-blue-500" /> Holiday ({todayHoliday.holidayName})
+                    <Calendar className="w-3.5 h-3.5 text-blue-500" /> Holiday ({todayHoliday.holidayName})
                   </>
-                ) : !hasShift && hasShift !== null ? (
+                ) : todayHoliday?.isWeekOff && isAttendanceBlocked ? (
+                  <>
+                    <CalendarOff className="w-3.5 h-3.5 text-amber-500" /> Week Off ({todayHoliday.holidayName})
+                  </>
+                ) : !hasShift && isAttendanceBlocked ? (
                   <>
                     <AlertCircle className="w-3.5 h-3.5 text-amber-500" /> No Shift Assigned
                   </>
@@ -1542,12 +1643,12 @@ export default function FaceAttendancePage() {
                   : 'text-indigo-600 dark:text-indigo-400'
                 )}>
                   {checkInStatus === 'not_started' && (
-                    shiftStatusInfo?.currentEntryStatus === 'half_day' ? '🔴 Half Day Zone'
-                    : shiftStatusInfo?.currentEntryStatus === 'late'   ? '🟡 Late Entry Zone'
-                    : '⏳ Pending Check In'
+                    shiftStatusInfo?.currentEntryStatus === 'half_day' ? 'Half Day Zone'
+                    : shiftStatusInfo?.currentEntryStatus === 'late'   ? 'Late Entry Zone'
+                    : 'Pending Check In'
                   )}
-                  {checkInStatus === 'checked_in' && (isOnBreak ? '☕ On Break' : '✅ Present (On Duty)')}
-                  {checkInStatus === 'completed' && '✅ Present (Shift Completed)'}
+                  {checkInStatus === 'checked_in' && (isOnBreak ? 'On Break' : 'Present (On Duty)')}
+                  {checkInStatus === 'completed' && 'Present (Shift Completed)'}
                 </span>
               </div>
 
@@ -1556,6 +1657,80 @@ export default function FaceAttendancePage() {
 
         </div>
       </div>
+
+      {/* ── REQUEST HOLIDAY WORK PERMISSION DIALOG ───────────────────────── */}
+      <Dialog open={isRequestModalOpen} onOpenChange={setIsRequestModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" /> Request Holiday Work Permission
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Submit a request to HR/Manager for permission to punch attendance on today's {todayHoliday?.isHoliday ? 'holiday' : 'weekly off'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-xl bg-muted/40 border border-border/60 text-xs space-y-1">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-medium">Holiday / Off Day:</span>
+                <strong className="text-foreground font-bold">{todayHoliday?.holidayName || 'Public Holiday'}</strong>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground font-medium">Date:</span>
+                <span className="font-mono text-foreground font-semibold">{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Expected Work Hours</label>
+              <Input
+                type="number"
+                min={1}
+                max={24}
+                value={requestHours}
+                onChange={(e) => setRequestHours(Number(e.target.value))}
+                placeholder="e.g. 8"
+                className="h-9 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Reason / Business Description *</label>
+              <Textarea
+                rows={3}
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+                placeholder="Describe why you need to work today (e.g. Urgent deployment, client support, maintenance)..."
+                className="text-xs resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRequestModalOpen(false)}
+              disabled={requestSubmitting}
+              className="text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleHolidayWorkRequest}
+              disabled={requestSubmitting || !requestReason.trim()}
+              className="text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {requestSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {requestSubmitting ? 'Submitting...' : 'Submit Work Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -108,35 +108,11 @@ export function useLiveTrackingSocket({
     });
 
     // ── Location updated ──────────────────────────────────────────────────────
+    // ✅ FIXED: Now uses server-generated routed trails instead of client-side OSRM
     socket.on('tracking:location_updated', (event: TrackingLocationUpdatedEvent) => {
       callbacksRef.current.setEmployees((prev) =>
         prev.map((emp) => {
           if (emp.employee_id !== event.employee_id) return emp;
-
-          const newPoint = {
-            latitude: Number(event.latitude),
-            longitude: Number(event.longitude),
-            speed: event.speed ?? null,
-            recorded_at: event.last_ping_at || new Date().toISOString(),
-          };
-
-          const existingTrail = emp.routeTrail || [];
-          let seedTrail = [...existingTrail];
-          if (seedTrail.length === 0 && emp.latitude != null && emp.longitude != null) {
-            seedTrail.push({
-              latitude: emp.latitude,
-              longitude: emp.longitude,
-              speed: null,
-              recorded_at: emp.last_ping_at || new Date().toISOString(),
-            });
-          }
-
-          const isDuplicate = seedTrail.some(
-            (p) => p.latitude === newPoint.latitude && p.longitude === newPoint.longitude
-          );
-
-          const updatedTrail = isDuplicate ? seedTrail : [...seedTrail, newPoint];
-          const updatedBreaks = detectBreakPoints(updatedTrail);
 
           return {
             ...emp,
@@ -148,7 +124,26 @@ export function useLiveTrackingSocket({
             location_status: event.location_status ?? emp.location_status,
             connection_status: event.connection_status ?? emp.connection_status,
             last_ping_at: event.last_ping_at ?? emp.last_ping_at,
-            routeTrail: updatedTrail,
+            // Keep existing trail/breaks - will be updated by routed_trail_updated event
+          };
+        })
+      );
+    });
+
+    // ── Routed Trail Updated (Server-generated routes like Swiggy) ─────────────
+    // New event from server with real-time routed polylines
+    socket.on('tracking:routed_trail_updated', (event: any) => {
+      callbacksRef.current.setEmployees((prev) =>
+        prev.map((emp) => {
+          if (emp.employee_id !== event.employee_id) return emp;
+
+          // Use routed trail from server
+          const routedTrail = event.routedTrail || [];
+          const updatedBreaks = detectBreakPoints(routedTrail);
+
+          return {
+            ...emp,
+            routeTrail: routedTrail,
             breakPoints: updatedBreaks,
           };
         })

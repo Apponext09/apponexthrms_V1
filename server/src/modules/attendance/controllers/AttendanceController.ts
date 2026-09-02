@@ -1,6 +1,7 @@
 
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
+import { ValidationError } from '../../../common/errors/index';
 import { AttendanceService } from '../services/AttendanceService';
 import { ShiftService } from '../services/ShiftService';
 import { GeoFenceService } from '../services/GeoFenceService';
@@ -706,6 +707,32 @@ export class AttendanceController {
     });
 
     res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
+  getAllOvertimeRequests = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { status } = req.query;
+    const result = await this.overtimeService.getAllRequests(ctx, {
+      filters: status && status !== 'all' ? { approval_status: status as string } : undefined,
+    });
+    res.json({ success: true, data: result.items });
+  });
+
+  updateOvertimeStatus = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { status } = req.body;
+
+    let result;
+    if (status === 'approved') {
+      result = await this.overtimeService.approve(ctx, parseInt(id, 10));
+    } else if (status === 'rejected') {
+      result = await this.overtimeService.reject(ctx, parseInt(id, 10));
+    } else {
+      throw new ValidationError('Invalid status. Must be approved or rejected.');
+    }
+
+    res.json({ success: true, data: result });
   });
 
 
