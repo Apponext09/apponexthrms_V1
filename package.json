@@ -55,7 +55,8 @@
   },
   "dependencies": {
     "argon2": "^0.44.0",
-    "git": "^0.1.5"
+    "git": "^0.1.5",
+    "maplibre-gl": "^6.6.0"
   },
   "allowScripts": {
     "argon2@0.44.0": true,
