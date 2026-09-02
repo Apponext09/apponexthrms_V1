@@ -109,9 +109,11 @@ router.post('/regularization/:id/hr-approve', controller.hrApproveRegularization
 router.post('/regularization/:id/hr-reject', controller.hrRejectRegularization);
 router.get('/regularization/logs', controller.getAdminRegularizationLogs);
 
-// Overtime
+// Overtime & Holiday Work Requests
 router.get('/overtime', controller.getMyOvertime);
+router.get('/overtime/all', controller.getAllOvertimeRequests);
 router.post('/overtime', controller.requestOvertime);
+router.patch('/overtime/:id/status', controller.updateOvertimeStatus);
 
 
 // Geofence and location
