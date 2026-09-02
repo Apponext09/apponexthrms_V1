@@ -8,8 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Building2, Calendar, FileText, Send, CheckCircle2, 
   XCircle, Clock, Link, Printer, Copy, User, HelpCircle, 
-  MapPin, ShieldAlert, Award, FileCheck, ArrowRight, Mail, Edit3
+  MapPin, ShieldAlert, Award, FileCheck, ArrowRight, Mail, Edit3, KeyRound
 } from 'lucide-react';
+import { CandidateOnboardingModal } from './CandidateOnboardingModal';
 import { toast } from 'sonner';
 
 interface OfferDetailsModalProps {
@@ -34,6 +35,7 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
   const [activeTab, setActiveTab] = useState('overview');
   const [targetEmail, setTargetEmail] = useState('');
   const [isEmailEditOpen, setIsEmailEditOpen] = useState(false);
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
 
   useEffect(() => {
     if (offer) {
@@ -232,6 +234,14 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2 self-end md:self-center flex-wrap">
+            {status === 'accepted' && (
+              <Button 
+                onClick={() => setIsOnboardingModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs flex items-center gap-1.5 shadow-sm font-bold"
+              >
+                <KeyRound className="h-3.5 w-3.5" /> Onboarding Credentials
+              </Button>
+            )}
             <Button 
               onClick={() => {
                 if (!targetEmail.trim() || !targetEmail.includes('@')) {
@@ -707,6 +717,12 @@ export const OfferDetailsModal: React.FC<OfferDetailsModalProps> = ({
         </DialogFooter>
 
       </DialogContent>
+
+      <CandidateOnboardingModal
+        offer={offer}
+        open={isOnboardingModalOpen}
+        onOpenChange={setIsOnboardingModalOpen}
+      />
     </Dialog>
   );
 };

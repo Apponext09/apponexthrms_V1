@@ -1143,6 +1143,38 @@ export class RecruitmentController {
     res.json({ success: true, data: offer });
   });
 
+  onboardOfferCandidate = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { offerId } = req.params;
+
+    const result = await this.offerService.onboardOfferCandidate(ctx, parseInt(offerId, 10));
+
+    res.json({ success: true, data: result });
+  });
+
+  getOfferOnboardingStatus = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { offerId } = req.params;
+
+    const result = await this.offerService.getOfferOnboardingDetails(ctx, parseInt(offerId, 10));
+
+    res.json({ success: true, data: result });
+  });
+
+  updateOfferEmployeeCredentials = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { offerId } = req.params;
+    const { password } = req.body;
+
+    if (!password || typeof password !== 'string' || password.trim().length < 4) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 4 characters.' });
+    }
+
+    const result = await this.offerService.updateEmployeeCredentials(ctx, parseInt(offerId, 10), password.trim());
+
+    res.json({ success: true, data: result });
+  });
+
   // ==================== Analytics Endpoints ====================
 
   getDashboard = asyncHandler(async (req: Request, res: Response) => {
@@ -2026,12 +2058,13 @@ export class RecruitmentController {
   sendOfferWithTemplate = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { offerId } = req.params;
-    const { customSubject, customBody, sendEmails } = req.body;
+    const { customSubject, customBody, sendEmails, recipientEmail, customRecipientEmail, email } = req.body;
 
     const offer = await this.offerService.sendOffer(ctx, parseInt(offerId, 10), {
       customSubject,
       customBody,
       sendEmails,
+      customRecipientEmail: recipientEmail || customRecipientEmail || email,
     });
 
     res.json({ success: true, data: offer, message: 'Offer letter dispatched successfully' });
