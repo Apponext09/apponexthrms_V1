@@ -753,7 +753,7 @@ export const CandidateManagement: React.FC = () => {
 
       {isCreating && (
         <CandidateFormModal
-          jobs={jobs}
+          jobs={activePublishedJobs}
           onClose={() => setIsCreating(false)}
           onSubmit={handleCreateCandidate}
         />
@@ -1036,7 +1036,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <input type="file" accept=".pdf,.doc,.docx,application/pdf" className="hidden" onChange={handleResumeUpload} />
                   </label>
                 </div>
-                {!initialData && activePublishedJobs && activePublishedJobs.length > 0 && (
+                {!initialData && jobs && jobs.length > 0 && (
                   <div className="space-y-1.5 md:col-span-3">
                     <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Link to Job Opening</label>
                     <select
@@ -1045,7 +1045,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                       className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
                     >
                       <option value="">-- Optional: choose a published job --</option>
-                      {activePublishedJobs.map((job: any) => (
+                      {jobs.map((job: any) => (
                         <option key={job.id} value={job.id}>
                           {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
                         </option>

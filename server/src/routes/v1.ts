@@ -161,6 +161,7 @@ router.use('/superadmin', superAdminRoutes);
  * ⚠️ TEMPORARY: One-shot seed endpoint for super_admins table.
  * Remove after running!  POST /api/v1/seed-superadmin
  */
+
 router.post('/seed-superadmin', async (req: Request, res: Response) => {
   try {
     const { getKnex } = await import('../db/knex');

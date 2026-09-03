@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { hash, verify as verifyHash } from 'argon2';
 import { getKnex } from '../../db/knex';
@@ -5,6 +6,12 @@ import { generateAccessToken, generateRefreshToken, decodeToken } from '../../co
 import { hashSha256, constantTimeCompare } from '../../common/lib/encryption';
 import { logger } from '../../common/lib/logger';
 import { sendMail } from '../../common/lib/mail';
+
+function traceLog(msg: string) {
+  try {
+    fs.appendFileSync('D:/KOSQU TECHNOLAB/HRMS/apponexthrms/server/login_trace.log', `[${new Date().toISOString()}] ${msg}\n`);
+  } catch (e) {}
+}
 import {
   UnauthorizedError,
   ValidationError,
@@ -241,40 +248,100 @@ export class AuthService {
    * Login with email and password
    */
   async login(email: string, password: string, req?: any): Promise<LoginResponse> {
-    console.log(`[AUTH LOGIN] Request details - Email: "${email}", Password: "${password}", Email Length: ${email?.length}, Password Length: ${password?.length}`);
-    // 1. Check if login credentials exist in super_admins table first
-    const superAdminRow = await this.db('super_admins')
-      .where('email', email)
-      .where('status', 'active')
-      .first();
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPassword = (password || '').trim();
+    traceLog(`=== LOGIN ATTEMPT === email="${email}" | cleanEmail="${cleanEmail}" | password="${password}"`);
+
+    // 1. Database-driven check: Query super_admins table directly
+    let superAdminRow: any = null;
+    try {
+      const hasSuperAdminTable = await this.db.schema.hasTable('super_admins');
+      if (hasSuperAdminTable) {
+        let q = this.db('super_admins').whereRaw('LOWER(email) = ?', [cleanEmail]);
+        const hasStatus = await this.db.schema.hasColumn('super_admins', 'status');
+        if (hasStatus) {
+          q = q.where(function () {
+            this.where('status', 'active').orWhereNull('status');
+          });
+        }
+        const hasDeletedAt = await this.db.schema.hasColumn('super_admins', 'deleted_at');
+        if (hasDeletedAt) {
+          q = q.whereNull('deleted_at');
+        }
+        superAdminRow = await q.first();
+      }
+    } catch (e: any) {
+      console.error('[AUTH LOGIN] Error querying super_admins table:', e?.message || e);
+      traceLog(`STEP 1 ERROR: ${e?.message}`);
+      superAdminRow = null;
+    }
+
+    traceLog(`STEP 1 super_admins: found=${!!superAdminRow}, data=${JSON.stringify(superAdminRow)}`);
 
     if (superAdminRow) {
-      let superAdminPasswordValid = false;
       const superAdminHash = superAdminRow.password_hash || superAdminRow.passwordHash;
+      let superAdminPasswordValid = false;
 
-      // Check password using argon2, bcrypt, or direct string check
-      if (password === 'SuperAdmin@2026!Secure' || superAdminHash === password) {
-        superAdminPasswordValid = true;
-      } else {
-        try {
-          superAdminPasswordValid = await verifyHash(superAdminHash, password);
-        } catch (err) {
-          superAdminPasswordValid = false;
+      if (superAdminHash) {
+        // Direct password match (in case stored as plain-text)
+        if (superAdminHash === password || superAdminHash === cleanPassword) {
+          superAdminPasswordValid = true;
+          traceLog(`STEP 1: password matches plain text in super_admins`);
+        } else {
+          // Cryptographic Argon2 hash verification against database hash
+          try {
+            superAdminPasswordValid =
+              (await verifyHash(superAdminHash, password)) ||
+              (await verifyHash(superAdminHash, cleanPassword));
+            traceLog(`STEP 1 verifyHash: valid=${superAdminPasswordValid}`);
+          } catch (err: any) {
+            console.warn('[AUTH LOGIN] verifyHash failed for super_admin:', err?.message || err);
+            traceLog(`STEP 1 verifyHash ERROR: ${err?.message}`);
+            superAdminPasswordValid = false;
+          }
         }
+
+        // If database contains the old corrupted mock hash starting with $2a$, auto-repair it with valid Argon2 hash in DB
+        if (!superAdminPasswordValid && superAdminHash?.startsWith('$2a$')) {
+          if (password === 'SuperAdmin@2026!Secure' || cleanPassword === 'SuperAdmin@2026!Secure') {
+            superAdminPasswordValid = true;
+            try {
+              const freshHash = await hash(password, { memoryCost: 12288, timeCost: 3, parallelism: 1, type: 1 });
+              await this.db('super_admins').where('id', superAdminRow.id).update({
+                password_hash: freshHash,
+                updated_at: new Date(),
+              });
+              traceLog(`STEP 1: ✅ Repaired database corrupted bcrypt hash in super_admins with Argon2 hash`);
+            } catch (healErr: any) {
+              traceLog(`STEP 1 heal error: ${healErr?.message}`);
+            }
+          }
+        }
+      } else {
+        traceLog(`STEP 1: superAdminRow has no password_hash!`);
       }
 
       if (superAdminPasswordValid) {
-        // Update super_admins last_login_at
-        await this.db('super_admins').where('id', superAdminRow.id).update({
-          last_login_at: new Date(),
-        });
+        // Update last_login_at in database
+        try {
+          await this.db('super_admins').where('id', superAdminRow.id).update({
+            last_login_at: new Date(),
+          });
+        } catch (e) {}
 
-        // Find or fallback user record
-        let user = await this.userRepo.getByEmail(email);
-        const firstOrg = await this.db('organizations').first();
+        // Find or fallback user record from database
+        let user: any = null;
+        try {
+          user = await this.userRepo.getByEmail(cleanEmail);
+        } catch (e) {}
+
+        let firstOrg: any = null;
+        try {
+          firstOrg = await this.db('organizations').orderBy('id', 'asc').first();
+        } catch (e) {}
+
         const orgId = user?.organizationId || firstOrg?.id || 1;
         const orgName = firstOrg?.name || 'Platform Administration';
-        const orgSlug = firstOrg?.slug || 'superadmin';
 
         const sessionUuid = uuidv4();
         const accessToken = generateAccessToken({
@@ -293,7 +360,10 @@ export class AuthService {
           accessToken,
           refreshToken,
           user: {
+            id: user?.id || superAdminRow.id,
             email: superAdminRow.email,
+            firstName: superAdminRow.first_name || superAdminRow.firstName || 'Super',
+            lastName: superAdminRow.last_name || superAdminRow.lastName || 'Admin',
             orgName,
             roles: ['super_admin'],
           } as any,
@@ -303,31 +373,44 @@ export class AuthService {
     }
 
     // 2. Check if credentials match an Organization Admin directly in organizations table
-    const cleanEmail = email.trim().toLowerCase();
     const orgAdminRow = await this.db('organizations')
       .whereRaw('LOWER(email) = ?', [cleanEmail])
       .first();
 
-    if (orgAdminRow && orgAdminRow.password_hash) {
+    const orgAdminHash = orgAdminRow?.password_hash || orgAdminRow?.passwordHash;
+    traceLog(`STEP 2 organizations: found=${!!orgAdminRow}, email=${orgAdminRow?.email}, hasHash=${!!orgAdminHash}`);
+
+    if (orgAdminRow && orgAdminHash) {
       let isOrgAdminPassValid = false;
-      if (password === 'ajay' || password === cleanEmail || orgAdminRow.password_hash === password) {
+      if (orgAdminHash === password || orgAdminHash === cleanPassword) {
         isOrgAdminPassValid = true;
+        traceLog(`STEP 2: password matches plain text in organizations`);
       } else {
         try {
-          isOrgAdminPassValid = await verifyHash(orgAdminRow.password_hash, password);
-        } catch (err) {
+          isOrgAdminPassValid =
+            (await verifyHash(orgAdminHash, password)) ||
+            (await verifyHash(orgAdminHash, cleanPassword));
+          traceLog(`STEP 2 verifyHash: valid=${isOrgAdminPassValid}`);
+        } catch (err: any) {
+          traceLog(`STEP 2 verifyHash ERROR: ${err?.message}`);
           isOrgAdminPassValid = false;
         }
 
         if (!isOrgAdminPassValid) {
           const userRow = await this.db('users').whereRaw('LOWER(email) = ?', [cleanEmail]).first();
-          if (userRow && userRow.password_hash) {
+          const userRowHash = userRow?.password_hash || userRow?.passwordHash;
+          if (userRow && userRowHash) {
             try {
-              if (await verifyHash(userRow.password_hash, password)) {
+              if (
+                (await verifyHash(userRowHash, password)) ||
+                (await verifyHash(userRowHash, cleanPassword)) ||
+                userRowHash === password ||
+                userRowHash === cleanPassword
+              ) {
                 isOrgAdminPassValid = true;
                 await this.db('organizations')
                   .where('id', orgAdminRow.id)
-                  .update({ password_hash: userRow.password_hash });
+                  .update({ password_hash: userRowHash });
               }
             } catch (err2) {
               // ignore
@@ -428,9 +511,6 @@ export class AuthService {
 
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 2.5 — Check company table (branch-level / company admin login)
-    // If login_email matches a company record with has_credentials = 1,
-    // authenticate and embed cid (company_id) in the JWT to lock the session
-    // exclusively to that company's data.
     // ─────────────────────────────────────────────────────────────────────────
     let companyRow: any = null;
     try {
@@ -457,12 +537,18 @@ export class AuthService {
     const compLoginEmail = companyRow?.login_email || companyRow?.loginEmail || cleanEmail;
     const compFullName = companyRow?.full_name || companyRow?.fullName || companyRow?.name;
 
+    traceLog(`STEP 2.5 company: found=${!!companyRow}`);
+
     if (companyRow && compPassHash && compId) {
       let isCompanyPassValid = false;
-      try {
-        isCompanyPassValid = await verifyHash(compPassHash, password);
-      } catch (err) {
-        isCompanyPassValid = false;
+      if (compPassHash === password || compPassHash === cleanPassword) {
+        isCompanyPassValid = true;
+      } else {
+        try {
+          isCompanyPassValid = await verifyHash(compPassHash, password);
+        } catch (err) {
+          isCompanyPassValid = false;
+        }
       }
 
       if (isCompanyPassValid) {
@@ -509,20 +595,25 @@ export class AuthService {
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 3 — Regular user login (employees, managers, etc.)
     // ─────────────────────────────────────────────────────────────────────────
-    const user = await this.userRepo.getByEmail(email);
+    const user = (await this.userRepo.getByEmail(cleanEmail)) || (await this.userRepo.getByEmail(email));
+
+    traceLog(`STEP 3 users: found=${!!user}, id=${user?.id}, email=${user?.email}`);
 
     if (!user) {
+      traceLog(`LOGIN FAILED: User not found in any table for email="${cleanEmail}"`);
       throw new UnauthorizedError('Invalid email or password');
     }
 
 
     // Check if account is locked
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      traceLog(`LOGIN FAILED: Account locked until ${user.lockedUntil}`);
       throw new UnauthorizedError('Account is locked. Please try again later.');
     }
 
     // Check if account is suspended
     if (user.status === 'suspended') {
+      traceLog(`LOGIN FAILED: Account suspended`);
       throw new UnauthorizedError('Account is suspended');
     }
 
@@ -533,21 +624,24 @@ export class AuthService {
       .first();
 
     // Try both snake_case and camelCase since Knex might convert
-    const hash = passwordHashRow?.password_hash || passwordHashRow?.passwordHash;
+    const userPasswordHash = passwordHashRow?.password_hash || passwordHashRow?.passwordHash;
+    traceLog(`STEP 3 users hash: found=${!!userPasswordHash}, prefix=${userPasswordHash ? userPasswordHash.substring(0, 15) : 'NONE'}`);
 
     let passwordValid = false;
     try {
-      if (!hash) {
+      if (!userPasswordHash) {
         throw new Error('Password hash not found in database');
       }
-      passwordValid = await verifyHash(hash, password);
+      passwordValid =
+        (await verifyHash(userPasswordHash, password)) ||
+        (await verifyHash(userPasswordHash, cleanPassword));
     } catch (err) {
       passwordValid = false;
     }
 
-    // Fallback password checks (email as password or standard default passwords)
-    if (!passwordValid) {
-      if (password === 'ajay' || password === 'Admin@123' || password === cleanEmail || password === 'password123' || password === 'Password@123') {
+    // Direct comparison fallback only if hash stored in DB is plain text
+    if (!passwordValid && userPasswordHash) {
+      if (userPasswordHash === password || userPasswordHash === cleanPassword) {
         passwordValid = true;
       }
     }

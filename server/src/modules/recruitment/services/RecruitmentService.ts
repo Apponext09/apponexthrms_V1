@@ -668,7 +668,7 @@ Hiring Panel & HR Team
       }
     } catch (err) {
       console.warn('Error computing sourceMetrics:', err);
-      sourceMetrics = [{ name: 'Direct Sourcing', value: Math.max(totalAppliedVolume, 1) }];
+      sourceMetrics = totalAppliedVolume > 0 ? [{ name: 'Direct Sourcing', value: totalAppliedVolume }] : [];
     }
 
     // 6. Monthly Trends (Applications & Hires over last 6 months) — independent query, not filtered by dashboard params
