@@ -65,13 +65,14 @@ const envSchema = z.object({
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
-  SMTP_PASSWORD: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
 
   // Features
   ENABLE_MFA: z.string().transform(v => v === 'true').default('false'),
   ENABLE_SSO: z.string().transform(v => v === 'true').default('false'),
   ENABLE_IP_RESTRICTION: z.string().transform(v => v === 'true').default('false'),
+  TRUSTED_PROXIES: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -6,35 +6,27 @@
  * ║          F&F Settlements, Loan Types, Employee Loans, Loan Repayments  ║
  * ║  Safe to run multiple times — clean idempotency with [SEED] tag        ║
  * ╚══════════════════════════════════════════════════════════════════════════╝
- * 
- * Usage:
- *   node newlyssed.js
- *   (or from server dir: node src/scripts/newlyssed.js)
  */
 
 const mysql = require('mysql2/promise');
 const { v4: uuidv4 } = require('uuid');
 
 // ── CONFIG ─────────────────────────────────────────────────────────────────
-const DB = { host: 'localhost', port: 3306, user: 'root', password: 'root123', database: 'apponexthrms' };
-const ORG_ID    = 68;
-const CYCLE_ID  = 126;   // Monthly cycle for org 68
-const SLAB_ID_JR = 14;  // Junior slab
-const SLAB_ID_SR = 15;  // Senior slab
-const ADMIN_USER = 55;   // ajay (org admin)
+const DB = { host: process.env.DB_HOST || 'localhost', port: Number(process.env.DB_PORT) || 3306, user: process.env.DB_USER || 'root', password: process.env.DB_PASSWORD || 'root@123', database: process.env.DB_NAME || 'apponext' };
+const ORG_ID    = 14;
+const CYCLE_ID  = 10;   // Monthly cycle for org 14
+const SLAB_ID_JR = null;  // Junior slab
+const SLAB_ID_SR = null;  // Senior slab
+const ADMIN_USER = 51;   // Org user
 
-// Employees in org 68 (from live DB)
+// Employees in org 14 (from live DB)
 const EMPLOYEES = [
-  { id: 48, name: 'Amisha Shinde',  code: 'EMP001',      ctc: 480000,  bank: 'HDFC Bank',  account: '501002345678', ifsc: 'HDFC0000123', pan: 'ABCPA1234C', pf: 'MH/48001/01', uan: '100912345678', esic: '4101234567' },
-  { id: 49, name: 'Isha Shinde',    code: 'EMP002',      ctc: 360000,  bank: 'ICICI Bank', account: '623401234567', ifsc: 'ICIC0001234', pan: 'BCDPB5678D', pf: 'MH/48001/02', uan: '100912345679', esic: '4101234568' },
-  { id: 50, name: 'Isha Shinde',    code: 'EMP0033',     ctc: 360000,  bank: 'SBI',        account: '31234567890',  ifsc: 'SBIN0001234', pan: 'CDEPB9012E', pf: 'MH/48001/03', uan: '100912345680', esic: '4101234569' },
-  { id: 51, name: 'Man Shinde',     code: 'EMP00111',    ctc: 420000,  bank: 'Axis Bank',  account: '911010012345', ifsc: 'UTIB0001234', pan: 'DEFPC3456F', pf: 'MH/48001/04', uan: '100912345681', esic: '4101234570' },
-  { id: 53, name: 'Vikram Singh',   code: 'EMP-MGR-01',  ctc: 900000,  bank: 'HDFC Bank',  account: '501009876543', ifsc: 'HDFC0000456', pan: 'EFGPD7890G', pf: 'MH/48001/05', uan: '100912345682', esic: null },
-  { id: 54, name: 'Rahul Sharma',   code: 'EMP-102',     ctc: 660000,  bank: 'Kotak Bank', account: '1234567890',   ifsc: 'KKBK0001234', pan: 'FGHPE2345H', pf: 'MH/48001/06', uan: '100912345683', esic: null },
-  { id: 55, name: 'Ajay User',      code: 'EMP-47',      ctc: 1200000, bank: 'HDFC Bank',  account: '501001234567', ifsc: 'HDFC0000789', pan: 'GHIPF6789I', pf: 'MH/48001/07', uan: '100912345684', esic: null },
-  { id: 56, name: 'Priya Verma',    code: 'EMP-HR-001',  ctc: 540000,  bank: 'SBI',        account: '32109876543',  ifsc: 'SBIN0005678', pan: 'HIJPG1234J', pf: 'MH/48001/08', uan: '100912345685', esic: '4101234571' },
-  { id: 57, name: 'Rohan Mehta',    code: 'EMP-MGR-002', ctc: 780000,  bank: 'ICICI Bank', account: '623409876543', ifsc: 'ICIC0005678', pan: 'IJKPH5678K', pf: 'MH/48001/09', uan: '100912345686', esic: null },
-  { id: 58, name: 'Siddharth Rao',  code: 'EMP-DEV-501', ctc: 720000,  bank: 'Axis Bank',  account: '911010087654', ifsc: 'UTIB0005678', pan: 'JKLPI9012L', pf: 'MH/48001/10', uan: '100912345687', esic: null },
+  { id: 51, name: 'Sam Rane',       code: 'EMP001',      ctc: 480000,  bank: 'HDFC Bank',  account: '501002345678', ifsc: 'HDFC0000123', pan: 'ABCPA1234C', pf: 'MH/48001/01', uan: '100912345678', esic: '4101234567' },
+  { id: 52, name: 'Priya Mishra',   code: 'EMP002',      ctc: 360000,  bank: 'ICICI Bank', account: '623401234567', ifsc: 'ICIC0001234', pan: 'BCDPB5678D', pf: 'MH/48001/02', uan: '100912345679', esic: '4101234568' },
+  { id: 55, name: 'Pranali Patil',  code: 'EMP005',      ctc: 420000,  bank: 'Axis Bank',  account: '911010012345', ifsc: 'UTIB0001234', pan: 'DEFPC3456F', pf: 'MH/48001/04', uan: '100912345681', esic: '4101234570' },
+  { id: 56, name: 'Shakyadita Sona',code: 'EMP006',      ctc: 900000,  bank: 'HDFC Bank',  account: '501009876543', ifsc: 'HDFC0000456', pan: 'EFGPD7890G', pf: 'MH/48001/05', uan: '100912345682', esic: null },
+  { id: 57, name: 'Harsh Gawali',   code: 'EMP007',      ctc: 660000,  bank: 'Kotak Bank', account: '1234567890',   ifsc: 'KKBK0001234', pan: 'FGHPE2345H', pf: 'MH/48001/06', uan: '100912345683', esic: null },
+  { id: 59, name: 'Adita Sona',     code: 'EMP009',      ctc: 540000,  bank: 'SBI',        account: '32109876543',  ifsc: 'SBIN0005678', pan: 'HIJPG1234J', pf: 'MH/48001/08', uan: '100912345685', esic: '4101234571' },
 ];
 
 function calcBreakdown(annualCtc) {
@@ -52,15 +44,15 @@ function calcBreakdown(annualCtc) {
 
 async function clearOldSeedData(conn) {
   console.log('\n  Clearing old seed data (keeping production rows)...');
-  await conn.query("DELETE FROM payroll_run_employees WHERE processing_notes LIKE '%[SEED]%'").catch(() => {});
-  await conn.query("DELETE FROM payslips WHERE payslip_number LIKE 'SEED%'").catch(() => {});
-  await conn.query("DELETE FROM payroll_runs WHERE processing_notes LIKE '%[SEED]%'").catch(() => {});
-  await conn.query("DELETE FROM salary_structures WHERE structure_code LIKE 'SEED-%'").catch(() => {});
+  await conn.query("DELETE FROM payroll_run_employees WHERE processing_notes LIKE '%[SEED]%' OR created_by = 9999").catch(() => {});
+  await conn.query("DELETE FROM payslips WHERE payslip_number LIKE 'SEED%' OR created_by = 9999").catch(() => {});
+  await conn.query("DELETE FROM payroll_runs WHERE processing_notes LIKE '%[SEED]%' OR created_by = 9999").catch(() => {});
+  await conn.query("DELETE FROM salary_structures WHERE structure_code LIKE 'SEED-%' OR created_by = 9999").catch(() => {});
   await conn.query("DELETE FROM employee_salary_structures WHERE created_by = 9999").catch(() => {});
-  await conn.query("DELETE FROM salary_revisions WHERE reason_description LIKE '%[SEED]%'").catch(() => {});
-  await conn.query("DELETE FROM full_final_settlements WHERE settlement_notes LIKE '%[SEED]%'").catch(() => {});
-  await conn.query("DELETE FROM loan_repayments WHERE loan_id IN (SELECT id FROM employee_loans WHERE reason LIKE '%[SEED]%')").catch(() => {});
-  await conn.query("DELETE FROM employee_loans WHERE reason LIKE '%[SEED]%'").catch(() => {});
+  await conn.query("DELETE FROM salary_revisions WHERE reason_description LIKE '%[SEED]%' OR created_by = 9999").catch(() => {});
+  await conn.query("DELETE FROM full_final_settlements WHERE settlement_notes LIKE '%[SEED]%' OR created_by = 9999").catch(() => {});
+  await conn.query("DELETE FROM loan_repayments WHERE created_by = 9999").catch(() => {});
+  await conn.query("DELETE FROM employee_loans WHERE created_by = 9999").catch(() => {});
   await conn.query("DELETE FROM loan_types WHERE created_by = 9999 AND organization_id = ?", [ORG_ID]).catch(() => {});
   console.log('  Done clearing.');
 }
@@ -185,7 +177,7 @@ async function seedPayrollRunEmployees(conn, runIds) {
       const leaveDays   = Math.floor(Math.random() * 2);
       const unpaidDays  = 0;
 
-      await conn.query(`INSERT INTO payroll_run_employees
+      const [preRes] = await conn.query(`INSERT INTO payroll_run_employees
         (uuid,organization_id,payroll_run_id,employee_id,status,
          working_days,leave_days,paid_leave_days,unpaid_leave_days,
          total_earnings,total_deductions,net_salary,tax_deducted,
@@ -196,32 +188,52 @@ async function seedPayrollRunEmployees(conn, runIds) {
          b.gross, b.pf + b.esi + b.tds, b.net, b.tds,
          '[SEED] Auto-generated by payroll seed', ADMIN_USER, ADMIN_USER]);
       preCount++;
+      const preId = preRes.insertId;
+
+      // Seed itemized earnings into payroll_earnings
+      await conn.query(`INSERT INTO payroll_earnings
+        (uuid, organization_id, payroll_run_employee_id, component_name, component_type, calculated_value, actual_value)
+        VALUES
+        (?, ?, ?, 'Basic Pay', 'Earning', ?, ?),
+        (?, ?, ?, 'House Rent Allowance (HRA)', 'Earning', ?, ?),
+        (?, ?, ?, 'Special Allowance', 'Earning', ?, ?),
+        (?, ?, ?, 'Transport Allowance', 'Earning', 1600.00, 1600.00)`,
+        [uuidv4(), ORG_ID, preId, b.basic, b.basic,
+         uuidv4(), ORG_ID, preId, b.hra, b.hra,
+         uuidv4(), ORG_ID, preId, b.special, b.special,
+         uuidv4(), ORG_ID, preId]
+      ).catch(() => {});
+
+      // Seed itemized deductions into payroll_deductions
+      if (b.pf > 0) {
+        await conn.query(`INSERT INTO payroll_deductions (uuid, organization_id, payroll_run_employee_id, component_name, component_type, calculated_value, actual_value) VALUES (?, ?, ?, 'Provident Fund (PF)', 'Deduction', ?, ?)`, [uuidv4(), ORG_ID, preId, b.pf, b.pf]).catch(() => {});
+      }
+      if (b.esi > 0) {
+        await conn.query(`INSERT INTO payroll_deductions (uuid, organization_id, payroll_run_employee_id, component_name, component_type, calculated_value, actual_value) VALUES (?, ?, ?, 'ESIC Contribution', 'Deduction', ?, ?)`, [uuidv4(), ORG_ID, preId, b.esi, b.esi]).catch(() => {});
+      }
+      if (b.tds > 0) {
+        await conn.query(`INSERT INTO payroll_deductions (uuid, organization_id, payroll_run_employee_id, component_name, component_type, calculated_value, actual_value) VALUES (?, ?, ?, 'Income Tax (TDS)', 'Deduction', ?, ?)`, [uuidv4(), ORG_ID, preId, b.tds, b.tds]).catch(() => {});
+      }
 
       const psNum = 'SEED-' + emp.code + '-' + month.substring(0, 7).replace('-', '');
       const [exPs] = await conn.query('SELECT id FROM payslips WHERE payslip_number=?', [psNum]);
       if (exPs.length === 0) {
         await conn.query(`INSERT INTO payslips
           (uuid,organization_id,employee_id,payroll_run_id,
-           payslip_month,salary_month,payslip_number,
-           ctc,base_salary,basic_salary,gross_salary,
-           total_allowances,total_deductions,net_salary,
-           pf_contribution,esi_contribution,tax_deduction,
-           ytd_gross,ytd_tax,ytd_net,days_worked,
-           payment_mode,payment_date,is_locked,
+           payslip_month,payslip_number,
+           ctc,basic_salary,gross_salary,
+           total_deductions,net_salary,
+           ytd_gross,ytd_tax,ytd_net,is_locked,
            bank_name,account_no,ifsc_code,pf_no,uan_no,esic_no,pan,
            created_by,updated_by)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [uuidv4(), ORG_ID, emp.id, runId,
-           month, month, psNum,
-           emp.ctc, b.monthly, b.basic, b.gross,
-           b.hra + b.special, b.pf + b.esi + b.tds, b.net,
-           b.pf, b.esi, b.tds,
+           month, psNum,
+           emp.ctc, b.basic, b.gross,
+           b.pf + b.esi + b.tds, b.net,
            b.gross * (publishedMonths.indexOf(month) + 1),
            b.tds  * (publishedMonths.indexOf(month) + 1),
            b.net  * (publishedMonths.indexOf(month) + 1),
-           workingDays - leaveDays,
-           'bank_transfer',
-           new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1).toISOString().split('T')[0],
            1,
            emp.bank, emp.account, emp.ifsc, emp.pf, emp.uan, emp.esic || null, emp.pan,
            ADMIN_USER, ADMIN_USER]);
@@ -237,14 +249,12 @@ async function seedPayrollRunEmployees(conn, runIds) {
 async function seedSalaryRevisions(conn) {
   console.log('\n[5/8] SALARY REVISIONS...');
   const revisions = [
-    { empId: 48, empName: 'Amisha Shinde',  oldCtc: 420000, newCtc: 480000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',  fromDate: '2026-04-01' },
-    { empId: 49, empName: 'Isha Shinde',    oldCtc: 300000, newCtc: 360000, type: 'increment', reason: 'Performance bonus revision [SEED]', status: 'approved', fromDate: '2026-04-01' },
-    { empId: 51, empName: 'Man Shinde',     oldCtc: 360000, newCtc: 420000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',  fromDate: '2026-04-01' },
-    { empId: 53, empName: 'Vikram Singh',   oldCtc: 800000, newCtc: 900000, type: 'promotion', reason: 'Promoted to Senior Manager [SEED]', status: 'approved', fromDate: '2026-04-01' },
-    { empId: 54, empName: 'Rahul Sharma',   oldCtc: 600000, newCtc: 660000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',  fromDate: '2026-04-01' },
-    { empId: 58, empName: 'Siddharth Rao',  oldCtc: 600000, newCtc: 720000, type: 'promotion', reason: 'Promoted to Senior Dev [SEED]', status: 'submitted', fromDate: '2026-08-01' },
-    { empId: 56, empName: 'Priya Verma',    oldCtc: 480000, newCtc: 540000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',   fromDate: '2026-04-01' },
-    { empId: 57, empName: 'Rohan Mehta',    oldCtc: 720000, newCtc: 780000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'submitted',  fromDate: '2026-08-01' },
+    { empId: EMPLOYEES[0].id, empName: EMPLOYEES[0].name, oldCtc: 420000, newCtc: 480000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',  fromDate: '2026-04-01' },
+    { empId: EMPLOYEES[1].id, empName: EMPLOYEES[1].name, oldCtc: 300000, newCtc: 360000, type: 'increment', reason: 'Performance bonus revision [SEED]', status: 'approved', fromDate: '2026-04-01' },
+    { empId: EMPLOYEES[2].id, empName: EMPLOYEES[2].name, oldCtc: 360000, newCtc: 420000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',  fromDate: '2026-04-01' },
+    { empId: EMPLOYEES[3].id, empName: EMPLOYEES[3].name, oldCtc: 800000, newCtc: 900000, type: 'promotion', reason: 'Promoted to Senior Manager [SEED]', status: 'approved', fromDate: '2026-04-01' },
+    { empId: EMPLOYEES[4].id, empName: EMPLOYEES[4].name, oldCtc: 600000, newCtc: 660000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',  fromDate: '2026-04-01' },
+    { empId: EMPLOYEES[5].id, empName: EMPLOYEES[5].name, oldCtc: 480000, newCtc: 540000, type: 'increment', reason: 'Annual appraisal FY2026 [SEED]', status: 'approved',   fromDate: '2026-04-01' },
   ];
 
   let count = 0;
@@ -287,21 +297,18 @@ async function seedLoans(conn, loanTypeIds) {
   const medId       = loanTypeIds['Medical Loan']    || null;
 
   const loans = [
-    { empId: 48, empName: 'Amisha Shinde',  typeId: personalId,  typeName: 'personal',       amount: 150000, tenure: 24, rate: 10, startDate: '2026-01-15', status: 'active'   },
-    { empId: 49, empName: 'Isha Shinde',    typeId: homeId,      typeName: 'home',            amount: 2500000,tenure: 120,rate: 7.5,startDate: '2025-09-01', status: 'active'   },
-    { empId: 50, empName: 'Isha Shinde 2',  typeId: vehicleId,   typeName: 'vehicle',         amount: 300000, tenure: 36, rate: 9,  startDate: '2026-03-01', status: 'active'   },
-    { empId: 51, empName: 'Man Shinde',     typeId: educId,      typeName: 'education',       amount: 200000, tenure: 24, rate: 6,  startDate: '2026-04-01', status: 'approved' },
-    { empId: 53, empName: 'Vikram Singh',   typeId: emergencyId, typeName: 'emergency',       amount: 50000,  tenure: 6,  rate: 0,  startDate: '2025-06-01', status: 'completed'},
-    { empId: 54, empName: 'Rahul Sharma',   typeId: personalId,  typeName: 'personal',       amount: 100000, tenure: 12, rate: 10, startDate: '2026-08-01', status: 'pending'  },
-    { empId: 56, empName: 'Priya Verma',    typeId: advanceId,   typeName: 'salary_advance',  amount: 30000,  tenure: 3,  rate: 0,  startDate: '2026-07-01', status: 'active'   },
-    { empId: 57, empName: 'Rohan Mehta',    typeId: vehicleId,   typeName: 'vehicle',         amount: 450000, tenure: 48, rate: 9,  startDate: '2026-02-01', status: 'active'   },
-    { empId: 58, empName: 'Siddharth Rao',  typeId: medId,       typeName: 'medical',         amount: 80000,  tenure: 12, rate: 4,  startDate: '2026-08-01', status: 'pending'  },
+    { empId: EMPLOYEES[0].id, empName: EMPLOYEES[0].name,  typeId: personalId,  typeName: 'personal',       amount: 150000, tenure: 24, rate: 10, startDate: '2026-01-15', status: 'active'   },
+    { empId: EMPLOYEES[1].id, empName: EMPLOYEES[1].name,    typeId: homeId,      typeName: 'home',            amount: 2500000,tenure: 120,rate: 7.5,startDate: '2025-09-01', status: 'active'   },
+    { empId: EMPLOYEES[2].id, empName: EMPLOYEES[2].name,     typeId: educId,      typeName: 'education',       amount: 200000, tenure: 24, rate: 6,  startDate: '2026-04-01', status: 'approved' },
+    { empId: EMPLOYEES[3].id, empName: EMPLOYEES[3].name,   typeId: emergencyId, typeName: 'personal',       amount: 50000,  tenure: 6,  rate: 0,  startDate: '2025-06-01', status: 'completed'},
+    { empId: EMPLOYEES[4].id, empName: EMPLOYEES[4].name,   typeId: personalId,  typeName: 'personal',       amount: 100000, tenure: 12, rate: 10, startDate: '2026-08-01', status: 'pending'  },
+    { empId: EMPLOYEES[5].id, empName: EMPLOYEES[5].name,    typeId: advanceId,   typeName: 'personal',  amount: 30000,  tenure: 3,  rate: 0,  startDate: '2026-07-01', status: 'active'   },
   ];
 
   const loanIds = [];
   for (const loan of loans) {
     const [ex] = await conn.query(
-      "SELECT id FROM employee_loans WHERE employee_id=? AND organization_id=? AND reason LIKE '%[SEED]%' AND loan_amount=?",
+      "SELECT id FROM employee_loans WHERE employee_id=? AND organization_id=? AND loan_amount=? AND created_by=9999",
       [loan.empId, ORG_ID, loan.amount]
     );
     if (ex.length > 0) { loanIds.push({ id: ex[0].id, ...loan }); console.log('  ~ Exists for ' + loan.empName); continue; }
@@ -326,15 +333,15 @@ async function seedLoans(conn, loanTypeIds) {
     const outstanding = Math.max(0, total - repaid);
 
     const [r] = await conn.query(`INSERT INTO employee_loans
-      (uuid,organization_id,employee_id,loan_type,loan_type_id,loan_amount,amount,
-       loan_date,tenure_months,interest_rate,emi,monthly_emi,
+      (uuid,organization_id,employee_id,loan_type,loan_type_id,loan_amount,
+       loan_date,tenure_months,interest_rate,emi,
        total_amount_with_interest,repaid_amount,outstanding_amount,
-       status,reason,created_by,updated_by)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       status,created_by,updated_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [uuidv4(), ORG_ID, loan.empId, loan.typeName, loan.typeId,
-       loan.amount, loan.amount, loan.startDate, loan.tenure, loan.rate,
-       emi, emi, total, repaid, outstanding,
-       loan.status, '[SEED] ' + loan.typeName + ' loan application for ' + loan.empName, ADMIN_USER, ADMIN_USER]);
+       loan.amount, loan.startDate, loan.tenure, loan.rate,
+       emi, total, repaid, outstanding,
+       loan.status, ADMIN_USER, ADMIN_USER]);
     loanIds.push({ id: r.insertId, ...loan, emi, repaidMonths, total });
     console.log('  + Loan for ' + loan.empName + ' ₹' + loan.amount.toLocaleString() + ' @ ' + loan.rate + '% EMI=₹' + emi + ' [' + loan.status + ']');
   }
@@ -388,14 +395,14 @@ async function seedSettlements(conn) {
   console.log('\n[8/8] F&F SETTLEMENTS...');
   const settlements = [
     {
-      empId: 50, empName: 'Isha Shinde (EMP0033)',
+      empId: EMPLOYEES[1].id, empName: EMPLOYEES[1].name,
       exitDate: '2026-07-31', noticeDays: 30, noticeRecovery: 0,
       leaveEnc: 15000, gratuity: 32000, bonus: 10000,
       assetRecovery: 0, otherDeductions: 0, notes: '[SEED] Resigned by mutual consent',
       status: 'approved'
     },
     {
-      empId: 51, empName: 'Man Shinde',
+      empId: EMPLOYEES[2].id, empName: EMPLOYEES[2].name,
       exitDate: '2026-08-31', noticeDays: 30, noticeRecovery: 0,
       leaveEnc: 8000, gratuity: 0, bonus: 5000,
       assetRecovery: 5000, otherDeductions: 0, notes: '[SEED] Contract completion',

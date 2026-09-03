@@ -68,13 +68,23 @@ export class RecruitmentController {
       maxExperienceYears: validated.maxExperienceYears,
       minSalary: validated.minSalary,
       maxSalary: validated.maxSalary,
-      currency: validated.currency,
-      employmentType: validated.employmentType,
+      currency: validated.currency || 'INR',
+      employmentType: validated.employmentType || 'onsite',
       noOfPositions: validated.noOfPositions,
+      expiryDate: validated.expiryDate,
       jobTemplateId: validated.jobTemplateId,
       skills: validated.skills,
       locations: validated.locations,
     });
+
+    if (req.body.aiSettings && job?.id) {
+      try {
+        const { jobAiService } = await import('../services/JobAiService');
+        await jobAiService.saveJobAiSettings(ctx, job.id, req.body.aiSettings);
+      } catch (aiErr) {
+        console.warn('Failed to save AI settings for job:', aiErr);
+      }
+    }
 
     res.status(201).json({ success: true, data: job });
   });
@@ -82,6 +92,9 @@ export class RecruitmentController {
   listJobs = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { page = 1, pageSize = 20, search, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
+
+    const { recruitmentExpiryService } = await import('../services/RecruitmentExpiryService');
+    await recruitmentExpiryService.closeExpiredRecords(ctx);
 
     const result = await this.jobService.listJobs(ctx, {
       page: parseInt(page as string, 10),
@@ -151,6 +164,11 @@ export class RecruitmentController {
       email: validated.email,
       phone: validated.phone,
       alternativePhone: validated.alternativePhone,
+      gender: validated.gender,
+      maritalStatus: validated.maritalStatus,
+      qualification: validated.qualification,
+      skills: validated.skills,
+      dateOfBirth: validated.dateOfBirth,
       currentLocation: validated.currentLocation,
       preferredLocation: validated.preferredLocation,
       currentSalary: validated.currentSalary,
@@ -162,7 +180,8 @@ export class RecruitmentController {
       linkedinUrl: validated.linkedinUrl,
       githubUrl: validated.githubUrl,
       portfolioUrl: validated.portfolioUrl,
-      source: validated.source,
+      source: validated.source || 'direct_apply',
+      resumeUrl: validated.resumeUrl,
     });
 
     res.status(201).json({ success: true, data: candidate });
@@ -222,10 +241,10 @@ export class RecruitmentController {
 
   listApplications = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { 
-      page = 1, 
-      pageSize = 20, 
-      sortBy = 'created_at', 
+    const {
+      page = 1,
+      pageSize = 100,
+      sortBy = 'created_at',
       sortOrder = 'desc',
       companyId,
       locationId,
@@ -251,6 +270,49 @@ export class RecruitmentController {
       sortBy: sortBy as string,
       sortOrder: sortOrder as 'asc' | 'desc',
       filters
+    });
+
+    const rawItems = Array.isArray(result.items) ? result.items : [];
+
+    // Filter out dummy orphan test records (e.g. positionTitle === 'Job Position')
+    const cleanItems = rawItems.filter((item: any) => {
+      const pos = String(item.position_title || item.positionTitle || '').toLowerCase().trim();
+      const email = String(item.candidate_email || item.candidateEmail || '').trim();
+      return pos !== 'job position' && email.length > 0;
+    });
+
+    // Auto-calculate missing ATS/JD scores asynchronously for real candidates
+    (async () => {
+      try {
+        const { resumeScreeningEngine } = await import('../services/ResumeScreeningEngine');
+        for (const item of cleanItems) {
+          const candId = item.candidate_id || item.candidateId;
+          const jId = item.job_id || item.jobId;
+          if (candId && jId && (item.ats_score == null || item.jd_match_score == null)) {
+            await resumeScreeningEngine.screenCandidateForJob(ctx, Number(candId), Number(jId), { persist: true }).catch(() => {});
+          }
+        }
+      } catch (e) {}
+    })();
+
+    res.json({ success: true, data: cleanItems, meta: result.meta });
+  });
+
+  /**
+   * GET /applications/hired
+   * Returns only hired candidates not yet converted to employees.
+   */
+  listHiredCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = (req as any).ctx!;
+    const { page = 1, pageSize = 200, search } = req.query;
+
+    const filters: any = {};
+    if (search) filters.search = search as string;
+
+    const result = await this.recruitmentService.getHiredCandidates(ctx, {
+      page: parseInt(page as string, 10),
+      pageSize: parseInt(pageSize as string, 10),
+      filters,
     });
 
     res.json({ success: true, data: result.items, meta: result.meta });
@@ -286,6 +348,12 @@ export class RecruitmentController {
     res.json({ success: true, data: application });
   });
 
+  listPipelineStages = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const stages = await this.recruitmentService.getPipelineStages(ctx);
+    res.json({ success: true, data: stages });
+  });
+
   // ==================== Interview Endpoints ====================
 
   scheduleInterview = asyncHandler(async (req: Request, res: Response) => {
@@ -294,6 +362,7 @@ export class RecruitmentController {
 
     const interview = await this.interviewService.scheduleInterview(ctx, {
       applicationId: validated.applicationId,
+      candidateEmail: validated.candidateEmail || undefined,
       interviewType: validated.interviewType,
       interviewRound: validated.interviewRound,
       scheduledDate: validated.scheduledDate,
@@ -333,6 +402,18 @@ export class RecruitmentController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
+  getCandidateRoundsSummary = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { applicationId } = req.params;
+
+    const summary = await this.interviewService.getCandidateInterviewSummary(
+      ctx,
+      parseInt(applicationId, 10)
+    );
+
+    res.json({ success: true, data: summary });
+  });
+
   getInterviewSchedule = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { assignedOnly } = req.query;
@@ -340,22 +421,77 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    const user = await db('users').where({ id: ctx.userId }).first();
-    const employeeId = user?.employee_id;
+    const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
 
-    let employeeObj = null;
-    if (employeeId) {
-      employeeObj = await db('employees').where({ id: employeeId }).first();
+    let loggedInEmployee = null;
+    const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
+    if (empIdFromUser) {
+      loggedInEmployee = await db('employees').where({ id: empIdFromUser }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && loggedInUser?.email) {
+      loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
     }
 
-    const userFullName = employeeObj 
-      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
-      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+    const possibleUserIds = new Set<number | string>();
+    if (ctx.userId) {
+      possibleUserIds.add(ctx.userId);
+      possibleUserIds.add(Number(ctx.userId));
+      possibleUserIds.add(String(ctx.userId));
+    }
+    if (empIdFromUser) {
+      possibleUserIds.add(empIdFromUser);
+      possibleUserIds.add(Number(empIdFromUser));
+      possibleUserIds.add(String(empIdFromUser));
+    }
+    if (loggedInEmployee?.id) {
+      possibleUserIds.add(loggedInEmployee.id);
+      possibleUserIds.add(Number(loggedInEmployee.id));
+      possibleUserIds.add(String(loggedInEmployee.id));
+    }
+
+    const possibleNameStrings = new Set<string>();
+    const addNameParts = (str?: string) => {
+      if (!str) return;
+      const clean = str.trim().toLowerCase();
+      if (clean.length >= 2) possibleNameStrings.add(clean);
+    };
+
+    if (loggedInEmployee) {
+      addNameParts(`${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`);
+      addNameParts(loggedInEmployee.full_name);
+      addNameParts(loggedInEmployee.name);
+      addNameParts(loggedInEmployee.email);
+    }
+    if (loggedInUser) {
+      addNameParts(`${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`);
+      addNameParts(loggedInUser.full_name);
+      addNameParts(loggedInUser.name);
+      addNameParts(loggedInUser.username);
+      addNameParts(loggedInUser.email);
+    }
+
+    const formatCleanName = (val?: string): string => {
+      if (!val) return '';
+      if (val.includes('@')) {
+        const username = val.split('@')[0];
+        const lettersOnly = username.replace(/[0-9_.]/g, ' ').trim();
+        if (lettersOnly.length >= 2) {
+          return lettersOnly.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
+      return val;
+    };
+
+    const rawUserFullName = (loggedInEmployee ? `${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`.trim() : '')
+      || (loggedInUser ? `${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`.trim() : '')
+      || loggedInEmployee?.name || loggedInUser?.name || loggedInUser?.email || '';
+
+    const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
     const items = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .where(function() {
+      .where(function () {
         this.where('interviews.organization_id', ctx.organizationId).orWhereNull('interviews.organization_id');
       })
       .select([
@@ -366,102 +502,193 @@ export class RecruitmentController {
       ])
       .orderBy('interviews.scheduled_date', 'asc');
 
-    const panelRows = await db('interview_panel').where(function() {
+    const panelRows = await db('interview_panel').where(function () {
       this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
     }).catch(() => []);
 
     const panelMap: Record<number, number[]> = {};
     (panelRows || []).forEach((row: any) => {
-      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
-      panelMap[row.interview_id].push(Number(row.employee_id));
-    });
-
-    const [employees, users] = await Promise.all([
-      db('employees')
-        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => []),
-      db('users')
-        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => [])
-    ]);
-
-    const employeeNameMap: Record<number, string> = {};
-    (employees || []).forEach((emp: any) => {
-      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
-    });
-    (users || []).forEach((usr: any) => {
-      if (usr.id && usr.full_name) {
-        employeeNameMap[Number(usr.id)] = usr.full_name;
-        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      const intId = Number(row.interviewId || row.interview_id);
+      const empId = Number(row.employeeId || row.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        panelMap[intId].push(empId);
       }
     });
 
-    items.forEach(item => {
+    const [employees, users] = await Promise.all([
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => [])
+    ]);
+
+    const buildName = (obj: any): string => {
+      if (!obj) return '';
+      const fn = obj.firstName || obj.first_name || obj.given_name || '';
+      const ln = obj.lastName || obj.last_name || obj.family_name || '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      return obj.fullName || obj.full_name || obj.name || obj.email || '';
+    };
+
+    const employeeNameMap: Record<number | string, string> = {};
+
+    (employees || []).forEach((emp: any) => {
+      const name = buildName(emp) || `Employee #${emp.id}`;
+      const empId = Number(emp.id);
+      if (empId) {
+        employeeNameMap[empId] = name;
+        employeeNameMap[String(empId)] = name;
+      }
+      const uId = Number(emp.userId || emp.user_id);
+      if (uId) {
+        employeeNameMap[uId] = name;
+        employeeNameMap[String(uId)] = name;
+      }
+      if (emp.email) {
+        employeeNameMap[emp.email.toLowerCase()] = name;
+      }
+    });
+
+    (users || []).forEach((usr: any) => {
+      const name = buildName(usr) || `User #${usr.id}`;
+      const usrId = Number(usr.id);
+      if (usrId && !employeeNameMap[usrId]) {
+        employeeNameMap[usrId] = name;
+        employeeNameMap[String(usrId)] = name;
+      }
+      if (usr.email && !employeeNameMap[usr.email.toLowerCase()]) {
+        employeeNameMap[usr.email.toLowerCase()] = name;
+      }
+    });
+
+    (items as any[]).forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
       }
-      if (item.interviewer_ids) {
+      const rawIds = item.interviewerIds || item.interviewer_ids;
+      if (rawIds) {
         try {
-          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          const parsed = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
+          } else if (parsed) {
+            interviewerIds.push(parsed);
           }
-        } catch (e) {}
+        } catch (e) {
+          interviewerIds.push(rawIds);
+        }
       }
-      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer_id || item.interviewerId) interviewerIds.push(item.interviewer_id || item.interviewerId);
       if (item.interviewer) interviewerIds.push(item.interviewer);
 
       const resolvedNamesList: string[] = [];
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
+
+        if (typeof idOrName === 'object') {
+          const objName = buildName(idOrName);
+          if (objName && !resolvedNamesList.includes(objName)) {
+            resolvedNamesList.push(objName);
+            return;
+          }
+          idOrName = (idOrName as any).id || (idOrName as any).value || idOrName;
+        }
+
         const numId = Number(idOrName);
-        if (!isNaN(numId) && employeeNameMap[numId]) {
+        if (!isNaN(numId) && numId > 0 && employeeNameMap[numId]) {
           if (!resolvedNamesList.includes(employeeNameMap[numId])) {
             resolvedNamesList.push(employeeNameMap[numId]);
           }
-        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
-          if (!resolvedNamesList.includes(idOrName.trim())) {
-            resolvedNamesList.push(idOrName.trim());
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
+          const cleanStr = idOrName.trim();
+          if (isNaN(Number(cleanStr))) {
+            if (employeeNameMap[cleanStr.toLowerCase()]) {
+              if (!resolvedNamesList.includes(employeeNameMap[cleanStr.toLowerCase()])) {
+                resolvedNamesList.push(employeeNameMap[cleanStr.toLowerCase()]);
+              }
+            } else if (!resolvedNamesList.includes(cleanStr)) {
+              resolvedNamesList.push(cleanStr);
+            }
+          } else {
+            const parsedNum = Number(cleanStr);
+            if (employeeNameMap[parsedNum] && !resolvedNamesList.includes(employeeNameMap[parsedNum])) {
+              resolvedNamesList.push(employeeNameMap[parsedNum]);
+            }
           }
         }
       });
 
+      // Fallback if no interviewer resolved
+      if (resolvedNamesList.length === 0) {
+        if (item.created_by && employeeNameMap[Number(item.created_by)]) {
+          resolvedNamesList.push(employeeNameMap[Number(item.created_by)]);
+        } else if (userFullName && userFullName.length > 1) {
+          resolvedNamesList.push(userFullName);
+        }
+      }
+
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel')
+        ? finalString
+        : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items as any[];
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = (items as any[]).filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
-        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
-        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+        for (const pId of panelEmpIds) {
+          if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
+            return true;
+          }
+        }
 
         if (item.interviewer_ids) {
           try {
             const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
-            if (Array.isArray(parsed)) {
-              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
-              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
-              if (userFullName && userFullName.length > 1) {
-                const lowerUser = userFullName.toLowerCase();
-                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
-                if (matchedByName) return true;
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const val of arr) {
+              if (possibleUserIds.has(val) || possibleUserIds.has(Number(val)) || possibleUserIds.has(String(val))) {
+                return true;
+              }
+              if (typeof val === 'string' && val.trim().length >= 2) {
+                const valLower = val.trim().toLowerCase();
+                for (const nameStr of possibleNameStrings) {
+                  if (valLower.includes(nameStr) || nameStr.includes(valLower)) return true;
+                }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            const strVal = String(item.interviewer_ids).toLowerCase();
+            for (const nameStr of possibleNameStrings) {
+              if (strVal.includes(nameStr)) return true;
+            }
+          }
         }
 
-        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
-        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+        if (item.interviewer_id && (possibleUserIds.has(item.interviewer_id) || possibleUserIds.has(Number(item.interviewer_id)) || possibleUserIds.has(String(item.interviewer_id)))) {
+          return true;
+        }
 
-        if (userFullName && userFullName.length > 1) {
-          const lowerUser = userFullName.toLowerCase().trim();
-          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
-          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        if (item.interviewer_names && typeof item.interviewer_names === 'string') {
+          const namesLower = item.interviewer_names.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (namesLower.includes(nameStr) || nameStr.includes(namesLower)) return true;
+          }
+        }
+
+        if (item.interviewer && typeof item.interviewer === 'string') {
+          const intLower = item.interviewer.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (intLower.includes(nameStr) || nameStr.includes(intLower)) return true;
+          }
+        }
+
+        if (item.created_by && (possibleUserIds.has(item.created_by) || possibleUserIds.has(Number(item.created_by)) || possibleUserIds.has(String(item.created_by)))) {
+          return true;
         }
 
         return false;
@@ -487,24 +714,79 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    const user = await db('users').where({ id: ctx.userId }).first();
-    const employeeId = user?.employee_id;
+    const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
 
-    let employeeObj = null;
-    if (employeeId) {
-      employeeObj = await db('employees').where({ id: employeeId }).first();
+    let loggedInEmployee = null;
+    const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
+    if (empIdFromUser) {
+      loggedInEmployee = await db('employees').where({ id: empIdFromUser }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && loggedInUser?.email) {
+      loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
     }
 
-    const userFullName = employeeObj 
-      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
-      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+    const possibleUserIds = new Set<number | string>();
+    if (ctx.userId) {
+      possibleUserIds.add(ctx.userId);
+      possibleUserIds.add(Number(ctx.userId));
+      possibleUserIds.add(String(ctx.userId));
+    }
+    if (empIdFromUser) {
+      possibleUserIds.add(empIdFromUser);
+      possibleUserIds.add(Number(empIdFromUser));
+      possibleUserIds.add(String(empIdFromUser));
+    }
+    if (loggedInEmployee?.id) {
+      possibleUserIds.add(loggedInEmployee.id);
+      possibleUserIds.add(Number(loggedInEmployee.id));
+      possibleUserIds.add(String(loggedInEmployee.id));
+    }
+
+    const possibleNameStrings = new Set<string>();
+    const addNameParts = (str?: string) => {
+      if (!str) return;
+      const clean = str.trim().toLowerCase();
+      if (clean.length >= 2) possibleNameStrings.add(clean);
+    };
+
+    if (loggedInEmployee) {
+      addNameParts(`${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`);
+      addNameParts(loggedInEmployee.full_name);
+      addNameParts(loggedInEmployee.name);
+      addNameParts(loggedInEmployee.email);
+    }
+    if (loggedInUser) {
+      addNameParts(`${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`);
+      addNameParts(loggedInUser.full_name);
+      addNameParts(loggedInUser.name);
+      addNameParts(loggedInUser.username);
+      addNameParts(loggedInUser.email);
+    }
+
+    const formatCleanName = (val?: string): string => {
+      if (!val) return '';
+      if (val.includes('@')) {
+        const username = val.split('@')[0];
+        const lettersOnly = username.replace(/[0-9_.]/g, ' ').trim();
+        if (lettersOnly.length >= 2) {
+          return lettersOnly.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
+      return val;
+    };
+
+    const rawUserFullName = (loggedInEmployee ? `${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`.trim() : '')
+      || (loggedInUser ? `${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`.trim() : '')
+      || loggedInEmployee?.name || loggedInUser?.name || loggedInUser?.email || '';
+
+    const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
     const todayStr = new Date().toISOString().split('T')[0];
 
     let items = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .where(function() {
+      .where(function () {
         this.where('interviews.organization_id', ctx.organizationId).orWhereNull('interviews.organization_id');
       })
       .whereRaw("DATE(interviews.scheduled_date) = ?", [todayStr])
@@ -516,102 +798,193 @@ export class RecruitmentController {
       ])
       .orderBy('interviews.scheduled_date', 'asc');
 
-    const panelRows = await db('interview_panel').where(function() {
+    const panelRows = await db('interview_panel').where(function () {
       this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
     }).catch(() => []);
 
     const panelMap: Record<number, number[]> = {};
     (panelRows || []).forEach((row: any) => {
-      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
-      panelMap[row.interview_id].push(Number(row.employee_id));
-    });
-
-    const [employees, users] = await Promise.all([
-      db('employees')
-        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => []),
-      db('users')
-        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => [])
-    ]);
-
-    const employeeNameMap: Record<number, string> = {};
-    (employees || []).forEach((emp: any) => {
-      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
-    });
-    (users || []).forEach((usr: any) => {
-      if (usr.id && usr.full_name) {
-        employeeNameMap[Number(usr.id)] = usr.full_name;
-        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      const intId = Number(row.interviewId || row.interview_id);
+      const empId = Number(row.employeeId || row.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        panelMap[intId].push(empId);
       }
     });
 
-    items.forEach(item => {
+    const [employees, users] = await Promise.all([
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => [])
+    ]);
+
+    const buildName = (obj: any): string => {
+      if (!obj) return '';
+      const fn = obj.firstName || obj.first_name || obj.given_name || '';
+      const ln = obj.lastName || obj.last_name || obj.family_name || '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      return obj.fullName || obj.full_name || obj.name || obj.email || '';
+    };
+
+    const employeeNameMap: Record<number | string, string> = {};
+
+    (employees || []).forEach((emp: any) => {
+      const name = buildName(emp) || `Employee #${emp.id}`;
+      const empId = Number(emp.id);
+      if (empId) {
+        employeeNameMap[empId] = name;
+        employeeNameMap[String(empId)] = name;
+      }
+      const uId = Number(emp.userId || emp.user_id);
+      if (uId) {
+        employeeNameMap[uId] = name;
+        employeeNameMap[String(uId)] = name;
+      }
+      if (emp.email) {
+        employeeNameMap[emp.email.toLowerCase()] = name;
+      }
+    });
+
+    (users || []).forEach((usr: any) => {
+      const name = buildName(usr) || `User #${usr.id}`;
+      const usrId = Number(usr.id);
+      if (usrId && !employeeNameMap[usrId]) {
+        employeeNameMap[usrId] = name;
+        employeeNameMap[String(usrId)] = name;
+      }
+      if (usr.email && !employeeNameMap[usr.email.toLowerCase()]) {
+        employeeNameMap[usr.email.toLowerCase()] = name;
+      }
+    });
+
+    (items as any[]).forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
       }
-      if (item.interviewer_ids) {
+      const rawIds = item.interviewerIds || item.interviewer_ids;
+      if (rawIds) {
         try {
-          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          const parsed = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
+          } else if (parsed) {
+            interviewerIds.push(parsed);
           }
-        } catch (e) {}
+        } catch (e) {
+          interviewerIds.push(rawIds);
+        }
       }
-      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer_id || item.interviewerId) interviewerIds.push(item.interviewer_id || item.interviewerId);
       if (item.interviewer) interviewerIds.push(item.interviewer);
 
       const resolvedNamesList: string[] = [];
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
+
+        if (typeof idOrName === 'object') {
+          const objName = buildName(idOrName);
+          if (objName && !resolvedNamesList.includes(objName)) {
+            resolvedNamesList.push(objName);
+            return;
+          }
+          idOrName = (idOrName as any).id || (idOrName as any).value || idOrName;
+        }
+
         const numId = Number(idOrName);
-        if (!isNaN(numId) && employeeNameMap[numId]) {
+        if (!isNaN(numId) && numId > 0 && employeeNameMap[numId]) {
           if (!resolvedNamesList.includes(employeeNameMap[numId])) {
             resolvedNamesList.push(employeeNameMap[numId]);
           }
-        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
-          if (!resolvedNamesList.includes(idOrName.trim())) {
-            resolvedNamesList.push(idOrName.trim());
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
+          const cleanStr = idOrName.trim();
+          if (isNaN(Number(cleanStr))) {
+            if (employeeNameMap[cleanStr.toLowerCase()]) {
+              if (!resolvedNamesList.includes(employeeNameMap[cleanStr.toLowerCase()])) {
+                resolvedNamesList.push(employeeNameMap[cleanStr.toLowerCase()]);
+              }
+            } else if (!resolvedNamesList.includes(cleanStr)) {
+              resolvedNamesList.push(cleanStr);
+            }
+          } else {
+            const parsedNum = Number(cleanStr);
+            if (employeeNameMap[parsedNum] && !resolvedNamesList.includes(employeeNameMap[parsedNum])) {
+              resolvedNamesList.push(employeeNameMap[parsedNum]);
+            }
           }
         }
       });
 
+      // Fallback if no interviewer resolved
+      if (resolvedNamesList.length === 0) {
+        if (item.created_by && employeeNameMap[Number(item.created_by)]) {
+          resolvedNamesList.push(employeeNameMap[Number(item.created_by)]);
+        } else if (userFullName && userFullName.length > 1) {
+          resolvedNamesList.push(userFullName);
+        }
+      }
+
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel')
+        ? finalString
+        : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items as any[];
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = (items as any[]).filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
-        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
-        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+        for (const pId of panelEmpIds) {
+          if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
+            return true;
+          }
+        }
 
         if (item.interviewer_ids) {
           try {
             const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
-            if (Array.isArray(parsed)) {
-              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
-              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
-              if (userFullName && userFullName.length > 1) {
-                const lowerUser = userFullName.toLowerCase();
-                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
-                if (matchedByName) return true;
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const val of arr) {
+              if (possibleUserIds.has(val) || possibleUserIds.has(Number(val)) || possibleUserIds.has(String(val))) {
+                return true;
+              }
+              if (typeof val === 'string' && val.trim().length >= 2) {
+                const valLower = val.trim().toLowerCase();
+                for (const nameStr of possibleNameStrings) {
+                  if (valLower.includes(nameStr) || nameStr.includes(valLower)) return true;
+                }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            const strVal = String(item.interviewer_ids).toLowerCase();
+            for (const nameStr of possibleNameStrings) {
+              if (strVal.includes(nameStr)) return true;
+            }
+          }
         }
 
-        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
-        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+        if (item.interviewer_id && (possibleUserIds.has(item.interviewer_id) || possibleUserIds.has(Number(item.interviewer_id)) || possibleUserIds.has(String(item.interviewer_id)))) {
+          return true;
+        }
 
-        if (userFullName && userFullName.length > 1) {
-          const lowerUser = userFullName.toLowerCase().trim();
-          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
-          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        if (item.interviewer_names && typeof item.interviewer_names === 'string') {
+          const namesLower = item.interviewer_names.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (namesLower.includes(nameStr) || nameStr.includes(namesLower)) return true;
+          }
+        }
+
+        if (item.interviewer && typeof item.interviewer === 'string') {
+          const intLower = item.interviewer.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (intLower.includes(nameStr) || nameStr.includes(intLower)) return true;
+          }
+        }
+
+        if (item.created_by && (possibleUserIds.has(item.created_by) || possibleUserIds.has(Number(item.created_by)) || possibleUserIds.has(String(item.created_by)))) {
+          return true;
         }
 
         return false;
@@ -620,7 +993,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    (resultItems as any[]).forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -696,37 +1069,6 @@ export class RecruitmentController {
     res.json({ success: true, message: 'Assessment deleted successfully' });
   });
 
-  getAttemptsByAssessment = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const assessmentId = parseInt(req.params.assessmentId, 10);
-    const db = (await import('../../../db/knex')).getKnex();
-
-    const attempts = await db('assessment_attempts')
-      .where({ assessment_id: assessmentId, organization_id: ctx.organizationId })
-      .orderBy('created_at', 'desc');
-
-    // Enrich with candidate info
-    const enriched = await Promise.all(attempts.map(async (attempt: any) => {
-      const application = await db('applications').where('id', attempt.application_id).first();
-      let candidateName = `App #${attempt.application_id}`;
-      let candidateEmail = '';
-      if (application) {
-        const candidate = await db('candidates').where('id', application.candidate_id).first();
-        if (candidate) {
-          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim();
-          candidateEmail = candidate.email || '';
-        }
-      }
-      return {
-        ...attempt,
-        candidate_name: candidateName,
-        candidate_email: candidateEmail,
-      };
-    }));
-
-    res.json({ success: true, data: enriched });
-  });
-
   // ==================== Offer Endpoints ====================
 
   generateOffer = asyncHandler(async (req: Request, res: Response) => {
@@ -743,6 +1085,7 @@ export class RecruitmentController {
       currency: validated.currency,
       offerStartDate: validated.offerStartDate,
       offerExpiryDate: validated.offerExpiryDate,
+      meta: validated.meta,
     });
 
     res.status(201).json({ success: true, data: offer });
@@ -773,18 +1116,36 @@ export class RecruitmentController {
 
   getDashboard = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
     res.json({ success: true, data: dashboard });
   });
 
   getMetrics = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
+    const filters = {
+      department_id: req.query.department_id || req.query.departmentId,
+      job_id: req.query.job_id || req.query.jobId,
+      grade_id: req.query.grade_id || req.query.gradeId,
+      time_range: req.query.time_range || req.query.timeRange,
+      start_date: req.query.start_date || req.query.startDate,
+      end_date: req.query.end_date || req.query.endDate,
+      status: req.query.status,
+    };
 
-    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
+    const dashboard = await this.recruitmentService.getRecruitmentDashboard(ctx, filters);
 
-    res.json({ success: true, data: metrics });
+    res.json({ success: true, data: dashboard });
   });
 
   // ==================== Additional Candidate Endpoints ====================
@@ -859,15 +1220,6 @@ export class RecruitmentController {
 
   // ==================== Additional Interview Endpoints ====================
 
-  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const validated = validate(req.body, submitFeedbackSchema);
-
-    const feedback = await this.interviewService.submitFeedback(ctx, validated.interviewId, validated);
-
-    res.status(201).json({ success: true, data: feedback });
-  });
-
   recordInterviewDecision = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { interviewId } = req.params;
@@ -886,6 +1238,114 @@ export class RecruitmentController {
       success: true,
       data: result,
       message: `Interview decision '${decision}' recorded successfully`,
+    });
+  });
+
+  completeInterview = asyncHandler(async (req: Request, res: Response) => {
+    const rawId = req.params.interviewId || req.body.interviewId;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      updated_at: new Date(),
+    });
+
+    const updated = await db('interviews').where('id', interviewId).first();
+    res.json({
+      success: true,
+      message: 'Interview marked as completed successfully',
+      data: updated,
+    });
+  });
+
+  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { getKnex } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+
+    const rawId = req.params.interviewId || req.body.interviewId || req.body.id;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    const overallRating = Number(req.body.overallRating || req.body.rating || 4);
+    const technicalRating = Number(req.body.technicalScore || req.body.technicalRating || req.body.technical || overallRating);
+    const communicationRating = Number(req.body.communicationScore || req.body.communicationRating || req.body.communication || overallRating);
+    const culturalFitRating = req.body.culturalFitRating ? Number(req.body.culturalFitRating) : null;
+    const wouldRecommend = typeof req.body.wouldRecommend === 'boolean'
+      ? req.body.wouldRecommend
+      : (req.body.recommendation === 'strong_hire' || req.body.recommendation === 'hire' || req.body.recommendation === 'neutral');
+    const feedbackText = req.body.feedbackText || req.body.feedback || req.body.comments || req.body.notes || 'Interview feedback submitted.';
+
+    // Check if feedback already exists for this interview & interviewer
+    const existingFeedback = await db('interview_feedback')
+      .where('interview_id', interviewId)
+      .andWhere(function () {
+        this.where('interviewer_id', ctx.userId)
+          .orWhere('interviewer_id', (ctx as any).employeeId || 0);
+      })
+      .first();
+
+    let feedbackRecord: any;
+    if (existingFeedback) {
+      await db('interview_feedback')
+        .where('id', existingFeedback.id)
+        .update({
+          overall_rating: overallRating,
+          technical_rating: technicalRating,
+          communication_rating: communicationRating,
+          cultural_fit_rating: culturalFitRating,
+          feedback_text: feedbackText,
+          would_recommend: wouldRecommend ? 1 : 0,
+        });
+      feedbackRecord = await db('interview_feedback').where('id', existingFeedback.id).first();
+    } else {
+      const newUuid = uuidv4();
+      const [insertedId] = await db('interview_feedback').insert({
+        uuid: newUuid,
+        organization_id: interview.organization_id || ctx.organizationId,
+        interview_id: interviewId,
+        interviewer_id: ctx.userId || (ctx as any).employeeId || 1,
+        overall_rating: overallRating,
+        technical_rating: technicalRating,
+        communication_rating: communicationRating,
+        cultural_fit_rating: culturalFitRating,
+        feedback_text: feedbackText,
+        would_recommend: wouldRecommend ? 1 : 0,
+        created_at: new Date(),
+      });
+      feedbackRecord = await db('interview_feedback').where('id', insertedId || newUuid).first();
+    }
+
+    // Update interview status to completed and feedback_submitted to true
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      feedback_submitted: 1,
+      updated_at: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: 'Interview rating and feedback submitted successfully',
+      data: feedbackRecord,
     });
   });
 
@@ -1293,10 +1753,17 @@ export class RecruitmentController {
   sendOffer = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { offerId } = req.params;
+    const { recipientEmail, candidateEmail, customRecipientEmail, customSubject, customBody } = req.body || {};
 
-    const offer = await this.offerService.sendOffer(ctx, parseInt(offerId, 10));
+    const targetRecipient = (recipientEmail || candidateEmail || customRecipientEmail || '').trim();
 
-    res.json({ success: true, data: offer });
+    const offer = await this.offerService.sendOffer(ctx, parseInt(offerId, 10), {
+      customRecipientEmail: targetRecipient || undefined,
+      customSubject,
+      customBody,
+    });
+
+    res.json({ success: true, data: offer, recipientEmail: targetRecipient });
   });
 
   getPublicOffer = asyncHandler(async (req: Request, res: Response) => {
@@ -1310,22 +1777,50 @@ export class RecruitmentController {
       return;
     }
 
-    const application = await db('applications').where('id', offer.application_id).first();
-    const candidate = await db('candidates').where('id', application.candidate_id).first();
-    const org = await db('organizations').where('id', offer.organization_id).first();
+    const appId = offer.application_id || (offer as any).applicationId;
+    const application = appId ? await db('applications').where('id', appId).first().catch(() => null) : null;
+    
+    let candidate: any = null;
+    if (application?.candidate_id) {
+      candidate = await db('candidates').where('id', application.candidate_id).first().catch(() => null);
+    }
+    if (!candidate && (offer as any).candidate_id) {
+      candidate = await db('candidates').where('id', (offer as any).candidate_id).first().catch(() => null);
+    }
+
+    const org = offer.organization_id 
+      ? await db('organizations').where('id', offer.organization_id).first().catch(() => null) 
+      : null;
 
     let departmentName = 'N/A';
-    if (offer.department_id) {
-      const dept = await db('departments').where('id', offer.department_id).first();
+    const deptId = offer.department_id || (offer as any).departmentId;
+    if (deptId) {
+      const dept = await db('departments').where('id', deptId).first().catch(() => null);
       departmentName = dept?.name || 'N/A';
     }
+
+    let meta: any = {};
+    try {
+      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
+    } catch {
+      meta = {};
+    }
+
+    const candidateName = candidate
+      ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
+      : (meta.candidateName || (offer as any).candidate_name || 'Candidate');
+    
+    const candidateEmail = candidate?.email || meta.candidateEmail || (offer as any).candidate_email || '';
 
     res.json({
       success: true,
       data: {
-        offer,
-        candidateName: `${candidate.first_name} ${candidate.last_name || ''}`.trim(),
-        candidateEmail: candidate.email,
+        offer: {
+          ...offer,
+          meta
+        },
+        candidateName,
+        candidateEmail,
         companyName: org?.name || 'Apponext Organization',
         departmentName
       }
@@ -1358,7 +1853,17 @@ export class RecruitmentController {
 
   submitPublicAssessmentAttempt = asyncHandler(async (req: Request, res: Response) => {
     const { uuid } = req.params;
-    const result = await this.assessmentService.submitAssessmentResultByUuid(uuid, req.body);
+    const candidateIp = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+    const result = await this.assessmentService.submitAssessmentResultByUuid(uuid, {
+      ...req.body,
+      candidateIp,
+    });
+    res.json({ success: true, data: result });
+  });
+
+  autosavePublicAssessmentAttempt = asyncHandler(async (req: Request, res: Response) => {
+    const { uuid } = req.params;
+    const result = await this.assessmentService.autosaveAnswersByUuid(uuid, req.body);
     res.json({ success: true, data: result });
   });
 
@@ -1389,6 +1894,8 @@ export class RecruitmentController {
     if (validated.currency !== undefined) updateData.currency = validated.currency;
     if (validated.employmentType !== undefined) updateData.employment_type = validated.employmentType;
     if (validated.noOfPositions !== undefined) updateData.no_of_positions = validated.noOfPositions;
+    if (validated.expiryDate !== undefined) updateData.expiry_date = validated.expiryDate;
+    if (validated.jobCode !== undefined) updateData.job_code = validated.jobCode;
 
     const job = await this.jobService.updateJob(ctx, parseInt(id, 10), updateData);
 
@@ -1506,19 +2013,60 @@ export class RecruitmentController {
     res.json({ success: true, message: 'Candidate regret email processed successfully' });
   });
 
+  bulkImportCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { candidates } = req.body;
+    const candidatesList = Array.isArray(candidates) ? candidates : (Array.isArray(req.body) ? req.body : []);
+
+    if (!Array.isArray(candidatesList) || candidatesList.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: { insertedCount: 0, skippedCount: 0 },
+        message: 'No candidate records provided for import',
+      });
+    }
+
+    const result = await this.candidateService.bulkImportCandidates(ctx, candidatesList);
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Bulk import completed! Inserted: ${result.insertedCount}, Skipped/Duplicates: ${result.skippedCount}`,
+    });
+  });
+
   // ==================== Referral Endpoints ====================
 
   createReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const validated = validate(req.body, createReferralSchema);
+    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount } = req.body;
 
-    const referral = await this.referralService.createReferral(ctx, {
-      employeeId: validated.employeeId,
-      candidateId: validated.candidateId,
-      referralRewardAmount: validated.referralRewardAmount,
+    const referral = await this.referralService.submitReferral(ctx, {
+      employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
+      candidateId: candidateId ? parseInt(candidateId, 10) : undefined,
+      candidateName,
+      candidateEmail,
+      candidatePhone,
+      positionTitle,
+      referralRewardAmount: referralRewardAmount ? parseFloat(referralRewardAmount) : undefined,
     });
 
     res.status(201).json({ success: true, data: referral });
+  });
+
+  getMyReferrals = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    let empId = ctx.userId;
+    const emp = await db('employees')
+      .where('organization_id', ctx.organizationId)
+      .where((b) => b.where('user_id', ctx.userId).orWhere('id', ctx.userId))
+      .first();
+    if (emp) empId = emp.id;
+
+    const result = await this.referralService.getEmployeeReferrals(ctx, empId);
+    res.json({ success: true, data: result.data });
   });
 
   listReferrals = asyncHandler(async (req: Request, res: Response) => {
@@ -1988,6 +2536,85 @@ export class RecruitmentController {
 
     res.json({ success: true, message: 'Question deleted successfully' });
   });
+
+  // ==================== Job AI & ATS Screening ====================
+
+  getJobAiSettings = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const settings = await jobAiService.getJobAiSettings(ctx, parseInt(id, 10));
+    res.json({ success: true, data: settings });
+  });
+
+  saveJobAiSettings = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const settings = await jobAiService.saveJobAiSettings(ctx, parseInt(id, 10), req.body);
+    res.json({ success: true, data: settings, message: 'AI Screening Settings saved successfully' });
+  });
+
+  screenJobCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { resumeScreeningEngine } = await import('../services/ResumeScreeningEngine');
+
+    const results = await resumeScreeningEngine.screenAllCandidatesForJob(ctx, parseInt(id, 10));
+    res.json({ success: true, data: results, message: `Screened ${results.length} candidates` });
+  });
+
+  getJobAiSuggestions = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { limit, statusFilter, minAts, minJd } = req.query;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const suggestions = await jobAiService.getAiSuggestions(ctx, parseInt(id, 10), {
+      limit: limit as string,
+      statusFilter: statusFilter as string,
+      minAts: minAts ? parseInt(minAts as string, 10) : undefined,
+      minJd: minJd ? parseInt(minJd as string, 10) : undefined,
+    });
+
+    res.json({ success: true, data: suggestions });
+  });
+
+  getCandidateAiAnalysis = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id, jobId } = req.params;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const analysis = await jobAiService.getCandidateAiAnalysis(ctx, parseInt(id, 10), parseInt(jobId, 10));
+    res.json({ success: true, data: analysis });
+  });
+
+  bulkShortlistAiCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { candidateIds } = req.body;
+    if (!Array.isArray(candidateIds) || candidateIds.length === 0) {
+      res.status(400).json({ success: false, error: 'candidateIds array is required' });
+      return;
+    }
+
+    const { jobAiService } = await import('../services/JobAiService');
+    const result = await jobAiService.bulkShortlistCandidates(ctx, parseInt(id, 10), candidateIds);
+
+    res.json({ success: true, data: result, message: `Successfully shortlisted ${result.shortlistedCount} candidate(s)` });
+  });
+
+  listSkillMaster = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { skillMasterService } = await import('../services/SkillMasterService');
+
+    const skills = await skillMasterService.listSkills(ctx);
+    res.json({ success: true, data: skills });
+  });
+
 }
 
 export const recruitmentController = new RecruitmentController();
+

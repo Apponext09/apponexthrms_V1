@@ -21,6 +21,13 @@ router.get('/upload/sample', controller.downloadSampleTemplate);
  */
 router.post('/bulk', controller.bulkUploadEmployees);
 
+router.post('/profile-update-requests', controller.createProfileUpdateRequest);
+router.get('/profile-update-requests', controller.getProfileUpdateRequests);
+router.patch('/profile-update-requests/:id/status', controller.updateProfileUpdateRequestStatus);
+router.get('/my-edit-permission', controller.getMyEditPermission);
+router.post('/consume-edit-permission/:requestId', controller.consumeEditPermission);
+router.get('/my-profile-requests', controller.getMyProfileRequests);
+
 /**
  * GET /employees/me - Get logged-in user employee profile
  */
@@ -84,6 +91,7 @@ router.put('/:id/professional-info', controller.upsertProfessionalInfo);
 router.get('/my-documents', controller.getMyDocuments);
 router.get('/:id/documents', controller.getDocuments);
 router.post('/:id/documents', controller.uploadDocument);
+router.post('/:id/accept-document-policy', controller.acceptDocumentPolicy);
 router.post('/documents/:documentId/verify', controller.verifyDocument);
 router.delete('/documents/:documentId', controller.deleteDocument);
 

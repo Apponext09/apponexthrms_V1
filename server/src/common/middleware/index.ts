@@ -6,3 +6,4 @@ export { validate } from './validate';
 export { apiLimiter, authLimiter, passwordResetLimiter, createUserRateLimiter } from './rateLimiter';
 export { errorHandler, notFoundHandler } from './errorHandler';
 export { requestLogger } from './requestLogger';
+export { requirePolicyAcceptance } from './requirePolicyAcceptance';

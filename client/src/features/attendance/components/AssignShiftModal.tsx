@@ -68,6 +68,18 @@ export function AssignShiftModal({
     }
   }, [open, selectedCompanyId]);
 
+  // Re-query the server as the admin types instead of only ever filtering
+  // the first 100 employees loaded on open — otherwise anyone outside that
+  // first page (e.g. by name, in a >100-employee org) is unfindable.
+  useEffect(() => {
+    if (!open) return;
+    const handle = setTimeout(() => {
+      loadEmployees(searchQuery);
+    }, 300);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, open]);
+
   const loadEmployees = async (search = '') => {
     setLoadingEmployees(true);
     try {
@@ -89,13 +101,9 @@ export function AssignShiftModal({
     );
   };
 
-  const filteredEmployees = employees.filter(
-    (e) =>
-      !searchQuery ||
-      `${e.firstName} ${e.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.employeeCode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      e.departmentName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // `employees` already reflects the server-side search (see effect above),
+  // so no further client-side filtering is applied here.
+  const filteredEmployees = employees;
 
   const selectedShift = shifts.find((s) => s.id === selectedShiftId);
 
@@ -116,35 +124,70 @@ export function AssignShiftModal({
     }
 
     setLoading(true);
-    let successCount = 0;
-    const errors: string[] = [];
 
-    for (const emp of selectedEmployees) {
-      try {
-        await assignShift({
-          employeeId: emp.id,
-          shiftId: selectedShiftId,
-          assignmentStartDate: startDate,
-          assignmentEndDate: endDate || null,
-        });
-        successCount++;
-      } catch (err: any) {
-        errors.push(`${emp.firstName}: ${err?.response?.data?.message || err?.message || 'Failed'}`);
-      }
-    }
+    const submit = (confirmReassignment: boolean) =>
+      assignShift({
+        employeeIds: selectedEmployees.map((emp) => emp.id),
+        shiftId: selectedShiftId,
+        assignmentStartDate: startDate,
+        assignmentEndDate: endDate || null,
+        confirmReassignment,
+      });
 
-    setLoading(false);
-
-    if (errors.length > 0) {
-      showToast.error('Assignment Errors', errors.join(', '));
-    }
-
-    if (successCount > 0) {
-      showToast.success('Shift Assigned', `Successfully assigned shift to ${successCount} employee(s)`);
+    const onSuccess = () => {
+      showToast.success(
+        'Shift Assigned',
+        `Successfully assigned shift to ${selectedEmployees.length} employee(s)`
+      );
       onAssigned();
       setSelectedEmployees([]);
       setEndDate('');
       onClose();
+    };
+
+    // Single batched request (server accepts employeeIds[]) instead of one
+    // HTTP round-trip per employee — avoids leaving some employees assigned
+    // and others not with no indication of which failed.
+    try {
+      await submit(false);
+      onSuccess();
+    } catch (err: any) {
+      const conflicts = err?.response?.data?.error?.details?.conflicts;
+
+      if (err?.response?.status === 409 && Array.isArray(conflicts) && conflicts.length > 0) {
+        // The server refused because this would silently end an existing
+        // active assignment for one or more of the selected employees —
+        // ask before overwriting instead of doing it silently. A single
+        // employee can appear in multiple conflict entries (e.g. more than
+        // one overlapping assignment record) — de-duplicate by employee.
+        const names = [...new Set(conflicts.map((c: any) => c.employeeId))].map((employeeId) => {
+          const emp = selectedEmployees.find((e) => e.id === employeeId);
+          return emp ? `${emp.firstName} ${emp.lastName}`.trim() : `Employee #${employeeId}`;
+        });
+        const verb = names.length === 1 ? 'has' : 'have';
+        const proceed = window.confirm(
+          `${names.join(', ')} already ${verb} an active shift assignment that will be ended if you continue.\n\nAssign the new shift anyway?`
+        );
+
+        if (proceed) {
+          try {
+            await submit(true);
+            onSuccess();
+          } catch (err2: any) {
+            showToast.error(
+              'Assignment Failed',
+              err2?.response?.data?.message || err2?.message || 'Failed to assign shift to the selected employees.'
+            );
+          }
+        }
+      } else {
+        showToast.error(
+          'Assignment Failed',
+          err?.response?.data?.message || err?.message || 'Failed to assign shift to the selected employees.'
+        );
+      }
+    } finally {
+      setLoading(false);
     }
   };
 

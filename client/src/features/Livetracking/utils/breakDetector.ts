@@ -23,17 +23,17 @@ function getRecTime(p: RoutePoint): string {
 /**
  * Analyzes a chronological list of route breadcrumb points
  * and detects stationary clusters (stops/breaks).
- * 
+ *
  * @param trail Chronological list of location pings
- * @param minBreakDurationMs Minimum stay time to register as a break (default: 1.5 mins for responsive testing)
- * @param maxClusterRadiusMeters Maximum movement allowed while stopped (default: 25m)
+ * @param minBreakDurationMs Minimum stay time to register as a break (default: 3 mins for meaningful breaks)
+ * @param maxClusterRadiusMeters Maximum movement allowed while stopped (default: 50m for GPS noise tolerance)
  */
 export function detectBreakPoints(
   trail: RoutePoint[],
-  minBreakDurationMs = 90_000, // 1.5 minutes
-  maxClusterRadiusMeters = 25
+  minBreakDurationMs = 3 * 60 * 1000, // 3 minutes - real break detection (not traffic lights!)
+  maxClusterRadiusMeters = 50 // 50m tolerance for GPS noise and movement at stop
 ): BreakPoint[] {
-  if (!trail || trail.length < 2) return [];
+  if (!trail || trail.length === 0) return [];
 
   const breaks: BreakPoint[] = [];
   let clusterStart = trail[0];
@@ -43,10 +43,10 @@ export function detectBreakPoints(
   for (let i = 1; i < trail.length; i++) {
     const current = trail[i];
     const distFromStart = haversineMeters(
-      clusterStart.latitude,
-      clusterStart.longitude,
-      current.latitude,
-      current.longitude
+      Number(clusterStart.latitude),
+      Number(clusterStart.longitude),
+      Number(current.latitude),
+      Number(current.longitude)
     );
 
     if (distFromStart <= maxClusterRadiusMeters) {
@@ -59,13 +59,13 @@ export function detectBreakPoints(
       const endTimeStr = getRecTime(clusterEnd);
       const startTime = new Date(startTimeStr).getTime();
       const endTime = new Date(endTimeStr).getTime();
-      const durationMs = endTime - startTime;
+      const durationMs = Math.max(endTime - startTime, 0);
 
       if (durationMs >= minBreakDurationMs && !isNaN(startTime) && !isNaN(endTime)) {
         // Calculate average location of cluster
-        const avgLat = clusterPoints.reduce((acc, p) => acc + p.latitude, 0) / clusterPoints.length;
-        const avgLng = clusterPoints.reduce((acc, p) => acc + p.longitude, 0) / clusterPoints.length;
-        const durationMinutes = Math.max(1, Math.round(durationMs / 60_000));
+        const avgLat = clusterPoints.reduce((acc, p) => acc + Number(p.latitude), 0) / clusterPoints.length;
+        const avgLng = clusterPoints.reduce((acc, p) => acc + Number(p.longitude), 0) / clusterPoints.length;
+        const durationMinutes = Math.max(1, Math.ceil(durationMs / 60_000));
 
         breaks.push({
           id: `break-${startTimeStr}-${breaks.length}`,
@@ -84,24 +84,29 @@ export function detectBreakPoints(
     }
   }
 
-  // Check final cluster
+  // Evaluate active/ongoing stationary cluster
   const startTimeStr = getRecTime(clusterStart);
   const endTimeStr = getRecTime(clusterEnd);
   const startTime = new Date(startTimeStr).getTime();
-  const endTime = new Date(endTimeStr).getTime();
-  const durationMs = endTime - startTime;
+  const lastPingTime = new Date(endTimeStr).getTime();
+  const currentTime = Date.now();
 
-  if (durationMs >= minBreakDurationMs && !isNaN(startTime) && !isNaN(endTime)) {
-    const avgLat = clusterPoints.reduce((acc, p) => acc + p.latitude, 0) / clusterPoints.length;
-    const avgLng = clusterPoints.reduce((acc, p) => acc + p.longitude, 0) / clusterPoints.length;
-    const durationMinutes = Math.max(1, Math.round(durationMs / 60_000));
+  const isRecentPing = !isNaN(lastPingTime) && Math.abs(currentTime - lastPingTime) < 15 * 60 * 1000;
+  const ongoingDurationMs = isRecentPing
+    ? Math.max(currentTime - startTime, lastPingTime - startTime)
+    : Math.max(lastPingTime - startTime, 0);
+
+  if (ongoingDurationMs >= minBreakDurationMs && !isNaN(startTime)) {
+    const avgLat = clusterPoints.reduce((acc, p) => acc + Number(p.latitude), 0) / clusterPoints.length;
+    const avgLng = clusterPoints.reduce((acc, p) => acc + Number(p.longitude), 0) / clusterPoints.length;
+    const durationMinutes = Math.max(1, Math.ceil(ongoingDurationMs / 60_000));
 
     breaks.push({
       id: `break-${startTimeStr}-${breaks.length}`,
       latitude: avgLat,
       longitude: avgLng,
       startTime: startTimeStr,
-      endTime: endTimeStr,
+      endTime: new Date(startTime + ongoingDurationMs).toISOString(),
       durationMinutes,
     });
   }

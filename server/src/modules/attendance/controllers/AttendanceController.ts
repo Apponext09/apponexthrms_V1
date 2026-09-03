@@ -1,5 +1,7 @@
+
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
+import { ValidationError } from '../../../common/errors/index';
 import { AttendanceService } from '../services/AttendanceService';
 import { ShiftService } from '../services/ShiftService';
 import { GeoFenceService } from '../services/GeoFenceService';
@@ -30,7 +32,6 @@ export class AttendanceController {
     this.policyService = new AttendancePolicyService();
     this.userRepo = new UserRepository();
   }
-
   /**
    * Helper to resolve the true employeeId linked to the logged-in user
    */
@@ -430,14 +431,7 @@ export class AttendanceController {
 
     res.json({
       success: true,
-      data: {
-        shift_name: 'General Shift',
-        shiftName: 'General Shift',
-        start_time: '09:00 AM',
-        startTime: '09:00 AM',
-        end_time: '06:00 PM',
-        endTime: '06:00 PM',
-      }
+      data: null,
     });
   });
 
@@ -715,6 +709,32 @@ export class AttendanceController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
+  getAllOvertimeRequests = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { status } = req.query;
+    const result = await this.overtimeService.getAllRequests(ctx, {
+      filters: status && status !== 'all' ? { approval_status: status as string } : undefined,
+    });
+    res.json({ success: true, data: result.items });
+  });
+
+  updateOvertimeStatus = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { status } = req.body;
+
+    let result;
+    if (status === 'approved') {
+      result = await this.overtimeService.approve(ctx, parseInt(id, 10));
+    } else if (status === 'rejected') {
+      result = await this.overtimeService.reject(ctx, parseInt(id, 10));
+    } else {
+      throw new ValidationError('Invalid status. Must be approved or rejected.');
+    }
+
+    res.json({ success: true, data: result });
+  });
+
 
 
   // ===== TIMESHEET =====
@@ -767,7 +787,13 @@ export class AttendanceController {
 
   getReportFilterOptions = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const options = await this.attendanceService.getReportFilterOptions(ctx);
+    // companyId is passed as a query param by the frontend when a company is selected.
+    // When absent (no company selected yet) the service returns empty dependent lists.
+    const companyId = req.query.companyId ? Number(req.query.companyId) : null;
+    const departmentIds = req.query.departmentIds
+      ? String(req.query.departmentIds).split(',').map((x) => parseInt(x, 10)).filter((n) => !isNaN(n))
+      : [];
+    const options = await (this.attendanceService as any).getReportFilterOptions(ctx, companyId, departmentIds);
     res.json({ success: true, data: options });
   });
 
@@ -859,7 +885,14 @@ export class AttendanceController {
     const data = await this.policyService.assignPolicyScope(ctx, id, assignedDepartments || []);
     res.json({ success: true, message: 'Attendance policy scope assigned successfully in DB', data });
   });
+
+  getCeoPunches = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.attendanceService.getCeoPunches(ctx);
+    res.json({ success: true, data });
+  });
 }
 
 export const attendanceController = new AttendanceController();
+
 

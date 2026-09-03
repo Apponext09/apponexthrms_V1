@@ -8,23 +8,29 @@ import employeeRoutes from '../modules/employee/employee.routes';
 import attendanceRoutes from '../modules/attendance/attendance.routes';
 import { leavesRouter } from '../modules/leaves/leaves.routes';
 import payrollRoutes from '../modules/payroll/payroll.routes';
+import loanRoutes from '../modules/loans/loan.routes';
+import expenseRoutes from '../modules/expenses/expense.routes';
 import notificationRoutes from '../modules/notifications/notification.routes';
 import settingsRoutes from '../modules/settings/settings.routes';
 import assetRoutes from '../modules/asset/asset.routes';
 import recruitmentRoutes from '../modules/recruitment/recruitment.routes';
+import masterHolidayCalendarRoutes from '../modules/master/routes/masterHolidayCalendar.routes';
 import workflowRoutes from '../modules/workflow/workflow.routes';
 import marketplaceRoutes from '../modules/marketplace/marketplace.routes';
 import licensingRoutes from '../modules/licensing/licensing.routes';
 import superAdminRoutes from '../modules/superadmin/superadmin.routes';
 import { interviewRouter } from '../modules/employee-lifecycle/routes/InterviewRoutes';
+import { lettersRouter } from '../modules/letters/letters.routes';
 import teamLeadRoutes from '../modules/team-lead/team-lead.routes';
 import managerRoutes from '../modules/manager/manager.routes';
 import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
 import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
 import dashboardRoutes from '../modules/dashboard/dashboard.routes';
+import reportRoutes from '../modules/reports/reports.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
+import policyRoutes from '../modules/policy/policy.routes';
 
 const router = Router();
 
@@ -55,11 +61,16 @@ router.use('/employees', employeeRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/leaves', leavesRouter);
 router.use('/payroll', payrollRoutes);
+router.use('/loans', loanRoutes);
+router.use('/expenses', expenseRoutes);
+router.use('/reimbursements', expenseRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
+router.use('/policies', policyRoutes);
+router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
 
 /**
  * Public Job Reference Routes (no auth required)
@@ -67,9 +78,22 @@ router.use('/recruitment', recruitmentRoutes);
 router.get('/public/jobs', jobReferenceController.listPublicJobs);
 router.get('/public/job-portal/filters', jobReferenceController.getFilterData);
 router.get('/public/job-portal/openings', jobReferenceController.listOpenings);
+router.get('/public/job-portal/candidates', jobReferenceController.listCandidatesWithResumes);
+router.get('/public/job-portal/settings', jobReferenceController.getPublicPortalSettings);
+
+// Aliases for /public/job-reference/*
+router.get('/public/job-reference/filters', jobReferenceController.getFilterData);
+router.get('/public/job-reference/openings', jobReferenceController.listOpenings);
+router.get('/public/job-reference/candidates', jobReferenceController.listCandidatesWithResumes);
+router.get('/public/job-reference/settings', jobReferenceController.getPublicPortalSettings);
+
 router.get('/public/job-reference/:mrfId', jobReferenceController.getPublicJobData);
 router.post('/public/job-reference/:mrfId/apply', jobReferenceController.applyFromReference);
 router.post('/public/job-reference/:mrfId/refer-existing', jobReferenceController.referExisting);
+
+// Authenticated Career Portal Settings routes
+router.get('/recruitment/career-portal-settings', jobReferenceController.getPortalSettings);
+router.put('/recruitment/career-portal-settings', jobReferenceController.updatePortalSettings);
 
 // Public offers and assessments
 router.get('/public/offers/:uuid', recruitmentController.getPublicOffer);
@@ -77,9 +101,47 @@ router.post('/public/offers/:uuid/accept', recruitmentController.acceptPublicOff
 router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOffer);
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/autosave', recruitmentController.autosavePublicAssessmentAttempt);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
+// ── Report Engine (isolated module) ─────────────────────────────────────────
+router.use('/reports', reportRoutes);
+
+// Generic reports options dropdown route
+router.get('/reports/options', async (req: Request, res: Response) => {
+  try {
+    const { getKnex } = await import('../db/knex');
+    const db = getKnex();
+    const orgId = req.ctx?.organizationId || 1;
+
+    const [departments, designations, locations] = await Promise.all([
+      db('departments').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
+      db('designations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
+      db('locations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code', 'city'),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        departments,
+        designations,
+        locations,
+      },
+    });
+  } catch (err: any) {
+    res.json({
+      success: true,
+      data: {
+        departments: [],
+        designations: [],
+        locations: [],
+      },
+    });
+  }
+});
+
 router.use('/workflow', workflowRoutes);
+router.use('/workflows', workflowRoutes);
 router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);
 router.use('/manager', managerRoutes);

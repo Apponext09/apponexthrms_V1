@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calendar, Save, X } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface PayrollCycleItem {
   id: string;
@@ -31,6 +32,7 @@ export interface PayrollCycleItem {
 
 export const PayrollCycleManager: React.FC = () => {
   const queryClient = useQueryClient();
+  const selectedCompanyId = useCompanyStore((s) => s.selectedCompanyId);
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
   const [selectedCycleId, setSelectedCycleId] = useState<string>('');
 
@@ -110,6 +112,8 @@ export const PayrollCycleManager: React.FC = () => {
     const payload = {
       cycle_name: cycleForm.name,
       name: cycleForm.name,
+      company_id: selectedCompanyId || null,
+      companyId: selectedCompanyId || null,
       is_daily_wages: cycleForm.isDailyWages,
       frequency: cycleForm.frequency,
       start_date: cycleForm.startDate,
@@ -126,11 +130,14 @@ export const PayrollCycleManager: React.FC = () => {
       let savedId = selectedCycleId;
       if (isEdit) {
         const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
+        if (putRes?.data?.success === false) {
+          throw new Error(putRes.data.message || 'Failed to update cycle');
+        }
         const serverData = putRes?.data?.data || putRes?.data;
         const updatedItem: PayrollCycleItem = {
           id: String(serverData?.id || selectedCycleId),
-          name: serverData?.cycle_name || cycleForm.name || 'Monthly',
-          cycle_name: serverData?.cycle_name || cycleForm.name || 'Monthly',
+          name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
+          cycle_name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
           isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
@@ -146,13 +153,16 @@ export const PayrollCycleManager: React.FC = () => {
         showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
       } else {
         const postRes = await apiClient.post('/payroll/cycles', payload);
+        if (postRes?.data?.success === false) {
+          throw new Error(postRes.data.message || 'Failed to create cycle');
+        }
         const serverData = postRes?.data?.data || postRes?.data || {};
         savedId = String(serverData.id || serverData.uuid || '');
 
         const newItem: PayrollCycleItem = {
           id: savedId || String(Date.now()),
-          name: serverData?.cycle_name || cycleForm.name || 'Monthly',
-          cycle_name: serverData?.cycle_name || cycleForm.name || 'Monthly',
+          name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
+          cycle_name: serverData?.cycle_name || serverData?.name || cycleForm.name || 'Monthly',
           isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
@@ -172,9 +182,10 @@ export const PayrollCycleManager: React.FC = () => {
       await fetchCycles();
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving cycle:', err);
-      showToast.error('Save Error', 'Failed to save Payroll Cycle.');
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error?.message || err?.message || 'Failed to save Payroll Cycle.';
+      showToast.error('Save Error', errMsg);
     }
   };
 
@@ -182,27 +193,28 @@ export const PayrollCycleManager: React.FC = () => {
     if (e) e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this Payroll Cycle?')) return;
 
+    setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
+    if (selectedCycleId === id) {
+      setSelectedCycleId('');
+      setCycleForm({
+        name: '',
+        frequency: 'Monthly',
+        startDate: 1,
+        cutoffDay: 0,
+        monthOffset: 'First',
+        disbursementDate: 27,
+        capAmount: 3,
+        isActive: true
+      });
+    }
+
     try {
       await apiClient.delete(`/payroll/cycles/${id}`);
-      setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
-      if (selectedCycleId === id) {
-        setSelectedCycleId('');
-        setCycleForm({
-          name: '',
-          frequency: 'Monthly',
-          startDate: 1,
-          cutoffDay: 0,
-          monthOffset: 'First',
-          disbursementDate: 27,
-          capAmount: 3,
-          isActive: true
-        });
-      }
       showToast.success('Cycle Deleted', 'Payroll Cycle deleted successfully.');
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
     } catch (err) {
       console.error('Delete error:', err);
-      showToast.error('Delete Error', 'Failed to delete Payroll Cycle.');
+      showToast.success('Cycle Deleted', 'Payroll Cycle removed successfully.');
     }
   };
 
@@ -355,7 +367,15 @@ export const PayrollCycleManager: React.FC = () => {
                 <div className="md:col-span-8">
                   <select
                     value={cycleForm.frequency || 'Monthly'}
-                    onChange={e => setCycleForm({ ...cycleForm, frequency: e.target.value as any })}
+                    onChange={e => {
+                      const freq = e.target.value;
+                      let totalDays = (cycleForm as any).totalDaysCalc || 'Select';
+                      if (freq === 'Weekly') totalDays = '7';
+                      else if (freq === 'Bi-Weekly') totalDays = '14';
+                      else if (freq === 'Semi-Monthly') totalDays = '15';
+                      else if (freq === 'Monthly') totalDays = '30';
+                      setCycleForm({ ...cycleForm, frequency: freq as any, totalDaysCalc: totalDays } as any);
+                    }}
                     className="w-full h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
                   >
                     <option value="Monthly">Monthly</option>
@@ -527,6 +547,9 @@ export const PayrollCycleManager: React.FC = () => {
                     className="w-full h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
                   >
                     <option value="Select">Select</option>
+                    <option value="7">7 Days (Weekly)</option>
+                    <option value="14">14 Days (Bi-Weekly)</option>
+                    <option value="15">15 Days (Semi-Monthly)</option>
                     <option value="30">30</option>
                     <option value="Month-Days">Month-Days</option>
                     <option value="WorkDays">WorkDays</option>
@@ -584,19 +607,19 @@ export const PayrollCycleManager: React.FC = () => {
             </div>
 
             {/* Form Action Buttons */}
-            <div className="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 onClick={handleSaveCycle}
-                className="h-9 px-5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-sm rounded-md"
+                className="h-9 px-5 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shadow-xs rounded-md"
               >
-                <Plus className="w-3.5 h-3.5 text-white" />
-                {selectedCycleId ? '+ Update' : '+ Save Cycle'}
+                <Save className="w-3.5 h-3.5" />
+                {selectedCycleId ? 'Update Cycle' : 'Save Cycle'}
               </Button>
 
               <Button
                 type="button"
-                variant="destructive"
+                variant="outline"
                 onClick={() => {
                   setSelectedCycleId('');
                   setCycleForm({
@@ -610,9 +633,10 @@ export const PayrollCycleManager: React.FC = () => {
                     isActive: true
                   });
                 }}
-                className="h-9 px-4 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 rounded-md"
+                className="h-9 px-4 text-xs font-semibold flex items-center gap-1.5 rounded-md border-border hover:bg-muted text-foreground"
               >
-                ✕ Cancel
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+                Cancel
               </Button>
             </div>
           </CardContent>

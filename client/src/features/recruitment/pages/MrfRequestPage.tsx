@@ -7,14 +7,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   Search, RefreshCw, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, User, Settings, Briefcase, Eye, Clipboard,
-  Grid, GraduationCap, FileText, X, Minus
+  Grid, GraduationCap, FileText, X, Minus, ChevronDown, UserCheck, Layers,
+  Calendar, Mail, UserX, CheckCircle, Code2, Star, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
 import { cn } from '@/lib/utils';
+import { downloadCsvFile } from '@/lib/downloadCsv';
 
 interface MRFRequest {
   id: number;
@@ -247,8 +250,8 @@ const USER_MAPPING_FIELDS = [
 export const MrfRequestPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  // Manager portal = view + create only; HR portal = full control (approve/reject/edit/delete/settings)
-  const isManagerPortal = location.pathname.startsWith('/manager');
+  // Manager / Team Lead portal = view + create only; HR portal = full control (approve/reject/edit/delete/settings)
+  const isManagerPortal = location.pathname.startsWith('/manager') || location.pathname.startsWith('/team-lead');
   const isHrPortal = !isManagerPortal;
 
   const [data, setData] = useState<MRFRequest[]>([]);
@@ -257,37 +260,61 @@ export const MrfRequestPage: React.FC = () => {
   const fetchMrfs = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/recruitment/mrf');
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        const mapped = response.data.data.map((item: any) => ({
-          id: item.id,
-          mrNumber: item.mrNumber || item.mr_number,
-          stage: item.stage,
-          positionTitle: item.positionTitle || item.position_title,
-          company: item.company || 'Trial Company',
-          requestedBy: item.requestedBy || item.requested_by || 'sakshi shukla',
-          requestedOn: item.createdAt ? item.createdAt.replace('T', ' ').substring(0, 19) : (item.created_at ? item.created_at.replace('T', ' ').substring(0, 19) : ''),
-          numberOfPositions: item.numberOfPositions || item.number_of_positions,
-          department: item.department || 'HR',
-          status: item.status,
-          applicants: item.applicants || 0,
-          recruitmentType: item.recruitmentType || item.recruitment_type || 'Both',
-          companyLocation: item.companyLocation || item.company_location || 'Headquarters',
-          grade: item.grade || 'Grade B',
-          employmentType: item.employmentType || item.employment_type || 'Full Time',
-          qualificationRequired: item.qualificationRequired || item.qualification_required || '',
-          experienceDesired: item.experienceDesired || item.experience_desired || '',
-          interviewer: item.interviewer || '',
-          payScaleType: item.payScaleType || item.pay_scale_type || 'Monthly Salary',
-          payScaleForPosition: item.payScaleForPosition || item.pay_scale_for_position || '',
-          reasonForRequirement: item.reasonForRequirement || item.reason_for_requirement || 'New Position',
-          listInJobRecruitmentPage: item.listInJobPage || item.list_in_job_page || 'Yes',
-          skills: item.skills || '',
-          comment: item.comment || '',
-          jobDescription: item.jobDescription || item.job_description || '',
-          targetClosureDate: item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '',
-          expiryDate: item.expiryDate || item.expiry_date || item.targetClosureDate || item.target_closure_date || ''
-        }));
+      const [mrfRes, appsRes] = await Promise.allSettled([
+        apiClient.get('/recruitment/mrf', { params: { pageSize: 500 } }),
+        apiClient.get('/recruitment/applications')
+      ]);
+
+      let rawApps: any[] = [];
+      if (appsRes.status === 'fulfilled' && appsRes.value.data?.success) {
+        rawApps = Array.isArray(appsRes.value.data.data) 
+          ? appsRes.value.data.data 
+          : (Array.isArray(appsRes.value.data.data?.items) ? appsRes.value.data.data.items : []);
+      }
+
+      if (mrfRes.status === 'fulfilled' && mrfRes.value.data?.success && Array.isArray(mrfRes.value.data.data)) {
+        const mapped = mrfRes.value.data.data.map((item: any) => {
+          const mrfId = item.id;
+          const posTitle = (item.positionTitle || item.position_title || '').toLowerCase().trim();
+
+          const matchedApps = rawApps.filter((app: any) => {
+            const appMrfId = Number(app.mrf_request_id || app.mrfRequestId || app.mrfId);
+            const appPos = (app.positionTitle || app.position_title || app.jobTitle || '').toLowerCase().trim();
+            const isDirectMatch = appMrfId === Number(mrfId);
+            const isTitleMatch = Boolean(posTitle) && (appPos.includes(posTitle) || posTitle.includes(appPos));
+            return isDirectMatch || isTitleMatch;
+          });
+
+          return {
+            id: item.id,
+            mrNumber: item.mrNumber || item.mr_number,
+            stage: item.stage,
+            positionTitle: item.positionTitle || item.position_title,
+            company: item.company || 'Trial Company',
+            requestedBy: item.requestedBy || item.requested_by || 'sakshi shukla',
+            requestedOn: item.createdAt ? item.createdAt.replace('T', ' ').substring(0, 19) : (item.created_at ? item.created_at.replace('T', ' ').substring(0, 19) : ''),
+            numberOfPositions: item.numberOfPositions || item.number_of_positions,
+            department: item.department || 'HR',
+            status: item.status,
+            applicants: matchedApps.length > 0 ? matchedApps.length : Number(item.applicants || 0),
+            recruitmentType: item.recruitmentType || item.recruitment_type || 'Both',
+            companyLocation: item.companyLocation || item.company_location || 'Headquarters',
+            grade: item.grade || 'Grade B',
+            employmentType: item.employmentType || item.employment_type || 'Full Time',
+            qualificationRequired: item.qualificationRequired || item.qualification_required || '',
+            experienceDesired: item.experienceDesired || item.experience_desired || '',
+            interviewer: item.interviewer || '',
+            payScaleType: item.payScaleType || item.pay_scale_type || 'Monthly Salary',
+            payScaleForPosition: item.payScaleForPosition || item.pay_scale_for_position || '',
+            reasonForRequirement: item.reasonForRequirement || item.reason_for_requirement || 'New Position',
+            listInJobRecruitmentPage: item.listInJobPage || item.list_in_job_page || 'Yes',
+            skills: item.skills || '',
+            comment: item.comment || '',
+            jobDescription: item.jobDescription || item.job_description || '',
+            targetClosureDate: item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '',
+            expiryDate: item.expiryDate || item.expiry_date || item.targetClosureDate || item.target_closure_date || ''
+          };
+        });
         setData(mapped);
       } else {
         setData([]);
@@ -318,6 +345,368 @@ export const MrfRequestPage: React.FC = () => {
   const [newFieldOption, setNewFieldOption] = useState('');
 
   const [activeStagePopoverId, setActiveStagePopoverId] = useState<number | null>(null);
+
+  // Applicant Pipeline Stages & Actions State
+  const [pipelineStages, setPipelineStages] = useState<any[]>([
+    { id: 1, stageName: 'Applied' },
+    { id: 2, stageName: 'Screening' },
+    { id: 3, stageName: 'Assessment' },
+    { id: 4, stageName: 'Technical Interview' },
+    { id: 5, stageName: 'HR Interview' },
+    { id: 6, stageName: 'Offer' },
+    { id: 7, stageName: 'Hired' },
+    { id: 8, stageName: 'Rejected' },
+  ]);
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [offerTemplates, setOfferTemplates] = useState<any[]>([]);
+  const [rejectionTemplates, setRejectionTemplates] = useState<any[]>([]);
+
+  // Selected application ID for actions
+  const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Action Dialog 1: Assign Assessment
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>('');
+  const [assignedTestUrl, setAssignedTestUrl] = useState<string | null>(null);
+
+  const generateUniqueMeetingLink = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `https://meet.google.com/${rand(3)}-${rand(4)}-${rand(3)}`;
+  };
+
+  // Action Dialog 2: Schedule Interview
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleType, setScheduleType] = useState<string>('Technical Interview');
+  const [scheduleRound, setScheduleRound] = useState<number>(1);
+  const [scheduleDate, setScheduleDate] = useState<string>('');
+  const [scheduleDuration, setScheduleDuration] = useState<number>(45);
+  const [scheduleMeetingUrl, setScheduleMeetingUrl] = useState<string>(generateUniqueMeetingLink());
+  const [scheduleInterviewerId, setScheduleInterviewerId] = useState<string>('');
+  const [emailSubject, setEmailSubject] = useState<string>('Interview Invitation');
+  const [candidateEmailBody, setCandidateEmailBody] = useState<string>('Dear Candidate,\n\nYou have been invited for an interview.');
+  const [interviewerEmailBody, setInterviewerEmailBody] = useState<string>('Dear Interviewer,\n\nYou have been assigned an interview.');
+  const [sendEmailsToggle, setSendEmailsToggle] = useState<boolean>(true);
+
+  // Action Dialog 3: Generate Offer Letter
+  const [showOfferDialog, setShowOfferDialog] = useState(false);
+  const [selectedOfferTemplateId, setSelectedOfferTemplateId] = useState<string>('');
+  const [offerPosition, setOfferPosition] = useState<string>('');
+  const [offerCtc, setOfferCtc] = useState<string>('');
+  const [offerBaseSalary, setOfferBaseSalary] = useState<string>('');
+  const [offerStartDate, setOfferStartDate] = useState<string>('');
+  const [offerExpiryDate, setOfferExpiryDate] = useState<string>('');
+  const [offerEmailSubject, setOfferEmailSubject] = useState<string>('Job Offer Letter');
+  const [offerEmailBody, setOfferEmailBody] = useState<string>('We are pleased to offer you a position at our company.');
+  const [sendOfferEmailToggle, setSendOfferEmailToggle] = useState<boolean>(true);
+
+  // Action Dialog 4: Reject Candidate
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectingCandidateInfo, setRejectingCandidateInfo] = useState<any>(null);
+  const [selectedRejectionTemplateId, setSelectedRejectionTemplateId] = useState<string>('');
+  const [rejectionReason, setRejectionReason] = useState<string>('');
+  const [rejectionSubject, setRejectionSubject] = useState<string>('Update on your application');
+  const [rejectionBody, setRejectionBody] = useState<string>('Thank you for applying. Unfortunately, we will not be moving forward with your application.');
+  const [sendRejectionEmailToggle, setSendRejectionEmailToggle] = useState<boolean>(true);
+
+  // Helper fetchers for actions
+  const fetchPipelineStages = () => {
+    apiClient.get('/recruitment/pipeline-stages')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setPipelineStages(res.data.data);
+        } else if (res.data?.success && Array.isArray(res.data.data?.items)) {
+          setPipelineStages(res.data.data.items);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchAssessmentsList = () => {
+    apiClient.get('/recruitment/assessments')
+      .then(res => {
+        if (res.data?.success) {
+          const items = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          setAssessments(items);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchEmployeesList = () => {
+    apiClient.get('/employees', { params: { pageSize: 1000 } })
+      .then(res => {
+        if (res.data?.success) {
+          const rawItems = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          const list = rawItems.map((item: any) => {
+            const fn = item.firstName || item.first_name || '';
+            const ln = item.lastName || item.last_name || '';
+            const fullName = `${fn} ${ln}`.trim() || item.name || item.email || '';
+            const deptId = item.currentDepartmentId || item.current_department_id || item.departmentId || item.department_id;
+            const deptName = item.department || item.departmentName || item.department_name || '';
+            const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
+            const role = (item.accessRole || item.role || '').toLowerCase();
+
+            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
+            const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
+
+            return {
+              id: Number(item.id),
+              name: fullName,
+              first_name: fn,
+              last_name: ln,
+              departmentId: deptId ? Number(deptId) : null,
+              departmentName: deptName,
+              department: deptName,
+              designation: item.designation || item.jobTitle || '',
+              accessRole: role,
+              isManager: isMgr,
+              rawItem: item
+            };
+          }).filter((x: any) => x.id && x.name);
+          setEmployeesList(list);
+          setEmployeesRaw(list);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchOfferTemplatesList = () => {
+    apiClient.get('/recruitment/offer/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setOfferTemplates(list);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchRejectionTemplatesList = () => {
+    apiClient.get('/recruitment/rejection/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setRejectionTemplates(list);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchPipelineStages();
+    fetchAssessmentsList();
+    fetchEmployeesList();
+    fetchOfferTemplatesList();
+    fetchRejectionTemplatesList();
+  }, []);
+
+  // Handler functions for applicant stage update & actions
+  const handleMoveStage = (applicationId: number, stageId: number) => {
+    if (!stageId || !applicationId) return;
+    apiClient.patch(`/recruitment/applications/${applicationId}/move-stage`, { stageId })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Application stage updated successfully!');
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to update stage');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to move stage', err);
+        toast.error('Failed to move stage');
+      });
+  };
+
+  const handleScheduleInterviewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppId) return;
+    if (!scheduleDate) {
+      toast.error('Please select date and time for the interview');
+      return;
+    }
+
+    let targetInterviewerId = scheduleInterviewerId;
+    if (!targetInterviewerId && employeesList.length > 0) {
+      targetInterviewerId = String((employeesList[0] as any)?.id || '');
+    }
+    if (!targetInterviewerId) {
+      toast.error('Please select an Assigned Interviewer');
+      return;
+    }
+
+    const parsedNumId = Number(targetInterviewerId);
+    const interviewerPayload = (!isNaN(parsedNumId) && parsedNumId > 0) ? [parsedNumId] : [targetInterviewerId];
+
+    let formattedDateStr = scheduleDate;
+    if (formattedDateStr.includes('T')) {
+      formattedDateStr = formattedDateStr.replace('T', ' ');
+    }
+    if (formattedDateStr.length === 16) {
+      formattedDateStr += ':00';
+    }
+
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/interviews', {
+      applicationId: selectedAppId,
+      interviewType: scheduleType,
+      interviewRound: Number(scheduleRound),
+      scheduledDate: formattedDateStr,
+      durationMinutes: Number(scheduleDuration),
+      meetingUrl: scheduleMeetingUrl,
+      interviewerIds: interviewerPayload,
+      customSubject: emailSubject,
+      customCandidateBody: candidateEmailBody,
+      customInterviewerBody: interviewerEmailBody,
+      sendEmails: sendEmailsToggle,
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Interview scheduled & emails dispatched!');
+          setShowScheduleDialog(false);
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to schedule interview');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to schedule interview', err);
+        toast.error('Failed to schedule interview');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleAssignAssessmentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppId) return;
+    if (!selectedAssessmentId) {
+      toast.error('Please select an assessment to assign');
+      return;
+    }
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/assessments/assign', {
+      applicationId: selectedAppId,
+      assessmentId: Number(selectedAssessmentId)
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Assessment assigned successfully!');
+          setShowAssignDialog(false);
+          const attemptUuid = res.data.data?.uuid;
+          if (attemptUuid) {
+            const testUrl = `${window.location.origin}/public/assessments/take/${attemptUuid}`;
+            setAssignedTestUrl(testUrl);
+          }
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to assign assessment');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to assign assessment', err);
+        toast.error('Failed to assign assessment');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleSendOfferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppId) return;
+    if (!offerPosition || !offerCtc || !offerBaseSalary || !offerStartDate || !offerExpiryDate) {
+      toast.error('Please fill in all offer terms fields');
+      return;
+    }
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/offers', {
+      applicationId: selectedAppId,
+      positionTitle: offerPosition,
+      costToCompany: Number(offerCtc),
+      baseSalary: Number(offerBaseSalary),
+      currency: 'INR',
+      offerStartDate,
+      offerExpiryDate
+    })
+      .then(res => {
+        if (res.data?.success) {
+          const offerId = res.data.data.id;
+          return apiClient.post(`/recruitment/offers/${offerId}/send`, {
+            customSubject: offerEmailSubject,
+            customBody: offerEmailBody,
+            sendEmails: sendOfferEmailToggle,
+          });
+        } else {
+          throw new Error(res.data?.message || 'Failed to generate offer');
+        }
+      })
+      .then(res => {
+        if (res?.data?.success) {
+          toast.success('Offer generated and emailed successfully!');
+          setShowOfferDialog(false);
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res?.data?.message || 'Failed to email offer');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to generate/email offer letter', err);
+        toast.error(err.message || 'Failed to complete offer generation');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleRejectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetAppId = rejectingCandidateInfo?.applicationId || rejectingCandidateInfo?.id;
+    if (!targetAppId) return;
+    setSubmittingAction(true);
+    apiClient.post(`/recruitment/applications/${targetAppId}/reject-email`, {
+      rejectionReason,
+      customSubject: rejectionSubject,
+      customBody: rejectionBody,
+      sendEmail: sendRejectionEmailToggle,
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate marked as Rejected & regret email sent!');
+          setShowRejectDialog(false);
+          setRejectingCandidateInfo(null);
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to reject application');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to reject application', err);
+        toast.error('Failed to reject application');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleOnboardCandidate = (applicationId: number) => {
+    if (!applicationId) return;
+    apiClient.post(`/recruitment/applications/${applicationId}/onboard`)
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate successfully hired and sent to Onboarding!');
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to onboard candidate');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to onboard candidate', err);
+        toast.error('Failed to onboard candidate');
+      });
+  };
 
   // Add Candidate Form Modal State for MRF Detail View
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
@@ -486,6 +875,9 @@ export const MrfRequestPage: React.FC = () => {
   const fetchMrfApplicants = async (mrfId: number) => {
     try {
       setLoadingApplicants(true);
+      const targetMrf = data.find(m => m.id === mrfId) || viewingMrf;
+      const targetTitle = (targetMrf?.positionTitle || '').toLowerCase().trim();
+
       const [resumeRes, appRes] = await Promise.allSettled([
         apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId } }),
         apiClient.get('/recruitment/applications')
@@ -494,7 +886,11 @@ export const MrfRequestPage: React.FC = () => {
       let combined: any[] = [];
 
       if (resumeRes.status === 'fulfilled' && resumeRes.value.data?.success && Array.isArray(resumeRes.value.data.data)) {
-        combined = [...resumeRes.value.data.data];
+        combined = resumeRes.value.data.data.filter((c: any) => {
+          const cMrfId = Number(c.mrfRequestId || c.mrf_request_id || c.mrfId);
+          const cPos = (c.positionTitle || c.position || '').toLowerCase().trim();
+          return cMrfId === Number(mrfId) || (targetTitle && (cPos.includes(targetTitle) || targetTitle.includes(cPos)));
+        });
       }
 
       if (appRes.status === 'fulfilled' && appRes.value.data?.success) {
@@ -502,23 +898,31 @@ export const MrfRequestPage: React.FC = () => {
           ? appRes.value.data.data 
           : (Array.isArray(appRes.value.data.data?.items) ? appRes.value.data.data.items : []);
 
-        const targetMrf = data.find(m => m.id === mrfId) || viewingMrf;
-        const targetTitle = (targetMrf?.positionTitle || '').toLowerCase().trim();
-
         rawApps.forEach((app: any) => {
           const appMrfId = Number(app.mrf_request_id || app.mrfRequestId || app.mrfId);
           const appPosition = (app.positionTitle || app.position_title || app.jobTitle || '').toLowerCase().trim();
 
           const isDirectMatch = appMrfId === Number(mrfId);
-          const isTitleMatch = targetTitle && (appPosition.includes(targetTitle) || targetTitle.includes(appPosition));
+          const isTitleMatch = Boolean(targetTitle) && (appPosition.includes(targetTitle) || targetTitle.includes(appPosition));
 
-          if (isDirectMatch || isTitleMatch || combined.length === 0) {
+          if (isDirectMatch || isTitleMatch) {
             const candidateId = app.candidate_id || app.id;
             const existingIndex = combined.findIndex(c => c.id === candidateId || (c.email && app.candidate_email && c.email === app.candidate_email));
             
-            if (existingIndex === -1) {
+            if (existingIndex !== -1) {
+              combined[existingIndex] = {
+                ...combined[existingIndex],
+                applicationId: app.id,
+                pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || combined[existingIndex].pipelineStageId || '',
+                positionTitle: app.position_title || app.positionTitle || app.jobTitle || combined[existingIndex].positionTitle || '',
+                status: app.application_status || app.applicationStatus || app.status || combined[existingIndex].status || 'applied'
+              };
+            } else {
               combined.push({
                 id: candidateId,
+                applicationId: app.id,
+                pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || '',
+                positionTitle: app.position_title || app.positionTitle || app.jobTitle || targetMrf?.positionTitle || '',
                 name: app.candidate_name || app.candidateName || app.name || 'Candidate',
                 email: app.candidate_email || app.candidateEmail || app.email || 'N/A',
                 contact: app.candidate_phone || app.candidatePhone || app.phone || app.contact || 'N/A',
@@ -533,15 +937,6 @@ export const MrfRequestPage: React.FC = () => {
             }
           }
         });
-      }
-
-      if (combined.length === 0) {
-        try {
-          const fallbackRes = await apiClient.get('/recruitment/resume-bank');
-          if (fallbackRes.data?.success && Array.isArray(fallbackRes.data.data)) {
-            combined = fallbackRes.data.data;
-          }
-        } catch (e) {}
       }
 
       setMrfApplicants(combined);
@@ -901,12 +1296,74 @@ export const MrfRequestPage: React.FC = () => {
   const [companiesList, setCompaniesList] = useState<string[]>(['Trial Company', 'Apponext Tech', 'Kosqu Technolab']);
   const [employeesList, setEmployeesList] = useState<string[]>(['sakshi shukla', 'Rahul Sharma', 'Siddharth Mehta']);
 
-  // Raw reference maps for ID resolution
+  // Raw reference maps for ID resolution & company filtering
+  const [positionsRaw, setPositionsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
   const [companiesRaw, setCompaniesRaw] = useState<{ id: number; name: string }[]>([]);
-  const [locationsRaw, setLocationsRaw] = useState<{ id: number; name: string }[]>([]);
-  const [departmentsRaw, setDepartmentsRaw] = useState<{ id: number; name: string }[]>([]);
-  const [gradesRaw, setGradesRaw] = useState<{ id: number; name: string }[]>([]);
-  const [employeesRaw, setEmployeesRaw] = useState<{ id: number; name: string }[]>([]);
+  const [locationsRaw, setLocationsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [departmentsRaw, setDepartmentsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [gradesRaw, setGradesRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [employeesRaw, setEmployeesRaw] = useState<{ id: number; name: string; first_name?: string; last_name?: string; departmentId?: number | null; departmentName?: string; department?: string; companyId?: number | null; companyName?: string; designation?: string; accessRole?: string; isManager?: boolean; rawItem?: any }[]>([]);
+
+  // Sub-Company Filter Helpers
+  const isCompanyMatch = (itemCompanyId?: number | null, itemCompanyName?: string | null, targetCompany?: string | number) => {
+    if (!targetCompany || targetCompany === 'Choose' || targetCompany === 'Select') return true;
+    const targetStr = String(targetCompany).toLowerCase().trim();
+    if (!itemCompanyId && !itemCompanyName) return true; // Parent scope items apply everywhere
+
+    const matchName = itemCompanyName ? String(itemCompanyName).toLowerCase().trim() === targetStr : false;
+    const matchId = itemCompanyId ? String(itemCompanyId) === targetStr : false;
+    return matchName || matchId;
+  };
+
+  const getFilteredPositions = (companyName?: string) => {
+    if (!positionsRaw || positionsRaw.length === 0) return positions;
+    const matched = positionsRaw.filter(p => isCompanyMatch(p.companyId, p.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(p => p.name))) : positions;
+  };
+
+  const getFilteredLocations = (companyName?: string) => {
+    if (!locationsRaw || locationsRaw.length === 0) return locations;
+    const matched = locationsRaw.filter(l => isCompanyMatch(l.companyId, l.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(l => l.name))) : locations;
+  };
+
+  const getFilteredDepartments = (companyName?: string) => {
+    if (!departmentsRaw || departmentsRaw.length === 0) return departments;
+    const matched = departmentsRaw.filter(d => isCompanyMatch(d.companyId, d.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(d => d.name))) : departments;
+  };
+
+  const getFilteredGrades = (companyName?: string) => {
+    if (!gradesRaw || gradesRaw.length === 0) return grades;
+    const matched = gradesRaw.filter(g => isCompanyMatch(g.companyId, g.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(g => g.name))) : grades;
+  };
+
+  // Helper to resolve & filter Managers for a given department and company
+  const getDepartmentManagers = (deptNameOrId?: string | number, companyName?: string) => {
+    if (!employeesRaw || employeesRaw.length === 0) return [];
+    
+    // Filter by company first
+    const companyEmployees = employeesRaw.filter(e => isCompanyMatch(e.companyId, e.companyName, companyName));
+    const poolEmployees = companyEmployees.length > 0 ? companyEmployees : employeesRaw;
+
+    // Filter managers/leads first
+    const managersOnly = poolEmployees.filter(e => e.isManager);
+    const pool = managersOnly.length > 0 ? managersOnly : poolEmployees;
+
+    if (!deptNameOrId || deptNameOrId === 'Choose' || deptNameOrId === 'Select') {
+      return pool;
+    }
+
+    const targetStr = String(deptNameOrId).toLowerCase().trim();
+    const matched = pool.filter(e => {
+      const eDept = (e.departmentName || e.department || '').toLowerCase().trim();
+      const eDeptId = String(e.departmentId || '');
+      return eDept === targetStr || eDeptId === targetStr;
+    });
+
+    return matched.length > 0 ? matched : pool;
+  };
 
   const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
   const [upcomingSchedule, setUpcomingSchedule] = useState<any[]>([]);
@@ -954,8 +1411,16 @@ export const MrfRequestPage: React.FC = () => {
     apiClient.get('/settings/designations')
       .then(res => {
         if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => item.name || item.title).filter(Boolean);
-          if (list.length > 0) setPositions(list);
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name || item.title || ''),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setPositions(list.map((x: any) => x.name));
+            setPositionsRaw(list);
+          }
         }
       })
       .catch(err => console.error('Failed to load designations', err));
@@ -966,7 +1431,9 @@ export const MrfRequestPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const list = res.data.data.map((item: any) => ({
             id: Number(item.id),
-            name: String(item.name)
+            name: String(item.name),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
           })).filter((x: any) => x.id && x.name);
           if (list.length > 0) {
             setLocations(list.map((x: any) => x.name));
@@ -982,7 +1449,9 @@ export const MrfRequestPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const list = res.data.data.map((item: any) => ({
             id: Number(item.id),
-            name: String(item.name)
+            name: String(item.name),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
           })).filter((x: any) => x.id && x.name);
           if (list.length > 0) {
             setDepartments(list.map((x: any) => x.name));
@@ -998,7 +1467,9 @@ export const MrfRequestPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const list = res.data.data.map((item: any) => ({
             id: Number(item.id),
-            name: String(item.name)
+            name: String(item.name),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
           })).filter((x: any) => x.id && x.name);
           if (list.length > 0) {
             setGrades(list.map((x: any) => x.name));
@@ -1027,13 +1498,42 @@ export const MrfRequestPage: React.FC = () => {
     // Fetch employees (interviewers)
     apiClient.get('/employees', { params: { pageSize: 1000 } })
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.id),
-            name: `${item.firstName || item.first_name || ''} ${item.lastName || item.last_name || ''}`.trim()
-          })).filter((x: any) => x.id && x.name);
+        if (res.data?.success) {
+          const rawItems = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          const list = rawItems.map((item: any) => {
+            const fn = item.firstName || item.first_name || '';
+            const ln = item.lastName || item.last_name || '';
+            const fullName = `${fn} ${ln}`.trim() || item.name || item.email || '';
+            const deptId = item.currentDepartmentId || item.current_department_id || item.departmentId || item.department_id;
+            const deptName = item.department || item.departmentName || item.department_name || '';
+            const compId = item.currentBranchId || item.current_branch_id || item.companyId || item.company_id || item.currentCompanyId || item.current_company_id;
+            const compName = item.company || item.companyName || item.company_name || '';
+            const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
+            const role = (item.accessRole || item.role || '').toLowerCase();
+
+            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
+            const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
+
+            return {
+              id: Number(item.id),
+              name: fullName,
+              first_name: fn,
+              last_name: ln,
+              departmentId: deptId ? Number(deptId) : null,
+              departmentName: deptName,
+              department: deptName,
+              companyId: compId ? Number(compId) : null,
+              companyName: compName,
+              designation: item.designation || item.jobTitle || '',
+              accessRole: role,
+              isManager: isMgr,
+              rawItem: item
+            };
+          }).filter((x: any) => x.id && x.name);
+
           if (list.length > 0) {
-            setEmployeesList(list.map((x: any) => x.name));
+            setEmployeesList(list);
             setEmployeesRaw(list);
           }
         }
@@ -1150,6 +1650,7 @@ export const MrfRequestPage: React.FC = () => {
     skills: '',
     comment: '',
     jobDescription: '',
+    targetClosureDate: '',
     requestedBy: 'sakshi shukla',
     stage: 'Approved',
     applicants: 0,
@@ -1170,7 +1671,10 @@ export const MrfRequestPage: React.FC = () => {
     const safeData = Array.isArray(data) ? data : [];
     let result = safeData.filter(item => {
       if (!item) return false;
-      const matchStatus = activeTab === 'open' ? item.status === 'Open' : item.status === 'Closed';
+      const status = (item.status || '').toLowerCase();
+      const stage = (item.stage || '').toLowerCase();
+      const isClosed = status === 'closed' || stage === 'completed';
+      const matchStatus = activeTab === 'open' ? !isClosed : isClosed;
       
       const matchMrNumber = mrNum.trim() === '' || 
         (item.mrNumber && item.mrNumber.toLowerCase().includes(mrNum.toLowerCase()));
@@ -1272,11 +1776,13 @@ export const MrfRequestPage: React.FC = () => {
         const response = await apiClient.delete(`/recruitment/mrf/${id}`);
         if (response.data?.success) {
           toast.success(`${recordToDelete?.mrNumber} deleted successfully`);
+          setData(prev => (Array.isArray(prev) ? prev.filter((item: any) => item.id !== id) : []));
           fetchMrfs();
         } else {
           toast.error(response.data?.message || 'Failed to delete MRF request');
         }
       } catch (err) {
+        console.error('Delete MRF Request error:', err);
         toast.error('Error deleting MRF request');
       }
     }
@@ -1355,30 +1861,22 @@ export const MrfRequestPage: React.FC = () => {
       toast.error('No data available to export');
       return;
     }
-    const headers = ['MR Number', 'Stage', 'Position Title', 'Company', 'Requested By', 'Requested On', 'Positions', 'Department', 'Status', 'Applicants'];
-    const rows = filteredData.map(item => [
-      item.mrNumber,
-      item.stage,
-      item.positionTitle,
-      item.company,
-      item.requestedBy,
-      item.requestedOn,
-      item.numberOfPositions,
-      item.department,
-      item.status,
-      item.applicants
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `MRF_Requests_Export_${activeTab}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadCsvFile(
+      `MRF_Requests_Export_${activeTab}.csv`,
+      ['MR Number', 'Stage', 'Position Title', 'Company', 'Requested By', 'Requested On', 'Positions', 'Department', 'Status', 'Applicants'],
+      filteredData.map((item) => [
+        item.mrNumber,
+        item.stage,
+        item.positionTitle,
+        item.company,
+        item.requestedBy,
+        item.requestedOn,
+        item.numberOfPositions,
+        item.department,
+        item.status,
+        item.applicants,
+      ])
+    );
     toast.success('Data exported to CSV successfully');
   };
 
@@ -1406,7 +1904,7 @@ export const MrfRequestPage: React.FC = () => {
       jobDescription: '',
       targetClosureDate: '',
       requestedBy: loggedInEmployeeName,
-      stage: 'Approved',
+      stage: isHrPortal ? 'Approved' : 'Pending Approval',
       applicants: 0,
       status: 'Open'
     });
@@ -1416,6 +1914,9 @@ export const MrfRequestPage: React.FC = () => {
   // Open Edit Modal
   const handleOpenEditModal = (item: MRFRequest) => {
     setEditingMrf(item);
+    const rawDate = item.targetClosureDate || item.expiryDate || '';
+    const cleanDate = rawDate.includes('T') ? rawDate.split('T')[0] : (rawDate.includes(' ') ? rawDate.split(' ')[0] : rawDate);
+
     setFormFields({
       positionTitle: item.positionTitle || 'Choose',
       numberOfPositions: item.numberOfPositions || '' as any,
@@ -1435,7 +1936,7 @@ export const MrfRequestPage: React.FC = () => {
       skills: item.skills || '',
       comment: item.comment || '',
       jobDescription: item.jobDescription || '',
-      targetClosureDate: item.targetClosureDate || item.expiryDate || '',
+      targetClosureDate: cleanDate,
       requestedBy: item.requestedBy || 'sakshi shukla',
       stage: item.stage || 'Approved',
       applicants: item.applicants || 0,
@@ -1490,6 +1991,10 @@ export const MrfRequestPage: React.FC = () => {
       toast.error('Skills field is required');
       return;
     }
+    if (!formFields.targetClosureDate || !formFields.targetClosureDate.trim()) {
+      toast.error('Target Closure Date / Expiry Date is required');
+      return;
+    }
 
     const matchedCompany = companiesRaw.find(c => c.name === formFields.company);
     const matchedLocation = locationsRaw.find(l => l.name === formFields.companyLocation);
@@ -1501,22 +2006,22 @@ export const MrfRequestPage: React.FC = () => {
 
     const payload: any = {
       positionTitle: formFields.positionTitle,
-      numberOfPositions: Number(formFields.numberOfPositions),
-      recruitmentType: formFields.recruitmentType,
-      companyId: matchedCompany?.id,
-      companyLocationId: matchedLocation?.id,
-      departmentId: matchedDept?.id,
-      gradeId: matchedGrade?.id,
-      employmentType: formFields.employmentType,
-      qualificationRequired: formFields.qualificationRequired,
-      experienceDesired: formFields.experienceDesired,
-      interviewerId: matchedInterviewer?.id,
-      payScaleType: formFields.payScaleType,
-      payScaleForPosition: formFields.payScaleForPosition,
-      reasonForRequirement: formFields.reasonForRequirement,
-      listInJobPage: formFields.listInJobRecruitmentPage,
+      numberOfPositions: Number(formFields.numberOfPositions) || 1,
+      recruitmentType: formFields.recruitmentType !== 'Choose' ? formFields.recruitmentType : 'Both',
+      companyId: matchedCompany?.id || undefined,
+      companyLocationId: matchedLocation?.id || undefined,
+      departmentId: matchedDept?.id || undefined,
+      gradeId: matchedGrade?.id || undefined,
+      employmentType: formFields.employmentType !== 'Choose' ? formFields.employmentType : undefined,
+      qualificationRequired: formFields.qualificationRequired || undefined,
+      experienceDesired: formFields.experienceDesired || undefined,
+      interviewerId: matchedInterviewer?.id || undefined,
+      payScaleType: formFields.payScaleType !== 'Choose' ? formFields.payScaleType : undefined,
+      payScaleForPosition: formFields.payScaleForPosition || undefined,
+      reasonForRequirement: formFields.reasonForRequirement !== 'Choose' ? formFields.reasonForRequirement : undefined,
+      listInJobPage: (formFields.listInJobRecruitmentPage === 'No' ? 'No' : 'Yes') as 'Yes' | 'No',
       skills: formFields.skills,
-      comment: formFields.comment,
+      comment: formFields.comment || undefined,
       jobDescription: formFields.jobDescription,
       targetClosureDate: formFields.targetClosureDate || undefined,
       expiryDate: formFields.targetClosureDate || undefined,
@@ -1545,7 +2050,8 @@ export const MrfRequestPage: React.FC = () => {
       // Create
       apiClient.post('/recruitment/mrf', {
         ...payload,
-        stage: 'Pending Approval'
+        stage: formFields.stage || (isHrPortal ? 'Approved' : 'Pending Approval'),
+        status: formFields.status || 'Open'
       })
       .then((res) => {
         if (res.data?.success) {
@@ -1677,191 +2183,139 @@ export const MrfRequestPage: React.FC = () => {
       {/* Main Content Area (Spans full page width, making elements more compact) */}
       <div className="flex-1">
         
-        {/* Top Header Bar (Has pl-20 to leave space for the floating settings button) */}
-        <div className={cn("relative flex items-center justify-between mb-6 bg-white border border-slate-100 p-4 rounded-xl shadow-sm z-30", isHrPortal && "pl-20")}>
-          
-          {/* Floating Left Vertical Action Sidebar — HR only */}
-          {isHrPortal && (
-          <div className={cn(
-            "absolute left-4 top-3 w-12 z-40 transition-all duration-250 overflow-visible",
-            showQuickSettings 
-              ? "bg-[#374151] border border-slate-650 rounded-lg shadow-lg flex flex-col gap-0.5" 
-              : "flex flex-col"
-          )}>
-            
-            {/* Gear Settings Button (Click toggles the menu open/closed) */}
-            <button
-              type="button"
-              onClick={() => setShowQuickSettings(!showQuickSettings)}
-              className={cn(
-                "w-12 h-12 bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer shadow-sm",
-                showQuickSettings ? "rounded-t-lg" : "rounded-lg"
-              )}
-              title="Settings Menu"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-
-            {/* Collapsible Options List (Smooth transition, overflow-visible when open to prevent tooltip clipping) */}
-            <div className={cn(
-              "flex flex-col gap-0.5 bg-[#374151] rounded-b-lg border-t border-slate-600/20 transition-all duration-300 ease-in-out",
-              showQuickSettings 
-                ? "max-h-[200px] opacity-100 overflow-visible" 
-                : "max-h-0 opacity-0 overflow-hidden pointer-events-none"
-            )}>
-              
-              {/* Grid / Recruitment Fields Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'grid' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsFieldsModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
-                >
-                  <Grid className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'grid' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      Recruitment Fields
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Graduation Cap / Candidate Fields Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'cap' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCandidateModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
-                >
-                  <GraduationCap className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'cap' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      Candidate Fields
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Profile / User Creation Fields Mapping Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'user' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMappingModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
-                >
-                  <User className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'user' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      User Creation Fields Mapping
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Plus / Candidate Form Field Keywords Map Option */}
-              <div 
-                className="relative"
-                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'plus' } as any))}
-                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsKeywordsModalOpen(true);
-                    setShowQuickSettings(false);
-                  }}
-                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20 rounded-b-lg"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-                {(formFields as any).activeTooltip === 'plus' && (
-                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
-                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
-                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
-                      Candidate Form Field Keywords Map
-                    </div>
-                  </div>
-                )}
-              </div>
-
+        {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible mb-6">
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <div className="space-y-0.5">
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                Manpower Requisition (MRF)
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Create, approve and manage departmental hiring requests with multi-tier approval chains.
+              </p>
             </div>
           </div>
-          )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
+            {isHrPortal && (
+              <Popover open={showQuickSettings} onOpenChange={setShowQuickSettings}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 px-3 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted text-foreground cursor-pointer shadow-2xs"
+                    title="Field & Mapping Configurations"
+                  >
+                    <Settings className="w-4 h-4 text-muted-foreground" />
+                    <span className="hidden sm:inline">Settings</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-0.5" />
+                  </Button>
+                </PopoverTrigger>
+
+                <PopoverContent align="end" className="w-64 p-1.5 rounded-xl shadow-2xl z-50 bg-card border border-border">
+                  <div className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground border-b border-border/60">
+                    Form & Field Configurations
+                  </div>
+                  <div className="py-1 space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFieldsModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <Grid className="w-4 h-4 text-primary" />
+                      <span>Recruitment Fields</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCandidateModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <GraduationCap className="w-4 h-4 text-primary" />
+                      <span>Candidate Fields</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMappingModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <User className="w-4 h-4 text-primary" />
+                      <span>User Creation Fields Mapping</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsKeywordsModalOpen(true);
+                        setShowQuickSettings(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted/70 cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-primary" />
+                      <span>Candidate Form Field Keywords</span>
+                    </button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
             <Button 
               onClick={handleOpenCreateModal}
-              className="bg-[#1e73be] hover:bg-[#1a62a3] text-white font-semibold flex items-center gap-2 rounded px-4 py-2 shadow-sm transition-all hover:translate-y-[-1px] active:translate-y-[0px] cursor-pointer"
+              className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" /> Recruitment Request
+              <Plus className="w-3.5 h-3.5" /> Raise MRF Requisition
             </Button>
-          </div>
-          <div className="text-sm font-semibold text-slate-500 flex items-center gap-2">
-            <Briefcase className="w-4 h-4 text-slate-400" />
-            Recruitment &gt; MRF Request
           </div>
         </div>
 
-      {/* Top Cards Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      {/* ── Top Schedule Cards Section ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
         
         {/* Card 1: Today's Schedule */}
-        <Card className="border-t-4 border-t-green-500 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-bold text-slate-700">Today's Schedule</CardTitle>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Today's Interviews</CardTitle>
+            </div>
             <RefreshCw 
               onClick={() => handleRefreshSchedule('today')}
-              className={`h-4 w-4 text-slate-400 hover:text-slate-600 cursor-pointer transition-transform duration-500 ${
-                isRefreshingToday ? 'animate-spin text-green-500' : ''
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingToday ? 'animate-spin text-emerald-500' : ''
               }`} 
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {todaySchedule.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-                No schedule found
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                No interviews scheduled for today
               </div>
             ) : (
-              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {todaySchedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-primary font-bold uppercase tracking-wider">{item.interviewType}</div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <div className="text-[11px] font-bold text-green-600">
+                    <div className="text-right space-y-1 shrink-0">
+                      <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                         {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </div>
                       {item.meetingUrl && (
@@ -1869,7 +2323,7 @@ export const MrfRequestPage: React.FC = () => {
                           href={item.meetingUrl} 
                           target="_blank" 
                           rel="noreferrer" 
-                          className="inline-block text-[9px] bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 font-bold px-2 py-0.5 rounded transition-all"
+                          className="inline-block text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-md transition-all"
                         >
                           Join
                         </a>
@@ -1883,35 +2337,40 @@ export const MrfRequestPage: React.FC = () => {
         </Card>
 
         {/* Card 2: Upcoming Schedule */}
-        <Card className="border-t-4 border-t-amber-500 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-bold text-slate-700">Upcoming Schedule</CardTitle>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Upcoming Schedule</CardTitle>
+            </div>
             <RefreshCw 
               onClick={() => handleRefreshSchedule('upcoming')}
-              className={`h-4 w-4 text-slate-400 hover:text-slate-600 cursor-pointer transition-transform duration-500 ${
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
                 isRefreshingUpcoming ? 'animate-spin text-amber-500' : ''
               }`} 
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {upcomingSchedule.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-                No schedule found
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                No upcoming interviews
               </div>
             ) : (
-              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {upcomingSchedule.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase">{item.interviewType}</div>
                     </div>
-                    <div className="text-right space-y-1">
-                      <div className="text-[11px] font-bold text-amber-600">
+                    <div className="text-right space-y-0.5 shrink-0">
+                      <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 font-mono">
                         {item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
                       </div>
-                      <div className="text-[9px] text-slate-500 font-medium">
+                      <div className="text-[10px] text-muted-foreground font-mono">
                         {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </div>
                     </div>
@@ -1923,40 +2382,34 @@ export const MrfRequestPage: React.FC = () => {
         </Card>
 
         {/* Card 3: Pending Feedback */}
-        <Card className="border-t-4 border-t-red-500 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md bg-white">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-sm font-bold text-slate-700">Pending Feedback (Last 5 day's)</CardTitle>
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                <Star className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Pending Feedback</CardTitle>
+            </div>
             <RefreshCw 
               onClick={() => handleRefreshSchedule('pending')}
-              className={`h-4 w-4 text-slate-400 hover:text-slate-600 cursor-pointer transition-transform duration-500 ${
-                isRefreshingPending ? 'animate-spin text-red-500' : ''
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingPending ? 'animate-spin text-rose-500' : ''
               }`} 
             />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {pendingFeedback.length === 0 ? (
-              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-                No schedule found
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                All interview feedback submitted
               </div>
             ) : (
-              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
                 {pendingFeedback.map((item) => (
-                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
-                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
-                    </div>
-                    <div className="text-right">
-                      <Button
-                        size="sm"
-                        className="text-[9px] bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 font-bold px-2 py-1 h-auto rounded transition-all"
-                        onClick={() => {
-                          toast.info(`Submit feedback for ${item.candidateName || 'Candidate'}`);
-                        }}
-                      >
-                        Feedback
-                      </Button>
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs font-bold text-foreground truncate">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">{item.interviewType}</div>
                     </div>
                   </div>
                 ))}
@@ -1966,124 +2419,119 @@ export const MrfRequestPage: React.FC = () => {
         </Card>
       </div>
 
-      {/* Filter Section */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="mr-number" className="text-xs font-bold text-slate-500 uppercase tracking-wider">MR-Number</Label>
-            <Input
-              id="mr-number"
-              placeholder="1, 2, 3, ......."
-              value={searchMrNumber}
-              onChange={(e) => setSearchMrNumber(e.target.value)}
-              className="h-10 text-sm focus-visible:ring-1 focus-visible:ring-blue-500"
-            />
-          </div>
-          
-          <div className="space-y-1.5">
-            <Label htmlFor="position" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Position</Label>
-            <Select value={selectedPosition} onValueChange={handlePositionFilterChange}>
-              <SelectTrigger className="h-10 text-sm bg-slate-50 border-slate-200 text-slate-600">
-                <SelectValue placeholder="Position (0)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Position (All)</SelectItem>
-                {uniquePositions.map((pos) => (
-                  <SelectItem key={pos} value={pos}>{pos}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* ── Filter Section ────────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden mb-6">
+        <CardContent className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="mr-number" className="text-xs font-bold text-foreground uppercase tracking-wider">MR-Number</Label>
+              <Input
+                id="mr-number"
+                placeholder="1, 2, 3, ..."
+                value={searchMrNumber}
+                onChange={(e) => setSearchMrNumber(e.target.value)}
+                className="h-9 text-xs bg-background border-border rounded-xl"
+              />
+            </div>
+            
+            <div className="space-y-1.5">
+              <Label htmlFor="position" className="text-xs font-bold text-foreground uppercase tracking-wider">Position</Label>
+              <Select value={selectedPosition} onValueChange={handlePositionFilterChange}>
+                <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+                  <SelectValue placeholder="All Positions" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Positions</SelectItem>
+                  {uniquePositions.map((pos) => (
+                    <SelectItem key={pos} value={pos}>{pos}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="requested-by" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Requested By</Label>
-            <Select value={selectedRequestedBy} onValueChange={handleRequestedByFilterChange}>
-              <SelectTrigger className="h-10 text-sm bg-slate-50 border-slate-200 text-slate-600">
-                <SelectValue placeholder="Employees (0)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Employees (All)</SelectItem>
-                {uniqueRequestedBy.map((emp) => (
-                  <SelectItem key={emp} value={emp}>{emp}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="requested-by" className="text-xs font-bold text-foreground uppercase tracking-wider">Requested By</Label>
+              <Select value={selectedRequestedBy} onValueChange={handleRequestedByFilterChange}>
+                <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+                  <SelectValue placeholder="All Requesters" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Requesters</SelectItem>
+                  {uniqueRequestedBy.map((emp) => (
+                    <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Button 
-            onClick={handleSearch}
-            className="bg-[#1e73be] hover:bg-[#1a62a3] text-white h-10 w-full md:w-auto font-semibold shadow-sm transition-all flex items-center justify-center gap-2"
-          >
-            <Search className="w-4 h-4" /> Search
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabs Row */}
-      <div className="flex items-center gap-1 mb-[-1px]">
-        <button
-          onClick={() => setActiveTab('open')}
-          className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-            activeTab === 'open'
-              ? 'bg-white text-slate-800 border-t-green-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-              : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-          }`}
-        >
-          Open Request
-        </button>
-        <button
-          onClick={() => setActiveTab('closed')}
-          className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-            activeTab === 'closed'
-              ? 'bg-white text-slate-800 border-t-red-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-              : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-          }`}
-        >
-          Closed Request
-        </button>
-      </div>
-
-      {/* Result Card Wrapper */}
-      <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-        
-        {/* Result Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
-          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Result
-          </h3>
-          <Button
-            onClick={handleExport}
-            variant="outline"
-            size="sm"
-            className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
-          >
-            <Download className="w-4 h-4" /> Export
-          </Button>
-        </div>
-
-        {/* Show Entries & Quick Text */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
-          <div className="font-medium">
-            Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries
-          </div>
-          <div className="flex items-center gap-2">
-            <span>Show</span>
-            <select
-              value={entriesPerPage}
-              onChange={(e) => {
-                setEntriesPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
+            <Button 
+              onClick={handleSearch}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
             >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-            <span>entries</span>
+              <Search className="w-3.5 h-3.5" /> Search Requests
+            </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Segmented Tabs & Results Card ─────────────────────────────────────── */}
+      <div className="space-y-0">
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => setActiveTab('open')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'open'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-card text-muted-foreground hover:bg-muted border border-border/80'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            Open Requests ({data.filter(d => {
+              const status = (d.status || '').toLowerCase();
+              const stage = (d.stage || '').toLowerCase();
+              return status !== 'closed' && stage !== 'completed';
+            }).length})
+          </button>
+          <button
+            onClick={() => setActiveTab('closed')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
+              activeTab === 'closed'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'bg-card text-muted-foreground hover:bg-muted border border-border/80'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-rose-400"></span>
+            Closed Requests ({data.filter(d => {
+              const status = (d.status || '').toLowerCase();
+              const stage = (d.stage || '').toLowerCase();
+              return status === 'closed' || stage === 'completed';
+            }).length})
+          </button>
         </div>
+
+        {/* Result Card Wrapper */}
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          
+          {/* Result Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border-b border-border/60 gap-4">
+            <div>
+              <CardTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-primary" /> Requisition Roster
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Showing {filteredData.length === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, filteredData.length)} of {filteredData.length} entries</p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleExport}
+                variant="outline"
+                size="sm"
+                className="h-8 px-3 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted shrink-0 text-foreground"
+              >
+                <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+              </Button>
+            </div>
+          </div>
 
         {/* Table Container */}
         <div className="overflow-x-auto border border-slate-200 rounded-lg w-full">
@@ -2164,27 +2612,22 @@ export const MrfRequestPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-3.5 font-semibold text-slate-800">{item.mrNumber}</td>
-                    <td className="p-3.5 text-center relative overflow-visible">
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveStagePopoverId(prev => prev === item.id ? null : item.id);
-                        }}
-                        className="inline-flex items-center justify-center p-1.5 bg-red-100 rounded-full text-red-500 shadow-sm cursor-pointer transition-transform hover:scale-105"
-                        title=""
-                      >
-                        <User className="w-3.5 h-3.5" />
-                      </div>
-
-                      {activeStagePopoverId === item.id && (
-                        <div 
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute left-[70%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none animate-in fade-in zoom-in-95 duration-150"
+                    <td className="p-3.5 text-center">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <div 
+                            className="inline-flex items-center justify-center p-1.5 bg-red-100 rounded-full text-red-500 shadow-sm cursor-pointer transition-transform hover:scale-105"
+                            title="Reporting Officer"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent 
+                          align="center" 
+                          side="top" 
+                          sideOffset={8}
+                          className="bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none"
                         >
-                          {/* Arrow pointing to profile button */}
-                          <div className="absolute top-1/2 -translate-y-1/2 -left-2 w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-r-[7px] border-r-white z-50"></div>
-                          <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-r-[7px] border-r-slate-200"></div>
-
                           {/* Popover Header */}
                           <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100 mb-2">
                             <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Reporting Officer</span>
@@ -2221,8 +2664,8 @@ export const MrfRequestPage: React.FC = () => {
                               </button>
                             </div>
                           )}
-                        </div>
-                      )}
+                        </PopoverContent>
+                      </Popover>
                     </td>
 
                     {/* Dynamically configured column cells */}
@@ -2307,15 +2750,15 @@ export const MrfRequestPage: React.FC = () => {
 
         {/* Footer controls */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-end gap-1.5 pt-4">
+          <div className="flex items-center justify-end gap-1.5 p-4 border-t border-border/60">
             <Button
               variant="outline"
               size="sm"
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              className="h-8 px-2 text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="h-8 px-2.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground"
             >
-              <ChevronLeft className="w-4 h-4 mr-0.5" /> Previous
+              <ChevronLeft className="w-3.5 h-3.5 mr-0.5" /> Previous
             </Button>
             {Array.from({ length: totalPages }).map((_, idx) => (
               <Button
@@ -2323,10 +2766,10 @@ export const MrfRequestPage: React.FC = () => {
                 variant={currentPage === idx + 1 ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setCurrentPage(idx + 1)}
-                className={`h-8 w-8 p-0 ${
+                className={`h-8 w-8 p-0 text-xs font-bold rounded-xl ${
                   currentPage === idx + 1 
-                    ? 'bg-[#1e73be] hover:bg-[#1a62a3] text-white' 
-                    : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                    ? 'bg-primary text-primary-foreground shadow-xs' 
+                    : 'border-border hover:bg-muted text-foreground'
                 }`}
               >
                 {idx + 1}
@@ -2337,17 +2780,38 @@ export const MrfRequestPage: React.FC = () => {
               size="sm"
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              className="h-8 px-2 text-slate-600 border-slate-200 hover:bg-slate-50"
+              className="h-8 px-2.5 text-xs font-bold rounded-xl border-border hover:bg-muted text-foreground"
             >
-              Next <ChevronRight className="w-4 h-4 ml-0.5" />
+              Next <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
             </Button>
           </div>
         )}
+        </Card>
       </div>
 
       {/* Add / Edit Recruitment Form Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact">
+        <DialogContent
+          className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact"
+          onPointerDownOutside={(e) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-select-content]')) {
+              e.preventDefault();
+            }
+          }}
+          onInteractOutside={(e) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-select-content]')) {
+              e.preventDefault();
+            }
+          }}
+          onFocusOutside={(e) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest('[data-select-content]')) {
+              e.preventDefault();
+            }
+          }}
+        >
           <form onSubmit={handleSave}>
             <DialogHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
               <div>
@@ -2377,7 +2841,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {positions.map(p => (
+                      {getFilteredPositions(formFields.company).map(p => (
                         <SelectItem key={p} value={p}>{p}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2456,7 +2920,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {locations.map(loc => (
+                      {getFilteredLocations(formFields.company).map(loc => (
                         <SelectItem key={loc} value={loc}>{loc}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2479,7 +2943,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {departments.map(dept => (
+                      {getFilteredDepartments(formFields.company).map(dept => (
                         <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2499,7 +2963,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {grades.map(g => (
+                      {getFilteredGrades(formFields.company).map(g => (
                         <SelectItem key={g} value={g}>{g}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2572,8 +3036,10 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {employeesList.map(emp => (
-                        <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                      {getDepartmentManagers(formFields.department).map(emp => (
+                        <SelectItem key={emp.id} value={emp.name}>
+                          {emp.name} {emp.designation ? `(${emp.designation})` : ''}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2660,20 +3126,42 @@ export const MrfRequestPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 7.5: Target Closure Date / Expiry Date */}
+              {/* Row 7.5: Target Closure Date / Expiry Date & Approval Stage */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="targetClosureDate" className="text-xs font-bold text-slate-700">
-                    Target Closure Date / Expiry Date
+                    Target Closure Date / Expiry Date <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="targetClosureDate"
                     type="date"
+                    required
                     value={formFields.targetClosureDate}
                     onChange={(e) => setFormFields(prev => ({ ...prev, targetClosureDate: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white"
+                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white text-slate-800 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
                   />
                 </div>
+
+                {isHrPortal && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mrfStage" className="text-xs font-bold text-slate-700">
+                      Approval Stage
+                    </Label>
+                    <Select 
+                      value={formFields.stage || 'Approved'} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, stage: val }))}
+                    >
+                      <SelectTrigger id="mrfStage" className="bg-white border-slate-200 text-slate-700 h-10">
+                        <SelectValue placeholder="Stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Approved">Approved</SelectItem>
+                        <SelectItem value="Pending Approval">Pending Approval</SelectItem>
+                        <SelectItem value="Rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               {/* Row 8: Skills * */}
@@ -3254,6 +3742,7 @@ export const MrfRequestPage: React.FC = () => {
                                       </th>
                                     );
                                   })}
+                                  <th className="p-2.5">Stage Select</th>
                                   <th className="p-2.5">Status</th>
                                   <th className="p-2.5 text-center">Action</th>
                                 </tr>
@@ -3265,7 +3754,83 @@ export const MrfRequestPage: React.FC = () => {
 
                                   return (
                                     <tr key={candidate.id} className="hover:bg-slate-50">
-                                      <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap">{name}</td>
+                                      <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap">
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button 
+                                              type="button"
+                                              className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left flex items-center gap-1"
+                                            >
+                                              {name}
+                                              <ChevronDown className="w-3 h-3 text-blue-400" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent align="start" className="w-52 p-1.5 text-xs space-y-1 shadow-lg border border-slate-200 bg-white z-[9999]">
+                                            <div className="px-2 py-1 bg-slate-50 rounded text-[11px] font-bold text-slate-700 border-b border-slate-100 mb-1">
+                                              Candidate Actions: {name}
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setSelectedAssessmentId('');
+                                                setShowAssignDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setScheduleRound(1);
+                                                setScheduleDate('');
+                                                setScheduleMeetingUrl('https://meet.google.com/new');
+                                                setShowScheduleDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                navigate('/hr/recruitment/interviews');
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
+                                            >
+                                              <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setOfferPosition(candidate.positionTitle || viewingMrf?.positionTitle || '');
+                                                setOfferCtc('');
+                                                setOfferBaseSalary('');
+                                                setOfferStartDate('');
+                                                setOfferExpiryDate('');
+                                                setShowOfferDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setRejectingCandidateInfo(candidate);
+                                                setRejectionReason('');
+                                                setShowRejectDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-semibold text-red-600 cursor-pointer"
+                                            >
+                                              <UserX className="w-3.5 h-3.5 text-red-600" /> Reject Candidate
+                                            </button>
+                                          </PopoverContent>
+                                        </Popover>
+                                      </td>
                                       {candidateVisibleColumns.map((colKey) => {
                                         let val = '-';
                                         if (colKey === 'emailId' || colKey === 'email') val = candidate.candidate_email || candidate.email || '-';
@@ -3288,6 +3853,50 @@ export const MrfRequestPage: React.FC = () => {
                                           </td>
                                         );
                                       })}
+                                      <td className="p-2.5 whitespace-nowrap min-w-[130px]">
+                                        <div className="relative inline-block w-full">
+                                          {(() => {
+                                            const resolvedStageId = (() => {
+                                              if (candidate.pipelineStageId) {
+                                                const match = pipelineStages.find(s => Number(s.id) === Number(candidate.pipelineStageId));
+                                                if (match) return match.id;
+                                              }
+                                              const statusLower = (candidate.status || '').toLowerCase().trim();
+                                              const matchByName = pipelineStages.find(s => {
+                                                const nameLower = (s.stageName || s.stage_name || '').toLowerCase().trim();
+                                                if (nameLower === statusLower) return true;
+                                                if ((statusLower === 'offer' || statusLower === 'offered') && (nameLower === 'offer' || nameLower === 'offered')) return true;
+                                                if ((statusLower.includes('tech') || statusLower.includes('technical')) && (nameLower.includes('tech') || nameLower.includes('technical'))) return true;
+                                                if (statusLower.includes('hr') && nameLower.includes('hr')) return true;
+                                                return false;
+                                              });
+                                              return matchByName ? matchByName.id : '';
+                                            })();
+
+                                            return (
+                                              <select
+                                                value={resolvedStageId || ''}
+                                                onChange={(e) => {
+                                                  const newStageId = Number(e.target.value);
+                                                  const appId = candidate.applicationId || candidate.id;
+                                                  if (newStageId && appId) {
+                                                    handleMoveStage(appId, newStageId);
+                                                  }
+                                                }}
+                                                className="h-7 text-[11px] font-semibold border border-slate-300 rounded bg-white text-slate-800 px-2 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer hover:border-slate-400 w-full"
+                                              >
+                                                <option value="" disabled>Select Stage...</option>
+                                                {pipelineStages.map((stage) => (
+                                                  <option key={stage.id} value={stage.id}>
+                                                    {stage.stageName || stage.stage_name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            );
+                                          })()}
+                                          <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+                                        </div>
+                                      </td>
                                       <td className="p-2.5 whitespace-nowrap">
                                         <span className={cn(
                                           "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
@@ -3301,13 +3910,91 @@ export const MrfRequestPage: React.FC = () => {
                                         </span>
                                       </td>
                                       <td className="p-2.5 text-center whitespace-nowrap">
-                                        <button 
-                                          type="button"
-                                          onClick={() => navigate(`/recruitment/applicant-tracker`)}
-                                          className="text-xs text-blue-600 hover:underline font-semibold"
-                                        >
-                                          View Profile
-                                        </button>
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              type="button"
+                                              className="h-7 text-[11px] font-semibold px-2.5 bg-white border border-slate-300 rounded hover:bg-slate-50 text-slate-700 shadow-2xs inline-flex items-center gap-1 cursor-pointer"
+                                            >
+                                              Actions <ChevronDown className="w-3 h-3 text-slate-400" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent align="end" className="w-48 p-1 text-xs space-y-0.5 shadow-md border border-slate-200 bg-white text-slate-800 z-[9999]">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setSelectedAssessmentId('');
+                                                setShowAssignDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setScheduleRound(1);
+                                                setScheduleDate('');
+                                                setScheduleMeetingUrl('https://meet.google.com/new');
+                                                setShowScheduleDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                navigate('/hr/recruitment/interviews');
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
+                                            >
+                                              <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setOfferPosition(candidate.positionTitle || viewingMrf?.positionTitle || '');
+                                                setOfferCtc('');
+                                                setOfferBaseSalary('');
+                                                setOfferStartDate('');
+                                                setOfferExpiryDate('');
+                                                setShowOfferDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                                            </button>
+                                            {['offer', 'offered'].includes((candidate.status || '').toLowerCase().trim()) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOnboardCandidate(candidate.applicationId || candidate.id)}
+                                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-green-50 font-medium text-green-700 cursor-pointer"
+                                              >
+                                                <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Hire & Onboard
+                                              </button>
+                                            )}
+                                            {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
+                                              <>
+                                                <div className="my-1 border-t border-slate-100" />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setRejectingCandidateInfo(candidate);
+                                                    setRejectionReason('');
+                                                    setShowRejectDialog(true);
+                                                  }}
+                                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-semibold text-red-600 cursor-pointer"
+                                                >
+                                                  <UserX className="w-3.5 h-3.5 text-red-600" /> Reject Candidate
+                                                </button>
+                                              </>
+                                            )}
+                                          </PopoverContent>
+                                        </Popover>
                                       </td>
                                     </tr>
                                   );
@@ -4049,6 +4736,300 @@ export const MrfRequestPage: React.FC = () => {
               >
                 Save
               </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Assessment Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="sm:max-w-[425px] z-[99999]">
+          <DialogHeader>
+            <DialogTitle>Assign Online Assessment</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Select an assessment profile to assign to the candidate.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAssignAssessmentSubmit} className="space-y-4 py-4 text-xs">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">Select Test Profile</label>
+              <select
+                value={selectedAssessmentId}
+                onChange={e => setSelectedAssessmentId(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none"
+              >
+                <option value="">Choose Test...</option>
+                {assessments.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {a.assessmentName || a.assessment_name || 'Untitled'} ({(a.assessmentType || a.assessment_type || 'test').toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowAssignDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                {submittingAction ? 'Assigning...' : 'Assign & Send Link'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Link Assigned Success Dialog */}
+      <Dialog open={Boolean(assignedTestUrl)} onOpenChange={(open) => !open && setAssignedTestUrl(null)}>
+        <DialogContent className="sm:max-w-[480px] z-[99999]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2 text-green-600">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Test Assigned & Email Sent
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              An automated email with the test link has been dispatched to the candidate.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800">
+              <p className="font-semibold">📧 Candidate Email Notification Sent!</p>
+              <p className="text-[11px] mt-0.5 text-green-700">
+                The candidate will receive the test invitation in their email and can click "Start Assessment" to begin.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-700">Direct Assessment Link (Copy to Share)</label>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={assignedTestUrl || ''}
+                  className="h-8 text-xs font-mono bg-slate-100 text-slate-700"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                  onClick={() => {
+                    if (assignedTestUrl) {
+                      navigator.clipboard.writeText(assignedTestUrl);
+                      toast.success('Test link copied to clipboard!');
+                    }
+                  }}
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy Link
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button size="sm" onClick={() => setAssignedTestUrl(null)} className="h-8 text-xs px-4">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Interview Dialog */}
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto z-[99999]">
+          <DialogHeader>
+            <DialogTitle>Schedule Interview Round</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Set date, time, assigned interviewer, and dispatch invitations.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleScheduleInterviewSubmit} className="space-y-3 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Interview Type</label>
+                <select
+                  value={scheduleType}
+                  onChange={e => setScheduleType(e.target.value)}
+                  className="w-full h-8 px-2 border border-slate-300 rounded bg-white text-xs text-slate-800"
+                >
+                  <option value="Technical Interview">Technical Interview</option>
+                  <option value="HR Screening">HR Screening</option>
+                  <option value="Managerial Round">Managerial Round</option>
+                  <option value="Final CEO Round">Final CEO Round</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Interview Round</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={scheduleRound}
+                  onChange={e => setScheduleRound(Number(e.target.value))}
+                  className="h-8 text-xs bg-white border-slate-300"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Scheduled Date & Time <span className="text-red-500">*</span></label>
+                <Input
+                  type="datetime-local"
+                  value={scheduleDate}
+                  onChange={e => setScheduleDate(e.target.value)}
+                  className="h-8 text-xs bg-white border-slate-300"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Duration (Minutes)</label>
+                <Input
+                  type="number"
+                  value={scheduleDuration}
+                  onChange={e => setScheduleDuration(Number(e.target.value))}
+                  className="h-8 text-xs bg-white border-slate-300"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Meeting Link / Google Meet</label>
+              <Input
+                value={scheduleMeetingUrl}
+                onChange={e => setScheduleMeetingUrl(e.target.value)}
+                className="h-8 text-xs bg-white border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Assigned Interviewer</label>
+              <select
+                value={scheduleInterviewerId}
+                onChange={e => setScheduleInterviewerId(e.target.value)}
+                className="w-full h-8 px-2 border border-slate-300 rounded bg-white text-xs text-slate-800"
+              >
+                <option value="">Select Interviewer...</option>
+                {getDepartmentManagers((viewingMrf as any)?.department || (viewingMrf as any)?.departmentName || (viewingMrf as any)?.departmentId).map((emp: any) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.designation || emp.departmentName || emp.department || 'Manager'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <DialogFooter className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowScheduleDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                {submittingAction ? 'Scheduling...' : 'Schedule & Send Email'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Offer Dialog */}
+      <Dialog open={showOfferDialog} onOpenChange={setShowOfferDialog}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto z-[99999]">
+          <DialogHeader>
+            <DialogTitle>Generate & Email Offer Letter</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Configure candidate offer terms and dispatch offer invitation email.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSendOfferSubmit} className="space-y-4 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Position Title</label>
+                <Input 
+                  value={offerPosition} 
+                  onChange={e => setOfferPosition(e.target.value)}
+                  placeholder="e.g. Senior Software Engineer"
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Cost to Company (CTC)</label>
+                <Input 
+                  type="number"
+                  value={offerCtc} 
+                  onChange={e => setOfferCtc(e.target.value)}
+                  placeholder="CTC amount"
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Base Salary</label>
+                <Input 
+                  type="number"
+                  value={offerBaseSalary} 
+                  onChange={e => setOfferBaseSalary(e.target.value)}
+                  placeholder="Base Salary"
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Joining Date</label>
+                <Input 
+                  type="date"
+                  value={offerStartDate} 
+                  onChange={e => setOfferStartDate(e.target.value)}
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Offer Expiry Date</label>
+                <Input 
+                  type="date"
+                  value={offerExpiryDate} 
+                  onChange={e => setOfferExpiryDate(e.target.value)}
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowOfferDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-purple-600 hover:bg-purple-700 text-white font-semibold">
+                {submittingAction ? 'Generating...' : 'Generate & Send Offer'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Candidate Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent className="sm:max-w-[500px] z-[99999]">
+          <DialogHeader>
+            <DialogTitle className="text-rose-600 font-bold">Reject Candidate</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Provide rejection comments and send optional regret email.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRejectSubmit} className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Rejection Reason</label>
+              <textarea
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                placeholder="Reason for rejecting this candidate..."
+                className="w-full min-h-[70px] p-2 text-xs border border-slate-300 rounded bg-white"
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowRejectDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white font-bold">
+                {submittingAction ? 'Rejecting...' : 'Confirm Reject & Send Email'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

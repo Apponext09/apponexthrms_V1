@@ -20,19 +20,33 @@ export interface EmployeeLifecycleSummary {
   designationName: string;
   reportingManagerId?: number | null;
   reportingManager: string;
+  reportingManagerName?: string;
   currentLocationId?: number | null;
   locationName: string;
   transfersCount: number;
+  lastTransferDate?: string | null;
+  transferReason?: string | null;
+  transferType?: string | null;
   onboarding: {
     interviewerName: string;
     onboardedByName: string;
     interviewDate?: string | null;
+    interviewRating?: string | null;
+    probationEndDate?: string | null;
     orientationCompleted: boolean;
+    documentsVerified?: boolean;
+    welcomeKitIssued?: boolean;
+    notes?: string;
   };
   offboarding: {
     exitType?: string | null;
     resignationDate?: string | null;
     relievingDate?: string | null;
+    lastWorkingDay?: string | null;
+    noticePeriodDays?: number | null;
+    exitReason?: string | null;
+    exitInterviewerName?: string | null;
+    assetsReturned?: boolean | null;
     fnfStatus: string;
   };
 }
@@ -132,9 +146,22 @@ export interface ChronologicalMilestoneEvent {
 }
 
 export const lifecycleApi = {
-  getSummaries: async (params?: { search?: string; stage?: string; departmentId?: number; companyId?: number | string }) => {
+  getSummaries: async (params?: {
+    search?: string;
+    stage?: string;
+    departmentId?: number;
+    companyId?: number | string;
+    page?: number;
+    pageSize?: number;
+  }) => {
     const res = await apiClient.get('/hr/lifecycle/employees', { params });
-    return res.data?.data as EmployeeLifecycleSummary[];
+    // Return both data and metadata for pagination
+    return {
+      data: (res.data?.data || []) as EmployeeLifecycleSummary[],
+      total: res.data?.total || 0,
+      page: res.data?.page || 1,
+      pageSize: res.data?.pageSize || 25,
+    };
   },
 
   getDetails: async (employeeId: number) => {
@@ -165,5 +192,10 @@ export const lifecycleApi = {
   saveOffboarding: async (employeeId: number, payload: any) => {
     const res = await apiClient.post(`/hr/lifecycle/offboarding/${employeeId}`, payload);
     return res.data;
+  },
+
+  getManagers: async (companyId?: number | string) => {
+    const res = await apiClient.get('/hr/lifecycle/managers', { params: { companyId } });
+    return (res.data?.data || []) as Array<{ id: number; name: string; designation?: string; department?: string }>;
   },
 };

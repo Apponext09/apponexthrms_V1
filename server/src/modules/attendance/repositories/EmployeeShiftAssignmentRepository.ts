@@ -36,12 +36,6 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
     employeeId: number,
     date: string
   ): Promise<any | null> {
-    console.log('🔍 Repository.getAssignmentByDate query parameters:', {
-      organizationId: ctx.organizationId,
-      employeeId,
-      date
-    });
-
     const result = await this.db('employee_shift_assignments')
       .where('employee_shift_assignments.organization_id', ctx.organizationId)
       .whereNull('employee_shift_assignments.deleted_at')
@@ -76,7 +70,6 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       ])
       .first() as Promise<any | null>;
 
-    console.log('🔍 Repository.getAssignmentByDate query output:', result);
     return result;
   }
 
@@ -112,7 +105,10 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       .join('employees as e', 'e.id', 'esa.employee_id')
       .join('shift_templates as st', 'st.id', 'esa.shift_id')
       .leftJoin('departments as d', 'd.id', 'e.current_department_id')
-      .leftJoin('designations as des', 'des.id', 'e.current_designation_id');
+      .leftJoin('designations as des', 'des.id', 'e.current_designation_id')
+      .where((builder) => {
+        builder.where('e.is_ceo', 0).orWhereNull('e.is_ceo');
+      });
 
     if (ctx.companyId) {
       query = query.where('e.company_id', ctx.companyId);

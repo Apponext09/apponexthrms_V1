@@ -1,54 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Gift, Plus, Users, Send } from 'lucide-react';
+import { Gift, Plus, Users, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-
-interface ReferralItem {
-  id: number;
-  name: string;
-  role: string;
-  date: string;
-  status: 'Hired' | 'Resume Screen' | 'Interview' | 'Rejected';
-  reward: string;
-}
+import { apiClient } from '@/lib/api';
 
 export default function ReferralPage() {
-  const [referrals, setReferrals] = useState<ReferralItem[]>([
-    { id: 1, name: 'Sanjay Deshmukh', role: 'Fullstack Engineer', date: '2026-07-15', status: 'Hired', reward: '₹25,000' },
-  ]);
+  const [referrals, setReferrals] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
     email: '',
+    phone: '',
     role: 'Senior React Developer',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fetchMyReferrals = () => {
+    setIsLoading(true);
+    apiClient.get('/recruitment/referrals/my-referrals')
+      .then((res) => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setReferrals(res.data.data);
+        }
+      })
+      .catch((err) => console.error('Failed to load employee referrals', err))
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchMyReferrals();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email) {
       toast.error('Candidate name and email are required.');
       return;
     }
 
-    setReferrals([
-      {
-        id: referrals.length + 1,
-        name: form.name,
-        role: form.role,
-        date: new Date().toISOString().split('T')[0],
-        status: 'Resume Screen',
-        reward: 'Pending',
-      },
-      ...referrals,
-    ]);
+    try {
+      setIsSubmitting(true);
+      await apiClient.post('/recruitment/referrals', {
+        candidateName: form.name,
+        candidateEmail: form.email,
+        candidatePhone: form.phone,
+        positionTitle: form.role,
+      });
 
-    toast.success(`Referral submitted for ${form.name}.`);
-    setForm({ name: '', email: '', role: 'Senior React Developer' });
+      toast.success(`Referral submitted for ${form.name}.`);
+      setForm({ name: '', email: '', phone: '', role: 'Senior React Developer' });
+      fetchMyReferrals();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to submit candidate referral');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -106,6 +119,17 @@ export default function ReferralPage() {
                   />
                 </div>
                 <div className="space-y-1">
+                  <Label htmlFor="candPhone" className="text-xs font-bold text-foreground">Candidate Phone (Optional)</Label>
+                  <Input
+                    id="candPhone"
+                    type="text"
+                    placeholder="E.g., +91 9876543210"
+                    value={form.phone}
+                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
+                  />
+                </div>
+                <div className="space-y-1">
                   <Label htmlFor="candRole" className="text-xs font-bold text-foreground">Referred Position</Label>
                   <select
                     id="candRole"
@@ -114,12 +138,15 @@ export default function ReferralPage() {
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
                   >
                     <option value="Senior React Developer">Senior React Developer</option>
+                    <option value="Fullstack Engineer">Fullstack Engineer</option>
+                    <option value="Software Engineer">Software Engineer</option>
                     <option value="DevOps Lead">DevOps Lead</option>
                     <option value="QA Specialist">QA Specialist</option>
+                    <option value="Product Manager">Product Manager</option>
                   </select>
                 </div>
-                <Button type="submit" className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
-                  <Plus className="w-3.5 h-3.5" /> Submit Candidate
+                <Button type="submit" disabled={isSubmitting} className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
+                  {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Submit Candidate
                 </Button>
               </form>
             </CardContent>
@@ -145,26 +172,45 @@ export default function ReferralPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {referrals.map((r) => (
-                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors border-b border-border/50">
-                      <TableCell className="px-4 py-3 text-xs font-bold text-foreground">{r.name}</TableCell>
-                      <TableCell className="px-4 py-3 text-xs">
-                        <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
-                          {r.role}
-                        </span>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">{r.reward}</TableCell>
-                      <TableCell className="px-4 py-3 text-xs">
-                        <Badge variant="outline" className={`text-[10px] font-bold ${
-                          r.status === 'Hired' 
-                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' 
-                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
-                        }`}>
-                          {r.status}
-                        </Badge>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">
+                        Loading referrals...
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : referrals.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-xs text-muted-foreground">
+                        No candidate referrals submitted yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    referrals.map((r) => (
+                      <TableRow key={r.id} className="hover:bg-muted/20 transition-colors border-b border-border/50">
+                        <TableCell className="px-4 py-3 text-xs font-bold text-foreground">
+                          <div>{r.candidateName || r.candidate_name || `Candidate #${r.candidate_id}`}</div>
+                          <div className="text-[10px] text-muted-foreground font-normal">{r.candidateEmail || r.candidate_email}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs">
+                          <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
+                            {r.positionTitle || r.position_title || 'Open Role'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          {r.referralRewardAmount || r.referral_reward_amount ? `₹${parseFloat(r.referralRewardAmount || r.referral_reward_amount).toLocaleString()}` : 'Pending'}
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs">
+                          <Badge variant="outline" className={`text-[10px] font-bold ${
+                            r.status === 'hired' || r.referral_status === 'hired'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' 
+                              : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                          }`}>
+                            {r.status || r.referral_status || 'submitted'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>

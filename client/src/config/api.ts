@@ -3,8 +3,13 @@ import axios from 'axios';
 const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
 const API_BASE_URL = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
 
+export const getApiBaseUrl = (): string => {
+  return rawApiUrl.replace('/api/v1', '');
+};
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -56,7 +61,7 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Check if the error is 401 and it's not a retry or an auth endpoint
+    // 401 Unauthorized — token expired, try refresh
     if (
       error.response?.status === 401 &&
       originalRequest &&
@@ -80,41 +85,54 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (!refreshToken) {
-        // No refresh token available, logout user
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
-        return Promise.reject(error);
-      }
-
       try {
-        // Call the refresh endpoint to obtain a new token pair
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
+        const refreshToken = localStorage.getItem('refreshToken');
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          { refreshToken: refreshToken || undefined },
+          { withCredentials: true }
+        );
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+        const newAccessToken = response.data?.data?.accessToken;
+        const newRefreshToken = response.data?.data?.refreshToken;
 
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
+        if (newAccessToken) {
+          localStorage.setItem('accessToken', newAccessToken);
+          apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
+        if (newRefreshToken) {
+          localStorage.setItem('refreshToken', newRefreshToken);
+        }
 
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-
-        processQueue(null, accessToken);
+        processQueue(null, newAccessToken || null);
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        // If refresh token request fails (e.g. refresh token expired), clean up and redirect to login
+        console.error('[API] Token refresh failed, clearing auth and redirecting to login');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
+    }
+
+    // 403 Forbidden — user lacks permission for this resource
+    if (error.response?.status === 403) {
+      console.warn('[API] Access forbidden (403)', {
+        url: originalRequest?.url,
+        method: originalRequest?.method,
+        timestamp: new Date().toISOString(),
+      });
+      // Redirect to unauthorized page
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/unauthorized')) {
+        window.location.href = '/unauthorized';
+      }
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);

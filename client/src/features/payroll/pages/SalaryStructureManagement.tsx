@@ -364,6 +364,19 @@ export const SalaryStructureManagement: React.FC = () => {
     }
   };
 
+  const handleDeleteSlab = async (id: string | number, name?: string) => {
+    if (!window.confirm(`Are you sure you want to delete pay slab "${name || id}"?`)) return;
+    try {
+      await apiClient.delete(`/payroll/slabs/${id}`);
+      setPayrollSlabs(prev => prev.filter(s => String(s.id) !== String(id)));
+      setSuccessMsg(`Pay slab "${name || id}" deleted successfully.`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Delete slab error:', err);
+      alert(err?.response?.data?.message || 'Failed to delete pay slab.');
+    }
+  };
+
   // ── Auto-match Payroll Slab based on input CTC (Loads ONLY components assigned to matched slab) ──
   React.useEffect(() => {
     const ctcVal = Number(inputCtc) || 0;
@@ -464,27 +477,30 @@ export const SalaryStructureManagement: React.FC = () => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const mapped = data.map((s: any) => {
-          let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
+          let depts: string[] = []; 
+          const rawDepts = s.departments;
+          try { depts = typeof rawDepts === 'string' ? JSON.parse(rawDepts) : (rawDepts || []); } catch {}
           let compIds: string[] = [];
+          const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
           try {
-            compIds = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []);
+            compIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
           } catch {
             compIds = ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
           }
-          const hasPf = compIds.some((id: string) => id.toLowerCase().includes('pf'));
-          const hasEsi = compIds.some((id: string) => id.toLowerCase().includes('esi'));
+          const hasPf = compIds.some((id: string) => String(id).toLowerCase().includes('pf'));
+          const hasEsi = compIds.some((id: string) => String(id).toLowerCase().includes('esi'));
           const isIntern = (s.name || '').toLowerCase().includes('intern');
           return {
             id: String(s.id),
-            name: s.name || 'Payroll Slab',
+            name: s.name || s.slabName || 'Payroll Slab',
             departments: depts,
-            minCtc: Number(s.min_ctc || 0),
-            maxCtc: Number(s.max_ctc || 10000000),
+            minCtc: Number(s.minCtc ?? s.min_ctc ?? 0),
+            maxCtc: Number(s.maxCtc ?? s.max_ctc ?? 10000000),
             selectedComponentIds: compIds,
             pfEnabled: !isIntern && hasPf,
             esiEnabled: !isIntern && hasEsi,
             healthInsuranceEnabled: !isIntern,
-            isActive: Boolean(s.is_active ?? true)
+            isActive: Boolean(s.isActive ?? s.is_active ?? true)
           };
         });
         setPayrollSlabs(mapped);
@@ -907,9 +923,9 @@ export const SalaryStructureManagement: React.FC = () => {
 
     const targetTemplate = structuresList.find(s => s.structureName === assignTemplateName);
     const grossVal = targetTemplate?.grossMonthly || (targetTemplate?.annualCtc ? Math.round(targetTemplate.annualCtc / 12) : (grossMonthly > 0 ? grossMonthly : 0));
-    const basicVal = targetTemplate?.basicMonthly || (grossVal ? Math.round(grossVal * 0.50) : 0);
+    const basicVal = targetTemplate?.basicMonthly || 0;
     const ctcVal = targetTemplate?.annualCtc || (grossVal * 12);
-    const netVal = targetTemplate?.netTakeHome || (grossVal ? Math.round(grossVal * 0.90) : 0);
+    const netVal = targetTemplate?.netTakeHome || grossVal;
     const grossDisplayStr = grossVal > 0 ? `₹${Number(grossVal).toLocaleString('en-IN')}/mo` : '₹0/mo';
 
     try {
@@ -1097,11 +1113,11 @@ export const SalaryStructureManagement: React.FC = () => {
 
         const basicMonthly = matchingStruct && matchingStruct.basicMonthly > 0
           ? matchingStruct.basicMonthly
-          : Math.round(grossMonthly * 0.5);
+          : 0;
 
         const hraMonthly = matchingStruct && matchingStruct.hraMonthly > 0
           ? matchingStruct.hraMonthly
-          : Math.round(basicMonthly * 0.5);
+          : 0;
 
         const specialAllowanceMonthly = matchingStruct && matchingStruct.specialAllowanceMonthly > 0
           ? matchingStruct.specialAllowanceMonthly
@@ -1109,11 +1125,11 @@ export const SalaryStructureManagement: React.FC = () => {
 
         const pfDeduction = matchingStruct && matchingStruct.pfDeduction > 0
           ? matchingStruct.pfDeduction
-          : Math.round(Math.min(basicMonthly, 15000) * 0.12);
+          : 0;
 
         const netTakeHome = matchingStruct && matchingStruct.netTakeHome > 0
           ? matchingStruct.netTakeHome
-          : Math.max(0, grossMonthly - pfDeduction - 200);
+          : Math.max(0, grossMonthly - pfDeduction);
 
         return {
           id: emp.id,
@@ -1553,8 +1569,8 @@ export const SalaryStructureManagement: React.FC = () => {
             </div>
           </CardHeader>
 
-          {/* 🌟 DEPARTMENT, GRADE & EMPLOYEE AUTO-ASSIGNMENT FILTER TOOLBAR */}
-          <div className="p-3 bg-muted/20 border-b border-border/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+          {/* 🌟 DEPARTMENT, GRADE & SEARCH FILTER TOOLBAR */}
+          <div className="p-3 bg-muted/20 border-b border-border/60 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {/* Department Filter Dropdown */}
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
@@ -1590,24 +1606,6 @@ export const SalaryStructureManagement: React.FC = () => {
               </select>
             </div>
 
-            {/* Specific Employee Filter Dropdown */}
-            <div>
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
-                <User className="w-3 h-3 text-primary" /> Select Employee
-              </label>
-              <select
-                value={selectedEmpFilter}
-                onChange={(e) => setSelectedEmpFilter(e.target.value)}
-                className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-              >
-                <option value="all">All Employees (Company Wide)</option>
-                {employees.map((e: any) => (
-                  <option key={e.id} value={String(e.id)}>
-                    {e.name || `${e.first_name || ''} ${e.last_name || ''}`.trim()} ({e.code || e.employee_code})
-                  </option>
-                ))}
-              </select>
-            </div>
             {/* Search Input */}
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
@@ -1785,9 +1783,21 @@ export const SalaryStructureManagement: React.FC = () => {
                     View active grade slabs configured with monthly cycle badges and min-max CTC ranges.
                   </CardDescription>
                 </div>
-                <Badge variant="outline" className="bg-emerald-600/10 text-emerald-600 border-emerald-600/20 font-extrabold text-[10px]">
-                  {payrollSlabs.length || 7} Slabs Configured
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-emerald-600/10 text-emerald-600 border-emerald-600/20 font-extrabold text-[10px]">
+                    {payrollSlabs.length} Slabs Configured
+                  </Badge>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    onClick={() => {
+                      window.location.href = '/payroll/settings?tab=slabs';
+                    }}
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    New Slab
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -1802,34 +1812,58 @@ export const SalaryStructureManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {(payrollSlabs.length > 0 ? payrollSlabs : [
-                        { id: 1, name: 'Executive Grade Slab', minCtc: 300000, maxCtc: 600000, dept: 'All Departments' },
-                        { id: 2, name: 'Senior Executive Slab', minCtc: 600000, maxCtc: 1000000, dept: 'Engineering, Sales' },
-                        { id: 3, name: 'Manager Pay Slab', minCtc: 1000000, maxCtc: 1800000, dept: 'Operations, Finance' },
-                        { id: 4, name: 'Director Pay Grade', minCtc: 1800000, maxCtc: 3500000, dept: 'Management' },
-                      ]).map((slab: any) => (
-                        <tr key={slab.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 font-extrabold text-foreground">
-                            {slab.name || slab.slab_name || 'Pay Grade Slab'}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
-                              [Monthly]
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 font-mono font-bold text-foreground">
-                            ₹{(slab.minCtc || slab.min_ctc || 300000).toLocaleString('en-IN')} - ₹{(slab.maxCtc || slab.max_ctc || 1200000).toLocaleString('en-IN')}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground font-medium">
-                            {slab.dept || 'All Organization Departments'}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button size="sm" variant="outline" className="h-7 text-[10px] font-bold">
-                              Edit Slab
-                            </Button>
+                      {payrollSlabs.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            No pay slabs configured yet. Click "New Slab" to create one.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        payrollSlabs.map((slab: any) => (
+                          <tr key={slab.id} className="hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 font-extrabold text-foreground">
+                              {slab.name || slab.slab_name || 'Pay Grade Slab'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
+                                [Monthly]
+                              </Badge>
+                            </td>
+                            <td className="px-4 py-3 font-mono font-bold text-foreground">
+                              ₹{(slab.minCtc || slab.min_ctc || 0).toLocaleString('en-IN')} - ₹{(slab.maxCtc || slab.max_ctc || 10000000).toLocaleString('en-IN')}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground font-medium">
+                              {Array.isArray(slab.departments) && slab.departments.length > 0
+                                ? slab.departments.join(', ')
+                                : (slab.dept || 'All Organization Departments')}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[10px] font-bold"
+                                  onClick={() => {
+                                    window.location.href = '/payroll/settings?tab=slabs';
+                                  }}
+                                >
+                                  <Edit className="w-3 h-3 mr-1" />
+                                  Configure
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40"
+                                  title="Delete Slab"
+                                  onClick={() => handleDeleteSlab(slab.id, slab.name || slab.slab_name)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>

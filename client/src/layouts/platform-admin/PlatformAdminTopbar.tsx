@@ -6,6 +6,7 @@ import { useNotifications } from '@/features/notifications/hooks/useNotification
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 
 export function PlatformAdminTopbar({
   onMenuClick,
@@ -61,14 +62,7 @@ export function PlatformAdminTopbar({
           </Button>
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative" onClick={() => setDrawerOpen(true)}>
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </Button>
+          <NotificationBell className="size-9 rounded-lg" iconClassName="size-5" />
         </div>
       </div>
     </header>

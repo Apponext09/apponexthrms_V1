@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  User, Building2, GraduationCap, MapPin, Landmark,
+  User, Building, Building2, GraduationCap, MapPin, Landmark,
   CheckSquare, CheckCircle2, RefreshCw, ChevronDown,
   X, Users, Search, Layers, FileText, Settings, Sliders,
 } from 'lucide-react';
@@ -26,17 +26,25 @@ interface EmpRow {
   grade: string;
   location: string;
   branch: string;
+  companyId?: number | null;
+  companyName?: string;
   gender: string;
   slabId: number | null;
   slabName: string | null;
+  cycleId?: number | null;
+  annualCtc?: number;
 }
 
+import { useCompanies } from '@/features/settings/hooks/useCompanies';
+
 export const AssignPaySlabTab: React.FC = () => {
+  const { data: companies = [] } = useCompanies();
   const [slabs, setSlabs] = useState<any[]>([]);
   const [allEmps, setAllEmps] = useState<EmpRow[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Filters
+  const [filterCompany, setFilterCompany] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
@@ -72,20 +80,26 @@ export const AssignPaySlabTab: React.FC = () => {
 
   // Deductions
   const [esic, setEsic] = useState('0');
-  const [pt, setPt] = useState('200');
-  const [pf, setPf] = useState('1800');
-  const [pfEmployer, setPfEmployer] = useState('1800');
+  const [pt, setPt] = useState('0');
+  const [pf, setPf] = useState('0');
+  const [pfEmployer, setPfEmployer] = useState('0');
+  const [componentDefs, setComponentDefs] = useState<any[]>([]);
 
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [empRes, slabRes] = await Promise.all([
+      const [empRes, slabRes, compRes, defsRes] = await Promise.all([
         apiClient.get('/employees', { params: { pageSize: 500 } }),
         apiClient.get('/payroll/slabs'),
+        apiClient.get('/settings/companies').catch(() => null),
+        apiClient.get('/payroll/component-definitions').catch(() => ({ data: [] })),
       ]);
       const emps = extract(empRes);
       const slabList = extract(slabRes);
+      const defsList = extract(defsRes);
+
       setSlabs(slabList);
+      setComponentDefs(defsList);
 
       const slabMap: Record<number, string> = {};
       slabList.forEach((s: any) => { slabMap[s.id] = s.name || s.slab_name || `Slab #${s.id}`; });
@@ -101,16 +115,23 @@ export const AssignPaySlabTab: React.FC = () => {
           name: full || e.name || e.fullName || e.full_name || e.email || `EMP #${e.id}`,
           code: e.employeeCode || e.employee_code || `EMP-${e.id}`,
           department: e.departmentName || e.department_name || e.department || e.dept || '',
-          grade: e.designationName || e.designation_name || e.designation || e.grade || e.jobTitle || e.job_title || '',
+          grade: e.gradeName || e.grade_name || e.grade || e.pay_grade || e.pay_grade_name || e.designationName || e.designation_name || e.designation || e.jobTitle || e.job_title || '',
           location: e.locationName || e.location_name || e.location || e.workLocation || e.work_location || e.city || '',
-          branch: e.branchName || e.branch_name || e.branch || e.company || e.entity || '',
+          branch: e.company_name || e.companyName || e.company || e.branchName || e.branch_name || e.branch || e.entity || '',
+          companyId: e.company_id || e.companyId || null,
+          companyName: e.company_name || e.companyName || e.company || '',
           gender: e.gender || '',
           slabId: empSlabId,
           slabName: empSlabId ? (slabMap[empSlabId] || `Slab #${empSlabId}`) : null,
+          cycleId: e.payrollCycleId || e.payroll_cycle_id || null,
+          annualCtc: e.annualCtc || e.annual_ctc || (e.gross_salary ? e.gross_salary * 12 : 0) || 0,
         };
       }));
-    } catch { /* silent */ }
-    setLoadingData(false);
+    } catch {
+      showToast.error('Load Failed', 'Could not load employees or slabs.');
+    } finally {
+      setLoadingData(false);
+    }
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -124,6 +145,12 @@ export const AssignPaySlabTab: React.FC = () => {
 
   const filtered = allEmps.filter(e => {
     if (filterEmpId && String(e.id) !== filterEmpId) return false;
+    if (filterCompany) {
+      const matchId = String(e.companyId) === filterCompany;
+      const matchName = e.companyName?.toLowerCase() === filterCompany.toLowerCase();
+      const matchBranch = e.branch?.toLowerCase() === filterCompany.toLowerCase();
+      if (!matchId && !matchName && !matchBranch) return false;
+    }
     if (filterDept && e.department !== filterDept) return false;
     if (filterGrade && e.grade !== filterGrade) return false;
     if (filterLocation && e.location !== filterLocation) return false;
@@ -140,7 +167,7 @@ export const AssignPaySlabTab: React.FC = () => {
     return true;
   });
 
-  const anyFilter = filterDept || filterGrade || filterLocation || filterBranch || filterGender || filterSearch || filterCurrentSlab || filterEmpId;
+  const anyFilter = Boolean(filterCompany || filterDept || filterGrade || filterLocation || filterBranch || filterGender || filterSearch || filterCurrentSlab || filterEmpId);
   const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
   const someSelected = selectedIds.size > 0;
 
@@ -166,25 +193,6 @@ export const AssignPaySlabTab: React.FC = () => {
     setFilterCurrentSlab(''); setFilterEmpId('');
   };
 
-  // Bulk Assign
-  const handleAssign = async () => {
-    if (!selectedSlabId) { showToast.error('Select Slab', 'Please select a Pay Slab.'); return; }
-    if (selectedIds.size === 0) { showToast.error('No Selection', 'Please select at least one employee.'); return; }
-    setSaving(true);
-    try {
-      await Promise.all(Array.from(selectedIds).map(id =>
-        apiClient.patch(`/employees/${id}`, { salary_slab_id: Number(selectedSlabId), salarySlabId: Number(selectedSlabId) })
-      ));
-      const slabName = slabs.find(s => String(s.id) === selectedSlabId)?.name || 'Slab';
-      showToast.success('Pay Slab Assigned!', `"${slabName}" assigned to ${selectedIds.size} employee(s).`);
-      clearSelection(); setSelectedSlabId('');
-      await loadData();
-    } catch (err: any) {
-      showToast.error('Failed', err?.response?.data?.message || err?.message || 'Assignment failed.');
-    }
-    setSaving(false);
-  };
-
   const handleRemove = async (emp: EmpRow) => {
     try {
       await apiClient.patch(`/employees/${emp.id}`, { salary_slab_id: null, salarySlabId: null });
@@ -194,29 +202,39 @@ export const AssignPaySlabTab: React.FC = () => {
   };
 
   // ─── 2-Option Modal Recalculation Helpers ────────────────────────────────────
-  const recalculateFromSalaryInput = (inputVal: number) => {
+  const [inputFrequency, setInputFrequency] = useState<'annual' | 'monthly'>('annual');
+
+  const recalculateFromSalaryInput = (inputVal: number, freq?: 'annual' | 'monthly') => {
     if (isNaN(inputVal) || inputVal <= 0) return;
-    const b = Math.round(inputVal * 0.5);
+    const activeFreq = freq || inputFrequency;
+    const monthlyVal = activeFreq === 'annual' ? Math.round(inputVal / 12) : inputVal;
+    const b = Math.round(monthlyVal * 0.5);
     const h = Math.round(b * 0.4);
-    const l = Math.max(0, inputVal - (b + h));
+    const conv = monthlyVal > 25000 ? 1600 : 0;
+    const med = monthlyVal > 25000 ? 1250 : 0;
+    const l = Math.max(0, monthlyVal - (b + h + conv + med));
 
     setBasic(String(b));
     setHra(String(h));
-    setStandardAllowance('0');
-    setMealAllowance('0');
+    setStandardAllowance(String(conv));
+    setMealAllowance(String(med));
     setCommunicationAllowance('0');
     setChildrenEduAllowance('0');
     setLta(String(l));
 
-    setPf('1800');
-    setPt('200');
-    setEsic('0');
-    setPfEmployer('1800');
+    const pfVal = Math.min(1800, Math.round(b * 0.12));
+    const ptVal = monthlyVal > 15000 ? 200 : 0;
+    const esiVal = monthlyVal <= 21000 ? Math.round(monthlyVal * 0.0075) : 0;
+
+    setPf(String(pfVal));
+    setPt(String(ptVal));
+    setEsic(String(esiVal));
+    setPfEmployer(String(pfVal));
   };
 
   const recalculateFromBasicInput = (basicVal: number) => {
     if (isNaN(basicVal) || basicVal <= 0) return;
-    const h = Math.round(basicVal * 0.4);
+    const h = Math.round(basicVal * 0.5);
     setHra(String(h));
     const pfVal = Math.min(1800, Math.round(basicVal * 0.12));
     setPf(String(pfVal));
@@ -224,22 +242,32 @@ export const AssignPaySlabTab: React.FC = () => {
 
     const estGross = basicVal + h + (Number(standardAllowance) || 0) + (Number(mealAllowance) || 0) + (Number(communicationAllowance) || 0) + (Number(childrenEduAllowance) || 0) + (Number(lta) || 0);
     setEsic(estGross <= 21000 ? String(Math.round(estGross * 0.0075)) : '0');
-    setPt('200');
+    setPt(estGross > 15000 ? '200' : '0');
   };
 
   const handleModeChange = (mode: 'salary_input' | 'component_based') => {
     setCalcMode(mode);
     if (mode === 'salary_input') {
-      recalculateFromSalaryInput(Number(salaryInput) || 60000);
+      recalculateFromSalaryInput(Number(salaryInput) || 600000, inputFrequency);
     } else {
-      recalculateFromBasicInput(Number(basic) || 30000);
+      recalculateFromBasicInput(Number(basic) || 25000);
     }
   };
 
-  const handleSalaryInputChange = (val: string) => {
+  const handleSalaryInputChange = (val: string, freq?: 'annual' | 'monthly') => {
     setSalaryInput(val);
     const num = Number(val);
-    if (!isNaN(num) && num > 0) recalculateFromSalaryInput(num);
+    if (!isNaN(num) && num > 0) recalculateFromSalaryInput(num, freq || inputFrequency);
+  };
+
+  const handleFrequencyChange = (newFreq: 'annual' | 'monthly') => {
+    setInputFrequency(newFreq);
+    const num = Number(salaryInput) || 0;
+    if (num > 0) {
+      const converted = newFreq === 'monthly' ? Math.round(num / 12) : num * 12;
+      setSalaryInput(String(converted));
+      recalculateFromSalaryInput(converted, newFreq);
+    }
   };
 
   const handleBasicChange = (val: string) => {
@@ -250,31 +278,67 @@ export const AssignPaySlabTab: React.FC = () => {
     }
   };
 
-  const openStructureModal = (emp: EmpRow) => {
-    setTargetEmp(emp);
-    setModalSlabId(emp.slabId ? String(emp.slabId) : (slabs[0]?.id ? String(slabs[0].id) : ''));
+  const [targetEmps, setTargetEmps] = useState<EmpRow[]>([]);
 
-    // Fetch existing structure from DB if available
-    apiClient.get(`/payroll/salary-structure?employee_id=${emp.id}`).then((res: any) => {
-      const list = extract(res);
-      if (list && list.length > 0) {
-        const s = list[0];
-        setCalcMode(s.calculation_mode || s.calcMode || 'salary_input');
-        setSalaryInput(String(s.gross_monthly || s.salary_input || s.salaryInput || 60000));
-        setBasic(String(s.basic_monthly || s.basic || 30000));
-        setHra(String(s.hra_monthly || s.hra || 12000));
-        setPf(String(s.pf_deduction || s.pf || 1800));
-        setPt(String(s.pt_deduction || s.pt || 200));
-        setEsic(String(s.esi_deduction || s.esic || 0));
-        setPfEmployer(String(s.pf_employer || s.pfEmployer || 1800));
-      } else {
-        recalculateFromSalaryInput(60000);
-      }
-    }).catch(() => {
-      recalculateFromSalaryInput(60000);
-    });
+  const openStructureModalForSelection = (empList?: EmpRow[]) => {
+    let listToAssign: EmpRow[] = [];
+    if (empList && empList.length > 0) {
+      listToAssign = empList;
+    } else if (selectedIds.size > 0) {
+      listToAssign = allEmps.filter(e => selectedIds.has(e.id));
+    } else if (targetEmp) {
+      listToAssign = [targetEmp];
+    }
+
+    if (listToAssign.length === 0) {
+      showToast.error('No Employee Selected', 'Please select at least one employee to configure payroll structure.');
+      return;
+    }
+
+    setTargetEmps(listToAssign);
+    const firstEmp = listToAssign[0];
+    setTargetEmp(firstEmp);
+
+    const activeSlabId = selectedSlabId || (firstEmp.slabId ? String(firstEmp.slabId) : (slabs[0]?.id ? String(slabs[0].id) : ''));
+    setModalSlabId(activeSlabId);
+
+    // Fetch existing structure from DB if single employee selected
+    if (listToAssign.length === 1) {
+      apiClient.get(`/payroll/salary-structure?employee_id=${firstEmp.id}`).then((res: any) => {
+        const list = extract(res);
+        if (list && list.length > 0) {
+          const s = list[0];
+          setCalcMode(s.calculation_mode || s.calcMode || 'salary_input');
+          setSalaryInput(String(s.gross_monthly || s.salary_input || s.salaryInput || 120000));
+          setBasic(String(s.basic_monthly || s.basic || 60000));
+          setHra(String(s.hra_monthly || s.hra || 24000));
+          setPf(String(s.pf_deduction || s.pf || 1800));
+          setPt(String(s.pt_deduction || s.pt || 200));
+          setEsic(String(s.esi_deduction || s.esic || 0));
+          setPfEmployer(String(s.pf_employer || s.pfEmployer || 1800));
+        } else {
+          recalculateFromSalaryInput(120000);
+        }
+      }).catch(() => {
+        recalculateFromSalaryInput(120000);
+      });
+    } else {
+      recalculateFromSalaryInput(120000);
+    }
 
     setModalOpen(true);
+  };
+
+  const openStructureModal = (emp: EmpRow) => {
+    openStructureModalForSelection([emp]);
+  };
+
+  const handleAssign = () => {
+    if (selectedIds.size === 0) {
+      showToast.error('No Selection', 'Please select at least one employee.');
+      return;
+    }
+    openStructureModalForSelection();
   };
 
   // Calculated totals
@@ -297,42 +361,83 @@ export const AssignPaySlabTab: React.FC = () => {
   const ctcCalculated = grossCalculated + numPfEmployer;
 
   const handleSaveStructureModal = async () => {
-    if (!targetEmp) return;
+    if (targetEmps.length === 0 && !targetEmp) return;
+    const listToSave = targetEmps.length > 0 ? targetEmps : (targetEmp ? [targetEmp] : []);
 
-    const payload = {
-      employee_id: targetEmp.id,
-      slab_id: modalSlabId ? Number(modalSlabId) : targetEmp.slabId,
-      effective_from: modalEffectiveFrom,
-      arrear_pay_month: arrearPayMonth,
-      calculation_mode: calcMode,
-      salary_input: Number(salaryInput) || 0,
-      basic_monthly: numBasic,
-      hra_monthly: numHra,
-      standard_allowance_monthly: numSa,
-      meal_allowance_monthly: numMa,
-      communication_allowance_monthly: numCa,
-      children_edu_allowance_monthly: numCea,
-      lta_monthly: numLta,
-      esi_deduction: numEsic,
-      pt_deduction: numPt,
-      pf_deduction: numPf,
-      pf_employer: numPfEmployer,
-      gross_monthly: grossCalculated,
-      total_deductions_monthly: totalDeductionCalculated,
-      net_take_home: netSalaryCalculated,
-      annual_ctc: ctcCalculated * 12,
-    };
-
+    setSaving(true);
     try {
-      await apiClient.post('/payroll/salary-structure', payload).catch(() => {});
-      if (modalSlabId) {
-        await apiClient.patch(`/employees/${targetEmp.id}`, { salary_slab_id: Number(modalSlabId), salarySlabId: Number(modalSlabId) });
-      }
-      showToast.success('Salary Structure Saved!', `Pay structure saved for ${targetEmp.name}`);
+      await Promise.all(listToSave.map(async emp => {
+        const modalSlabObj = slabs.find(s => String(s.id) === modalSlabId);
+        
+        const earningsBreakup = [
+          { component_id: 1, code: 'BASIC', name: 'Basic Salary', type: 'Formula', amount: numBasic },
+          { component_id: 2, code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'Formula', amount: numHra },
+          ...(numSa > 0 ? [{ component_id: 4, code: 'STANDARD_ALLOWANCE', name: 'Standard Allowance', type: 'Value', amount: numSa }] : []),
+          ...(numMa > 0 ? [{ component_id: 5, code: 'MEAL_ALLOWANCE', name: 'Meal Allowance', type: 'Value', amount: numMa }] : []),
+          ...(numCa > 0 ? [{ component_id: 6, code: 'COMMUNICATION_ALLOWANCE', name: 'Communication Allowance', type: 'Value', amount: numCa }] : []),
+          ...(numCea > 0 ? [{ component_id: 7, code: 'CHILDREN_EDU_ALLOWANCE', name: 'Children Education Allowance', type: 'Value', amount: numCea }] : []),
+          ...(numLta > 0 ? [{ component_id: 8, code: 'LTA', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: numLta }] : []),
+        ];
+
+        const specialAllowanceVal = Math.max(0, grossCalculated - earningsBreakup.reduce((acc, cur) => acc + cur.amount, 0));
+        if (specialAllowanceVal > 0) {
+          earningsBreakup.push({ component_id: 3, code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'Derived', amount: specialAllowanceVal });
+        }
+
+        const deductionsBreakup = [
+          ...(numPf > 0 ? [{ component_id: 9, code: 'PF', name: 'Employee Provident Fund (EPF)', type: 'Formula', amount: numPf }] : []),
+          ...(numPt > 0 ? [{ component_id: 11, code: 'PT', name: 'Professional Tax', type: 'Value', amount: numPt }] : []),
+          ...(numEsic > 0 ? [{ component_id: 10, code: 'ESIC', name: 'Employee State Insurance (ESIC)', type: 'Formula', amount: numEsic }] : []),
+        ];
+
+        const payload = {
+          employee_id: emp.id,
+          company_id: emp.companyId || null,
+          companyId: emp.companyId || null,
+          slab_id: modalSlabId ? Number(modalSlabId) : emp.slabId,
+          cycle_id: modalSlabObj?.cycle_id || null,
+          cycleId: modalSlabObj?.cycle_id || null,
+          effective_from: modalEffectiveFrom,
+          arrear_pay_month: arrearPayMonth,
+          calculation_mode: calcMode,
+          salary_input: Number(salaryInput) || 0,
+          basic_monthly: numBasic,
+          hra_monthly: numHra,
+          special_allowance_monthly: specialAllowanceVal,
+          standard_allowance_monthly: numSa,
+          meal_allowance_monthly: numMa,
+          communication_allowance_monthly: numCa,
+          children_edu_allowance_monthly: numCea,
+          lta_monthly: numLta,
+          esi_deduction: numEsic,
+          pt_deduction: numPt,
+          pf_deduction: numPf,
+          pf_employer: numPfEmployer,
+          gross_monthly: grossCalculated,
+          total_deductions: totalDeductionCalculated,
+          total_deductions_monthly: totalDeductionCalculated,
+          net_take_home: netSalaryCalculated,
+          annual_ctc: ctcCalculated * 12,
+          earnings_breakup: earningsBreakup,
+          deductions_breakup: deductionsBreakup
+        };
+
+        await apiClient.post('/payroll/salary-structure', payload).catch(() => {});
+        if (modalSlabId) {
+          await apiClient.patch(`/employees/${emp.id}`, { salary_slab_id: Number(modalSlabId), salarySlabId: Number(modalSlabId) });
+        }
+      }));
+
+      const slabName = modalSlabObj?.name || 'Selected Slab';
+      showToast.success('Payroll Structure & Slab Saved!', `Structure and "${slabName}" assigned to ${listToSave.length} employee(s).`);
       setModalOpen(false);
+      clearSelection();
+      setSelectedSlabId('');
       await loadData();
     } catch (err: any) {
       showToast.error('Save Failed', err?.message || 'Could not save pay structure.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -374,14 +479,17 @@ export const AssignPaySlabTab: React.FC = () => {
           )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
-          {/* Employee Dropdown */}
+          {/* Employee Dropdown Filter */}
           <div className="relative">
             <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
-            <select value={filterEmpId} onChange={e => {
-              const val = e.target.value;
-              setFilterEmpId(val);
-              if (val) setSelectedIds(new Set([Number(val)]));
-            }} className={`${sel} pl-8`}>
+            <select
+              value={filterEmpId}
+              onChange={e => {
+                const val = e.target.value;
+                setFilterEmpId(val);
+              }}
+              className={`${sel} pl-8 font-semibold`}
+            >
               <option value="">All Employees</option>
               {allEmps.map(e => (
                 <option key={e.id} value={String(e.id)}>{e.code} — {e.name}</option>
@@ -389,11 +497,28 @@ export const AssignPaySlabTab: React.FC = () => {
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
           </div>
-          {/* Search */}
+          {/* Company Filter Dropdown */}
+          <div className="relative">
+            <Building className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
+            <select
+              value={filterCompany}
+              onChange={e => setFilterCompany(e.target.value)}
+              className={`${sel} pl-8 font-semibold`}
+            >
+              <option value="">All Companies</option>
+              {companies.map((c: any) => {
+                const cName = c.company_name || c.name || c.companyName || `Company #${c.company_id || c.id}`;
+                const cVal = String(c.company_id || c.id || cName);
+                return <option key={cVal} value={cVal}>{cName}</option>;
+              })}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+          </div>
+          {/* Search Name/Code */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
             <input placeholder="Search Name/Code…" value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
-              className="w-full border border-border rounded-lg pl-7 pr-3 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-8" />
+              className="w-full border border-border rounded-lg pl-7 pr-3 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-8 font-semibold" />
           </div>
           {/* Department */}
           <div className="relative">
@@ -478,7 +603,7 @@ export const AssignPaySlabTab: React.FC = () => {
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
             </div>
 
-            <input type="date" value={effectiveFrom} onChange={e => setEffectiveFrom(e.target.value)}
+            <input type="date" value={effectiveFrom ? String(effectiveFrom).slice(0, 10) : ''} onChange={e => setEffectiveFrom(e.target.value)}
               className="border border-border rounded-lg px-3 py-2 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-9" />
 
             {selectedSlab && (
@@ -605,7 +730,7 @@ export const AssignPaySlabTab: React.FC = () => {
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-emerald-600" />
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                Payroll Structure — {targetEmp?.code} ({targetEmp?.name})
+                Payroll Structure — {targetEmps.length > 1 ? `Bulk Allocation (${targetEmps.length} Employees Selected)` : `${targetEmp?.code || ''} (${targetEmp?.name || ''})`}
               </span>
             </div>
             <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-base cursor-pointer">✕</button>
@@ -629,7 +754,10 @@ export const AssignPaySlabTab: React.FC = () => {
                   className="w-full border border-sky-300 rounded px-2 py-1 text-xs font-bold bg-white text-sky-950 focus:outline-none"
                 >
                   <option value="">-- Select Slab --</option>
-                  {slabs.map((s: any) => (
+                  {(targetEmp?.companyId
+                    ? slabs.filter((s: any) => !(s.companyId ?? s.company_id) || String(s.companyId ?? s.company_id) === String(targetEmp.companyId))
+                    : slabs
+                  ).map((s: any) => (
                     <option key={s.id} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
                   ))}
                 </select>
@@ -641,29 +769,49 @@ export const AssignPaySlabTab: React.FC = () => {
               )}
             </div>
 
-            {/* 2 Calculation Modes Radio Options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="calcMode"
-                    checked={calcMode === 'salary_input'}
-                    onChange={() => handleModeChange('salary_input')}
-                    className="accent-sky-600"
-                  />
-                  Calculate Payroll based on Salary Input
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="calcMode"
-                    checked={calcMode === 'component_based'}
-                    onChange={() => handleModeChange('component_based')}
-                    className="accent-sky-600"
-                  />
-                  Calculate CTC based on Payroll Component
-                </label>
+            {/* CTC / Salary Input & Dates Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-sky-50/70 p-4 rounded-lg border border-sky-200">
+              {/* Salary Input with Frequency Toggle */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-slate-800">Salary Input :</label>
+                  <div className="inline-flex rounded p-0.5 bg-sky-200/60 border border-sky-300">
+                    <button
+                      type="button"
+                      onClick={() => handleFrequencyChange('annual')}
+                      className={`px-1.5 py-0.5 text-[9px] font-bold rounded cursor-pointer ${
+                        inputFrequency === 'annual'
+                          ? 'bg-sky-600 text-white shadow-2xs'
+                          : 'text-sky-900 hover:text-slate-900'
+                      }`}
+                    >
+                      Annual CTC (₹/yr)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFrequencyChange('monthly')}
+                      className={`px-1.5 py-0.5 text-[9px] font-bold rounded cursor-pointer ${
+                        inputFrequency === 'monthly'
+                          ? 'bg-sky-600 text-white shadow-2xs'
+                          : 'text-sky-900 hover:text-slate-900'
+                      }`}
+                    >
+                      Monthly Gross (₹/mo)
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  value={salaryInput}
+                  onChange={e => handleSalaryInputChange(e.target.value)}
+                  placeholder={inputFrequency === 'annual' ? 'e.g. 600000' : 'e.g. 50000'}
+                  className="w-full h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
+                />
+                <p className="text-[10px] text-sky-800 font-semibold mt-1 mb-0">
+                  {inputFrequency === 'annual'
+                    ? `Monthly Gross: ₹${Math.round((Number(salaryInput) || 0) / 12).toLocaleString('en-IN')}/mo`
+                    : `Annual CTC: ₹${((Number(salaryInput) || 0) * 12).toLocaleString('en-IN')}/yr`}
+                </p>
               </div>
 
               {/* Effective From */}
@@ -671,7 +819,7 @@ export const AssignPaySlabTab: React.FC = () => {
                 <label className="text-xs font-bold text-slate-800 block mb-1">Effective From :</label>
                 <input
                   type="date"
-                  value={modalEffectiveFrom}
+                  value={modalEffectiveFrom ? String(modalEffectiveFrom).slice(0, 10) : ''}
                   onChange={e => setModalEffectiveFrom(e.target.value)}
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs bg-white"
                 />
@@ -682,29 +830,12 @@ export const AssignPaySlabTab: React.FC = () => {
                 <label className="text-xs font-bold text-slate-800 block mb-1">Arrear Pay Month :</label>
                 <input
                   type="date"
-                  value={arrearPayMonth}
+                  value={arrearPayMonth ? String(arrearPayMonth).slice(0, 10) : ''}
                   onChange={e => setArrearPayMonth(e.target.value)}
                   className="w-full h-8 border border-slate-300 rounded px-2 text-xs bg-white"
                 />
               </div>
             </div>
-
-            {/* Salary Input Field (Shown ONLY when Option 1 is selected) */}
-            {calcMode === 'salary_input' && (
-              <div className="bg-sky-50/50 border border-sky-200 rounded-lg p-3 space-y-1">
-                <label className="text-xs font-bold text-slate-900 block">Salary Input (Monthly Gross) :</label>
-                <input
-                  type="number"
-                  value={salaryInput}
-                  onChange={e => handleSalaryInputChange(e.target.value)}
-                  placeholder="Enter Monthly Gross Salary"
-                  className="w-60 h-9 border border-slate-300 rounded px-3 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
-                />
-                <p className="text-[11px] text-red-600 italic m-0">
-                  * Enter gross monthly amount above — Basic (50%), HRA (40% of Basic), and statutory deductions are auto-calculated.
-                </p>
-              </div>
-            )}
 
             {/* 2-Column Earnings & Deductions Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -712,72 +843,113 @@ export const AssignPaySlabTab: React.FC = () => {
               {/* LEFT COLUMN: Employee's Earning */}
               <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
                 <div className="border-t-4 border-emerald-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Employee's Earning</h4>
+                  <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Employee's Earning (Calculated as per Pay Slab)</h4>
                 </div>
                 <div className="p-4 space-y-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Basic Pay</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Basic</label>
                     <input
                       type="number"
                       value={basic}
                       onChange={e => handleBasicChange(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">HRA (House Rent Allowance)</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">HRA</label>
                     <input
                       type="number"
                       value={hra}
                       onChange={e => setHra(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Special / LTA Allowance</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Standard Allowance</label>
+                    <input
+                      type="number"
+                      value={standardAllowance}
+                      onChange={e => setStandardAllowance(e.target.value)}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Meal Allowance</label>
+                    <input
+                      type="number"
+                      value={mealAllowance}
+                      onChange={e => setMealAllowance(e.target.value)}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Communication Allowance</label>
+                    <input
+                      type="number"
+                      value={communicationAllowance}
+                      onChange={e => setCommunicationAllowance(e.target.value)}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Children Education Allowance / LTA</label>
                     <input
                       type="number"
                       value={lta}
                       onChange={e => setLta(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                 </div>
               </div>
 
               {/* RIGHT COLUMN: Deductions & Employer Contribution */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                <div className="border-t-4 border-red-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Statutory Deductions & Contributions</h4>
+              <div className="space-y-4">
+                <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="border-t-4 border-red-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                    <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider">Employee's Deduction</h4>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">ESIC</label>
+                      <input
+                        type="number"
+                        value={esic}
+                        onChange={e => setEsic(e.target.value)}
+                        className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">PT</label>
+                      <input
+                        type="number"
+                        value={pt}
+                        onChange={e => setPt(e.target.value)}
+                        className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">PF</label>
+                      <input
+                        type="number"
+                        value={pf}
+                        onChange={e => setPf(e.target.value)}
+                        className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Employee PF (12%)</label>
-                    <input
-                      type="number"
-                      value={pf}
-                      onChange={e => setPf(e.target.value)}
-                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
-                    />
+
+                <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="border-t-4 border-amber-500 px-4 py-2.5 border-b border-amber-100 bg-amber-50/50">
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Employer's Contribution</h4>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Professional Tax (PT)</label>
+                  <div className="p-4">
+                    <label className="text-xs font-bold text-slate-700 block mb-1">PF Employer</label>
                     <input
                       type="number"
-                      value={pt}
-                      onChange={e => setPt(e.target.value)}
-                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">ESI Contribution</label>
-                    <input
-                      type="number"
-                      value={esic}
-                      onChange={e => setEsic(e.target.value)}
+                      value={pfEmployer}
+                      onChange={e => setPfEmployer(e.target.value)}
                       className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
@@ -801,7 +973,12 @@ export const AssignPaySlabTab: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Annual CTC</span>
-                <span className="text-base font-black text-amber-400">₹{(ctcCalculated * 12).toLocaleString('en-IN')}</span>
+                <span className="text-base font-black text-amber-400">
+                  ₹{((salaryInput && Number(salaryInput) > 0)
+                    ? (inputFrequency === 'annual' ? Number(salaryInput) : Number(salaryInput) * 12)
+                    : grossCalculated * 12
+                  ).toLocaleString('en-IN')}
+                </span>
               </div>
             </div>
 

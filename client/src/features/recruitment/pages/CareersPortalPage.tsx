@@ -56,10 +56,24 @@ export const CareersPortalPage: React.FC = () => {
 
 
       if (!candRes.data?.success) throw new Error('Failed to create candidate profile');
+      const candidateId = candRes.data.data.id;
+
+      // Index in resume_bank so it appears in Resume Source Screen Bank & ATS Screening
+      await api.post('/recruitment/resume-bank', {
+        name: `${form.firstName} ${form.lastName}`,
+        email: form.email,
+        contact: form.phone || undefined,
+        company: form.currentCompany || undefined,
+        totalExp: form.totalExperience || undefined,
+        skills: form.skills || undefined,
+        jobId: selectedJob.id,
+        position: selectedJob.job_title || selectedJob.jobTitle || 'Software Engineer',
+        source: 'Career Portal',
+      }).catch(() => {});
 
       // Then, link application
       return api.post('/recruitment/applications', {
-        candidateId: candRes.data.data.id,
+        candidateId,
         jobId: selectedJob.id,
         appliedFromSource: 'Careers Portal',
       });
@@ -80,7 +94,9 @@ export const CareersPortalPage: React.FC = () => {
       });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.error || 'Failed to submit application');
+      const errObj = err.response?.data?.error;
+      const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to submit application';
+      toast.error(msg);
     }
   });
 
@@ -100,59 +116,80 @@ export const CareersPortalPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Careers Portal Header */}
-      <div className="bg-slate-900 text-white py-12 px-6 text-center">
-        <h1 className="text-4xl font-extrabold tracking-tight">Join Our Outstanding Team</h1>
-        <p className="text-slate-400 mt-2 text-md max-w-xl mx-auto">Discover open jobs, build your career, and solve hard problems alongside industry experts.</p>
-        
-        <div className="max-w-md mx-auto mt-6 flex items-center bg-white rounded-md px-3 py-2 text-slate-800 shadow">
-          <Search className="h-4 w-4 text-slate-400 mr-2" />
-          <input
-            type="text"
-            placeholder="Search open positions..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="outline-none w-full text-xs text-slate-800 bg-transparent"
-          />
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Careers Portal Header Banner */}
+      <div className="bg-card border-b border-border/80 py-16 px-6 text-center relative overflow-hidden">
+        <div className="relative z-10 max-w-2xl mx-auto space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold uppercase tracking-wider">
+            <Briefcase className="w-3.5 h-3.5" /> Career Opportunities
+          </div>
+          <h1 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight">
+            Build the Future With Us
+          </h1>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Discover impactful career paths, collaborate with exceptional teams, and help build world-class enterprise software.
+          </p>
+          
+          <div className="max-w-md mx-auto mt-6 flex items-center bg-background rounded-2xl px-4 py-2.5 border border-border shadow-xs">
+            <Search className="h-4 w-4 text-muted-foreground mr-2.5 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search positions, teams, or skills..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="outline-none w-full text-xs text-foreground bg-transparent placeholder:text-muted-foreground"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="max-w-5xl w-full mx-auto px-6 py-10 flex-1">
-        <h2 className="text-xl font-bold text-slate-800 mb-6">Published Job Opportunities ({filteredJobs.length})</h2>
+      <div className="max-w-5xl w-full mx-auto px-6 py-12 flex-1">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-xl font-black text-foreground">Open Positions</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{filteredJobs.length} active opportunities available</p>
+          </div>
+        </div>
 
         {isLoading ? (
-          <p className="text-center py-12 text-slate-500 text-xs">Loading open opportunities...</p>
+          <div className="text-center py-16 text-muted-foreground text-xs">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <span>Loading open opportunities...</span>
+            </div>
+          </div>
         ) : filteredJobs.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border text-slate-500 text-xs">
-            No active job postings found matching search. Check back later!
+          <div className="text-center py-16 bg-card rounded-2xl border border-border/80 text-muted-foreground text-xs p-8">
+            No active job postings found matching search. Check back soon for new openings!
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredJobs.map((j: any) => (
-              <Card key={j.id} className="hover:shadow-md transition-shadow border-slate-200">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-md font-bold text-slate-800 flex justify-between items-start gap-2">
-                    {j.job_title || j.jobTitle}
-                    <Badge variant="outline" className="bg-blue-50 text-blue-800 capitalize shrink-0 text-[10px]">
+              <Card key={j.id} className="bg-card border-border/80 shadow-2xs hover:shadow-xs transition-all rounded-2xl overflow-hidden flex flex-col justify-between">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-extrabold text-foreground flex justify-between items-start gap-2">
+                    <span>{j.job_title || j.jobTitle}</span>
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 capitalize shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full">
                       {j.job_type || j.jobType || 'Full-time'}
                     </Badge>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4 text-xs">
-                  <p className="text-slate-500 line-clamp-3 leading-relaxed">
+                <CardContent className="space-y-4 text-xs flex-1 flex flex-col justify-between">
+                  <p className="text-muted-foreground line-clamp-3 leading-relaxed">
                     {j.job_description || j.jobDescription || 'No description provided.'}
                   </p>
                   
-                  <div className="flex gap-4 text-slate-500 pt-2 border-t text-[10px]">
-                    <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-slate-400" /> Remote / Location</span>
-                    <span className="flex items-center gap-1"><Briefcase className="w-3.5 h-3.5 text-slate-400" /> {j.experience_level || j.experienceLevel || 'Mid Level'}</span>
-                  </div>
+                  <div className="space-y-3 pt-3 border-t border-border/60">
+                    <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-primary" /> {j.location || 'Remote / Hybrid'}</span>
+                      <span className="flex items-center gap-1"><Briefcase className="w-3.5 h-3.5 text-primary" /> {j.experience_level || j.experienceLevel || 'Mid Level'}</span>
+                    </div>
 
-                  <div className="flex justify-end pt-2">
-                    <Button onClick={() => setSelectedJob(j)} size="sm" className="bg-slate-900 hover:bg-slate-800 text-white font-semibold">
-                      Apply Now
-                    </Button>
+                    <div className="flex justify-end pt-1">
+                      <Button onClick={() => setSelectedJob(j)} size="sm" className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-xs h-8 rounded-xl shadow-xs cursor-pointer">
+                        Apply Now
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -163,82 +200,89 @@ export const CareersPortalPage: React.FC = () => {
 
       {/* APPLY NOW DIALOG */}
       <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-card border-border rounded-2xl">
           {selectedJob && (
             <>
               <DialogHeader>
-                <DialogTitle>Apply for {selectedJob.job_title || selectedJob.jobTitle}</DialogTitle>
+                <DialogTitle className="text-base font-black text-foreground">Apply for {selectedJob.job_title || selectedJob.jobTitle}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleApply} className="space-y-4 text-xs">
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName" className="text-[10px]">First Name *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="firstName" className="text-xs font-bold text-foreground">First Name *</Label>
                     <Input
                       id="firstName"
                       value={form.firstName}
                       onChange={(e) => setForm(f => ({ ...f, firstName: e.target.value }))}
+                      className="h-9 text-xs rounded-xl"
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="lastName" className="text-[10px]">Last Name *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="lastName" className="text-xs font-bold text-foreground">Last Name *</Label>
                     <Input
                       id="lastName"
                       value={form.lastName}
                       onChange={(e) => setForm(f => ({ ...f, lastName: e.target.value }))}
+                      className="h-9 text-xs rounded-xl"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email" className="text-[10px]">Email Address *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="email" className="text-xs font-bold text-foreground">Email Address *</Label>
                     <Input
                       id="email"
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
+                      className="h-9 text-xs rounded-xl font-mono"
                       required
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="phone" className="text-[10px]">Phone Number</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="phone" className="text-xs font-bold text-foreground">Phone Number</Label>
                     <Input
                       id="phone"
                       value={form.phone}
                       onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
+                      className="h-9 text-xs rounded-xl font-mono"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="currentCompany" className="text-[10px]">Current Company</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="currentCompany" className="text-xs font-bold text-foreground">Current Company</Label>
                     <Input
                       id="currentCompany"
                       value={form.currentCompany}
                       onChange={(e) => setForm(f => ({ ...f, currentCompany: e.target.value }))}
+                      className="h-9 text-xs rounded-xl"
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="totalExperience" className="text-[10px]">Total Experience (Yrs)</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="totalExperience" className="text-xs font-bold text-foreground">Experience (Yrs)</Label>
                     <Input
                       id="totalExperience"
                       type="number"
                       value={form.totalExperience}
                       onChange={(e) => setForm(f => ({ ...f, totalExperience: e.target.value }))}
+                      className="h-9 text-xs rounded-xl"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="skills" className="text-[10px]">Skills (comma separated)</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="skills" className="text-xs font-bold text-foreground">Skills (comma separated)</Label>
                   <Input
                     id="skills"
                     value={form.skills}
                     onChange={(e) => setForm(f => ({ ...f, skills: e.target.value }))}
                     placeholder="e.g. React, Node.js, TypeScript"
+                    className="h-9 text-xs rounded-xl"
                   />
                 </div>
 

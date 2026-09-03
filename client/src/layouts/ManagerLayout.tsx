@@ -10,13 +10,14 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 
@@ -72,12 +73,25 @@ const MANAGER_NAV = [
         subItems: [
           { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
           { name: 'Salary Revisions', href: '/manager/salary-revisions', icon: TrendingUp },
-          { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
-          { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
-          { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
           { name: 'Team Exit Settlements', href: '/manager/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Expense Approvals', href: '/manager/expenses/approvals', icon: CheckCircle2 },
+      { name: 'My Expenses', href: '/manager/expenses/my-expenses', icon: FileText },
+      { name: 'Travel Requests', href: '/manager/expenses/travel-requests', icon: Clock },
+      { name: 'Travel Advances', href: '/manager/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/manager/expenses/mileage-claims', icon: Navigation },
     ],
   },
   {
@@ -93,13 +107,14 @@ const MANAGER_NAV = [
     items: [
       { name: 'Hiring Requests', href: '/manager/hiring', icon: Briefcase },
       { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
-      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
+      { name: 'Interview Schedule', href: '/manager/interview-schedule', icon: Calendar },
     ],
   },
   {
-    label: 'APPROVALS',
+    label: 'APPROVALS & GOVERNANCE',
     items: [
       { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
+      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
     ],
   },
 ];
@@ -276,7 +291,13 @@ export function ManagerLayout() {
                 className="flex-1 min-w-0 leading-tight"
               >
                 <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
-                  {user?.firstName} {user?.lastName}
+                  {(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}
                 </p>
                 <p className={cn('text-[10px] font-medium truncate', C.icon)}>
                   {roleInfo.roleTitle}
@@ -382,14 +403,7 @@ export function ManagerLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
             <div className="w-px h-5 bg-border mx-1" />
 
@@ -404,7 +418,13 @@ export function ManagerLayout() {
                 </AvatarFallback>
               </Avatar>
               <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[12px] font-semibold text-foreground">{(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}</p>
                 <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
               </div>
             </button>

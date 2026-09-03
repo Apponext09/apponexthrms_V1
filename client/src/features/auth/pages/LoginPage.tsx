@@ -1,21 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, useAuthHydrated } from '../store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('admin@apponexthrms.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login, isAuthenticated, user } = useAuthStore();
+  const authHydrated = useAuthHydrated();
+
+  useEffect(() => {
+    if (!authHydrated || !isAuthenticated || !user) return;
+    const roles = user.roles || [];
+    if (roles.includes('super_admin')) navigate('/superadmin/dashboard', { replace: true });
+    else if (roles.includes('organization_admin') || roles.includes('ceo')) navigate('/dashboard', { replace: true });
+    else if (roles.includes('hr_manager') || roles.includes('hr_admin')) navigate('/hr/dashboard', { replace: true });
+    else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard', { replace: true });
+    else if (roles.includes('team_lead')) navigate('/team-lead/dashboard', { replace: true });
+    else navigate('/dashboard', { replace: true });
+  }, [authHydrated, isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,28 +36,37 @@ export function LoginPage() {
 
     try {
       await login(email, password);
+
+      // Get user data immediately (avoid second fetch)
       const currentUser = useAuthStore.getState().user;
       const roles = currentUser?.roles || [];
       const cleanEmail = (email || '').trim().toLowerCase();
 
+      // Navigate immediately - page will show loading screen while data loads
       if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
-        navigate('/superadmin/dashboard');
+        navigate('/superadmin/dashboard', { replace: true });
       } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
       } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
-        navigate('/manager/dashboard');
+        navigate('/manager/dashboard', { replace: true });
       } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
-        navigate('/hr/dashboard');
+        navigate('/hr/dashboard', { replace: true });
       } else if (roles.includes('team_lead')) {
-        navigate('/team-lead/dashboard');
+        navigate('/team-lead/dashboard', { replace: true });
+      } else if (roles.includes('intern')) {
+        navigate('/intern/dashboard', { replace: true });
+      } else if (roles.includes('consultant')) {
+        navigate('/consultant/dashboard', { replace: true });
       } else if (roles.includes('employee')) {
-        navigate('/employee/dashboard');
+        navigate('/employee/dashboard', { replace: true });
       } else {
-        navigate('/manager/dashboard');
+        navigate('/employee/dashboard', { replace: true });
       }
+
+      // Don't wait for setLoading(false) - navigate immediately
+      // Loading screen will handle the wait
     } catch (err) {
       setError('Invalid email or password');
-    } finally {
       setLoading(false);
     }
   };
@@ -247,46 +268,17 @@ export function LoginPage() {
             </Button>
           </form>
 
-          {/* Demo credentials */}
-          <div className="mt-8 p-4 rounded-xl bg-muted/50 border border-border space-y-3">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-              Quick Demo Login Presets
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@apponexthrms.com');
-                  setPassword('Admin@123');
-                }}
-                className="p-2 text-left rounded-lg bg-background hover:bg-muted border border-border transition text-xs"
-              >
-                <div className="font-bold text-foreground">Org Admin</div>
-                <div className="text-[10px] text-muted-foreground truncate">admin@apponexthrms.com</div>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('superadmin@apponext.com');
-                  setPassword('SuperAdmin@2026!Secure');
-                }}
-                className="p-2 text-left rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition text-xs"
-              >
-                <div className="font-bold text-amber-500 flex items-center gap-1">
-                  ⚡ Super Admin
-                </div>
-                <div className="text-[10px] text-muted-foreground truncate">superadmin@apponext.com</div>
-              </button>
-            </div>
-          </div>
 
           {/* Footer */}
-          <div className="mt-8 pt-8 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              ApponextHRMS v1.0.0 • {new Date().getFullYear()} All rights reserved
+          <div className="mt-8 pt-6 border-t border-border/60 text-center space-y-1.5">
+            <p className="text-xs font-semibold text-foreground/80">
+              © {new Date().getFullYear()} ApponextHRMS
             </p>
-            <div className="flex gap-4 justify-center mt-4 text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground font-medium">
+              All rights reserved
+            </p>
+            <div className="flex gap-4 justify-center pt-2 text-xs text-muted-foreground">
               <a href="#" className="hover:text-foreground transition">
                 Privacy
               </a>

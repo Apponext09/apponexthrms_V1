@@ -9,7 +9,7 @@ export class AttendanceIntegrationService {
     // Count active employees in org
     const employees = await db('employees')
       .where('organization_id', ctx.organizationId)
-      .where('status', 'active');
+      .whereRaw("UPPER(status) = 'ACTIVE'");
 
     const existing = await db('attendance_locks')
       .where('organization_id', ctx.organizationId)

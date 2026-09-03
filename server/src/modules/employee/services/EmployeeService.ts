@@ -178,9 +178,9 @@ export class EmployeeService {
       }
     }
 
-    // Helper to get Org Admin's employee ID
+    // Helper to get Org Admin's employee ID if no reporting manager is specified
     let finalReportingManagerId = input.reportingManagerId || null;
-    if (['department_head', 'hr_manager'].includes(input.accessRole || 'employee')) {
+    if (!finalReportingManagerId && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId) {
         finalReportingManagerId = adminEmpId;
@@ -194,13 +194,31 @@ export class EmployeeService {
       finalEmpCode = `EMP${String(nextNum % 1000).padStart(3, '0')}`;
     }
 
-    const slabIdVal = input.salarySlabId || input.salary_slab_id || null;
+    // Note: the employee who gets a salary slab assigned at creation time
+    // (input.salarySlabId) is tracked via salary_structures.slab_id, not a
+    // column on employees — the employees table has no salary_slab_id
+    // column, so including it here always failed the insert with "Unknown
+    // column 'salary_slab_id'". The actual /payroll/structures/assign call
+    // that EmployeeCreateModal makes right after this is what persists it.
+
+    // Resolve target company ID (use active company or fallback to parent company for org admin)
+    let effectiveCompanyId = ctx.companyId || (input as any).companyId || null;
+    if (!effectiveCompanyId) {
+      const parentComp = await db('company')
+        .where('organization_id', ctx.organizationId)
+        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
+        .whereNull('deleted_at')
+        .first();
+      if (parentComp) {
+        effectiveCompanyId = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
+      }
+    }
 
     // Create employee
     const employee = await this.employeeRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      company_id: ctx.companyId || null,
+      company_id: effectiveCompanyId,
       employee_code: finalEmpCode,
       first_name: input.firstName,
       last_name: input.lastName,
@@ -219,7 +237,6 @@ export class EmployeeService {
       current_grade_id: input.currentGradeId || null,
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
-      salary_slab_id: slabIdVal ? Number(slabIdVal) : null,
       avatar_url: input.avatarUrl || null,
       status: input.status || 'active',
       created_by: ctx.userId,
@@ -227,7 +244,7 @@ export class EmployeeService {
     } as any);
 
     // Create user login credentials
-    const plainPassword = input.password;
+    const plainPassword = input.password || `${(input.firstName || 'Emp').replace(/\s+/g, '')}@${new Date().getFullYear()}!`;
     const hashedPassword = await hash(plainPassword, {
       type: 2, // argon2id
       memoryCost: 19456,
@@ -241,7 +258,7 @@ export class EmployeeService {
         const [userId] = await trx('users').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
-          company_id: ctx.companyId || null,
+          company_id: effectiveCompanyId,
           employee_id: employee.id,
           email: input.email,
           password_hash: hashedPassword,
@@ -443,6 +460,18 @@ export class EmployeeService {
           { name: 'aadhar_number', type: 'string', length: 50 },
           { name: 'pan_number', type: 'string', length: 50 },
           { name: 'passport_number', type: 'string', length: 50 },
+          { name: 'bank_name', type: 'string', length: 100 },
+          { name: 'account_no', type: 'string', length: 50 },
+          { name: 'ifsc_code', type: 'string', length: 50 },
+          { name: 'company_bank', type: 'string', length: 100 },
+          { name: 'branch_name', type: 'string', length: 100 },
+          { name: 'pf_no', type: 'string', length: 50 },
+          { name: 'uan_no', type: 'string', length: 50 },
+          { name: 'esic_no', type: 'string', length: 50 },
+          { name: 'pan_status', type: 'string', length: 50 },
+          { name: 'user_band', type: 'string', length: 50 },
+          { name: 'eligible_for_eps', type: 'string', length: 10 },
+          { name: 'background_verification', type: 'string', length: 50 },
         ];
         for (const col of columnsToEnsure) {
           const hasCol = await db.schema.hasColumn('employees', col.name);
@@ -471,7 +500,7 @@ export class EmployeeService {
     departmentId?: number | null
   ) {
     const targetRole = accessRole || 'employee';
-    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head'];
+    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'];
     if (!roleCodes.includes(targetRole)) return;
 
     // Fetch existing system roles for this organization
@@ -485,10 +514,16 @@ export class EmployeeService {
     }
 
     const roleNames: Record<string, string> = {
+      cto: 'Chief Technology Officer',
+      cfo: 'Chief Financial Officer',
+      coo: 'Chief Operating Officer',
+      cxo: 'Chief Executive Officer / CXO',
       department_head: 'Department Manager',
       team_lead: 'Team Lead',
       hr_manager: 'HR Manager',
       employee: 'Employee',
+      intern: 'Intern',
+      consultant: 'Consultant',
     };
 
     // 1. Ensure target role exists in roles table
@@ -633,9 +668,9 @@ export class EmployeeService {
     if (input.account_type !== undefined) payload.account_type = input.account_type;
     if (input.upiId !== undefined) payload.upi_id = input.upiId;
     if (input.upi_id !== undefined) payload.upi_id = input.upi_id;
-    // ← Salary Slab Assignment (set at employee creation)
-    if (input.salarySlabId !== undefined) payload.salary_slab_id = input.salarySlabId || null;
-    if (input.salary_slab_id !== undefined) payload.salary_slab_id = input.salary_slab_id || null;
+    // Note: salary slab assignment is tracked via salary_structures.slab_id
+    // (see /payroll/structures/assign) — employees has no salary_slab_id
+    // column, so writing it here always failed the update.
     // Statutory / compliance fields
     if (input.pf_no !== undefined) payload.pf_no = input.pf_no;
     if (input.pfNo !== undefined) payload.pf_no = input.pfNo;
@@ -652,6 +687,21 @@ export class EmployeeService {
     // aadhaar variants
     if (input.aadhaar_number !== undefined) payload.aadhar_number = input.aadhaar_number;
     if (input.aadhaarNumber !== undefined) payload.aadhar_number = input.aadhaarNumber;
+    if (input.aadhar_number !== undefined) payload.aadhar_number = input.aadhar_number;
+    if (input.aadharNumber !== undefined) payload.aadhar_number = input.aadharNumber;
+    if (input.uidaiNumber !== undefined) payload.aadhar_number = input.uidaiNumber;
+    if (input.company_bank !== undefined) payload.company_bank = input.company_bank;
+    if (input.pan_number !== undefined) payload.pan_number = input.pan_number;
+    if (input.panNumber !== undefined) payload.pan_number = input.panNumber;
+    if (input.pan !== undefined) payload.pan_number = input.pan;
+    if (input.pan_status !== undefined) payload.pan_status = input.pan_status;
+    if (input.panStatus !== undefined) payload.pan_status = input.panStatus;
+    if (input.user_band !== undefined) payload.user_band = input.user_band;
+    if (input.userBand !== undefined) payload.user_band = input.userBand;
+    if (input.eligible_for_eps !== undefined) payload.eligible_for_eps = input.eligible_for_eps;
+    if (input.eligibleForEps !== undefined) payload.eligible_for_eps = input.eligibleForEps;
+    if (input.background_verification !== undefined) payload.background_verification = input.background_verification;
+    if (input.backgroundVerification !== undefined) payload.background_verification = input.backgroundVerification;
 
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
@@ -659,9 +709,8 @@ export class EmployeeService {
       'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
-      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'branch_name', 'account_type', 'upi_id',
-      'salary_slab_id',   // ← assigned payroll slab
-      'pf_no', 'uan_no', 'esic_no'  // ← statutory compliance fields
+      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'company_bank', 'branch_name', 'account_type', 'upi_id',
+      'pf_no', 'uan_no', 'esic_no', 'pan_status', 'user_band', 'eligible_for_eps', 'background_verification'
     ]);
 
     // Copy any direct snake_case properties if passed and valid in employees table
@@ -671,12 +720,10 @@ export class EmployeeService {
       }
     }
 
-    // Hardcode rule: Manager ('department_head') and HR ('hr_manager') directly report to Admin
-    const targetAccessRole = input.accessRole !== undefined
-      ? input.accessRole
-      : (employee as any).accessRole || 'employee';
+    const targetAccessRole = input.accessRole || input.access_role || input.role || '';
 
-    if (['department_head', 'hr_manager'].includes(targetAccessRole)) {
+    // Default Manager ('department_head', 'cto', etc.) and HR ('hr_manager') to Admin only if no reporting manager was provided
+    if (targetAccessRole && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId && adminEmpId !== employeeId) {
@@ -889,12 +936,48 @@ export class EmployeeService {
   /**
    * Get employee by ID
    */
-  async getEmployee(ctx: TenantContext, employeeId: number): Promise<Employee> {
+  async getEmployee(ctx: TenantContext, employeeId: number | string): Promise<Employee> {
     await this.ensureEmployeeColumns();
-    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    const db = getKnex();
+    const strVal = String(employeeId || '').trim();
+    const numericId = parseInt(strVal, 10);
+    let employee: Employee | null = null;
+
+    if (!isNaN(numericId) && numericId > 0) {
+      employee = await this.employeeRepo.getById(ctx, numericId).catch(() => null);
+      if (!employee) {
+        // Fallback 1: Check if numericId is a user ID in users table
+        const user = await db('users').where({ id: numericId }).first().catch(() => null);
+        if (user && user.employee_id) {
+          employee = await this.employeeRepo.getById(ctx, user.employee_id).catch(() => null);
+        }
+        if (!employee && user && user.email) {
+          employee = await this.employeeRepo.getByEmail(ctx, user.email).catch(() => null);
+        }
+      }
+    }
+
+    // Fallback 2: Lookup by email, employeeCode, or UUID string
+    if (!employee && strVal) {
+      if (strVal.includes('@')) {
+        employee = await this.employeeRepo.getByEmail(ctx, strVal).catch(() => null);
+      } else {
+        employee = await this.employeeRepo.getByCode(ctx, strVal).catch(() => null);
+        if (!employee) {
+          employee = (await db('employees')
+            .where({ organization_id: ctx.organizationId })
+            .whereNull('deleted_at')
+            .where('uuid', strVal)
+            .first()
+            .catch(() => null)) as Employee | null;
+        }
+      }
+    }
+
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }
+
     return employee;
   }
 
@@ -1413,6 +1496,189 @@ export class EmployeeService {
       failed,
       errors,
     };
+  }
+
+  /**
+   * Submit a profile update request (Employee side)
+   */
+  async createProfileUpdateRequest(ctx: TenantContext, input: {
+    employeeId?: number;
+    requestType?: 'personal_info' | 'contact' | 'bank_details' | 'emergency_contact';
+    targetArea?: string;
+    requestedChanges: string;
+    reason: string;
+  }) {
+    const db = getKnex();
+    const uuid = uuidv4();
+
+    let empId = input.employeeId;
+    if (!empId && ctx.userId) {
+      const user = await db('users').where('id', ctx.userId).first();
+      empId = user?.employee_id;
+      if (!empId && user?.email) {
+        const emp = await db('employees').whereRaw('LOWER(email) = ?', [user.email.toLowerCase()]).first();
+        empId = emp?.id;
+      }
+    }
+
+    if (!empId) {
+      throw new Error('Employee profile not linked to user account.');
+    }
+
+    const empObj = await db('employees').where('id', empId).first();
+    const orgId = ctx.organizationId || empObj?.organization_id || 8;
+    const compId = ctx.companyId || empObj?.company_id || null;
+
+    const reqType = input.requestType || 'personal_info';
+
+    const [id] = await db('employee_profile_update_requests').insert({
+      uuid,
+      organization_id: orgId,
+      company_id: compId,
+      employee_id: empId,
+      request_type: reqType,
+      profile_section: input.targetArea || 'General Profile Information',
+      reason: input.reason,
+      requested_value: JSON.stringify({
+        targetArea: input.targetArea || 'General Profile Information',
+        requestedChanges: input.requestedChanges,
+        reason: input.reason,
+      }),
+      status: 'pending',
+      submitted_at: new Date(),
+      created_by: ctx.userId || 1,
+      updated_by: ctx.userId || 1,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    return { id, uuid, success: true, message: 'Profile edit request submitted successfully.' };
+  }
+
+  /**
+   * Get list of profile update requests
+   */
+  async getProfileUpdateRequests(ctx: TenantContext, companyId?: number) {
+    const db = getKnex();
+    let query = db('employee_profile_update_requests as pr')
+      .join('employees as e', 'pr.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('company as c', 'pr.company_id', 'c.company_id')
+      .select(
+        'pr.id',
+        'pr.uuid',
+        'pr.request_type as requestType',
+        'pr.profile_section as profileSection',
+        'pr.reason as reason',
+        'pr.requested_value as requestedValue',
+        'pr.status',
+        'pr.rejection_reason as rejectionReason',
+        'pr.submitted_at as submittedAt',
+        'pr.approved_at as approvedAt',
+        'pr.approved_by as approvedBy',
+        'e.id as employeeId',
+        'e.first_name as firstName',
+        'e.last_name as lastName',
+        'e.employee_code as employeeCode',
+        'e.avatar_url as avatarUrl',
+        'd.name as departmentName',
+        'c.name as companyName'
+      )
+      .where('pr.organization_id', ctx.organizationId || 8)
+      .whereNull('pr.deleted_at')
+      .orderBy('pr.id', 'desc');
+
+    if (companyId) {
+      query = query.where((q) => q.where('pr.company_id', companyId).orWhereNull('pr.company_id'));
+    }
+
+    const rows = await query;
+    return rows.map((r: any) => {
+      let parsedVal: any = {};
+      try {
+        parsedVal = typeof r.requestedValue === 'string' ? JSON.parse(r.requestedValue) : (r.requestedValue || {});
+      } catch (e) {
+        parsedVal = {};
+      }
+      return {
+        id: r.id,
+        reqId: `PRF-${String(r.id).padStart(4, '0')}`,
+        uuid: r.uuid,
+        requestType: r.requestType,
+        profileSection: r.profileSection || parsedVal.targetArea || 'General',
+        reason: r.reason || parsedVal.reason || '',
+        requestedChanges: parsedVal.requestedChanges || '',
+        employeeId: r.employeeId,
+        employeeName: `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Employee',
+        employeeCode: r.employeeCode || `EMP${r.employeeId}`,
+        departmentName: r.departmentName || '-',
+        companyName: r.companyName || '-',
+        avatarUrl: r.avatarUrl,
+        submittedAt: r.submittedAt,
+        approvedAt: r.approvedAt,
+        status: (r.status || 'pending').toLowerCase(),
+        rejectionReason: r.rejectionReason,
+      };
+    });
+  }
+
+  /**
+   * Update profile update request status (Approve / Reject)
+   */
+  async updateProfileUpdateRequestStatus(ctx: TenantContext, id: number, status: 'approved' | 'rejected', reason?: string) {
+    const db = getKnex();
+    await db('employee_profile_update_requests')
+      .where('id', id)
+      .where('organization_id', ctx.organizationId)
+      .update({
+        status,
+        rejection_reason: reason || null,
+        approved_at: status === 'approved' ? new Date() : null,
+        approved_by: status === 'approved' ? (ctx.userId || 1) : null,
+        updated_at: new Date(),
+        updated_by: ctx.userId || 1,
+      });
+
+    return { success: true, message: `Profile update request ${status}.` };
+  }
+
+  /**
+   * Get the logged-in employee's own profile update request history
+   */
+  async getMyProfileUpdateRequests(empId: number) {
+    const db = getKnex();
+    const rows = await db('employee_profile_update_requests as pr')
+      .select(
+        'pr.id',
+        'pr.profile_section as profileSection',
+        'pr.reason',
+        'pr.requested_value as requestedValue',
+        'pr.status',
+        'pr.rejection_reason as rejectionReason',
+        'pr.submitted_at as submittedAt',
+        'pr.approved_at as approvedAt',
+      )
+      .where('pr.employee_id', empId)
+      .whereNull('pr.deleted_at')
+      .orderBy('pr.id', 'desc');
+
+    return rows.map((r: any) => {
+      let parsedVal: any = {};
+      try {
+        parsedVal = typeof r.requestedValue === 'string' ? JSON.parse(r.requestedValue) : (r.requestedValue || {});
+      } catch { parsedVal = {}; }
+      return {
+        id: r.id,
+        reqId: `PRF-${String(r.id).padStart(4, '0')}`,
+        profileSection: r.profileSection || parsedVal.targetArea || 'General',
+        reason: r.reason || parsedVal.reason || '',
+        requestedChanges: parsedVal.requestedChanges || '',
+        status: (r.status || 'pending').toLowerCase(),
+        rejectionReason: r.rejectionReason,
+        submittedAt: r.submittedAt,
+        approvedAt: r.approvedAt,
+      };
+    });
   }
 }
 

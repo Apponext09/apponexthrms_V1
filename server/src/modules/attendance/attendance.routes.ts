@@ -2,8 +2,15 @@ import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { requirePermission } from '../../common/middleware/requirePermission';
+import { requireRoles } from '../../common/middleware/requireRoles';
 import { AttendanceController } from './controllers/AttendanceController';
 import { BiometricController } from './controllers/BiometricController';
+
+// Roles permitted to manage shift templates and assignments — mirrors the
+// SHIFT MANAGEMENT sidebar's minRoles in client/src/config/navigation.ts.
+// Read-only shift endpoints (GET) are intentionally left open to any
+// authenticated org member; only mutating actions are gated here.
+const SHIFT_MANAGER_ROLES = ['organization_admin', 'hr_manager', 'department_head', 'super_admin'];
 
 const router = Router();
 const controller = new AttendanceController();
@@ -34,13 +41,16 @@ router.get('/break-logs', controller.getBreakLogs);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 
 // Biometric Face Recognition routes
+router.get('/ceo-punches', controller.getCeoPunches);
 router.post(
   '/biometric/enroll',
   requirePermission('employee.profile.update'),
   biometricController.enrollFace
 );
 router.get('/biometric/status', biometricController.getEnrollmentStatus);
+router.get('/biometric/ceo-status', biometricController.getCeoStatus);
 router.post('/biometric/verify-punch', biometricController.verifyAndPunch);
+router.post('/biometric/ceo-punch', biometricController.ceoPunch);
 router.get('/biometric/employees', biometricController.getEmployees);
 router.post(
   '/biometric/sync-existing',
@@ -61,17 +71,17 @@ router.get('/my-roster-pattern', controller.getMyRosterPattern);
 
 // Shifts — Templates CRUD
 router.get('/shifts', controller.getAllShifts);
-router.post('/shifts', controller.createShift);
+router.post('/shifts', requireRoles(SHIFT_MANAGER_ROLES), controller.createShift);
 router.get('/shifts/active', controller.getActiveShifts);
 router.get('/shifts/assignments', controller.getAllAssignments);
 router.get('/shifts/:id', controller.getShiftById);
-router.put('/shifts/:id', controller.updateShift);
-router.delete('/shifts/:id', controller.deleteShift);
-router.patch('/shifts/:id/status', controller.toggleShiftStatus);
+router.put('/shifts/:id', requireRoles(SHIFT_MANAGER_ROLES), controller.updateShift);
+router.delete('/shifts/:id', requireRoles(SHIFT_MANAGER_ROLES), controller.deleteShift);
+router.patch('/shifts/:id/status', requireRoles(SHIFT_MANAGER_ROLES), controller.toggleShiftStatus);
 
 // Shift Assignments
-router.post('/shifts/assign', controller.assignShift);
-router.delete('/shifts/assignments/:id', controller.deleteAssignment);
+router.post('/shifts/assign', requireRoles(SHIFT_MANAGER_ROLES), controller.assignShift);
+router.delete('/shifts/assignments/:id', requireRoles(SHIFT_MANAGER_ROLES), controller.deleteAssignment);
 
 // Shift Swaps
 router.post('/shift-swap', controller.requestShiftSwap);
@@ -99,9 +109,11 @@ router.post('/regularization/:id/hr-approve', controller.hrApproveRegularization
 router.post('/regularization/:id/hr-reject', controller.hrRejectRegularization);
 router.get('/regularization/logs', controller.getAdminRegularizationLogs);
 
-// Overtime
+// Overtime & Holiday Work Requests
 router.get('/overtime', controller.getMyOvertime);
+router.get('/overtime/all', controller.getAllOvertimeRequests);
 router.post('/overtime', controller.requestOvertime);
+router.patch('/overtime/:id/status', controller.updateOvertimeStatus);
 
 
 // Geofence and location

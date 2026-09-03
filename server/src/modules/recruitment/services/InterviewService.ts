@@ -98,6 +98,7 @@ export class InterviewService {
     ctx: TenantContext,
     input: {
       applicationId: number;
+      candidateEmail?: string;
       interviewType: string;
       interviewRound: number;
       scheduledDate: string;
@@ -116,10 +117,32 @@ export class InterviewService {
       throw new NotFoundError('Application not found');
     }
 
-    const scheduledDateObj = new Date(input.scheduledDate);
-    const dbFormattedScheduledDate = !isNaN(scheduledDateObj.getTime())
-      ? scheduledDateObj.toISOString().replace('T', ' ').substring(0, 19)
-      : input.scheduledDate;
+    let dbFormattedScheduledDate: string;
+    if (typeof input.scheduledDate === 'string' && input.scheduledDate.match(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/)) {
+      let cleaned = input.scheduledDate.replace('T', ' ').substring(0, 19);
+      if (cleaned.length === 16) cleaned += ':00';
+      dbFormattedScheduledDate = cleaned;
+    } else {
+      let scheduledDateObj = new Date(input.scheduledDate);
+      if (isNaN(scheduledDateObj.getTime())) {
+        scheduledDateObj = new Date();
+      }
+      const year = scheduledDateObj.getFullYear() < 2000 ? 2026 : scheduledDateObj.getFullYear();
+      const month = String(scheduledDateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(scheduledDateObj.getDate()).padStart(2, '0');
+      const hours = String(scheduledDateObj.getHours()).padStart(2, '0');
+      const minutes = String(scheduledDateObj.getMinutes()).padStart(2, '0');
+      const seconds = String(scheduledDateObj.getSeconds()).padStart(2, '0');
+      dbFormattedScheduledDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Ensure a persistent unique room link instead of generic /new
+    let persistentMeetingUrl = (input.meetingUrl && typeof input.meetingUrl === 'string') ? input.meetingUrl.trim() : '';
+    if (!persistentMeetingUrl || persistentMeetingUrl.endsWith('/new') || persistentMeetingUrl === 'https://meet.google.com/new') {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      persistentMeetingUrl = `https://meet.jit.si/apponext-interview-${rand(8)}`;
+    }
 
     const interview = await this.interviewRepo.create(ctx, {
       uuid: uuidv4(),
@@ -129,7 +152,7 @@ export class InterviewService {
       scheduled_date: dbFormattedScheduledDate,
       interview_duration_minutes: input.durationMinutes || 30,
       status: 'scheduled',
-      meeting_url: input.meetingUrl || null,
+      meeting_url: persistentMeetingUrl,
       recording_url: null,
       feedback_submitted: false,
       interviewer_ids: JSON.stringify(input.interviewerIds),
@@ -137,16 +160,35 @@ export class InterviewService {
       updated_by: ctx.userId,
     } as any);
 
-    // Save panel records to interview_panel table
+    // Save panel records to interview_panel table safely
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
-    const panelRecords = input.interviewerIds.map((employeeId) => ({
-      organization_id: ctx.organizationId,
-      interview_id: interview.id,
-      employee_id: employeeId,
-    }));
-    if (panelRecords.length > 0) {
-      await db('interview_panel').insert(panelRecords);
+
+    const validPanelRecords: any[] = [];
+    for (const rawId of input.interviewerIds) {
+      let numEmpId = Number(rawId);
+      if (isNaN(numEmpId) || numEmpId <= 0) {
+        // Look up employee by ID, user_id, or name
+        const empLookup = await db('employees')
+          .where('id', rawId)
+          .orWhere('user_id', rawId)
+          .orWhereRaw("LOWER(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) LIKE ?", [`%${String(rawId).toLowerCase()}%`])
+          .first()
+          .catch(() => null);
+        if (empLookup?.id) numEmpId = empLookup.id;
+      }
+
+      if (!isNaN(numEmpId) && numEmpId > 0) {
+        validPanelRecords.push({
+          organization_id: ctx.organizationId,
+          interview_id: interview.id,
+          employee_id: numEmpId,
+        });
+      }
+    }
+
+    if (validPanelRecords.length > 0) {
+      await db('interview_panel').insert(validPanelRecords).catch((e) => console.error('interview_panel insert error:', e));
     }
 
     // Update application status via StatusSyncService
@@ -168,22 +210,32 @@ export class InterviewService {
       }
     );
 
-    // Send in-app notification to interviewers
-    for (const interviewerId of input.interviewerIds) {
-      try {
-        await this.notificationService.sendNotification(ctx, {
-          eventCode: 'INTERVIEW_SCHEDULED',
-          recipientId: interviewerId,
-          variables: {
-            interviewId: interview.id,
-            applicationId: input.applicationId,
-            scheduledDate: input.scheduledDate,
-          },
-        } as any);
-      } catch (error) {
-        // Silently skip if eventCode template is not seeded in notification_events table
+    // 🔔 Send in-app notification to assigned interviewers
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interview.id);
+      const interviewerUserIds = await RecruitmentNotificationHelper.getInterviewerUserIds(ctx, interview.id);
+
+      if (interviewerUserIds.length === 0) {
+        for (const rawId of input.interviewerIds) {
+          const user = await db('users').where({ employee_id: rawId, organization_id: ctx.organizationId }).first()
+            || await db('users').where({ id: rawId, organization_id: ctx.organizationId }).first();
+          if (user) interviewerUserIds.push(user.id);
+        }
       }
-    }
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, interviewerUserIds, {
+        eventCode: 'INTERVIEW_SCHEDULED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          scheduledDate: input.scheduledDate,
+          round: String(input.interviewRound || 1),
+          interviewType: input.interviewType || 'Video',
+          interviewId: interview.id,
+          applicationId: input.applicationId,
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
 
     // =========================================================================
     // Send Email Notifications to Candidate & Assigned Interviewers
@@ -228,7 +280,14 @@ export class InterviewService {
         const candidateName = candidate
           ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
           : 'Candidate';
-        const candidateEmail = candidate ? (candidate.email || candidate.email_address || '') : '';
+        
+        const inputCandEmail = (input.candidateEmail || '').trim();
+        const dbCandEmail = candidate ? (candidate.email || candidate.email_address || '') : '';
+        const candidateEmail = inputCandEmail || dbCandEmail;
+
+        if (candidate?.id && inputCandEmail && dbCandEmail !== inputCandEmail) {
+          await db('candidates').where('id', candidate.id).update({ email: inputCandEmail }).catch(() => null);
+        }
 
         const dateObj = new Date(input.scheduledDate);
         const dateFormatted = !isNaN(dateObj.getTime())
@@ -243,10 +302,10 @@ export class InterviewService {
           ? `${dateFormatted} at ${timeFormatted}`
           : input.scheduledDate;
 
-        const modeText = input.interviewType === 'video' 
-          ? 'Online Video Call' 
-          : input.interviewType === 'phone' 
-            ? 'Phone Screening' 
+        const modeText = input.interviewType === 'video'
+          ? 'Online Video Call'
+          : input.interviewType === 'phone'
+            ? 'Phone Screening'
             : 'In-Person (Office)';
 
         const commonVars: Record<string, string> = {
@@ -270,8 +329,8 @@ export class InterviewService {
           interview_mode: modeText,
           interviewRound: String(input.interviewRound || 1),
           interview_round: String(input.interviewRound || 1),
-          meetingUrl: input.meetingUrl || 'N/A',
-          meeting_url: input.meetingUrl || 'N/A',
+          meetingUrl: persistentMeetingUrl || 'N/A',
+          meeting_url: persistentMeetingUrl || 'N/A',
           interviewerName: '',
           interviewer_name: '',
         };
@@ -404,7 +463,7 @@ HR Management System
       .where({ interview_id: interviewId, organization_id: ctx.organizationId })
       .count('id as count')
       .first();
-    
+
     let expectedCount = Number(panelCountRes?.count || 0);
     if (expectedCount === 0) {
       try {
@@ -433,6 +492,25 @@ HR Management System
       } as any);
     }
 
+    // 🔔 Notify HR admins about feedback submission
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const submitterName = await RecruitmentNotificationHelper.getUserDisplayName(ctx.userId);
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, hrAdmins, {
+        eventCode: 'INTERVIEW_FEEDBACK_SUBMITTED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          round: candidateInfo.round,
+          rating: String(input.overallRating),
+          recommendation: input.wouldRecommend !== false ? 'Recommended' : 'Not Recommended',
+          submittedBy: submitterName,
+        },
+        priority: 'normal',
+      });
+    } catch { /* notification failure is non-critical */ }
+
     return feedback;
   }
 
@@ -448,10 +526,13 @@ HR Management System
       notes?: string;
     }
   ): Promise<any> {
-    const interview = await this.interviewRepo.getById(ctx, interviewId);
+    const interview = await this.interviewRepo.getById(ctx, interviewId) as any;
     if (!interview) {
       throw new NotFoundError('Interview not found');
     }
+
+    const appId = interview.applicationId || (interview as any).application_id;
+    const roundNum = interview.interviewRound || (interview as any).interview_round;
 
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
@@ -477,15 +558,15 @@ HR Management System
       // Advance to 'offer' stage
       syncResult = await statusSyncService.syncApplicationStatus(
         ctx,
-        interview.application_id,
+        appId,
         'offer',
         {
           triggeredBy: 'interview_advanced',
-          notes: input.notes || `Candidate advanced to Offer stage following Round ${interview.interview_round} interview feedback`,
+          notes: input.notes || `Candidate advanced to Offer stage following Round ${roundNum} interview feedback`,
           metadata: {
             interviewId,
             decision: 'advance',
-            round: interview.interview_round,
+            round: roundNum,
           },
           changedBy: ctx.userId,
         }
@@ -494,16 +575,16 @@ HR Management System
       // Reject application
       syncResult = await statusSyncService.syncApplicationStatus(
         ctx,
-        interview.application_id,
+        appId,
         'rejected',
         {
           triggeredBy: 'interview_rejected',
-          rejectionReason: input.notes || `Rejected following Round ${interview.interview_round} interview evaluation`,
+          rejectionReason: input.notes || `Rejected following Round ${roundNum} interview evaluation`,
           notes: input.notes,
           metadata: {
             interviewId,
             decision: 'reject',
-            round: interview.interview_round,
+            round: roundNum,
           },
           changedBy: ctx.userId,
         }
@@ -511,12 +592,12 @@ HR Management System
     } else if (input.decision === 'hold') {
       // Soft hold - record audit note in application_stage_history without altering application_status
       const hasMetadataCol = await db.schema.hasColumn('application_stage_history', 'metadata').catch(() => false);
-      const app = await db('applications').where('id', interview.application_id).first();
+      const app = await db('applications').where('id', appId).first();
 
       const historyData: any = {
         uuid: uuidv4(),
         organization_id: ctx.organizationId,
-        application_id: interview.application_id,
+        application_id: appId,
         from_stage_id: app?.pipeline_stage_id || null,
         to_stage_id: app?.pipeline_stage_id || 0,
         changed_by: ctx.userId,
@@ -548,10 +629,29 @@ HR Management System
       });
     }
 
+    // 🔔 Notify HR admins about interview decision
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const deciderName = await RecruitmentNotificationHelper.getUserDisplayName(ctx.userId);
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, hrAdmins, {
+        eventCode: 'INTERVIEW_DECISION_MADE',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          decision: input.decision.charAt(0).toUpperCase() + input.decision.slice(1),
+          round: candidateInfo.round,
+          decisionBy: deciderName,
+          notes: input.notes || 'None',
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
+
     return {
       decision: input.decision,
       interviewId,
-      applicationId: interview.application_id,
+      applicationId: appId,
       syncResult,
     };
   }
@@ -562,11 +662,32 @@ HR Management System
       throw new NotFoundError('Interview not found');
     }
 
-    return this.interviewRepo.update(ctx, interviewId, {
+    const updated = await this.interviewRepo.update(ctx, interviewId, {
       status: 'completed',
       recording_url: recordingUrl || null,
       updated_by: ctx.userId,
     } as any);
+
+    // 🔔 Notify HR admins that interview was completed
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const completedByName = await RecruitmentNotificationHelper.getUserDisplayName(ctx.userId);
+      const hrAdmins = await RecruitmentNotificationHelper.getHrAdminUserIds(ctx);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, hrAdmins, {
+        eventCode: 'INTERVIEW_COMPLETED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          round: candidateInfo.round,
+          interviewType: candidateInfo.interviewType,
+          scheduledDate: candidateInfo.scheduledDate,
+          completedBy: completedByName,
+        },
+        priority: 'normal',
+      });
+    } catch { /* notification failure is non-critical */ }
+
+    return updated;
   }
 
   async rescheduleInterview(
@@ -588,11 +709,30 @@ HR Management System
       ? dateObj.toISOString().replace('T', ' ').substring(0, 19)
       : newScheduledDate;
 
-    return this.interviewRepo.update(ctx, interviewId, {
+    const updated = await this.interviewRepo.update(ctx, interviewId, {
       scheduled_date: dbFormattedDate,
       status: 'rescheduled',
       updated_by: ctx.userId,
     } as any);
+
+    // 🔔 Notify all panel interviewers about the reschedule
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const interviewerUserIds = await RecruitmentNotificationHelper.getInterviewerUserIds(ctx, interviewId);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, interviewerUserIds, {
+        eventCode: 'INTERVIEW_RESCHEDULED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          newDate: newScheduledDate,
+          round: candidateInfo.round,
+          interviewType: candidateInfo.interviewType,
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
+
+    return updated;
   }
 
   async cancelInterview(ctx: TenantContext, interviewId: number): Promise<Interview> {
@@ -601,10 +741,29 @@ HR Management System
       throw new NotFoundError('Interview not found');
     }
 
-    return this.interviewRepo.update(ctx, interviewId, {
+    const updated = await this.interviewRepo.update(ctx, interviewId, {
       status: 'cancelled',
       updated_by: ctx.userId,
     } as any);
+
+    // 🔔 Notify all panel interviewers about the cancellation
+    try {
+      const candidateInfo = await RecruitmentNotificationHelper.getCandidateInfoFromInterview(ctx, interviewId);
+      const interviewerUserIds = await RecruitmentNotificationHelper.getInterviewerUserIds(ctx, interviewId);
+
+      await RecruitmentNotificationHelper.safeSendToMultiple(this.notificationService, ctx, interviewerUserIds, {
+        eventCode: 'INTERVIEW_CANCELLED',
+        variables: {
+          candidateName: candidateInfo.candidateName,
+          scheduledDate: candidateInfo.scheduledDate,
+          round: candidateInfo.round,
+          interviewType: candidateInfo.interviewType,
+        },
+        priority: 'high',
+      });
+    } catch { /* notification failure is non-critical */ }
+
+    return updated;
   }
 
   async getInterview(ctx: TenantContext, interviewId: number): Promise<any> {
@@ -630,6 +789,168 @@ HR Management System
     return this.interviewRepo.getByApplication(ctx, applicationId, options);
   }
 
+  async getCandidateInterviewSummary(ctx: TenantContext, applicationId: number) {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const interviews = await db('interviews')
+      .where('application_id', applicationId)
+      .where(function () {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
+      .orderBy('interview_round', 'asc')
+      .orderBy('scheduled_date', 'asc');
+
+    const interviewIds = interviews.map((i: any) => i.id);
+
+    const [panels, feedbacks, employees, users, designations] = await Promise.all([
+      interviewIds.length > 0 ? db('interview_panel').whereIn('interview_id', interviewIds).catch(() => []) : [],
+      interviewIds.length > 0 ? db('interview_feedback').whereIn('interview_id', interviewIds).catch(() => []) : [],
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => []),
+      db('designations').select('*').catch(() => [])
+    ]);
+
+    const designationMap: Record<number | string, string> = {};
+    (designations || []).forEach((d: any) => {
+      if (d.id && d.name) designationMap[d.id] = d.name;
+    });
+
+    const formatNameFromEmail = (email?: string) => {
+      if (!email || !email.includes('@')) return '';
+      const handle = email.split('@')[0];
+      return handle
+        .split(/[\._\-]/)
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+    };
+
+    const employeeMap: Record<number | string, string> = {};
+    (employees || []).forEach((e: any) => {
+      const fn = (e.first_name || e.firstName || '').trim();
+      const ln = (e.last_name || e.lastName || '').trim();
+      let name = `${fn} ${ln}`.trim();
+      if (!name) name = e.name || e.full_name || e.fullName || formatNameFromEmail(e.email);
+      const desigId = e.current_designation_id || e.designation_id || e.designationId;
+      const desigName = e.designation || e.designation_name || e.job_title || e.jobTitle || (desigId ? designationMap[desigId] : '');
+      if (desigName) {
+        name = `${name || `Employee #${e.id}`} (${desigName})`;
+      } else if (!name) {
+        name = `Employee #${e.id}`;
+      }
+      employeeMap[e.id] = name;
+      employeeMap[String(e.id)] = name;
+    });
+
+    (users || []).forEach((u: any) => {
+      const fn = (u.first_name || u.firstName || '').trim();
+      const ln = (u.last_name || u.lastName || '').trim();
+      let name = `${fn} ${ln}`.trim();
+      if (!name) name = u.name || u.full_name || u.fullName || u.username || formatNameFromEmail(u.email);
+      if (name) {
+        if (!employeeMap[u.id] || employeeMap[u.id].startsWith('Employee #')) {
+          employeeMap[u.id] = name;
+          employeeMap[String(u.id)] = name;
+        }
+        employeeMap[`user_${u.id}`] = name;
+      }
+    });
+
+    const panelMap: Record<number, string[]> = {};
+    (panels || []).forEach((p: any) => {
+      const intId = Number(p.interviewId || p.interview_id);
+      const empId = Number(p.employeeId || p.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        const empName = employeeMap[empId] || employeeMap[String(empId)] || `Interviewer #${empId}`;
+        if (!panelMap[intId].includes(empName)) panelMap[intId].push(empName);
+      }
+    });
+
+    const feedbackMap: Record<number, any> = {};
+    (feedbacks || []).forEach((f: any) => {
+      const intId = Number(f.interviewId || f.interview_id);
+      if (intId) {
+        const interviewerId = f.interviewerId || f.interviewer_id;
+        const interviewerName = interviewerId ? (employeeMap[interviewerId] || employeeMap[String(interviewerId)] || '') : '';
+        const rawRec = f.wouldRecommend ?? f.would_recommend;
+        const recommendation = (rawRec === 1 || rawRec === '1' || rawRec === 'hire' || rawRec === 'strong_hire' || rawRec === true)
+          ? 'Hire'
+          : (rawRec === 0 || rawRec === '0' || rawRec === 'reject' || rawRec === false)
+            ? 'Reject'
+            : (rawRec || 'Hire');
+
+        feedbackMap[intId] = {
+          overallRating: Number(f.overallRating || f.overall_rating || 0),
+          technicalScore: Number(f.technicalRating || f.technical_rating || f.technicalScore || f.technical_score || 0),
+          communicationScore: Number(f.communicationRating || f.communication_rating || f.communicationScore || f.communication_score || 0),
+          culturalFitScore: Number(f.culturalFitRating || f.cultural_fit_rating || 0),
+          wouldRecommend: recommendation,
+          feedbackText: f.feedbackText || f.feedback_text || f.comments || '',
+          interviewerName,
+          submittedAt: f.createdAt || f.created_at,
+        };
+      }
+    });
+
+    let maxRound = 0;
+    let totalScore = 0;
+    let scoreCount = 0;
+    let hasPending = false;
+
+    const rounds = interviews.map((item: any) => {
+      const roundNum = Number(item.interviewRound || item.interview_round || 1);
+      if (roundNum > maxRound) maxRound = roundNum;
+
+      const fb = feedbackMap[item.id] || null;
+      if (fb && fb.overallRating) {
+        totalScore += Number(fb.overallRating);
+        scoreCount += 1;
+      }
+
+      if (item.status === 'scheduled') {
+        hasPending = true;
+      }
+
+      let panelNames = panelMap[item.id] || [];
+      if (panelNames.length === 0 && item.interviewer_ids) {
+        try {
+          const rawIds = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          if (Array.isArray(rawIds)) {
+            panelNames = rawIds.map((id: any) => employeeMap[id] || employeeMap[String(id)] || `Interviewer #${id}`);
+          }
+        } catch { /* ignore */ }
+      }
+      const interviewerDisplay = panelNames.length > 0 ? panelNames.join(', ') : 'Assigned Interviewer';
+
+      return {
+        id: item.id,
+        uuid: item.uuid,
+        roundNumber: roundNum,
+        interviewType: item.interviewType || item.interview_type || 'video',
+        scheduledDate: item.scheduledDate || item.scheduled_date,
+        durationMinutes: item.interviewDurationMinutes || item.interview_duration_minutes || 30,
+        meetingUrl: item.meetingUrl || item.meeting_url || null,
+        status: item.status || 'scheduled',
+        decision: item.decision || null,
+        decisionNotes: item.decisionNotes || item.decision_notes || null,
+        interviewerNames: interviewerDisplay,
+        feedback: fb,
+      };
+    });
+
+    return {
+      applicationId,
+      totalRounds: rounds.length,
+      completedRounds: rounds.filter((r: any) => r.status === 'completed' || r.feedback !== null).length,
+      maxRoundNumber: maxRound,
+      nextSuggestedRound: maxRound > 0 ? maxRound + 1 : 1,
+      averageRating: scoreCount > 0 ? Number((totalScore / scoreCount).toFixed(1)) : null,
+      hasPendingRound: hasPending,
+      rounds,
+    };
+  }
+
   async getInterviewSchedule(ctx: TenantContext, userId: number, options?: ListQueryOptions) {
     return this.interviewRepo.getByInterviewer(ctx, userId, options);
   }
@@ -647,7 +968,7 @@ HR Management System
       templates = await db('notification_templates')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .where(function() {
+        .where(function () {
           this.where('template_name', 'like', '%Interview%')
             .orWhere('template_name', 'like', '%Recruitment%');
         });

@@ -16,6 +16,8 @@ export interface OrgLeaveSettings {
   disableLeaveApplicationReminder: boolean;
   showPopupOnWeekOffOrHoliday: boolean;
   leaveApplicationDateRestriction: boolean;
+  enableBackupPerson: boolean;
+  enable_backup_person?: boolean;
 }
 
 /**
@@ -57,6 +59,8 @@ export async function getOrgLeaveSettings(
     disableLeaveApplicationReminder: false,
     showPopupOnWeekOffOrHoliday: false,
     leaveApplicationDateRestriction: false,
+    enableBackupPerson: true,
+    enable_backup_person: true,
   };
 
   try {
@@ -116,6 +120,9 @@ export async function getOrgLeaveSettings(
       const showPopupOnWeekOffOrHoliday = !!(settingsRow.show_popup_on_week_off_or_holiday || settingsRow.showPopupOnWeekOffOrHoliday);
       const leaveApplicationDateRestriction = !!(settingsRow.leave_application_date_restriction || settingsRow.leaveApplicationDateRestriction);
 
+      const enableBackupPersonRaw = settingsRow.enable_backup_person ?? settingsRow.enableBackupPerson;
+      const enableBackupPerson = enableBackupPersonRaw !== undefined && enableBackupPersonRaw !== null ? !!enableBackupPersonRaw : true;
+
       return {
         id: settingsRow.id || settingsRow.uuid,
         organizationId: parseInt(settingsRow.organization_id || settingsRow.organizationId, 10),
@@ -132,6 +139,7 @@ export async function getOrgLeaveSettings(
         disableLeaveApplicationReminder,
         showPopupOnWeekOffOrHoliday,
         leaveApplicationDateRestriction,
+        enableBackupPerson,
 
         normal_working_hours_daily: normalWorkingHoursDaily,
         full_time_hours: fullTimeHours,
@@ -144,7 +152,7 @@ export async function getOrgLeaveSettings(
         disable_leave_application_reminder: disableLeaveApplicationReminder,
         show_popup_on_week_off_or_holiday: showPopupOnWeekOffOrHoliday,
         leave_application_date_restriction: leaveApplicationDateRestriction,
-      };
+      } as any;
     }
   } catch (err: any) {
     // Table doesn't exist yet — return fallback defaults silently

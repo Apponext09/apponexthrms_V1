@@ -22,6 +22,8 @@ const config = {
   migrations: {
     directory: path.join(__dirname, 'migrations'),
     extension: 'ts',
+    loadExtensions: ['.ts'],
+    disableMigrationsListValidation: true,
   },
 };
 

@@ -7,8 +7,10 @@ import type { Knex } from 'knex';
 export interface TenantContext {
   organizationId: number;
   userId: number;
-  sessionUuid: string;
+  sessionUuid?: string;
   companyId?: number;
+  role?: string;
+  roles?: string[];
 }
 
 /**

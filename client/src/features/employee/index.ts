@@ -21,3 +21,4 @@ export * from './hooks/useAssets';
 
 // Store
 export { useEmployeeStore } from './store/employeeStore';
+export { useEmployeeCustomizationStore } from './store/employeeCustomizationStore';

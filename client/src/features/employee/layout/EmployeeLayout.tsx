@@ -7,9 +7,10 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
-import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
 import { useEmployeeLocationTracker } from '@/features/Livetracking';
@@ -49,8 +50,6 @@ export function EmployeeLayout() {
     if (location.pathname.includes('/performance/goals')) return 'Goals & OKR Tracking';
     if (location.pathname.includes('/performance/appraisals')) return 'Performance Appraisals';
     if (location.pathname.includes('/performance')) return 'Performance Reviews & Feedback';
-    if (location.pathname.includes('/interview-schedule')) return 'My Assigned Interview Schedule & Rating Portal';
-    if (location.pathname.includes('/interviewer-rating')) return 'Interviewer Rating & Scorecards';
     if (location.pathname.includes('/assets')) return 'My Assigned Company Assets';
     if (location.pathname.includes('/approvals')) return 'Approval Inbox';
     return 'Employee Self Service Portal';
@@ -131,21 +130,8 @@ export function EmployeeLayout() {
               )}
             </Button>
 
-            {/* Notifications Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative size-9 rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Open notifications"
-            >
-              <Bell className="size-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm ring-1 ring-white">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            {/* Notifications Dropdown Popup */}
+            <NotificationBell className="size-9 rounded-lg border border-border bg-card" iconClassName="size-4" />
 
             {/* Profile Avatar Badge */}
             <button

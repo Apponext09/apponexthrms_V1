@@ -1,0 +1,7 @@
+{
+  "item6a_filter_nothing_selected_toast": "Missing Selection\nChoose \"Generate Payroll On\" before filtering.",
+  "item6b_filter_missing_cycle_toast": null,
+  "item6c_filter_missing_month_toast": "Missing Month\nSelect a Month / Period before filtering.",
+  "item6d_noAutoLoadBeforeFilterClick": false,
+  "item6d_filter_valid_toast": null
+}

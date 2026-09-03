@@ -123,10 +123,8 @@ export function Topbar({
               )}
             </Button>
 
-            {/* Notifications — live bell connected to real API + Socket.IO */}
-            <div className="relative">
-              <NotificationBell onClick={() => setDrawerOpen(true)} />
-            </div>
+            {/* Notifications — popup dropdown connected to live API + Socket.IO */}
+            <NotificationBell className="size-9 rounded-lg border border-border bg-card hover:bg-muted" iconClassName="size-4" />
           </div>
         </div>
       </header>

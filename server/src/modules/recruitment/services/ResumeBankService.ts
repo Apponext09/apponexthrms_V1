@@ -3,6 +3,7 @@ import { ResumeBankRepository } from '../repositories/ResumeBankRepository';
 import { ResumeUploadLogRepository } from '../repositories/ResumeUploadLogRepository';
 import { CandidateRepository } from '../repositories/CandidateRepository';
 import type { CreateResumeBankEntryInput } from '../types/mrf';
+import AdmZip from 'adm-zip';
 
 export class ResumeBankService {
   private resumeRepo: ResumeBankRepository;
@@ -15,62 +16,179 @@ export class ResumeBankService {
     this.candidateRepo = new CandidateRepository();
   }
 
+  private saveBase64Resume(dataUrl: string | null | undefined, prefix: string): string | null {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    if (!dataUrl.startsWith('data:')) return dataUrl.length > 500 ? dataUrl.slice(0, 500) : dataUrl;
+
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads/resumes');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const matches = dataUrl.match(/^data:([a-zA-Z0-9-]+\/[a-zA-Z0-9-+.]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) return dataUrl.slice(0, 500);
+
+      const mimeType = matches[1];
+      let ext = 'pdf';
+      if (mimeType.includes('wordprocessingml.document')) ext = 'docx';
+      else if (mimeType.includes('msword')) ext = 'doc';
+      else if (mimeType.includes('jpeg')) ext = 'jpg';
+      else if (mimeType.includes('png')) ext = 'png';
+
+      const buffer = Buffer.from(matches[2], 'base64');
+      const filename = `${prefix.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+      const filePath = path.join(uploadsDir, filename);
+
+      fs.writeFileSync(filePath, buffer);
+      return `/uploads/resumes/${filename}`;
+    } catch (err) {
+      console.error(`Failed to save base64 resume (${prefix}):`, err);
+      return null;
+    }
+  }
+
+  /**
+   * Resolve the real organization_id valid in FK references.
+   * ctx.organizationId may not match FK in organizations table if the
+   * JWT oid claim reflects a user_id or a legacy id.
+   * Falls back to looking up the user's actual organization_id from users table.
+   *
+   * NOTE: Knex postProcessResponse converts snake_case → camelCase for ALL queries
+   * including raw(). We handle both key names to be safe.
+   */
+  private async resolveOrgId(ctx: TenantContext): Promise<number> {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    try {
+      // Check if ctx.organizationId exists in organizations table
+      const orgResult = await db.raw('SELECT id FROM organizations WHERE id = ? LIMIT 1', [ctx.organizationId]);
+      const orgRows = orgResult[0];
+      if (orgRows && orgRows.length > 0) {
+        return ctx.organizationId; // Already valid
+      }
+
+      // Fallback: look up user's organization_id from users table
+      // NOTE: Knex converts organization_id → organizationId in postProcessResponse
+      if (ctx.userId) {
+        const userResult = await db.raw('SELECT organization_id FROM users WHERE id = ? LIMIT 1', [ctx.userId]);
+        const userRows = userResult[0];
+        if (userRows && userRows.length > 0) {
+          // Handle both camelCase (Knex processed) and snake_case (raw)
+          const realOrgId = userRows[0].organizationId ?? userRows[0].organization_id;
+          if (realOrgId) {
+            console.warn(`[ResumeBankService] ctx.organizationId=${ctx.organizationId} not in organizations. Resolved from user id=${ctx.userId}: organizationId=${realOrgId}`);
+            return Number(realOrgId);
+          }
+        }
+      }
+
+      // Last resort: use the first valid org ID
+      const firstOrgResult = await db.raw('SELECT id FROM organizations ORDER BY id ASC LIMIT 1');
+      const firstOrgRows = firstOrgResult[0];
+      if (firstOrgRows && firstOrgRows.length > 0) {
+        console.warn(`[ResumeBankService] Fallback to first org id=${firstOrgRows[0].id}`);
+        return Number(firstOrgRows[0].id);
+      }
+    } catch (err) {
+      console.error('[ResumeBankService] resolveOrgId error:', err);
+    }
+
+    return ctx.organizationId;
+  }
+
+
   /**
    * Add a single resume bank entry (and create/link candidate)
    */
   async addEntry(ctx: TenantContext, input: CreateResumeBankEntryInput) {
-    // Parse name into first/last
-    const nameParts = input.name.trim().split(' ');
-    const firstName = nameParts[0] || input.name;
-    const lastName = nameParts.slice(1).join(' ') || '';
+    // Parse name into first/last safely
+    const rawName = (input.name && typeof input.name === 'string' && input.name.trim()) 
+      ? input.name.trim() 
+      : 'Candidate Applicant';
+    
+    const nameParts = rawName.split(' ');
+    const firstName = nameParts[0] || 'Candidate';
+    const lastName = nameParts.slice(1).join(' ') || 'Applicant';
 
-    // Create candidate record
-    const candidate = await this.candidateRepo.create(ctx, {
-      first_name: firstName,
-      last_name: lastName,
-      email: input.email,
-      phone: input.contact || null,
-      dob: input.dob || null,
-      gender: input.gender || null,
-      marital_status: input.maritalStatus || null,
-      current_company: input.company || null,
-      qualification: input.qualification || null,
-      university: input.university || null,
-      years_of_experience: input.totalExp ? parseFloat(input.totalExp) : null,
-      source: input.source || 'direct_apply',
-      address_line1: input.addressLine1 || null,
-      address_line2: input.addressLine2 || null,
-      country: input.country || null,
-      zipcode: input.zipcode || null,
-      state: input.state || null,
-      city: input.city || null,
-      skills: input.skills || null,
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-    } as any);
+    const safeEmail = (input.email && typeof input.email === 'string' && input.email.trim())
+      ? input.email.trim().toLowerCase()
+      : `candidate_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}@example.com`;
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    // Resolve the real FK-valid organizationId
+    const realOrgId = await this.resolveOrgId(ctx);
+    const resolvedCtx: TenantContext = { ...ctx, organizationId: realOrgId };
+
+    // Check if candidate record already exists for this email
+    let candidate: any = await this.candidateRepo.getByEmail(resolvedCtx, safeEmail);
+    if (!candidate) {
+      const rawCand = await db('candidates').where('email', safeEmail).first().catch(() => null);
+      if (rawCand) {
+        candidate = rawCand;
+      } else {
+        try {
+          candidate = await this.candidateRepo.create(resolvedCtx, {
+            first_name: firstName,
+            last_name: lastName,
+            email: safeEmail,
+            phone: input.contact || null,
+            dob: input.dob || null,
+            gender: input.gender || null,
+            marital_status: input.maritalStatus || null,
+            current_company: input.company || null,
+            qualification: input.qualification || null,
+            university: input.university || null,
+            years_of_experience: input.totalExp ? parseFloat(input.totalExp) : null,
+            source: input.source || 'direct_apply',
+            address_line1: input.addressLine1 || null,
+            address_line2: input.addressLine2 || null,
+            country: input.country || null,
+            zipcode: input.zipcode || null,
+            state: input.state || null,
+            city: input.city || null,
+            skills: input.skills || null,
+            created_by: ctx.userId || 1,
+            updated_by: ctx.userId || 1,
+          } as any);
+        } catch (err: any) {
+          const fallbackCand = await db('candidates').where('email', safeEmail).first().catch(() => null);
+          if (fallbackCand) {
+            candidate = fallbackCand;
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+
+    const candidateId = candidate.id || candidate.ID;
 
     // Generate tracker ID and create resume bank entry
-    const trackerId = await this.resumeRepo.getNextTrackerId(ctx);
+    const trackerId = await this.resumeRepo.getNextTrackerId(resolvedCtx);
 
-    const entry = await this.resumeRepo.create(ctx, {
+    const entry = await this.resumeRepo.create(resolvedCtx, {
       tracker_id: trackerId,
-      candidate_id: candidate.id,
+      candidate_id: candidateId,
       job_id: input.jobId || null,
       mrf_request_id: input.mrfRequestId || null,
       source: input.source || 'Direct',
       position: input.position || null,
       status: 'Applied',
-      uploaded_by: ctx.userId,
+      uploaded_by: ctx.userId || 1,
     } as any);
 
     // Link resume_bank_id on candidate if schema supports it
-    const { getKnex: getKnexDb } = await import('../../../db/knex');
-    const knexDb = getKnexDb();
-    const hasResumeBankCol = await knexDb.schema.hasColumn('candidates', 'resume_bank_id');
+    const hasResumeBankCol = await db.schema.hasColumn('candidates', 'resume_bank_id').catch(() => false);
     if (hasResumeBankCol) {
-      await knexDb('candidates').where('id', candidate.id).update({
+      await db('candidates').where('id', candidateId).update({
         resume_bank_id: entry.id,
-      });
+      }).catch(() => {});
     }
 
     return { ...entry, candidate };
@@ -398,8 +516,8 @@ export class ResumeBankService {
         const combined = [...(resumeResult.items || [])];
         const existingEmails = new Set(combined.map((c: any) => (c.candidate_email || c.email || '').toLowerCase()).filter(Boolean));
 
-        for (const app of appRows) {
-          const emailKey = (app.candidate_email || '').toLowerCase();
+        for (const app of (appRows as any[])) {
+          const emailKey = ((app as any).candidate_email || '').toLowerCase();
           if (!emailKey || !existingEmails.has(emailKey)) {
             combined.push(app);
             if (emailKey) existingEmails.add(emailKey);
@@ -430,45 +548,241 @@ export class ResumeBankService {
   async createUploadLog(
     ctx: TenantContext,
     fileName: string,
-    totalRecords: number
+    totalRecords: number,
+    targetJobId?: number | null
   ) {
-    return this.uploadLogRepo.create(ctx, {
-      uploaded_by: ctx.userId,
+    const realOrgId = await this.resolveOrgId(ctx);
+    const resolvedCtx: TenantContext = { ...ctx, organizationId: realOrgId };
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const hasJobIdCol = await db.schema.hasColumn('resume_upload_logs', 'target_job_id').catch(() => false);
+
+    const data: any = {
+      uploaded_by: ctx.userId || 1,
       file_name: fileName,
       total_records: totalRecords,
       success_count: 0,
       failed_count: 0,
       status: 'Processing',
-    } as any);
+    };
+
+    if (hasJobIdCol && targetJobId) {
+      data.target_job_id = targetJobId;
+    }
+
+    return this.uploadLogRepo.create(resolvedCtx, data);
   }
 
   /**
-   * Update upload log after processing
+   * Update upload log after processing with AI screening metrics
    */
   async updateUploadLog(
     ctx: TenantContext,
     logId: number,
     successCount: number,
     failedCount: number,
-    errorLog?: any
+    errorLog?: any,
+    aiStats?: { atsPassedCount?: number; jdMatchPassedCount?: number; aiShortlistedCount?: number }
   ) {
-    return this.uploadLogRepo.update(ctx, logId, {
+    const realOrgId = await this.resolveOrgId(ctx);
+    const resolvedCtx: TenantContext = { ...ctx, organizationId: realOrgId };
+    const totalProcessed = successCount + failedCount;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const hasAtsCol = await db.schema.hasColumn('resume_upload_logs', 'ats_passed_count').catch(() => false);
+
+    const updateData: any = {
+      total_records: totalProcessed > 0 ? totalProcessed : 1,
       success_count: successCount,
       failed_count: failedCount,
       status: failedCount > 0 && successCount === 0 ? 'Failed' : 'Completed',
       error_log_json: errorLog ? JSON.stringify(errorLog) : null,
-    } as any);
+    };
+
+    if (hasAtsCol && aiStats) {
+      updateData.ats_passed_count = aiStats.atsPassedCount || 0;
+      updateData.jd_match_passed_count = aiStats.jdMatchPassedCount || 0;
+      updateData.ai_shortlisted_count = aiStats.aiShortlistedCount || 0;
+    }
+
+    return this.uploadLogRepo.update(resolvedCtx, logId, updateData);
   }
 
   /**
-   * Get upload logs
+   * Get upload logs with target job information
    */
   async getUploadLogs(ctx: TenantContext, options?: ListQueryOptions) {
-    return this.uploadLogRepo.list(ctx, {
+    const realOrgId = await this.resolveOrgId(ctx);
+    const resolvedCtx: TenantContext = { ...ctx, organizationId: realOrgId };
+    return this.uploadLogRepo.list(resolvedCtx, {
       ...options,
       sortBy: 'created_at',
       sortOrder: 'desc',
     });
+  }
+
+  /**
+   * Process a single resume buffer (PDF) and save to DB
+   */
+  async processSingleResumeBuffer(
+    ctx: TenantContext,
+    buffer: Buffer,
+    originalFilename: string,
+    options: { jobId?: number; source?: string } = {}
+  ) {
+    try {
+      const { ResumeParserService } = await import('./ResumeParserService');
+      const parser = new ResumeParserService();
+      const parsed = await parser.parseResumeBuffer(buffer, originalFilename);
+
+      let fileUrl: string | null = null;
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        const cleanName = (originalFilename || 'resume.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeFileName = `${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}-${cleanName}`;
+        const filePath = path.join(uploadDir, safeFileName);
+        fs.writeFileSync(filePath, buffer);
+        fileUrl = `/uploads/${safeFileName}`;
+      } catch (e) {
+        console.warn('Failed to save physical PDF resume file to disk:', e);
+      }
+
+      const candidateName = parsed.name || (originalFilename ? originalFilename.replace(/\.[^/.]+$/, '').replace(/[_-\s]+/g, ' ').trim() : '') || 'Candidate Applicant';
+      const candidateEmail = parsed.email || `candidate_${Date.now()}_${Math.floor(100000 + Math.random() * 900000)}@example.com`;
+
+      const resEntry = await this.addEntry(ctx, {
+        name: candidateName,
+        email: candidateEmail,
+        contact: parsed.phone || undefined,
+        skills: parsed.skills && parsed.skills.length ? parsed.skills.map(s => s.name).join(', ') : undefined,
+        totalExp: parsed.yearsOfExperience ? String(parsed.yearsOfExperience) : undefined,
+        source: options.source || 'bulk_import',
+        jobId: options.jobId,
+        position: options.jobId ? undefined : 'Software Engineer',
+      });
+
+      if (resEntry && resEntry.id) {
+        const { getKnex } = await import('../../../db/knex');
+        const db = getKnex();
+        await db('resume_bank').where('id', resEntry.id).update({
+          resume_text: parsed.extractedText || null,
+          resume_file_url: fileUrl,
+        }).catch((err) => {
+          console.warn('Failed to update resume_text or resume_file_url:', err);
+        });
+      }
+
+      return resEntry;
+    } catch (err: any) {
+      console.error('[processSingleResumeBuffer] Exception processing file:', originalFilename, err);
+      throw new Error(`Failed to process ${originalFilename || 'file'}: ${err.message || String(err)}`);
+    }
+  }
+
+  /**
+   * Bulk upload resumes supporting PDF files, ZIP, and RAR archives
+   */
+  async bulkUploadResumes(
+    ctx: TenantContext,
+    files: Array<{ buffer: Buffer; originalname: string }>,
+    options: { jobId?: number; source?: string } = {}
+  ) {
+    const log = await this.createUploadLog(ctx, files.map(f => f.originalname).join(', '), files.length);
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: any[] = [];
+
+    for (const file of files) {
+      const ext = file.originalname.split('.').pop()?.toLowerCase();
+      if (ext === 'rar') {
+        failedCount++;
+        errors.push({
+          file: file.originalname,
+          error: 'RAR archives are not supported. Upload PDF/DOCX files or a ZIP of resumes.',
+        });
+        continue;
+      }
+      if (ext === 'zip') {
+        try {
+          const zip = new AdmZip(file.buffer);
+          const zipEntries = zip.getEntries();
+          
+          let processedAnyInZip = false;
+
+          for (const entry of zipEntries) {
+            const entryPath = entry.entryName || '';
+            const fileName = entry.name || entryPath.split('/').pop() || '';
+
+            // Skip directories, macOS metadata files (__MACOSX/._*), hidden files (.DS_Store, etc.)
+            if (
+              entry.isDirectory ||
+              !fileName ||
+              fileName.startsWith('.') ||
+              fileName.startsWith('~') ||
+              entryPath.includes('__MACOSX') ||
+              fileName.toLowerCase() === '.ds_store' ||
+              fileName.toLowerCase() === 'thumbs.db'
+            ) {
+              continue;
+            }
+
+            const entryExt = fileName.toLowerCase().split('.').pop() || '';
+            if (['pdf', 'doc', 'docx', 'txt', 'rtf', 'csv'].includes(entryExt)) {
+              processedAnyInZip = true;
+              try {
+                const entryBuffer = entry.getData();
+                if (!entryBuffer || entryBuffer.length === 0) {
+                  console.warn('[bulkUploadResumes] Skipping empty file in ZIP:', fileName);
+                  continue;
+                }
+                await this.processSingleResumeBuffer(ctx, entryBuffer, fileName, options);
+                successCount++;
+              } catch (err: any) {
+                console.error('[bulkUploadResumes] ZIP Entry processing error:', fileName, err);
+                failedCount++;
+                errors.push({ file: fileName, error: err.message || String(err) });
+              }
+            }
+          }
+
+          if (!processedAnyInZip) {
+            console.warn('[bulkUploadResumes] No valid resume files (.pdf, .doc, .docx, .txt) found in ZIP:', file.originalname);
+            failedCount++;
+            errors.push({ file: file.originalname, error: 'No valid resume files (.pdf, .doc, .docx, .txt) found inside ZIP archive' });
+          }
+        } catch (zipErr: any) {
+          console.error('[bulkUploadResumes] ZIP Archive error:', file.originalname, zipErr);
+          failedCount++;
+          errors.push({ file: file.originalname, error: `Archive extraction error: ${zipErr.message}` });
+        }
+      } else {
+        try {
+          await this.processSingleResumeBuffer(ctx, file.buffer, file.originalname, options);
+          successCount++;
+        } catch (err: any) {
+          console.error('[bulkUploadResumes] File processing error:', file.originalname, err);
+          failedCount++;
+          errors.push({ file: file.originalname, error: err.message || String(err) });
+        }
+      }
+    }
+
+    await this.updateUploadLog(ctx, log.id, successCount, failedCount, errors);
+
+    return {
+      success: true,
+      logId: log.id,
+      successCount,
+      failedCount,
+      errors,
+    };
   }
 
   /**

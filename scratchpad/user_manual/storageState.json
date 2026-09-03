@@ -1,0 +1,22 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5173",
+      "localStorage": [
+        {
+          "name": "accessToken",
+          "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NiIsIm9pZCI6IjE0Iiwic2lkIjoiNTY0YmExMzQtODA0YS00NGU4LWI4MzQtMjc4MmMyMjk1YjgwIiwiaWF0IjoxNzg2OTY0MjQ4LCJleHAiOjE3ODcwNTA2NDh9.H2lScXmPKHtD5mMsUJvhl5LFbIWopGaztWq1X7-EPMLxYh3iucYGuZ5qrlBdsf4lM-eZ2kIEj7C-ITAYhEB7NdHen5aXYRZ4_z52UiYxIyxU8gDyfPoufEX7XzPqSPRHJedPrE3wbhn-rC4pRIi82EOkt_bbBukHRQC-NSMKiwP_PmBvXxAOSkAt_de1c5JzytwnV21n7sX4Aa-vMTjyjE2N0B-8kBP5EZHKdnM5CNfKadkVvDWDnH0HfU5UHDyrmfJMOSczTIE-oFXc1bVyc4LCk7DY65H17yCdiqidl_iqXvWEklCWjzwmPzheoHC12lfGtDkuKLW4EuHlV9Ibfw"
+        },
+        {
+          "name": "auth-storage",
+          "value": "{\"state\":{\"user\":{\"id\":46,\"email\":\"shakya@gmail.com\",\"firstName\":\"shakya\",\"lastName\":\"User\",\"organizationId\":14,\"organizationName\":\"sonex1\",\"organizationCode\":\"SHA\",\"organizationLocation\":\"\",\"roles\":[\"organization_admin\"],\"permissions\":[\"advance:approve\",\"advance:create\",\"advance:view\",\"loan:approve\",\"loan:create\",\"loan:view\",\"payroll:approve\",\"payroll:generate\",\"payroll:lock\",\"payroll:process\",\"payroll:publish\",\"payroll:unlock\",\"payroll:view\",\"payslip:lock\",\"payslip:send\",\"payslip:view\",\"recruitment.application.read\",\"recruitment.application.write\",\"recruitment.assessment.read\",\"recruitment.assessment.write\",\"recruitment.candidate.read\",\"recruitment.candidate.write\",\"recruitment.interview.read\",\"recruitment.interview.write\",\"recruitment.job.read\",\"recruitment.job.write\",\"recruitment.mrf.read\",\"recruitment.mrf.write\",\"recruitment.offer.read\",\"recruitment.offer.write\",\"recruitment.read\",\"revision:approve\",\"revision:request\",\"revision:submit\",\"revision:view\",\"settlement:approve\",\"settlement:calculate\",\"settlement:create\",\"settlement:process\",\"settlement:submit\",\"settlement:view\",\"structure:assign\",\"structure:create\",\"structure:edit\",\"structure:view\",\"tax:declare\",\"tax:view\"],\"employeeId\":null,\"departmentName\":\"\",\"deptName\":\"\",\"designation\":\"Organization Administrator\",\"companyId\":null,\"companyName\":null},\"isAuthenticated\":true},\"version\":0}"
+        },
+        {
+          "name": "refreshToken",
+          "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NiIsIm9pZCI6IjE0Iiwic2lkIjoiNTY0YmExMzQtODA0YS00NGU4LWI4MzQtMjc4MmMyMjk1YjgwIiwiaWF0IjoxNzg2OTY0MjQ4LCJleHAiOjE3ODc1NjkwNDh9.wZw7hhYxlk1lWj3FAXUCrJQmXoZ9zMGCJVg5cHZVwQbfLVfncc98T86rns2cHAffVEC2rpT9cA-RxU8182H-FkzUawgrVny_3Kl-sl-1ny-_ewLDcUVDHbzE5PHK56tSezWW9wfKfHZXQcFmW7o7x4-EIZOFB0gxdZCnGlpHQM60AGfnmv7YkfNv6ad4xyNuaYeklLT93UywAZeiKYoP6JkoA-pxw7KJVm5KMHDxz1cdapf7qddYLWuQ-ByCRhAgyjGpA7ba8YQQS3Unw6zVOHh0YuTIiT-XX541PwdTl7pfF2lopG3mB39RV0yl99WrUPVMeURoLNZCG7t3sISerw"
+        }
+      ]
+    }
+  ]
+}

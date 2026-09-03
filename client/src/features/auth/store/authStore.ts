@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/config/api';
@@ -12,6 +13,8 @@ export interface User {
   organizationCode?: string;
   organizationLocation?: string;
   roles: string[];
+  role?: string;
+  accessRole?: string;
   permissions: string[];
   employeeId?: number | null;
   employee_id?: number | null;
@@ -24,6 +27,8 @@ export interface User {
   designation?: string;
   companyId?: number | null;
   companyName?: string | null;
+  policyAccepted?: boolean;
+  policyAcceptedAt?: string | null;
 }
 
 interface AuthState {
@@ -33,7 +38,13 @@ interface AuthState {
   updateUser: (partialUser: Partial<User>) => void;
   login: (email: string, password: string) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  acceptPolicy: () => Promise<void>;
   logout: () => void;
+}
+
+export function hasStoredAccessToken(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(localStorage.getItem('accessToken'));
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -78,8 +89,10 @@ export const useAuthStore = create<AuthState>()(
             organizationName: orgObj.name || userObj.organizationName || (isDemoKot ? 'Apponext' : `${defaultFirstName}'s Org`),
             organizationCode: orgObj.code || userObj.organizationCode || (isDemoKot ? 'ORG' : `${defaultFirstName.slice(0, 3).toUpperCase()}`),
             organizationLocation: orgObj.location || userObj.organizationLocation || '',
-            roles: loginData.roles || userObj.roles || ['organization_admin'],
-            permissions: loginData.permissions || userObj.permissions || ['*'],
+            // Deny by default: an empty/missing roles or permissions list from
+            // the server must never be masked by an admin-level fallback here.
+            roles: loginData.roles || userObj.roles || [],
+            permissions: loginData.permissions || userObj.permissions || [],
             employeeId: userObj.employeeId || userObj.employee_id || null,
             avatarUrl: userObj.avatarUrl || userObj.avatar_url || undefined,
             departmentName: userObj.departmentName || userObj.department_name || userObj.deptName || userObj.department || (isDemoKot ? 'Finance' : ''),
@@ -87,6 +100,8 @@ export const useAuthStore = create<AuthState>()(
             designation: userObj.designation || (isDemoKot ? 'Finance Manager' : 'Organization Admin'),
             companyId: compId,
             companyName: compName,
+            policyAccepted: Boolean(userObj.policyAccepted ?? userObj.policy_accepted ?? loginData.policyAccepted ?? false),
+            policyAcceptedAt: userObj.policyAcceptedAt || userObj.policy_accepted_at || loginData.policyAcceptedAt || null,
           };
 
           if (loginData.accessToken) {
@@ -95,6 +110,7 @@ export const useAuthStore = create<AuthState>()(
           if (loginData.refreshToken) {
             localStorage.setItem('refreshToken', loginData.refreshToken);
           }
+          localStorage.removeItem('last-logout-time');
 
           // If logging in as a company/branch admin, set the companyStore active company context automatically
           if (compId) {
@@ -119,13 +135,23 @@ export const useAuthStore = create<AuthState>()(
           const data = response.data?.data || response.data;
           if (data?.user) {
             set((state) => {
-              if (!state.user) return state;
+              const previous = state.user;
               return {
+                isAuthenticated: true,
                 user: {
-                  ...state.user,
+                  ...(previous || {}),
                   ...data.user,
-                  departmentName: data.user.departmentName || state.user.departmentName || 'Finance',
-                },
+                  id: data.user.id || previous?.id,
+                  email: data.user.email || previous?.email,
+                  firstName: data.user.firstName || data.user.first_name || previous?.firstName || '',
+                  lastName: data.user.lastName || data.user.last_name || previous?.lastName || '',
+                  organizationId: data.user.organizationId || data.user.organization_id || previous?.organizationId,
+                  roles: data.roles || data.user.roles || previous?.roles || [],
+                  permissions: data.permissions || data.user.permissions || previous?.permissions || [],
+                  departmentName: data.user.departmentName || previous?.departmentName || '',
+                  policyAccepted: Boolean(data.user.policyAccepted ?? data.user.policy_accepted ?? previous?.policyAccepted ?? false),
+                  policyAcceptedAt: data.user.policyAcceptedAt || data.user.policy_accepted_at || previous?.policyAcceptedAt || null,
+                } as User,
               };
             });
           }
@@ -134,15 +160,90 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      acceptPolicy: async () => {
+        try {
+          const res = await apiClient.post('/auth/accept-policy');
+          if (res.data?.success || res.data?.policyAccepted) {
+            set((state) => {
+              if (!state.user) return state;
+              return {
+                user: {
+                  ...state.user,
+                  policyAccepted: true,
+                  policyAcceptedAt: new Date().toISOString(),
+                },
+              };
+            });
+          }
+        } catch (error) {
+          console.error('acceptPolicy failed:', error);
+          throw error;
+        }
+      },
+
       logout: () => {
+        // Clear all tokens and auth data
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('ai-chat-storage');
+        localStorage.removeItem('auth-storage');
+
+        // Set logout timestamp to detect session changes
+        localStorage.setItem('last-logout-time', Date.now().toString());
+
+        // Clear browser service worker cache
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            names.forEach(name => {
+              caches.delete(name).catch(() => {
+                // Ignore errors
+              });
+            });
+          });
+        }
+
+        // Disable browser back button completely
+        // Clear all history by replacing state multiple times
+        window.history.replaceState(null, '', '/login');
+        window.history.replaceState(null, '', '/login?logout=true');
+        window.history.replaceState(null, '', '/login?' + new Date().getTime());
+
+        // Prevent back button by listening to popstate
+        const preventBack = (e: PopStateEvent) => {
+          window.history.pushState(null, '', '/login?' + new Date().getTime());
+        };
+        window.addEventListener('popstate', preventBack);
+
         set({ user: null, isAuthenticated: false });
+
+        // Force hard redirect with cache busting
+        const timestamp = new Date().getTime();
+        window.location.replace('/login?' + timestamp);
+
+        // Extra safety: prevent any code after logout from running
+        return;
       },
     }),
     {
       name: 'auth-storage',
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
     }
   )
 );
+
+export function useAuthHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+
+  useEffect(() => {
+    const unsub = useAuthStore.persist.onFinishHydration(() => setHydrated(true));
+    if (useAuthStore.persist.hasHydrated()) {
+      setHydrated(true);
+    }
+    return unsub;
+  }, []);
+
+  return hydrated;
+}

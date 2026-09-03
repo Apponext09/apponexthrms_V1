@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   const hasUpdatedAt = await knex.schema.hasColumn('leave_application_days', 'updated_at');

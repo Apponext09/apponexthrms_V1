@@ -45,13 +45,23 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const [lockedItemDialogOpen, setLockedItemDialogOpen] = useState(false);
   const [lockedItemName, setLockedItemName] = useState('');
 
-  // Get role-filtered navigation on mount and when roles/features change
+  // Get role-filtered navigation on mount and when roles/features/modules change
   useEffect(() => {
-    const sections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
-    setVisibleSections(sections);
+    const refreshSections = () => {
+      const sections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
+      setVisibleSections(sections);
+      expandSectionContainingRoute(location.pathname, sections);
+    };
 
-    // Auto-expand section containing current route
-    expandSectionContainingRoute(location.pathname, sections);
+    refreshSections();
+
+    window.addEventListener('apponext_modules_updated', refreshSections);
+    window.addEventListener('storage', refreshSections);
+
+    return () => {
+      window.removeEventListener('apponext_modules_updated', refreshSections);
+      window.removeEventListener('storage', refreshSections);
+    };
   }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, location.pathname]);
 
   const handleLogout = () => {
@@ -66,11 +76,29 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       return;
     }
     navigate(href);
-    // Don't close sidebar on desktop
+  };
+
+  const isPathActive = (itemHref: string, currentPath: string): boolean => {
+    if (itemHref === currentPath) return true;
+    if (currentPath.startsWith(itemHref + '/')) return true;
+    if (itemHref.startsWith(currentPath + '/')) return false;
+    return currentPath.startsWith(itemHref);
+  };
+
+  const getFullName = () => {
+    const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+    let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+    if (lName.toLowerCase() === 'user') lName = '';
+    const combined = `${fName} ${lName}`.trim();
+    if (combined) return combined;
+    if ((user as any)?.name && (user as any).name.toLowerCase() !== 'user') return (user as any).name;
+    return fName || 'User';
   };
 
   const getInitials = () => {
-    return `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+    const fName = user?.firstName || (user as any)?.first_name || '';
+    const lName = user?.lastName || (user as any)?.last_name || '';
+    return `${fName?.[0] || ''}${lName?.[0] || ''}`.toUpperCase() || 'US';
   };
 
   // Get icon component by name
@@ -125,7 +153,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
         <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {visibleSections.map((section) => {
             const isActive = section.items.some((item) =>
-              location.pathname.startsWith(item.href)
+              isPathActive(item.href, location.pathname)
             );
             const isExpanded = expandedSections[section.id] ?? true;
 
@@ -178,8 +206,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                       {section.items.map((item) => {
                         const hasChildren = item.children && item.children.length > 0;
-                        const isChildActive = hasChildren && item.children!.some((c) => location.pathname === c.href);
-                        const itemActive = (location.pathname === item.href && !hasChildren) || isChildActive;
+                        const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname));
+                        const itemActive = (isPathActive(item.href, location.pathname) && !hasChildren) || isChildActive;
                         const isLocked = (item as any).isLocked;
 
                         if (hasChildren) {
@@ -221,7 +249,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
                               <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                                 {item.children!.map((child) => {
-                                  const childActive = location.pathname === child.href;
+                                  const childActive = isPathActive(child.href, location.pathname);
                                   return (
                                     <button
                                       key={child.name}
@@ -385,7 +413,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     {open && (
                       <div className="overflow-hidden text-left leading-tight min-w-0">
                         <p className="text-[12px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
-                          {user?.firstName || 'Admin'} {user?.lastName || 'User'}
+                          {getFullName()}
                         </p>
                         <p className="text-[10px] font-semibold text-primary truncate">
                           {roleInfo.roleTitle}

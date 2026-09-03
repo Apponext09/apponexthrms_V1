@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
@@ -78,7 +78,76 @@ export function EmployeeDashboardPage() {
   const [isLocationSending, setIsLocationSending] = useState(false);
   const [lastLocationPingTime, setLastLocationPingTime] = useState<string | null>(null);
 
-  const handleLocationAccessClick = async () => {
+  // Core location ping transmitter function (used by both manual button click and automatic 2.5s background interval)
+  const sendLocationPingUpdate = useCallback(async (isManual = false) => {
+    if (checkInStatus === 'not_started' || !navigator.geolocation) return;
+
+    if (isManual) setIsLocationSending(true);
+
+    const sendFix = async (pos: GeolocationPosition) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const accuracy = pos.coords.accuracy;
+      const speed = pos.coords.speed || 0;
+
+      setUserCoords({ latitude: lat, longitude: lng });
+
+      try {
+        await apiClient.post('/livetracking/ping', {
+          latitude: lat,
+          longitude: lng,
+          accuracy,
+          speed,
+        });
+
+        const timeStr = new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        });
+        setLastLocationPingTime(timeStr);
+
+        if (isManual) {
+          showToast.success(
+            'Location Access Active 📍',
+            `Live GPS location update sent successfully at ${timeStr}! (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+          );
+        }
+      } catch (err: any) {
+        console.error('Failed to send location ping:', err);
+        if (isManual) {
+          showToast.error('Location Update Failed', 'Could not transmit location ping to server.');
+        }
+      } finally {
+        if (isManual) setIsLocationSending(false);
+      }
+    };
+
+    // Primary attempt: Wi-Fi/IP fast-location on laptop (enableHighAccuracy: false)
+    navigator.geolocation.getCurrentPosition(
+      sendFix,
+      () => {
+        // Fallback: cached fix if fresh query times out
+        navigator.geolocation.getCurrentPosition(
+          sendFix,
+          (err) => {
+            if (isManual) {
+              setIsLocationSending(false);
+              showToast.error(
+                'Location Permission Denied',
+                err.message || 'Please grant browser location permissions to enable tracking.'
+              );
+            }
+          },
+          { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
+        );
+      },
+      { enableHighAccuracy: false, maximumAge: 0, timeout: 4000 }
+    );
+  }, [checkInStatus]);
+
+  const handleLocationAccessClick = () => {
     if (checkInStatus === 'not_started') {
       showToast.error(
         'Location Access Blocked 🔒',
@@ -86,54 +155,24 @@ export function EmployeeDashboardPage() {
       );
       return;
     }
-
-    if (!navigator.geolocation) {
-      showToast.error('GPS Error', 'Geolocation is not supported by your browser.');
-      return;
-    }
-
-    setIsLocationSending(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy;
-        const speed = pos.coords.speed || 0;
-
-        setUserCoords({ latitude: lat, longitude: lng });
-
-        try {
-          await apiClient.post('/livetracking/ping', {
-            latitude: lat,
-            longitude: lng,
-            accuracy,
-            speed,
-          });
-
-          const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          setLastLocationPingTime(timeStr);
-
-          showToast.success(
-            'Location Access Active 📍',
-            `Live GPS location update sent successfully at ${timeStr}! (${lat.toFixed(4)}, ${lng.toFixed(4)})`
-          );
-        } catch (err: any) {
-          console.error('Failed to send location ping:', err);
-          showToast.error('Location Update Failed', 'Could not transmit location ping to server.');
-        } finally {
-          setIsLocationSending(false);
-        }
-      },
-      (err) => {
-        setIsLocationSending(false);
-        showToast.error(
-          'Location Permission Denied',
-          err.message || 'Please grant browser location permissions to enable tracking.'
-        );
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    sendLocationPingUpdate(true);
   };
+
+  // ── Automatic 2.5-Second Background Location Trigger ─────────────────────
+  // Automatically triggers the Send Manual Location Access Update action every 2.5 seconds in the background
+  useEffect(() => {
+    if (checkInStatus === 'not_started') return;
+
+    // Trigger immediate location ping on check-in
+    sendLocationPingUpdate(false);
+
+    // Continuous 2.5-second background interval loop
+    const intervalId = setInterval(() => {
+      sendLocationPingUpdate(false);
+    }, 2500);
+
+    return () => clearInterval(intervalId);
+  }, [checkInStatus, sendLocationPingUpdate]);
 
   // Expanded Calendar State
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -409,7 +448,9 @@ stored in the ApponextHRMS Secure Document Vault.
     fetchMonthlyAttendance();
   }, [calendarDate]);
 
-  // Employee Assigned Shift State
+  // Holiday & Shift Gate State
+  const [todayHoliday, setTodayHoliday] = useState<{ isHoliday: boolean; holidayName?: string } | null>(null);
+  const [hasShift, setHasShift] = useState<boolean | null>(null);
   const [myShift, setMyShift] = useState<any>(null);
 
   // Fetch Today's Check-In Status & Assigned Shift
@@ -418,6 +459,12 @@ stored in the ApponextHRMS Secure Document Vault.
       const res = await apiClient.get('/attendance/status');
       if (res.data?.data) {
         const st = res.data.data;
+        if (typeof st.isHoliday === 'boolean') {
+          setTodayHoliday({ isHoliday: st.isHoliday, holidayName: st.holidayName });
+        }
+        if (typeof st.hasShift === 'boolean') {
+          setHasShift(st.hasShift);
+        }
         if (st.shiftInfo) {
           setMyShift(st.shiftInfo);
         }
@@ -854,7 +901,8 @@ stored in the ApponextHRMS Secure Document Vault.
   };
 
   const getCalculatedAvailable = (bal: any): number => {
-    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+    const quotaFallback = parseFloat(bal?.annual_quota ?? bal?.annualQuota ?? 0) || 0;
+    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', quotaFallback);
     const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
@@ -1109,26 +1157,67 @@ stored in the ApponextHRMS Secure Document Vault.
           </CardHeader>
 
           <CardContent className="p-4 space-y-3.5 flex-1 flex flex-col justify-between">
-            {/* Shift Time & Schedule Banner */}
-            <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5">
-              <div className="flex items-center justify-between text-xs font-bold">
-                <span className="flex items-center gap-1.5 text-primary">
-                  <Calendar className="w-3.5 h-3.5" />
-                  {myShift?.shiftName || 'Standard Morning Shift'}
-                </span>
-                <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
-                  {myShift?.durationHours || 8.5}h Shift
-                </Badge>
+            {/* Shift Time & Schedule Banner — Dynamic Holiday / Shift awareness */}
+            {todayHoliday?.isHoliday && !hasShift ? (
+              <div className="p-3.5 rounded-xl bg-blue-500/10 dark:bg-blue-950/40 border border-blue-500/30 text-blue-700 dark:text-blue-300 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <Palmtree className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span>🎉 Public Holiday Today — {todayHoliday.holidayName || 'Holiday'}</span>
+                </div>
+                <p className="text-[11px] text-blue-600/90 dark:text-blue-300/90 font-medium">
+                  No attendance marking required today. Enjoy your day off!
+                </p>
               </div>
-              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono font-medium">
-                <span>
-                  ⏰ {myShift?.startTime || '09:00'} - {myShift?.endTime || '17:30'}
-                </span>
-                <span>
-                  Grace: {myShift?.gracePeriodMinutes || 15}m (till {myShift?.graceDeadline || '09:15'})
-                </span>
+            ) : !hasShift && hasShift !== null ? (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 text-amber-800 dark:text-amber-300 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span>⚠️ No Shift Assigned Today</span>
+                </div>
+                <p className="text-[11px] text-amber-700/90 dark:text-amber-300/90 font-medium">
+                  Please contact HR or your Department Manager to assign a work shift before marking attendance.
+                </p>
               </div>
-            </div>
+            ) : todayHoliday?.isHoliday && hasShift ? (
+              <div className="p-3.5 rounded-xl bg-blue-500/10 dark:bg-blue-950/40 border border-blue-500/30 text-blue-700 dark:text-blue-300 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Palmtree className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    Working on Holiday: {todayHoliday.holidayName}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-400">
+                    Shift Active
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between text-[11px] font-mono">
+                  <span>⏰ {myShift?.shiftName || 'Shift'} ({myShift?.startTime || '--'} - {myShift?.endTime || '--'})</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="flex items-center gap-1.5 text-primary">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {myShift?.shiftName || 'No Shift Assigned'}
+                  </span>
+                  {myShift?.durationHours && (
+                    <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                      {myShift.durationHours}h Shift
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono font-medium">
+                  <span>
+                    ⏰ {myShift?.startTime || '--'} - {myShift?.endTime || '--'}
+                  </span>
+                  {myShift?.gracePeriodMinutes > 0 && (
+                    <span>
+                      Grace: {myShift.gracePeriodMinutes}m (till {myShift.graceDeadline || '--'})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* GPS Geofence Status */}
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/60 text-xs">
@@ -1201,16 +1290,29 @@ stored in the ApponextHRMS Secure Document Vault.
               </select>
             </div>
 
-            {/* Action Buttons */}
+            {/* Action Buttons — gated by holiday & shift assignment */}
             <div className="space-y-2 pt-1">
-              {(attendanceMode === 'gps' || attendanceMode === 'both' || attendanceMode === 'wifi_ip') && checkInStatus !== 'completed' && (
+              {todayHoliday?.isHoliday && !hasShift ? (
+                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs font-bold text-center flex items-center justify-center gap-1.5">
+                  <Palmtree className="w-4 h-4" />
+                  Today is a Public Holiday ({todayHoliday.holidayName || 'Holiday'})
+                </div>
+              ) : !hasShift && hasShift !== null ? (
+                <Button
+                  disabled
+                  className="w-full h-9 rounded-lg text-xs font-bold bg-muted text-muted-foreground cursor-not-allowed opacity-60 gap-1.5"
+                >
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  No Shift Assigned (Contact HR)
+                </Button>
+              ) : (attendanceMode === 'gps' || attendanceMode === 'both' || attendanceMode === 'wifi_ip') && checkInStatus !== 'completed' ? (
                 <Button
                   onClick={handleCheckInToggle}
                   className="w-full h-9 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-2xs"
                 >
                   {checkInStatus === 'not_started' ? 'Punch In (GPS Verified)' : 'Punch Out'}
                 </Button>
-              )}
+              ) : null}
 
               {(attendanceMode === 'face' || attendanceMode === 'both') && (
                 <Button
@@ -1620,7 +1722,8 @@ stored in the ApponextHRMS Secure Document Vault.
                   {leaveBalances.map((bal, i) => {
                     const leaveName = getBalStr(bal, 'leave_name', 'leaveName', 'Leave');
                     const leaveCode = getBalStr(bal, 'leave_code', 'leaveCode', 'LV');
-                    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+                    const quotaFallback = parseFloat(bal?.annual_quota ?? bal?.annualQuota ?? 0) || 0;
+                    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', quotaFallback);
                     const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
                     const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
                     const available = getCalculatedAvailable(bal);
@@ -1728,11 +1831,11 @@ stored in the ApponextHRMS Secure Document Vault.
                     {(() => {
                       const shiftInfo = shifts[selectedDayLog.date];
                       if (shiftInfo && !shiftInfo.isOffDay) {
-                        const start = shiftInfo.startTime ? formatTimeToDisplay(shiftInfo.startTime) : '9am';
-                        const end = shiftInfo.endTime ? formatTimeToDisplay(shiftInfo.endTime) : '6pm';
+                        const start = shiftInfo.startTime ? formatTimeToDisplay(shiftInfo.startTime) : '--';
+                        const end = shiftInfo.endTime ? formatTimeToDisplay(shiftInfo.endTime) : '--';
                         return `${shiftInfo.shiftCode} (${start} - ${end})`;
                       }
-                      return 'General Shift (09:00 AM - 06:00 PM)';
+                      return myShift?.shiftName ? `${myShift.shiftName} (${myShift.startTime || '--'} - ${myShift.endTime || '--'})` : 'No Shift Assigned';
                     })()}
                   </span>
                 </div>

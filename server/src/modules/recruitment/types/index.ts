@@ -3,41 +3,62 @@ import { z } from 'zod';
 // Job schemas
 export const createJobSchema = z.object({
   mrfRequestId: z.number().optional(),
-  jobCode: z.string().min(3).max(50),
-  jobTitle: z.string().min(3).max(255),
-  jobDescription: z.string().min(10),
+  jobCode: z.string().min(1).max(50),
+  jobTitle: z.string().min(1).max(255),
+  jobDescription: z.string().min(1),
   departmentId: z.number().optional(),
   designationId: z.number().optional(),
   locationId: z.number().optional(),
-  jobType: z.enum(['full_time', 'part_time', 'contract', 'internship']),
-  experienceLevel: z.enum(['entry', 'mid', 'senior', 'lead']),
+  jobType: z.string().default('full_time'),
+  experienceLevel: z.string().default('mid'),
   minExperienceYears: z.number().optional(),
   maxExperienceYears: z.number().optional(),
   minSalary: z.number().optional(),
   maxSalary: z.number().optional(),
-  currency: z.string().length(3),
-  employmentType: z.enum(['onsite', 'remote', 'hybrid']),
-  noOfPositions: z.number().min(1),
+  currency: z.string().optional(),
+  employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
+  noOfPositions: z.number().min(1).default(1),
+  expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
+    const datePart = String(value).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return datePart >= todayStr;
+  }, { message: 'Application deadline must be today or a future date' }),
   jobTemplateId: z.number().optional(),
   isInternal: z.boolean().optional(),
   isPublishedExternal: z.boolean().optional(),
-  skills: z.array(z.object({
-    name: z.string(),
-    proficiency: z.enum(['beginner', 'intermediate', 'expert']),
-    isMandatory: z.boolean(),
-  })).optional(),
-  locations: z.array(z.number()).optional(),
+  skills: z.any().optional(),
+  locations: z.any().optional(),
+  aiSettings: z.any().optional(),
 });
 
 export const updateJobSchema = createJobSchema.partial();
 
+const candidateSourceSchema = z.preprocess((value) => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const raw = String(value).toLowerCase().trim();
+  if (['linkedin', 'naukri', 'job_board', 'jobboard'].includes(raw)) return 'job_board';
+  if (['referral', 'employee_referral', 'employee referral'].includes(raw)) return 'employee_referral';
+  if (['agency', 'recruitment_agency', 'recruitment agency'].includes(raw)) return 'recruitment_agency';
+  if (['bulk', 'bulk_import', 'csv', 'import'].includes(raw)) return 'bulk_import';
+  if (['resume_bank', 'resume bank'].includes(raw)) return 'resume_bank';
+  if (['direct', 'direct_apply', 'direct apply', 'direct application'].includes(raw)) return 'direct_apply';
+  return raw || undefined;
+}, z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency', 'bulk_import', 'resume_bank']).optional());
+
 // Candidate schemas
 export const createCandidateSchema = z.object({
-  firstName: z.string().min(2).max(100),
-  lastName: z.string().min(2).max(100),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
   email: z.string().email(),
   phone: z.string().optional(),
   alternativePhone: z.string().optional(),
+  gender: z.string().optional(),
+  maritalStatus: z.string().optional(),
+  qualification: z.string().optional(),
+  skills: z.string().optional(),
+  dateOfBirth: z.string().optional(),
   currentLocation: z.number().optional(),
   preferredLocation: z.number().optional(),
   currentSalary: z.number().optional(),
@@ -46,11 +67,12 @@ export const createCandidateSchema = z.object({
   noticePeriodDays: z.number().optional(),
   currentCompany: z.string().optional(),
   yearsOfExperience: z.number().optional(),
-  linkedinUrl: z.string().url().optional(),
-  githubUrl: z.string().url().optional(),
-  portfolioUrl: z.string().url().optional(),
-  source: z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency']),
+  linkedinUrl: z.string().url().optional().or(z.literal('')),
+  githubUrl: z.string().url().optional().or(z.literal('')),
+  portfolioUrl: z.string().url().optional().or(z.literal('')),
+  source: candidateSourceSchema,
   resumeUrl: z.string().optional(),
+  status: z.enum(['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected', 'dropped']).optional(),
 });
 
 export const updateCandidateSchema = createCandidateSchema.partial();
@@ -74,18 +96,19 @@ export const assignRecruiterSchema = z.object({
 
 // Interview schemas
 export const scheduleInterviewSchema = z.object({
-  applicationId: z.number(),
-  interviewType: z.enum(['phone', 'video', 'in_person']),
-  interviewRound: z.number().min(1),
-  scheduledDate: z.string().datetime(),
-  durationMinutes: z.number().optional(),
-  meetingUrl: z.string().optional(),
-  interviewerIds: z.array(z.number()),
-  templateId: z.number().optional(),
-  customSubject: z.string().optional(),
-  customCandidateBody: z.string().optional(),
-  customInterviewerBody: z.string().optional(),
-  sendEmails: z.boolean().optional(),
+  applicationId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  candidateEmail: z.string().optional().nullable(),
+  interviewType: z.string().optional().default('video'),
+  interviewRound: z.union([z.number(), z.string()]).transform(val => Number(val) || 1).optional().default(1),
+  scheduledDate: z.string(),
+  durationMinutes: z.union([z.number(), z.string()]).transform(val => Number(val) || 30).optional().default(30),
+  meetingUrl: z.string().optional().nullable(),
+  interviewerIds: z.array(z.union([z.number(), z.string()])).optional().default([]),
+  templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).optional().nullable(),
+  customSubject: z.string().optional().nullable(),
+  customCandidateBody: z.string().optional().nullable(),
+  customInterviewerBody: z.string().optional().nullable(),
+  sendEmails: z.boolean().optional().default(true),
 });
 
 export const submitFeedbackSchema = z.object({
@@ -127,14 +150,15 @@ export const submitAssessmentResultSchema = z.object({
 // Offer schemas
 export const generateOfferSchema = z.object({
   applicationId: z.number(),
-  positionTitle: z.string().min(3).max(255),
+  positionTitle: z.string().min(1).max(255),
   departmentId: z.number().optional(),
   designationId: z.number().optional(),
   costToCompany: z.number().min(0),
   baseSalary: z.number().min(0),
-  currency: z.string().length(3),
-  offerStartDate: z.string().date(),
-  offerExpiryDate: z.string().date(),
+  currency: z.string().min(1).max(5),
+  offerStartDate: z.string().min(1),
+  offerExpiryDate: z.string().min(1),
+  meta: z.any().optional(),
 });
 
 // Requisition schemas

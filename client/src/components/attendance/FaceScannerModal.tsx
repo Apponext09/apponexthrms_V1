@@ -129,6 +129,13 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isOpen, stream]);
+
   const startCamera = async () => {
     try {
       setCameraError(null);

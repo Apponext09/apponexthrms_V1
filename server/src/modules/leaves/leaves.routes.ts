@@ -32,9 +32,10 @@ leavesRouter.post('/approvals/:applicationId/approve', asyncHandler((req, res) =
 leavesRouter.post('/approvals/:applicationId/reject', asyncHandler((req, res) => leaveController.rejectLeave(req, res)));
 leavesRouter.post('/applications/:applicationId/hr-override', asyncHandler((req, res) => leaveController.hrOverride(req, res)));
 
-// Leave balance
+// Leave balance & calendar
 leavesRouter.get('/balances', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));
 leavesRouter.get('/balance', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));
+leavesRouter.get('/calendar', asyncHandler((req, res) => leaveController.getLeaveCalendar(req, res)));
 
 // AI Endpoints
 leavesRouter.post('/ai/chat', asyncHandler((req, res) => leaveController.chatWithHR(req, res)));
@@ -54,12 +55,22 @@ leavesRouter.get('/policy-mappings', asyncHandler((req, res) => leaveController.
 leavesRouter.post('/policy-mappings', asyncHandler((req, res) => leaveController.createPolicyMapping(req, res)));
 leavesRouter.delete('/policy-mappings/:mappingId', asyncHandler((req, res) => leaveController.deletePolicyMapping(req, res)));
 
-// Optional/Floating Holidays Selection
+// Optional/Floating Holidays Selection (Touchpoint 3)
 leavesRouter.get('/optional-holidays', asyncHandler((req, res) => leaveController.getOptionalHolidays(req, res)));
-leavesRouter.get('/policies', asyncHandler((req, res) => leaveController.getPolicies(req, res)));
-leavesRouter.put('/policies/:id', asyncHandler((req, res) => leaveController.updatePolicy(req, res)));
 leavesRouter.post('/optional-holidays', asyncHandler((req, res) => leaveController.selectOptionalHoliday(req, res)));
+leavesRouter.post('/optional-holidays/select', asyncHandler((req, res) => leaveController.selectOptionalHoliday(req, res)));
 leavesRouter.delete('/optional-holidays/:selectionId', asyncHandler((req, res) => leaveController.cancelOptionalHolidaySelection(req, res)));
+
+// Comp-Off Endpoints (Touchpoint 4)
+leavesRouter.post('/comp-off/requests', asyncHandler((req, res) => leaveController.createCompOffRequest(req, res)));
+leavesRouter.get('/comp-off/requests', asyncHandler((req, res) => leaveController.getCompOffRequests(req, res)));
+leavesRouter.post('/comp-off', asyncHandler((req, res) => leaveController.createCompOffRequest(req, res)));
+leavesRouter.get('/comp-off', asyncHandler((req, res) => leaveController.getCompOffRequests(req, res)));
+
+leavesRouter.get('/policies', asyncHandler((req, res) => leaveController.getPolicies(req, res)));
+leavesRouter.post('/policies', asyncHandler((req, res) => leaveController.createPolicy(req, res)));
+leavesRouter.put('/policies/:id', asyncHandler((req, res) => leaveController.updatePolicy(req, res)));
+leavesRouter.post('/sync-balances', asyncHandler((req, res) => leaveController.syncBalances(req, res)));
 
 // Blackout Periods
 leavesRouter.get('/blackout-periods', asyncHandler((req, res) => leaveController.getBlackoutPeriods(req, res)));

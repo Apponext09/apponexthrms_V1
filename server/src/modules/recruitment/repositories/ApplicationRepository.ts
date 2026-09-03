@@ -7,7 +7,11 @@ export interface Application {
   organization_id: number;
   candidate_id: number;
   job_id: number;
+  job_posting_id?: number;
+  candidateId?: number;
+  jobId?: number;
   application_status: 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'withdrawn';
+  applicationStatus?: string;
   applied_at: string;
   applied_from_source: string;
   initial_screening_status: 'pending' | 'passed' | 'failed';
@@ -31,29 +35,60 @@ export class ApplicationRepository extends BaseRepository<Application> {
   }
 
   override async list(ctx: TenantContext, options?: ListQueryOptions): Promise<any> {
+    const hasEmployeesTable = await this.db.schema.hasTable('employees').catch(() => false);
+    const hasOfficialEmail = hasEmployeesTable ? await this.db.schema.hasColumn('employees', 'official_email').catch(() => false) : false;
+    const hasCandidateStatus = await this.db.schema.hasColumn('candidates', 'status').catch(() => false);
+
     const query = this.db(this.tableName)
       .where('applications.organization_id', ctx.organizationId)
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
       .leftJoin('jobs', 'applications.job_id', 'jobs.id')
       .leftJoin('mrf_requests', 'jobs.mrf_request_id', 'mrf_requests.id')
       .leftJoin('departments', 'jobs.department_id', 'departments.id')
-      .select([
-        'applications.*',
-        this.db.raw("TRIM(CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
-        'candidates.email as candidate_email',
-        'candidates.phone as candidate_phone',
-        'candidates.source as candidate_source',
-        'candidates.years_of_experience as candidate_experience',
-        'candidates.current_company as candidate_company',
-        this.db.raw("(SELECT GROUP_CONCAT(skill_name SEPARATOR ', ') FROM candidate_skills WHERE candidate_skills.candidate_id = candidates.id) as candidate_skills"),
-        this.db.raw("'-' as gender"),
-        this.db.raw("'-' as marital_status"),
-        this.db.raw("'-' as qualification"),
-        'candidates.status as candidate_status',
-        'jobs.job_title as position_title',
-        'jobs.job_code as job_code',
-        'departments.name as department_name'
-      ]);
+      .leftJoin('resume_ats_scores', function() {
+        this.on('resume_ats_scores.candidate_id', '=', 'applications.candidate_id')
+            .andOn('resume_ats_scores.job_id', '=', 'applications.job_id');
+      })
+      .leftJoin('candidate_job_matches', function() {
+        this.on('candidate_job_matches.candidate_id', '=', 'applications.candidate_id')
+            .andOn('candidate_job_matches.job_id', '=', 'applications.job_id');
+      })
+      .leftJoin('resume_bank', 'applications.candidate_id', 'resume_bank.candidate_id');
+
+    if (hasEmployeesTable) {
+      if (hasOfficialEmail) {
+        query.leftJoin('employees', function() {
+          this.on('candidates.email', '=', 'employees.official_email')
+              .orOn('candidates.email', '=', 'employees.personal_email');
+        });
+      } else {
+        query.leftJoin('employees', 'candidates.email', 'employees.email');
+      }
+    }
+
+    const selectFields: any[] = [
+      'applications.*',
+      this.db.raw("TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+      'candidates.email as candidate_email',
+      'candidates.phone as candidate_phone',
+      'candidates.source as candidate_source',
+      'candidates.years_of_experience as candidate_experience',
+      'candidates.current_company as candidate_company',
+      this.db.raw("COALESCE(NULLIF(TRIM(candidates.skills), ''), (SELECT GROUP_CONCAT(skill_name SEPARATOR ', ') FROM candidate_skills WHERE candidate_skills.candidate_id = candidates.id), '-') as candidate_skills"),
+      this.db.raw("COALESCE(NULLIF(TRIM(candidates.gender), ''), '-') as gender"),
+      this.db.raw("COALESCE(NULLIF(TRIM(candidates.marital_status), ''), '-') as marital_status"),
+      this.db.raw("COALESCE(NULLIF(TRIM(candidates.qualification), ''), '-') as qualification"),
+      hasCandidateStatus ? 'candidates.status as candidate_status' : 'applications.application_status as candidate_status',
+      'jobs.job_title as position_title',
+      'jobs.job_code as job_code',
+      'departments.name as department_name',
+      this.db.raw("MAX(COALESCE(resume_ats_scores.ats_score, candidate_job_matches.overall_score, resume_bank.ats_score, NULL)) as ats_score"),
+      this.db.raw("MAX(COALESCE(candidate_job_matches.overall_score, resume_ats_scores.ats_score, resume_bank.ats_score, NULL)) as jd_match_score"),
+      hasEmployeesTable ? this.db.raw("MAX(employees.id) as employee_id") : this.db.raw('NULL as employee_id'),
+      hasEmployeesTable ? this.db.raw("MAX(employees.employee_code) as employee_code") : this.db.raw('NULL as employee_code')
+    ];
+
+    query.select(selectFields).groupBy('applications.id');
 
     if (options?.filters) {
       if (options.filters.job_id) {
@@ -156,5 +191,87 @@ export class ApplicationRepository extends BaseRepository<Application> {
 
   async countByStatus(ctx: TenantContext, status: string): Promise<number> {
     return this.count(ctx, { application_status: status });
+  }
+
+  /**
+   * Returns only applications with status = 'hired' or 'offer' whose candidate
+   * has NOT yet been converted to an employee (matched by email).
+   * Powers the "New Candidate (Hired)" dropdown in offer creation.
+   */
+  async listHiredNotOnboarded(ctx: TenantContext, options?: ListQueryOptions): Promise<any> {
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 200;
+    const offset = (page - 1) * pageSize;
+
+    const hasEmployeesTable = await this.db.schema.hasTable('employees').catch(() => false);
+    const hasOfficialEmail = hasEmployeesTable ? await this.db.schema.hasColumn('employees', 'official_email').catch(() => false) : false;
+    const hasCandidateStatus = await this.db.schema.hasColumn('candidates', 'status').catch(() => false);
+
+    const query = this.db('applications')
+      .where('applications.organization_id', ctx.organizationId)
+      .whereIn('applications.application_status', ['hired', 'offer'])
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+      .leftJoin('departments', 'jobs.department_id', 'departments.id')
+      .leftJoin('designations', 'jobs.designation_id', 'designations.id');
+
+    // Exclude candidates already converted to employees
+    if (hasEmployeesTable) {
+      if (hasOfficialEmail) {
+        query.leftJoin('employees', function () {
+          this.on('candidates.email', '=', 'employees.official_email')
+            .orOn('candidates.email', '=', 'employees.personal_email');
+        });
+      } else {
+        query.leftJoin('employees', 'candidates.email', 'employees.email');
+      }
+      query.whereNull('employees.id');
+    }
+
+    query.select([
+      'applications.*',
+      this.db.raw("TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+      'candidates.email as candidate_email',
+      'candidates.phone as candidate_phone',
+      'candidates.source as candidate_source',
+      'candidates.years_of_experience as candidate_experience',
+      'candidates.current_company as candidate_company',
+      hasCandidateStatus ? 'candidates.status as candidate_status' : 'applications.application_status as candidate_status',
+      'jobs.job_title as position_title',
+      'jobs.job_code as job_code',
+      'jobs.department_id as department_id',
+      'jobs.designation_id as designation_id',
+      'departments.name as department_name',
+      'designations.name as designation_name',
+    ]);
+
+    // Search filter
+    if (options?.filters?.search) {
+      const q = `%${options.filters.search}%`;
+      query.where(function () {
+        this.whereRaw("CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, '')) LIKE ?", [q])
+          .orWhere('candidates.email', 'like', q)
+          .orWhere('jobs.job_title', 'like', q);
+      });
+    }
+
+    const countResult = await query.clone().clearSelect().count('applications.id as count').first();
+    const total = parseInt(String((countResult as any)?.count || 0), 10);
+
+    const items = await query
+      .orderBy('applications.updated_at', 'desc')
+      .limit(pageSize)
+      .offset(offset);
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasMore: offset + items.length < total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
   }
 }

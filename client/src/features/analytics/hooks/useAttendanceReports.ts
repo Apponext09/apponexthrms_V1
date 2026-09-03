@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
-import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface AttendanceReportFilterParams {
   companies: string[];
@@ -106,19 +105,25 @@ export interface MobileTrackingRecord {
   batteryLevel: string;
 }
 
-// Hook to get metadata options for filters from backend DB
-export function useReportFilterOptions() {
-  const { selectedCompanyId } = useCompanyStore();
+// Hook to get metadata options for filters from backend DB.
+// Accepts an optional companyId — when provided, the backend cascades
+// departments / employees / reporting officers to that company scope.
+// React Query re-fetches automatically whenever companyId changes.
+export function useReportFilterOptions(companyId?: string | null, departmentIds?: string[]) {
+  const deptKey = departmentIds && departmentIds.length > 0 ? [...departmentIds].sort().join(',') : null;
   return useQuery({
-    queryKey: ['reportFilterOptions', selectedCompanyId],
+    queryKey: ['reportFilterOptions', companyId ?? null, deptKey],
     queryFn: async () => {
-      const res = await apiClient.get('/attendance/reports/options');
+      const params: Record<string, any> = {};
+      if (companyId) params.companyId = companyId;
+      if (deptKey) params.departmentIds = deptKey;
+      const res = await apiClient.get('/attendance/reports/options', { params });
       if (res.data?.success && res.data?.data) {
         return res.data.data;
       }
       throw new Error('Failed to load report filter options');
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 min — shorter because results are company-scoped
   });
 }
 
@@ -144,6 +149,7 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
 export function useTimelogMatrixQuery(params: {
   fromDate: string;
   toDate: string;
+  companies?: string[];
   employees?: string[];
   locations?: string[];
   departments?: string[];
@@ -160,6 +166,7 @@ export function useTimelogMatrixQuery(params: {
         if (params.fromDate) qp.append('fromDate', params.fromDate);
         if (params.toDate) qp.append('toDate', params.toDate);
         if (params.status && params.status !== 'choose') qp.append('status', params.status);
+        (params.companies || []).forEach((v) => v && qp.append('companies[]', v));
         (params.employees || []).forEach((v) => v && qp.append('employees[]', v));
         (params.locations || []).forEach((v) => v && qp.append('locations[]', v));
         (params.departments || []).forEach((v) => v && qp.append('departments[]', v));
@@ -170,19 +177,9 @@ export function useTimelogMatrixQuery(params: {
           return res.data.data as TimelogMatrixRow[];
         }
       } catch (err) {
-        console.warn('[useTimelogMatrixQuery] API error, using generator', err);
+        console.warn('[useTimelogMatrixQuery] API error:', err);
       }
-      const dates: string[] = [];
-      const start = new Date(params.fromDate);
-      const end = new Date(params.toDate);
-      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
-        const curr = new Date(start);
-        while (curr <= end) {
-          dates.push(curr.toISOString().split('T')[0]);
-          curr.setDate(curr.getDate() + 1);
-        }
-      }
-      return generateTimelogMatrixData(dates);
+      return [];
     },
     enabled: !!params,
   });
@@ -290,134 +287,3 @@ function minsToHHMM(totalMins: number): string {
   const m = totalMins % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
-
-export function generateTimelogMatrixData(dates: string[]): TimelogMatrixRow[] {
-  const employees = [
-    { location: 'Airoli', name: 'Ajitsingh Patil', code: 'T01' },
-    { location: 'Airoli', name: 'Akanksha Nikam', code: 'T02' },
-    { location: 'Airoli', name: 'Amit Shriwardhankar', code: 'T03' },
-    { location: 'Airoli', name: 'Ankita Rane', code: 'T04' },
-    { location: 'Airoli', name: 'Archana Koli', code: 'T05' },
-    { location: 'Mumbai HQ', name: 'Nirmal Navghane', code: 'T06' },
-    { location: 'Mumbai HQ', name: 'Devendra Mane', code: 'T07' },
-    { location: 'Pune Branch', name: 'Snehal Patil', code: 'T08' },
-    { location: 'Pune Branch', name: 'Rahul Deshmukh', code: 'T09' },
-    { location: 'Bangalore', name: 'Vikram Solanki', code: 'T10' },
-  ];
-
-  // Sample timing options for working days
-  const timingOptions = [
-    '09:30-18:30',
-    '09:15-18:15',
-    '09:45-18:45',
-    '10:00-19:00',
-    '09:30-14:00', // half day
-  ];
-
-  return employees.map((emp, empIdx) => {
-    const dailyStatus: { [dateStr: string]: 'P' | 'NP' | 'W/O' | 'PL' | 'PLV' | 'HD' | 'LWP' | 'Holiday' } = {};
-    const dailyTimings: { [dateStr: string]: string } = {};
-    const weeklyTotalMins: { [weekNum: number]: number } = {};
-    const weeklyWorkingDays: { [weekNum: number]: number } = {};
-
-    let presentDays = 0;
-    let lwp = 0;
-    let pl = 0;
-    let plv = 0;
-    let wo = 0;
-    let totalHoliday = 0;
-    let grandTotalMins = 0;
-    let totalBreakMins = 0;
-    let totalWorkingDaysCount = 0;
-
-    // Group dates by week (7-day chunks from start of date range)
-    dates.forEach((dateStr, dIdx) => {
-      const weekNum = Math.floor(dIdx / 7) + 1; // 1-based week number
-      if (!weeklyTotalMins[weekNum]) {
-        weeklyTotalMins[weekNum] = 0;
-        weeklyWorkingDays[weekNum] = 0;
-      }
-
-      const parts = dateStr.split('-');
-      const y = parseInt(parts[0], 10);
-      const m = parseInt(parts[1], 10) - 1;
-      const d = parseInt(parts[2], 10);
-      const dt = new Date(y, m, d);
-      const dayOfWeek = dt.getDay(); // 0: Sun, 6: Sat
-
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        dailyStatus[dateStr] = 'W/O';
-        dailyTimings[dateStr] = 'Week-Off';
-        wo += 1;
-      } else if ((empIdx + dIdx) % 23 === 0) {
-        dailyStatus[dateStr] = 'PL';
-        dailyTimings[dateStr] = '00:00-00:00';
-        pl += 1;
-      } else if ((empIdx + dIdx) % 17 === 0) {
-        dailyStatus[dateStr] = 'LWP';
-        dailyTimings[dateStr] = '00:00-00:00';
-        lwp += 1;
-      } else if ((empIdx + dIdx) % 13 === 0) {
-        // Present - assign a working timing
-        const timing = timingOptions[(empIdx + dIdx) % timingOptions.length];
-        dailyStatus[dateStr] = 'P';
-        dailyTimings[dateStr] = timing;
-        presentDays += 1;
-        // Calculate worked minutes (rough: 8h30m = 510 mins - 60 break = 450 net)
-        const workMins = timing === '09:30-14:00' ? 270 : 510;
-        const breakMins = timing === '09:30-14:00' ? 0 : 60;
-        weeklyTotalMins[weekNum] += workMins;
-        weeklyWorkingDays[weekNum] += 1;
-        grandTotalMins += workMins;
-        totalBreakMins += breakMins;
-        totalWorkingDaysCount += 1;
-      } else {
-        dailyStatus[dateStr] = 'NP';
-        dailyTimings[dateStr] = '00:00-00:00';
-      }
-    });
-
-    // Build weekly totals & averages
-    const weeklyTotalHours: { [weekNum: number]: string } = {};
-    const weeklyAvgHours: { [weekNum: number]: string } = {};
-    const weekNums = [...new Set(dates.map((_, dIdx) => Math.floor(dIdx / 7) + 1))];
-    weekNums.forEach((wn) => {
-      const totalMins = weeklyTotalMins[wn] || 0;
-      const wDays = weeklyWorkingDays[wn] || 0;
-      weeklyTotalHours[wn] = minsToHHMM(totalMins);
-      weeklyAvgHours[wn] = wDays > 0 ? minsToHHMM(Math.round(totalMins / wDays)) : '00:00';
-    });
-
-    const grandTotal = minsToHHMM(grandTotalMins);
-    const grandAverage = totalWorkingDaysCount > 0
-      ? minsToHHMM(Math.round(grandTotalMins / totalWorkingDaysCount))
-      : '00:00';
-    const totalBreakHoursStr = minsToHHMM(totalBreakMins);
-    const actualWorkHours = minsToHHMM(Math.max(0, grandTotalMins - totalBreakMins));
-
-    const payableDays = presentDays + pl + plv + wo + totalHoliday;
-
-    return {
-      id: `emp-mat-${empIdx + 1}`,
-      location: emp.location,
-      employeeName: emp.name,
-      employeeCode: emp.code,
-      dailyStatus,
-      dailyTimings,
-      weeklyTotalHours,
-      weeklyAvgHours,
-      grandTotal,
-      grandAverage,
-      totalBreakHours: totalBreakHoursStr,
-      actualWorkHours,
-      presentDays,
-      lwp,
-      pl,
-      plv,
-      wo,
-      totalHoliday,
-      payableDays,
-    };
-  });
-}
-

@@ -39,19 +39,22 @@ export class MrfService {
       comment: input.comment || null,
       job_description: input.jobDescription || null,
       target_closure_date: (input as any).targetClosureDate || (input as any).expiryDate || null,
-      stage: 'Pending Approval',
-      status: input.listInJobPage === 'No' ? 'Closed' : 'Open',
+      expiry_date: (input as any).expiryDate || (input as any).targetClosureDate || null,
+      stage: input.stage || 'Pending Approval',
+      status: input.status || (input.listInJobPage === 'No' ? 'Closed' : 'Open'),
       requested_by: ctx.userId,
+      approved_by: input.stage === 'Approved' ? ctx.userId : null,
+      approved_at: input.stage === 'Approved' ? new Date().toISOString().replace('T', ' ').substring(0, 19) : null,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
 
-    // Create initial submission audit entry
+    // Create initial submission/approval audit entry
     await this.approvalRepo.create(ctx, {
       mrf_request_id: created.id,
       approver_id: ctx.userId,
-      action: 'submitted',
-      comment: 'MRF Request submitted',
+      action: input.stage === 'Approved' ? 'approved' : 'submitted',
+      comment: input.stage === 'Approved' ? 'MRF Request created and approved' : 'MRF Request submitted',
     } as any);
 
     if (created.interviewer_id) {
@@ -128,7 +131,9 @@ export class MrfService {
     if (input.comment !== undefined) updateData.comment = input.comment;
     if (input.jobDescription !== undefined) updateData.job_description = input.jobDescription;
     if ((input as any).targetClosureDate !== undefined || (input as any).expiryDate !== undefined) {
-      updateData.target_closure_date = (input as any).targetClosureDate || (input as any).expiryDate || null;
+      const nextDate = (input as any).targetClosureDate || (input as any).expiryDate || null;
+      updateData.target_closure_date = nextDate;
+      updateData.expiry_date = nextDate;
     }
 
     const oldMrf = await this.mrfRepo.getById(ctx, id);

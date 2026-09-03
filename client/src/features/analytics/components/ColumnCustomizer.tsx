@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { Settings2, GripVertical, Eye, EyeOff, RotateCcw, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 // ─── All available columns sourced from DB fields ─────────────────────────────
 // attendance_records: check_in_date, check_in_time, check_out_time,
@@ -87,25 +88,13 @@ export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeGroup, setActiveGroup] = useState<ColumnDef['group'] | 'all'>('all');
-  const panelRef = useRef<HTMLDivElement>(null);
   const dragSrcRef = useRef<number | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   // Sync local state whenever columns prop changes
   React.useEffect(() => {
     setLocalCols(columns);
   }, [columns]);
-
-  // Close on outside click
-  React.useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
 
   const visibleCount = localCols.filter(c => c.visible).length;
 
@@ -173,12 +162,12 @@ export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
   const groups = ['all', ...Array.from(new Set(localCols.map(c => c.group)))] as Array<'all' | ColumnDef['group']>;
 
   return (
-    <div className="relative" ref={panelRef}>
+    <>
       {/* Trigger Button */}
       <Button
         type="button"
         variant="outline"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen(true)}
         className={cn(
           'h-8 text-xs px-3 font-semibold gap-1.5 bg-background border-slate-300 dark:border-slate-700',
           'hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors',
@@ -195,163 +184,174 @@ export function ColumnCustomizer({ columns, onChange }: ColumnCustomizerProps) {
         )}
       </Button>
 
-      {/* Dropdown Panel */}
+      {/* Right Slide-over Drawer Panel */}
       {open && (
-        <div
-          className={cn(
-            'absolute right-0 top-10 z-50',
-            'w-[360px] max-h-[540px]',
-            'bg-card border border-border rounded-xl shadow-xl',
-            'flex flex-col overflow-hidden',
-            'animate-in fade-in-0 zoom-in-95 duration-150'
-          )}
-        >
-          {/* Panel Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30 flex-shrink-0">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">Customize Columns</h3>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {visibleCount} of {localCols.length} visible · Drag to reorder
-              </p>
-            </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Backdrop Overlay */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
+            onClick={() => setOpen(false)}
+          />
 
-          {/* Search */}
-          <div className="px-3 pt-3 pb-2 flex-shrink-0">
-            <input
-              type="text"
-              placeholder="Search columns..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full h-8 px-3 text-xs rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </div>
-
-          {/* Group Tabs */}
-          <div className="px-3 pb-2 flex gap-1.5 flex-wrap flex-shrink-0">
-            {groups.map(g => (
+          {/* Drawer Content */}
+          <div
+            ref={panelRef}
+            className={cn(
+              'relative z-50 w-full sm:w-[420px] h-full bg-card border-l border-border shadow-2xl',
+              'flex flex-col overflow-hidden',
+              'animate-in slide-in-from-right duration-250 ease-out'
+            )}
+          >
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30 flex-shrink-0">
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-foreground flex items-center gap-2">
+                  <Settings2 className="w-4 h-4 text-primary" />
+                  Customize Table Columns
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {visibleCount} of {localCols.length} columns visible · Drag items to reorder
+                </p>
+              </div>
               <button
-                key={g}
-                onClick={() => setActiveGroup(g)}
-                className={cn(
-                  'px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition-colors',
-                  activeGroup === g
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-muted text-muted-foreground border-border hover:border-primary/30 hover:text-foreground'
-                )}
+                onClick={() => setOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
               >
-                {g === 'all' ? 'All' : GROUP_LABELS[g]}
+                <X className="w-4 h-4" />
               </button>
-            ))}
-          </div>
+            </div>
 
-          {/* Column List */}
-          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1 min-h-0">
-            {filteredCols.length === 0 ? (
-              <div className="text-center py-8 text-xs text-muted-foreground">No columns match your search</div>
-            ) : (
-              filteredCols.map((col) => {
-                const realIdx = localCols.findIndex(c => c.key === col.key);
-                const isDragging = draggingIdx === realIdx;
-                const isDragOver = dragOverIdx === realIdx;
-                return (
-                  <div
-                    key={col.key}
-                    draggable
-                    onDragStart={e => handleDragStart(e, realIdx)}
-                    onDragOver={e => handleDragOver(e, realIdx)}
-                    onDrop={e => handleDrop(e, realIdx)}
-                    onDragEnd={handleDragEnd}
-                    className={cn(
-                      'flex items-center gap-2.5 px-2.5 py-2 rounded-lg border transition-all cursor-default select-none',
-                      col.visible
-                        ? 'bg-card border-border hover:border-primary/30 hover:bg-muted/30'
-                        : 'bg-muted/20 border-border/50 opacity-60',
-                      isDragging && 'opacity-40 scale-95 border-dashed border-primary',
-                      isDragOver && !isDragging && 'border-primary bg-primary/5 scale-[1.01]'
-                    )}
-                  >
-                    {/* Drag Handle */}
-                    <GripVertical
-                      className="w-3.5 h-3.5 text-muted-foreground/60 cursor-grab active:cursor-grabbing flex-shrink-0"
-                    />
+            {/* Search */}
+            <div className="px-4 pt-4 pb-2 flex-shrink-0">
+              <input
+                type="text"
+                placeholder="Search columns by name or field..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full h-9 px-3.5 text-xs rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+              />
+            </div>
 
-                    {/* Group Badge */}
-                    <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase flex-shrink-0', GROUP_COLORS[col.group])}>
-                      {col.group.slice(0, 3)}
-                    </span>
+            {/* Group Tabs */}
+            <div className="px-4 pb-3 flex gap-1.5 flex-wrap flex-shrink-0">
+              {groups.map(g => (
+                <button
+                  key={g}
+                  onClick={() => setActiveGroup(g)}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-semibold border transition-all',
+                    activeGroup === g
+                      ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
+                      : 'bg-muted/50 text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
+                  )}
+                >
+                  {g === 'all' ? 'All' : GROUP_LABELS[g]}
+                </button>
+              ))}
+            </div>
 
-                    {/* Column Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground truncate">{col.label}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono truncate">{col.dbField}</p>
-                    </div>
-
-                    {/* Required badge */}
-                    {col.required && (
-                      <span className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border flex-shrink-0">
-                        Pinned
-                      </span>
-                    )}
-
-                    {/* Toggle */}
-                    <button
-                      onClick={() => toggleCol(col.key)}
-                      disabled={!!col.required}
-                      title={col.required ? 'Required column (cannot hide)' : col.visible ? 'Hide column' : 'Show column'}
+            {/* Column List */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5 min-h-0">
+              {filteredCols.length === 0 ? (
+                <div className="text-center py-12 text-xs text-muted-foreground">No columns match your search</div>
+              ) : (
+                filteredCols.map((col) => {
+                  const realIdx = localCols.findIndex(c => c.key === col.key);
+                  const isDragging = draggingIdx === realIdx;
+                  const isDragOver = dragOverIdx === realIdx;
+                  return (
+                    <div
+                      key={col.key}
+                      draggable
+                      onDragStart={e => handleDragStart(e, realIdx)}
+                      onDragOver={e => handleDragOver(e, realIdx)}
+                      onDrop={e => handleDrop(e, realIdx)}
+                      onDragEnd={handleDragEnd}
                       className={cn(
-                        'flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center transition-colors border',
-                        col.required
-                          ? 'opacity-30 cursor-not-allowed bg-muted border-border'
-                          : col.visible
-                          ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 cursor-pointer'
-                          : 'bg-muted text-muted-foreground border-border hover:bg-muted/80 cursor-pointer'
+                        'flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all cursor-default select-none',
+                        col.visible
+                          ? 'bg-card border-border/80 shadow-2xs hover:border-primary/40 hover:bg-muted/30'
+                          : 'bg-muted/20 border-border/40 opacity-60',
+                        isDragging && 'opacity-40 scale-95 border-dashed border-primary',
+                        isDragOver && !isDragging && 'border-primary bg-primary/5 scale-[1.01]'
                       )}
                     >
-                      {col.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                      {/* Drag Handle */}
+                      <GripVertical
+                        className="w-4 h-4 text-muted-foreground/60 cursor-grab active:cursor-grabbing flex-shrink-0"
+                      />
 
-          {/* Panel Footer */}
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border bg-muted/20 flex-shrink-0">
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset to Default
-            </button>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs px-3"
-                onClick={() => { setLocalCols(columns); setOpen(false); }}
+                      {/* Group Badge */}
+                      <span className={cn('text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase flex-shrink-0', GROUP_COLORS[col.group])}>
+                        {col.group.slice(0, 3)}
+                      </span>
+
+                      {/* Column Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{col.label}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono truncate">{col.dbField}</p>
+                      </div>
+
+                      {/* Required badge */}
+                      {col.required && (
+                        <span className="text-[9px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border flex-shrink-0">
+                          Pinned
+                        </span>
+                      )}
+
+                      {/* Toggle */}
+                      <button
+                        onClick={() => toggleCol(col.key)}
+                        disabled={!!col.required}
+                        title={col.required ? 'Required column (cannot hide)' : col.visible ? 'Hide column' : 'Show column'}
+                        className={cn(
+                          'flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-colors border',
+                          col.required
+                            ? 'opacity-30 cursor-not-allowed bg-muted border-border'
+                            : col.visible
+                            ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 cursor-pointer'
+                            : 'bg-muted text-muted-foreground border-border hover:bg-muted/80 cursor-pointer'
+                        )}
+                      >
+                        {col.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-border bg-muted/20 flex-shrink-0">
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
               >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                className="h-7 text-xs px-3 gap-1"
-                onClick={handleApply}
-              >
-                <Check className="w-3 h-3" />
-                Apply
-              </Button>
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset to Default
+              </button>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs font-bold px-3 rounded-lg"
+                  onClick={() => { setLocalCols(columns); setOpen(false); }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs font-bold px-4 gap-1.5 rounded-lg shadow-2xs"
+                  onClick={handleApply}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Apply Columns
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

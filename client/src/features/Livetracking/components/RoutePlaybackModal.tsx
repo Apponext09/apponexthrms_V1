@@ -4,46 +4,14 @@
 // Supports light & dark mode theme compatibility
 // ============================================================
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { X, Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Loader2, Navigation } from 'lucide-react';
 import { fetchRouteHistory } from '../api/livetrackingApi';
 import type { LiveEmployee, RoutePoint } from '../types/livetracking.types';
 
-// Fix Leaflet default marker icon issue with Vite
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
+// Fix for Vite bundling — not needed with MapLibre, kept as no-op for safety
 
-// Custom DivIcon for the walking employee marker during playback
-function createMovingEmployeeIcon(name: string): L.DivIcon {
-  const initials = (name || 'Emp')
-    .split(' ')
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase();
-
-  return L.divIcon({
-    className: '',
-    iconSize: [44, 44],
-    iconAnchor: [22, 22],
-    html: `
-      <div style="position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(99,102,241,0.4);animation:livetrack-pulse 1.5s infinite;pointer-events:none;"></div>
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#4f46e5);border:3px solid #ffffff;box-shadow:0 4px 12px rgba(79,70,229,0.6);display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:12px;font-weight:900;">
-          ${initials}
-        </div>
-        <div style="position:absolute;bottom:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:#ef4444;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#ffffff;">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4a2 2 0 1 0-4 0 2 2 0 0 0 4 0z"/><path d="M6 21v-4l2-3 2-2 3 2 4 4"/><path d="M12 11l-3 4-4-2"/><path d="M12 11l3 4 3-2"/></svg>
-        </div>
-      </div>
-    `,
-  });
-}
 
 /** Helper to convert 0-indexed integer into alphabet label (0->A, 1->B, 2->C, 3->D...) */
 function getAlphabetLabel(index: number): string {
@@ -55,36 +23,8 @@ function getAlphabetLabel(index: number): string {
   return `${first}${second}`;
 }
 
-function createWaypointAlphabetIcon(
-  letter: string,
-  isStart: boolean,
-  isEnd: boolean
-): L.DivIcon {
-  const bg = isStart
-    ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-    : isEnd
-    ? 'linear-gradient(135deg, #10b981, #059669)'
-    : 'linear-gradient(135deg, #6366f1, #4f46e5)';
+// createWaypointAlphabetIcon removed (was Leaflet DivIcon) — PlaybackMap renders cluster markers directly
 
-  const glow = isStart ? 'rgba(239,68,68,0.4)' : isEnd ? 'rgba(16,185,129,0.4)' : 'rgba(99,102,241,0.4)';
-  const size = isStart || isEnd ? 34 : 30;
-  const half = size / 2;
-
-  return L.divIcon({
-    className: '',
-    iconSize: [size, size],
-    iconAnchor: [half, half],
-    popupAnchor: [0, -half],
-    html: `
-      <div style="position:relative;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;cursor:pointer;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:${glow};animation:livetrack-pulse 2s infinite;pointer-events:none;"></div>
-        <div style="width:${size - 8}px;height:${size - 8}px;border-radius:50%;background:${bg};border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:${letter.length > 1 ? '9px' : '11px'};font-weight:900;font-family:sans-serif;">
-          ${letter}
-        </div>
-      </div>
-    `,
-  });
-}
 
 /** Destination Cluster interface for location-wise differential alphabet markers */
 export interface DestinationCluster {
@@ -213,25 +153,279 @@ function interpolateRoutePoints(rawPoints: RoutePoint[], stepsPerSegment = 20): 
   return interpolated;
 }
 
-/** Recenter map on route bounds and fix Leaflet blank map issue inside modal */
-const MapBoundsAdjuster: React.FC<{ points: RoutePoint[] }> = ({ points }) => {
-  const map = useMap();
-  useEffect(() => {
-    // Invalidate Leaflet canvas size after modal renders to prevent gray blank map
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-      if (points.length > 1) {
-        const bounds = L.latLngBounds(points.map((p) => [p.latitude, p.longitude]));
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
-      } else if (points.length === 1 && points[0].latitude != null && points[0].longitude != null) {
-        map.setView([points[0].latitude, points[0].longitude], 15);
-      }
-    }, 150);
+// ── PlaybackMap — MapLibre GL JS powered playback map ────────────────────────
+interface PlaybackMapProps {
+  interpolatedRoute: RoutePoint[];
+  rawRoute: RoutePoint[];
+  playedPath: RoutePoint[];
+  currentPoint: RoutePoint | undefined;
+  destinationClusters: DestinationCluster[];
+  employeeName: string;
+  onJumpToCluster: (frameIndex: number) => void;
+}
 
-    return () => clearTimeout(timer);
-  }, [map, points]);
-  return null;
+const PLAYBACK_MAP_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    'osm-tiles': {
+      type: 'raster',
+      tiles: [
+        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      ],
+      tileSize: 256,
+      attribution: '&copy; OpenStreetMap contributors',
+    },
+  },
+  layers: [
+    {
+      id: 'osm-base-layer',
+      type: 'raster',
+      source: 'osm-tiles',
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
 };
+
+const PlaybackMap: React.FC<PlaybackMapProps> = ({
+  interpolatedRoute,
+  rawRoute,
+  playedPath,
+  currentPoint,
+  destinationClusters,
+  employeeName,
+  onJumpToCluster,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapLoadedRef = useRef(false);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const playerMarkerRef = useRef<maplibregl.Marker | null>(null);
+
+  // ── Init MapLibre ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const first = interpolatedRoute[0];
+    const center: [number, number] = first
+      ? [first.longitude, first.latitude]
+      : [78.9629, 20.5937];
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: PLAYBACK_MAP_STYLE,
+      center,
+      zoom: 13,
+      attributionControl: false,
+      fadeDuration: 0,
+    });
+
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
+    mapRef.current = map;
+
+    map.on('load', () => {
+      // Full route trail source (dotted grey ghost path)
+      map.addSource('full-route', {
+        type: 'geojson',
+        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} },
+      });
+      map.addLayer({
+        id: 'full-route-line',
+        type: 'line',
+        source: 'full-route',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#64748b', 'line-width': 4, 'line-opacity': 0.45, 'line-dasharray': [2, 4] },
+      });
+
+      // Played path source (animated theme trail: Dark Black in Light mode, White in Dark mode)
+      const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+      const lineColor = isDark ? '#ffffff' : '#0f172a';
+      const glowColor = isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(15, 23, 42, 0.2)';
+
+      map.addSource('played-path', {
+        type: 'geojson',
+        data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] }, properties: {} },
+      });
+      map.addLayer({
+        id: 'played-glow',
+        type: 'line',
+        source: 'played-path',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': glowColor, 'line-width': 12, 'line-opacity': 0.8 },
+      });
+      map.addLayer({
+        id: 'played-solid',
+        type: 'line',
+        source: 'played-path',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': lineColor, 'line-width': 5, 'line-opacity': 0.95 },
+      });
+
+      mapLoadedRef.current = true;
+
+      // Fit to full route
+      if (interpolatedRoute.length > 1) {
+        const bounds = new maplibregl.LngLatBounds();
+        interpolatedRoute.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+        if (!bounds.isEmpty()) {
+          map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
+        }
+      }
+
+      // Set full route source
+      (map.getSource('full-route') as maplibregl.GeoJSONSource)?.setData({
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: interpolatedRoute.map((p) => [p.longitude, p.latitude]),
+        },
+        properties: {},
+      } as any);
+    });
+
+    return () => {
+      mapLoadedRef.current = false;
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      playerMarkerRef.current?.remove();
+      playerMarkerRef.current = null;
+      map.remove();
+      mapRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Update full route when interpolatedRoute changes ──────────────────
+  useEffect(() => {
+    if (!mapLoadedRef.current || !mapRef.current) return;
+    (mapRef.current.getSource('full-route') as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: interpolatedRoute.map((p) => [p.longitude, p.latitude]),
+      },
+      properties: {},
+    } as any);
+
+    // Re-fit bounds
+    if (interpolatedRoute.length > 1) {
+      const bounds = new maplibregl.LngLatBounds();
+      interpolatedRoute.forEach((p) => bounds.extend([p.longitude, p.latitude]));
+      if (!bounds.isEmpty()) {
+        mapRef.current.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
+      }
+    }
+  }, [interpolatedRoute]);
+
+  // ── Update played path (called on every playIndex tick) ───────────────
+  useEffect(() => {
+    if (!mapLoadedRef.current || !mapRef.current) return;
+    (mapRef.current.getSource('played-path') as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: playedPath.map((p) => [p.longitude, p.latitude]),
+      },
+      properties: {},
+    } as any);
+  }, [playedPath]);
+
+  // ── Move animated player marker ───────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current || !currentPoint) return;
+
+    const initials = (employeeName || 'Emp')
+      .split(' ')
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase();
+
+    const el = document.createElement('div');
+    el.style.cssText = `
+      width:40px;height:40px;border-radius:50%;
+      background:linear-gradient(135deg,#6366f1,#4f46e5);
+      border:3px solid #fff;
+      box-shadow:0 4px 12px rgba(79,70,229,0.6);
+      display:flex;align-items:center;justify-content:center;
+      color:#fff;font-size:12px;font-weight:900;font-family:sans-serif;
+      cursor:pointer;
+    `;
+    el.textContent = initials;
+
+    if (!playerMarkerRef.current) {
+      playerMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([currentPoint.longitude, currentPoint.latitude])
+        .addTo(mapRef.current);
+    } else {
+      playerMarkerRef.current.setLngLat([currentPoint.longitude, currentPoint.latitude]);
+    }
+  }, [currentPoint, employeeName]);
+
+  // ── Render destination cluster markers ────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current || !mapLoadedRef.current) return;
+
+    // Remove old cluster markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    destinationClusters.forEach((cluster) => {
+      const isStart = cluster.index === 0;
+      const isEnd = cluster.index === destinationClusters.length - 1;
+      const bg = isStart ? '#ef4444' : isEnd ? '#10b981' : '#6366f1';
+
+      const el = document.createElement('div');
+      el.style.cssText = `
+        width:28px;height:28px;border-radius:50%;
+        background:${bg};border:2.5px solid #fff;
+        box-shadow:0 3px 10px rgba(0,0,0,0.35);
+        display:flex;align-items:center;justify-content:center;
+        color:#fff;font-size:11px;font-weight:900;font-family:sans-serif;
+        cursor:pointer;
+      `;
+      el.textContent = cluster.letter;
+      el.title = `Point ${cluster.letter}${isStart ? ' (Start)' : isEnd ? ' (End)' : ''}`;
+
+      el.addEventListener('click', () => onJumpToCluster(cluster.frameIndex));
+
+      const popup = new maplibregl.Popup({ closeButton: false, offset: 15 }).setHTML(`
+        <div style="background:#1e293b;color:#fff;border-radius:10px;padding:10px;font-family:sans-serif;font-size:12px;min-width:180px;">
+          <div style="font-weight:900;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+            <span style="width:18px;height:18px;border-radius:50%;background:${bg};display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;">${cluster.letter}</span>
+            Point ${cluster.letter} ${isStart ? '(Origin)' : isEnd ? '(Latest)' : `(Stop #${cluster.index})`}
+          </div>
+          ${cluster.recorded_at ? `<div style="color:#94a3b8;font-size:11px;">🕐 ${new Date(cluster.recorded_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>` : ''}
+          <div style="color:#94a3b8;font-size:11px;margin-top:2px;">🌐 ${cluster.latitude.toFixed(5)}, ${cluster.longitude.toFixed(5)}</div>
+          <button onclick="window.__jumpToCluster_${cluster.frameIndex}()" style="margin-top:8px;width:100%;padding:5px 8px;border-radius:7px;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;cursor:pointer;border:none;">▶ Jump to Point ${cluster.letter}</button>
+        </div>
+      `);
+
+      // Attach global jump handler (cleaned up below)
+      (window as any)[`__jumpToCluster_${cluster.frameIndex}`] = () => onJumpToCluster(cluster.frameIndex);
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([cluster.longitude, cluster.latitude])
+        .setPopup(popup)
+        .addTo(mapRef.current!);
+
+      markersRef.current.push(marker);
+    });
+
+    return () => {
+      destinationClusters.forEach((c) => {
+        delete (window as any)[`__jumpToCluster_${c.frameIndex}`];
+      });
+    };
+  }, [destinationClusters, onJumpToCluster]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '380px' }} />;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Props {
   employee: LiveEmployee;
@@ -260,57 +454,36 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
       let pointsToUse: RoutePoint[] = [];
 
       if (data && data.length >= 2) {
-        // Use EXACT real breadcrumb history recorded in DB for this employee & date
         pointsToUse = data;
       } else if (employee.routeTrail && employee.routeTrail.length >= 2) {
         pointsToUse = employee.routeTrail;
-      } else {
-        // Fallback: If no DB breadcrumbs recorded yet for this date, anchor fallback path around current position
-        const hasLiveCoords = employee.latitude != null && Number(employee.latitude) !== 0 && employee.longitude != null && Number(employee.longitude) !== 0;
-        const curLat = hasLiveCoords ? Number(employee.latitude) : 20.0059;
-        const curLng = hasLiveCoords ? Number(employee.longitude) : 73.7898;
-        const now = new Date().toISOString();
+      }
 
-        pointsToUse = [
-          { latitude: curLat - 0.0060, longitude: curLng - 0.0050, speed: 12, recorded_at: new Date(Date.now() - 3600_000).toISOString() }, // Start (Point A)
-          { latitude: curLat - 0.0035, longitude: curLng - 0.0028, speed: 18, recorded_at: new Date(Date.now() - 2400_000).toISOString() },
-          { latitude: curLat - 0.0018, longitude: curLng - 0.0012, speed: 22, recorded_at: new Date(Date.now() - 1200_000).toISOString() },
-          { latitude: curLat, longitude: curLng, speed: 0, recorded_at: now },                                                               // Destination (Point B)
-        ];
+      if (pointsToUse.length === 0) {
+        setRawRoute([]);
+        setInterpolatedRoute([]);
+        setIsPlaying(false);
+        return;
       }
 
       setRawRoute(pointsToUse);
-
       const smoothPoints = interpolateRoutePoints(pointsToUse, 25);
       setInterpolatedRoute(smoothPoints);
 
       if (smoothPoints.length > 1) {
-        setIsPlaying(true); // Automatically start frame-by-frame walking animation
+        setIsPlaying(true);
       }
-    } catch {
-      const hasLiveCoords = employee.latitude != null && Number(employee.latitude) !== 0 && employee.longitude != null && Number(employee.longitude) !== 0;
-      const curLat = hasLiveCoords ? Number(employee.latitude) : 20.0059;
-      const curLng = hasLiveCoords ? Number(employee.longitude) : 73.7898;
-      const now = new Date().toISOString();
-
-      const fallback = [
-        { latitude: curLat - 0.0060, longitude: curLng - 0.0050, speed: 12, recorded_at: new Date(Date.now() - 3600_000).toISOString() },
-        { latitude: curLat - 0.0035, longitude: curLng - 0.0028, speed: 18, recorded_at: new Date(Date.now() - 2400_000).toISOString() },
-        { latitude: curLat - 0.0018, longitude: curLng - 0.0012, speed: 22, recorded_at: new Date(Date.now() - 1200_000).toISOString() },
-        { latitude: curLat, longitude: curLng, speed: 0, recorded_at: now },
-      ];
-      setRawRoute(fallback);
-      const smooth = interpolateRoutePoints(fallback, 25);
-      setInterpolatedRoute(smooth);
-      if (smooth.length > 1) setIsPlaying(true);
+    } catch (error) {
+      console.error('[RoutePlayback] Failed to load route history:', error);
+      setRawRoute([]);
+      setInterpolatedRoute([]);
+      setIsPlaying(false);
     } finally {
       setLoading(false);
     }
   }, [
     employee.employee_id,
     employee.routeTrail,
-    employee.latitude,
-    employee.longitude,
     date,
   ]);
 
@@ -430,142 +603,26 @@ export const RoutePlaybackModal: React.FC<Props> = ({ employee, onClose }) => {
           </span>
         </div>
 
-        {/* Map */}
+        {/* ── MapLibre GL JS map ──────────────────────────────── */}
         <div className="flex-1 min-h-[380px] relative">
           {loading && (
             <div className="absolute inset-0 z-[1000] bg-background/60 backdrop-blur-sm flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
             </div>
           )}
-          <MapContainer
-            center={
-              interpolatedRoute.length > 0
-                ? [interpolatedRoute[0].latitude, interpolatedRoute[0].longitude]
-                : [20.5937, 78.9629]
-            }
-            zoom={14}
-            style={{ width: '100%', height: '100%', minHeight: '380px' }}
-            zoomControl
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            />
-
-            {/* Dotted Full Route Trail */}
-            {interpolatedRoute.length > 1 && (
-              <Polyline
-                positions={interpolatedRoute.map((p) => [p.latitude, p.longitude])}
-                color="#64748b"
-                weight={4}
-                dashArray="6 6"
-                opacity={0.5}
-              />
-            )}
-
-            {/* Animated Traveled Path (Red Line growing frame-by-frame behind employee) */}
-            {playedPath.length > 1 && (
-              <>
-                <Polyline
-                  positions={playedPath.map((p) => [p.latitude, p.longitude])}
-                  color="#dc2626"
-                  weight={10}
-                  opacity={0.25}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-                <Polyline
-                  positions={playedPath.map((p) => [p.latitude, p.longitude])}
-                  color="#dc2626"
-                  weight={6}
-                  opacity={0.95}
-                  lineCap="round"
-                  lineJoin="round"
-                />
-              </>
-            )}
-
-            {/* Destination Cluster Markers (Point A, Point B, Point C, Point D...) */}
-            {destinationClusters.map((cluster) => {
-              const isStart = cluster.index === 0;
-              const isEnd = cluster.index === destinationClusters.length - 1;
-
-              return (
-                <Marker
-                  key={`cluster-${cluster.letter}-${cluster.latitude}-${cluster.longitude}`}
-                  position={[cluster.latitude, cluster.longitude]}
-                  icon={createWaypointAlphabetIcon(cluster.letter, isStart, isEnd)}
-                  eventHandlers={{
-                    click: () => {
-                      setIsPlaying(false);
-                      setPlayIndex(cluster.frameIndex);
-                    },
-                  }}
-                >
-                  <Popup>
-                    <div className="p-3 text-xs font-sans rounded-xl bg-slate-900 text-white shadow-xl max-w-xs space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-1.5">
-                        <span className="font-extrabold text-sm flex items-center gap-1.5">
-                          <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white ${
-                              isStart ? 'bg-rose-500' : isEnd ? 'bg-emerald-500' : 'bg-indigo-500'
-                            }`}
-                          >
-                            {cluster.letter}
-                          </span>
-                          Destination Point {cluster.letter}{' '}
-                          {isStart
-                            ? '(Origin / Start)'
-                            : isEnd
-                            ? '(Current / Latest)'
-                            : `(Stop #${cluster.index + 1})`}
-                        </span>
-                      </div>
-
-                      <div className="text-slate-300 text-[11px] space-y-1">
-                        {cluster.recorded_at && (
-                          <div>
-                            <strong>🕐 Recorded:</strong>{' '}
-                            {new Date(cluster.recorded_at).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </div>
-                        )}
-                        <div>
-                          <strong>🌐 Coordinates:</strong> {cluster.latitude.toFixed(5)},{' '}
-                          {cluster.longitude.toFixed(5)}
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          setIsPlaying(false);
-                          setPlayIndex(cluster.frameIndex);
-                        }}
-                        className="mt-2 w-full py-1.5 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition-all"
-                      >
-                        ▶ Jump Animation to Point {cluster.letter}
-                      </button>
-                    </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
-
-            {/* Frame-by-Frame Moving Employee Marker */}
-            {currentPoint && (
-              <Marker
-                position={[currentPoint.latitude, currentPoint.longitude]}
-                icon={createMovingEmployeeIcon(employee.name)}
-              />
-            )}
-
-            <MapBoundsAdjuster points={rawRoute} />
-          </MapContainer>
+          <PlaybackMap
+            interpolatedRoute={interpolatedRoute}
+            rawRoute={rawRoute}
+            playedPath={playedPath}
+            currentPoint={currentPoint}
+            destinationClusters={destinationClusters}
+            employeeName={employee.name}
+            onJumpToCluster={(frameIndex) => {
+              setIsPlaying(false);
+              setPlayIndex(frameIndex);
+            }}
+          />
         </div>
-
-
 
         {/* Playback Controls */}
         <div className="px-5 py-3.5 border-t border-border/60 flex items-center gap-4 flex-wrap bg-muted/20">

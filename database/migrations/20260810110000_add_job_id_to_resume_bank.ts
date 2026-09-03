@@ -14,7 +14,7 @@ export async function up(knex: Knex): Promise<void> {
 
     await knex.schema.alterTable('resume_bank', (table) => {
       if (!hasJobId) {
-        table.bigInteger('job_id').unsigned().nullable().after('candidate_id');
+        table.integer('job_id').unsigned().nullable().after('candidate_id');
         table.foreign('job_id').references('jobs.id').onDelete('SET NULL');
         table.index('job_id');
       }

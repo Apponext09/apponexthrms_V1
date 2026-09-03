@@ -2,390 +2,472 @@ import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Search, FileText, Send, CheckCircle, XCircle, Eye } from 'lucide-react';
-import { useOffers, useCreateOffer, useSendOffer } from '../hooks/useOffers';
+import { Plus, Search, FileText, Send, CheckCircle, XCircle, Eye, FileSpreadsheet, TrendingUp, Users, UserPlus } from 'lucide-react';
+import { useOffers, useCreateOffer, useEmployeeLetters } from '../hooks/useOffers';
 import { useApplications } from '../hooks/useApplications';
 import { useDepartments, useDesignations } from '@/features/settings/hooks';
+import { GenerateOfferModal } from '../components/GenerateOfferModal';
+import { OfferDetailsModal } from '../components/OfferDetailsModal';
+import { apiClient } from '@/config/api';
+import { toast } from 'sonner';
 
 export const OfferManagementPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'offers' | 'employee_letters'>('all');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<any>(null);
-  
-  // Form State
-  const [form, setForm] = useState({
-    applicationId: '',
-    positionTitle: '',
-    departmentId: '',
-    designationId: '',
-    costToCompany: '',
-    baseSalary: '',
-    currency: 'INR',
-    offerStartDate: '',
-    offerExpiryDate: '',
-  });
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isActionPending, setIsActionPending] = useState(false);
 
-  const { data: offersResponse, isLoading } = useOffers({
+  // Queries
+  const { data: offersResponse, isLoading: isLoadingOffers, refetch } = useOffers({
     status: statusFilter === 'all' ? undefined : statusFilter,
   });
 
+  const { data: employeeLettersResponse } = useEmployeeLetters();
+
   const { data: appsResponse } = useApplications({ pageSize: 100 });
-  const { data: departments } = useDepartments();
-  const { data: designations } = useDesignations();
+  const { data: departmentsResponse } = useDepartments(1, 100);
+  const { designations } = useDesignations();
 
   const createOfferMutation = useCreateOffer();
-  const sendOfferMutation = useSendOffer(selectedOffer?.id || 0);
 
-  const offersList = Array.isArray(offersResponse?.data) 
+  // Data processing
+  const rawOffersList = Array.isArray(offersResponse?.data) 
     ? offersResponse.data 
     : (Array.isArray(offersResponse?.data?.items) ? offersResponse.data.items : (Array.isArray(offersResponse?.items) ? offersResponse.items : []));
+
+  const offersList = rawOffersList.map((o: any) => ({ ...o, record_type: 'offer' }));
+
+  const rawLettersList = Array.isArray(employeeLettersResponse?.data?.items)
+    ? employeeLettersResponse.data.items
+    : (Array.isArray(employeeLettersResponse?.items) ? employeeLettersResponse.items : (Array.isArray(employeeLettersResponse?.data) ? employeeLettersResponse.data : []));
+
+  const employeeLettersList = rawLettersList.map((l: any) => ({
+    id: `letter_${l.id}`,
+    offer_code: l.letter_code || `LTR-${l.id}`,
+    candidate_name: l.recipient_name || 'Employee',
+    candidate_email: l.recipient_email || 'N/A',
+    position_title: l.letter_type ? l.letter_type.replace(/_/g, ' ').toUpperCase() : (l.subject || 'Employee Letter'),
+    cost_to_company: null,
+    currency: 'INR',
+    offer_start_date: l.created_at,
+    offer_expiry_date: null,
+    status: l.status || 'sent',
+    record_type: 'letter',
+    raw_letter: l
+  }));
 
   const applicationList = Array.isArray(appsResponse?.items) 
     ? appsResponse.items 
     : (Array.isArray(appsResponse?.data) ? appsResponse.data : (Array.isArray(appsResponse) ? appsResponse : []));
 
-  const departmentList = Array.isArray(departments) 
-    ? departments 
-    : (Array.isArray(departments?.items) ? departments.items : (Array.isArray(departments?.data) ? departments.data : []));
+  const departmentList = Array.isArray(departmentsResponse?.items) 
+    ? departmentsResponse.items 
+    : (Array.isArray(departmentsResponse?.data) ? departmentsResponse.data : (Array.isArray(departmentsResponse) ? departmentsResponse : []));
 
   const designationList = Array.isArray(designations) 
     ? designations 
-    : (Array.isArray(designations?.items) ? designations.items : (Array.isArray(designations?.data) ? designations.data : []));
+    : (Array.isArray((designations as any)?.items) ? (designations as any).items : (Array.isArray((designations as any)?.data) ? (designations as any).data : []));
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.applicationId || !form.positionTitle) return;
+  // KPI calculations (computed over the full offers list)
+  const allOffers = Array.isArray(offersList) ? offersList : [];
+  const totalOffersCount = allOffers.length;
+  const sentOffersCount = allOffers.filter((o: any) => o.status === 'sent').length;
+  const acceptedOffersCount = allOffers.filter((o: any) => o.status === 'accepted').length;
+  const draftOffersCount = allOffers.filter((o: any) => o.status === 'draft').length;
+  const totalEmployeeLettersCount = employeeLettersList.length;
+  const acceptanceRate = totalOffersCount > 0 
+    ? Math.round((acceptedOffersCount / (totalOffersCount - draftOffersCount || totalOffersCount)) * 100) 
+    : 0;
 
-    await createOfferMutation.mutateAsync({
-      applicationId: parseInt(form.applicationId, 10),
-      positionTitle: form.positionTitle,
-      departmentId: form.departmentId ? parseInt(form.departmentId, 10) : undefined,
-      designationId: form.designationId ? parseInt(form.designationId, 10) : undefined,
-      costToCompany: form.costToCompany ? parseFloat(form.costToCompany) : undefined,
-      baseSalary: form.baseSalary ? parseFloat(form.baseSalary) : undefined,
-      currency: form.currency,
-      offerStartDate: form.offerStartDate || undefined,
-      offerExpiryDate: form.offerExpiryDate || undefined,
-    });
-
-    setIsCreateOpen(false);
-    setForm({
-      applicationId: '',
-      positionTitle: '',
-      departmentId: '',
-      designationId: '',
-      costToCompany: '',
-      baseSalary: '',
-      currency: 'INR',
-      offerStartDate: '',
-      offerExpiryDate: '',
-    });
+  // Actions
+  const handleCreateOffer = async (payload: any) => {
+    try {
+      await createOfferMutation.mutateAsync(payload);
+      toast.success('Professional Offer Generated & Saved as Draft!');
+      setIsCreateOpen(false);
+      refetch();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to generate offer letter.');
+    }
   };
 
-  const handleSend = async (offer: any) => {
-    await sendOfferMutation.mutateAsync();
-    alert('Offer sent successfully to the candidate!');
+  const handleSendOffer = async (offer: any, customEmail?: string) => {
+    setIsActionPending(true);
+    const targetEmail = (customEmail || offer.candidate_email || offer.candidateEmail || offer.meta?.candidateEmail || '').trim();
+    try {
+      const res = await apiClient.post(`/recruitment/offers/${offer.id}/send`, {
+        recipientEmail: targetEmail || undefined
+      });
+      const sentTo = res.data?.recipientEmail || targetEmail || 'candidate email';
+      toast.success(`Offer Ref: ${offer.offer_code || offer.offerCode} sent successfully to ${sentTo}!`);
+      refetch();
+      if (selectedOffer && selectedOffer.id === offer.id) {
+        setSelectedOffer({ 
+          ...selectedOffer, 
+          status: 'sent',
+          candidate_email: sentTo,
+          candidateEmail: sentTo,
+          meta: { ...(selectedOffer.meta || {}), candidateEmail: sentTo }
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to dispatch offer.');
+    } finally {
+      setIsActionPending(false);
+    }
+  };
+
+  const handleViewDetails = (offer: any) => {
+    setSelectedOffer(offer);
+    setIsDetailsOpen(true);
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft': return <Badge variant="outline" className="bg-gray-100 text-gray-800">Draft</Badge>;
-      case 'sent': return <Badge variant="outline" className="bg-blue-100 text-blue-800">Sent</Badge>;
-      case 'accepted': return <Badge variant="outline" className="bg-green-100 text-green-800">Accepted</Badge>;
-      case 'rejected': return <Badge variant="outline" className="bg-red-100 text-red-800">Rejected</Badge>;
-      case 'expired': return <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Expired</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
+      case 'draft': return <Badge variant="outline" className="bg-slate-100 text-slate-800 border-slate-200">Draft</Badge>;
+      case 'sent': return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Sent</Badge>;
+      case 'accepted': return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Accepted</Badge>;
+      case 'rejected': return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Declined</Badge>;
+      case 'expired': return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Expired</Badge>;
+      default: return <Badge variant="outline" className="capitalize">{status}</Badge>;
     }
   };
 
-  const filteredOffers = (Array.isArray(offersList) ? offersList : []).filter((o: any) => {
+  const getRecordTypeBadge = (type: string) => {
+    if (type === 'letter') {
+      return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 font-extrabold text-[10px]">Employee Letter</Badge>;
+    }
+    return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-extrabold text-[10px]">Offer Letter</Badge>;
+  };
+
+  // Combine offers and employee letters based on categoryFilter
+  const rawCombinedItems = categoryFilter === 'offers' 
+    ? allOffers 
+    : categoryFilter === 'employee_letters' 
+    ? employeeLettersList 
+    : [...allOffers, ...employeeLettersList];
+
+  const filteredOffers = rawCombinedItems.filter((o: any) => {
     if (!o) return false;
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
     const candidateName = (o.candidate_name || o.candidateName || '').toLowerCase();
     const pos = (o.position_title || o.positionTitle || '').toLowerCase();
-    return candidateName.includes(query) || pos.includes(query);
+    const code = (o.offer_code || o.offerCode || '').toLowerCase();
+    return candidateName.includes(query) || pos.includes(query) || code.includes(query);
   });
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Offer Management</h1>
-          <p className="text-gray-500 mt-1">Generate, track, and manage official employment offer letters.</p>
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
+      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Offer Management
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Generate structured compensation letters, calculate CTC breakdowns, and monitor candidate acceptance.
+            </p>
+          </div>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" /> Generate New Offer
-        </Button>
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto">
+          <Button 
+            onClick={() => setIsCreateOpen(true)} 
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs cursor-pointer whitespace-nowrap"
+          >
+            <Plus className="w-3.5 h-3.5" /> Create Offer Letter
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="flex items-center gap-2 border border-gray-300 rounded-md px-3 py-2 w-full max-w-sm bg-white">
-          <Search className="h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by candidate name or job title..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="outline-none w-full bg-transparent text-sm"
-          />
-        </div>
-        <div className="flex gap-2">
-          {['all', 'draft', 'sent', 'accepted', 'rejected', 'expired'].map((status) => (
-            <Button
-              key={status}
-              variant={statusFilter === status ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setStatusFilter(status)}
-              className="capitalize"
+      {/* ── KPI Stats Widgets ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Offers</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{totalOffersCount}</h3>
+              <p className="text-[11px] text-muted-foreground mt-1">Drafts: <span className="text-foreground font-bold">{draftOffersCount}</span></p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <FileSpreadsheet className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sent & Pending</p>
+              <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{sentOffersCount}</h3>
+              <p className="text-[11px] text-blue-600/80 dark:text-blue-400/80 font-medium mt-1">Awaiting Candidate</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Send className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Accepted Offers</p>
+              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{acceptedOffersCount}</h3>
+              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 font-medium mt-1">Ready for Onboarding</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Acceptance Rate</p>
+              <h3 className="text-2xl font-black text-foreground mt-1">{acceptanceRate}%</h3>
+              <p className="text-[11px] text-muted-foreground mt-1">Excludes Drafts</p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Filter Row & Segmented Status Pills ──────────────────────────────── */}
+      <div className="flex flex-col gap-4 bg-card p-4 rounded-2xl border border-border/80 shadow-2xs">
+        
+        {/* Row 1: Search & Category Selection */}
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+          <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 w-full max-w-md bg-background">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              placeholder="Search candidate/employee, role, ref..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="outline-none w-full bg-transparent text-xs text-foreground placeholder:text-muted-foreground"
+            />
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/80 shrink-0">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer ${
+                categoryFilter === 'all'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
-              {status}
-            </Button>
-          ))}
+              All Records ({allOffers.length + employeeLettersList.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('offers')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                categoryFilter === 'offers'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Offer Letters ({allOffers.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('employee_letters')}
+              className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer flex items-center gap-1.5 ${
+                categoryFilter === 'employee_letters'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              Employee Letters ({employeeLettersList.length})
+            </button>
+          </div>
         </div>
+
+        {/* Row 2: Status Pills (Only when viewing offers or all) */}
+        {categoryFilter !== 'employee_letters' && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none pt-2 border-t border-border/40">
+            <span className="text-[11px] font-bold text-muted-foreground flex items-center mr-2">Status:</span>
+            {['all', 'draft', 'sent', 'accepted', 'rejected', 'expired'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`text-xs px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
+                  statusFilter === status 
+                    ? 'bg-primary text-primary-foreground shadow-xs' 
+                    : 'bg-muted/40 text-muted-foreground hover:bg-muted border border-border/60'
+                }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <Card>
+      {/* ── Data Table ───────────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Candidate</TableHead>
-                <TableHead>Position Title</TableHead>
-                <TableHead>CTC (Annual)</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>Expiry Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    Loading offer records...
-                  </TableCell>
+          <div className="w-full overflow-x-auto">
+            <Table className="min-w-[1000px] border-collapse">
+              <TableHeader className="bg-muted/50 border-b border-border/60">
+                <TableRow className="border-border/60">
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Recipient & Code</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Type</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Offered Role / Subject</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Annual CTC</TableHead>
+                  <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Target / Date</TableHead>
+                  <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground">Status</TableHead>
+                  <TableHead className="text-right text-[11px] font-bold uppercase tracking-wider py-3.5 px-5 text-muted-foreground">Actions</TableHead>
                 </TableRow>
-              ) : filteredOffers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No offers found matching current filters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredOffers.map((o: any) => (
-                  <TableRow key={o.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-semibold text-gray-900">{o.candidate_name || 'N/A'}</div>
-                        <div className="text-xs text-gray-500">{o.candidate_email || 'N/A'}</div>
+              </TableHeader>
+              <TableBody className="divide-y divide-border/60">
+                {isLoadingOffers ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs bg-background">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        <span>Loading official recruitment & letter records...</span>
                       </div>
                     </TableCell>
-                    <TableCell>{o.position_title || o.positionTitle || 'N/A'}</TableCell>
-                    <TableCell>{o.cost_to_company || o.costToCompany ? `${o.currency} ${parseFloat(o.cost_to_company || o.costToCompany).toLocaleString()}` : 'N/A'}</TableCell>
-                    <TableCell>{o.offer_start_date || o.offerStartDate || 'N/A'}</TableCell>
-                    <TableCell>{o.offer_expiry_date || o.offerExpiryDate || 'N/A'}</TableCell>
-                    <TableCell>{getStatusBadge(o.status)}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="icon" onClick={() => setSelectedOffer(o)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {o.status === 'draft' && (
-                        <Button variant="default" size="sm" onClick={() => handleSend(o)} className="bg-blue-600 hover:bg-blue-700">
-                          <Send className="h-3 w-3 mr-1" /> Send
-                        </Button>
-                      )}
+                  </TableRow>
+                ) : filteredOffers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground text-xs bg-background">
+                      No offer or letter records match the search parameters.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredOffers.map((o: any) => {
+                    const rawCTC = o.cost_to_company || o.costToCompany;
+                    const formattedCTC = rawCTC && !isNaN(parseFloat(rawCTC)) && parseFloat(rawCTC) > 0
+                      ? `${o.currency || 'INR'} ${parseFloat(rawCTC).toLocaleString()}`
+                      : '—';
+
+                    const candidateName = o.candidate_name || o.candidateName || 'Recipient';
+                    const candidateEmail = o.candidate_email || o.candidateEmail || 'No Email';
+                    const positionTitle = o.position_title || o.positionTitle || 'General Position';
+                    const offerCode = o.offer_code || o.offerCode || 'DRAFT';
+                    const initials = candidateName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+
+                    const formatDate = (dateVal: any) => {
+                      if (!dateVal) return '—';
+                      const str = String(dateVal);
+                      return str.includes('T') ? str.split('T')[0] : str;
+                    };
+                    
+                    return (
+                      <TableRow key={o.id} className="border-border/60 hover:bg-muted/40 transition-colors">
+                        <TableCell className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase">{offerCode}</span>
+                              <div className="font-bold text-foreground text-xs truncate">{candidateName}</div>
+                              <div className="text-[11px] text-muted-foreground truncate font-mono">{candidateEmail}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs font-semibold text-foreground">
+                          {getRecordTypeBadge(o.record_type)}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs font-semibold text-foreground">
+                          {positionTitle}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4">
+                          <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                            {formattedCTC}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-xs text-muted-foreground font-mono">
+                          {formatDate(o.offer_start_date || o.offerStartDate)}
+                        </TableCell>
+                        <TableCell className="py-3.5 px-4 text-center">
+                          {getStatusBadge(o.status)}
+                        </TableCell>
+                        <TableCell className="text-right py-3.5 px-5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {o.record_type === 'offer' && (
+                              <>
+                                <Button 
+                                  variant="outline" 
+                                  size="icon" 
+                                  onClick={() => handleViewDetails(o)}
+                                  className="h-8 w-8 rounded-lg border-border hover:bg-muted text-muted-foreground hover:text-foreground shadow-2xs"
+                                  title="View Offer Details"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                {o.status === 'draft' && (
+                                  <Button 
+                                    variant="default" 
+                                    size="sm" 
+                                    onClick={() => handleSendOffer(o)}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg shadow-2xs gap-1"
+                                  >
+                                    <Send className="h-3 w-3" /> Dispatch
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                            {o.record_type === 'letter' && (
+                              <Badge variant="outline" className="text-[10.5px] text-purple-700 bg-purple-50 border-purple-200">
+                                Letter Generated
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* CREATE OFFER DIALOG */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Generate Offer Letter</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <Label htmlFor="applicationId">Select Candidate Application</Label>
-              <Select value={form.applicationId} onValueChange={(val) => setForm(f => ({ ...f, applicationId: val }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an application" />
-                </SelectTrigger>
-                <SelectContent>
-                  {applicationList.map((app: any) => (
-                    <SelectItem key={app.id} value={app.id.toString()}>
-                      {app.candidateName || app.candidate_name || `App #${app.id}`} - {app.jobTitle || app.position_title || 'General'}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="positionTitle">Position Title</Label>
-              <Input
-                id="positionTitle"
-                value={form.positionTitle}
-                onChange={(e) => setForm(f => ({ ...f, positionTitle: e.target.value }))}
-                placeholder="Software Engineer"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="departmentId">Department</Label>
-                <Select value={form.departmentId} onValueChange={(val) => setForm(f => ({ ...f, departmentId: val }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departmentList.map((d: any) => (
-                      <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="designationId">Designation</Label>
-                <Select value={form.designationId} onValueChange={(val) => setForm(f => ({ ...f, designationId: val }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Designation" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {designationList.map((d: any) => (
-                      <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="costToCompany">CTC (Annual)</Label>
-                <Input
-                  id="costToCompany"
-                  type="number"
-                  value={form.costToCompany}
-                  onChange={(e) => setForm(f => ({ ...f, costToCompany: e.target.value }))}
-                  placeholder="1200000"
-                />
-              </div>
-              <div>
-                <Label htmlFor="baseSalary">Base Salary</Label>
-                <Input
-                  id="baseSalary"
-                  type="number"
-                  value={form.baseSalary}
-                  onChange={(e) => setForm(f => ({ ...f, baseSalary: e.target.value }))}
-                  placeholder="800000"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="offerStartDate">Start Date</Label>
-                <Input
-                  id="offerStartDate"
-                  type="date"
-                  value={form.offerStartDate}
-                  onChange={(e) => setForm(f => ({ ...f, offerStartDate: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label htmlFor="offerExpiryDate">Expiry Date</Label>
-                <Input
-                  id="offerExpiryDate"
-                  type="date"
-                  value={form.offerExpiryDate}
-                  onChange={(e) => setForm(f => ({ ...f, offerExpiryDate: e.target.value }))}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={createOfferMutation.isPending}>
-                {createOfferMutation.isPending ? 'Generating...' : 'Create Offer'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* OFFER CREATION DIALOG WIZARD */}
+      <GenerateOfferModal
+        open={isCreateOpen}
+        onOpenChange={setIsCreateOpen}
+        onSubmit={handleCreateOffer}
+        isSubmitting={createOfferMutation.isPending}
+        applicationList={applicationList}
+        departmentList={departmentList}
+        designationList={designationList}
+      />
 
-      {/* DETAIL MODAL */}
-      <Dialog open={!!selectedOffer} onOpenChange={() => setSelectedOffer(null)}>
-        <DialogContent className="max-w-md">
-          {selectedOffer && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Offer Details</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="border-b pb-4">
-                  <h3 className="font-bold text-gray-900 text-lg">{selectedOffer.candidate_name || 'Candidate'}</h3>
-                  <p className="text-sm text-gray-500">{selectedOffer.candidate_email || 'No email'}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="font-semibold text-gray-500">Position:</div>
-                  <div className="text-gray-900">{selectedOffer.position_title || 'N/A'}</div>
-                  
-                  <div className="font-semibold text-gray-500">CTC (Annual):</div>
-                  <div className="text-gray-900">{selectedOffer.cost_to_company || selectedOffer.costToCompany ? `${selectedOffer.currency} ${parseFloat(selectedOffer.cost_to_company || selectedOffer.costToCompany).toLocaleString()}` : 'N/A'}</div>
+      {/* OFFER DETAILS DIALOG VIEW */}
+      <OfferDetailsModal
+        offer={selectedOffer}
+        open={isDetailsOpen}
+        onOpenChange={setIsDetailsOpen}
+        onSend={handleSendOffer}
+        isSending={isActionPending}
+        departmentList={departmentList}
+        designationList={designationList}
+      />
 
-                  <div className="font-semibold text-gray-500">Start Date:</div>
-                  <div className="text-gray-900">{selectedOffer.offer_start_date || selectedOffer.offerStartDate || 'N/A'}</div>
-
-                  <div className="font-semibold text-gray-500">Expiry Date:</div>
-                  <div className="text-gray-900">{selectedOffer.offer_expiry_date || selectedOffer.offerExpiryDate || 'N/A'}</div>
-
-                  <div className="font-semibold text-gray-500">Status:</div>
-                  <div>{getStatusBadge(selectedOffer.status)}</div>
-                </div>
-
-                {selectedOffer.status === 'accepted' && (
-                  <div className="bg-green-50 border border-green-200 rounded p-3 text-green-800 text-xs flex items-start gap-2">
-                    <CheckCircle className="h-4 w-4 shrink-0 text-green-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold">Offer Accepted & Signed</p>
-                      {selectedOffer.accepted_at && <p className="mt-0.5">Signed on: {new Date(selectedOffer.accepted_at).toLocaleString()}</p>}
-                    </div>
-                  </div>
-                )}
-
-                {selectedOffer.status === 'rejected' && (
-                  <div className="bg-red-50 border border-red-200 rounded p-3 text-red-800 text-xs flex items-start gap-2">
-                    <XCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
-                    <div>
-                      <p className="font-semibold">Offer Declined</p>
-                      {selectedOffer.rejected_at && <p className="mt-0.5">Declined on: {new Date(selectedOffer.rejected_at).toLocaleString()}</p>}
-                    </div>
-                  </div>
-                )}
-
-                <div className="border-t pt-4 flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setSelectedOffer(null)}>Close</Button>
-                  {selectedOffer.status === 'draft' && (
-                    <Button variant="default" onClick={() => handleSend(selectedOffer)} className="bg-blue-600 hover:bg-blue-700">
-                      <Send className="h-4 w-4 mr-1" /> Send to Candidate
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

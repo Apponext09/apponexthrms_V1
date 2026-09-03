@@ -132,10 +132,10 @@ export class SuperAdminService {
       updated_at: knex.fn.now(),
     });
 
-    // Auto-create parent company record for this newly provisioned organization
+    // Auto-create parent company record and default payroll cycle for this newly provisioned organization
     try {
       const compUuid = uuidv4();
-      await knex('company').insert({
+      const [compInsertedId] = await knex('company').insert({
         uuid: compUuid,
         organization_id: id,
         code: input.code || `ORG-${id}`,
@@ -146,6 +146,46 @@ export class SuperAdminService {
         created_at: knex.fn.now(),
         updated_at: knex.fn.now(),
       });
+
+      // Auto-create company-wise payroll cycle for the new organization & company
+      try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
+        const cycleEndDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        const cutoffDate = new Date(year, month, 25).toISOString().split('T')[0];
+        const creditDate = new Date(year, month, 28).toISOString().split('T')[0];
+        const cycleCode = `CYC-${(input.code || `ORG${id}`).replace(/[^a-zA-Z0-9]/g, '')}-${Date.now().toString().slice(-4)}`;
+
+        await knex('payroll_cycles').insert({
+          uuid: uuidv4(),
+          organization_id: id,
+          company_id: compInsertedId || null,
+          cycle_name: `Monthly Pay Cycle (${input.name || 'Company'})`,
+          cycle_code: cycleCode,
+          cycle_type: 'monthly',
+          frequency: 'Monthly',
+          cycle_start_date: cycleStartDate,
+          cycle_end_date: cycleEndDate,
+          payroll_run_date: cutoffDate,
+          salary_credit_date: creditDate,
+          start_date: 1,
+          cutoff_day: 25,
+          disbursement_date_str: '28',
+          month_offset: 'Current',
+          total_days_calc: '30',
+          cap_amount: 1000000.00,
+          tolerance_enabled: 1,
+          tolerance_minutes: 15,
+          is_active: 1,
+          status: 'open',
+          created_by: 10,
+          updated_by: 10,
+        });
+      } catch (cycleErr) {
+        console.warn('Failed to auto-create default payroll cycle for organization:', cycleErr);
+      }
     } catch (compErr) {
       console.warn('Failed to auto-create parent company record:', compErr);
     }
@@ -189,7 +229,10 @@ export class SuperAdminService {
 
         // Ensure organization_admin system role exists for this new organization
         let adminRole = await knex('roles')
-          .where({ organization_id: id, code: 'organization_admin' })
+          .where('code', 'organization_admin')
+          .where(function () {
+            this.where('organization_id', id).orWhereNull('organization_id').orWhere('is_platform_role', true);
+          })
           .first();
 
         if (!adminRole) {
@@ -210,15 +253,49 @@ export class SuperAdminService {
         }
 
         const userRoleExists = await knex('user_roles')
-          .where({ user_id: userId, role_id: adminRole.id })
+          .where({ organization_id: id, user_id: userId, role_id: adminRole.id })
           .first();
 
         if (!userRoleExists) {
           await knex('user_roles').insert({
+            organization_id: id,
             user_id: userId,
             role_id: adminRole.id,
+            assigned_by: userId,
             assigned_at: knex.fn.now(),
           });
+        }
+
+        // Auto-provision CEO employee record for the newly created organization admin
+        try {
+          const ceoEmpExists = await knex('employees')
+            .where({ organization_id: id, is_ceo: true })
+            .whereNull('deleted_at')
+            .first();
+
+          if (!ceoEmpExists) {
+            const empCode = `CEO-${id}-${userId}`;
+            const [ceoEmpId] = await knex('employees').insert({
+              uuid: uuidv4(),
+              organization_id: id,
+              employee_code: empCode,
+              first_name: firstName || 'CEO',
+              last_name: lastName || '',
+              email: cleanEmail,
+              status: 'active',
+              is_ceo: true,
+              is_ceo_profile_hidden: true,
+              date_of_joining: new Date().toISOString().slice(0, 10),
+              created_by: userId,
+              updated_by: userId,
+              created_at: knex.fn.now(),
+              updated_at: knex.fn.now(),
+            });
+
+            await knex('users').where('id', userId).update({ employee_id: ceoEmpId, updated_at: knex.fn.now() }).catch(() => {});
+          }
+        } catch (ceoErr) {
+          console.warn('Failed to auto-create CEO employee record during tenant provisioning:', ceoErr);
         }
       } catch (e) {
         console.error('Admin user auto-creation error during tenant provisioning:', e);

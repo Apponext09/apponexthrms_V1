@@ -11,22 +11,31 @@ interface PayslipRequestFormProps {
   role: 'Employee' | 'Manager' | 'Team Lead' | 'HR';
 }
 
-const MONTHS = [
-  { value: '2026-07', label: 'July 2026' },
-  { value: '2026-06', label: 'June 2026' },
-  { value: '2026-05', label: 'May 2026' },
-  { value: '2026-04', label: 'April 2026' },
-  { value: '2026-03', label: 'March 2026' },
-  { value: '2026-02', label: 'February 2026' },
-  { value: '2026-01', label: 'January 2026' },
-];
+// Rolling window ending at the actual current month, not a fixed year.
+const getRecentMonths = (count = 12) => {
+  const now = new Date();
+  const months: { value: string; label: string }[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    months.push({ value, label: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) });
+  }
+  return months;
+};
+
+const MONTHS = getRecentMonths(12);
+
+const currentMonthValue = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
 
 export const PayslipRequestForm: React.FC<PayslipRequestFormProps> = ({
   employeeName,
   employeeId,
   role,
 }) => {
-  const [month, setMonth] = useState('2026-07');
+  const [month, setMonth] = useState(currentMonthValue());
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [myRequests, setMyRequests] = useState<PayslipRequest[]>(() =>

@@ -263,6 +263,13 @@ export function RosterShiftMasterForm({ onCancel, onSave }: RosterShiftMasterFor
       return;
     }
 
+    if (!isFlexible && startTime && endTime && startTime === endTime) {
+      setSubmitError('Shift end time must be different from the start time.');
+      return;
+    }
+
+    const computedIsNightShift = !isFlexible && !!startTime && !!endTime && endTime < startTime;
+
     setSubmitting(true);
     try {
       let finalShiftName = shiftName.trim();
@@ -276,7 +283,10 @@ export function RosterShiftMasterForm({ onCancel, onSave }: RosterShiftMasterFor
         .replace(/[^A-Z0-9-]/g, '')
         .slice(0, 10) || 'ROST';
 
-      const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      // 6-char suffix (~2.2B combos) instead of 4 (~1.7M); rawCode is capped
+      // at 10 chars so "R-" + rawCode + "-" + suffix stays under the 20-char
+      // slice below.
+      const uniqueSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
       const shiftCode = `R-${rawCode}-${uniqueSuffix}`.slice(0, 20);
 
       const totalMins = parseHHMM(totalTime);
@@ -325,6 +335,8 @@ export function RosterShiftMasterForm({ onCancel, onSave }: RosterShiftMasterFor
         start_time: !isFlexible && startTime ? `${startTime}:00` : null,
         endTime: !isFlexible && endTime ? `${endTime}:00` : null,
         end_time: !isFlexible && endTime ? `${endTime}:00` : null,
+        isNightShift: computedIsNightShift,
+        is_night_shift: computedIsNightShift,
         checkInTime: startTime,
         totalTime,
         logBreakTime,

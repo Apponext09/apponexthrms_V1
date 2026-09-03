@@ -7,6 +7,7 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
+import { PayrollFormulaEvaluator } from '../utils/PayrollFormulaEvaluator';
 
 interface RequestRevisionInput {
   employeeId: number;
@@ -135,11 +136,46 @@ export class SalaryRevisionService {
     });
 
     // Notify managers/approvers
-    await this.notificationService.sendNotification(ctx, {
-      eventCode: 'salary_revision_submitted',
-      recipientId: revision.employee_id,
-      variables: { revisionId: String(revisionId) }
-    } as any);
+    try {
+      const db = getKnex();
+      const emp = await db('employees').where('id', revision.employee_id).first().catch(() => null);
+      const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${revision.employee_id}`;
+
+      const adminUsers = await db('users as u')
+        .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
+        .leftJoin('roles as r', 'ur.role_id', 'r.id')
+        .where('u.organization_id', ctx.organizationId)
+        .where(function () {
+          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager'])
+            .orWhere('u.email', 'ajay@gmail.com');
+        })
+        .whereNull('u.deleted_at')
+        .select('u.id')
+        .distinct();
+
+      for (const admin of adminUsers) {
+        if (admin.id) {
+          await db('notifications').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            event_code: 'SALARY_REVISION_SUBMITTED',
+            recipient_id: admin.id,
+            channels: JSON.stringify(['inapp', 'email']),
+            subject_line: `New Salary Revision Request for ${empName}`,
+            body_text: `HR submitted a salary revision request for ${empName} (New CTC: ₹${Number(revision.new_ctc).toLocaleString('en-IN')}). Please review and approve.`,
+            variables: JSON.stringify({ employee_name: empName, new_ctc: revision.new_ctc, revision_id: revisionId }),
+            status: 'sent',
+            priority: 'high',
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: new Date(),
+            updated_at: new Date()
+          }).catch(() => { });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Failed to notify admins in SalaryRevisionService:', notifErr);
+    }
 
     return updated;
   }
@@ -158,6 +194,119 @@ export class SalaryRevisionService {
       approval_date: new Date().toISOString(),
       updated_by: ctx.userId
     });
+
+    // ✅ Direct DB update — no circular require() needed
+    if (revision.employee_id && Number(revision.new_ctc) > 0) {
+      try {
+        const db = getKnex();
+        const newGrossMonthly = Math.round(Number(revision.new_ctc) / 12);
+
+        // Fetch employee's current slab & active components
+        const currentStruct = await db('salary_structures')
+          .where('employee_id', revision.employee_id)
+          .whereNull('deleted_at')
+          .orderBy('effective_from', 'desc')
+          .first();
+
+        let slabComps: any[] = [];
+        if (currentStruct?.slab_id) {
+          const slabRow = await db('payroll_slabs').where('id', currentStruct.slab_id).first();
+          let compIds: number[] = [];
+          try {
+            const raw = slabRow?.selected_component_ids;
+            compIds = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
+          } catch {}
+          if (compIds.length > 0) {
+            slabComps = await db('payroll_components').whereIn('id', compIds).where('is_active', true);
+          }
+        }
+        if (slabComps.length === 0) {
+          slabComps = await db('payroll_components').where('is_active', true);
+        }
+
+        const formulaCtx: any = {
+          ctc: newGrossMonthly,
+          monthly_ctc: newGrossMonthly,
+          annual_ctc: Number(revision.new_ctc),
+          gross: newGrossMonthly,
+          gross_salary: newGrossMonthly,
+          basic: Math.round(newGrossMonthly * 0.5),
+        };
+
+        let newBasicMonthly = 0;
+        let newHraMonthly = 0;
+        let newPfDeduction = 0;
+        let newPtDeduction = 0;
+        let newEsiDeduction = 0;
+        let totalDeductions = 0;
+
+        for (const comp of slabComps) {
+          const compNameLower = (comp.name || '').toLowerCase();
+          const compType = comp.component_type || comp.type || 'Value';
+          const formula = comp.formula || '';
+
+          let amt = 0;
+          if (compType === 'Value') amt = Number(comp.amount || 0);
+          else if (formula) amt = PayrollFormulaEvaluator.evaluate(formula, formulaCtx);
+          else amt = Number(comp.amount || 0);
+
+          if (compNameLower.includes('basic')) {
+            newBasicMonthly = amt || Math.round(newGrossMonthly * 0.5);
+            formulaCtx.basic = newBasicMonthly;
+          } else if (compNameLower.includes('hra') || compNameLower.includes('house rent')) {
+            newHraMonthly = amt;
+            formulaCtx.hra = newHraMonthly;
+          } else if (compNameLower.includes('provident') || compNameLower.includes('pf')) {
+            newPfDeduction = amt;
+            totalDeductions += amt;
+          } else if (compNameLower.includes('professional') || compNameLower.includes('pt')) {
+            newPtDeduction = amt;
+            totalDeductions += amt;
+          } else if (compNameLower.includes('esic') || compNameLower.includes('esi')) {
+            newEsiDeduction = amt;
+            totalDeductions += amt;
+          }
+        }
+
+        if (!newBasicMonthly) newBasicMonthly = Math.round(newGrossMonthly * 0.5);
+        if (!newHraMonthly) newHraMonthly = Math.round(newBasicMonthly * 0.4);
+        const newSpecialAllowance = Math.max(0, newGrossMonthly - (newBasicMonthly + newHraMonthly));
+        const newNetTakeHome = Math.max(0, newGrossMonthly - totalDeductions);
+
+        // Update active salary structure
+        await db('salary_structures')
+          .where('employee_id', revision.employee_id)
+          .whereNull('deleted_at')
+          .update({
+            gross_monthly:             newGrossMonthly,
+            basic_monthly:             newBasicMonthly,
+            hra_monthly:               newHraMonthly,
+            special_allowance_monthly: newSpecialAllowance,
+            annual_ctc:                revision.new_ctc,
+            pf_deduction:              newPfDeduction,
+            pf_employer:               newPfDeduction,
+            pt_deduction:              newPtDeduction,
+            esi_deduction:             newEsiDeduction,
+            total_deductions:          totalDeductions,
+            net_take_home:             newNetTakeHome,
+            effective_from:            revision.effective_from || new Date().toISOString().slice(0, 10),
+            updated_at:                new Date()
+          })
+          .catch(() => {});
+
+        // Update employee record
+        await db('employees')
+          .where('id', revision.employee_id)
+          .update({
+            annual_ctc:   revision.new_ctc,
+            gross_salary: newGrossMonthly,
+            updated_at:   new Date()
+          })
+          .catch(() => {});
+      } catch (err) {
+        // Non-fatal — revision status is already saved above
+      }
+    }
 
     // Mark workflow as completed
     if (revision.workflow_instance_id) {

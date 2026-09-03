@@ -11,15 +11,16 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
-  FilePlus, LineChart, ListChecks, UploadCloud
+  FilePlus, LineChart, ListChecks, UploadCloud, Palette
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 // ── Accent palette for HR (rose/pink) ────────────────────────────────────────
@@ -55,7 +56,6 @@ const HR_NAV = [
         subItems: [
           { name: 'Employees', href: '/hr/employees', icon: Users },
           { name: 'Employee Lifecycle', href: '/hr/employee-lifecycle', icon: RefreshCw },
-          { name: 'Departments', href: '/hr/departments', icon: Building2 },
           { name: 'Org Structure', href: '/hr/org-structure', icon: GitBranch },
         ],
       },
@@ -73,12 +73,41 @@ const HR_NAV = [
           { name: 'Payroll Master Settings', href: '/hr/payroll/settings', icon: Sliders },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
-          { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'SETTLEMENT MANAGEMENT',
+    items: [
+      { name: 'Exit Settlements (FnF)', href: '/hr/settlements', icon: UserX },
+      { name: 'Gratuity Policy', href: '/hr/gratuity', icon: Award },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Type Settings', href: '/payroll/loan-types', icon: Sliders },
+      { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Dashboard', href: '/expenses/dashboard', icon: TrendingUp },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: Receipt },
+      { name: 'Approvals', href: '/expenses/approvals', icon: CheckCircle2 },
+      { name: 'Finance Verification', href: '/expenses/finance-verification', icon: FileCheck },
+      { name: 'Reimbursements', href: '/expenses/reimbursements', icon: CreditCard },
+      { name: 'Travel Requests', href: '/expenses/travel-requests', icon: Compass },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: Percent },
+      { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: Navigation },
+      { name: 'Expense Categories', href: '/expenses/categories', icon: Layers },
+      { name: 'Expense Policies', href: '/expenses/policies', icon: ShieldCheck },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: LineChart },
+      { name: 'Settings', href: '/expenses/settings', icon: Sliders },
     ],
   },
   {
@@ -91,7 +120,7 @@ const HR_NAV = [
         subItems: [
           { name: 'Attendance Dashboard', href: '/hr/attendance', icon: LayoutDashboard },
           { name: 'Live Employee Tracking', href: '/hr/live-tracking', icon: Navigation },
-          { name: 'Location Access Mapping', href: '/hr/attendance/locations', icon: MapPin },
+          { name: 'Location Management & Mapping', href: '/hr/attendance/locations', icon: MapPin },
         ],
       },
       { name: 'Leave Approvals', href: '/hr/leaves/approvals', icon: CheckCircle2 },
@@ -103,12 +132,14 @@ const HR_NAV = [
     items: [
       { name: 'MRF Request', href: '/hr/recruitment/mrf-request', icon: FilePlus },
       { name: 'Job Management', href: '/hr/recruitment/jobs', icon: Briefcase },
+      { name: 'Career Portal Customization', href: '/hr/recruitment/career-customization', icon: Palette },
       { name: 'Candidate Management', href: '/hr/recruitment/candidates', icon: Users },
       { name: 'Candidate Report', href: '/hr/recruitment/candidate-report', icon: Users },
       { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
       { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
       { name: 'Assessment Management', href: '/hr/recruitment/assessments', icon: Code2 },
-      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
+      { name: 'Offer Management', href: '/recruitment/offers', icon: FileCheck },
+      { name: 'Interview Schedule', href: '/hr/recruitment/interview-schedule', icon: Calendar },
       { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
     ],
   },
@@ -122,29 +153,33 @@ const HR_NAV = [
   {
     label: 'MASTERS',
     items: [
-      { name: 'Company', href: '/hr/masters?tab=company', icon: Building2 },
-      { name: 'Location', href: '/hr/masters?tab=location', icon: MapPin },
-      { name: 'Department', href: '/hr/masters?tab=department', icon: Layers },
-      { name: 'Designation', href: '/hr/masters?tab=designation', icon: Briefcase },
-      { name: 'General Shift', href: '/hr/masters?tab=general-shift', icon: Clock },
-      { name: 'Roster Shift', href: '/hr/masters?tab=roster-shift', icon: Clock },
-      { name: 'OT Rule', href: '/hr/masters?tab=ot-rule', icon: Sliders },
-      { name: 'Grade', href: '/hr/masters?tab=grade', icon: Award },
-      { name: 'Holiday', href: '/hr/masters?tab=holiday', icon: Calendar },
-      { name: 'Employee Status', href: '/hr/masters?tab=employee-status', icon: Users },
-      { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
-      { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
-      { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
-      { name: 'Notification Merge Codes', href: '/hr/masters?tab=notification-merge-codes', icon: Code2 },
-      { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
-      { name: 'Roles & Responsibility', href: '/hr/masters?tab=roles-responsibility', icon: ShieldCheck },
-      { name: 'KRA Form', href: '/hr/masters?tab=kra', icon: FileText },
-      { name: 'Resource Plan', href: '/hr/masters?tab=resource-plan', icon: Grid },
+      { name: 'Company', href: '/hr/masters/company', icon: Building2 },
+      { name: 'Location', href: '/hr/masters/location', icon: MapPin },
+      { name: 'Department', href: '/hr/masters/department', icon: Layers },
+      { name: 'Designation', href: '/hr/masters/designation', icon: Briefcase },
+      { name: 'General Shift', href: '/hr/masters/general-shift', icon: Clock },
+      { name: 'Roster Shift', href: '/hr/masters/roster-shift', icon: Clock },
+      { name: 'OT Rule', href: '/hr/masters/ot-rule', icon: Sliders },
+      { name: 'Grade', href: '/hr/masters/grade', icon: Award },
+      { name: 'Holiday', href: '/hr/masters/holiday', icon: Calendar },
+      { name: 'Employee Status', href: '/hr/masters/employee-status', icon: Users },
+      { name: 'Emp. Type', href: '/hr/masters/emp-type', icon: Users },
+      { name: 'Events', href: '/hr/masters/events', icon: Calendar },
+      { name: 'Offer Letter Master', href: '/hr/masters/offer-templates', icon: FileText },
+      { name: 'Notification Templates', href: '/hr/masters/notification-templates', icon: Bell },
+      { name: 'Notification Merge Codes', href: '/hr/masters/notification-merge-codes', icon: Code2 },
+      { name: 'Break', href: '/hr/masters/break', icon: Coffee },
+      { name: 'Roles & Responsibility', href: '/hr/masters/roles-responsibility', icon: ShieldCheck },
+      { name: 'KRA Form', href: '/hr/masters/kra', icon: FileText },
+      { name: 'Resource Plan', href: '/hr/masters/resource-plan', icon: Grid },
     ],
   },
   {
     label: 'OPERATIONS',
     items: [
+      { name: 'Policy Management', href: '/policies/manage', icon: Shield },
+      { name: 'My Policies', href: '/employee/policies', icon: FileText },
+
       { name: 'Workflows', href: '/hr/workflow', icon: GitBranch },
       { name: 'Settings', href: '/hr/settings', icon: Settings },
     ],
@@ -179,7 +214,7 @@ function SidebarNavContent({
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
-      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Portal" />
+      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Panel" />
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
@@ -324,7 +359,13 @@ function SidebarNavContent({
                 className="flex-1 min-w-0 leading-tight"
               >
                 <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
-                  {user?.firstName} {user?.lastName}
+                  {(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}
                 </p>
                 <p className={cn('text-[10px] font-medium truncate', C.icon)}>
                   {roleInfo.roleTitle}
@@ -450,7 +491,7 @@ export function HRLayout() {
 
           <div className="flex items-center gap-2">
             <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">HR Portal</span>
+            <span className="text-sm font-bold text-foreground hidden sm:block">HR Panel</span>
             <span className={cn(
               'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
               C.badge
@@ -472,14 +513,7 @@ export function HRLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
             <div className="w-px h-5 bg-border mx-1" />
 
@@ -494,7 +528,13 @@ export function HRLayout() {
                 </AvatarFallback>
               </Avatar>
               <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[12px] font-semibold text-foreground">{(() => {
+  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+  if (lName.toLowerCase() === 'user') lName = '';
+  const full = `${fName} ${lName}`.trim();
+  return full || fName || 'User';
+})()}</p>
                 <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
               </div>
             </button>

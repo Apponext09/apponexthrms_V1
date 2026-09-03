@@ -1,4 +1,6 @@
 import * as React from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Recursive helper to safely extract raw string content from React children
@@ -10,6 +12,24 @@ const getChildrenText = (children: React.ReactNode): string => {
   return '';
 };
 
+// Helper to pre-extract itemsMap from children tree before/without opening dropdown
+const extractItemsMap = (node: React.ReactNode, map: Record<string, string> = {}): Record<string, string> => {
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement(child)) return;
+    
+    if (child.props && (child.props as any).value !== undefined) {
+      const val = String((child.props as any).value);
+      const label = getChildrenText((child.props as any).children).trim() || val;
+      map[val] = label;
+    }
+    
+    if (child.props && (child.props as any).children) {
+      extractItemsMap((child.props as any).children, map);
+    }
+  });
+  return map;
+};
+
 interface SelectContextValue {
   value?: string;
   isOpen: boolean;
@@ -18,6 +38,9 @@ interface SelectContextValue {
   registerItem: (value: string, label: string) => void;
   itemsMap: Record<string, string>;
   disabled?: boolean;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
+  positionStyle: React.CSSProperties;
 }
 
 const SelectContext = React.createContext<SelectContextValue | undefined>(undefined);
@@ -34,9 +57,20 @@ function Select({ value, defaultValue, onValueChange, disabled, children }: Sele
   const [internalValue, setInternalValue] = React.useState(defaultValue ?? '');
   const [isOpen, setIsOpen] = React.useState(false);
   const [itemsMap, setItemsMap] = React.useState<Record<string, string>>({});
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [positionStyle, setPositionStyle] = React.useState<React.CSSProperties>({});
+  
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
 
   const selectedValue = value !== undefined ? value : internalValue;
+
+  const extractedMap = React.useMemo(() => {
+    return extractItemsMap(children);
+  }, [children]);
+
+  const mergedItemsMap = React.useMemo(() => {
+    return { ...extractedMap, ...itemsMap };
+  }, [extractedMap, itemsMap]);
 
   const handleSelect = (nextValue: string) => {
     if (disabled) return;
@@ -54,17 +88,86 @@ function Select({ value, defaultValue, onValueChange, disabled, children }: Sele
     });
   }, []);
 
+  const updatePosition = React.useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const openUpwards = spaceBelow < 190 && spaceAbove > spaceBelow;
+
+    const minWidth = Math.max(rect.width, 160);
+    const maxDropdownWidth = 400;
+    
+    let left = rect.left;
+    if (left + minWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - minWidth - 12);
+    }
+
+    setPositionStyle({
+      position: 'fixed',
+      top: openUpwards ? undefined : `${rect.bottom + 4}px`,
+      bottom: openUpwards ? `${window.innerHeight - rect.top + 4}px` : undefined,
+      left: `${left}px`,
+      minWidth: `${minWidth}px`,
+      maxWidth: `${Math.max(minWidth, maxDropdownWidth)}px`,
+      zIndex: 999999,
+    });
+  }, []);
+
+  // Position recalculation & event listeners
   React.useEffect(() => {
+    if (!isOpen) return;
+    updatePosition();
+
+    const handleScroll = (e: Event) => {
+      if (contentRef.current && contentRef.current.contains(e.target as Node)) {
+        return;
+      }
+      updatePosition();
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, updatePosition]);
+
+  // Click outside & Escape key listeners
+  React.useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        triggerRef.current &&
+        !triggerRef.current.contains(target) &&
+        contentRef.current &&
+        !contentRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
     };
-  }, []);
+
+    document.addEventListener('mousedown', handleClickOutside, true);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
 
   return (
     <SelectContext.Provider 
@@ -74,11 +177,14 @@ function Select({ value, defaultValue, onValueChange, disabled, children }: Sele
         setIsOpen, 
         onSelect: handleSelect, 
         registerItem, 
-        itemsMap,
+        itemsMap: mergedItemsMap,
         disabled,
+        triggerRef,
+        contentRef,
+        positionStyle,
       }}
     >
-      <div ref={containerRef} className={cn("relative", isOpen ? "z-40" : "z-10")}>{children}</div>
+      <div className="relative inline-block w-full">{children}</div>
     </SelectContext.Provider>
   );
 }
@@ -91,13 +197,26 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
   ({ className, children, onClick, disabled, ...props }, ref) => {
     const context = React.useContext(SelectContext);
     const isDisabled = disabled ?? context?.disabled;
+
+    const handleRef = (node: HTMLButtonElement | null) => {
+      if (context?.triggerRef) {
+        (context.triggerRef as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+      }
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node;
+      }
+    };
+
     return (
       <button
-        ref={ref}
+        ref={handleRef}
         type="button"
         disabled={isDisabled}
         className={cn(
-          'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-9 w-full items-center justify-between rounded-xl border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer transition-all duration-150',
+          context?.isOpen && 'ring-2 ring-primary/40 border-primary shadow-xs',
           className
         )}
         onClick={(event) => {
@@ -109,7 +228,13 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
         }}
         {...props}
       >
-        {children}
+        <span className="truncate flex-1 text-left">{children}</span>
+        <ChevronDown 
+          className={cn(
+            "w-3.5 h-3.5 ml-1.5 opacity-50 shrink-0 transition-transform duration-200", 
+            context?.isOpen && "rotate-180 opacity-90 text-primary"
+          )} 
+        />
       </button>
     );
   }
@@ -122,30 +247,55 @@ interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 function SelectValue({ placeholder, className, ...props }: SelectValueProps) {
   const context = React.useContext(SelectContext);
-  const displayLabel = context?.value ? context.itemsMap[context.value] : '';
-  return <span className={cn("truncate", className)} {...props}>{displayLabel || placeholder || ''}</span>;
+  const rawVal = context?.value;
+  const valStr = rawVal !== undefined && rawVal !== null ? String(rawVal) : '';
+  
+  let displayLabel = '';
+  if (valStr && context?.itemsMap) {
+    displayLabel = context.itemsMap[valStr] || (context.itemsMap as any)[rawVal as any] || '';
+  }
+
+  // Fallback: if value is set and not empty, and not 'Choose' or 'Select', display the value itself
+  if (!displayLabel && valStr && valStr !== 'Choose' && valStr !== 'Select') {
+    displayLabel = valStr;
+  }
+
+  return (
+    <span className={cn("truncate block", className)} {...props}>
+      {displayLabel || placeholder || ''}
+    </span>
+  );
 }
 
 interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
+  className?: string;
 }
 
 function SelectContent({ className, children, style, ...props }: SelectContentProps) {
   const context = React.useContext(SelectContext);
   if (!context?.isOpen) return null;
-  
-  return (
+
+  const content = (
     <div 
+      ref={context.contentRef as any}
+      data-select-content=""
       className={cn(
-        "absolute mt-1 min-w-full max-h-60 overflow-y-auto rounded-md border bg-background p-1 shadow-lg",
+        "fixed pointer-events-auto max-h-60 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-1.5 shadow-2xl text-slate-800 dark:text-slate-100 text-xs animate-in fade-in-0 zoom-in-95 duration-100",
         className
       )}
-      style={{ zIndex: 9999, ...style }}
+      style={{ ...context.positionStyle, pointerEvents: 'auto', ...style }}
       {...props}
     >
-      {children}
+      <div className="space-y-0.5">{children}</div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(content, document.body);
+  }
+
+  return content;
 }
 
 interface SelectItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -167,12 +317,17 @@ const SelectItem = React.forwardRef<HTMLButtonElement, SelectItemProps>(
       }
     }, [value, labelText, context]);
 
+    const isSelected = context?.value === value;
+
     return (
       <button
         ref={ref}
         type="button"
         className={cn(
-          'flex w-full items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-muted text-left',
+          'flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-xs outline-none hover:bg-slate-100 dark:hover:bg-slate-800 font-medium cursor-pointer text-left transition-colors',
+          isSelected 
+            ? 'bg-primary/10 text-primary font-bold hover:bg-primary/15' 
+            : 'text-slate-700 dark:text-slate-200',
           className
         )}
         onClick={(event) => {
@@ -181,7 +336,8 @@ const SelectItem = React.forwardRef<HTMLButtonElement, SelectItemProps>(
         }}
         {...props}
       >
-        {children}
+        <span className="truncate flex-1">{children}</span>
+        {isSelected && <Check className="w-3.5 h-3.5 ml-2 text-primary shrink-0" />}
       </button>
     );
   }

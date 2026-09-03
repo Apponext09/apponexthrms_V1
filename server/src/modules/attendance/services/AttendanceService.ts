@@ -7,6 +7,7 @@ import { EmployeeShiftAssignmentRepository } from '../repositories/EmployeeShift
 import { AttendancePoliciesMappingRepository } from '../repositories/AttendancePoliciesMappingRepository';
 import { GeofenceRepository } from '../repositories/GeofenceRepository';
 import { GeoFenceService } from './GeoFenceService';
+import { HolidayCalendarService } from '../../master/services/HolidayCalendarService';
 import { ShiftService } from './ShiftService';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { LateMarkNotificationService } from '../../notifications/services/lateMarkNotificationService';
@@ -129,7 +130,7 @@ const computeShiftEntryStatus = (
       const raw = (shift as any).roster_pattern || (shift as any).rosterPattern;
       const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
       rosterRules = parsed?.globalAttendanceRules || null;
-    } catch {}
+    } catch { }
   }
 
   const rawHalfDayTime = (shift as any).half_day_start_time || (shift as any).halfDayStartTime || rosterRules?.halfDayStartTime || rosterRules?.half_day_start_time;
@@ -216,6 +217,158 @@ export class AttendanceService {
   }
 
   /**
+   * Resolve whether a given date is a public holiday or weekly off for an employee,
+   * using the priority-based HolidayCalendarService which respects calendar assignments
+   * (location, department, company, org fallback).
+   *
+   * Also evaluates multi-tier punch permission:
+   *   1. Org-wide setting: allow_holiday_punch_by_default
+   *   2. Employee-level override: employee_attendance_locations.allow_holiday_punch / allow_weekoff_punch
+   *   3. Shift assigned for today (shift override implicitly allows)
+   *   4. Optional holidays (Restricted/RH) never block check-in
+   *
+   * Returns structured result with `isHoliday`, `isWeekOff`, `isPunchAllowed`, and `reason`.
+   */
+  private async resolveHolidayStatus(
+    ctx: TenantContext,
+    employeeId: number,
+    date: string  // YYYY-MM-DD
+  ): Promise<{
+    isHoliday: boolean;
+    isWeekOff: boolean;
+    holidayName?: string;
+    holidayType?: string;
+    isOptional?: boolean;
+    isPunchAllowed: boolean;
+    punchAllowedReason?: string;
+    hasPendingRequest?: boolean;
+  }> {
+    try {
+      const db = getKnex();
+      const holidayCalSvc = new HolidayCalendarService();
+
+      // 1. Resolve employee's assigned calendar using full priority chain
+      const calResult = await holidayCalSvc.getCalendarForEmployee(null, ctx, employeeId);
+      if (!calResult) {
+        // No calendar assigned — no restrictions
+        return { isHoliday: false, isWeekOff: false, isPunchAllowed: true, punchAllowedReason: 'No holiday calendar assigned' };
+      }
+
+      // 2. Check if today is a holiday or week-off
+      const offDayResult = await holidayCalSvc.isHolidayOrWeekOff(null, ctx, calResult.calendarId, date);
+
+      if (!offDayResult.isOff) {
+        return { isHoliday: false, isWeekOff: false, isPunchAllowed: true };
+      }
+
+      const isHoliday = offDayResult.type === 'Holiday';
+      const isWeekOff = offDayResult.type === 'WeekOff';
+
+      // 3. Optional holidays (Restricted/RH) never block check-in
+      if (isHoliday && offDayResult.isOptional) {
+        return {
+          isHoliday: true,
+          isWeekOff: false,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isOptional: true,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Optional/Restricted Holiday does not block check-in',
+        };
+      }
+
+      // 4. Check org-wide setting: allow_holiday_punch_by_default
+      const orgSetting = await db('organization_leave_settings')
+        .where('organization_id', ctx.organizationId)
+        .first('allow_holiday_punch_by_default')
+        .catch(() => null);
+      const orgAllowsHolidayPunch = !!(orgSetting?.allow_holiday_punch_by_default);
+
+      if (orgAllowsHolidayPunch) {
+        return {
+          isHoliday,
+          isWeekOff,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Org setting: Holiday punch allowed by default',
+        };
+      }
+
+      // 5. Check employee-level override in employee_attendance_locations
+      const empLocation = await db('employee_attendance_locations')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', employeeId)
+        .first('allow_holiday_punch', 'allow_weekoff_punch')
+        .catch(() => null);
+
+      const empAllowHoliday = !!(empLocation?.allow_holiday_punch);
+      const empAllowWeekOff = !!(empLocation?.allow_weekoff_punch);
+
+      if (isHoliday && empAllowHoliday) {
+        return {
+          isHoliday: true,
+          isWeekOff: false,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Employee granted holiday punch permission',
+          hasPendingRequest: false,
+        };
+      }
+
+      if (isWeekOff && empAllowWeekOff) {
+        return {
+          isHoliday: false,
+          isWeekOff: true,
+          holidayName: offDayResult.name,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Employee granted week-off punch permission',
+          hasPendingRequest: false,
+        };
+      }
+
+      // 6. Check approved or pending overtime/holiday work requests for today
+      const overtimeReq = await db('overtime_requests')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', employeeId)
+        .whereRaw('DATE(overtime_date) = ?', [date])
+        .whereNull('deleted_at')
+        .first('approval_status', 'reason_description')
+        .catch(() => null);
+
+      const statusVal = overtimeReq?.approvalStatus || overtimeReq?.approval_status;
+
+      if (statusVal === 'approved') {
+        return {
+          isHoliday,
+          isWeekOff,
+          holidayName: offDayResult.name,
+          holidayType: offDayResult.holidayType,
+          isPunchAllowed: true,
+          punchAllowedReason: 'Approved Holiday Work Request',
+          hasPendingRequest: false,
+        };
+      }
+
+      const hasPendingRequest = statusVal === 'pending';
+
+      // 7. Block punch — not authorized
+      return {
+        isHoliday,
+        isWeekOff,
+        holidayName: offDayResult.name,
+        holidayType: offDayResult.holidayType,
+        isPunchAllowed: false,
+        hasPendingRequest,
+      };
+    } catch (e) {
+      console.warn('[AttendanceService] resolveHolidayStatus error (non-fatal):', e);
+      return { isHoliday: false, isWeekOff: false, isPunchAllowed: true, hasPendingRequest: false };
+    }
+  }
+
+  /**
    * Check in an employee
    */
   async checkIn(ctx: TenantContext, input: {
@@ -245,7 +398,7 @@ export class AttendanceService {
       // shiftId was provided directly — fetch its details so we can compute grace period
       try {
         resolvedShift = await this.shiftService.getShiftById(ctx, assignedShiftId);
-      } catch {}
+      } catch { }
     }
 
     let geofenceMatched: boolean | null = null;
@@ -282,6 +435,34 @@ export class AttendanceService {
       }
     }
 
+    // ── Holiday & Week-Off Punch Gate ─────────────────────────────────────────
+    const holidayStatus = await this.resolveHolidayStatus(ctx, input.employeeId, today);
+
+    // Determine if the punch is on a restricted day (holiday or week-off)
+    const isRestrictedDay = holidayStatus.isHoliday || holidayStatus.isWeekOff;
+
+    if (isRestrictedDay && !holidayStatus.isPunchAllowed) {
+      // Punch is blocked — employee/org has no permission override and no shift assigned
+      const dayLabel = holidayStatus.isHoliday
+        ? `public holiday (${holidayStatus.holidayName})`
+        : `weekly off (${holidayStatus.holidayName ?? 'Week Off'})`;
+      throw new ValidationError(
+        `Today is a ${dayLabel}. Attendance punch is disabled. Contact HR to enable holiday work permission.`
+      );
+    }
+
+    if (!isRestrictedDay && !resolvedShift) {
+      // Normal working day but no shift assigned → block check-in
+      throw new ValidationError(
+        'No shift is assigned for today. Please contact HR to assign a shift before marking attendance.'
+      );
+    }
+
+    // If punch is allowed on holiday/week-off → attach a note for payroll tracking
+    const holidayNote = isRestrictedDay && holidayStatus.isPunchAllowed
+      ? `${holidayStatus.isHoliday ? 'Holiday' : 'Week-Off'} Work: ${holidayStatus.holidayName ?? ''}`
+      : null;
+
     // ── Grace Period + Half-Day Status Computation ────────────────────────────
     const checkInDateObj = new Date();
     const entryResult = computeShiftEntryStatus(
@@ -295,8 +476,8 @@ export class AttendanceService {
     const entryNotes = entryResult.entryStatus === 'late'
       ? `Late Entry (+${entryResult.lateMinutes} mins)`
       : entryResult.entryStatus === 'half_day'
-      ? `Half Day (arrived after ${entryResult.halfDayDeadlineLabel})`
-      : null;
+        ? `Half Day (arrived after ${entryResult.halfDayDeadlineLabel})`
+        : null;
 
     const cleanMethod = (() => {
       const m = String(input.method || 'web').toLowerCase();
@@ -309,6 +490,11 @@ export class AttendanceService {
     })();
 
     // Get or create today's attendance record
+    // Merge holiday note into entry notes
+    const finalNotes = holidayNote
+      ? (entryNotes ? `${holidayNote} | ${entryNotes}` : holidayNote)
+      : entryNotes;
+
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
       record = await this.recordRepo.create(ctx, {
@@ -321,7 +507,7 @@ export class AttendanceService {
         check_in_method: cleanMethod,
         status: attendanceStatus,
         is_late: isLateFlag,
-        notes: entryNotes,
+        notes: finalNotes,
         created_by: ctx.userId,
         updated_by: ctx.userId,
       } as any);
@@ -333,7 +519,7 @@ export class AttendanceService {
         check_in_method: cleanMethod,
         status: attendanceStatus,
         is_late: isLateFlag,
-        notes: entryNotes,
+        notes: finalNotes,
         ...(assignedShiftId ? { shift_id: assignedShiftId } : {}),
       });
     }
@@ -379,9 +565,9 @@ export class AttendanceService {
 
               // Check location eligibility (match either branch ID or location ID)
               const ruleLocations = safeParseJsonArr(rule.locations);
-              if (ruleLocations.length > 0 && 
-                  !ruleLocations.includes(Number(employee.current_location_id)) && 
-                  !ruleLocations.includes(Number(employee.current_branch_id))) {
+              if (ruleLocations.length > 0 &&
+                !ruleLocations.includes(Number(employee.current_location_id)) &&
+                !ruleLocations.includes(Number(employee.current_branch_id))) {
                 continue;
               }
 
@@ -427,7 +613,7 @@ export class AttendanceService {
                     // Find LWP or first available leave type for deduction
                     const lwpType = await db('leave_types')
                       .where('organization_id', ctx.organizationId)
-                      .where(function(this: any) {
+                      .where(function (this: any) {
                         this.whereRaw("LOWER(leave_name) = 'lwp'")
                           .orWhereRaw("LOWER(leave_code) = 'lwp'")
                           .orWhereRaw("LOWER(leave_name) = 'loss of pay'")
@@ -545,6 +731,51 @@ export class AttendanceService {
     const existingCheckInTime = record.checkInTime ?? record.check_in_time;
     if (!existingCheckInTime) {
       throw new ValidationError('Employee has not checked in');
+    }
+
+    // Auto-close any active/paused break so checkout is never blocked by an unfinished
+    // break (e.g. an employee going on half-day leave mid-break must still be able to check out).
+    const openBreaks = await this.breakRepo.getByRecord(ctx, record.id);
+    const openBreak = openBreaks.find(b => b.status === 'active' || b.status === 'paused');
+    if (openBreak) {
+      const rawStartTime = openBreak.break_start_time || (openBreak as any).breakStartTime || openBreak.created_at;
+      let breakStartTime = NaN;
+      if (rawStartTime instanceof Date) {
+        breakStartTime = rawStartTime.getTime();
+      } else if (typeof rawStartTime === 'number') {
+        breakStartTime = rawStartTime;
+      } else if (typeof rawStartTime === 'string') {
+        const isoStart = rawStartTime.includes('T') ? rawStartTime : rawStartTime.replace(' ', 'T');
+        breakStartTime = new Date(isoStart).getTime();
+        if (isNaN(breakStartTime)) {
+          breakStartTime = new Date(rawStartTime).getTime();
+        }
+      }
+
+      const parsedEndTime = new Date(now.replace(' ', 'T')).getTime();
+      const breakEndTime = !isNaN(parsedEndTime) ? parsedEndTime : Date.now();
+      let breakDurationMinutes = 1;
+      if (!isNaN(breakStartTime) && !isNaN(breakEndTime) && breakEndTime > breakStartTime) {
+        breakDurationMinutes = Math.max(1, Math.floor((breakEndTime - breakStartTime) / (1000 * 60)));
+      }
+      if (isNaN(breakDurationMinutes) || !isFinite(breakDurationMinutes)) {
+        breakDurationMinutes = 1;
+      }
+
+      await this.breakRepo.update(ctx, openBreak.id, {
+        break_end_time: now,
+        break_duration_minutes: breakDurationMinutes,
+        break_type: openBreak.break_type || 'General Break',
+        status: 'completed',
+      } as any);
+
+      await this.sessionRepo.create(ctx, {
+        uuid: uuidv4(),
+        attendance_record_id: record.id,
+        session_type: 'break_out',
+        session_timestamp: now,
+        session_notes: openBreak.break_type || 'General Break',
+      } as any);
     }
 
     let geofenceMatched: boolean | null = null;
@@ -1014,6 +1245,13 @@ export class AttendanceService {
       console.warn('[AttendanceService] getCheckInStatus shift error:', e);
     }
 
+    // Resolve holiday / week-off status for today with full permission check
+    const holidayStatus = await this.resolveHolidayStatus(ctx, employeeId, today);
+    const hasShift = !!resolvedShift;
+    const isRestrictedDay = holidayStatus.isHoliday || holidayStatus.isWeekOff;
+    // Punch is blocked when: restricted day without permission, OR no shift on a normal working day
+    const isAttendanceBlocked = (isRestrictedDay && !holidayStatus.isPunchAllowed) || (!hasShift && !isRestrictedDay);
+
     if (record) {
       try {
         const existingBreaks = await this.breakRepo.getByRecord(ctx, record.id);
@@ -1035,15 +1273,15 @@ export class AttendanceService {
       `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
     const shiftInfo = resolvedShift ? {
-      shiftName:           resolvedShift.shift_name || resolvedShift.shiftName || null,
-      startTime:           resolvedShift.start_time || resolvedShift.startTime || null,
-      endTime:             resolvedShift.end_time   || resolvedShift.endTime   || null,
-      gracePeriodMinutes:  Number(resolvedShift.grace_period_minutes ?? resolvedShift.gracePeriodMinutes ?? 0),
-      durationHours:       Number(resolvedShift.duration_hours ?? resolvedShift.durationHours ?? 8.5),
-      graceDeadline:       liveEntry.graceDeadlineLabel,
-      halfDayDeadline:     liveEntry.halfDayDeadlineLabel,
-      currentEntryStatus:  liveEntry.entryStatus,   // 'on_time' | 'late' | 'half_day' | 'no_shift'
-      lateMinutesNow:      liveEntry.lateMinutes,
+      shiftName: resolvedShift.shift_name || resolvedShift.shiftName || null,
+      startTime: resolvedShift.start_time || resolvedShift.startTime || null,
+      endTime: resolvedShift.end_time || resolvedShift.endTime || null,
+      gracePeriodMinutes: Number(resolvedShift.grace_period_minutes ?? resolvedShift.gracePeriodMinutes ?? 0),
+      durationHours: Number(resolvedShift.duration_hours ?? resolvedShift.durationHours ?? 8.5),
+      graceDeadline: liveEntry.graceDeadlineLabel,
+      halfDayDeadline: liveEntry.halfDayDeadlineLabel,
+      currentEntryStatus: liveEntry.entryStatus,   // 'on_time' | 'late' | 'half_day' | 'no_shift'
+      lateMinutesNow: liveEntry.lateMinutes,
     } : null;
 
     return {
@@ -1053,6 +1291,16 @@ export class AttendanceService {
       checkOutTime: record ? (record.checkOutTime ?? record.check_out_time) : null,
       duration: record ? (record.durationMinutes ?? record.duration_minutes) : null,
       isOnBreak: !!activeBreak,
+      // ── Holiday & Week-Off Gate fields ────────────────────────────────────────
+      isHoliday: holidayStatus.isHoliday,
+      isWeekOff: holidayStatus.isWeekOff,
+      holidayName: holidayStatus.holidayName ?? null,
+      holidayType: holidayStatus.holidayType ?? null,
+      isPunchAllowedOnHoliday: holidayStatus.isPunchAllowed,
+      holidayPunchReason: holidayStatus.punchAllowedReason ?? null,
+      hasPendingRequest: holidayStatus.hasPendingRequest ?? false,
+      hasShift,
+      isAttendanceBlocked,
       isBreakPaused: activeBreak?.status === 'paused',
       isBreakCompleted: isBreakQuotaExhausted,
       isBreakQuotaExhausted,
@@ -1070,21 +1318,21 @@ export class AttendanceService {
   }
 
   /**
-   * Get filter options for reports from database
+   * Get filter options for reports from database.
+   * When companyId is provided, cascades departments, employees, locations and
+   * reporting officers to that company scope only.
+   * Companies list always returns all companies for the org (used for the top-level picker).
    */
-  async getReportFilterOptions(ctx: TenantContext) {
+  async getReportFilterOptions(ctx: TenantContext, companyId?: string | number | null) {
     try {
       const { db } = await import('../../../db/knex');
-      const [settingsLocations, branches, attendanceLocations, departments, employees, companyRows, currentOrg] = await Promise.all([
-        db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        // Companies (parent + sub-companies) come from the `company` table — the same source
-        // used by the top-right Workspace Context Switcher and by employees.company_id.
-        // Previously this queried `organizations` (always exactly one row per tenant), so the
-        // dropdown never matched the real parent/child company hierarchy or employees.company_id.
+      console.log('[FilterOptions] companyId received:', companyId, '| organizationId:', ctx.organizationId);
+
+      const isValidCompanyId = companyId != null && String(companyId) !== 'all' && String(companyId) !== 'undefined';
+
+      // ── 1. Companies ─────────────────────────────────────────────────────────
+      // Always load all companies for the org so the company dropdown is always populated.
+      const [companyRows, currentOrg] = await Promise.all([
         db('company')
           .where(function () {
             this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
@@ -1097,86 +1345,89 @@ export class AttendanceService {
       ]);
 
       const companies = companyRows.length > 0
-        ? companyRows.map((c: any) => ({ id: String(c.company_id), name: c.name }))
+        ? companyRows.map((c: any) => ({ id: String(c.companyId ?? c.company_id), name: c.name }))
         : [{ id: String(ctx.organizationId), name: currentOrg?.name || 'Primary Organization' }];
 
-      // Filter locations belonging strictly to this organization including currentOrg.location
-      const seenLocNames = new Set<string>();
-      const formattedLocations: { id: string; name: string }[] = [];
-
-      if (currentOrg && currentOrg.location) {
-        seenLocNames.add(currentOrg.location);
-        formattedLocations.push({
-          id: `org_loc_${currentOrg.id}`,
-          name: currentOrg.location,
+      // ── 2. Locations ─────────────────────────────────────────────────────────
+      let locationQuery = db('locations')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .where('status', 'active');
+      if (isValidCompanyId) {
+        locationQuery = locationQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
         });
       }
+      const locationRows = await locationQuery.select('id', 'name').orderBy('name', 'asc').catch(() => []);
+      const formattedLocations = locationRows.map((l: any) => ({
+        id: String(l.id),
+        name: l.name,
+      }));
 
-      const allRawLocs = [...settingsLocations, ...branches, ...attendanceLocations];
-      for (const item of allRawLocs) {
-        const name = item.name || item.locationName || item.location_name;
-        if (name && !seenLocNames.has(name)) {
-          seenLocNames.add(name);
-          formattedLocations.push({ id: String(item.id), name });
-        }
+      // ── 3. Departments ───────────────────────────────────────────────────────
+      let departmentQuery = db('departments')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+      if (isValidCompanyId) {
+        departmentQuery = departmentQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        });
       }
-
-      const formattedDepartments = (departments || []).map((d: any) => ({
+      const departmentRows = await departmentQuery.select('id', 'name').orderBy('name', 'asc').catch(() => []);
+      const departmentIds = departmentRows.map((d: any) => d.id);
+      const formattedDepartments = departmentRows.map((d: any) => ({
         id: String(d.id),
         name: d.name || `Department ${d.id}`,
       }));
 
-      // Gather IDs of employees who have direct reports assigned to them strictly within this org
-      const managerIdsSet = new Set(
-        employees.map((e: any) => e.reportingManagerId || e.reporting_manager_id).filter(Boolean)
-      );
+      // ── 4. Reporting Officers ─────────────────────────────────────────────────
+      let assignedManagerQuery = db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .whereNotNull('reporting_manager_id');
+      if (isValidCompanyId) {
+        assignedManagerQuery = assignedManagerQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        });
+      }
+      const assignedManagerIdRows = await assignedManagerQuery.distinct('reporting_manager_id').select('reporting_manager_id').catch(() => []);
+      const assignedManagerIds = assignedManagerIdRows
+        .map((r: any) => Number(r.reportingManagerId ?? r.reporting_manager_id))
+        .filter(Boolean);
 
-      // Join user_roles to find users with leadership roles strictly within this org
-      const userRoleRows = await db('user_roles')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .join('users', 'user_roles.user_id', 'users.id')
-        .where('user_roles.organization_id', ctx.organizationId)
-        .whereIn('roles.code', ['department_head', 'hr_manager', 'team_lead'])
-        .select('users.employee_id', 'users.employeeId', 'roles.code')
-        .catch(() => []);
+      let formattedReportingOfficers: { id: string; name: string }[] = [];
+      if (assignedManagerIds.length > 0) {
+        const managerRows = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .whereIn('id', assignedManagerIds)
+          .select('id', 'first_name', 'last_name', 'employee_code')
+          .orderBy('first_name', 'asc')
+          .catch(() => []);
 
-      const leaderEmpIdsSet = new Set<number>();
-      const leaderRoleMap = new Map<number, string>();
-      for (const ur of userRoleRows) {
-        const empId = Number(ur.employeeId || ur.employee_id);
-        if (empId) {
-          leaderEmpIdsSet.add(empId);
-          leaderRoleMap.set(empId, ur.code);
-        }
+        formattedReportingOfficers = managerRows.map((e: any) => ({
+          id: String(e.id),
+          name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Officer ${e.id}`,
+        }));
       }
 
-      managerIdsSet.forEach((id) => leaderEmpIdsSet.add(Number(id)));
-
-      // 1. Reporting Officers: ONLY HR, Manager (department_head), Team Lead
-      const formattedReportingOfficers = (employees || [])
-        .filter((e: any) => {
-          const empId = Number(e.id);
-          const isLeaderRole = ['department_head', 'hr_manager', 'team_lead'].includes(e.accessRole || e.access_role);
-          return isLeaderRole || leaderEmpIdsSet.has(empId);
-        })
-        .map((e: any) => {
-          const name = `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Officer ${e.id}`;
-          const roleCode = leaderRoleMap.get(Number(e.id)) || e.accessRole || e.access_role || '';
-          let roleTag = 'Manager';
-          if (roleCode === 'hr_manager') roleTag = 'HR';
-          else if (roleCode === 'team_lead') roleTag = 'Team Lead';
-          else if (roleCode === 'department_head') roleTag = 'Dept Manager';
-          return {
-            id: String(e.id),
-            name: `${name} (${roleTag})`,
-          };
+      // ── 5. Employees ─────────────────────────────────────────────────────────
+      let employeeQuery = db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+      if (isValidCompanyId) {
+        employeeQuery = employeeQuery.where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
         });
-
-      // 2. Employees: ALL employees in organization
-      const formattedEmployees = (employees || []).map((e: any) => ({
+      }
+      if (departmentIds && departmentIds.length > 0) {
+        employeeQuery = employeeQuery.whereIn('current_department_id', departmentIds);
+      }
+      const employeeRows = await employeeQuery.select('id', 'first_name', 'last_name', 'employee_code').orderBy('first_name', 'asc').catch(() => []);
+      const formattedEmployees = employeeRows.map((e: any) => ({
         id: String(e.id),
-        name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Employee ${e.id}`,
-        code: e.employeeCode || e.employee_code || '',
+        name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Employee ${e.id}`,
+        code: e.employeeCode ?? e.employee_code ?? '',
       }));
 
       return {
@@ -1210,11 +1461,17 @@ export class AttendanceService {
       workType,
     } = params || {};
 
+    const sf = typeof statusFilters === 'string'
+      ? (() => { try { return JSON.parse(statusFilters); } catch { return {}; } })()
+      : (statusFilters || {});
+
     const rawEmp = params?.employees ?? params?.['employees[]'] ?? params?.employeeId ?? params?.employee_id;
     const rawLoc = params?.locations ?? params?.['locations[]'] ?? params?.locationId ?? params?.location_id;
     const rawDept = params?.departments ?? params?.['departments[]'] ?? params?.departmentId ?? params?.department_id;
     const rawRo = params?.reportingOfficers ?? params?.['reportingOfficers[]'] ?? params?.reportingOfficerId ?? params?.reporting_officer_id;
     const rawCompany = params?.companies ?? params?.['companies[]'] ?? params?.companyId ?? params?.company_id;
+
+    const isAllCompanies = String(rawCompany).includes('all') || rawCompany === 'all' || !rawCompany || (Array.isArray(rawCompany) && rawCompany.length === 0);
 
     const { db } = await import('../../../db/knex');
 
@@ -1242,25 +1499,27 @@ export class AttendanceService {
     const targetEmpIds = parseIds(rawEmp);
     const targetEmpStrings = parseStrings(rawEmp);
     const targetDeptIds = parseIds(rawDept);
-    const targetLocIds = parseIds(rawLoc);
     const targetRoIds = parseIds(rawRo);
-    const targetCompanyIds = parseIds(rawCompany);
+    const targetCompanyIds = isAllCompanies ? [] : parseIds(rawCompany);
 
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at');
-
-    if (ctx.companyId) {
-      empQuery = empQuery.where('company_id', ctx.companyId);
-    }
+      .whereNull('deleted_at')
+      .where(function () {
+        this.where('is_ceo', 0).orWhereNull('is_ceo');
+      });
 
     if (targetCompanyIds.length > 0) {
-      empQuery = empQuery.whereIn('company_id', targetCompanyIds);
+      empQuery = empQuery.where(function () {
+        this.whereIn('company_id', targetCompanyIds).orWhereNull('company_id');
+      });
     }
 
-    if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {
-      if (['active', 'inactive', 'onboarding', 'terminated'].includes(filterStatus)) {
+    if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose' && filterStatus !== 'all') {
+      if (filterStatus === 'active') {
+        empQuery = empQuery.whereIn('status', ['active', 'onboarding', 'probation', 'notice']);
+      } else if (['inactive', 'terminated', 'exit', 'alumni'].includes(filterStatus)) {
         empQuery = empQuery.where('status', filterStatus);
       }
     }
@@ -1279,11 +1538,6 @@ export class AttendanceService {
     }
     if (targetRoIds.length > 0) {
       empQuery = empQuery.whereIn('reporting_manager_id', targetRoIds);
-    }
-    if (targetLocIds.length > 0) {
-      empQuery = empQuery.where((builder) => {
-        builder.whereIn('current_branch_id', targetLocIds).orWhereIn('current_location_id', targetLocIds);
-      });
     }
 
     const employeeList = await empQuery.catch(() => []);
@@ -1450,8 +1704,6 @@ export class AttendanceService {
     const rows: any[] = [];
     let rowIdCounter = 1;
 
-    const sf = typeof statusFilters === 'string' ? JSON.parse(statusFilters) : (statusFilters || {});
-
     const [locationsGen, locationsAtt, geofencesList, branchesList] = await Promise.all([
       db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
       db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
@@ -1470,6 +1722,38 @@ export class AttendanceService {
       if (gId && gName) locationNameMap.set(gId, gName);
       if (lId && gName) locationNameMap.set(lId, gName);
     });
+
+    // ── Pre-fetch holiday dates for the report range (org-wide, non-optional) ────────────
+    // We fetch all calendars for the org (both location-specific and default)
+    // so that any holiday that applies to any employee in this org is included.
+    // Per-employee location filtering would require N+1 queries; org-wide is a
+    // safe conservative approach for report generation.
+    const reportHolidaySet = new Map<string, string>(); // holiday_date -> holiday_name
+    try {
+      const reportYear = parseInt(startStr.split('-')[0], 10);
+      const calendarIds = await db('holiday_calendars')
+        .where('organization_id', ctx.organizationId)
+        .where('year', reportYear)
+        .select('id')
+        .catch(() => []);
+      const calIds = calendarIds.map((c: any) => Number(c.id));
+      if (calIds.length > 0) {
+        const holidayRows = await db('holidays')
+          .whereIn('holiday_calendar_id', calIds)
+          .where('holiday_date', '>=', startStr)
+          .where('holiday_date', '<=', endStr)
+          .where('is_optional', false)
+          .select('holiday_date', 'holiday_name')
+          .catch(() => []);
+        holidayRows.forEach((h: any) => {
+          const d = h.holiday_date || h.holidayDate;
+          const n = h.holiday_name || h.holidayName;
+          if (d) reportHolidaySet.set(String(d).slice(0, 10), n || 'Holiday');
+        });
+      }
+    } catch (e) {
+      console.warn('[TabularReport] Failed to fetch holiday set (non-fatal):', e);
+    }
 
     for (const dateStr of dates) {
       const parts = dateStr.split('-').map(Number);
@@ -1501,14 +1785,14 @@ export class AttendanceService {
           dayStatus = rawStatus === 'present'
             ? 'Full Day'
             : rawStatus === 'half_day'
-            ? 'Half Day'
-            : rawStatus === 'absent'
-            ? 'Absent'
-            : rawStatus === 'on_leave'
-            ? 'Leave'
-            : rawStatus === 'weekly_off'
-            ? 'Week Off'
-            : 'Full Day';
+              ? 'Half Day'
+              : rawStatus === 'absent'
+                ? 'Absent'
+                : rawStatus === 'on_leave'
+                  ? 'Leave'
+                  : rawStatus === 'weekly_off'
+                    ? 'Week Off'
+                    : 'Full Day';
 
           isLate = (dbRec.is_late || dbRec.isLate) ? 'Yes' : 'No';
           lateMins = (dbRec.is_late || dbRec.isLate) ? '00:15' : '00:00';
@@ -1604,7 +1888,9 @@ export class AttendanceService {
             breakHoursForRow = bM > 0 ? `${bH}h ${bM}m` : `${bH}h`;
           }
         } else {
-          dayStatus = isWeekend ? 'Week Off' : 'Absent';
+          // No attendance record for this date — check if holiday or week-off or absent
+          const isHolidayDate = reportHolidaySet.has(dateStr);
+          dayStatus = isWeekend ? 'Week Off' : isHolidayDate ? 'Holiday' : 'Absent';
           actualTiming = '-- - --';
           actualWorkingHours = '00:00';
         }
@@ -1615,14 +1901,14 @@ export class AttendanceService {
         const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
         const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
 
-        if (sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
-        if (sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
-        if (sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
-        if (sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
-        if (sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
-        if (sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
-        if (sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
-        if (sf.breakLog !== undefined && isFalse(sf.breakLog) && totalBreakHours !== '00:00') continue;
+        if (sf && sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
+        if (sf && sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
+        if (sf && sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
+        if (sf && sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
+        if (sf && sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
+
+        if (sf && sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
+        if (sf && sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && (shortHours === '00:00' || dayStatus === 'Full Day')) continue;
 
         if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
         if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
@@ -1649,9 +1935,10 @@ export class AttendanceService {
         const resolveEmpShift = (eId: number, dStr: string, recordObj?: any) => {
           if (recordObj && recordObj.rec_shift_name) {
             const sName = recordObj.rec_shift_name;
-            const sIn = recordObj.rec_shift_start_time ? formatDisplayTime(recordObj.rec_shift_start_time) : '09:00 AM';
-            const sOut = recordObj.rec_shift_end_time ? formatDisplayTime(recordObj.rec_shift_end_time) : '06:00 PM';
-            return { shiftName: sName, startTime: sIn, endTime: sOut };
+            const sIn = recordObj.rec_shift_start_time ? formatDisplayTime(recordObj.rec_shift_start_time) : '--';
+            const sOut = recordObj.rec_shift_end_time ? formatDisplayTime(recordObj.rec_shift_end_time) : '--';
+            const dur = Number(recordObj.rec_shift_duration_hours || recordObj.recShiftDurationHours || 0);
+            return { shiftName: sName, startTime: sIn, endTime: sOut, durationHours: dur };
           }
           const saMatch = shiftAssignments.find((sa: any) => {
             if (Number(sa.employee_id) !== eId) return false;
@@ -1663,21 +1950,33 @@ export class AttendanceService {
           });
           if (saMatch) {
             return {
-              shiftName: saMatch.shift_name || 'General Shift',
-              startTime: saMatch.start_time ? formatDisplayTime(saMatch.start_time) : '09:00 AM',
-              endTime: saMatch.end_time ? formatDisplayTime(saMatch.end_time) : '06:00 PM',
+              shiftName: saMatch.shift_name || 'Unknown Shift',
+              startTime: saMatch.start_time ? formatDisplayTime(saMatch.start_time) : '--',
+              endTime: saMatch.end_time ? formatDisplayTime(saMatch.end_time) : '--',
+              durationHours: Number(saMatch.duration_hours || saMatch.durationHours || 0),
             };
           }
-          return {
-            shiftName: 'General Shift',
-            startTime: '09:00 AM',
-            endTime: '06:00 PM',
-          };
+          // No shift assigned — return Unassigned (do NOT fall back to hardcoded General Shift)
+          return { shiftName: 'Unassigned', startTime: '--', endTime: '--', durationHours: 0 };
         };
 
         const currentShift = resolveEmpShift(empId, dateStr, dbRec);
-        const shiftLabel = `${currentShift.shiftName} (${currentShift.startTime} - ${currentShift.endTime})`;
-        const expTimingLabel = `${currentShift.startTime} - ${currentShift.endTime}`;
+        const isUnassigned = currentShift.shiftName === 'Unassigned';
+        const shiftLabel = isUnassigned
+          ? 'Unassigned'
+          : `${currentShift.shiftName} (${currentShift.startTime} - ${currentShift.endTime})`;
+        const expTimingLabel = isUnassigned
+          ? '--'
+          : `${currentShift.startTime} - ${currentShift.endTime}`;
+
+        // Derive expected hours from shift duration_hours; fall back to '--' when unassigned
+        const expHoursValue = (() => {
+          if (isUnassigned || !currentShift.durationHours) return '--';
+          const totalMins = Math.round(currentShift.durationHours * 60);
+          const h = Math.floor(totalMins / 60).toString().padStart(2, '0');
+          const m = (totalMins % 60).toString().padStart(2, '0');
+          return `${h}:${m}`;
+        })();
 
         rows.push({
           id: String(rowIdCounter++),
@@ -1689,7 +1988,7 @@ export class AttendanceService {
           actualTiming,
           checkInTime: formattedIn || '--',
           checkOutTime: formattedOut || (formattedIn ? 'Active' : '--'),
-          expHours: '09:00',
+          expHours: expHoursValue,
           actualHours: actualWorkingHours,
           shortHours,
           bufferMins: '00:00:00',
@@ -1749,19 +2048,28 @@ export class AttendanceService {
       return arr.map((x: any) => String(x).trim()).filter(Boolean);
     };
 
+    const rawCompany = params?.companies ?? params?.['companies[]'] ?? params?.companyId ?? params?.company_id;
+
     const targetEmpIds = parseIds(rawEmp);
     const targetEmpStrings = parseStrings(rawEmp);
     const targetDeptIds = parseIds(rawDept);
     const targetLocIds = parseIds(rawLoc);
     const targetRoIds = parseIds(rawRo);
+    const targetCompanyIds = parseIds(rawCompany);
 
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
-    if (ctx.companyId) {
-      empQuery = empQuery.where('company_id', ctx.companyId);
+    if (targetCompanyIds.length > 0) {
+      empQuery = empQuery.where(function () {
+        this.whereIn('company_id', targetCompanyIds).orWhereNull('company_id');
+      });
+    } else if (ctx.companyId) {
+      empQuery = empQuery.where(function () {
+        this.where('company_id', ctx.companyId).orWhereNull('company_id');
+      });
     }
 
     if (filterStatus && filterStatus !== 'choose' && filterStatus !== 'both') {
@@ -1910,6 +2218,34 @@ export class AttendanceService {
       }
     });
 
+    // ── Pre-fetch holiday dates for the matrix report range ────────────────────────────
+    const matrixHolidaySet = new Map<string, string>(); // date -> holiday name
+    try {
+      const matrixYear = parseInt(startStr.split('-')[0], 10);
+      const matrixCalIds = await db('holiday_calendars')
+        .where('organization_id', ctx.organizationId)
+        .where('year', matrixYear)
+        .select('id')
+        .catch(() => []);
+      const mCalIds = matrixCalIds.map((c: any) => Number(c.id));
+      if (mCalIds.length > 0) {
+        const mHolidays = await db('holidays')
+          .whereIn('holiday_calendar_id', mCalIds)
+          .where('holiday_date', '>=', startStr)
+          .where('holiday_date', '<=', endStr)
+          .where('is_optional', false)
+          .select('holiday_date', 'holiday_name')
+          .catch(() => []);
+        mHolidays.forEach((h: any) => {
+          const d = h.holiday_date || h.holidayDate;
+          const n = h.holiday_name || h.holidayName;
+          if (d) matrixHolidaySet.set(String(d).slice(0, 10), n || 'Holiday');
+        });
+      }
+    } catch (e) {
+      console.warn('[MatrixReport] Failed to fetch holiday set (non-fatal):', e);
+    }
+
     return employeeList.map((emp: any) => {
       const empId = emp.id;
       const fn = emp.first_name || emp.firstName || '';
@@ -1957,9 +2293,17 @@ export class AttendanceService {
         }
 
         if (!rec) {
-          // Working day but no attendance record → Not Present
-          dailyStatus[dateStr] = 'NP';
-          dailyTimings[dateStr] = '00:00-00:00';
+          // Working day but no attendance record — check if holiday before marking NP
+          if (matrixHolidaySet.has(dateStr)) {
+            const holName = matrixHolidaySet.get(dateStr) || 'Holiday';
+            dailyStatus[dateStr] = 'Holiday';
+            dailyTimings[dateStr] = holName;
+            totalHoliday += 1;
+          } else {
+            // No record, not a holiday → Not Present
+            dailyStatus[dateStr] = 'NP';
+            dailyTimings[dateStr] = '00:00-00:00';
+          }
           return;
         }
 
@@ -2068,10 +2412,144 @@ export class AttendanceService {
         lwp,
         pl,
         plv,
-        wo,
         totalHoliday,
         payableDays,
       };
     });
   }
+
+  /**
+   * Dedicated CEO / Executive Admin attendance punches query.
+   * Returns ONLY real database check-in records for the Organization Admin / CEO.
+   */
+  async getCeoPunches(ctx: TenantContext): Promise<any[]> {
+    const db = getKnex();
+
+    // 1. Find dedicated CEO employee row or Org Admin user
+    const ceoEmp = await db('employees')
+      .where({ organization_id: ctx.organizationId, is_ceo: true })
+      .whereNull('deleted_at')
+      .first()
+      .catch(() => null);
+
+    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
+
+    let adminUser: any = null;
+    if (ctx.userId) {
+      adminUser = await db('users').where('id', ctx.userId).first().catch(() => null);
+    }
+    if (!adminUser) {
+      adminUser = await db('users')
+        .leftJoin('user_roles', 'users.id', 'user_roles.user_id')
+        .leftJoin('roles', 'user_roles.role_id', 'roles.id')
+        .where('users.organization_id', ctx.organizationId)
+        .where('roles.code', 'organization_admin')
+        .select('users.*')
+        .first()
+        .catch(() => null);
+    }
+
+    const adminUserId = adminUser ? Number(adminUser.id) : ctx.userId;
+    const ceoEmpId = ceoEmp?.id || adminUser?.employee_id || null;
+
+    const ceoName = ceoEmp
+      ? [ceoEmp.firstName || ceoEmp.first_name, ceoEmp.lastName || ceoEmp.last_name].filter(Boolean).join(' ')
+      : [adminUser?.firstName || adminUser?.first_name, adminUser?.lastName || adminUser?.last_name].filter(Boolean).join(' ') || org?.ownerName || org?.owner_name || 'Harsh Gawali (CEO)';
+    const ceoCode = ceoEmp?.employee_code || ceoEmp?.employeeCode || `CEO-${ctx.organizationId}-${adminUserId}`;
+
+    // 2. Query attendance_records strictly for CEO (is_ceo_punch = 1 OR employee_id = ceoEmpId)
+    const dbRecords = await db('attendance_records')
+      .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
+      .where('attendance_records.organization_id', ctx.organizationId)
+      .where(function () {
+        this.where('attendance_records.is_ceo_punch', 1)
+          .orWhere('attendance_records.is_ceo_punch', true);
+        if (ceoEmpId) {
+          this.orWhere('attendance_records.employee_id', ceoEmpId);
+        }
+      })
+      .select(
+        'attendance_records.*',
+        'in_loc.location_name as check_in_location_name'
+      )
+      .orderBy('attendance_records.created_at', 'desc')
+      .catch(() => []);
+
+
+    return dbRecords.map((r: any) => {
+      const rawIn = r.check_in_time || r.checkInTime || r.created_at;
+      const rawOut = r.check_out_time || r.checkOutTime;
+
+      let formattedIn = '--:--';
+      let formattedOut = '--:--';
+      let totalHours = '--';
+
+      if (rawIn) {
+        const dIn = new Date(rawIn);
+        if (!isNaN(dIn.getTime())) {
+          formattedIn = dIn.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        } else {
+          formattedIn = String(rawIn).slice(11, 16);
+        }
+      }
+
+      if (rawOut) {
+        const dOut = new Date(rawOut);
+        if (!isNaN(dOut.getTime())) {
+          formattedOut = dOut.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        } else {
+          formattedOut = String(rawOut).slice(11, 16);
+        }
+      }
+
+      if (rawIn && rawOut) {
+        const dIn = new Date(rawIn);
+        const dOut = new Date(rawOut);
+        if (!isNaN(dIn.getTime()) && !isNaN(dOut.getTime())) {
+          const diffMs = dOut.getTime() - dIn.getTime();
+          if (diffMs > 0) {
+            const hrs = Math.floor(diffMs / (1000 * 60 * 60));
+            const mins = Math.round((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            totalHours = `${hrs}h ${mins}m`;
+          }
+        }
+      }
+      //Date format yyyy-mm-dd
+
+      let rawDate = r.check_in_date || r.checkInDate || rawIn;
+      let formattedDate = '';
+      if (rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          formattedDate = `${y}-${m}-${day}`;
+        } else {
+          formattedDate = String(rawDate).slice(0, 10);
+        }
+      }
+      if (!formattedDate) formattedDate = getLocalYYYYMMDD();
+
+
+      const isCheckedOut = Boolean(rawOut);
+
+      return {
+        id: String(r.id),
+        date: formattedDate,
+        employeeId: String(r.employee_id || ceoEmpId || adminUserId),
+        employeeName: ceoName,
+        employeeCode: ceoCode,
+        checkInTime: formattedIn,
+        checkOutTime: formattedOut,
+        totalHours,
+        checkInLocation: r.check_in_location_name || r.notes || 'Executive Boundary / Headquarters',
+        checkInMethod: r.check_in_method || 'biometric',
+        status: isCheckedOut ? 'Completed' : (rawIn ? 'Checked In' : 'Pending'),
+      };
+
+
+    });
+  }
+
 }

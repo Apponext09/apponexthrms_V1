@@ -57,21 +57,22 @@ export class AdminDashboardService {
       if (comp) {
         companyName = comp.name || companyName;
         companyCode = comp.code || '';
-        isParent = Boolean(comp.is_parent);
+        isParent = Boolean((comp as any).isParent ?? comp.is_parent);
         location = [comp.city, comp.state, comp.country].filter(Boolean).join(', ') || 'Headquarters';
+        companyIdVal = Number((comp as any).companyId || (comp as any).company_id || (comp as any).id);
       }
     } else {
       // Find parent company for org or org name
       const parentComp = await db('company')
         .where('organization_id', organizationId)
-        .where('is_parent', 1)
+        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
         .whereNull('deleted_at')
         .first();
 
       if (parentComp) {
         companyName = parentComp.name;
         companyCode = parentComp.code || '';
-        companyIdVal = parentComp.company_id;
+        companyIdVal = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
         isParent = true;
         location = [parentComp.city, parentComp.state, parentComp.country].filter(Boolean).join(', ') || 'Headquarters';
       } else {
@@ -86,8 +87,11 @@ export class AdminDashboardService {
     const targetCompanyId = companyId || companyIdVal;
 
     // 2. Query KPIs
-    // Total Employees
-    let empQuery = db('employees').whereNull('deleted_at').where('status', '!=', 'terminated');
+    // Total Active Employees
+    let empQuery = db('employees')
+      .whereNull('deleted_at')
+      .whereIn('status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+
     if (targetCompanyId) {
       empQuery = empQuery.where('company_id', targetCompanyId);
     } else {
@@ -157,6 +161,7 @@ export class AdminDashboardService {
 
       let trendQuery = db('employees')
         .whereNull('deleted_at')
+        .whereIn('status', ['active', 'probation', 'confirmed', 'onboarding', 'Active'])
         .where(function () {
           this.where('date_of_joining', '<=', cutoffIso)
             .orWhere(function () {
@@ -182,7 +187,7 @@ export class AdminDashboardService {
       .leftJoin('employees', function () {
         this.on('departments.id', '=', 'employees.current_department_id')
           .andOnNull('employees.deleted_at')
-          .andOn('employees.status', '!=', db.raw('?', ['terminated']));
+          .andOnIn('employees.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
       })
       .select('departments.id', 'departments.name')
       .count('employees.id as emp_count')

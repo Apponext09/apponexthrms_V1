@@ -17,7 +17,7 @@ export class BiometricController {
     if (!message) return fallback;
 
     const containsTechnicalDetails =
-      /(select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|sql|query|knex|bindings?|errno|er_[a-z_]+|unknown column|doesn't exist|econnrefused|database)/i.test(
+      /(select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|sql|query|knex|bindings?|errno|er_[a-z_]+|unknown column|doesn't exist|database)/i.test(
         message
       );
 
@@ -149,6 +149,51 @@ export class BiometricController {
           error,
           'Failed to synchronize employee profile photos'
         ),
+      });
+    }
+  };
+
+  ceoPunch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const { image, images, action } = req.body;
+      if (!image && (!Array.isArray(images) || images.length === 0)) {
+        res.status(400).json({ success: false, message: 'Snapshot image payload is required' });
+        return;
+      }
+      if (!['check_in', 'check_out'].includes(action)) {
+        res.status(400).json({ success: false, message: 'action must be check_in or check_out' });
+        return;
+      }
+      const result = await this.biometricService.ceoPunch(
+        req.ctx,
+        Array.isArray(images) && images.length ? images : image,
+        action as 'check_in' | 'check_out'
+      );
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: this.clientMessage(error, 'CEO biometric punch failed. Please try again.'),
+      });
+    }
+  };
+
+  getCeoStatus = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const result = await this.biometricService.getCeoStatus(req.ctx);
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: this.clientMessage(error, 'Failed to load CEO status'),
       });
     }
   };

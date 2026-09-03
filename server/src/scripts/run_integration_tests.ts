@@ -53,6 +53,10 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
     const dbStages = await db('pipeline_stages').where('organization_id', orgId).select('*');
     log(`🔍 Pipeline Stages found in DB for Org ${orgId}: ${JSON.stringify(dbStages)}`);
 
+    // Resolve existing TEST-JOB-101 ID to clean up associated records
+    const testJob = await db('jobs').where('organization_id', orgId).where('job_code', 'TEST-JOB-101').first();
+    const testJobId = testJob ? testJob.id : null;
+
     // Clean up previous test candidates/jobs to allow fresh testing
     const testCandidateEmails = ['test.candidate@testflow.com'];
     const testCandidates = await db('candidates')
@@ -71,6 +75,9 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
         builder.where('applied_from_source', 'integration_test');
         if (testCandIds.length > 0) {
           builder.orWhereIn('candidate_id', testCandIds);
+        }
+        if (testJobId) {
+          builder.orWhere('job_id', testJobId);
         }
       })
       .select('id');
@@ -106,6 +113,11 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
       await db('candidates').whereIn('id', testCandIds).del();
     }
     await db('candidates').where('organization_id', orgId).whereIn('email', testCandidateEmails).del();
+    
+    if (testJobId) {
+      await db('job_skills').where('job_id', testJobId).del();
+      await db('job_locations').where('job_id', testJobId).del();
+    }
     await db('jobs').where('organization_id', orgId).where('job_code', 'TEST-JOB-101').del();
 
     log('🧹 Old test data cleaned successfully.');
@@ -121,10 +133,11 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
       noOfPositions: 2,
       jobType: 'full_time',
       experienceLevel: 'mid',
-      employmentType: 'remote',
+      employmentType: 'full_time',
+      currency: 'INR',
       isInternal: false,
       isPublishedExternal: true,
-    });
+    } as any);
     log(`✅ Job Created: ID=${job.id}, Code=${job.job_code}, Title="${job.job_title}"`);
 
     // 3. Create Candidate Profile (Verify Email Deduplication)
@@ -166,6 +179,23 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
 
     // 5. Schedule Interview Panel
     log('Step 4: Scheduling Interview Round with panelists...');
+    let testEmp = await db('employees').where('organization_id', orgId).first();
+    if (!testEmp) {
+      const [insertedId] = await db('employees').insert({
+        uuid: uuidv4(),
+        organization_id: orgId,
+        employee_code: 'TEST-EMP-001',
+        first_name: 'Test',
+        last_name: 'Interviewer',
+        email: 'interviewer.test@apponext.com',
+        status: 'active',
+        date_of_joining: '2024-01-01',
+        created_by: userId,
+        updated_by: userId,
+      });
+      testEmp = await db('employees').where('id', insertedId).first();
+    }
+
     const interview = await interviewService.scheduleInterview(ctx, {
       applicationId: app.id,
       interviewType: 'video',
@@ -173,7 +203,7 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
       scheduledDate: new Date(Date.now() + 86400000).toISOString().replace('T', ' ').substring(0, 19),
       durationMinutes: 45,
       meetingUrl: 'https://zoom.us/j/123456789',
-      interviewerIds: [userId] // Admin as panelist
+      interviewerIds: [testEmp.id] // Valid employee as panelist
     });
     log(`✅ Interview Scheduled: ID=${interview.id}, Stage="technical"`);
 

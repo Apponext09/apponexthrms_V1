@@ -6,9 +6,12 @@ export interface Assessment {
   uuid: string;
   organization_id: number;
   assessment_name: string;
+  assessmentName?: string;
   assessment_type: 'coding' | 'mcq' | 'assignment' | 'form';
+  assessmentType?: string;
   duration_minutes: number;
   passing_score: number;
+  passingScore?: number;
   description: string | null;
   created_by: number;
   updated_by: number;
@@ -39,7 +42,9 @@ export interface AssessmentAttempt {
   uuid: string;
   organization_id: number;
   application_id: number;
+  applicationId?: number;
   assessment_id: number;
+  assessmentId?: number;
   attempt_number: number;
   started_at: string;
   completed_at: string | null;

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,11 +16,16 @@ import {
   Building2,
   Globe,
   Radio,
+  UserCheck,
 } from 'lucide-react';
 import { useLocationManagement, GeofenceLocation } from '../hooks/useLocationManagement';
 import { AddLocationModal } from '../components/AddLocationModal';
 
 export function LocationManagementPage(): JSX.Element {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isHrPath = location.pathname.startsWith('/hr');
+  const mappingRoute = isHrPath ? '/hr/attendance/locations' : '/attendance/employee-locations';
   const { geofences, isLoading, deleteGeofence } = useLocationManagement();
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -89,6 +95,28 @@ export function LocationManagementPage(): JSX.Element {
         >
           <Plus className="w-3.5 h-3.5" />
           Add Location
+        </Button>
+      </div>
+
+      {/* Navigation Tabs Bar */}
+      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+        <Button
+          variant="default"
+          size="sm"
+          className="h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground shadow-2xs"
+        >
+          <MapPin className="w-3.5 h-3.5" />
+          Geofence Boundaries
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(mappingRoute)}
+          className="h-8 text-xs font-bold gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60"
+        >
+          <UserCheck className="w-3.5 h-3.5 text-primary" />
+          Employee Location Mapping
         </Button>
       </div>
 

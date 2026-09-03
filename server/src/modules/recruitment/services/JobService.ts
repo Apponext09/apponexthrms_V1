@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getKnex } from '../../../db/knex';
 import { JobRepository, type Job } from '../repositories/JobRepository';
 import { JobSkillRepository, type JobSkill } from '../repositories/SupportingRepository';
 import { JobLocationRepository, type JobLocation } from '../repositories/SupportingRepository';
@@ -41,6 +42,7 @@ export class JobService {
       currency: string;
       employmentType: string;
       noOfPositions: number;
+      expiryDate?: string;
       jobTemplateId?: number;
       isInternal?: boolean;
       isPublishedExternal?: boolean;
@@ -50,7 +52,16 @@ export class JobService {
   ): Promise<Job> {
     const isUnique = await this.jobRepo.isCodeUnique(ctx, input.jobCode);
     if (!isUnique) {
-      throw new ValidationError(`Job code '${input.jobCode}' already exists`);
+      throw new ValidationError(`Job code '${input.jobCode}' already exists! Cannot create duplicate job code.`);
+    }
+
+    const existingTitle = await this.jobRepo.query(ctx)
+      .whereRaw('LOWER(job_title) = ?', [input.jobTitle.toLowerCase().trim()])
+      .whereNull('deleted_at')
+      .first();
+
+    if (existingTitle) {
+      throw new ValidationError(`A job opening with title '${input.jobTitle}' already exists! Duplicate job postings are not allowed.`);
     }
 
     if (input.mrfRequestId) {
@@ -58,8 +69,16 @@ export class JobService {
       if (!mrf) {
         throw new ValidationError(`Linked MRF Request with ID ${input.mrfRequestId} not found`);
       }
+      if (mrf.stage === 'Rejected') {
+        throw new ValidationError('Cannot create a job posting for a REJECTED MRF Request');
+      }
       if (mrf.stage !== 'Approved') {
-        throw new ValidationError('A job posting can only be created for an APPROVED MRF Request');
+        await this.mrfRepo.update(ctx, mrf.id, {
+          stage: 'Approved',
+          approved_by: ctx.userId,
+          approved_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updated_by: ctx.userId,
+        } as any);
       }
     }
 
@@ -81,6 +100,7 @@ export class JobService {
       currency: input.currency,
       employment_type: input.employmentType,
       no_of_positions: input.noOfPositions,
+      expiry_date: input.expiryDate || null,
       job_template_id: input.jobTemplateId || null,
       is_internal: input.isInternal ?? false,
       is_published_external: input.isPublishedExternal ?? true,
@@ -127,6 +147,27 @@ export class JobService {
     const job = await this.jobRepo.getById(ctx, jobId);
     if (!job) {
       throw new NotFoundError('Job not found');
+    }
+
+    if (input.job_code && input.job_code !== job.job_code) {
+      const isUniqueCode = await this.jobRepo.isCodeUnique(ctx, input.job_code, jobId);
+      if (!isUniqueCode) {
+        throw new ValidationError(`Job code '${input.job_code}' already exists`);
+      }
+    }
+
+    const titleToCheck = input.job_title || (input as any).jobTitle;
+    const currentJobTitle = job.job_title || (job as any).jobTitle || '';
+    if (titleToCheck && titleToCheck.toLowerCase().trim() !== currentJobTitle.toLowerCase().trim()) {
+      const existingTitle = await this.jobRepo.query(ctx)
+        .whereRaw('LOWER(job_title) = ?', [titleToCheck.toLowerCase().trim()])
+        .whereNot('id', jobId)
+        .whereNull('deleted_at')
+        .first();
+
+      if (existingTitle) {
+        throw new ValidationError(`A job opening with title '${titleToCheck}' already exists!`);
+      }
     }
 
     const updated = await this.jobRepo.update(ctx, jobId, {

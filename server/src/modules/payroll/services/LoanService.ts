@@ -9,13 +9,16 @@ import type { TenantContext } from '../../../db/types';
 
 interface CreateLoanInput {
   employeeId: number;
-  loanType: 'personal' | 'vehicle' | 'home' | 'education';
+  loanType: string;
+  loanTypeId?: string;
   loanAmount: number;
   loanDate: string;
   tenureMonths: number;
   interestRate?: number;
   status?: 'pending' | 'active' | 'approved' | 'rejected';
 }
+
+import { withSnakeAliases } from '../utils/payroll.utils';
 
 export class LoanService {
   private loanRepo: EmployeeLoanRepository;
@@ -42,19 +45,56 @@ export class LoanService {
       throw new ValidationError('Tenure must be greater than 0');
     }
 
-    // Calculate EMI and total amount
-    const rate = (input.interestRate || 0) / 100 / 12;
+    const db = getKnex();
+
+    // Resolve the admin-configured loan type (if given) and let its real
+    // interest rate / min-max amount / min-max tenure govern this loan —
+    // previously the client's own numbers were trusted outright.
+    const loanTypeId = input.loanTypeId || (input as any).loan_type_id;
+    let resolvedType: any = null;
+    let interestRate = input.interestRate || 0;
+    let loanTypeName = input.loanType || 'personal';
+
+    if (loanTypeId) {
+      resolvedType = withSnakeAliases(await db('payroll_loan_types')
+        .where({ id: loanTypeId, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .first()
+        .catch(() => null));
+
+      if (!resolvedType) {
+        throw new ValidationError('Selected loan type was not found');
+      }
+
+      const minAmount = Number(resolvedType.minAmount ?? 0);
+      const maxAmount = Number(resolvedType.maxAmount ?? Infinity);
+      const minTerm = Number(resolvedType.minTermMonths ?? 1);
+      const maxTerm = Number(resolvedType.maxTermMonths ?? Infinity);
+
+      if (loanAmount < minAmount || loanAmount > maxAmount) {
+        throw new ValidationError(`Loan amount must be between ₹${minAmount.toLocaleString('en-IN')} and ₹${maxAmount.toLocaleString('en-IN')} for this loan type`);
+      }
+      if (tenureMonths < minTerm || tenureMonths > maxTerm) {
+        throw new ValidationError(`Tenure must be between ${minTerm} and ${maxTerm} months for this loan type`);
+      }
+
+      interestRate = Number(resolvedType.interestRate ?? 0);
+      loanTypeName = resolvedType.name || loanTypeName;
+    }
+
+    // Calculate EMI and total amount using the resolved (or given) interest rate
+    const rate = interestRate / 100 / 12;
     const emi = rate > 0
       ? (loanAmount * rate * Math.pow(1 + rate, tenureMonths)) /
         (Math.pow(1 + rate, tenureMonths) - 1)
       : loanAmount / tenureMonths;
 
     const totalAmount = emi * tenureMonths;
-    const db = getKnex();
 
     const creatorUser = await db('users').where('id', ctx.userId).first().catch(() => null);
-    const creatorEmp = creatorUser?.employee_id
-      ? await db('employees').where('id', creatorUser.employee_id).first().catch(() => null)
+    const creatorUserEmpId = creatorUser?.employeeId ?? creatorUser?.employee_id;
+    const creatorEmp = creatorUserEmpId
+      ? await db('employees').where('id', creatorUserEmpId).first().catch(() => null)
       : await db('employees').whereRaw('LOWER(email) = ?', [creatorUser?.email?.toLowerCase() || '']).first().catch(() => null);
 
     const userRoles = await db('user_roles as ur')
@@ -81,47 +121,77 @@ export class LoanService {
     // Use the context organization ID — never undefined
     const orgId = ctx.organizationId;
 
+    // 🔧 FIX: this insert (and its "fallback") referenced `amount` and
+    // `monthly_emi`, neither of which are real columns on employee_loans
+    // (the real columns are `loan_amount` and `emi`) — every loan creation
+    // has been throwing "Unknown column 'amount'" since this was written,
+    // silently swallowed wherever the caller didn't surface the error.
     const [insertedId] = await db('employee_loans').insert({
       uuid: uuidv4(),
       organization_id: orgId,
       employee_id: targetEmpId,
-      loan_type: (input.loanType || 'personal').toString(),
-      amount: loanAmount,
+      loan_type_id: loanTypeId || null,
+      loan_type: loanTypeName.toString(),
       loan_amount: loanAmount,
       loan_date: input.loanDate || new Date().toISOString().slice(0, 10),
       tenure_months: tenureMonths,
-      interest_rate: input.interestRate || 0,
-      monthly_emi: calculatedEmi,
+      interest_rate: interestRate,
+      reason: (input as any).reason || 'Personal Financial Request',
       emi: calculatedEmi,
       total_amount_with_interest: calculatedTotal,
       repaid_amount: 0,
       outstanding_amount: calculatedTotal,
-      reason: (input as any).reason || 'Personal Financial Request',
       status: loanStatus,
       created_by: validUserId,
       updated_by: validUserId
-    }).catch(async (err: any) => {
-      // Fallback insert if extra columns don't exist
-      return await db('employee_loans').insert({
-        uuid: uuidv4(),
-        organization_id: orgId,
-        employee_id: targetEmpId,
-        loan_type: 'personal_loan',
-        amount: loanAmount,
-        tenure_months: tenureMonths,
-        interest_rate: input.interestRate || 0,
-        monthly_emi: calculatedEmi,
-        reason: (input as any).reason || 'Personal Financial Request',
-        status: loanStatus,
-        created_by: validUserId
-      });
     });
 
-    const loan = await db('employee_loans').where('id', insertedId).first();
+    const loan = withSnakeAliases(await db('employee_loans').where('id', insertedId).first());
 
     // Create repayment schedule if loan is immediately active or approved
     if (loanStatus === 'active' || loanStatus === 'approved') {
       await this.createRepaymentSchedule(ctx, loan);
+    }
+
+    // 🔔 Dispatch Notification to Organization Admins & Approvers
+    try {
+      const emp = await db('employees').where('id', targetEmpId).first().catch(() => null);
+      const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${targetEmpId}`;
+
+      const adminUsers = await db('users as u')
+        .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
+        .leftJoin('roles as r', 'ur.role_id', 'r.id')
+        .where('u.organization_id', orgId)
+        .where(function () {
+          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager'])
+            .orWhere('u.email', 'ajay@gmail.com');
+        })
+        .whereNull('u.deleted_at')
+        .select('u.id')
+        .distinct();
+
+      for (const admin of adminUsers) {
+        if (admin.id) {
+          await db('notifications').insert({
+            uuid: uuidv4(),
+            organization_id: orgId,
+            event_code: 'LOAN_REQUEST_SUBMITTED',
+            recipient_id: admin.id,
+            channels: JSON.stringify(['inapp', 'email']),
+            subject_line: `New Loan & Salary Advance Request from ${empName}`,
+            body_text: `${empName} applied for a ${input.loanType || 'Personal'} loan of ₹${Number(loanAmount).toLocaleString('en-IN')}. Please review and approve.`,
+            variables: JSON.stringify({ employee_name: empName, loan_amount: loanAmount, loan_id: insertedId }),
+            status: 'sent',
+            priority: 'high',
+            created_by: validUserId,
+            updated_by: validUserId,
+            created_at: new Date(),
+            updated_at: new Date()
+          }).catch(() => { });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Failed to dispatch loan request notification:', notifErr);
     }
 
     await this.auditService.log(ctx, {
@@ -134,44 +204,90 @@ export class LoanService {
     return loan;
   }
 
-  async approveLoan(ctx: TenantContext, loanId: number) {
+  /** Configurable per-loan-type approver role (payroll_loan_types.approver_role),
+   *  falling back to the broad admin/HR/finance check when no type is set. */
+  private async resolveApproverCheck(ctx: TenantContext, loan: any): Promise<{ canAct: boolean; requiredRole: string | null }> {
     const db = getKnex();
-
-    // Resolve actor's roles
     const userRoles = await db('user_roles as ur')
       .join('roles as r', 'r.id', 'ur.role_id')
       .where('ur.user_id', ctx.userId)
       .select('r.code');
     const roleCodes = userRoles.map((r: any) => r.code);
 
-    // Also check super_admins table
     const isSuperAdmin = await db('super_admins')
       .where('status', 'active')
       .where(function () { this.where('id', ctx.userId).orWhere('user_id', ctx.userId); })
       .first()
       .catch(() => null);
 
-    // 🔧 EXPANDED: Admin + HR Manager + Finance Manager can all approve loans
-    const canApprove =
-      !!isSuperAdmin ||
-      roleCodes.includes('organization_admin') ||
-      roleCodes.includes('super_admin') ||
-      roleCodes.includes('hr_manager') ||
-      roleCodes.includes('finance_manager');
-
-    if (!canApprove) {
-      throw new ValidationError('Only Admin, HR Manager, or Finance Manager can approve loan requests.');
+    if (isSuperAdmin || roleCodes.includes('organization_admin') || roleCodes.includes('super_admin')) {
+      return { canAct: true, requiredRole: null };
     }
 
-    const loan = await this.loanRepo.getById(ctx, loanId);
+    const loanTypeId = loan.loanTypeId ?? loan.loan_type_id;
+    let requiredRole: string | null = null;
+    if (loanTypeId) {
+      const type = await db('payroll_loan_types').where('id', loanTypeId).first().catch(() => null);
+      requiredRole = (type as any)?.approverRole ?? (type as any)?.approver_role ?? null;
+    }
+
+    if (requiredRole) {
+      return { canAct: roleCodes.includes(requiredRole), requiredRole };
+    }
+
+    // No type-specific approver configured — fall back to the broad check
+    return {
+      canAct: roleCodes.includes('hr_manager') || roleCodes.includes('finance_manager'),
+      requiredRole: null
+    };
+  }
+
+  async approveLoan(ctx: TenantContext, loanId: number) {
+    const db = getKnex();
+
+    const loan = withSnakeAliases(await this.loanRepo.getById(ctx, loanId));
     if (!loan) throw new NotFoundError('Loan not found');
+
+    const { canAct, requiredRole } = await this.resolveApproverCheck(ctx, loan);
+    if (!canAct) {
+      throw new ValidationError(
+        requiredRole
+          ? `Only a ${requiredRole.replace(/_/g, ' ')} can approve this loan type.`
+          : 'Only Admin, HR Manager, or Finance Manager can approve loan requests.'
+      );
+    }
 
     const updated = await this.loanRepo.update(ctx, loanId, {
       status: 'active',
       approved_by: ctx.userId,
-      approved_at: new Date().toISOString(),
+      approved_at: new Date(),
       updated_by: ctx.userId
     } as any);
+
+    // 🔔 Notify Employee of Loan Approval
+    if (loan && loan.employee_id) {
+      try {
+        const empUserId = (await db('users').where('employee_id', loan.employee_id).first().catch(() => null))?.id;
+        const recipient = empUserId || loan.employee_id;
+
+        await db('notifications').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          event_code: 'LOAN_REQUEST_APPROVED',
+          recipient_id: recipient,
+          channels: JSON.stringify(['inapp', 'email']),
+          subject_line: `Loan Request Approved`,
+          body_text: `Your ${loan.loan_type || 'Personal'} loan request of ₹${Number((loan as any).loanAmount ?? loan.loan_amount ?? 0).toLocaleString('en-IN')} has been approved.`,
+          variables: JSON.stringify({ amount: (loan as any).loanAmount ?? loan.loan_amount ?? 0, loan_id: loanId }),
+          status: 'sent',
+          priority: 'high',
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+          created_at: new Date(),
+          updated_at: new Date()
+        }).catch(() => { });
+      } catch { }
+    }
 
     // Create EMI schedule if none exists
     const existingSchedule = await this.repaymentRepo.getForLoan(ctx, loanId);
@@ -204,40 +320,22 @@ export class LoanService {
   }
 
   async rejectLoan(ctx: TenantContext, loanId: number, reason?: string) {
-    const db = getKnex();
-
-    // Resolve actor's roles
-    const userRoles = await db('user_roles as ur')
-      .join('roles as r', 'r.id', 'ur.role_id')
-      .where('ur.user_id', ctx.userId)
-      .select('r.code');
-    const roleCodes = userRoles.map((r: any) => r.code);
-
-    const isSuperAdmin = await db('super_admins')
-      .where('status', 'active')
-      .where(function () { this.where('id', ctx.userId).orWhere('user_id', ctx.userId); })
-      .first()
-      .catch(() => null);
-
-    // 🔧 EXPANDED: Admin + HR Manager + Finance Manager can all reject loans
-    const canReject =
-      !!isSuperAdmin ||
-      roleCodes.includes('organization_admin') ||
-      roleCodes.includes('super_admin') ||
-      roleCodes.includes('hr_manager') ||
-      roleCodes.includes('finance_manager');
-
-    if (!canReject) {
-      throw new ValidationError('Only Admin, HR Manager, or Finance Manager can reject loan requests.');
-    }
-
-    const loan = await this.loanRepo.getById(ctx, loanId);
+    const loan = withSnakeAliases(await this.loanRepo.getById(ctx, loanId));
     if (!loan) throw new NotFoundError('Loan not found');
+
+    const { canAct, requiredRole } = await this.resolveApproverCheck(ctx, loan);
+    if (!canAct) {
+      throw new ValidationError(
+        requiredRole
+          ? `Only a ${requiredRole.replace(/_/g, ' ')} can reject this loan type.`
+          : 'Only Admin, HR Manager, or Finance Manager can reject loan requests.'
+      );
+    }
 
     const updated = await this.loanRepo.update(ctx, loanId, {
       status: 'rejected',
       rejected_by: ctx.userId,
-      rejected_at: new Date().toISOString(),
+      rejected_at: new Date(),
       rejection_reason: reason || null,
       updated_by: ctx.userId
     } as any);
@@ -299,6 +397,68 @@ export class LoanService {
         updated_by: ctx.userId
       });
     }
+  }
+
+  async updateLoan(ctx: TenantContext, loanId: number, input: any) {
+    const db = getKnex();
+    const loanAmount = input.loanAmount || input.amount;
+    const tenureMonths = input.tenureMonths || input.tenure_months;
+    const interestRate = input.interestRate !== undefined ? input.interestRate : (input.interest_rate || 0);
+
+    const rate = (interestRate || 0) / 100 / 12;
+    const emi = (loanAmount && tenureMonths)
+      ? (rate > 0
+          ? (loanAmount * rate * Math.pow(1 + rate, tenureMonths)) / (Math.pow(1 + rate, tenureMonths) - 1)
+          : loanAmount / tenureMonths)
+      : undefined;
+
+    const updateData: Record<string, any> = {
+      updated_at: new Date(),
+      updated_by: ctx.userId || 1
+    };
+
+    if (loanAmount !== undefined) {
+      updateData.amount = loanAmount;
+      updateData.loan_amount = loanAmount;
+    }
+    if (tenureMonths !== undefined) {
+      updateData.tenure_months = tenureMonths;
+    }
+    if (input.interestRate !== undefined || input.interest_rate !== undefined) {
+      updateData.interest_rate = interestRate;
+    }
+    if (emi !== undefined) {
+      const calcEmi = Math.round(emi * 100) / 100;
+      updateData.monthly_emi = calcEmi;
+      updateData.emi = calcEmi;
+      if (tenureMonths) {
+        const totalAmount = Math.round(calcEmi * tenureMonths * 100) / 100;
+        updateData.total_amount_with_interest = totalAmount;
+        updateData.outstanding_amount = totalAmount;
+      }
+    }
+    if (input.loanType !== undefined || input.loan_type !== undefined) {
+      updateData.loan_type = input.loanType || input.loan_type;
+    }
+    if (input.reason !== undefined) {
+      updateData.reason = input.reason;
+    }
+    if (input.employeeId !== undefined || input.employee_id !== undefined) {
+      updateData.employee_id = input.employeeId || input.employee_id;
+    }
+    if (input.status !== undefined) {
+      updateData.status = input.status;
+    }
+    if (input.loanDate !== undefined || input.loan_date !== undefined) {
+      updateData.loan_date = input.loanDate || input.loan_date;
+    }
+
+    await db('employee_loans')
+      .where('id', loanId)
+      .where('organization_id', ctx.organizationId)
+      .update(updateData);
+
+    return await db('employee_loans').where('id', loanId).first();
   }
 
   async getLoan(ctx: TenantContext, loanId: number) {

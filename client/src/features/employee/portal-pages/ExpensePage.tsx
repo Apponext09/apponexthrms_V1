@@ -20,18 +20,71 @@ interface ExpenseClaim {
   status: 'Approved' | 'Pending' | 'Rejected';
 }
 
+const formatDisplayDate = (rawDate: any): string => {
+  if (!rawDate) return new Date().toLocaleDateString('en-CA');
+  const d = new Date(rawDate);
+  if (isNaN(d.getTime())) return String(rawDate).slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function ExpensePage() {
   const { user } = useAuthStore();
-  const [claims, setClaims] = useState<ExpenseClaim[]>([
-    { id: 1, date: '2026-07-18', category: 'Travel Reimbursement', description: 'Client meeting travel in Pune', amount: '₹1,250', rawAmount: 1250, status: 'Approved' },
-    { id: 2, date: '2026-07-10', category: 'Internet Allowance', description: 'July broadband bills', amount: '₹800', rawAmount: 800, status: 'Pending' },
-  ]);
+  const [claims, setClaims] = useState<ExpenseClaim[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [form, setForm] = useState({
     category: 'Travel Reimbursement',
     amount: '',
     description: '',
   });
+
+  const fetchClaims = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await apiClient.get('/payroll/reimbursements');
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list)) {
+        const mapped = list.map((item: any) => {
+          const rawAmt = Number(item.amount || 0);
+          const dateStr = formatDisplayDate(item.claim_date || item.claimDate || item.created_at);
+
+          let desc = item.description || 'Expense Claim';
+          let category = item.claim_type || item.claimType || 'Expense Reimbursement';
+          if (desc.startsWith('[')) {
+            const match = desc.match(/^\[(.*?)\]\s*(.*)$/);
+            if (match) {
+              category = match[1];
+              desc = match[2];
+            }
+          }
+          const rawStatus = String(item.status || 'pending').toLowerCase();
+          const status: 'Approved' | 'Rejected' | 'Pending' = rawStatus === 'approved' ? 'Approved' : rawStatus === 'rejected' ? 'Rejected' : 'Pending';
+
+          return {
+            id: item.id || Date.now(),
+            date: dateStr,
+            category,
+            description: desc,
+            amount: `₹${rawAmt.toLocaleString('en-IN')}`,
+            rawAmount: rawAmt,
+            status,
+          };
+        });
+        setClaims(mapped);
+      }
+    } catch (err) {
+      console.error('Failed to fetch expense claims:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchClaims();
+  }, [fetchClaims]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,49 +95,22 @@ export default function ExpensePage() {
 
     const numAmount = parseFloat(form.amount) || 0;
     const today = new Date().toISOString().split('T')[0];
-    const newClaim: ExpenseClaim = {
-      id: Date.now(),
-      date: today,
-      category: form.category,
-      description: form.description,
-      amount: `₹${numAmount.toLocaleString('en-IN')}`,
-      rawAmount: numAmount,
-      status: 'Pending',
-    };
 
-    setClaims([newClaim, ...claims]);
-
-    // Save claim into MySQL DB reimbursement_claims table via API
     try {
       await apiClient.post('/payroll/reimbursements', {
-        employeeId: (user as any)?.employeeId || user?.id || 1,
-        claimType: 'other',
+        employeeId: (user as any)?.employeeId || (user as any)?.employee_id || user?.id || 49,
+        claimType: form.category.toLowerCase().includes('travel') ? 'travel' : 'other',
         claimDate: today,
         amount: numAmount,
         description: `[${form.category}] ${form.description}`
       });
-    } catch {}
 
-    // Save to shared localStorage for real-time UI sync
-    try {
-      const storageKey = 'shared_hr_reimbursements';
-      const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      const adminRecord = {
-        id: newClaim.id,
-        empName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Employee' : 'Employee',
-        code: (user as any)?.employeeCode || (user as any)?.employee_code || `EMP-${user?.id || '001'}`,
-        type: form.category,
-        amount: numAmount,
-        date: today,
-        description: form.description,
-        status: 'pending',
-        isTravel: false
-      };
-      localStorage.setItem(storageKey, JSON.stringify([adminRecord, ...existing]));
-    } catch {}
-
-    toast.success('Expense claim submitted and saved to DB for Admin approval.');
-    setForm({ category: 'Travel Reimbursement', amount: '', description: '' });
+      toast.success('Expense claim submitted for Admin approval.');
+      setForm({ category: 'Travel Reimbursement', amount: '', description: '' });
+      fetchClaims();
+    } catch (err: any) {
+      toast.error('Failed to submit claim: ' + (err?.response?.data?.message || err?.message || 'Server error'));
+    }
   };
 
   const totalClaimed = claims.reduce((acc, curr) => acc + curr.rawAmount, 0);

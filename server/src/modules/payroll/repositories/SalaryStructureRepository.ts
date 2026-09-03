@@ -13,6 +13,16 @@ export interface SalaryStructure {
   effective_from: string;
   effective_to: string | null;
   status: 'active' | 'inactive';
+  slab_id?: number | null;            // FK to payroll_slabs
+  employee_id?: number | null;         // direct assignment (legacy)
+  annual_ctc?: number | null;
+  gross_monthly?: number | null;
+  basic_monthly?: number | null;
+  hra_monthly?: number | null;
+  pf_enabled?: boolean;
+  esi_enabled?: boolean;
+  pt_enabled?: boolean;
+  tds_deduction?: number | null;
   created_by: number;
   updated_by: number;
   created_at: string;

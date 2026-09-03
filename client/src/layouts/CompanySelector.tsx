@@ -62,7 +62,7 @@ export function CompanySelector() {
     setSelectedCompany(null, organizationName);
     setOpen(false);
     queryClient.invalidateQueries();
-    showToast.success('Context Switched', `Active context set to ${organizationName} (Organization)`);
+    showToast.success('Organization Switched', ` ${organizationName} `);
   };
 
   const handleSelectSubCompany = (company: Company) => {
@@ -70,7 +70,7 @@ export function CompanySelector() {
     setSelectedCompany(company.id, company.name);
     setOpen(false);
     queryClient.invalidateQueries();
-    showToast.success('Context Switched', `Active context set to ${company.name} (Sub-Company)`);
+    showToast.success('Company Switched', `${company.name} `);
   };
 
   // If user is locked to a specific branch/company (e.g. company_admin login), block context switching completely
@@ -117,20 +117,8 @@ export function CompanySelector() {
 
       <PopoverContent align="end" className="w-80 p-0 shadow-xl border-border bg-card">
         {/* Header */}
-        <div className="p-3 border-b border-border bg-muted/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-extrabold text-foreground">
-              <Sparkles className="size-3.5 text-primary" />
-              <span>Workspace Context Switcher</span>
-            </div>
-            <span className="text-[10px] text-muted-foreground font-medium">
-              {companies.length} Registered
-            </span>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Select Organization or Sub-Company to filter data
-          </p>
-
+        
+        
           {/* Search */}
           {subCompanies.length > 3 && (
             <div className="relative mt-2.5">
@@ -143,7 +131,7 @@ export function CompanySelector() {
               />
             </div>
           )}
-        </div>
+        
 
         {/* Scrollable Content */}
         <div className="max-h-72 overflow-y-auto p-1.5 space-y-3">
@@ -151,7 +139,7 @@ export function CompanySelector() {
           <div>
             <p className="px-2 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <ShieldCheck className="size-3 text-amber-500" />
-              Parent Organization
+             Organization
             </p>
 
             <button
@@ -176,9 +164,7 @@ export function CompanySelector() {
                       Organization
                     </Badge>
                   </div>
-                  <span className="text-[10px] text-muted-foreground block truncate">
-                    Parent Scope (Full Organization)
-                  </span>
+                  
                 </div>
               </div>
 
@@ -199,7 +185,7 @@ export function CompanySelector() {
           <div>
             <p className="px-2 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
               <Layers className="size-3 text-blue-500" />
-              Sub-Companies ({subCompanies.length})
+              Companies ({subCompanies.length})
             </p>
 
             {isLoading ? (
@@ -215,7 +201,7 @@ export function CompanySelector() {
 
                   return (
                     <button
-                      key={company.id}
+                      key={company.id || (company as any).uuid || company.name}
                       type="button"
                       disabled={isCurrentActive}
                       onClick={() => handleSelectSubCompany(company)}
@@ -247,14 +233,10 @@ export function CompanySelector() {
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold truncate">{company.name}</span>
                             <Badge variant="outline" className="h-3.5 px-1 text-[9px] font-bold border-blue-500/40 text-blue-600 dark:text-blue-400">
-                              Sub
+                              Company
                             </Badge>
                           </div>
-                          {company.code && (
-                            <span className="text-[10px] text-muted-foreground font-mono block truncate">
-                              {company.code}
-                            </span>
-                          )}
+                        
                         </div>
                       </div>
 

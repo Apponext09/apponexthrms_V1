@@ -137,7 +137,7 @@ export class JobReferenceController {
       return;
     }
 
-    const result = await this.jobRefService.listPublicJobs(parseInt(organizationId as string, 10), {
+    const result = await (this.jobRefService as any).listPublicJobs(parseInt(organizationId as string, 10), {
       page: parseInt(page as string, 10),
       pageSize: parseInt(pageSize as string, 10),
       search: search as string,
@@ -179,6 +179,64 @@ export class JobReferenceController {
     );
 
     res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
+  /**
+   * GET /public/job-portal/candidates
+   * Returns list of candidates with uploaded resumes for referral selection
+   */
+  listCandidatesWithResumes = asyncHandler(async (req: Request, res: Response) => {
+    const { organizationId } = req.query;
+    const orgId = organizationId ? parseInt(organizationId as string, 10) : undefined;
+
+    const data = await this.jobRefService.getCandidatesWithResumes(orgId);
+    res.json({ success: true, data });
+  });
+
+  /**
+   * GET /public/job-portal/settings
+   * Public endpoint to fetch Career Portal customization settings
+   */
+  getPublicPortalSettings = asyncHandler(async (req: Request, res: Response) => {
+    const { CareerPortalSettingsService } = await import('../services/CareerPortalSettingsService');
+    const settingsService = new CareerPortalSettingsService();
+    const orgId = req.query.organizationId ? parseInt(req.query.organizationId as string, 10) : 1;
+    const settings = await settingsService.getSettings(orgId);
+    res.json({ success: true, data: settings });
+  });
+
+  /**
+   * GET /recruitment/career-portal-settings
+   * Authenticated HR/Admin endpoint to fetch Career Portal settings
+   */
+  getPortalSettings = asyncHandler(async (req: Request, res: Response) => {
+    const { CareerPortalSettingsService } = await import('../services/CareerPortalSettingsService');
+    const settingsService = new CareerPortalSettingsService();
+    const user = (req as any).user;
+    console.log('[GET career-portal-settings] user.organizationId:', user?.organizationId);
+    const settings = await settingsService.getSettings();
+    console.log('[GET career-portal-settings] returned portalTitle:', settings.portalTitle);
+    console.log('[GET career-portal-settings] returned companyLogoUrl length:', settings.companyLogoUrl?.length);
+    res.json({ success: true, data: settings });
+  });
+
+  /**
+   * PUT /recruitment/career-portal-settings
+   * Authenticated HR/Admin endpoint to update Career Portal settings
+   */
+  updatePortalSettings = asyncHandler(async (req: Request, res: Response) => {
+    const { CareerPortalSettingsService } = await import('../services/CareerPortalSettingsService');
+    const settingsService = new CareerPortalSettingsService();
+    const user = (req as any).user;
+    console.log('[PUT career-portal-settings] user.organizationId:', user?.organizationId);
+    console.log('[PUT career-portal-settings] payload.portalTitle:', req.body.portalTitle);
+    console.log('[PUT career-portal-settings] payload.companyLogoUrl length:', req.body.companyLogoUrl?.length);
+    console.log('[PUT career-portal-settings] payload.primaryColor:', req.body.primaryColor);
+    console.log('[PUT career-portal-settings] typeof payload.formFieldsConfig:', typeof req.body.formFieldsConfig);
+    const updated = await settingsService.updateSettings(1, req.body);
+    console.log('[PUT career-portal-settings] AFTER updateSettings, portalTitle:', updated.portalTitle);
+    console.log('[PUT career-portal-settings] AFTER updateSettings, companyLogoUrl length:', updated.companyLogoUrl?.length);
+    res.json({ success: true, data: updated, message: 'Career Portal settings saved successfully!' });
   });
 }
 

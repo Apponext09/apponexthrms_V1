@@ -17,6 +17,12 @@ const safeDate = z.preprocess((val) => {
 const safeEnum = <T extends [string, ...string[]]>(values: T) =>
   z.preprocess((val) => (val === '' || val === null ? undefined : val), z.enum(values).nullable().optional());
 
+const safeInt = z.preprocess((val) => {
+  if (val === '' || val === null || val === undefined) return undefined;
+  const num = Number(val);
+  return isNaN(num) ? undefined : num;
+}, z.number().int().nullable().optional());
+
 // ── Employee Schemas ──────────────────────────────────────────────────────────
 export const employeeCreateSchema = z.object({
   employeeCode: z.string().min(1).max(50),
@@ -29,24 +35,62 @@ export const employeeCreateSchema = z.object({
   dateOfBirth: safeDate,
   gender: safeEnum(['male', 'female', 'other']),
   bloodGroup: z.string().max(10).nullable().optional(),
-  nationality: z.string().max(100).nullable().optional(),
-  aadharNumber: z.string().max(20).nullable().optional(),
-  panNumber: z.string().max(20).nullable().optional(),
+  aadharNumber: z.string().max(50).nullable().optional(),
+  aadhar_number: z.string().max(50).nullable().optional(),
+  panNumber: z.string().max(50).nullable().optional(),
+  pan_number: z.string().max(50).nullable().optional(),
   passportNumber: z.string().max(50).nullable().optional(),
+  passport_number: z.string().max(50).nullable().optional(),
   dateOfJoining: safeDate,
   employmentType: z.preprocess((val) => (val === '' || val === null ? undefined : val), z.string().max(100).default('full_time')),
-  designationId: z.number().int().nullable().optional(),
+  designationId: safeInt,
   status: z.string().max(100).optional(),
   jobTitle: z.string().max(150).nullable().optional(),
-  departmentId: z.number().int().nullable().optional(),
-  branchId: z.number().int().nullable().optional(),
-  locationId: z.number().int().nullable().optional(),
-  reportingManagerId: z.number().int().nullable().optional(),
-  costCenterId: z.number().int().nullable().optional(),
+  departmentId: safeInt,
+  branchId: safeInt,
+  locationId: safeInt,
+  currentLocationId: safeInt,
+  gradeId: safeInt,
+  currentGradeId: safeInt,
+  companyId: safeInt,
+  reportingManagerId: safeInt,
+  costCenterId: safeInt,
   avatarUrl: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
-  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head']).default('employee'),
-  password: z.string().min(6),
+  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'organization_admin', 'intern', 'consultant', 'admin', 'ceo', 'hr_admin', 'hr', 'support', 'super_admin']).default('employee'),
+  password: z.string().min(6).optional(),
+  // Statutory and Banking details
+  bankName: z.string().max(100).nullable().optional(),
+  bank_name: z.string().max(100).nullable().optional(),
+  accountNumber: z.string().max(50).nullable().optional(),
+  account_no: z.string().max(50).nullable().optional(),
+  ifscCode: z.string().max(20).nullable().optional(),
+  ifsc_code: z.string().max(20).nullable().optional(),
+  companyBank: z.string().max(100).nullable().optional(),
+  company_bank: z.string().max(100).nullable().optional(),
+  pfNumber: z.string().max(50).nullable().optional(),
+  pf_no: z.string().max(50).nullable().optional(),
+  pf_number: z.string().max(50).nullable().optional(),
+  uanNumber: z.string().max(50).nullable().optional(),
+  uan_no: z.string().max(50).nullable().optional(),
+  uan_number: z.string().max(50).nullable().optional(),
+  esicNumber: z.string().max(50).nullable().optional(),
+  esic_no: z.string().max(50).nullable().optional(),
+  esic_number: z.string().max(50).nullable().optional(),
+  userBand: z.string().max(50).nullable().optional(),
+  user_band: z.string().max(50).nullable().optional(),
+  payrollSlab: z.string().max(50).nullable().optional(),
+  payroll_slab: z.string().max(50).nullable().optional(),
+  employeeShare: z.string().max(50).nullable().optional(),
+  employee_share: z.string().max(50).nullable().optional(),
+  employerShare: z.string().max(50).nullable().optional(),
+  employer_share: z.string().max(50).nullable().optional(),
+  backgroundVerification: z.string().max(50).nullable().optional(),
+  background_verification: z.string().max(50).nullable().optional(),
+  eligibleForEps: z.string().max(10).nullable().optional(),
+  eligible_for_eps: z.string().max(10).nullable().optional(),
+  panStatus: z.string().max(50).nullable().optional(),
+  pan_status: z.string().max(50).nullable().optional(),
 });
 
 export const employeeUpdateSchema = employeeCreateSchema.partial();

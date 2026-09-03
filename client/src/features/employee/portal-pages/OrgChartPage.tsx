@@ -26,81 +26,67 @@ export default function OrgChartPage() {
   const fetchOrgHierarchy = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/employees', { params: { pageSize: 100 } });
-      const items = Array.isArray(res.data?.data) ? res.data.data : [];
+      const res = await apiClient.get('/employees', { params: { pageSize: 100, excludeCeo: true } });
+      const rawItems = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+
+      // Exclude CEO profile from chart nodes using database flags (isCeo, isCeoProfileHidden)
+      const items = rawItems.filter((e: any) => {
+        const isCeoFlag = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+        const isHiddenFlag = Boolean(e.isCeoProfileHidden || e.is_ceo_profile_hidden || e.isCeoProfileHidden === 1 || e.is_ceo_profile_hidden === 1);
+        return !isCeoFlag && !isHiddenFlag;
+      });
 
       if (items.length > 0) {
-        // Build live tree by department / manager
-        const engTeam = items.filter((e: any) => (e.department || '').toLowerCase().includes('eng') || (e.jobTitle || '').toLowerCase().includes('dev'));
-        const hrTeam = items.filter((e: any) => (e.department || '').toLowerCase().includes('hr'));
-        const salesTeam = items.filter((e: any) => (e.department || '').toLowerCase().includes('sal'));
+        // Group employees by department
+        const deptMap = new Map<string, any[]>();
+        items.forEach((e: any) => {
+          const deptName = e.department || e.department_name || e.departmentName || 'General Operations';
+          if (!deptMap.has(deptName)) {
+            deptMap.set(deptName, []);
+          }
+          deptMap.get(deptName)!.push(e);
+        });
+
+        const deptNodes: EmployeeNode[] = [];
+
+        deptMap.forEach((empList, deptName) => {
+          const lead = empList[0];
+          const members = empList.slice(1);
+
+          const leadNode: EmployeeNode = {
+            id: lead.id,
+            name: `${lead.firstName || lead.first_name || 'Lead'} ${lead.lastName || lead.last_name || ''}`.trim(),
+            role: lead.designation || lead.designation_name || lead.jobTitle || `${deptName} Head`,
+            department: deptName,
+            email: lead.email || '',
+            avatar: `${(lead.firstName || lead.first_name || 'D')[0]}${(lead.lastName || lead.last_name || 'L')[0]}`.toUpperCase(),
+            children: members.map((m: any) => ({
+              id: m.id,
+              name: `${m.firstName || m.first_name || 'Member'} ${m.lastName || m.last_name || ''}`.trim(),
+              role: m.designation || m.designation_name || m.jobTitle || 'Team Member',
+              department: deptName,
+              email: m.email || '',
+              avatar: `${(m.firstName || m.first_name || 'M')[0]}${(m.lastName || m.last_name || 'T')[0]}`.toUpperCase(),
+            })),
+          };
+
+          deptNodes.push(leadNode);
+        });
 
         const root: EmployeeNode = {
-          id: 1,
-          name: 'Narendra Gaikwad',
-          role: 'Chief Technology Officer & VP Engineering',
-          department: 'Executive Management',
-          email: 'gaikwadnarendra316@gmail.com',
-          avatar: 'NG',
-          children: [
-            {
-              id: 2,
-              name: 'John Doe',
-              role: 'HR Director',
-              department: 'Human Resources',
-              email: 'john.doe@example.com',
-              avatar: 'JD',
-              children: hrTeam.slice(0, 4).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName || e.first_name || 'Employee'} ${e.lastName || e.last_name || ''}`,
-                role: e.designation || e.jobTitle || 'HR Executive',
-                department: e.department || 'Human Resources',
-                email: e.email || '',
-                avatar: `${(e.firstName || 'E')[0]}${(e.lastName || 'M')[0]}`
-              }))
-            },
-            {
-              id: 3,
-              name: 'Rahul Sharma',
-              role: 'Engineering Manager',
-              department: 'Engineering',
-              email: 'rahul.sharma@example.com',
-              avatar: 'RS',
-              children: engTeam.slice(0, 6).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName || e.first_name || 'Engineer'} ${e.lastName || e.last_name || ''}`,
-                role: e.designation || e.jobTitle || 'Software Engineer',
-                department: e.department || 'Engineering',
-                email: e.email || '',
-                avatar: `${(e.firstName || 'E')[0]}${(e.lastName || 'ENG')[0]}`
-              }))
-            },
-            {
-              id: 4,
-              name: 'Priya Verma',
-              role: 'Sales Head',
-              department: 'Sales & Business',
-              email: 'priya.verma@example.com',
-              avatar: 'PV',
-              children: salesTeam.slice(0, 4).map((e: any) => ({
-                id: e.id,
-                name: `${e.firstName || e.first_name || 'Sales'} ${e.lastName || e.last_name || ''}`,
-                role: e.designation || e.jobTitle || 'Account Executive',
-                department: e.department || 'Sales',
-                email: e.email || '',
-                avatar: `${(e.firstName || 'S')[0]}${(e.lastName || 'L')[0]}`
-              }))
-            }
-          ]
+          id: 9999,
+          name: 'Departmental & Operational Hierarchy',
+          role: 'Organization Structure',
+          department: 'Active Departments',
+          email: '',
+          avatar: 'OH',
+          children: deptNodes,
         };
 
         setTreeData(root);
-        setExpandedNodes({
-          'Narendra Gaikwad': true,
-          'John Doe': true,
-          'Rahul Sharma': true,
-          'Priya Verma': true,
-        });
+        const expanded: Record<string, boolean> = { 'Departmental & Operational Hierarchy': true };
+        deptNodes.forEach((n) => { expanded[n.name] = true; });
+        setExpandedNodes(expanded);
       }
     } catch (err) {
       console.error('Failed to fetch org hierarchy', err);

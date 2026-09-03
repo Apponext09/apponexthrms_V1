@@ -17,11 +17,12 @@ const config: Record<string, Knex.Config> = {
       database: process.env.DB_NAME || 'apponexthrms',
       port: parseInt(process.env.DB_PORT || '3306'),
       charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
     } as any,
     migrations: {
       extension: 'ts',
       directory: './migrations',
+      loadExtensions: ['.ts'],
+      disableMigrationsListValidation: true,
     },
     seeds: {
       extension: 'ts',
@@ -37,11 +38,12 @@ const config: Record<string, Knex.Config> = {
       database: process.env.DB_NAME || 'apponexthrms_test',
       port: parseInt(process.env.DB_PORT || '3306'),
       charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
     } as any,
     migrations: {
       extension: 'ts',
       directory: './migrations',
+      loadExtensions: ['.ts'],
+      disableMigrationsListValidation: true,
     },
   },
   production: {
@@ -53,11 +55,12 @@ const config: Record<string, Knex.Config> = {
       database: process.env.DB_NAME,
       port: parseInt(process.env.DB_PORT || '3306'),
       charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
     } as any,
     migrations: {
       extension: 'ts',
       directory: './migrations',
+      loadExtensions: ['.ts'],
+      disableMigrationsListValidation: true,
     },
   },
 };

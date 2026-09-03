@@ -4,24 +4,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import {
-  Mail,
-  Phone,
-  Briefcase,
-  MapPin,
-  Camera,
-  CheckCircle2,
-  Calendar,
-  Building2,
-  Edit2,
-  User,
-  Shield,
-  Layers,
-} from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Camera, CheckCircle2, Calendar, Building2, Edit2, User, Lock as LockIcon, Shield, Layers, FileEdit, Banknote } from 'lucide-react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
+import { useProfileEditPermission } from '../hooks/useProfileEditPermission';
 import { EmployeeDetailsCombined } from '../components/EmployeeDetailsCombined';
 import { EmployeePayrollDetail } from '../components/EmployeePayrollDetail';
 import { EmployeeCheckInSetting } from '../components/EmployeeCheckInSetting';
@@ -29,6 +17,8 @@ import { EmployeeRolesInfo } from '../components/EmployeeRolesInfo';
 import { EmployeeDocuments } from '../components/EmployeeDocuments';
 import { EmployeeStatutoryDetails } from '../components/EmployeeStatutoryDetails';
 import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
+import { ProfileEditRequestModal } from '../components/ProfileEditRequestModal';
+import { MyProfileRequestsView } from '../components/MyProfileRequestsView';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
@@ -45,15 +35,36 @@ export function EmployeeProfilePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
-  const employeeId = parseInt(id || String(user?.employeeId || user?.id || '0'), 10);
-  const { employee, isLoading, refetch } = useEmployee(employeeId);
-  const { professionalInfo } = useEmployeeProfessionalInfo(employeeId);
+  const isSelf = !id || id === 'me';
+  const targetId: number | string = isSelf ? 'me' : (parseInt(id, 10) || 'me');
+  const { employee, isLoading, refetch } = useEmployee(targetId);
+  const resolvedEmpId = employee?.id || (typeof targetId === 'number' ? targetId : Number(user?.employeeId || 0));
+  const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
   const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
-  // Check if current route is in the Employee Portal (/employee/*) vs Admin/HR (/hr/*, /employees/*)
-  const isEmployeePortal = location.pathname.startsWith('/employee');
+  // Check user roles to determine if user is Admin/HR
+  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const singleRole = (user as any)?.role || (user as any)?.accessRole || '';
+  const allUserRoles = [...userRoles, singleRole];
+  const isAdminOrHR = allUserRoles.some(r =>
+    ['organization_admin', 'hr_admin', 'hr', 'hr_manager', 'super_admin', 'support'].includes(r)
+  );
+
+  // Employee portal edit lock applies ONLY to non-admin employees accessing /employee/*
+  const isEmployeePortal = location.pathname.startsWith('/employee') && !isAdminOrHR;
+
+  // Only fetch edit permission when in employee portal
+  const { editUnlocked, approvedRequestId, unlockedSection } = useProfileEditPermission(resolvedEmpId);
+
+  // Universal approval unlock: when an edit request is approved (editUnlocked is true) or for Admin/HR, unlock all sections for editing
+  const isPhotoUnlocked = !isEmployeePortal || editUnlocked;
+  const isBasicUnlocked = !isEmployeePortal || editUnlocked;
+  const isPersonalUnlocked = !isEmployeePortal || editUnlocked;
+  const isProfessionalUnlocked = !isEmployeePortal || editUnlocked;
+  const isStatutoryUnlocked = !isEmployeePortal || editUnlocked;
 
   if (isLoading) {
     return (
@@ -89,8 +100,16 @@ export function EmployeeProfilePage() {
   const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (employee as any)?.jobTitle || roleLabel;
 
   const handleEditProfileClick = () => {
-    setActiveTab('details');
-    setIsEditingBasicInfo(true);
+    if (isPhotoUnlocked) {
+      setIsPhotoModalOpen(true);
+    } else if (isStatutoryUnlocked) {
+      setActiveTab('statutory');
+    } else {
+      setActiveTab('details');
+      if (isBasicUnlocked) {
+        setIsEditingBasicInfo(true);
+      }
+    }
   };
 
   return (
@@ -107,9 +126,15 @@ export function EmployeeProfilePage() {
           {/* Avatar Row */}
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 -mt-12 sm:-mt-14 mb-3">
             <div
-              className="relative group cursor-pointer self-start shrink-0"
-              onClick={() => setIsPhotoModalOpen(true)}
-              title="Click to change profile picture"
+              className={`relative group self-start shrink-0 ${isPhotoUnlocked ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+              onClick={() => {
+                if (isPhotoUnlocked) {
+                  setIsPhotoModalOpen(true);
+                } else {
+                  setIsEditRequestModalOpen(true);
+                }
+              }}
+              title={isPhotoUnlocked ? 'Click to change profile picture' : 'Request Profile Edit to change photo'}
             >
               <Avatar className="h-24 w-24 sm:h-28 sm:w-28 border-4 border-card shadow-md bg-card transition-transform group-hover:scale-102">
                 <AvatarImage src={(employee as any).avatarUrl || undefined} alt={fullName} />
@@ -123,7 +148,7 @@ export function EmployeeProfilePage() {
               </div>
             </div>
 
-            {/* Quick Action Buttons — Hidden on Employee Portal view */}
+            {/* Quick Action Buttons (Admin only) */}
             {!isEmployeePortal && (
               <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
                 <Button
@@ -132,8 +157,8 @@ export function EmployeeProfilePage() {
                   onClick={handleEditProfileClick}
                   className="h-7 text-xs font-semibold gap-1.5 px-3 bg-card hover:bg-muted"
                 >
-                  <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                  Edit Profile
+                  {/* <Edit2 className="w-3.5 h-3.5 text-muted-foreground" /> */}
+                  {/* Edit Profile */}
                 </Button>
               </div>
             )}
@@ -172,6 +197,27 @@ export function EmployeeProfilePage() {
                   Type: {employee.employmentType.replace(/_/g, ' ')}
                 </Badge>
               )}
+
+              {/* Dynamic Pay Slab Badge */}
+              {(() => {
+                const slabName = (employee as any)?.salarySlabName || (employee as any)?.payrollSlab || (employee as any)?.salary_slab_name || (employee as any)?.salarySlab || (employee as any)?.salary_slab;
+                const annualCtc = Number((employee as any)?.annualCtc || (employee as any)?.annual_ctc || (employee as any)?.ctc || 0);
+
+                return (
+                  <>
+                    <Badge variant="outline" className={`text-[11px] font-bold py-0 ${slabName ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : 'bg-muted/50 text-muted-foreground border-border/60'}`}>
+                      <Layers className="w-3 h-3 mr-1 text-emerald-600 dark:text-emerald-400" />
+                      Slab: {slabName || 'Not Assigned'}
+                    </Badge>
+                    {annualCtc > 0 && (
+                      <Badge variant="outline" className="text-[11px] font-bold bg-primary/10 text-primary border-primary/20 py-0">
+                        <Banknote className="w-3 h-3 mr-1" />
+                        CTC: ₹{(annualCtc / 100000).toFixed(2)}L/yr
+                      </Badge>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* Quick Contact Footer Strip */}
@@ -207,86 +253,132 @@ export function EmployeeProfilePage() {
         </div>
       </Card>
 
-      {/* Profile Photo Upload Modal */}
+      {/* Profile Photo Upload Modal & Edit Request Modal */}
       {employee && (
-        <ProfilePhotoUploadModal
-          open={isPhotoModalOpen}
-          onOpenChange={setIsPhotoModalOpen}
-          employee={employee}
-          onSuccess={() => refetch()}
-        />
+        <>
+          <ProfilePhotoUploadModal
+            open={isPhotoModalOpen}
+            onOpenChange={setIsPhotoModalOpen}
+            employee={employee}
+            onSuccess={() => refetch()}
+          />
+          <ProfileEditRequestModal
+            open={isEditRequestModalOpen}
+            onOpenChange={setIsEditRequestModalOpen}
+            employee={employee}
+          />
+        </>
       )}
 
       {/* ─── Compact Tabs Navigation ─── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-3">
         <div className="bg-card border border-border/80 rounded-lg p-1 shadow-2xs">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto p-0 bg-transparent gap-1">
+          <TabsList className={'grid w-full h-auto p-0 bg-transparent gap-1 ' + (isEmployeePortal ? 'grid-cols-2 sm:grid-cols-4 md:grid-cols-7' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-6')}>
             <TabsTrigger
               value="details"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
             >
-              Employee Details
+              <User className="w-3.5 h-3.5" />
+              Details
             </TabsTrigger>
+
             <TabsTrigger
               value="payroll"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
             >
-              Payroll Detail
+              <Briefcase className="w-3.5 h-3.5" />
+              Payroll
             </TabsTrigger>
-            <TabsTrigger
-              value="checkin_setting"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Check In Out Setting
-            </TabsTrigger>
-            <TabsTrigger
-              value="roles"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Roles
-            </TabsTrigger>
-            <TabsTrigger
-              value="statutory"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Statutory Details
-            </TabsTrigger>
+
             <TabsTrigger
               value="documents"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
             >
+              <Layers className="w-3.5 h-3.5" />
               Documents
             </TabsTrigger>
+
+            <TabsTrigger
+              value="statutory"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+            >
+              <LockIcon className="w-3.5 h-3.5" />
+              Statutory
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="checkin"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              Check-In Mode
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="roles"
+              className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              Roles
+            </TabsTrigger>
+
+            {isEmployeePortal && (
+              <TabsTrigger
+                value="requests"
+                className="text-xs font-semibold py-1.5 border border-transparent data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:font-bold transition-all cursor-pointer rounded-md flex items-center gap-1.5"
+              >
+                <FileEdit className="w-3.5 h-3.5" />
+                Requests
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
-        <TabsContent value="details" className="mt-0">
+        {/* Tab Contents */}
+        <TabsContent value="details" className="mt-0 space-y-4">
           <EmployeeDetailsCombined
             employee={employee}
             isEditingBasicInfo={isEditingBasicInfo}
             onEditBasicInfoToggle={setIsEditingBasicInfo}
+            editUnlocked={!isEmployeePortal || editUnlocked}
+            isBasicUnlocked={isBasicUnlocked}
+            isPersonalUnlocked={isPersonalUnlocked}
+            isProfessionalUnlocked={isProfessionalUnlocked}
+            isStatutoryUnlocked={isStatutoryUnlocked}
+            approvedRequestId={approvedRequestId}
           />
         </TabsContent>
 
-        <TabsContent value="payroll" className="mt-0">
+        <TabsContent value="payroll" className="mt-0 space-y-4">
           <EmployeePayrollDetail employee={employee} />
         </TabsContent>
 
-        <TabsContent value="checkin_setting" className="mt-0">
+        <TabsContent value="documents" className="mt-0 space-y-4">
+          <EmployeeDocuments employeeId={employee.id as number} readOnly={isEmployeePortal} />
+        </TabsContent>
+
+        <TabsContent value="statutory" className="mt-0 space-y-4">
+          <EmployeeStatutoryDetails
+            employee={employee}
+            onUpdate={() => refetch()}
+            editUnlocked={isStatutoryUnlocked}
+            approvedRequestId={approvedRequestId}
+          />
+        </TabsContent>
+
+        <TabsContent value="checkin" className="mt-0 space-y-4">
           <EmployeeCheckInSetting employee={employee} readOnly={isEmployeePortal} />
         </TabsContent>
 
-        <TabsContent value="roles" className="mt-0">
+        <TabsContent value="roles" className="mt-0 space-y-4">
           <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} readOnly={isEmployeePortal} />
         </TabsContent>
 
-        <TabsContent value="statutory" className="mt-0">
-          <EmployeeStatutoryDetails employee={employee} onUpdate={() => refetch()} />
-        </TabsContent>
-
-        <TabsContent value="documents" className="mt-0">
-          <EmployeeDocuments employeeId={employee.id as number} readOnly={isEmployeePortal} />
-        </TabsContent>
+        {isEmployeePortal && (
+          <TabsContent value="requests" className="mt-0 space-y-4">
+            <MyProfileRequestsView employeeId={employee.id as number} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

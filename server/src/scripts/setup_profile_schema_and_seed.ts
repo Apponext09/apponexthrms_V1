@@ -9,35 +9,6 @@ import { logger } from '../common/lib/logger';
  */
 export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
   try {
-    logger.info('Checking and upgrading database schema for organization-level admin credentials...');
-
-    // Diagnose existing tables
-    try {
-      const [tables] = await db.raw('SHOW TABLES') as any;
-      const tableNames = tables.map((t: any) => Object.values(t)[0]);
-      logger.info(`Existing tables in database (${tableNames.length}): ${tableNames.join(', ')}`);
-    } catch (err: any) {
-      logger.error('Error diagnosing database tables:', err.message);
-    }
-
-    // Run migrations programmatically
-    try {
-      const path = await import('path');
-      const migrationDir = path.resolve(process.cwd(), '../database/migrations');
-      logger.info(`Running Knex migrations programmatically from: ${migrationDir}`);
-      const [batchNo, log] = await db.migrate.latest({
-        directory: migrationDir,
-        loadExtensions: ['.ts', '.js'],
-      });
-      if (log.length > 0) {
-        logger.info(`Batch ${batchNo} run: ${log.join(', ')}`);
-      } else {
-        logger.info('No new migrations to run.');
-      }
-    } catch (migError: any) {
-      logger.error('Error running programmatic migrations:', migError.message);
-    }
-
     // ──────── MASTER RECRUITMENT & PORTAL SCHEMA ALIGNMENT ────────
     try {
       // 1. candidates table repair
@@ -109,6 +80,9 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
           { name: 'mrf_request_id', type: (t: any) => t.bigInteger('mrf_request_id').unsigned().nullable() },
           { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
           { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+          { name: 'is_internal', type: (t: any) => t.boolean('is_internal').defaultTo(false) },
+          { name: 'is_published_external', type: (t: any) => t.boolean('is_published_external').defaultTo(true) },
+          { name: 'expiry_date', type: (t: any) => t.date('expiry_date').nullable() },
         ];
         for (const col of jobCols) {
           if (!(await db.schema.hasColumn('jobs', col.name))) {
@@ -118,13 +92,67 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
         }
       }
 
-      // 5. notification_templates table (template_code fix)
+      // 5. notification_templates table repair
       if (await db.schema.hasTable('notification_templates')) {
+        const notifTemplateCols = [
+          { name: 'template_code', type: (t: any) => t.string('template_code', 100).nullable() },
+          { name: 'template_name', type: (t: any) => t.string('template_name', 255).nullable() },
+          { name: 'template_description', type: (t: any) => t.text('template_description').nullable() },
+          { name: 'category', type: (t: any) => t.string('category', 100).nullable() },
+          { name: 'channels', type: (t: any) => t.json('channels').nullable() },
+          { name: 'subject_line', type: (t: any) => t.string('subject_line', 500).nullable() },
+          { name: 'subject', type: (t: any) => t.string('subject', 500).nullable() },
+          { name: 'body_text', type: (t: any) => t.text('body_text').nullable() },
+          { name: 'body_html', type: (t: any) => t.text('body_html').nullable() },
+          { name: 'email_notification', type: (t: any) => t.text('email_notification').nullable() },
+          { name: 'sms_text', type: (t: any) => t.string('sms_text', 160).nullable() },
+          { name: 'whatsapp_template_name', type: (t: any) => t.string('whatsapp_template_name', 100).nullable() },
+          { name: 'variables', type: (t: any) => t.json('variables').nullable() },
+          { name: 'version_number', type: (t: any) => t.integer('version_number').defaultTo(1) },
+          { name: 'is_published', type: (t: any) => t.boolean('is_published').defaultTo(true) },
+          { name: 'is_active', type: (t: any) => t.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes') },
+          { name: 'status', type: (t: any) => t.string('status', 50).defaultTo('published') },
+          { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+          { name: 'deleted_at', type: (t: any) => t.timestamp('deleted_at').nullable() },
+        ];
+        for (const col of notifTemplateCols) {
+          if (!(await db.schema.hasColumn('notification_templates', col.name))) {
+            await db.schema.table('notification_templates', col.type).catch(() => {});
+            logger.info(`Added missing column ${col.name} to notification_templates table`);
+          }
+        }
         if (await db.schema.hasColumn('notification_templates', 'template_code')) {
           try {
             await db.raw('ALTER TABLE notification_templates MODIFY COLUMN template_code VARCHAR(100) NULL');
             logger.info('Modified template_code column to be NULLABLE in notification_templates');
           } catch (e: any) {}
+        }
+      }
+
+      // 6. notification_events table repair
+      if (await db.schema.hasTable('notification_events')) {
+        const notifEventCols = [
+          { name: 'uuid', type: (t: any) => t.uuid('uuid').nullable() },
+          { name: 'event_code', type: (t: any) => t.string('event_code', 100).nullable() },
+          { name: 'event_name', type: (t: any) => t.string('event_name', 255).nullable() },
+          { name: 'event_description', type: (t: any) => t.text('event_description').nullable() },
+          { name: 'default_template_id', type: (t: any) => t.bigInteger('default_template_id').unsigned().nullable() },
+          { name: 'is_enabled', type: (t: any) => t.boolean('is_enabled').defaultTo(true) },
+          { name: 'retry_count', type: (t: any) => t.integer('retry_count').defaultTo(3) },
+          { name: 'retry_interval_minutes', type: (t: any) => t.integer('retry_interval_minutes').defaultTo(5) },
+          { name: 'max_queue_delay_hours', type: (t: any) => t.integer('max_queue_delay_hours').defaultTo(1) },
+          { name: 'company_id', type: (t: any) => t.bigInteger('company_id').unsigned().nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+          { name: 'deleted_at', type: (t: any) => t.timestamp('deleted_at').nullable() },
+        ];
+        for (const col of notifEventCols) {
+          if (!(await db.schema.hasColumn('notification_events', col.name))) {
+            await db.schema.table('notification_events', col.type).catch(() => {});
+            logger.info(`Added missing column ${col.name} to notification_events table`);
+          }
         }
       }
     } catch (deepSchemaErr: any) {
@@ -243,6 +271,88 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       logger.error('Error seeding recruitment permissions:', permSeedError.message);
     }
 
+    // Seeding performance module permissions if they don't exist
+    // (performance.routes.ts gates every endpoint with requirePermission, but no
+    // permissions were ever seeded for this module, so it 403'd for every role.)
+    try {
+      const performancePermissions = [
+        { code: 'performance.goal_read', module: 'performance', resource: 'goal', action: 'read', description: 'Read Goals' },
+        { code: 'performance.goal_write', module: 'performance', resource: 'goal', action: 'write', description: 'Create and Manage Goals' },
+        { code: 'performance.okr_read', module: 'performance', resource: 'okr', action: 'read', description: 'Read OKRs' },
+        { code: 'performance.okr_write', module: 'performance', resource: 'okr', action: 'write', description: 'Create and Manage OKRs' },
+        { code: 'performance.review_cycle_write', module: 'performance', resource: 'review_cycle', action: 'write', description: 'Create and Manage Review Cycles' },
+        { code: 'performance.review_cycle_manage', module: 'performance', resource: 'review_cycle', action: 'manage', description: 'Manage Review Cycle Lifecycle' },
+        { code: 'performance.review_read', module: 'performance', resource: 'review', action: 'read', description: 'Read Performance Reviews' },
+        { code: 'performance.review_write', module: 'performance', resource: 'review', action: 'write', description: 'Create and Manage Performance Reviews' },
+        { code: 'performance.review_submit', module: 'performance', resource: 'review', action: 'submit', description: 'Submit Performance Reviews' },
+        { code: 'performance.review_approve', module: 'performance', resource: 'review', action: 'approve', description: 'Approve Performance Reviews' },
+        { code: 'performance.feedback_read', module: 'performance', resource: 'feedback', action: 'read', description: 'Read Feedback' },
+        { code: 'performance.feedback_write', module: 'performance', resource: 'feedback', action: 'write', description: 'Create and Manage Feedback' },
+        { code: 'performance.feedback_360', module: 'performance', resource: 'feedback', action: '360', description: '360-Degree Feedback' },
+        { code: 'performance.competency_read', module: 'performance', resource: 'competency', action: 'read', description: 'Read Competency Frameworks' },
+        { code: 'performance.competency_write', module: 'performance', resource: 'competency', action: 'write', description: 'Create and Manage Competency Frameworks' },
+        { code: 'performance.appraisal_read', module: 'performance', resource: 'appraisal', action: 'read', description: 'Read Appraisals' },
+        { code: 'performance.appraisal_write', module: 'performance', resource: 'appraisal', action: 'write', description: 'Create and Manage Appraisals' },
+        { code: 'performance.appraisal_approve', module: 'performance', resource: 'appraisal', action: 'approve', description: 'Approve Appraisals' },
+        { code: 'performance.pip_read', module: 'performance', resource: 'pip', action: 'read', description: 'Read Performance Improvement Plans' },
+        { code: 'performance.pip_write', module: 'performance', resource: 'pip', action: 'write', description: 'Create and Manage Performance Improvement Plans' },
+        { code: 'performance.pip_review', module: 'performance', resource: 'pip', action: 'review', description: 'Review Performance Improvement Plans' },
+        { code: 'performance.succession_read', module: 'performance', resource: 'succession', action: 'read', description: 'Read Succession Plans' },
+        { code: 'performance.succession_write', module: 'performance', resource: 'succession', action: 'write', description: 'Create and Manage Succession Plans' },
+        { code: 'performance.talent_matrix_read', module: 'performance', resource: 'talent_matrix', action: 'read', description: 'Read Talent Matrix' },
+        { code: 'performance.recognition_read', module: 'performance', resource: 'recognition', action: 'read', description: 'Read Recognitions' },
+        { code: 'performance.recognition_write', module: 'performance', resource: 'recognition', action: 'write', description: 'Create and Manage Recognitions' },
+        { code: 'performance.reward_read', module: 'performance', resource: 'reward', action: 'read', description: 'Read Reward Points' },
+        { code: 'performance.reward_redeem', module: 'performance', resource: 'reward', action: 'redeem', description: 'Redeem Reward Points' },
+        { code: 'performance.analytics_read', module: 'performance', resource: 'analytics', action: 'read', description: 'Read Performance Analytics' },
+      ];
+
+      for (const perm of performancePermissions) {
+        const existing = await db('permissions').where('code', perm.code).first();
+        if (!existing) {
+          logger.info(`Seeding permission: ${perm.code}`);
+          await db('permissions').insert({
+            code: perm.code,
+            module: perm.module,
+            resource: perm.resource,
+            action: perm.action,
+            description: perm.description,
+            is_system: true,
+          });
+        }
+      }
+
+      const performanceTargetRoles = ['super_admin', 'organization_admin', 'hr_admin', 'hr_manager', 'manager', 'department_head', 'team_lead'];
+
+      const allPerformancePermissions = await db('permissions')
+        .whereIn('code', performancePermissions.map(p => p.code))
+        .select('id', 'code');
+
+      const allPerformanceRoles = await db('roles')
+        .whereIn('code', performanceTargetRoles)
+        .select('id', 'code', 'organization_id');
+
+      for (const role of allPerformanceRoles) {
+        for (const perm of allPerformancePermissions) {
+          const mappingExists = await db('role_permissions')
+            .where({ role_id: role.id, permission_id: perm.id })
+            .first();
+
+          if (!mappingExists) {
+            logger.info(`Assigning permission ${perm.code} to Role ${role.code} (Role ID ${role.id})`);
+            await db('role_permissions').insert({
+              role_id: role.id,
+              permission_id: perm.id,
+            });
+          }
+        }
+      }
+
+      logger.info('Performance permissions seeding and role mapping completed successfully!');
+    } catch (permSeedError: any) {
+      logger.error('Error seeding performance permissions:', permSeedError.message);
+    }
+
     // Seed default assessments for all organizations
     try {
       const orgs = await db('organizations').select('id');
@@ -354,9 +464,9 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
         if (!empCount || Number((empCount as any).count) === 0) {
           logger.info(`Seeding employees for Org ID ${orgId}...`);
           await db('employees').insert([
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-001', first_name: 'Sakshi', last_name: 'Shukla', email: 'sakshi@apponext.com', status: 'active' },
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-002', first_name: 'Rahul', last_name: 'Sharma', email: 'rahul@apponext.com', status: 'active' },
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-003', first_name: 'Siddharth', last_name: 'Mehta', email: 'siddharth@apponext.com', status: 'active' },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-001', first_name: 'Sakshi', last_name: 'Shukla', email: 'sakshi@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-002', first_name: 'Rahul', last_name: 'Sharma', email: 'rahul@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-003', first_name: 'Siddharth', last_name: 'Mehta', email: 'siddharth@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
           ]);
         }
       }
@@ -1129,6 +1239,177 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       }
     } catch (err: any) {
       logger.error('Error upgrading assessment tables schema:', err.message);
+    }
+
+    // Ensure master holiday calendar submodule schema is created
+    try {
+      const { up: upMasterHolidayCalendar } = await import('../db/migrations/20260824000001_create_master_holiday_calendar_submodule');
+      await upMasterHolidayCalendar(db);
+      logger.info('Master holiday calendar submodule schema verified and applied.');
+    } catch (err: any) {
+      logger.error('Error upgrading master holiday calendar tables schema:', err.message);
+    }
+
+    // Ensure ID card templates submodule schema is created
+    try {
+      const { up: upIdCardTemplates } = await import('../db/migrations/20260825000001_create_id_card_templates');
+      await upIdCardTemplates(db);
+      logger.info('ID Card templates schema verified and applied.');
+    } catch (err: any) {
+      logger.error('Error upgrading ID card templates tables schema:', err.message);
+    }
+
+    // Ensure letter_templates and generated_letters schema is created and upgraded with LONGTEXT
+    try {
+      const hasTemplates = await db.schema.hasTable('letter_templates');
+      if (!hasTemplates) {
+        await db.schema.createTable('letter_templates', (table) => {
+          table.bigIncrements('id').primary();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
+
+          table.string('template_name', 255).notNullable();
+          table.string('template_code', 100).notNullable();
+
+          table.enum('letter_category', ['hiring', 'onboarding', 'employment', 'exit']).notNullable();
+          table.enum('letter_type', [
+            'interview_call', 'intent_to_offer', 'offer_letter',
+            'appointment', 'nda', 'code_of_conduct',
+            'confirmation', 'increment', 'promotion', 'warning',
+            'resignation_acceptance', 'relieving', 'experience',
+            'custom'
+          ]).notNullable();
+
+          table.string('subject', 500).nullable();
+
+          // Company branding
+          table.text('header_html', 'longtext').nullable();
+          table.text('footer_html', 'longtext').nullable();
+          table.text('logo_url', 'longtext').nullable();
+          table.string('company_name_override', 255).nullable();
+          table.text('company_address_override').nullable();
+          table.string('signatory_name', 255).nullable();
+          table.string('signatory_designation', 255).nullable();
+
+          // Template content
+          table.text('body_content', 'longtext').notNullable();
+          table.text('terms_and_conditions', 'longtext').nullable();
+          table.text('custom_clause', 'longtext').nullable();
+
+          // Merge codes tracking
+          table.json('merge_codes_used').nullable();
+
+          // Flags
+          table.boolean('is_default').defaultTo(false);
+          table.boolean('is_active').defaultTo(true);
+          table.boolean('bgv_mandatory').defaultTo(false);
+          table.boolean('nda_mandatory').defaultTo(false);
+          table.boolean('non_compete').defaultTo(false);
+          table.boolean('relieving_letter_required').defaultTo(false);
+
+          table.bigInteger('created_by').unsigned().nullable();
+          table.bigInteger('updated_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+          table.timestamp('deleted_at').nullable();
+
+          // Indexes
+          table.index('organization_id');
+          table.index('company_id');
+          table.index('letter_type');
+          table.index('letter_category');
+          table.index('is_active');
+        });
+        logger.info('letter_templates table created with LONGTEXT columns.');
+      } else {
+        await db.raw('ALTER TABLE letter_templates MODIFY logo_url LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY header_html LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY footer_html LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY body_content LONGTEXT NOT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY terms_and_conditions LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY custom_clause LONGTEXT NULL');
+        await db.raw('ALTER TABLE letter_templates MODIFY company_address_override TEXT NULL');
+        logger.info('letter_templates columns upgraded to LONGTEXT successfully.');
+      }
+
+      const hasLetters = await db.schema.hasTable('generated_letters');
+      if (!hasLetters) {
+        await db.schema.createTable('generated_letters', (table) => {
+          table.bigIncrements('id').primary();
+          table.string('uuid', 36).notNullable().unique();
+          table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
+
+          table.bigInteger('letter_template_id').unsigned().nullable();
+          table.string('letter_code', 50).notNullable();
+
+          table.enum('letter_type', [
+            'interview_call', 'intent_to_offer', 'offer_letter',
+            'appointment', 'nda', 'code_of_conduct',
+            'confirmation', 'increment', 'promotion', 'warning',
+            'resignation_acceptance', 'relieving', 'experience',
+            'custom'
+          ]).notNullable();
+
+          table.string('letter_category', 50).nullable();
+
+          // Recipient
+          table.bigInteger('employee_id').unsigned().nullable();
+          table.bigInteger('candidate_id').unsigned().nullable();
+          table.string('recipient_name', 255).notNullable();
+          table.string('recipient_email', 255).nullable();
+
+          table.string('subject', 500).nullable();
+
+          // Rendered content
+          table.text('rendered_html', 'longtext').notNullable();
+          table.text('rendered_pdf_url', 'longtext').nullable();
+
+          // Snapshot of merge data used
+          table.json('merge_data').nullable();
+
+          // Status tracking
+          table.enum('status', ['draft', 'sent', 'acknowledged', 'signed', 'revoked']).defaultTo('draft');
+          table.timestamp('sent_at').nullable();
+          table.timestamp('acknowledged_at').nullable();
+          table.timestamp('signed_at').nullable();
+          table.timestamp('revoked_at').nullable();
+
+          // Digital signature
+          table.text('digital_signature_url', 'longtext').nullable();
+          table.text('acknowledgment_note').nullable();
+
+          table.bigInteger('created_by').unsigned().nullable();
+          table.bigInteger('updated_by').unsigned().nullable();
+          table.timestamp('created_at').defaultTo(db.fn.now());
+          table.timestamp('updated_at').defaultTo(db.fn.now());
+          table.timestamp('deleted_at').nullable();
+
+          // Indexes
+          table.index('organization_id');
+          table.index('employee_id');
+          table.index('candidate_id');
+          table.index('letter_type');
+          table.index('status');
+          table.index('letter_template_id');
+        });
+        logger.info('generated_letters table created with LONGTEXT columns.');
+      } else {
+        await db.raw('ALTER TABLE generated_letters MODIFY rendered_html LONGTEXT NOT NULL');
+        await db.raw('ALTER TABLE generated_letters MODIFY digital_signature_url LONGTEXT NULL');
+        await db.raw('ALTER TABLE generated_letters MODIFY rendered_pdf_url LONGTEXT NULL');
+        logger.info('generated_letters columns upgraded to LONGTEXT successfully.');
+      }
+    } catch (err: any) {
+      logger.error('Error upgrading letter management tables schema:', err.message);
+    }
+
+    // ──────── RECRUITMENT NOTIFICATION EVENTS & TEMPLATES SEED ────────
+    try {
+      const { seedRecruitmentNotificationEvents } = await import('./seed_recruitment_notification_events');
+      await seedRecruitmentNotificationEvents();
+    } catch (err: any) {
+      logger.error('Error seeding recruitment notification events:', err.message);
     }
 
   } catch (error: any) {

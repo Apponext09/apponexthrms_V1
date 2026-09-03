@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/config/api';
 import { useSettlement } from '../hooks/index';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { GratuityConfiguration } from '../components/GratuityConfiguration';
 import {
   UserX,
   Search,
@@ -16,7 +17,11 @@ import {
   RotateCcw,
   Users,
   Download,
-  UserCheck
+  UserCheck,
+  Clock,
+  Award,
+  Sliders,
+  FileText
 } from 'lucide-react';
 
 export const FullFinalSettlement: React.FC = () => {
@@ -28,6 +33,10 @@ export const FullFinalSettlement: React.FC = () => {
   const {
     settlements,
     createSettlementAsync,
+    calculateSettlementAsync,
+    adminApproveSettlementAsync,
+    adminRejectSettlementAsync,
+    refetch
   } = useSettlement();
 
   const safeSettlements = Array.isArray(settlements) ? settlements : [];
@@ -75,19 +84,8 @@ export const FullFinalSettlement: React.FC = () => {
     return '03 Years 04 Months 12 Days';
   };
 
-  // Dynamic settlement records or active employees fallback
-  const baseSettlementList = safeSettlements.length > 0 ? safeSettlements : employees.map((emp: any) => ({
-    id: emp.id,
-    employee_id: emp.id,
-    employee_name: emp.name,
-    employee_code: emp.code,
-    employment_duration: '02 Years 06 Months',
-    resignation_date: '2026-07-15',
-    resignation_comment: 'Resignation Submitted / Pending Offboarding',
-    notice_period_days: 30,
-    last_working_date: '2026-08-31',
-    status: 'pending'
-  }));
+  // Dynamic settlement records from database
+  const baseSettlementList = safeSettlements;
 
   // Filter FnF records based on active tab
   const tabFilteredSettlements = baseSettlementList.filter((s: any) => {
@@ -112,13 +110,36 @@ export const FullFinalSettlement: React.FC = () => {
     }
 
     try {
-      await createSettlementAsync({
+      const created = await createSettlementAsync({
         employeeId: parseInt(empId),
         exitDate,
         noticePeriodDays: noticePeriod ? parseInt(noticePeriod) : undefined
       });
-      setFormSuccess('Full & Final Settlement initialized successfully!');
+      const newId = created?.data?.data?.id ?? created?.data?.id;
+
+      // Creating a record alone left every amount at ₹0 forever — there was
+      // no "Calculate" action anywhere in this UI, so the gratuity/leave
+      // encashment engine was completely unreachable. Calculate immediately
+      // so "Create" actually produces real dues, matching what an admin
+      // clicking this button would expect.
+      if (newId) {
+        try {
+          const calcRes: any = await calculateSettlementAsync(newId);
+          const warnings: string[] = calcRes?.data?.data?.dataWarnings || [];
+          if (warnings.length > 0) {
+            setFormSuccess(`Settlement created, but calculation is incomplete: ${warnings.join(' ')}`);
+          } else {
+            setFormSuccess('Full & Final Settlement initialized and calculated successfully!');
+          }
+        } catch {
+          setFormSuccess('Settlement created, but automatic calculation failed — open the record and recalculate manually.');
+        }
+      } else {
+        setFormSuccess('Full & Final Settlement initialized successfully!');
+      }
+
       setShowForm(false);
+      refetch();
     } catch (err: any) {
       setFormError(err.message || 'Failed to initialize settlement');
     }
@@ -126,19 +147,21 @@ export const FullFinalSettlement: React.FC = () => {
 
   const handleApproveFnF = async (id: number) => {
     try {
-      await apiClient.put(`/payroll/settlements/${id}/approve`);
+      await adminApproveSettlementAsync(id);
       setFormSuccess('FnF Settlement approved successfully!');
-    } catch (e) {
-      setFormSuccess('FnF Settlement marked as approved!');
+      refetch();
+    } catch (e: any) {
+      setFormError(e?.message || 'Failed to approve FnF settlement');
     }
   };
 
   const handleReverseRequest = async (id: number) => {
     try {
-      await apiClient.put(`/payroll/settlements/${id}/reverse`);
-      setFormSuccess('FnF Settlement request reversed!');
-    } catch (e) {
+      await adminRejectSettlementAsync({ settlementId: id, reason: 'Reversed to draft by Admin' });
       setFormSuccess('FnF Settlement request reversed to draft!');
+      refetch();
+    } catch (e: any) {
+      setFormError(e?.message || 'Failed to reverse settlement');
     }
   };
 
@@ -154,16 +177,59 @@ export const FullFinalSettlement: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-black text-foreground tracking-tight">Full and Final Settlement (FnF)</h1>
-            <p className="text-xs text-muted-foreground">Manage employee exit clearances, leave encashments, gratuity, notice period recoveries, and audit logs.</p>
+            <p className="text-xs text-muted-foreground">Manage employee exit clearances, leave encashments, gratuity calculations, notice recoveries, and audit logs.</p>
           </div>
         </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0"
+          className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shrink-0 shadow-2xs cursor-pointer"
         >
           {showForm ? <UserX className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showForm ? 'Cancel Form' : '+ Initialize Exit FnF'}
         </Button>
+      </div>
+
+      {/* Modern Metric Stat Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-950 bg-indigo-50/50 dark:bg-indigo-950/20 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Total FnF Records</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+            <UserX className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-950 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Pending Approvals</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => ['pending', 'draft', 'submitted', 'exit_requested'].includes((s.status || 'pending').toLowerCase())).length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-amber-600/10 text-amber-600 dark:text-amber-400">
+            <Clock className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Approved Settlements</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => s.status === 'approved').length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Closed &amp; Paid</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => ['closed', 'processed'].includes((s.status || '').toLowerCase())).length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        </div>
       </div>
 
       {/* Initialize Exit Settlement Form */}
@@ -385,16 +451,19 @@ export const FullFinalSettlement: React.FC = () => {
                         <td className="p-2.5 text-muted-foreground font-semibold">{empDuration}</td>
 
                         {/* 5. Resignation Date */}
-                        <td className="p-2.5 text-muted-foreground">{item.resignation_date || item.exit_date || '2025-07-23'}</td>
+                        <td className="p-2.5 text-muted-foreground">{String(item.exitDate ?? item.exit_date ?? '').slice(0, 10) || '—'}</td>
 
-                        {/* 6. Resignation Comment */}
-                        <td className="p-2.5 text-muted-foreground italic">{item.resignation_comment || item.reason || 'test'}</td>
+                        {/* 6. Resignation Comment — was checking field names (resignation_comment,
+                            reason) that don't exist on this record at all, so it always fell
+                            through to a literal hardcoded "test" placeholder. The real field
+                            is settlement_notes / settlementNotes. */}
+                        <td className="p-2.5 text-muted-foreground italic">{item.settlementNotes || item.settlement_notes || '—'}</td>
 
                         {/* 7. Notice Period */}
-                        <td className="p-2.5 font-bold text-foreground">{item.notice_period_days || 2} days</td>
+                        <td className="p-2.5 font-bold text-foreground">{item.noticePeriodDays ?? item.notice_period_days ?? '—'} days</td>
 
                         {/* 8. Last Working Date */}
-                        <td className="p-2.5 font-bold text-foreground">{item.exit_date || item.last_working_date || '2025-07-24'}</td>
+                        <td className="p-2.5 font-bold text-foreground">{String(item.exitDate ?? item.exit_date ?? '').slice(0, 10) || '—'}</td>
                       </tr>
                     );
                   })}
@@ -405,29 +474,29 @@ export const FullFinalSettlement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Exit FnF Audit Log Modal */}
-      {selectedAuditLog && (
-        <Card className="border border-indigo-200 dark:border-indigo-900 bg-card shadow-md">
-          <CardHeader className="bg-indigo-50/60 dark:bg-indigo-950/30 border-b border-indigo-200 pb-3 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-indigo-600" />
-              <CardTitle className="text-sm font-bold">Exit FnF Audit Log — {getEmployeeName(selectedAuditLog)}</CardTitle>
-            </div>
-            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setSelectedAuditLog(null)}>✕ Close</Button>
-          </CardHeader>
-          <CardContent className="p-4 space-y-2 text-xs">
-            <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
-              [Audit Log #1] Resignation Submitted: {selectedAuditLog.resignation_date || '2025-07-23'}
-            </div>
-            <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
-              [Audit Log #2] Manager Asset Clearance Verified: Cleared by Dept Head
-            </div>
-            <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
-              [Audit Log #3] FnF Dues Calculated &amp; Pending Admin Final Settlement
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          {/* Exit FnF Audit Log Modal */}
+          {selectedAuditLog && (
+            <Card className="border border-indigo-200 dark:border-indigo-900 bg-card shadow-md">
+              <CardHeader className="bg-indigo-50/60 dark:bg-indigo-950/30 border-b border-indigo-200 pb-3 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-indigo-600" />
+                  <CardTitle className="text-sm font-bold">Exit FnF Audit Log — {getEmployeeName(selectedAuditLog)}</CardTitle>
+                </div>
+                <Button size="sm" variant="ghost" className="h-6 text-xs cursor-pointer" onClick={() => setSelectedAuditLog(null)}>✕ Close</Button>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2 text-xs">
+                <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
+                  [Audit Log #1] Resignation Submitted: {selectedAuditLog.resignation_date || '2025-07-23'}
+                </div>
+                <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
+                  [Audit Log #2] Manager Asset Clearance Verified: Cleared by Dept Head
+                </div>
+                <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
+                  [Audit Log #3] FnF Dues Calculated &amp; Pending Admin Final Settlement
+                </div>
+              </CardContent>
+            </Card>
+          )}
     </div>
   );
 };

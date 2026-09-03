@@ -1,4 +1,4 @@
-import { db, initializeKnex } from '../db/knex.ts';
+import { db, initializeKnex } from '../db/knex';
 
 async function runPayrollDbMigration() {
   console.log('================================================================');
@@ -48,6 +48,10 @@ async function runPayrollDbMigration() {
     // 4. Salary Structures Table Custom Components JSON Column
     console.log('\n📌 4. Checking "salary_structures" custom components column...');
     await addColumnIfMissing('salary_structures', 'custom_components', (t) => t.text('custom_components').nullable());
+
+    // 5. Payroll Cycles Table Missing Columns
+    console.log('\n📌 5. Checking "payroll_cycles" table missing columns...');
+    await addColumnIfMissing('payroll_cycles', 'disbursement_date', (t) => t.integer('disbursement_date').defaultTo(27));
 
     console.log('\n================================================================');
     console.log('  🎉 MIGRATION COMPLETED! DATABASE IS 100% UP TO DATE & SYNCED  ');

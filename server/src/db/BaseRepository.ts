@@ -43,9 +43,12 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Start a new query scoped to this tenant and optionally company context
    */
   public query(ctx: TenantContext): QueryBuilder<T> {
-    let q = this.db(this.tableName).where(`${this.tableName}.organization_id`, ctx.organizationId);
+    const tableName = this.tableName;
+    let q = this.db(tableName).where(`${tableName}.organization_id`, ctx.organizationId);
     if (this.companyScoped && ctx?.companyId) {
-      q = q.where(`${this.tableName}.company_id`, ctx.companyId);
+      q = q.where((builder) => {
+        builder.where(`${tableName}.company_id`, ctx.companyId).orWhereNull(`${tableName}.company_id`);
+      });
     }
     return q as QueryBuilder<T>;
   }
@@ -61,6 +64,9 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Get single record by ID
    */
   async getById(ctx: TenantContext, id: number | string): Promise<T | null> {
+    if (id === undefined || id === null || id === '' || id === 'undefined' || id === 'null') {
+      return null;
+    }
     try {
       // Use raw query to bypass Knex query validation issues
       const idCol = this.isPrimaryKeyUuid(id) ? 'uuid' : 'id';
@@ -136,6 +142,10 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       if (value !== undefined && value !== null) {
         query = (query as any).where(field, value as any);
       }
+    }
+
+    if ((options as any).customWhere) {
+      query = (query as any).where((options as any).customWhere);
     }
 
     // Apply search (subclasses can override this method for custom search logic)

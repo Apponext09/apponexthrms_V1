@@ -8,25 +8,40 @@ export interface Candidate {
   resume_bank_id?: number | null;
   first_name: string;
   last_name: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   phone: string | null;
   alternative_phone: string | null;
+  alternativePhone?: string | null;
   current_location_id: number | null;
+  currentLocationId?: number | null;
   preferred_location_id: number | null;
+  preferredLocationId?: number | null;
   current_salary: number | null;
+  currentSalary?: number | null;
   salary_currency: string | null;
+  salaryCurrency?: string | null;
   expected_salary: number | null;
+  expectedSalary?: number | null;
   notice_period_days: number | null;
+  noticePeriodDays?: number | null;
   current_company: string | null;
+  currentCompany?: string | null;
   years_of_experience: number | null;
+  yearsOfExperience?: number | null;
   linkedin_url: string | null;
+  linkedinUrl?: string | null;
   github_url: string | null;
+  githubUrl?: string | null;
   portfolio_url: string | null;
+  portfolioUrl?: string | null;
   status: 'applied' | 'screening' | 'assessment' | 'interview' | 'offer' | 'hired' | 'rejected' | 'dropped';
   source: string | null;
   ai_score: number | null;
   ai_summary: string | null;
   resume_url: string | null;
+  resumeUrl?: string | null;
   resume_tracker_id?: string | null;
   resume_source?: string | null;
   resume_uploaded_by?: number | null;
@@ -55,6 +70,18 @@ export class CandidateRepository extends BaseRepository<Candidate> {
       }
       CandidateRepository.schemaChecked = true;
     } catch (err) {}
+  }
+
+  override async create(ctx: TenantContext, data: Partial<Candidate>): Promise<Candidate> {
+    await this.ensureColumns();
+    const { v4: uuidv4 } = await import('uuid');
+    return super.create(ctx, {
+      uuid: data.uuid || uuidv4(),
+      status: data.status || 'applied',
+      created_by: data.created_by || ctx.userId || 1,
+      updated_by: data.updated_by || ctx.userId || 1,
+      ...data,
+    });
   }
 
   protected getSearchableFields(): string[] {
@@ -111,13 +138,13 @@ export class CandidateRepository extends BaseRepository<Candidate> {
       if (options.filters.status) {
         const st = String(options.filters.status).toLowerCase();
         if (st.includes('applied')) {
-          query.whereIn(this.db.raw('LOWER(candidates.status)'), ['applied', 'new', 'screening']);
+          query.whereRaw('LOWER(candidates.status) IN (?, ?, ?)', ['applied', 'new', 'screening']);
         } else if (st.includes('interview')) {
-          query.whereIn(this.db.raw('LOWER(candidates.status)'), ['interview', 'interviewing']);
+          query.whereRaw('LOWER(candidates.status) IN (?, ?)', ['interview', 'interviewing']);
         } else if (st.includes('offer')) {
-          query.whereIn(this.db.raw('LOWER(candidates.status)'), ['offer', 'offered', 'hired']);
+          query.whereRaw('LOWER(candidates.status) IN (?, ?, ?)', ['offer', 'offered', 'hired']);
         } else {
-          query.where(this.db.raw('LOWER(candidates.status)'), st);
+          query.whereRaw('LOWER(candidates.status) = ?', [st]);
         }
       }
       if (options.filters.source) {

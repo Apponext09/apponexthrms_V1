@@ -44,7 +44,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to fetch offer letter details', err);
-        setError(err.response?.data?.error || 'Failed to fetch offer letter details. Please check the link.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to fetch offer letter details. Please check the link.';
+        setError(msg);
       })
       .finally(() => setIsLoading(false));
   }, [uuid]);
@@ -68,7 +70,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to accept offer', err);
-        toast.error('Failed to accept job offer.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to accept job offer.';
+        toast.error(msg);
       })
       .finally(() => setSubmitting(false));
   };
@@ -92,7 +96,9 @@ export const PublicOfferPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to decline offer', err);
-        toast.error('Failed to decline offer.');
+        const errObj = err.response?.data?.error;
+        const msg = typeof errObj === 'string' ? errObj : errObj?.message || err.response?.data?.message || 'Failed to decline offer.';
+        toast.error(msg);
       })
       .finally(() => setSubmitting(false));
   };
@@ -122,7 +128,21 @@ export const PublicOfferPage: React.FC = () => {
     );
   }
 
-  const { offer, candidateName, companyName, departmentName } = offerData;
+  const offer = offerData?.offer || {};
+  const candidateName = offerData?.candidateName || offer?.candidate_name || 'Candidate';
+  const companyName = offerData?.companyName || 'Company';
+  const departmentName = offerData?.departmentName || offer?.department || 'General';
+
+  let meta: any = {};
+  if (offer.meta) {
+    try {
+      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta) : offer.meta;
+    } catch (e) {
+      meta = {};
+    }
+  }
+
+  const effectiveCompanyName = meta.companyName || companyName;
 
   if (actionStatus === 'accepted') {
     return (
@@ -160,8 +180,8 @@ export const PublicOfferPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 py-10 px-4 md:px-6">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="h-screen w-full overflow-y-auto bg-muted/30 py-10 px-4 md:px-6">
+      <div className="max-w-3xl mx-auto space-y-6 pb-24">
         
         {/* Header Branding */}
         <div className="flex items-center justify-between border-b pb-4 border-muted">
@@ -179,11 +199,19 @@ export const PublicOfferPage: React.FC = () => {
           </CardHeader>
           <CardContent className="p-6 space-y-6 text-sm text-foreground/90 leading-relaxed">
             
-            <p>Dear <strong>{candidateName}</strong>,</p>
-            
-            <p>
-              We are pleased to offer you employment at <strong>{companyName}</strong> in the position of <strong>{offer.position_title}</strong> under the <strong>{departmentName}</strong> department. We believe your skills and experience will be a valuable asset to our organization.
-            </p>
+            {meta.compiledBody ? (
+              <div className="whitespace-pre-line text-slate-800 space-y-3 font-serif border-b border-border pb-4">
+                {meta.compiledBody}
+              </div>
+            ) : (
+              <>
+                <p>Dear <strong>{candidateName}</strong>,</p>
+                
+                <p>
+                  We are pleased to offer you employment at <strong>{effectiveCompanyName}</strong> in the position of <strong>{offer.position_title}</strong> under the <strong>{departmentName}</strong> department. We believe your skills and experience will be a valuable asset to our organization.
+                </p>
+              </>
+            )}
 
             <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mt-4 mb-2">Offer Terms & Remuneration:</h3>
             <div className="border border-border">
@@ -191,7 +219,7 @@ export const PublicOfferPage: React.FC = () => {
                 <TableBody>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20 w-44">Position Title</TableCell>
-                    <TableCell>{offer.position_title}</TableCell>
+                    <TableCell>{offer.position_title || offer.positionTitle || '-'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Department</TableCell>
@@ -199,19 +227,23 @@ export const PublicOfferPage: React.FC = () => {
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Cost to Company (CTC)</TableCell>
-                    <TableCell className="font-semibold text-foreground">{offer.cost_to_company} {offer.currency}</TableCell>
+                    <TableCell className="font-semibold text-foreground">
+                      {offer.cost_to_company || offer.costToCompany ? `${parseFloat(offer.cost_to_company || offer.costToCompany).toLocaleString()} ${offer.currency || 'INR'}` : '—'}
+                    </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Base Salary</TableCell>
-                    <TableCell>{offer.base_salary} {offer.currency}</TableCell>
+                    <TableCell>
+                      {offer.base_salary || offer.baseSalary ? `${parseFloat(offer.base_salary || offer.baseSalary).toLocaleString()} ${offer.currency || 'INR'}` : '—'}
+                    </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Joining Date</TableCell>
-                    <TableCell>{offer.offer_start_date ? new Date(offer.offer_start_date).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell>{(offer.offer_start_date || offer.offerStartDate) ? new Date(offer.offer_start_date || offer.offerStartDate).toLocaleDateString() : '—'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="font-medium bg-muted/20">Offer Expiry Date</TableCell>
-                    <TableCell>{offer.offer_expiry_date ? new Date(offer.offer_expiry_date).toLocaleDateString() : '-'}</TableCell>
+                    <TableCell>{(offer.offer_expiry_date || offer.offerExpiryDate) ? new Date(offer.offer_expiry_date || offer.offerExpiryDate).toLocaleDateString() : '—'}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>

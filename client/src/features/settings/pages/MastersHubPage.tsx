@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
   MapPin,
@@ -53,8 +53,10 @@ import { RolesResponsibilityMasterForm } from '../components/RolesResponsibility
 import { KraMasterForm } from '../components/KraMasterForm';
 import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
 import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
+import { OfferTemplateMasterForm } from '../components/OfferTemplateMasterForm';
 import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
 import { EventMasterForm } from '../components/EventMasterForm';
+import { HolidayMasterForm } from '../components/HolidayMasterForm';
 
 import { OTRulePage } from '../components/ot-rules/OTRulePage';
 
@@ -80,7 +82,7 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'holiday', name: 'Holiday', icon: Calendar, category: 'Events & Planning', description: 'Holiday calendar schedules, regional lists, and floaters.', defaultItemCount: 14 },
   { id: 'employee-status', name: 'Employee Status', icon: Users, category: 'Core & Structure', description: 'Active, On-Probation, Suspended, and Exit employee states.', defaultItemCount: 5 },
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
-  { id: 'events', name: 'Events', icon: Calendar, category: 'Events & Planning', description: 'Company events, town halls, anniversaries, and celebrations.', defaultItemCount: 9 },
+  { id: 'offer-templates', name: 'Letter & Offer Master', icon: FileText, category: 'Templates & System', description: 'Design MNC letter formats for Hiring, Onboarding (Appointment/NDA), Employment (Increment/Promotion/Warning), and Exit (Relieving/Experience).', defaultItemCount: 14 },
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
   { id: 'notification-merge-codes', name: 'Notification Merge Codes', icon: Code2, category: 'Templates & System', description: 'Store module and sub-module merge tags for notification templates.', defaultItemCount: 8 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
@@ -136,10 +138,6 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
     { id: 'g2', code: 'GRD-L2', name: 'Grade L2 - Senior Specialist', description: 'Mid to senior individual contributor band', status: 'Active', createdAt: '2026-01-01' },
     { id: 'g3', code: 'GRD-L3', name: 'Grade L3 - Management & Lead', description: 'Team leads and department managers band', status: 'Active', createdAt: '2026-01-01' },
   ],
-  holiday: [
-    { id: 'h1', code: 'HOL-NEWYEAR', name: 'New Year Day', description: 'National Holiday (Jan 01)', status: 'Active', createdAt: '2026-01-01' },
-    { id: 'h2', code: 'HOL-IND', name: 'Independence Day', description: 'Gazetted National Holiday (Aug 15)', status: 'Active', createdAt: '2026-01-01' },
-  ],
   'employee-status': [
     { id: 'es1', code: 'ST-ACT', name: 'Active', description: 'Employee currently employed and active', status: 'Active', createdAt: '2026-01-01' },
     { id: 'es2', code: 'ST-PROB', name: 'On Probation', description: 'Newly joined employee undergoing probation evaluation', status: 'Active', createdAt: '2026-01-01' },
@@ -180,20 +178,37 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
 };
 
 export function MastersHubPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get('tab');
 
   const [selectedMasterId, setSelectedMasterId] = useState<string>('company');
 
   useEffect(() => {
-    if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
-      setSelectedMasterId(tabFromUrl);
+    const pathSegments = location.pathname.split('/').filter(Boolean);
+    let masterId = null;
+
+    if (pathSegments.includes('masters')) {
+      const masterIndex = pathSegments.indexOf('masters');
+      masterId = pathSegments[masterIndex + 1];
     }
-  }, [tabFromUrl]);
+
+    if (masterId && MASTER_CATEGORIES.some(m => m.id === masterId)) {
+      setSelectedMasterId(masterId);
+    } else if (searchParams.get('tab')) {
+      const tabFromUrl = searchParams.get('tab');
+      if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
+        setSelectedMasterId(tabFromUrl);
+      }
+    } else {
+      setSelectedMasterId('company');
+    }
+  }, [location.pathname, searchParams]);
 
   const handleSelectMaster = (id: string) => {
     setSelectedMasterId(id);
-    setSearchParams({ tab: id });
+    const basePath = location.pathname.includes('/hr/') ? '/hr/masters' : '/masters';
+    navigate(`${basePath}/${id}`);
     setSearchQuery('');
   };
   const [fullCompanyRecords, setFullCompanyRecords] = useState<CompanyRecordItem[]>([]);
@@ -403,6 +418,8 @@ export function MastersHubPage() {
         />
       ) : selectedMasterId === 'employee-status' ? (
         <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'holiday' ? (
+        <HolidayMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
         <GeneralShiftMasterForm
           onCancel={() => handleSelectMaster('company')}
@@ -417,22 +434,20 @@ export function MastersHubPage() {
         />
       ) : selectedMasterId === 'designation' ? (
         <DesignationMaster onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'employee-status' ? (
-        <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'break' ? (
         <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'roles-responsibility' ? (
         <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'kra' ? (
         <KraMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'offer-templates' ? (
+        <OfferTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'notification-templates' || selectedMasterId === 'template') ? (
         <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (
         <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'resource-plan' ? (
         <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'events' ? (
-        <EventMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'ot-rule' ? (
         <OTRulePage />
       ) : (

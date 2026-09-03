@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   MapPin,
@@ -14,11 +15,18 @@ import {
   Layers,
   Loader2,
   UserCheck,
-  Plus
+  Plus,
+  Edit,
+  Trash2,
+  ArrowUpDown,
 } from 'lucide-react';
 import { AdminLocation, EmployeeLocationAccess, LocationAssignmentFilter } from './types';
 import { AssignLocationModal } from './components/AssignLocationModal';
 import { BulkAssignLocationModal } from './components/BulkAssignLocationModal';
+import { AddLocationModal } from '@/features/attendance/components/AddLocationModal';
+import { MapCoordinateExtractorModal } from '@/features/attendance/components/MapCoordinateExtractorModal';
+import { useLocationManagement, GeofenceLocation } from '@/features/attendance/hooks/useLocationManagement';
+import { useCompanies } from '@/features/settings/hooks/useCompanies';
 import {
   fetchEmployeeLocationData,
   saveEmployeeLocationAccess,
@@ -31,14 +39,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { showToast } from '@/components/ui/toast';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
 import apiClient from '@/lib/api';
 
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export const HRAttendanceLocationPage: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isHrPath = location.pathname.startsWith('/hr');
+  const geofencesRoute = isHrPath ? '/hr/attendance' : '/attendance/locations';
   const { selectedCompanyId } = useCompanyStore();
+  const { data: companies = [] } = useCompanies();
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
+  const [isExtractorOpen, setIsExtractorOpen] = useState(false);
   const [employees, setEmployees] = useState<EmployeeLocationAccess[]>([]);
   const [adminLocations, setAdminLocations] = useState<AdminLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,41 +73,13 @@ export const HRAttendanceLocationPage: React.FC = () => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
 
-  // Add Location Dialog State
-  const [isCreateLocOpen, setIsCreateLocOpen] = useState(false);
-  const [newLocName, setNewLocName] = useState('');
-  const [newLocCode, setNewLocCode] = useState('');
-  const [newLocAddress, setNewLocAddress] = useState('');
-  const [isSavingLoc, setIsSavingLoc] = useState(false);
+  const { geofences, deleteGeofence, fetchGeofences } = useLocationManagement();
+  const [editingGeofence, setEditingGeofence] = useState<GeofenceLocation | null>(null);
+  const [isAddLocationOpen, setIsAddLocationOpen] = useState(false);
+  const [locationSearch, setLocationSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'code' | 'radius'>('name');
 
-  const handleCreateNewLocation = async () => {
-    if (!newLocName.trim()) {
-      showToast.error('Validation Error', 'Please enter location name.');
-      return;
-    }
-    try {
-      setIsSavingLoc(true);
-      const code = newLocCode.trim() || `LOC-${Math.floor(1000 + Math.random() * 9000)}`;
-      await apiClient.post('/attendance/locations', {
-        locationName: newLocName.trim(),
-        locationCode: code,
-        address: newLocAddress.trim(),
-        latitude: 19.0760,
-        longitude: 72.8777,
-        isPrimary: false,
-      });
-      showToast.success('Location Created', `Location "${newLocName}" added successfully.`);
-      setIsCreateLocOpen(false);
-      setNewLocName('');
-      setNewLocCode('');
-      setNewLocAddress('');
-      loadData();
-    } catch (err: any) {
-      showToast.error('Creation Failed', err.response?.data?.message || 'Failed to create location.');
-    } finally {
-      setIsSavingLoc(false);
-    }
-  };
+  const [activeTab, setActiveTab] = useState<'mapping' | 'geofences'>('mapping');
 
   // Load Real Data from Backend
   const loadData = async (showRefreshToast = false) => {
@@ -154,6 +139,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
         emp.primaryLocationId === filters.locationId;
 
       // Access Type Filter
+      // Access Type Filter
       let matchesAccess = true;
       if (filters.accessType === 'multi') {
         matchesAccess = assigned.length > 1;
@@ -163,19 +149,28 @@ export const HRAttendanceLocationPage: React.FC = () => {
         matchesAccess = Boolean(emp.allowRemotePunch || emp.allowFieldPunch);
       }
 
-      return matchesSearch && matchesDept && matchesLoc && matchesAccess;
+      // Company Filter
+      const matchesComp = companyFilter === 'all' || String((emp as any).companyId || (emp as any).company_id || '') === String(companyFilter);
+
+      return matchesSearch && matchesDept && matchesLoc && matchesAccess && matchesComp;
     });
-  }, [employees, filters]);
+  }, [employees, filters, companyFilter]);
 
   // Stat Calculations
   const stats = useMemo(() => {
-    const list = employees || [];
+    const list = filteredEmployees || [];
     const total = list.length;
     const multiBranch = list.filter((e) => (e?.assignedLocationIds || []).length > 1).length;
     const singleBranch = list.filter((e) => (e?.assignedLocationIds || []).length <= 1).length;
     const remoteEnabled = list.filter((e) => Boolean(e?.allowRemotePunch || e?.allowFieldPunch)).length;
-    return { total, multiBranch, singleBranch, remoteEnabled };
-  }, [employees]);
+    const activeLocationsCount = (adminLocations || []).filter((loc) => {
+      return (
+        companyFilter === 'all' ||
+        String(loc.companyId || (loc as any).company_id || '') === String(companyFilter)
+      );
+    }).length;
+    return { total, multiBranch, singleBranch, remoteEnabled, activeLocationsCount };
+  }, [filteredEmployees, adminLocations, companyFilter]);
 
   // Handlers for Row Selection
   const handleSelectAll = (checked: boolean) => {
@@ -243,14 +238,14 @@ export const HRAttendanceLocationPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-black text-foreground tracking-tight">
-                Employee Attendance Locations
+                Location Management & Mapping
               </h1>
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px] px-2 py-0.5">
-                HR Portal
+                {isHrPath ? 'HR Portal' : 'Admin Portal'}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Assign Admin-created branch offices, client sites, and field geofences to employees across the organization.
+              Manage office geofence locations and assign branch access & punch permissions to employees across the organization.
             </p>
           </div>
         </div>
@@ -258,7 +253,20 @@ export const HRAttendanceLocationPage: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0">
           <Button
             size="sm"
-            onClick={() => setIsCreateLocOpen(true)}
+            variant="outline"
+            onClick={() => setIsExtractorOpen(true)}
+            className="h-8 text-xs font-bold gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+          >
+            <Globe className="w-3.5 h-3.5 text-primary" />
+            Import Maps Link / Search
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => {
+              setEditingGeofence(null);
+              setIsAddLocationOpen(true);
+            }}
             className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -289,13 +297,44 @@ export const HRAttendanceLocationPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Navigation Tabs Bar */}
+      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+        <Button
+          variant={activeTab === 'mapping' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('mapping')}
+          className={`h-8 text-xs font-bold gap-1.5 ${
+            activeTab === 'mapping'
+              ? 'bg-primary text-primary-foreground shadow-2xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+          }`}
+        >
+          <UserCheck className="w-3.5 h-3.5" />
+          1. Employee Access Mapping ({filteredEmployees.length})
+        </Button>
+
+        <Button
+          variant={activeTab === 'geofences' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActiveTab('geofences')}
+          className={`h-8 text-xs font-bold gap-1.5 ${
+            activeTab === 'geofences'
+              ? 'bg-primary text-primary-foreground shadow-2xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+          }`}
+        >
+          <MapPin className="w-3.5 h-3.5" />
+          2. Office & Geofence Locations ({stats.activeLocationsCount})
+        </Button>
+      </div>
+
       {/* Quick KPI Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Total Employees</p>
             <h3 className="text-2xl font-black text-foreground mt-1">{stats.total}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">DB Employee Records</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Matching Filter Selection</p>
           </div>
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
             <Users className="w-5 h-5" />
@@ -315,309 +354,497 @@ export const HRAttendanceLocationPage: React.FC = () => {
 
         <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Single Branch (Fixed)</p>
-            <h3 className="text-2xl font-black text-foreground mt-1">{stats.singleBranch}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Fixed Base Location</p>
+            <p className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Remote / Field Enabled</p>
+            <h3 className="text-2xl font-black text-emerald-600 mt-1">{stats.remoteEnabled}</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">WFH &amp; Field Punch Allowed</p>
           </div>
-          <div className="p-2.5 rounded-lg bg-muted text-muted-foreground shrink-0 border border-border/60">
-            <MapPin className="w-5 h-5" />
+          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
+            <Navigation className="w-5 h-5" />
           </div>
         </Card>
 
         <Card className="border border-border/80 bg-card shadow-2xs p-4 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Admin Locations</p>
-            <h3 className="text-2xl font-black text-emerald-600 mt-1">{adminLocations.length}</h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Geofences in System</p>
+            <p className="text-[10px] font-bold uppercase text-indigo-600 tracking-wider">Active Geofences</p>
+            <h3 className="text-2xl font-black text-indigo-600 mt-1">{stats.activeLocationsCount}</h3>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Configured Office Boundaries</p>
           </div>
-          <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
+          <div className="p-2.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 shrink-0">
             <Globe className="w-5 h-5" />
           </div>
         </Card>
       </div>
 
-      {/* Filters & Action Bar */}
-      <Card className="border border-border/80 shadow-2xs bg-card p-3 space-y-3">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Search Box */}
-          <div className="relative flex-1">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search employee by name, ID, code, designation, or department..."
-              value={filters.search}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              className="pl-9 pr-8 text-xs h-8 bg-background border-border"
-            />
-            {filters.search && (
-              <button
-                onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+      {/* Tab 1: Employee Access Mapping */}
+      {activeTab === 'mapping' && (
+        <div className="space-y-4 animate-in fade-in-50 duration-200">
+          {/* Filters & Action Bar */}
+          <Card className="border border-border/80 shadow-2xs bg-card p-3 space-y-3">
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              {/* Search Box */}
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search employee name, code, designation, email..."
+                  value={filters.search}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                  className="pl-8 h-8 text-xs font-medium bg-background border-border/80"
+                />
+                {filters.search && (
+                  <button
+                    onClick={() => setFilters((prev) => ({ ...prev, search: '' }))}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
 
-          {/* Filter Dropdowns Container */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Department Filter */}
-            <select
-              value={filters.department}
-              onChange={(e) => setFilters((prev) => ({ ...prev, department: e.target.value }))}
-              className="h-8 px-2.5 bg-background border border-border rounded-md text-xs font-semibold text-foreground cursor-pointer"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
+              {/* Filter Controls */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Company Select Filter */}
+                <select
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none max-w-[160px] truncate"
+                >
+                  <option value="all">All Companies ({companies.length})</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
 
-            {/* Admin Location Filter */}
-            <select
-              value={filters.locationId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, locationId: e.target.value }))}
-              className="h-8 px-2.5 bg-background border border-border rounded-md text-xs font-semibold text-foreground cursor-pointer"
-            >
-              <option value="all">All Admin Locations</option>
-              {adminLocations.map((loc) => (
-                <option key={loc.id} value={loc.id}>
-                  {loc.name}
-                </option>
-              ))}
-            </select>
+                {/* Department Select */}
+                <select
+                  value={filters.department}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, department: e.target.value }))}
+                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none"
+                >
+                  <option value="all">All Departments ({departments.length})</option>
+                  {departments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
 
-            {/* Access Type Filter */}
-            <select
-              value={filters.accessType}
-              onChange={(e) => setFilters((prev) => ({ ...prev, accessType: e.target.value as any }))}
-              className="h-8 px-2.5 bg-background border border-border rounded-md text-xs font-semibold text-foreground cursor-pointer"
-            >
-              <option value="all">All Access Modes</option>
-              <option value="multi">Multi-Branch Access</option>
-              <option value="single">Single Office Only</option>
-              <option value="remote">Remote / Field Enabled</option>
-            </select>
+                {/* Location Select */}
+                <select
+                  value={filters.locationId}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, locationId: e.target.value }))}
+                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none max-w-[160px] truncate"
+                >
+                  <option value="all">All Locations ({adminLocations.length})</option>
+                  {adminLocations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
 
-            {/* Reset Filters Button */}
-            {(filters.search || filters.department !== 'all' || filters.locationId !== 'all' || filters.accessType !== 'all') && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setFilters({ search: '', department: 'all', locationId: 'all', accessType: 'all' })}
-                className="h-8 text-xs font-bold text-rose-600 hover:bg-rose-50 gap-1 px-2"
-              >
-                <X className="w-3.5 h-3.5" />
-                Reset
-              </Button>
-            )}
-          </div>
-        </div>
-      </Card>
+                {/* Access Type Select */}
+                <select
+                  value={filters.accessType}
+                  onChange={(e) => setFilters((prev) => ({ ...prev, accessType: e.target.value as any }))}
+                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none"
+                >
+                  <option value="all">All Access Types</option>
+                  <option value="multi">Multi-Branch Access</option>
+                  <option value="single">Single Base Branch</option>
+                  <option value="remote">Remote / Field Allowed</option>
+                </select>
 
-      {/* Employee Locations Table */}
-      <Card className="border border-border/80 shadow-2xs bg-card overflow-hidden">
-        <div className="p-3 border-b border-border/60 flex items-center justify-between bg-muted/20">
-          <div className="flex items-center gap-2">
-            <h3 className="font-bold text-xs text-foreground uppercase tracking-wider">Employee Location Registry</h3>
-            <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
-              {filteredEmployees.length} Employees
-            </Badge>
-          </div>
-
-          {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-primary">
-                {selectedIds.length} Selected
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsBulkModalOpen(true)}
-                className="h-7 text-[10px] font-bold gap-1"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Assign Branches
-              </Button>
+                {(filters.search || filters.department !== 'all' || filters.locationId !== 'all' || filters.accessType !== 'all' || companyFilter !== 'all') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setFilters({ search: '', department: 'all', locationId: 'all', accessType: 'all' });
+                      setCompanyFilter('all');
+                    }}
+                    className="h-8 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                  >
+                    Reset Filters
+                  </Button>
+                )}
+              </div>
             </div>
-          )}
-        </div>
+          </Card>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-2 text-xs text-muted-foreground">
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
-            <p className="font-semibold">Loading employee attendance locations...</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-muted/30 text-muted-foreground uppercase text-[10px] font-bold tracking-wider border-b border-border/60">
-                <tr>
-                  <th className="px-4 py-3 w-10 text-center">
-                    <Checkbox
-                      checked={
-                        filteredEmployees.length > 0 &&
-                        selectedIds.length === filteredEmployees.length
-                      }
-                      onCheckedChange={(c) => handleSelectAll(!!c)}
-                    />
-                  </th>
-                  <th className="px-4 py-3">Employee</th>
-                  <th className="px-4 py-3">Primary / Default Location</th>
-                  <th className="px-4 py-3">Permitted Attendance Branches</th>
-                  <th className="px-4 py-3 text-center">Remote / Field</th>
-                  <th className="px-4 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {filteredEmployees.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-12 text-muted-foreground text-xs">
-                      <div className="flex flex-col items-center gap-2">
-                        <MapPin className="w-8 h-8 text-muted-foreground/40" />
-                        <p className="font-bold text-foreground">No matching employees found</p>
-                        <p className="text-[10px]">Try adjusting your search query or department filters.</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredEmployees.map((emp) => {
-                    const isSelected = selectedIds.includes(emp.id);
-                    const primaryLoc = (adminLocations || []).find((l) => l.id === emp.primaryLocationId);
-                    const assignedLocs = (adminLocations || []).filter((l) =>
-                      (emp.assignedLocationIds || []).includes(l.id)
-                    );
-                    const fn = emp.firstName || emp.email || 'E';
-                    const ln = emp.lastName || '';
-                    const initials = `${fn[0] || 'E'}${ln[0] || ''}`.toUpperCase();
-
-                    return (
-                      <tr
-                        key={emp.id}
-                        className={`hover:bg-muted/20 transition-colors ${
-                          isSelected ? 'bg-primary/5' : ''
-                        }`}
-                      >
-                        {/* Checkbox */}
-                        <td className="px-4 py-3 text-center">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(c) => handleSelectOne(emp.id, !!c)}
-                          />
+          {/* Employee Locations Table Card */}
+          <Card className="border border-border/80 shadow-2xs bg-card overflow-hidden">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center p-12 space-y-3">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <p className="text-xs text-muted-foreground font-semibold">Loading employee location mappings...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto no-scrollbar">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] font-bold border-b border-border/60">
+                    <tr>
+                      <th className="px-4 py-3 w-10 text-center">
+                        <Checkbox
+                          checked={
+                            filteredEmployees.length > 0 &&
+                            selectedIds.length === filteredEmployees.length
+                          }
+                          onCheckedChange={handleSelectAll}
+                        />
+                      </th>
+                      <th className="px-4 py-3 min-w-[200px]">Employee</th>
+                      <th className="px-4 py-3 min-w-[140px]">Primary Location</th>
+                      <th className="px-4 py-3 min-w-[220px]">Permitted Attendance Locations</th>
+                      <th className="px-4 py-3 text-center min-w-[120px]">Punch Allowances</th>
+                      <th className="px-4 py-3 text-right w-24">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {filteredEmployees.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-12 text-muted-foreground text-xs">
+                          <div className="flex flex-col items-center gap-2">
+                            <MapPin className="w-8 h-8 text-muted-foreground/40" />
+                            <p className="font-bold text-foreground">No matching employees found</p>
+                            <p className="text-[10px]">Try adjusting your search query or department filters.</p>
+                          </div>
                         </td>
+                      </tr>
+                    ) : (
+                      filteredEmployees.map((emp) => {
+                        const isSelected = selectedIds.includes(emp.id);
+                        const primaryLoc = (adminLocations || []).find((l) => l.id === emp.primaryLocationId);
+                        const assignedLocs = (adminLocations || []).filter((l) =>
+                          (emp.assignedLocationIds || []).includes(l.id)
+                        );
+                        const fn = emp.firstName || emp.email || 'E';
+                        const ln = emp.lastName || '';
+                        const initials = `${fn[0] || 'E'}${ln[0] || ''}`.toUpperCase();
 
-                        {/* Employee Info */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar className="h-8 w-8 border border-border shrink-0">
-                              <AvatarImage src={emp.avatarUrl} alt={`${emp.firstName} ${emp.lastName}`} />
-                              <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                                {initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-foreground text-xs">
-                                  {emp.firstName} {emp.lastName}
-                                </span>
-                                <span className="text-[10px] font-mono text-muted-foreground">
-                                  {emp.employeeCode}
-                                </span>
+                        return (
+                          <tr
+                            key={emp.id}
+                            className={`hover:bg-muted/20 transition-colors ${
+                              isSelected ? 'bg-primary/5' : ''
+                            }`}
+                          >
+                            {/* Checkbox */}
+                            <td className="px-4 py-3 text-center">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(c) => handleSelectOne(emp.id, !!c)}
+                              />
+                            </td>
+
+                            {/* Employee Info */}
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2.5">
+                                <Avatar className="h-8 w-8 border border-border shrink-0">
+                                  <AvatarImage src={emp.avatarUrl} alt={`${emp.firstName} ${emp.lastName}`} />
+                                  <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                                    {initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-foreground text-xs">
+                                      {emp.firstName} {emp.lastName}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-muted-foreground">
+                                      {emp.employeeCode}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    <span className="font-medium text-foreground">{emp.designation}</span>
+                                    <span> • </span>
+                                    <span className="text-primary font-medium">{emp.department}</span>
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-[10px] text-muted-foreground">
-                                <span className="font-medium text-foreground">{emp.designation}</span>
-                                <span> • </span>
-                                <span className="text-primary font-medium">{emp.department}</span>
-                              </p>
-                            </div>
-                          </div>
-                        </td>
+                            </td>
 
-                        {/* Primary Location */}
-                        <td className="px-4 py-3">
-                          {primaryLoc ? (
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                              <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                              <span>{primaryLoc.name}</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-[10px] italic">Default Geofence</span>
-                          )}
-                        </td>
+                            {/* Primary Location */}
+                            <td className="px-4 py-3">
+                              {primaryLoc ? (
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                                  <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                                  <span>{primaryLoc.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-[10px] italic">Default Geofence</span>
+                              )}
+                            </td>
 
-                        {/* Permitted Attendance Locations */}
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1 max-w-md">
-                            {assignedLocs.length === 0 ? (
-                              <span className="text-muted-foreground text-[10px] italic">No geofences assigned</span>
-                            ) : (
-                              assignedLocs.map((loc) => {
-                                const isPrim = loc.id === emp.primaryLocationId;
-                                return (
-                                  <Badge
-                                    key={loc.id}
-                                    className={`text-[9px] font-medium px-2 py-0.5 flex items-center gap-1 ${
-                                      isPrim
-                                        ? 'bg-primary text-primary-foreground font-bold'
-                                        : 'bg-muted text-foreground border border-border/60'
-                                    }`}
-                                  >
-                                    <MapPin className="w-2.5 h-2.5" />
-                                    {loc.name}
-                                    {isPrim && <span className="opacity-80">(Primary)</span>}
+                            {/* Permitted Attendance Locations */}
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1 max-w-md">
+                                {assignedLocs.length === 0 ? (
+                                  <span className="text-muted-foreground text-[10px] italic">No geofences assigned</span>
+                                ) : (
+                                  assignedLocs.map((loc) => {
+                                    const isPrim = loc.id === emp.primaryLocationId;
+                                    return (
+                                      <Badge
+                                        key={loc.id}
+                                        className={`text-[9px] font-medium px-2 py-0.5 flex items-center gap-1 ${
+                                          isPrim
+                                            ? 'bg-primary text-primary-foreground font-bold'
+                                            : 'bg-muted text-foreground border border-border/60'
+                                        }`}
+                                      >
+                                        <MapPin className="w-2.5 h-2.5" />
+                                        {loc.name}
+                                        {isPrim && <span className="opacity-80">(Primary)</span>}
+                                      </Badge>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Remote / Field Allowances */}
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {emp.allowRemotePunch ? (
+                                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold flex items-center gap-1">
+                                    <Globe className="w-2.5 h-2.5" />
+                                    WFH
                                   </Badge>
-                                );
-                              })
-                            )}
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">-</span>
+                                )}
+
+                                {emp.allowFieldPunch && (
+                                  <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold flex items-center gap-1">
+                                    <Navigation className="w-2.5 h-2.5" />
+                                    Field
+                                  </Badge>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* Action */}
+                            <td className="px-4 py-3 text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingEmployee(emp);
+                                  setIsAssignModalOpen(true);
+                                }}
+                                className="h-7 text-[10px] font-bold gap-1"
+                              >
+                                <SlidersHorizontal className="w-3 h-3 text-primary" />
+                                Manage
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Tab 2: Office & Geofence Locations Management */}
+      {activeTab === 'geofences' && (
+        <div className="space-y-4 animate-in fade-in-50 duration-200">
+          <Card className="border border-border/80 shadow-2xs bg-card p-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="relative flex-1 w-full">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search location by name, code, IP, address..."
+                  value={locationSearch}
+                  onChange={(e) => setLocationSearch(e.target.value)}
+                  className="pl-8 h-8 text-xs font-medium bg-background border-border/80"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                {/* Company Select Filter for Tab 2 */}
+                <select
+                  value={companyFilter}
+                  onChange={(e) => setCompanyFilter(e.target.value)}
+                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none max-w-[160px] truncate"
+                >
+                  <option value="all">All Companies ({companies.length})</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex items-center gap-1 text-xs text-muted-foreground font-semibold">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-primary" />
+                  Sort:
+                </div>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="h-8 text-xs font-semibold px-2.5 rounded-md border border-border/80 bg-background text-foreground focus:outline-none"
+                >
+                  <option value="name">Location Name (A-Z)</option>
+                  <option value="code">Location Code</option>
+                  <option value="radius">Geofence Radius</option>
+                </select>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditingGeofence(null);
+                    setIsAddLocationOpen(true);
+                  }}
+                  className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add New Geofence Location
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {adminLocations.length === 0 ? (
+              <div className="col-span-full text-center py-12 text-muted-foreground text-xs bg-card border border-border/80 rounded-xl p-8">
+                <MapPin className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="font-bold text-foreground">No Geofence Locations Configured</p>
+                <p className="text-[10px] mt-1">Click "Add New Geofence Location" to create your office radius boundaries.</p>
+              </div>
+            ) : (
+              adminLocations
+                .filter((loc) => {
+                  const q = locationSearch.toLowerCase();
+                  const matchesSearch =
+                    !q ||
+                    (loc.name || '').toLowerCase().includes(q) ||
+                    (loc.code || '').toLowerCase().includes(q) ||
+                    (loc.ipAddress || '').toLowerCase().includes(q);
+
+                  const matchesComp =
+                    companyFilter === 'all' ||
+                    String(loc.companyId || (loc as any).company_id || '') === String(companyFilter);
+
+                  return matchesSearch && matchesComp;
+                })
+                .sort((a, b) => {
+                  if (sortBy === 'code') return (a.code || '').localeCompare(b.code || '');
+                  if (sortBy === 'radius') return (b.radiusMeters || 0) - (a.radiusMeters || 0);
+                  return (a.name || '').localeCompare(b.name || '');
+                })
+                .map((loc) => {
+                  const gLoc = geofences.find((g) => g.id === Number(loc.id)) || {
+                    id: Number(loc.id),
+                    uuid: '',
+                    locationId: Number(loc.id),
+                    geofenceName: loc.name,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    radiusMeters: loc.radiusMeters,
+                    ipAddress: loc.ipAddress,
+                    isOfficeLocation: loc.type === 'head_office',
+                    allowsRemoteWork: false,
+                  };
+
+                  return (
+                    <Card key={loc.id} className="border border-border/80 bg-card shadow-2xs hover:shadow-sm transition-all p-4 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                              <Building2 className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-foreground">{loc.name}</h4>
+                              <span className="text-[10px] font-mono text-muted-foreground">{loc.code || `LOC-${loc.id}`}</span>
+                            </div>
                           </div>
-                        </td>
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-bold">
+                            {loc.type === 'head_office' ? 'Head Office' : 'Branch Office'}
+                          </Badge>
+                        </div>
 
-                        {/* Remote / Field Allowances */}
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {emp.allowRemotePunch ? (
-                              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold flex items-center gap-1">
-                                <Globe className="w-2.5 h-2.5" />
-                                WFH
-                              </Badge>
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">-</span>
-                            )}
-
-                            {emp.allowFieldPunch && (
-                              <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-bold flex items-center gap-1">
-                                <Navigation className="w-2.5 h-2.5" />
-                                Field
-                              </Badge>
-                            )}
+                        <div className="space-y-1 text-xs pt-1 border-t border-border/60">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground">Geofence Radius:</span>
+                            <span className="font-bold text-foreground">{loc.radiusMeters || 500} meters</span>
                           </div>
-                        </td>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground">IP Restriction:</span>
+                            <span className="font-mono text-xs text-primary">{loc.ipAddress || 'Any IP Allowed'}</span>
+                          </div>
+                          {loc.latitude && loc.longitude && (
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">GPS Coordinates:</span>
+                              <span className="font-mono text-[10px] text-muted-foreground">{loc.latitude}, {loc.longitude}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-                        {/* Action */}
-                        <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-border/60">
+                        <div className="flex items-center gap-1">
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              setEditingEmployee(emp);
-                              setIsAssignModalOpen(true);
+                              setEditingGeofence(gLoc);
+                              setIsAddLocationOpen(true);
                             }}
-                            className="h-7 text-[10px] font-bold gap-1"
+                            className="h-7 text-[10px] font-bold gap-1 text-primary hover:bg-primary/10"
                           >
-                            <SlidersHorizontal className="w-3 h-3 text-primary" />
-                            Manage
+                            <Edit className="w-3 h-3" />
+                            Edit
                           </Button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to delete geofence location "${loc.name}"?`)) {
+                                try {
+                                  await deleteGeofence(Number(loc.id));
+                                  loadData();
+                                } catch (e) {
+                                  // Handled in hook toast
+                                }
+                              }
+                            }}
+                            className="h-7 text-[10px] font-bold gap-1 text-rose-600 hover:bg-rose-50 hover:border-rose-200"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </Button>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setActiveTab('mapping');
+                          }}
+                          className="h-7 text-[10px] font-bold gap-1 text-muted-foreground hover:text-foreground"
+                        >
+                          <UserCheck className="w-3 h-3 text-primary" />
+                          Assign
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })
+            )}
           </div>
-        )}
-      </Card>
+        </div>
+      )}
 
       {/* Modals */}
       <AssignLocationModal
@@ -640,74 +867,39 @@ export const HRAttendanceLocationPage: React.FC = () => {
         onApplyBulk={handleApplyBulkLocations}
       />
 
-      {/* CREATE NEW LOCATION MODAL */}
-      <Dialog open={isCreateLocOpen} onOpenChange={setIsCreateLocOpen}>
-        <DialogContent className="sm:max-w-md border border-border/80 shadow-lg rounded-xl bg-card p-4">
-          <DialogHeader className="pb-2 border-b border-border/60">
-            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-              <MapPin className="w-4 h-4 text-primary" />
-              Create New Attendance Location
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-              Add a new branch office or site location for employee attendance.
-            </DialogDescription>
-          </DialogHeader>
+      {/* COMPLETE ADD/EDIT LOCATION MODAL WITH AUTO-GPS AND AUTO-IP */}
+      <AddLocationModal
+        open={isAddLocationOpen}
+        onOpenChange={(open) => {
+          setIsAddLocationOpen(open);
+          if (!open) {
+            setEditingGeofence(null);
+            loadData();
+            fetchGeofences();
+          }
+        }}
+        editingLocation={editingGeofence}
+      />
 
-          <div className="space-y-3 pt-2 text-xs">
-            <div className="space-y-1">
-              <Label className="text-[10px] font-bold text-muted-foreground uppercase">Location / Office Name *</Label>
-              <Input
-                value={newLocName}
-                onChange={(e) => setNewLocName(e.target.value)}
-                placeholder="e.g. Pune Tech Park Office"
-                className="h-8 text-xs font-semibold"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-[10px] font-bold text-muted-foreground uppercase">Location Code (Optional)</Label>
-              <Input
-                value={newLocCode}
-                onChange={(e) => setNewLocCode(e.target.value)}
-                placeholder="e.g. PUNE-OFFICE-01"
-                className="h-8 text-xs font-mono"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-[10px] font-bold text-muted-foreground uppercase">Address / Landmark</Label>
-              <Input
-                value={newLocAddress}
-                onChange={(e) => setNewLocAddress(e.target.value)}
-                placeholder="e.g. Baner Road, Pune, Maharashtra"
-                className="h-8 text-xs font-semibold"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-border/60">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsCreateLocOpen(false)}
-                className="h-8 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={isSavingLoc}
-                onClick={handleCreateNewLocation}
-                className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
-              >
-                {isSavingLoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                Save Location
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* MAP COORDINATE EXTRACTOR MODAL */}
+      <MapCoordinateExtractorModal
+        open={isExtractorOpen}
+        onOpenChange={setIsExtractorOpen}
+        onSelectCoordinates={(coords) => {
+          setEditingGeofence({
+            id: 0,
+            uuid: '',
+            locationId: 0,
+            geofenceName: coords.locationName || 'New Office Location',
+            latitude: Number(coords.latitude),
+            longitude: Number(coords.longitude),
+            radiusMeters: 500,
+            isOfficeLocation: true,
+            allowsRemoteWork: false,
+          });
+          setIsAddLocationOpen(true);
+        }}
+      />
     </div>
   );
 };

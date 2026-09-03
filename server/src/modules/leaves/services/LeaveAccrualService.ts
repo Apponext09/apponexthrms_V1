@@ -8,6 +8,7 @@ import { toLocalYYYYMMDD, calculateFinancialYearEnd, calculateFinancialYearStart
 import { getOrgLeaveSettings } from '../utils/settingsResolver';
 import { getKnex } from '../../../db/knex';
 import { subscribeEvent, publishEvent } from '../../../realtime/eventBus';
+import { evaluateConditionGroup } from '../utils/ruleEngine';
 
 export class LeaveAccrualService {
   private accrualRepo: LeaveAccrualRepository;
@@ -57,24 +58,92 @@ export class LeaveAccrualService {
       } catch (e) {}
     }
 
+    // Dynamic Rule Engine Evaluation (Only When)
+    if (allocationSettings.onlyWhen || allocationSettings.only_when) {
+      const isEligible = evaluateConditionGroup(allocationSettings.onlyWhen || allocationSettings.only_when, employee);
+      if (!isEligible) {
+        return { shouldAccrue: false, finalAccrual: 0 };
+      }
+    }
+
     let finalAccrual = baseAccrual;
 
-    // Rule 1: Consider allocation till Resigned date
-    if (allocationSettings.considerAllocationTillResignedDate) {
+    // Rule 1: Consider allocation cutoff when employee leaves (Resignation Date vs Last Working Day)
+    const exitCutoff = allocationSettings.whenEmployeeLeaves || (allocationSettings.considerAllocationTillResignedDate ? 'resignation_date' : 'none');
+    if (exitCutoff === 'resignation_date' || allocationSettings.considerAllocationTillResignedDate) {
       const activeExit = await db('exit_requests')
         .where('employee_id', assignment.employee_id)
         .whereIn('status', ['initiated', 'approved'])
         .whereNull('deleted_at')
         .first();
       
-      if (activeExit) {
+      const resDate = employee.resignation_date || employee.resignationDate;
+      if (activeExit || (resDate && new Date(resDate) <= new Date(todayStr))) {
+        return { shouldAccrue: false, finalAccrual: 0 };
+      }
+    } else if (exitCutoff === 'last_working_day') {
+      const lwd = employee.last_working_date || employee.lastWorkingDate;
+      if (lwd && new Date(lwd) <= new Date(todayStr)) {
         return { shouldAccrue: false, finalAccrual: 0 };
       }
     }
 
-    // Rule 2: Initial Allocation Date Range (Prorata cut-off)
+    // Rule 2: Fixed Ratio formula (Earn X leaves for every Y payable days worked)
+    const isFixedRatio = allocationSettings.baseEarningOn === 'fixed_ratio' ||
+      allocationSettings.baseEarningOn === 'fixed_ratio_days_worked' ||
+      (allocationSettings.earnLeaves && allocationSettings.forEveryDaysWorked);
+
+    if (isFixedRatio) {
+      const earnLeaves = parseFloat(allocationSettings.earnLeaves || 1);
+      const forEveryDays = parseFloat(allocationSettings.forEveryDaysWorked || 20);
+
+      if (!isNaN(earnLeaves) && !isNaN(forEveryDays) && forEveryDays > 0) {
+        // Query payable days worked in previous month or quarter
+        let startDate = new Date(todayStr);
+        let endDate = new Date(todayStr);
+        if (accrualType === 'yearly') {
+          startDate.setFullYear(startDate.getFullYear() - 1);
+        } else if (accrualType === 'quarterly') {
+          startDate.setMonth(startDate.getMonth() - 3);
+        } else {
+          startDate.setMonth(startDate.getMonth() - 1);
+        }
+
+        const countAsWorkingDays = allocationSettings.countedAs !== 'calendar_days';
+
+        try {
+          const hasAtt = await db.schema.hasTable('attendance_records');
+          let payableDays = 0;
+          if (hasAtt) {
+            const attQuery = db('attendance_records')
+              .where('employee_id', assignment.employee_id)
+              .where('check_in_date', '>=', toLocalYYYYMMDD(startDate))
+              .where('check_in_date', '<', toLocalYYYYMMDD(endDate))
+              .whereNull('deleted_at');
+
+            if (countAsWorkingDays) {
+              attQuery.whereIn('status', ['present', 'half_day', 'work_from_home']);
+            }
+            const attRecords = await attQuery.select('status');
+            for (const att of attRecords) {
+              if (att.status === 'half_day') payableDays += 0.5;
+              else payableDays += 1;
+            }
+          } else {
+            // Fallback default: approximate full working days (22 days per month)
+            payableDays = accrualType === 'yearly' ? 250 : accrualType === 'quarterly' ? 65 : 22;
+          }
+
+          finalAccrual = (payableDays / forEveryDays) * earnLeaves;
+        } catch (e) {
+          finalAccrual = (22 / forEveryDays) * earnLeaves;
+        }
+      }
+    }
+
+    // Rule 3: Initial Allocation Date Range (Prorata cut-off)
     const isProRataEnabled = allocationSettings.initialAllocationDateRange || allocationSettings.disableProRata === false;
-    if (isProRataEnabled && accrualType === 'monthly') {
+    if (isProRataEnabled && accrualType === 'monthly' && !isFixedRatio) {
       const cutOffDayStr = allocationSettings.leaveProrataDays || allocationSettings.considerFullMonthBeforeDay;
       const dateType = allocationSettings.leaveProrataDateType || allocationSettings.considerFullMonthIfDateOf; // 'Joining' or 'Confirmation'
       
@@ -90,10 +159,8 @@ export class LeaveAccrualService {
 
         if (targetDate && !isNaN(cutOffDay)) {
           const todayDate = new Date(todayStr);
-          // If the target date is in the current month and year of the accrual run
           if (targetDate.getMonth() === todayDate.getMonth() && targetDate.getFullYear() === todayDate.getFullYear()) {
             if (targetDate.getDate() > cutOffDay) {
-              // Joined/Confirmed AFTER the cut-off day -> 0 accrual for this month
               return { shouldAccrue: false, finalAccrual: 0 };
             }
           }
@@ -101,13 +168,10 @@ export class LeaveAccrualService {
       }
     }
 
-    // Rule 3: Minimum Working Days
+    // Rule 4: Minimum Working Days
     if (allocationSettings.minWorkingDays) {
       const minDays = parseInt(allocationSettings.minWorkingDays, 10);
       if (!isNaN(minDays) && minDays > 0) {
-        // Find total present days in the previous year (for yearly) or previous month (for monthly)
-        // Since attendance query can be complex (joining multiple tables or reading logs),
-        // we use a simplified check on attendance_logs if it exists, or fallback to true if table missing.
         try {
           const hasAttendance = await db.schema.hasTable('attendance_logs');
           if (hasAttendance) {
@@ -132,9 +196,21 @@ export class LeaveAccrualService {
               return { shouldAccrue: false, finalAccrual: 0 };
             }
           }
-        } catch(e) {
-          // Fallback if table doesn't exist
-        }
+        } catch(e) {}
+      }
+    }
+
+    // Rule 5: Round Off Math (Round Up / Round Down / Nearest)
+    const isRoundOff = allocationSettings.leaveRoundOff || allocationSettings.roundOff;
+    if (isRoundOff) {
+      const roundRule = (allocationSettings.roundOffType || allocationSettings.roundOffOption || 'nearest').toLowerCase();
+      if (roundRule.includes('up') || roundRule === 'round_up' || roundRule === 'ceil') {
+        finalAccrual = Math.ceil(finalAccrual);
+      } else if (roundRule.includes('down') || roundRule === 'round_down' || roundRule === 'floor') {
+        finalAccrual = Math.floor(finalAccrual);
+      } else {
+        // Nearest: round to nearest 0.5 or integer
+        finalAccrual = Math.round(finalAccrual * 2) / 2;
       }
     }
 
@@ -218,7 +294,7 @@ export class LeaveAccrualService {
       actualValue = lopCount ? parseFloat(String((lopCount as any).sum || 0)) : 0;
     } else if (conditionOn === 'leave_balance') {
       const balance = await this.balanceService.getBalance(ctx, assignment.employee_id, assignment.leave_type_id);
-      actualValue = balance ? parseFloat(String(balance.current_balance || 0)) : 0;
+      actualValue = balance ? parseFloat(String((balance as any).current_balance || (balance as any).closing_balance || (balance as any).balance || 0)) : 0;
     }
 
     let conditionMet = false;
@@ -250,7 +326,13 @@ export class LeaveAccrualService {
     if (!leaveType || !employee) return true;
 
     let settings: any = {};
-    const rawAlloc = leaveType.employmentAllocationSettings || leaveType.employment_allocation_settings;
+    const rawAlloc =
+      leaveType.employmentAllocationSettings ||
+      leaveType.employment_allocation_settings ||
+      (leaveType.departments || leaveType.locations || leaveType.companies || leaveType.designations || leaveType.subDepartments || leaveType.grades || leaveType.employeeTypes || leaveType.employeeStatuses
+        ? leaveType
+        : null);
+
     if (rawAlloc) {
       try {
         let parsed = rawAlloc;
@@ -272,11 +354,26 @@ export class LeaveAccrualService {
       return eArray.some(e => ruleArray.includes(e) || ruleArray.includes(String(e)) || ruleArray.includes(Number(e)));
     };
 
-    const deptMatch = hasOverlap(employee.current_department_id || employee.currentDepartmentId, settings.departments);
+    const compMatch = hasOverlap(
+      employee.organization_id || employee.organizationId || employee.company_id || employee.companyId,
+      settings.companies || settings.organizations
+    );
+    if (!compMatch) return false;
+
+    const deptMatch = hasOverlap(employee.current_department_id || employee.currentDepartmentId || employee.department_id, settings.departments);
     if (!deptMatch) return false;
 
-    const locMatch = hasOverlap(employee.current_location_id || employee.currentLocationId, settings.locations);
+    const subDeptMatch = hasOverlap(employee.sub_department_id || employee.subDepartmentId, settings.subDepartments || settings.sub_departments);
+    if (!subDeptMatch) return false;
+
+    const locMatch = hasOverlap(employee.current_location_id || employee.currentLocationId || employee.location_id, settings.locations);
     if (!locMatch) return false;
+
+    const desigMatch = hasOverlap(
+      employee.current_designation_id || employee.currentDesignationId || employee.designation_id || employee.designationId,
+      settings.designations
+    );
+    if (!desigMatch) return false;
 
     const typeMatch = hasOverlap(employee.employment_type || employee.employmentType || (employee as any).employee_type, settings.employeeTypes);
     if (!typeMatch) return false;
@@ -284,7 +381,7 @@ export class LeaveAccrualService {
     const statusMatch = hasOverlap(employee.status, settings.employeeStatuses);
     if (!statusMatch) return false;
 
-    const gradeMatch = hasOverlap(employee.current_grade_id || employee.currentGradeId, settings.grades);
+    const gradeMatch = hasOverlap(employee.current_grade_id || employee.currentGradeId || employee.grade, settings.grades);
     if (!gradeMatch) return false;
 
     return true;
@@ -295,31 +392,67 @@ export class LeaveAccrualService {
    */
   async accrueMonthlyLeaves(ctx: TenantContext, organizationId: number): Promise<void> {
     const today = toLocalYYYYMMDD(new Date());
+    const db = getKnex();
 
     // Get all active assignments
     const assignments = await this.assignmentRepo
       .query(ctx)
-      .where('is_active', true)
-      .where('monthly_accrual', '>', 0);
+      .where('is_active', true);
 
     for (const assignment of assignments) {
-      if (!assignment.monthly_accrual) continue;
+      const leaveType = await db('leave_types').where('id', assignment.leave_type_id).first();
+      if (!leaveType || leaveType.status === 'inactive') continue;
 
-      // Evaluate Calendar Allocation Rules
-      const { shouldAccrue, finalAccrual } = await this.evaluateCalendarAllocationRules(ctx, assignment, assignment.monthly_accrual, 'monthly', today);
+      let allocSettings: any = {};
+      if (leaveType.allocation_settings) {
+        try {
+          allocSettings = typeof leaveType.allocation_settings === 'string'
+            ? JSON.parse(leaveType.allocation_settings)
+            : leaveType.allocation_settings;
+        } catch (e) {}
+      }
+
+      // If explicitly quarterly or yearly, skip monthly loop
+      const periodicity = allocSettings.entitlementPeriodicity || 'Monthly';
+      if (periodicity === 'Quarterly' || periodicity === 'Yearly') continue;
+
+      const baseMonthly = assignment.monthly_accrual !== null && assignment.monthly_accrual !== undefined && parseFloat(String(assignment.monthly_accrual)) > 0
+        ? parseFloat(String(assignment.monthly_accrual))
+        : (allocSettings.entitlementDays ? parseFloat(allocSettings.entitlementDays) / 12 : (assignment.annual_quota || 12) / 12);
+
+      // Evaluate Calendar Allocation Rules (Ratio formula, Only When, Resignation cutoff, Rounding)
+      const { shouldAccrue, finalAccrual } = await this.evaluateCalendarAllocationRules(ctx, assignment, baseMonthly, 'monthly', today);
       
-      if (!shouldAccrue) continue;
+      if (!shouldAccrue || finalAccrual <= 0) continue;
 
       // Check Employment Eligibility
-      const db = getKnex();
-      const leaveType = await db('leave_types').where('id', assignment.leave_type_id).first();
       const employeeData = await db('employees').where('id', assignment.employee_id).first();
+      if (!employeeData) continue;
       const isEligible = await this.evaluateEmploymentEligibility(employeeData, leaveType);
       if (!isEligible) continue;
 
       // Evaluate Payroll Conditions
       const payrollOk = await this.evaluatePayrollConditions(ctx, assignment, today);
       if (!payrollOk) continue;
+
+      const settings = await getOrgLeaveSettings(ctx.organizationId, employeeData.current_location_id || employeeData.currentLocationId);
+      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(today, startMonth);
+      let balance = await this.balanceService.getBalance(
+        ctx,
+        assignment.employee_id,
+        assignment.leave_type_id
+      );
+
+      if (!balance) {
+        balance = await this.balanceService.initializeBalance(
+          ctx,
+          assignment.employee_id,
+          assignment.leave_type_id,
+          fyStart,
+          assignment.annual_quota || 12
+        );
+      }
 
       // Create accrual record
       const accrual = await this.accrualRepo.create(ctx, {
@@ -331,15 +464,77 @@ export class LeaveAccrualService {
         accrual_type: 'monthly',
         accrued_days: finalAccrual,
         policy_id: assignment.leave_policy_id,
-        processed: false,
+        processed: true,
         notes: `Monthly accrual for ${new Date().toLocaleDateString()}`,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
       } as any);
 
-      // Initialize or update balance
-      const employee = await this.assignmentRepo.db('employees').where('id', assignment.employee_id).first();
-      const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
+      // Credit accrual
+      await this.balanceService.creditAccrual(
+        ctx,
+        assignment.employee_id,
+        assignment.leave_type_id,
+        finalAccrual
+      );
+
+      // Audit log
+      await this.auditService.log(ctx, {
+        action: 'applied',
+        entityType: 'application',
+        entityId: accrual.id,
+        afterState: { days: finalAccrual, type: 'monthly' },
+      });
+    }
+  }
+
+  /**
+   * Process quarterly leave accruals
+   */
+  async accrueQuarterlyLeaves(ctx: TenantContext): Promise<void> {
+    const today = toLocalYYYYMMDD(new Date());
+    const db = getKnex();
+
+    const assignments = await this.assignmentRepo
+      .query(ctx)
+      .where('is_active', true);
+
+    for (const assignment of assignments) {
+      const leaveType = await db('leave_types').where('id', assignment.leave_type_id).first();
+      if (!leaveType || leaveType.status === 'inactive') continue;
+
+      let allocSettings: any = {};
+      if (leaveType.allocation_settings) {
+        try {
+          allocSettings = typeof leaveType.allocation_settings === 'string'
+            ? JSON.parse(leaveType.allocation_settings)
+            : leaveType.allocation_settings;
+        } catch (e) {}
+      }
+
+      const periodicity = allocSettings.entitlementPeriodicity;
+      if (periodicity !== 'Quarterly') continue;
+
+      const baseQuarterly = assignment.quarterly_accrual !== null && assignment.quarterly_accrual !== undefined && parseFloat(String(assignment.quarterly_accrual)) > 0
+        ? parseFloat(String(assignment.quarterly_accrual))
+        : (allocSettings.entitlementDays ? parseFloat(allocSettings.entitlementDays) / 4 : (assignment.annual_quota || 12) / 4);
+
+      // Evaluate Calendar Allocation Rules
+      const { shouldAccrue, finalAccrual } = await this.evaluateCalendarAllocationRules(ctx, assignment, baseQuarterly, 'quarterly', today);
+      
+      if (!shouldAccrue || finalAccrual <= 0) continue;
+
+      // Check Employment Eligibility
+      const employeeData = await db('employees').where('id', assignment.employee_id).first();
+      if (!employeeData) continue;
+      const isEligible = await this.evaluateEmploymentEligibility(employeeData, leaveType);
+      if (!isEligible) continue;
+
+      // Evaluate Payroll Conditions
+      const payrollOk = await this.evaluatePayrollConditions(ctx, assignment, today);
+      if (!payrollOk) continue;
+
+      const settings = await getOrgLeaveSettings(ctx.organizationId, employeeData.current_location_id || employeeData.currentLocationId);
       const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
       const fyStart = calculateFinancialYearStart(today, startMonth);
       let balance = await this.balanceService.getBalance(
@@ -354,61 +549,9 @@ export class LeaveAccrualService {
           assignment.employee_id,
           assignment.leave_type_id,
           fyStart,
-          assignment.annual_quota
+          assignment.annual_quota || 12
         );
       }
-
-      // Credit accrual
-      await this.balanceService.creditAccrual(
-        ctx,
-        assignment.employee_id,
-        assignment.leave_type_id,
-        finalAccrual
-      );
-
-      // Mark as processed
-      await this.accrualRepo.update(ctx, accrual.id, { processed: true } as any);
-
-      // Audit log
-      await this.auditService.log(ctx, {
-        action: 'applied',
-        entityType: 'application',
-        entityId: accrual.id,
-        afterState: { days: assignment.monthly_accrual, type: 'monthly' },
-      });
-    }
-  }
-
-  /**
-   * Process quarterly leave accruals
-   */
-  async accrueQuarterlyLeaves(ctx: TenantContext): Promise<void> {
-    const today = toLocalYYYYMMDD(new Date());
-
-    // Get all active assignments with quarterly accrual
-    const assignments = await this.assignmentRepo
-      .query(ctx)
-      .where('is_active', true)
-      .where('quarterly_accrual', '>', 0);
-
-    for (const assignment of assignments) {
-      if (!assignment.quarterly_accrual) continue;
-
-      // Evaluate Calendar Allocation Rules
-      const { shouldAccrue, finalAccrual } = await this.evaluateCalendarAllocationRules(ctx, assignment, assignment.quarterly_accrual, 'quarterly', today);
-      
-      if (!shouldAccrue) continue;
-
-      // Check Employment Eligibility
-      const db = getKnex();
-      const leaveType = await db('leave_types').where('id', assignment.leave_type_id).first();
-      const employeeData = await db('employees').where('id', assignment.employee_id).first();
-      const isEligible = await this.evaluateEmploymentEligibility(employeeData, leaveType);
-      if (!isEligible) continue;
-
-      // Evaluate Payroll Conditions
-      const payrollOk = await this.evaluatePayrollConditions(ctx, assignment, today);
-      if (!payrollOk) continue;
 
       const accrual = await this.accrualRepo.create(ctx, {
         uuid: uuidv4(),
@@ -419,16 +562,64 @@ export class LeaveAccrualService {
         accrual_type: 'quarterly',
         accrued_days: finalAccrual,
         policy_id: assignment.leave_policy_id,
-        processed: false,
+        processed: true,
         notes: `Quarterly accrual for ${new Date().toLocaleDateString()}`,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
       } as any);
 
-      const employee = await this.assignmentRepo.db('employees').where('id', assignment.employee_id).first();
-      const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
+      await this.balanceService.creditAccrual(
+        ctx,
+        assignment.employee_id,
+        assignment.leave_type_id,
+        finalAccrual
+      );
+    }
+  }
+
+  /**
+   * Process yearly leave accruals
+   */
+  async accrueYearlyLeaves(ctx: TenantContext): Promise<void> {
+    const today = toLocalYYYYMMDD(new Date());
+    const db = getKnex();
+
+    const assignments = await this.assignmentRepo
+      .query(ctx)
+      .where('is_active', true);
+
+    for (const assignment of assignments) {
+      const leaveType = await db('leave_types').where('id', assignment.leave_type_id).first();
+      if (!leaveType || leaveType.status === 'inactive') continue;
+
+      let allocSettings: any = {};
+      if (leaveType.allocation_settings) {
+        try {
+          allocSettings = typeof leaveType.allocation_settings === 'string'
+            ? JSON.parse(leaveType.allocation_settings)
+            : leaveType.allocation_settings;
+        } catch (e) {}
+      }
+
+      const periodicity = allocSettings.entitlementPeriodicity;
+      if (periodicity !== 'Yearly') continue;
+
+      const employee = await db('employees').where('id', assignment.employee_id).first();
+      if (!employee) continue;
+
+      const baseYearly = assignment.yearly_accrual !== null && assignment.yearly_accrual !== undefined && parseFloat(String(assignment.yearly_accrual)) > 0
+        ? parseFloat(String(assignment.yearly_accrual))
+        : (allocSettings.entitlementDays ? parseFloat(allocSettings.entitlementDays) : (assignment.annual_quota || 12));
+
+      // Evaluate Calendar Allocation Rules
+      const { shouldAccrue, finalAccrual } = await this.evaluateCalendarAllocationRules(ctx, assignment, baseYearly, 'yearly', today);
+      
+      if (!shouldAccrue || finalAccrual <= 0) continue;
+
+      const settings = await getOrgLeaveSettings(ctx.organizationId, employee.current_location_id || employee.currentLocationId);
       const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
       const fyStart = calculateFinancialYearStart(today, startMonth);
+
       let balance = await this.balanceService.getBalance(
         ctx,
         assignment.employee_id,
@@ -441,56 +632,9 @@ export class LeaveAccrualService {
           assignment.employee_id,
           assignment.leave_type_id,
           fyStart,
-          assignment.annual_quota
+          assignment.annual_quota || 12
         );
       }
-
-      await this.balanceService.creditAccrual(
-        ctx,
-        assignment.employee_id,
-        assignment.leave_type_id,
-        finalAccrual
-      );
-
-      await this.accrualRepo.update(ctx, accrual.id, { processed: true } as any);
-    }
-  }
-
-  /**
-   * Process yearly leave accruals
-   */
-  async accrueYearlyLeaves(ctx: TenantContext): Promise<void> {
-    const today = toLocalYYYYMMDD(new Date());
-
-    const assignments = await this.assignmentRepo
-      .query(ctx)
-      .where('is_active', true)
-      .where('yearly_accrual', '>', 0);
-
-    for (const assignment of assignments) {
-      if (!assignment.yearly_accrual) continue;
-
-      const employee = await this.assignmentRepo.db('employees').where('id', assignment.employee_id).first();
-      const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-      
-      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
-      const fyStart = calculateFinancialYearStart(today, startMonth);
-
-      const policy = await this.assignmentRepo.db('leave_policies').where('id', assignment.leave_policy_id).first();
-      let scalePercent = null;
-      if (policy && policy.earned_leave_entitlement_percent !== null) {
-        scalePercent = parseFloat(policy.earned_leave_entitlement_percent);
-      }
-
-      let accruedDays = assignment.yearly_accrual;
-      if (scalePercent !== null) {
-        accruedDays = (assignment.annual_quota || assignment.yearly_accrual || 0) * (scalePercent / 100);
-      }
-
-      // Evaluate Calendar Allocation Rules
-      const { shouldAccrue, finalAccrual } = await this.evaluateCalendarAllocationRules(ctx, assignment, accruedDays, 'yearly', today);
-      
-      if (!shouldAccrue) continue;
 
       const accrual = await this.accrualRepo.create(ctx, {
         uuid: uuidv4(),
@@ -501,27 +645,11 @@ export class LeaveAccrualService {
         accrual_type: 'yearly',
         accrued_days: finalAccrual,
         policy_id: assignment.leave_policy_id,
-        processed: false,
+        processed: true,
         notes: `Yearly accrual for ${new Date().toLocaleDateString()}`,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
       } as any);
-
-      let balance = await this.balanceService.getBalance(
-        ctx,
-        assignment.employee_id,
-        assignment.leave_type_id
-      );
-
-      if (!balance) {
-        balance = await this.balanceService.initializeBalance(
-          ctx,
-          assignment.employee_id,
-          assignment.leave_type_id,
-          fyStart,
-          assignment.annual_quota
-        );
-      }
 
       await this.balanceService.creditAccrual(
         ctx,
@@ -529,8 +657,6 @@ export class LeaveAccrualService {
         assignment.leave_type_id,
         finalAccrual
       );
-
-      await this.accrualRepo.update(ctx, accrual.id, { processed: true } as any);
     }
   }
 
@@ -1124,10 +1250,10 @@ export class LeaveAccrualService {
             organization_id: ctx.organizationId,
             employee_id: assignment.employee_id,
             leave_type_id: assignment.leave_type_id,
-            transaction_type: 'credit',
-            days: totalCredit,
-            transaction_date: yesterdayStr,
-            description: `Auto non-calendar rule credit up to ${yesterdayStr}`,
+            transaction_type: 'ACCRUAL',
+            amount: totalCredit,
+            effective_date: yesterdayStr,
+            remarks: `Auto non-calendar rule credit up to ${yesterdayStr}`,
             reference_id: `NONCAL-${assignment.employee_id}-${assignment.leave_type_id}-${yesterdayStr}`,
             created_by: ctx.userId || 1,
             created_at: new Date(),

@@ -74,6 +74,45 @@ export class OvertimeService {
   }
 
   /**
+   * Get all overtime / holiday work requests for HR & Admin panel with employee & department info
+   */
+  async getAllRequests(ctx: TenantContext, options?: ListQueryOptions) {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    let query = db('overtime_requests as ot')
+      .leftJoin('employees as e', 'ot.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .where('ot.organization_id', ctx.organizationId)
+      .whereNull('ot.deleted_at')
+      .select(
+        'ot.id',
+        'ot.uuid',
+        'ot.employee_id as employeeId',
+        'ot.overtime_date as overtimeDate',
+        'ot.overtime_hours as overtimeHours',
+        'ot.overtime_type as overtimeType',
+        'ot.reason_description as reason',
+        'ot.approval_status as approvalStatus',
+        'ot.approved_by as approvedBy',
+        'ot.approval_date as approvalDate',
+        'ot.created_at as createdAt',
+        db.raw("CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, '')) as employeeName"),
+        'e.employee_code as employeeCode',
+        'e.avatar_url as avatarUrl',
+        'd.name as departmentName'
+      )
+      .orderBy('ot.created_at', 'desc');
+
+    if (options?.filters?.approval_status) {
+      query = query.where('ot.approval_status', options.filters.approval_status);
+    }
+
+    const items = await query;
+    return { items };
+  }
+
+  /**
    * Approve overtime
    */
   async approve(ctx: TenantContext, requestId: number): Promise<any> {
@@ -82,11 +121,12 @@ export class OvertimeService {
       throw new NotFoundError('Overtime request not found');
     }
 
-    if (request.approval_status !== 'pending') {
+    const currentStatus = (request as any).approvalStatus || request.approval_status;
+    if (currentStatus !== 'pending') {
       throw new ValidationError('Only pending requests can be approved');
     }
 
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const approved = await this.overtimeRepo.update(ctx, requestId, {
       approval_status: 'approved',
       approved_by: ctx.userId,
@@ -112,7 +152,8 @@ export class OvertimeService {
       throw new NotFoundError('Overtime request not found');
     }
 
-    if (request.approval_status !== 'pending') {
+    const currentStatus = (request as any).approvalStatus || request.approval_status;
+    if (currentStatus !== 'pending') {
       throw new ValidationError('Only pending requests can be rejected');
     }
 

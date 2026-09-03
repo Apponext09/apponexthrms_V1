@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCandidates, useCreateCandidate, useUpdateCandidate, useDeleteCandidate, useJobs } from '../hooks';
 import { useRecruitmentStore } from '../store/useRecruitmentStore';
 import { apiClient } from '@/lib/api';
@@ -7,15 +8,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Users, Eye, Clipboard, CheckCircle, Link2,
-  FileText, ExternalLink
+  FileText, ExternalLink, FileSpreadsheet, Sparkles, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { downloadCsvFile } from '@/lib/downloadCsv';
+import { BulkCandidateImportModal } from '../components/BulkCandidateImportModal';
+import { AiAnalysisModal } from '../components/AiAnalysisModal';
 
 interface ColumnConfig {
   key: string;
@@ -28,22 +33,54 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
   { key: 'years_of_experience', label: 'Experience (Yrs)' },
   { key: 'expected_salary', label: 'Expected Salary' },
   { key: 'source', label: 'Source' },
-  { key: 'ai_score', label: 'AI Score' },
+  { key: 'ats_score', label: 'ATS Score' },
+  { key: 'jd_match_score', label: 'JD Match Score' },
 ];
+
+const pipelineRank = (status: string) => {
+  const s = String(status || 'applied').toLowerCase();
+  if (['rejected', 'dropped', 'withdrawn'].includes(s)) return 4;
+  if (['offer', 'offered', 'hired'].includes(s)) return 3;
+  if (['interview', 'interviewing', 'assessment'].includes(s)) return 2;
+  return 1;
+};
+
+const canMovePipelineStatus = (fromStatus: string, toStatus: string) => {
+  if (fromStatus === toStatus) return true;
+  const fromRank = pipelineRank(fromStatus);
+  const toRank = pipelineRank(toStatus);
+  if (fromRank >= 4) return false;
+  if (toStatus === 'rejected') return fromRank < 4;
+  return toRank > fromRank;
+};
+
+const tabForStatus = (status: string): 'applied' | 'interview' | 'offer' | 'rejected' => {
+  const rank = pipelineRank(status);
+  if (rank >= 4) return 'rejected';
+  if (rank === 3) return 'offer';
+  if (rank === 2) return 'interview';
+  return 'applied';
+};
 
 export const CandidateManagement: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
   const [viewingCandidate, setViewingCandidate] = useState<any>(null);
   const [candidateToDelete, setCandidateToDelete] = useState<any>(null);
+
+  // AI Modal State
+  const [selectedCandidateForAiModal, setSelectedCandidateForAiModal] = useState<any | null>(null);
+  const [isAiAnalysisModalOpen, setIsAiAnalysisModalOpen] = useState(false);
 
   const createCandidate = useCreateCandidate();
   const updateCandidate = useUpdateCandidate(editingCandidate?.id || 0);
   const deleteCandidate = useDeleteCandidate();
   const { data: jobsResponse } = useJobs();
+  const queryClient = useQueryClient();
   
   // Table State
-  const [activeTab, setActiveTab] = useState<'all' | 'applied' | 'interview' | 'offer'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'applied' | 'interview' | 'offer' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -57,7 +94,7 @@ export const CandidateManagement: React.FC = () => {
     } catch (e) {
       console.error('Failed to load saved column settings', e);
     }
-    return ['source', 'ai_score', 'years_of_experience'];
+    return ['source', 'ats_score', 'jd_match_score', 'years_of_experience'];
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeLinkPopoverId, setActiveLinkPopoverId] = useState<number | null>(null);
@@ -184,333 +221,466 @@ export const CandidateManagement: React.FC = () => {
     });
   };
 
-  const handleExport = () => {
-    toast.success('Export started');
-    // Implement CSV export logic here
+  const handleExport = async () => {
+    try {
+      const res = await apiClient.get('/recruitment/candidates', {
+        params: {
+          page: 1,
+          pageSize: 1000,
+          search: searchQuery || undefined,
+          status: activeTab === 'all' ? undefined : activeTab,
+        },
+      });
+      const rows = res.data?.data || [];
+      if (!rows.length) {
+        toast.error('No candidate records available to export');
+        return;
+      }
+      downloadCsvFile(
+        `candidate_management_${activeTab}_export.csv`,
+        ['First Name', 'Last Name', 'Email', 'Phone', 'Status', 'Source', 'Company', 'Experience', 'ATS Score'],
+        rows.map((c: any) => [
+          c.firstName || c.first_name || '',
+          c.lastName || c.last_name || '',
+          c.email || '',
+          c.phone || '',
+          c.status || '',
+          c.source || '',
+          c.currentCompany || c.current_company || '',
+          c.yearsOfExperience ?? c.years_of_experience ?? '',
+          c.atsScore ?? c.ats_score ?? '',
+        ])
+      );
+      toast.success('Candidates CSV downloaded');
+    } catch (err) {
+      console.error('Failed to export candidates', err);
+      toast.error('Failed to export candidates');
+    }
+  };
+
+  const handlePipelineStatusChange = async (candidateId: number, currentStatus: string, status: string) => {
+    if (!canMovePipelineStatus(currentStatus, status)) {
+      toast.error('Pipeline can only move forward. Offered / rejected candidates cannot return to Interview.');
+      return;
+    }
+    try {
+      await apiClient.patch(`/recruitment/candidates/${candidateId}`, { status });
+      await queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      setActiveTab(tabForStatus(status));
+      setCurrentPage(1);
+      toast.success(`Candidate moved to ${status}`);
+    } catch (err: any) {
+      console.error('Failed to update candidate status', err);
+      toast.error(err?.response?.data?.error?.message || 'Failed to update candidate pipeline status');
+    }
   };
 
   return (
-    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 bg-slate-50/50 min-h-[calc(100vh-4rem)]">
+    <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
       
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-            Candidate Management
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Manage, review, and link candidates to job openings.</p>
+      {/* ── Top Header Section ────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-visible">
+        <div className="flex items-center gap-3.5 relative z-10">
+          <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold shrink-0 border border-purple-500/20 shadow-xs">
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="space-y-0.5">
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+              Candidate Management
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Manage, review ATS profiles, and link candidates to published job requisitions.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2.5 shrink-0 relative z-10 w-full sm:w-auto flex-wrap">
+          <Button 
+            type="button"
+            variant="outline"
+            onClick={() => setIsBulkImportOpen(true)}
+            className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-xl border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 cursor-pointer shadow-2xs whitespace-nowrap"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            Bulk Import
+          </Button>
+
           <Button 
             onClick={() => setIsCreating(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200"
+            className="h-9 px-4 text-xs font-bold gap-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs cursor-pointer whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 mr-1.5" />
+            <Plus className="w-3.5 h-3.5" />
             Add Candidate
           </Button>
           
-          <div className="relative">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm transition-all"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
-            {/* Settings Popover */}
-            {isSettingsOpen && (
-              <div className="absolute right-0 top-12 w-64 bg-white border border-slate-200 rounded-lg shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                <div className="p-3 bg-slate-50 border-b border-slate-100">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Configure Columns</h4>
-                </div>
-                <div className="p-2 max-h-64 overflow-y-auto">
-                  {ALL_CONFIGURABLE_COLUMNS.map(col => (
-                    <label key={col.key} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        checked={visibleColumns.includes(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                        className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
-                      />
-                      <span className="ml-2 text-sm text-slate-600">{col.label}</span>
-                    </label>
-                  ))}
-                </div>
+          <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                className="h-9 w-9 p-0 rounded-xl border-border hover:bg-muted text-muted-foreground shadow-2xs"
+                title="Configure Table Columns"
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent align="end" className="w-64 p-0 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+              <div className="p-3 bg-muted/50 border-b border-border">
+                <h4 className="text-xs font-extrabold text-foreground uppercase tracking-wider">Configure Columns</h4>
               </div>
-            )}
-          </div>
+              <div className="p-2 max-h-64 overflow-y-auto space-y-1">
+                {ALL_CONFIGURABLE_COLUMNS.map(col => (
+                  <label key={col.key} className="flex items-center p-2 hover:bg-muted/60 rounded-lg cursor-pointer text-xs font-medium text-foreground transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={visibleColumns.includes(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                      className="rounded border-border text-primary focus:ring-primary w-4 h-4 mr-2"
+                    />
+                    <span>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex flex-col relative w-full">
-        {/* Search Bar */}
-        <div className="absolute right-4 top-2 z-20 w-64">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <Input
-              placeholder="Search candidates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm h-9 text-sm rounded-full"
-            />
+      {/* ── Main Content Area ────────────────────────────────────────────────── */}
+      <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
+        {/* Toolbar: Segmented Tabs & Search Bar */}
+        <CardHeader className="p-5 border-b border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/60 flex-wrap">
+            <button
+              onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'all'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              All Candidates
+            </button>
+            <button
+              onClick={() => { setActiveTab('applied'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'applied'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              Applied
+            </button>
+            <button
+              onClick={() => { setActiveTab('interview'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'interview'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Interviewing
+            </button>
+            <button
+              onClick={() => { setActiveTab('offer'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'offer'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Offered
+            </button>
+            <button
+              onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'rejected'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              Rejected
+            </button>
           </div>
-        </div>
 
-        {/* Tabs Row */}
-        <div className="flex items-center gap-1 mb-[-1px]">
-          <button
-            onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'all'
-                ? 'bg-white text-slate-800 border-t-blue-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            All Candidates
-          </button>
-          <button
-            onClick={() => { setActiveTab('applied'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'applied'
-                ? 'bg-white text-slate-800 border-t-amber-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Applied
-          </button>
-          <button
-            onClick={() => { setActiveTab('interview'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'interview'
-                ? 'bg-white text-slate-800 border-t-green-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Interviewing
-          </button>
-          <button
-            onClick={() => { setActiveTab('offer'); setCurrentPage(1); }}
-            className={`px-6 py-2.5 text-sm font-semibold rounded-t-lg border-t-4 transition-all duration-200 ${
-              activeTab === 'offer'
-                ? 'bg-white text-slate-800 border-t-purple-500 border-x border-b-0 border-slate-200 shadow-sm z-10'
-                : 'bg-slate-100/70 text-slate-500 border-t-slate-300 border-transparent hover:bg-slate-100 hover:text-slate-700'
-            }`}
-          >
-            Offered
-          </button>
-        </div>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search candidates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-background border-border text-xs rounded-xl h-9"
+              />
+            </div>
 
-        {/* Result Card Wrapper */}
-        <div className="bg-white border border-slate-200 rounded-b-xl rounded-tr-xl p-5 shadow-sm">
-          
-          {/* Result Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 mb-4 gap-4">
-            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${activeTab === 'all' ? 'bg-blue-500' : activeTab === 'applied' ? 'bg-amber-500' : activeTab === 'interview' ? 'bg-green-500' : 'bg-purple-500'}`}></span> Result
-            </h3>
             <Button
               onClick={handleExport}
               variant="outline"
               size="sm"
-              className="text-slate-600 hover:text-slate-800 flex items-center gap-2 border-slate-200 hover:bg-slate-50 shadow-sm h-9"
+              className="text-xs font-bold gap-1.5 rounded-xl h-9 border-border hover:bg-muted shrink-0"
             >
-              <Download className="w-4 h-4" /> Export
+              <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
             </Button>
           </div>
+        </CardHeader>
 
-          {/* Show Entries & Quick Text */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 text-xs text-slate-500 gap-2">
-            <div className="font-medium">
-              Showing {totalEntries === 0 ? 0 : startIndex + 1} to {Math.min(endIndex, totalEntries)} of {totalEntries} entries
-            </div>
-            <div className="flex items-center gap-2">
-              <span>Show</span>
-              <select
-                value={entriesPerPage}
-                onChange={(e) => {
-                  setEntriesPerPage(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border border-slate-200 rounded px-2 py-1 bg-white text-slate-600 focus:outline-none focus:ring-1 focus:ring-slate-300 font-medium"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-              </select>
-              <span>entries</span>
-            </div>
-          </div>
-
+        <CardContent className="p-0">
           {/* Table Container */}
-          <div className="overflow-x-auto border border-slate-200 rounded-lg w-full pb-[200px]">
+          <div className="overflow-x-auto w-full">
             <table className="w-full text-sm text-left border-collapse min-w-[1000px] mrf-table">
-              <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-bold">
+              <thead className="bg-muted/50 text-muted-foreground border-b border-border/60 text-[11px] uppercase tracking-wider font-bold">
                 <tr>
-                  <th className="p-3.5">Action</th>
-                  <th className="p-3.5">Candidate Name</th>
-                  <th className="p-3.5">Email</th>
-                  <th className="p-3.5 text-center">Status</th>
+                  <th className="py-3.5 px-5">Actions</th>
+                  <th className="py-3.5 px-5">Candidate Name</th>
+                  <th className="py-3.5 px-5">Email & Contact</th>
+                  <th className="py-3.5 px-5 text-center">Status</th>
                   
                   {/* Dynamically configured columns */}
                   {visibleColumns.map((colKey) => {
                     const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === colKey);
                     return (
-                      <th key={colKey} className={cn("p-3.5", colKey === 'ai_score' && "text-center")}>
+                      <th key={colKey} className={cn("py-3.5 px-5", colKey === 'ai_score' && "text-center")}>
                         {col?.label || colKey}
                       </th>
                     );
                   })}
                   
-                  <th className="p-3.5 text-center">Link Job</th>
+                  <th className="py-3.5 px-5 text-center">Link Job</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-600">
+              <tbody className="divide-y divide-border/60 text-foreground">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5 + visibleColumns.length} className="p-8 text-center">
-                      <div className="flex items-center justify-center gap-2 text-slate-500">
-                        <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin"></div>
+                    <td colSpan={5 + visibleColumns.length} className="p-12 text-center">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                         Loading candidates...
                       </div>
                     </td>
                   </tr>
                 ) : candidates.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + visibleColumns.length} className="p-8 text-center text-slate-400 italic">
-                      No Candidates found matching the criteria
+                    <td colSpan={5 + visibleColumns.length} className="p-12 text-center text-muted-foreground text-xs italic">
+                      No Candidates found matching the criteria.
                     </td>
                   </tr>
                 ) : (
-                  candidates.map((item: any) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => setViewingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => setEditingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"><Edit2 className="w-4 h-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => setCandidateToDelete(item)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <div className="font-semibold text-slate-700">
-                          {((item.first_name || item.firstName)
-                            ? `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim()
-                            : (item.name || item.candidate_name || item.candidateName || (item.email ? item.email.split('@')[0] : 'Candidate')))}
-                        </div>
-                      </td>
-                      <td className="p-3.5 text-slate-600">{item.email}</td>
-                      <td className="p-3.5 text-center">
-                        <span className={cn(
-                          "px-2 py-1 text-[10px] uppercase font-bold tracking-wider rounded-md",
-                          ['offer', 'hired'].includes(item.status) ? 'bg-green-100 text-green-700' :
-                          ['rejected', 'dropped'].includes(item.status) ? 'bg-red-100 text-red-700' :
-                          item.status === 'interview' ? 'bg-purple-100 text-purple-700' :
-                          'bg-blue-100 text-blue-700'
-                        )}>
-                          {item.status || 'Applied'}
-                        </span>
-                      </td>
+                  candidates.map((item: any) => {
+                    const fullName = ((item.first_name || item.firstName)
+                      ? `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim()
+                      : (item.name || item.candidate_name || item.candidateName || (item.email ? item.email.split('@')[0] : 'Candidate')));
+                    
+                    const initials = fullName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'CA';
+                    const statusStr = (item.status || 'applied').toLowerCase();
 
-                      {/* Dynamic Columns */}
-                      {visibleColumns.map(colKey => {
-                        const val = item[colKey];
-                        const isScore = colKey === 'ai_score';
-                        const isSource = colKey === 'source';
-
-                        if (isSource) {
-                          const hasResumeBank = Boolean(item.resume_tracker_id || item.resume_bank_id);
-                          return (
-                            <td key={colKey} className="p-3.5">
-                              {hasResumeBank ? (
-                                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200" title={`Sourced from Resume Bank (${item.resume_tracker_id || 'ID:' + item.resume_bank_id})`}>
-                                  <FileText className="w-3 h-3 text-purple-600 shrink-0" />
-                                  <span>Resume Bank</span>
-                                  {item.resume_tracker_id && (
-                                    <span className="text-[10px] text-purple-600 font-mono font-bold">[{item.resume_tracker_id}]</span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                  {val || 'Direct Apply'}
-                                </span>
-                              )}
-                            </td>
-                          );
-                        }
-
-                        return (
-                          <td key={colKey} className={cn("p-3.5", isScore && "text-center")}>
-                            {isScore ? (
-                              <span className="font-bold text-slate-700">{val ? `${val}/100` : '-'}</span>
-                            ) : (
-                              val || '-'
-                            )}
-                          </td>
-                        );
-                      })}
-
-                      <td className="p-3.5 text-center relative">
-                        {/* Link to Job Button / Popover trigger */}
-                        <div 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveLinkPopoverId(prev => prev === item.id ? null : item.id);
-                            setSelectedJobIdForLink('');
-                          }}
-                          className="inline-flex items-center justify-center p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-blue-100 hover:text-blue-600 shadow-sm cursor-pointer transition-colors"
-                          title="Link to Job"
-                        >
-                          <Link2 className="w-4 h-4" />
-                        </div>
-
-                        {/* Link to Job Popover */}
-                        {activeLinkPopoverId === item.id && (
-                          <div 
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute right-[50%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[280px] text-slate-700 animate-in fade-in zoom-in-95 duration-150"
-                          >
-                            <h4 className="text-xs font-bold text-slate-800 uppercase border-b border-slate-100 pb-2 mb-3">Link Candidate to Job</h4>
-                            <div className="space-y-3 text-sm">
-                              <div>
-                                <label className="text-xs font-semibold text-slate-500 mb-1 block">Select Job Opening</label>
-                                <select
-                                  value={selectedJobIdForLink}
-                                  onChange={(e) => setSelectedJobIdForLink(e.target.value)}
-                                  className="w-full border border-slate-200 rounded px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs font-medium"
-                                >
-                                  <option value="">-- Choose Job Opening --</option>
-                                  {(Array.isArray(jobs) ? jobs : []).map((job: any) => {
-                                    const code = job.job_code || job.jobCode || job.mr_number || `JOB-${job.id}`;
-                                    const title = job.job_title || job.position_title || job.title || job.positionTitle || 'Software Developer';
-                                    return (
-                                      <option key={job.id} value={job.id}>
-                                        [{code}] {title}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                              </div>
-                              <div className="pt-2 border-t border-slate-100 flex gap-2">
-                                <button
-                                  onClick={() => setActiveLinkPopoverId(null)}
-                                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => handleLinkToJob(item.id)}
-                                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 px-2 rounded text-[10px] text-center cursor-pointer transition-colors uppercase tracking-wider"
-                                >
-                                  Apply to Job
-                                </button>
-                              </div>
+                    return (
+                      <tr key={item.id} className="hover:bg-muted/40 transition-colors">
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-1.5">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setViewingCandidate(item)} 
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10" 
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setEditingCandidate(item)} 
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10" 
+                              title="Edit Candidate"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setCandidateToDelete(item)} 
+                              className="h-8 w-8 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10" 
+                              title="Delete Candidate"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20">
+                              {initials}
+                            </div>
+                            <div className="font-bold text-foreground text-xs">
+                              {fullName}
                             </div>
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3.5 px-5 text-xs text-muted-foreground font-mono">
+                          <div>{item.email}</div>
+                          {item.phone && <div className="text-[10px] text-muted-foreground/80 mt-0.5">{item.phone}</div>}
+                        </td>
+                        <td className="py-3.5 px-5 text-center">
+                          <select
+                            value={['applied', 'screening', 'interview', 'offer', 'hired', 'rejected', 'dropped'].includes(statusStr) ? (statusStr === 'screening' ? 'applied' : statusStr === 'dropped' ? 'rejected' : statusStr) : 'applied'}
+                            onChange={(e) => handlePipelineStatusChange(item.id, statusStr, e.target.value)}
+                            className={cn(
+                              "px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full border bg-transparent cursor-pointer",
+                              ['offer', 'hired'].includes(statusStr) ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30' :
+                              ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'text-rose-600 dark:text-rose-400 border-rose-500/30' :
+                              statusStr === 'interview' ? 'text-amber-600 dark:text-amber-400 border-amber-500/30' :
+                              'text-blue-600 dark:text-blue-400 border-blue-500/30'
+                            )}
+                          >
+                            <option value="applied" disabled={!canMovePipelineStatus(statusStr, 'applied')}>Applied</option>
+                            <option value="interview" disabled={!canMovePipelineStatus(statusStr, 'interview')}>Interview</option>
+                            <option value="offer" disabled={!canMovePipelineStatus(statusStr, 'offer')}>Offered</option>
+                            <option value="rejected" disabled={!canMovePipelineStatus(statusStr, 'rejected')}>Rejected</option>
+                          </select>
+                        </td>
+
+                        {/* Dynamic Columns */}
+                        {visibleColumns.map(colKey => {
+                          const val = item[colKey];
+                          const isSource = colKey === 'source';
+
+                          if (colKey === 'ats_score') {
+                            const score = item.ats_score ?? item.atsScore;
+                            return (
+                              <td key={colKey} className="py-3.5 px-5 text-center">
+                                {score !== null && score !== undefined ? (
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                    score >= 85 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" :
+                                    score >= 70 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                  )}>
+                                    {score}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          if (colKey === 'jd_match_score') {
+                            const score = item.jd_match_score ?? item.jdMatchScore;
+                            return (
+                              <td key={colKey} className="py-3.5 px-5 text-center">
+                                {score !== null && score !== undefined ? (
+                                  <span className={cn(
+                                    "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                    score >= 80 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" :
+                                    score >= 65 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30" : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30"
+                                  )}>
+                                    {score}%
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs font-mono">-</span>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          if (isSource) {
+                            const hasResumeBank = Boolean(item.resume_tracker_id || item.resume_bank_id);
+                            return (
+                              <td key={colKey} className="py-3.5 px-5">
+                                {hasResumeBank ? (
+                                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30" title={`Sourced from Resume Bank (${item.resume_tracker_id || 'ID:' + item.resume_bank_id})`}>
+                                    <FileText className="w-3 h-3 text-purple-500 shrink-0" />
+                                    <span>Resume Bank</span>
+                                    {item.resume_tracker_id && (
+                                      <span className="text-[10px] font-mono font-bold">[{item.resume_tracker_id}]</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-muted-foreground border border-border">
+                                    {val || 'Direct Apply'}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={colKey} className="py-3.5 px-5 text-xs text-foreground font-medium">
+                              {val || '-'}
+                            </td>
+                          );
+                        })}
+
+                        <td className="py-3.5 px-5 text-center relative">
+                          {/* Link to Job Button / Popover trigger */}
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveLinkPopoverId(prev => prev === item.id ? null : item.id);
+                              setSelectedJobIdForLink('');
+                            }}
+                            className="inline-flex items-center justify-center p-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary shadow-2xs cursor-pointer transition-colors"
+                            title="Link to Job"
+                          >
+                            <Link2 className="w-4 h-4" />
+                          </div>
+
+                          {/* Link to Job Popover */}
+                          {activeLinkPopoverId === item.id && (
+                            <div 
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-0 sm:left-auto top-10 bg-card border border-border rounded-xl shadow-2xl p-4 text-left z-50 min-w-[280px] max-w-[320px] text-foreground select-none animate-in fade-in zoom-in-95 duration-150"
+                            >
+                              <div className="flex items-center justify-between border-b border-border pb-2 mb-3">
+                                <h4 className="text-xs font-black text-foreground uppercase tracking-wider">Link Candidate to Job</h4>
+                                <button 
+                                  onClick={() => setActiveLinkPopoverId(null)}
+                                  className="text-muted-foreground hover:text-foreground text-xs"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">Target Job Opening</label>
+                                  <select
+                                    value={selectedJobIdForLink}
+                                    onChange={(e) => setSelectedJobIdForLink(e.target.value)}
+                                    className="w-full px-2.5 py-1.5 border border-border rounded-lg bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
+                                  >
+                                    <option value="">-- Choose Job --</option>
+                                    {jobs.map((job: any) => (
+                                      <option key={job.id} value={job.id}>
+                                        {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex items-center gap-2 pt-1">
+                                  <button
+                                    onClick={() => setActiveLinkPopoverId(null)}
+                                    className="flex-1 bg-muted hover:bg-muted/80 text-muted-foreground font-bold py-1.5 px-2 rounded-lg text-[11px] text-center cursor-pointer transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => handleLinkToJob(item.id)}
+                                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-1.5 px-2 rounded-lg text-[11px] text-center cursor-pointer transition-colors uppercase tracking-wider"
+                                  >
+                                    Apply to Job
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -518,29 +688,31 @@ export const CandidateManagement: React.FC = () => {
 
           {/* Pagination Controls */}
           {candidates.length > 0 && (
-            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-100 text-sm">
-              <div className="text-slate-500 font-medium">
-                Page {currentPage} of {totalPages}
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+              <div className="font-medium">
+                Showing <span className="font-bold text-foreground">{totalEntries === 0 ? 0 : startIndex + 1}</span> to <span className="font-bold text-foreground">{Math.min(endIndex, totalEntries)}</span> of <span className="font-bold text-foreground">{totalEntries}</span> entries
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                 >
-                  <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> Prev
                 </Button>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-1">
                   {Array.from({ length: totalPages }, (_, i) => (
                     <Button
                       key={i + 1}
                       variant={currentPage === i + 1 ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setCurrentPage(i + 1)}
-                      className={`h-8 w-8 p-0 ${
+                      className={`h-8 w-8 p-0 rounded-xl text-xs font-bold ${
                         currentPage === i + 1 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
-                          : 'text-slate-600 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-primary text-primary-foreground shadow-xs' 
+                          : 'border-border hover:bg-muted text-foreground'
                       }`}
                     >
                       {i + 1}
@@ -552,17 +724,18 @@ export const CandidateManagement: React.FC = () => {
                 </div>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className="h-8 px-3 text-slate-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                  className="h-8 px-3 rounded-xl border-border hover:bg-muted text-foreground disabled:opacity-40"
                 >
-                  Next <ChevronRight className="w-4 h-4 ml-1" />
+                  Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
                 </Button>
               </div>
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {isCreating && (
         <CandidateFormModal
@@ -594,6 +767,28 @@ export const CandidateManagement: React.FC = () => {
           onClose={() => setViewingCandidate(null)}
         />
       )}
+
+      <BulkCandidateImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onSuccess={refetch}
+      />
+
+      {/* AI ATS & Match Analysis Modal */}
+      {selectedCandidateForAiModal && (
+        <AiAnalysisModal
+          isOpen={isAiAnalysisModalOpen}
+          onClose={() => {
+            setIsAiAnalysisModalOpen(false);
+            setSelectedCandidateForAiModal(null);
+          }}
+          candidateId={selectedCandidateForAiModal.id}
+          jobId={selectedCandidateForAiModal.job_id || selectedCandidateForAiModal.jobId || (jobs[0]?.id || 1)}
+          candidateName={selectedCandidateForAiModal.name || `${selectedCandidateForAiModal.first_name || ''} ${selectedCandidateForAiModal.last_name || ''}`.trim()}
+          jobTitle={selectedCandidateForAiModal.job_title || selectedCandidateForAiModal.jobTitle}
+          onShortlistSuccess={refetch}
+        />
+      )}
     </div>
   );
 };
@@ -605,23 +800,52 @@ interface CandidateFormModalProps {
   jobs?: any[];
 }
 
+const pickValue = (...values: any[]) => values.find((v) => v !== undefined && v !== null && v !== '') ?? '';
+const toDateInputValue = (value: any) => (value ? String(value).slice(0, 10) : '');
+
 const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubmit, initialData, jobs }) => {
+  const existingResumeUrl = pickValue(initialData?.resumeUrl, initialData?.resume_url);
+  const [resumeFileName, setResumeFileName] = useState(
+    existingResumeUrl ? String(existingResumeUrl).split('/').pop() || 'Resume on file' : ''
+  );
   const [formData, setFormData] = useState({
-    firstName: initialData?.first_name || '',
-    lastName: initialData?.last_name || '',
-    email: initialData?.email || '',
-    phone: initialData?.phone || '',
-    alternativePhone: initialData?.alternative_phone || '',
-    yearsOfExperience: initialData?.years_of_experience || 0,
-    currentCompany: initialData?.current_company || '',
-    currentSalary: initialData?.current_salary || '',
-    expectedSalary: initialData?.expected_salary || '',
-    noticePeriodDays: initialData?.notice_period_days || 0,
-    linkedinUrl: initialData?.linkedin_url || '',
-    portfolioUrl: initialData?.portfolio_url || '',
-    source: initialData?.source || 'direct_apply',
+    firstName: pickValue(initialData?.firstName, initialData?.first_name),
+    lastName: pickValue(initialData?.lastName, initialData?.last_name),
+    email: pickValue(initialData?.email),
+    phone: pickValue(initialData?.phone),
+    alternativePhone: pickValue(initialData?.alternativePhone, initialData?.alternative_phone),
+    gender: pickValue(initialData?.gender, 'Male'),
+    maritalStatus: pickValue(initialData?.maritalStatus, initialData?.marital_status, 'Unmarried'),
+    qualification: pickValue(initialData?.qualification),
+    skills: pickValue(initialData?.skills),
+    dateOfBirth: toDateInputValue(pickValue(initialData?.dateOfBirth, initialData?.dob, initialData?.date_of_birth)),
+    yearsOfExperience: initialData?.yearsOfExperience ?? initialData?.years_of_experience ?? 0,
+    currentCompany: pickValue(initialData?.currentCompany, initialData?.current_company),
+    currentSalary: pickValue(initialData?.currentSalary, initialData?.current_salary),
+    expectedSalary: pickValue(initialData?.expectedSalary, initialData?.expected_salary),
+    noticePeriodDays: initialData?.noticePeriodDays ?? initialData?.notice_period_days ?? 0,
+    linkedinUrl: pickValue(initialData?.linkedinUrl, initialData?.linkedin_url),
+    portfolioUrl: pickValue(initialData?.portfolioUrl, initialData?.portfolio_url),
+    source: pickValue(initialData?.source, 'direct_apply'),
+    resumeUrl: existingResumeUrl || '',
   });
   const [selectedJobId, setSelectedJobId] = useState<string>('');
+
+  const handleResumeUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const allowed = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type) && !/\.(pdf|doc|docx)$/i.test(file.name)) {
+      toast.error('Please upload a PDF or Word resume');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFormData((prev) => ({ ...prev, resumeUrl: String(reader.result || '') }));
+      setResumeFileName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -661,6 +885,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             if (payload.portfolioUrl === '') delete payload.portfolioUrl;
             if (payload.currentCompany === '') delete payload.currentCompany;
             if (payload.alternativePhone === '') delete payload.alternativePhone;
+            if (payload.dateOfBirth === '') delete payload.dateOfBirth;
             
             // Map invalid legacy sources to valid enum values just in case state is stale
             if (payload.source === 'linkedin' || payload.source === 'naukri') {
@@ -696,6 +921,29 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <Input type="tel" name="alternativePhone" placeholder="Optional" value={formData.alternativePhone} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Gender <span className="text-red-500">*</span></label>
+                    <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Marital Status <span className="text-red-500">*</span></label>
+                    <select name="maritalStatus" value={formData.maritalStatus} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required>
+                      <option value="Unmarried">Unmarried</option>
+                      <option value="Married">Married</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Date of Birth</label>
+                  <Input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
+                </div>
               </div>
             </div>
 
@@ -703,6 +951,14 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             <div>
               <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Professional Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Qualification <span className="text-red-500">*</span></label>
+                  <Input name="qualification" placeholder="e.g. B.Tech / BE, MBA, MCA, Graduate" value={formData.qualification} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" required />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Skills <span className="text-red-500">*</span></label>
+                  <Input name="skills" placeholder="e.g. React, Node.js, Python, HR Management" value={formData.skills} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" required />
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Current Company</label>
                   <Input name="currentCompany" placeholder="e.g. Acme Corp" value={formData.currentCompany} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
@@ -739,6 +995,8 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <option value="job_board">Job Board (LinkedIn, Naukri, etc)</option>
                     <option value="employee_referral">Employee Referral</option>
                     <option value="recruitment_agency">Recruitment Agency</option>
+                    <option value="bulk_import">Bulk Import</option>
+                    <option value="resume_bank">Resume Bank</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">
@@ -749,28 +1007,40 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Resume / Portfolio Link</label>
                   <Input type="url" name="portfolioUrl" placeholder="Google Drive, Dropbox, Portfolio link..." value={formData.portfolioUrl} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
                 </div>
+                <div className="space-y-1.5 md:col-span-3">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Candidate Resume</label>
+                  <label className="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2.5 cursor-pointer hover:border-blue-400 hover:bg-blue-50/40 transition-colors">
+                    <Upload className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-800">
+                        {resumeFileName ? 'Resume selected' : 'Upload PDF or Word resume'}
+                      </p>
+                      <p className={cn('text-[11px] truncate', resumeFileName ? 'text-emerald-600 font-medium' : 'text-slate-500')}>
+                        {resumeFileName || 'No file uploaded yet'}
+                      </p>
+                    </div>
+                    <input type="file" accept=".pdf,.doc,.docx,application/pdf" className="hidden" onChange={handleResumeUpload} />
+                  </label>
+                </div>
+                {!initialData && jobs && jobs.length > 0 && (
+                  <div className="space-y-1.5 md:col-span-3">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Link to Job Opening</label>
+                    <select
+                      value={selectedJobId}
+                      onChange={(e) => setSelectedJobId(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
+                    >
+                      <option value="">-- Optional: choose a published job --</option>
+                      {jobs.map((job: any) => (
+                        <option key={job.id} value={job.id}>
+                          {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* Section: Assignment (Only for creation) */}
-            {!initialData && jobs && jobs.length > 0 && (
-              <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
-                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Link2 className="w-4 h-4 text-blue-600" /> Assign to Job Opening (Optional)</h3>
-                <div className="space-y-1.5 max-w-md">
-                  <select 
-                    value={selectedJobId} 
-                    onChange={(e) => setSelectedJobId(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg bg-white border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
-                  >
-                    <option value="">-- Do not assign to any job right now --</option>
-                    {jobs.map((job: any) => (
-                      <option key={job.id} value={job.id}>{job.title} ({job.department})</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">If selected, the candidate will be automatically linked as 'Applied' to this job.</p>
-                </div>
-              </div>
-            )}
 
           </form>
         </div>
@@ -781,7 +1051,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             Cancel
           </Button>
           <Button type="submit" form="create-candidate-form" className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md">
-            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Profile' : (selectedJobId ? 'Save & Assign' : 'Save Candidate')}
+            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Profile' : 'Save Candidate'}
           </Button>
         </div>
 
@@ -805,7 +1075,7 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ candi
         </div>
         <h3 className="text-lg font-bold text-slate-800 mb-2">Delete Candidate?</h3>
         <p className="text-sm text-slate-500 mb-6">
-          Are you sure you want to delete <strong>{candidate.first_name} {candidate.last_name}</strong>? This action cannot be undone.
+          Are you sure you want to delete <strong>{candidate.firstName || candidate.first_name} {candidate.lastName || candidate.last_name}</strong>? This permanently removes the candidate from the database.
         </p>
         <div className="flex justify-center gap-3">
           <Button variant="outline" onClick={onClose} className="px-6">Cancel</Button>
@@ -1005,7 +1275,7 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Name</p>
-                  <p className="font-medium text-slate-800">{candidate.first_name} {candidate.last_name}</p>
+                  <p className="font-medium text-slate-800">{candidate.firstName || candidate.first_name} {candidate.lastName || candidate.last_name}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Email</p>

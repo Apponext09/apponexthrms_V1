@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,15 +13,24 @@ import {
   Sparkles,
   FileCheck,
   XCircle,
-  Landmark
+  Landmark,
+  Calculator,
+  ArrowRight,
+  Layers,
+  UserCheck,
+  Calendar,
+  Check,
+  RotateCcw
 } from 'lucide-react';
 import { apiClient } from '@/config/api';
+import { formatPayrollDate } from '@/lib/utils';
 
 interface RevisionRecord {
   id: number;
   empId: number;
   empName: string;
   empCode: string;
+  slabName: string;
   revisionType: string;
   currentCtc: number;
   proposedCtc: number;
@@ -30,64 +39,273 @@ interface RevisionRecord {
   status: 'draft' | 'submitted' | 'pending' | 'approved' | 'rejected' | 'implemented';
 }
 
+interface EmployeeItem {
+  id: number;
+  name: string;
+  code: string;
+  ctc: number;
+  dept?: string;
+  slabId?: string | number;
+  slabName?: string;
+}
+
 export const SalaryRevisionManagement: React.FC = () => {
   const { user } = useAuthStore();
   const rawRole = (user as any)?.role || (user as any)?.accessRole || (user as any)?.access_role || (Array.isArray((user as any)?.roles) ? (user as any).roles.join(',') : '') || '';
   const userRole = String(rawRole).toLowerCase();
   const isAdmin = userRole.includes('admin') || userRole.includes('owner') || user?.email === 'kot@gmail.com';
-  const isHR = !isAdmin && (userRole.includes('hr') || userRole.includes('manager') || userRole.includes('lead') || userRole.includes('team') || userRole.includes('dept'));
 
-  // Revision list starts empty — populated from API on mount
   const [revisionsList, setRevisionsList] = useState<RevisionRecord[]>([]);
+  const [employees, setEmployees] = useState<EmployeeItem[]>([]);
+  const [paySlabs, setPaySlabs] = useState<any[]>([]);
+  const [componentDefs, setComponentDefs] = useState<any[]>([]);
+  const [employeeStructuresMap, setEmployeeStructuresMap] = useState<Record<number, { structureName: string; slabId?: number; annualCtc: number; grossMonthly: number }>>({});
 
   const [showForm, setShowForm] = useState(false);
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('38');
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
+  const [selectedSlabId, setSelectedSlabId] = useState<string>('');
   const [revisionType, setRevisionType] = useState('Annual Performance Appraisal');
-  const [newCtcInput, setNewCtcInput] = useState<string>('1150000');
+  const [newCtcInput, setNewCtcInput] = useState<string>('');
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
-  const [reason, setReason] = useState('Outstanding performance evaluation');
+  const [reason, setReason] = useState('Annual compensation review and performance adjustment');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Dynamic employee list — fetched live from API
-  const [employees, setEmployees] = useState<{ id: number; name: string; code: string; ctc: number }[]>([]);
-  const [employeeStructuresMap, setEmployeeStructuresMap] = useState<Record<number, { structureName: string; annualCtc: number; grossMonthly: number }>>({});
-
-  const fetchRevisions = React.useCallback(() => {
-    apiClient.get('/payroll/salary-revisions').then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list)) {
-        const mapped: RevisionRecord[] = list.map((r: any) => ({
-          id: r.id || r.uuid || Date.now(),
-          empId: r.employee_id || r.employeeId || 0,
-          empName: r.employee_name || r.employeeName || (r.employeeName ? r.employeeName : `Employee #${r.employee_id || r.employeeId}`),
-          empCode: r.employee_code || r.employeeCode || `EMP-${r.employee_id || r.employeeId}`,
-          revisionType: r.revision_type || r.revisionType || 'Revision',
-          currentCtc: Number(r.current_ctc || r.currentCtc || r.oldCtc || 0),
-          proposedCtc: Number(r.proposed_ctc || r.newCTC || r.newCtc || 0),
-          effectiveFrom: r.effective_from || r.effectiveFrom || '',
-          reason: r.reason || r.reasonDescription || '',
-          status: r.status || 'submitted'
-        }));
-        setRevisionsList(mapped);
-      }
+  // 1. Fetch Slabs Catalog & Component Definitions
+  useEffect(() => {
+    Promise.all([
+      apiClient.get('/payroll/slabs').catch(() => ({ data: [] })),
+      apiClient.get('/payroll/component-definitions').catch(() => ({ data: [] }))
+    ]).then(([slabsRes, defsRes]: any) => {
+      const slabList = slabsRes.data?.data || slabsRes.data || [];
+      const defsList = defsRes.data?.data || defsRes.data || [];
+      if (Array.isArray(slabList)) setPaySlabs(slabList);
+      if (Array.isArray(defsList)) setComponentDefs(defsList);
     }).catch(() => {});
   }, []);
 
-  React.useEffect(() => {
-    fetchRevisions();
+  // Helper to resolve slab name by ID or CTC
+  const getSlabName = (slabId?: any, ctc?: number) => {
+    if (slabId) {
+      const matched = paySlabs.find(s => String(s.id) === String(slabId));
+      if (matched) return matched.name || matched.slab_name;
+    }
+    if (ctc && ctc > 0) {
+      const matched = paySlabs.find(s => {
+        const min = Number(s.min_ctc || s.minCtc || 0);
+        const max = Number(s.max_ctc || s.maxCtc || 100000000);
+        return ctc >= min && ctc <= max;
+      });
+      if (matched) return matched.name || matched.slab_name;
+    }
+    return paySlabs[0]?.name || 'Standard Monthly Slab';
+  };
 
-    // Load live assigned salary structure mappings
+  // Universal client formula evaluator
+  const evaluateRevisionExpr = (exprStr: string, ctx: Record<string, number>): number => {
+    if (!exprStr || !exprStr.trim()) return 0;
+    let expr = exprStr.toLowerCase();
+
+    // Handle min(a, b) and max(a, b)
+    expr = expr.replace(/min\s*\(([^,]+),\s*([^)]+)\)/g, 'Math.min($1, $2)');
+    expr = expr.replace(/max\s*\(([^,]+),\s*([^)]+)\)/g, 'Math.max($1, $2)');
+
+    // Handle "50% of Basic", etc.
+    expr = expr.replace(/(\d+(\.\d+)?)%\s*(?:of\s*)?([a-z_]+)/g, '($3 * ($1 / 100))');
+
+    // Replace square bracket variables like [Basic Salary], [Gross], [CTC]
+    expr = expr.replace(/\[([^\]]+)\]/g, (_, name) => {
+      const k = name.toLowerCase().trim().replace(/[\s\-_]+/g, '_');
+      return String(ctx[k] ?? ctx[name.toLowerCase()] ?? 0);
+    });
+
+    for (const [k, v] of Object.entries(ctx)) {
+      const regex = new RegExp(`\\b${k}\\b`, 'g');
+      expr = expr.replace(regex, String(v));
+    }
+
+    expr = expr.replace(/[^0-9+\-*/().\s,Mathminax]/g, '');
+    try {
+      const res = Function(`'use strict'; return (${expr})`)();
+      return isNaN(res) ? 0 : Math.round(res * 100) / 100;
+    } catch { return 0; }
+  };
+
+  // Compute dynamic breakdown for given CTC as per Slab and Component Master Settings
+  const calculateBreakdown = (ctc: number) => {
+    const monthlyGross = Math.round(ctc / 12);
+    const selectedSlab = paySlabs.find(s => String(s.id) === String(selectedSlabId));
+    let allowedIds: string[] = [];
+    if (selectedSlab?.selected_component_ids || selectedSlab?.selectedComponentIds) {
+      try {
+        const raw = selectedSlab.selected_component_ids ?? selectedSlab.selectedComponentIds;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) allowedIds = parsed.map(String);
+      } catch {}
+    }
+
+    // Filter components for the slab
+    const relevantComps = componentDefs.filter(c => {
+      if (allowedIds.length === 0) return true;
+      const cid = String(c.id);
+      const cname = (c.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      return allowedIds.some(id => String(id) === cid || String(id).toLowerCase() === cname);
+    });
+
+    const ctx: Record<string, number> = {
+      ctc: monthlyGross,
+      monthly_ctc: monthlyGross,
+      annual_ctc: ctc,
+      gross: monthlyGross,
+      gross_salary: monthlyGross,
+      basic: Math.round(monthlyGross * 0.5),
+      basic_salary: Math.round(monthlyGross * 0.5)
+    };
+
+    // 1. Basic Component
+    const basicComp = relevantComps.find(c => (c.name || '').toLowerCase().includes('basic'));
+    let basicAmount = 0;
+    if (basicComp) {
+      if (basicComp.formula) basicAmount = evaluateRevisionExpr(basicComp.formula, ctx);
+      else if (basicComp.amount) basicAmount = Number(basicComp.amount);
+      else basicAmount = Math.round(monthlyGross * 0.5);
+    } else {
+      basicAmount = Math.round(monthlyGross * 0.5);
+    }
+    ctx.basic = basicAmount;
+    ctx.basic_salary = basicAmount;
+
+    const earningsList: { name: string; amount: number; type: string }[] = [];
+    earningsList.push({
+      name: basicComp?.name || 'Basic Salary',
+      amount: basicAmount,
+      type: basicComp?.component_type || 'Derived'
+    });
+    let allocatedEarnings = basicAmount;
+
+    // 2. Other Earning Components
+    for (const c of relevantComps) {
+      const name = c.name || '';
+      const nameLower = name.toLowerCase();
+      const cat = (c.category || c.component_type || '').toLowerCase();
+      if (nameLower.includes('basic') || nameLower.includes('special')) continue;
+      // If it's a deduction component, skip
+      if (cat.includes('deduct') || ['provident fund', 'employee state insurance', 'labour welfare fund', 'professional tax', 'tax deducted at source', 'salary advance recovery', 'loan emi recovery', 'loss of pay', 'attendance penalty', 'health insurance premium', 'staff welfare fund'].some(d => nameLower.includes(d))) {
+        continue;
+      }
+
+      let amt = 0;
+      if (c.formula) amt = evaluateRevisionExpr(c.formula, ctx);
+      else if (c.amount) amt = Number(c.amount);
+
+      const normKey = nameLower.replace(/[^a-z0-9]+/g, '_');
+      ctx[normKey] = amt;
+
+      if (amt > 0) {
+        earningsList.push({ name, amount: amt, type: c.component_type || 'Value' });
+        allocatedEarnings += amt;
+      }
+    }
+
+    // 3. Special Allowance (Residual Balancer)
+    const specialComp = relevantComps.find(c => (c.name || '').toLowerCase().includes('special'));
+    const specialAllowance = Math.max(0, monthlyGross - allocatedEarnings);
+    if (specialComp || specialAllowance > 0) {
+      earningsList.push({
+        name: specialComp?.name || 'Special Allowance',
+        amount: specialAllowance,
+        type: 'Derived'
+      });
+    }
+
+    // 4. Deduction Components
+    const deductionsList: { name: string; amount: number; type: string }[] = [];
+    let totalDeductions = 0;
+
+    for (const c of relevantComps) {
+      const name = c.name || '';
+      const nameLower = name.toLowerCase();
+      const cat = (c.category || c.component_type || '').toLowerCase();
+      const isDeduction = cat.includes('deduct') || ['provident fund', 'employee state insurance', 'labour welfare fund', 'professional tax', 'tax deducted at source', 'salary advance recovery', 'loan emi recovery', 'loss of pay', 'attendance penalty', 'health insurance premium', 'staff welfare fund'].some(d => nameLower.includes(d));
+      if (!isDeduction) continue;
+
+      let amt = 0;
+      if (nameLower.includes('provident fund') || nameLower.includes('pf')) {
+        amt = Math.min(1800, Math.round(basicAmount * 0.12));
+      } else if (nameLower.includes('employee state insurance') || nameLower.includes('esic')) {
+        amt = monthlyGross <= 21000 ? Math.round(monthlyGross * 0.0075) : 0;
+      } else if (nameLower.includes('professional tax') || nameLower.includes('pt')) {
+        amt = monthlyGross > 15000 ? 200 : 0;
+      } else if (c.formula) {
+        amt = evaluateRevisionExpr(c.formula, ctx);
+      } else if (c.amount) {
+        amt = Number(c.amount);
+      }
+
+      if (amt > 0) {
+        deductionsList.push({ name, amount: amt, type: c.component_type || 'Value' });
+        totalDeductions += amt;
+      }
+    }
+
+    const totalEarnings = monthlyGross;
+    const netSalary = Math.max(0, totalEarnings - totalDeductions);
+
+    return {
+      monthlyGross,
+      basic: basicAmount,
+      earningsList,
+      deductionsList,
+      totalEarnings,
+      totalDeductions,
+      netSalary
+    };
+  };
+
+  // 2. Fetch Revisions List
+  const fetchRevisions = useCallback(() => {
+    apiClient.get('/payroll/salary-revisions').then((res: any) => {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list)) {
+        const mapped: RevisionRecord[] = list.map((r: any) => {
+          const empCtc = Number(r.current_ctc || r.currentCtc || r.oldCtc || 0);
+          return {
+            id: r.id || r.uuid || Date.now(),
+            empId: r.employee_id || r.employeeId || 0,
+            empName: r.employee_name || r.employeeName || (r.first_name ? `${r.first_name} ${r.last_name || ''}` : `Employee #${r.employee_id || r.employeeId}`),
+            empCode: r.employee_code || r.employeeCode || `EMP-${r.employee_id || r.employeeId}`,
+            slabName: r.slab_name || r.slabName || getSlabName(r.payroll_slab_id || r.slab_id, empCtc),
+            revisionType: r.revision_type || r.revisionType || 'Revision',
+            currentCtc: empCtc,
+            proposedCtc: Number(r.proposed_ctc || r.newCTC || r.newCtc || 0),
+            effectiveFrom: r.effective_from || r.effectiveFrom || '',
+            reason: r.reason || r.reasonDescription || '',
+            status: r.status || 'submitted'
+          };
+        });
+        setRevisionsList(mapped);
+      }
+    }).catch(() => {});
+  }, [paySlabs]);
+
+  useEffect(() => {
+    fetchRevisions();
+  }, [fetchRevisions]);
+
+  // 3. Fetch Structure Mappings & Employees
+  useEffect(() => {
+    // Structure mappings
     apiClient.get('/payroll/structures/mappings').then((res: any) => {
       const list = res.data?.data || res.data || [];
       if (Array.isArray(list) && list.length > 0) {
-        const structMap: Record<number, { structureName: string; annualCtc: number; grossMonthly: number }> = {};
+        const structMap: Record<number, { structureName: string; slabId?: number; annualCtc: number; grossMonthly: number }> = {};
         for (const m of list) {
           const empId = m.empId || m.emp_id || m.id;
           const annual = Number(m.annualCtc || m.annual_ctc || (m.grossMonthly || m.gross_monthly ? Number(m.grossMonthly || m.gross_monthly) * 12 : 0));
           const gross = Number(m.grossMonthly || m.gross_monthly || (annual ? Math.round(annual / 12) : 0));
           if (empId) {
             structMap[empId] = {
-              structureName: m.structureName || m.structure_name || 'Standard Structure',
+              structureName: m.structureName || m.structure_name || 'Standard Monthly Slab',
+              slabId: m.slabId || m.slab_id || m.payroll_slab_id,
               annualCtc: annual,
               grossMonthly: gross
             };
@@ -97,101 +315,114 @@ export const SalaryRevisionManagement: React.FC = () => {
       }
     }).catch(() => {});
 
-    // Also fetch master salary structures to capture assigned employee CTCs
-    apiClient.get('/payroll/structures').then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list) && list.length > 0) {
-        const structMap: Record<number, { structureName: string; annualCtc: number; grossMonthly: number }> = {};
-        for (const s of list) {
-          const empId = s.employee_id || s.employeeId;
-          const annual = Number(s.annual_ctc || s.annualCtc || 0);
-          const gross = Number(s.gross_monthly || s.grossMonthly || (annual ? Math.round(annual / 12) : 0));
-          if (empId) {
-            structMap[empId] = {
-              structureName: s.structure_name || s.structureName || 'Standard Structure',
-              annualCtc: annual,
-              grossMonthly: gross
-            };
-          }
-        }
-        setEmployeeStructuresMap(prev => ({ ...prev, ...structMap }));
-      }
-    }).catch(() => {});
+    // Employees list
+    apiClient.get('/employees', { params: { pageSize: 500, limit: 500 } }).then((res: any) => {
+      const d = res?.data?.data ?? res?.data ?? res;
+      const rawList = Array.isArray(d) ? d : (Array.isArray(d?.items) ? d.items : []);
+      const mapped: EmployeeItem[] = rawList.map((e: any) => {
+        const fn = e.first_name || e.firstName || '';
+        const ln = e.last_name || e.lastName || '';
+        const fullName = `${fn} ${ln}`.trim() || e.name || e.fullName || `Employee #${e.id}`;
+        const code = e.employee_code || e.employeeCode || e.code || `EMP-${e.id}`;
+        const ctc = Number(e.annual_ctc || e.annualCtc || e.annual_salary || 0);
+        const dept = e.department_name || e.departmentName || e.department?.name || '';
+        const slabId = e.payroll_slab_id || e.slab_id || e.salary_slab_id;
+        return {
+          id: Number(e.id),
+          name: fullName,
+          code,
+          ctc,
+          dept,
+          slabId,
+          slabName: e.slab_name || e.slabName
+        };
+      }).filter((e: any) => Boolean(e.id));
 
-    // Load live employee list for this org
-    apiClient.get('/employees', { params: { pageSize: 500 } }).then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list) && list.length > 0) {
-        const mapped = list.map((e: any) => ({
-          id: e.id,
-          name: `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
-          code: e.employee_code || e.employeeCode || `EMP-${e.id}`,
-          ctc: Number(e.annual_ctc || e.annualCtc || (e.gross_salary ? e.gross_salary * 12 : 0) || 0)
-        }));
+      if (mapped.length > 0) {
+        mapped.sort((a, b) => a.name.localeCompare(b.name));
         setEmployees(mapped);
-        const myEmp = mapped.find((e: any) => e.id === (user as any)?.employeeId || e.id === (user as any)?.employee_id || e.id === user?.id);
-        if (myEmp) {
-          setSelectedEmpId(String(myEmp.id));
-        } else if (mapped.length > 0) {
+        if (!selectedEmpId) {
           setSelectedEmpId(String(mapped[0].id));
         }
       }
     }).catch(() => {});
-  }, [user?.organizationId]);
+  }, []);
 
-  // Dynamic assigned structure for logged in employee / selected employee
-  const [myAssignedStruct, setMyAssignedStruct] = useState<any>(null);
+  // Update selected employee & slab details
+  const activeEmp = employees.find(e => String(e.id) === String(selectedEmpId)) || employees[0] || { id: 0, name: '—', code: '—', ctc: 0 };
+  const assignedStruct = activeEmp?.id ? employeeStructuresMap[activeEmp.id] : undefined;
 
-  React.useEffect(() => {
-    if (!isAdmin) {
-      apiClient.get('/payroll/my-salary-structure').then((res: any) => {
-        const data = res.data?.data || res.data;
-        if (data && typeof data === 'object') {
-          setMyAssignedStruct(data);
-        }
-      }).catch(() => {});
+  // Resolve current active CTC
+  const currentCtcVal = (assignedStruct && assignedStruct.annualCtc > 0)
+    ? assignedStruct.annualCtc
+    : (activeEmp.ctc > 0 ? activeEmp.ctc : 600000);
+
+  // Initialize slab and CTC input when active employee changes
+  useEffect(() => {
+    if (activeEmp && activeEmp.id) {
+      const empSlabId = assignedStruct?.slabId || activeEmp.slabId || (paySlabs.length > 0 ? paySlabs[0].id : '');
+      setSelectedSlabId(String(empSlabId || (paySlabs[0]?.id || '1')));
+      // Default proposed CTC to 10% hike
+      const defaultHike = Math.round(currentCtcVal * 1.10);
+      setNewCtcInput(String(defaultHike));
     }
-  }, [isAdmin]);
+  }, [activeEmp.id, currentCtcVal, paySlabs]);
 
-  const activeEmp = employees.find(e => e.id === parseInt(selectedEmpId)) || employees[0] || { id: 0, name: '—', code: '—', ctc: 0 };
-  const assignedStruct = employeeStructuresMap[activeEmp.id];
+  // Calculations
+  const proposedCtcVal = parseFloat(newCtcInput) || currentCtcVal;
+  const hikeAmount = Math.max(0, proposedCtcVal - currentCtcVal);
+  const hikePercentage = currentCtcVal > 0 ? ((hikeAmount / currentCtcVal) * 100).toFixed(2) : '0.00';
   
-  // Selected employee values for Revision Builder
-  const empCtcVal = (assignedStruct && assignedStruct.annualCtc > 0) ? assignedStruct.annualCtc : activeEmp.ctc;
-  const empMonthlyGross = (assignedStruct && assignedStruct.grossMonthly > 0) ? assignedStruct.grossMonthly : Math.round(empCtcVal / 12);
-  const proposedCtcVal = parseFloat(newCtcInput) || empCtcVal;
-  const hikeAmount = Math.max(0, proposedCtcVal - empCtcVal);
-  const hikePercentage = empCtcVal > 0 ? ((hikeAmount / empCtcVal) * 100).toFixed(2) : '0.00';
+  const currentMonthlyGross = Math.round(currentCtcVal / 12);
   const proposedMonthlyGross = Math.round(proposedCtcVal / 12);
-  const monthlyDifference = proposedMonthlyGross - empMonthlyGross;
+  const monthlyDifference = proposedMonthlyGross - currentMonthlyGross;
 
-  // Logged-in HR personal salary structure
-  const myCtcVal = Number(myAssignedStruct?.annualCtc || myAssignedStruct?.annual_ctc || (myAssignedStruct?.grossMonthly || myAssignedStruct?.gross_monthly ? Number(myAssignedStruct?.grossMonthly || myAssignedStruct?.gross_monthly) * 12 : 0));
-  const myMonthlyGross = Number(myAssignedStruct?.grossMonthly || myAssignedStruct?.gross_monthly || (myCtcVal ? Math.round(myCtcVal / 12) : 0));
-  const myBasicPay = Number(myAssignedStruct?.basicMonthly || myAssignedStruct?.basic_monthly || Math.round(myMonthlyGross * 0.5));
-  const myTakeHomePay = Number(myAssignedStruct?.netTakeHome || myAssignedStruct?.net_take_home || Math.round(myMonthlyGross * 0.88));
-  const myStructureName = myAssignedStruct?.structureName || myAssignedStruct?.structure_name || (myCtcVal > 0 ? 'Active Structure' : 'Not Assigned');
+  const currentBreakdown = calculateBreakdown(currentCtcVal);
+  const proposedBreakdown = calculateBreakdown(proposedCtcVal);
+
+  const handleApplyHikePercent = (pct: number) => {
+    const newCtc = Math.round(currentCtcVal * (1 + pct / 100));
+    setNewCtcInput(String(newCtc));
+  };
 
   const handleCreateRevision = async (instantApprove = false) => {
-    const initialStatus = instantApprove ? 'approved' : 'submitted';
-    setSuccessMsg(`Salary revision request for ${activeEmp.name} (+${hikePercentage}% Hike) submitted for Admin approval!`);
+    const isInstant = instantApprove || isAdmin;
+    const initialStatus = isInstant ? 'approved' : 'submitted';
+
+    setSuccessMsg(
+      isInstant
+        ? `Salary revision for ${activeEmp.name} (+${hikePercentage}% Hike) approved and updated in payroll!`
+        : `Salary revision request for ${activeEmp.name} (+${hikePercentage}% Hike) submitted for Admin approval.`
+    );
 
     try {
+      // 1. Submit Salary Revision Record
       await apiClient.post('/payroll/salary-revisions', {
         employeeId: activeEmp.id,
         revisionType,
-        oldCtc: empCtcVal,
+        oldCtc: currentCtcVal,
         newCtc: proposedCtcVal,
         newCTC: proposedCtcVal,
         incrementPercentage: parseFloat(hikePercentage),
         incrementAmount: hikeAmount,
         effectiveFrom,
         reasonDescription: reason,
-        instantApprove,
+        instantApprove: isInstant,
         status: initialStatus
       });
+
+      // 2. If approved instantly, assign slab & new CTC to active salary structure
+      if (isInstant) {
+        await apiClient.post('/payroll/structures/assign', {
+          employeeId: activeEmp.id,
+          slabId: selectedSlabId || 1,
+          annualCtc: proposedCtcVal,
+          effectiveFrom
+        }).catch(() => {});
+      }
+
       fetchRevisions();
-    } catch (e) {
+    } catch {
       fetchRevisions();
     }
 
@@ -199,334 +430,402 @@ export const SalaryRevisionManagement: React.FC = () => {
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
-  const handleApprove = async (id: number) => {
-    const target = revisionsList.find(r => r.id === id);
-    setRevisionsList(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+  const handleApprove = async (rev: RevisionRecord) => {
+    setRevisionsList(prev => prev.map(r => r.id === rev.id ? { ...r, status: 'approved' } : r));
     try {
-      await apiClient.put(`/payroll/salary-revisions/${id}/approve`);
+      await apiClient.put(`/payroll/salary-revisions/${rev.id}/approve`);
+      // Update employee salary structure
+      await apiClient.post('/payroll/structures/assign', {
+        employeeId: rev.empId,
+        slabId: selectedSlabId || 1,
+        annualCtc: rev.proposedCtc,
+        effectiveFrom: rev.effectiveFrom || new Date().toISOString().slice(0, 10)
+      }).catch(() => {});
+
       fetchRevisions();
-    } catch (e) {
+    } catch {
       fetchRevisions();
     }
-    setSuccessMsg(`Salary revision request approved successfully${target ? ` for ${target.empName}` : ''}!`);
+    setSuccessMsg(`Salary revision for ${rev.empName} approved successfully!`);
     setTimeout(() => setSuccessMsg(null), 3500);
   };
 
-  const handleReject = async (id: number) => {
-    const target = revisionsList.find(r => r.id === id);
-    setRevisionsList(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
+  const handleReject = async (rev: RevisionRecord) => {
+    setRevisionsList(prev => prev.map(r => r.id === rev.id ? { ...r, status: 'rejected' } : r));
     try {
-      await apiClient.put(`/payroll/salary-revisions/${id}/reject`);
+      await apiClient.put(`/payroll/salary-revisions/${rev.id}/reject`);
       fetchRevisions();
-    } catch (e) {
+    } catch {
       fetchRevisions();
     }
-    setSuccessMsg(`Salary revision request rejected${target ? ` for ${target.empName}` : ''}.`);
+    setSuccessMsg(`Salary revision for ${rev.empName} rejected.`);
     setTimeout(() => setSuccessMsg(null), 3500);
   };
 
-  const getBadgeStyle = (status: string) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-emerald-50 text-emerald-800 border-emerald-200';
-      case 'implemented': return 'bg-purple-50 text-purple-800 border-purple-200';
-      case 'submitted': return 'bg-amber-50 text-amber-800 border-amber-200';
-      case 'rejected': return 'bg-rose-50 text-rose-800 border-rose-200';
-      default: return 'bg-slate-50 text-slate-800 border-slate-200';
+      case 'approved':
+        return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] font-bold">Approved</Badge>;
+      case 'implemented':
+        return <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">Implemented</Badge>;
+      case 'submitted':
+      case 'pending':
+        return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] font-bold">Pending Review</Badge>;
+      case 'rejected':
+        return <Badge className="bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 text-[10px] font-bold">Rejected</Badge>;
+      default:
+        return <Badge variant="outline" className="text-[10px] font-bold">{status}</Badge>;
     }
   };
+
+  const currentSlabName = getSlabName(selectedSlabId, currentCtcVal);
 
   return (
-    <div className="space-y-6">
-      {/* Guided Workspace Step Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
-            <TrendingUp className="w-5 h-5" />
+    <div className="w-full space-y-6 pb-12">
+      {/* ── Modern Header Banner ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-5 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-xl bg-primary/10 text-primary shrink-0 ring-4 ring-primary/5">
+            <TrendingUp className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
-                Step 4 of 4: Revisions &amp; Payslips
-              </span>
-              <h2 className="text-lg font-black text-foreground tracking-tight">
-                {isAdmin ? 'Salary Revision & Appraisal Approvals' : 'Salary Revision & Appraisal Management'}
-              </h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-black text-foreground tracking-tight">
+                {isAdmin ? 'Salary Revision & Appraisal Approvals' : 'Salary Revision Management'}
+              </h1>
+              <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+                Assigned Slabs &amp; CTC Engine
+              </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {isAdmin
-                ? 'Review and approve or reject salary revision requests submitted by HR for organization employees.'
-                : 'Submit salary revision requests for organization employees for Admin approval.'}
+              Review assigned salary slabs, adjust annual CTC with live formula breakdown, and process appraisal hikes.
             </p>
           </div>
         </div>
+
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0 cursor-pointer shadow-xs"
+          className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 shadow-xs cursor-pointer"
         >
-          {showForm ? <ChevronUp className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-          {showForm ? 'Close Builder' : '+ Create Salary Revision'}
+          {showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {showForm ? 'Close Revision Builder' : 'Create Salary Revision'}
         </Button>
       </div>
 
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2 font-medium text-sm shadow-xs">
-          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-200 rounded-xl flex items-center gap-2 text-xs font-bold shadow-xs animate-fade-in">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* Section 1: My Personal Assigned Salary Structure Card (Hidden for Admin) */}
-      {!isAdmin && (
-        <Card className="border border-border/80 shadow-xs bg-card p-5 space-y-3">
-          <div className="flex items-center justify-between border-b pb-3">
-            <span className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Landmark className="w-4.5 h-4.5 text-primary" />
-              My Current Assigned Salary Structure
-            </span>
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-xs">
-              {myStructureName}
-            </Badge>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold">
-            <div className="p-3 bg-muted/20 rounded-lg space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold">Annual CTC</span>
-              <div className="text-base font-extrabold text-foreground">
-                ₹{myCtcVal > 0 ? myCtcVal.toLocaleString('en-IN') : 'Structure Not Assigned'}
-              </div>
-            </div>
-            <div className="p-3 bg-muted/20 rounded-lg space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold">Monthly Gross</span>
-              <div className="text-base font-extrabold text-primary">
-                ₹{myMonthlyGross > 0 ? myMonthlyGross.toLocaleString('en-IN') : '0'}/mo
-              </div>
-            </div>
-            <div className="p-3 bg-muted/20 rounded-lg space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold">Basic Pay (50%)</span>
-              <div className="text-base font-extrabold text-foreground">
-                ₹{myBasicPay > 0 ? myBasicPay.toLocaleString('en-IN') : '0'}/mo
-              </div>
-            </div>
-            <div className="p-3 bg-muted/20 rounded-lg space-y-1">
-              <span className="text-muted-foreground block text-[10px] uppercase font-bold">Estimated Take-Home</span>
-              <div className="text-base font-extrabold text-emerald-600">
-                ₹{myTakeHomePay > 0 ? myTakeHomePay.toLocaleString('en-IN') : '0'}/mo
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Admin Quick Summary Overview */}
-      {isAdmin && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="p-4 border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-            <div className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">Pending Admin Approvals</div>
-            <div className="text-2xl font-black text-amber-900 dark:text-amber-200 mt-1">
-              {revisionsList.filter(r => r.status === 'submitted' || r.status === 'pending').length}
-            </div>
-            <div className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">Submitted by HR requiring review</div>
-          </Card>
-          <Card className="p-4 border border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20">
-            <div className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase">Approved Revisions</div>
-            <div className="text-2xl font-black text-emerald-900 dark:text-emerald-200 mt-1">
-              {revisionsList.filter(r => r.status === 'approved' || r.status === 'implemented').length}
-            </div>
-            <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">Approved & updated in payroll</div>
-          </Card>
-          <Card className="p-4 border border-slate-200 bg-slate-50/50 dark:bg-slate-900/50">
-            <div className="text-xs font-bold text-slate-500 uppercase">Total Revision Requests</div>
-            <div className="text-2xl font-black text-slate-800 dark:text-slate-200 mt-1">
-              {revisionsList.length}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">All time HR revision records</div>
-          </Card>
-        </div>
-      )}
-
-      {/* Revision Form & Hike Calculator (HR only) */}
-      {!isAdmin && showForm && (
+      {/* ── KPI Summary Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="border border-border/80 shadow-xs bg-card">
-          <CardHeader className="border-b border-border/60 bg-primary/5">
-            <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
-              <TrendingUp className="w-4 h-4 text-primary" /> Proposed Salary Increment Calculator
-            </CardTitle>
-            <CardDescription>Select employee and set proposed annual CTC to compute real-time hike percentage and monthly pay difference.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase">Pending Approvals</p>
+              <p className="text-2xl font-black text-amber-600">
+                {revisionsList.filter(r => r.status === 'submitted' || r.status === 'pending').length}
+              </p>
+              <p className="text-[10px] text-muted-foreground">Requests awaiting Admin sign-off</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600">
+              <Calendar className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
 
-            {/* Current Salary Structure Status Banner */}
-            {empCtcVal > 0 ? (
-              <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-primary/20 text-primary font-extrabold text-[10px] border-primary/30 uppercase">
-                    Assigned Structure
-                  </Badge>
-                  <span className="font-bold text-foreground">
-                    {assignedStruct?.structureName || 'Active Salary Structure'}
-                  </span>
-                </div>
-                <div className="font-extrabold text-emerald-600 dark:text-emerald-400 text-xs">
-                  Current Assigned CTC for {activeEmp.name}: ₹{empCtcVal.toLocaleString('en-IN')} / yr (₹{empMonthlyGross.toLocaleString('en-IN')}/mo)
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center gap-2">
-                <span>⚠️ No assigned salary structure found for {activeEmp.name}. You can still propose a new CTC revision.</span>
-              </div>
-            )}
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase">Approved Revisions</p>
+              <p className="text-2xl font-black text-emerald-600">
+                {revisionsList.filter(r => r.status === 'approved' || r.status === 'implemented').length}
+              </p>
+              <p className="text-[10px] text-muted-foreground">Updated in payroll structures</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600">
+              <CheckCircle className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Employee Selection */}
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase">Total Revisions</p>
+              <p className="text-2xl font-black text-foreground">{revisionsList.length}</p>
+              <p className="text-[10px] text-muted-foreground">All-time appraisal records</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <FileCheck className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Salary Revision Builder & Slab Component Calculator ── */}
+      {showForm && (
+        <Card className="border border-border/80 shadow-sm bg-card overflow-hidden">
+          <CardHeader className="border-b border-border/60 bg-muted/20 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Employee *</label>
+                <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                  <Calculator className="w-4 h-4 text-primary" /> Salary Revision &amp; Slab CTC Increment Builder
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                  Select an employee to load their assigned salary slab, then enter the revised Annual CTC to calculate new take-home earnings.
+                </CardDescription>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-bold px-3 py-1">
+                  Assigned Slab: {currentSlabName}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-6 space-y-6">
+            {/* Input Controls Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Employee Selector */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5">Select Employee *</label>
                 <select
                   value={selectedEmpId}
                   onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="w-full h-10 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-white cursor-pointer"
+                  className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background font-bold text-foreground focus:ring-1 focus:ring-primary cursor-pointer"
                 >
-                  {employees.map(e => {
-                    const empStruct = employeeStructuresMap[e.id];
-                    const empCtc = (empStruct && empStruct.annualCtc > 0) ? empStruct.annualCtc : e.ctc;
-                    const ctcStr = empCtc > 0 ? `₹${(empCtc / 100000).toFixed(2)}L/yr` : 'No Structure';
-                    return (
+                  {employees.length === 0 ? (
+                    <option value="">Loading employees...</option>
+                  ) : (
+                    employees.map(e => (
                       <option key={e.id} value={String(e.id)}>
-                        {e.name} ({e.code}) — Current CTC: {ctcStr} {empStruct?.structureName ? `[${empStruct.structureName}]` : ''}
+                        {e.name} ({e.code}) {e.dept ? `• ${e.dept}` : ''}
                       </option>
-                    );
-                  })}
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Assigned Salary Slab */}
+              <div>
+                <label className="block text-xs font-bold text-foreground mb-1.5">Salary Slab Template *</label>
+                <select
+                  value={selectedSlabId}
+                  onChange={(e) => setSelectedSlabId(e.target.value)}
+                  className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background font-bold text-foreground focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  {paySlabs.map(s => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.name || s.slab_name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               {/* Revision Type */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Revision Type *</label>
+                <label className="block text-xs font-bold text-foreground mb-1.5">Revision Type *</label>
                 <select
                   value={revisionType}
                   onChange={(e) => setRevisionType(e.target.value)}
-                  className="w-full h-10 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-white"
+                  className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background font-semibold text-foreground focus:ring-1 focus:ring-primary cursor-pointer"
                 >
                   <option value="Annual Performance Appraisal">Annual Performance Appraisal</option>
-                  <option value="Role Promotion (Lead Engineer)">Role Promotion</option>
+                  <option value="Role Promotion">Role Promotion</option>
                   <option value="Market Alignment Revision">Market Alignment Revision</option>
-                  <option value="Retention Bonus / Special Hike">Retention Bonus / Special Hike</option>
+                  <option value="Retention / Special Increment">Retention / Special Increment</option>
                 </select>
-              </div>
-
-              {/* Proposed Annual CTC */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Proposed Annual CTC (INR) *</label>
-                <Input
-                  type="number"
-                  value={newCtcInput}
-                  onChange={(e) => setNewCtcInput(e.target.value)}
-                  placeholder="e.g. 1150000"
-                  className="h-10 text-sm font-bold bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400"
-                />
               </div>
 
               {/* Effective From */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Effective Date *</label>
+                <label className="block text-xs font-bold text-foreground mb-1.5">Effective Date *</label>
                 <Input
                   type="date"
                   value={effectiveFrom}
                   onChange={(e) => setEffectiveFrom(e.target.value)}
-                  className="h-10 text-sm bg-white dark:bg-slate-800"
+                  className="h-9 text-xs bg-background"
                 />
               </div>
             </div>
 
-            {/* Real-time Increment Summary & Itemized Component Breakdown Card */}
-            <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-              <div className="flex justify-between items-center border-b pb-3">
+            {/* CTC Increase Control Box */}
+            <div className="p-4 bg-muted/30 border border-border/80 rounded-xl space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <label className="text-xs font-bold text-foreground block">
+                    Proposed Revised Annual CTC (₹) *
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Current CTC: <span className="font-bold text-foreground">₹{currentCtcVal.toLocaleString('en-IN')} / yr</span> (₹{currentMonthlyGross.toLocaleString('en-IN')}/mo)
+                  </p>
+                </div>
+
+                {/* Quick Hike Percentage Chips */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase mr-1">Quick Hike:</span>
+                  {[5, 10, 15, 20, 25, 30].map(pct => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => handleApplyHikePercent(pct)}
+                      className="px-2.5 py-1 rounded-md text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer border border-primary/20"
+                    >
+                      +{pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">₹</span>
+                  <Input
+                    type="number"
+                    value={newCtcInput}
+                    onChange={(e) => setNewCtcInput(e.target.value)}
+                    placeholder="Enter revised annual CTC..."
+                    className="pl-8 h-10 text-sm font-black text-emerald-600 dark:text-emerald-400 bg-background"
+                  />
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                    Assigned CTC, Slab &amp; Increment Impact Analysis
+                  <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs font-bold px-3 py-1.5">
+                    +{hikePercentage}% Hike (+₹{hikeAmount.toLocaleString('en-IN')}/yr)
+                  </Badge>
+                  <span className="text-xs font-bold text-muted-foreground">
+                    (+₹{monthlyDifference.toLocaleString('en-IN')}/mo Net Increase)
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 font-bold border-indigo-200 text-xs px-2.5 py-0.5">
-                    Slab: {assignedStruct?.structureName || 'Standard Grade Slab'}
-                  </Badge>
-                  <Badge variant="outline" className="bg-emerald-100 text-emerald-900 font-bold border-emerald-300 text-sm px-3 py-1">
-                    +{hikePercentage}% Salary Hike
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-semibold">
-                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg space-y-1 border">
-                  <span className="text-slate-500">Current Assigned CTC</span>
-                  <div className="text-base font-bold text-slate-900 dark:text-white">₹{(empCtcVal / 100000).toFixed(2)} Lakhs</div>
-                  <div className="text-[11px] text-slate-400">₹{empMonthlyGross.toLocaleString('en-IN')}/mo</div>
-                </div>
-
-                <div className="p-3 bg-emerald-50 dark:bg-slate-900 rounded-lg space-y-1 border border-emerald-200">
-                  <span className="text-slate-500">Proposed New CTC</span>
-                  <div className="text-base font-bold text-emerald-700 dark:text-emerald-400">₹{(proposedCtcVal / 100000).toFixed(2)} Lakhs</div>
-                  <div className="text-[11px] text-emerald-600 font-bold">₹{proposedMonthlyGross.toLocaleString('en-IN')}/mo</div>
-                </div>
-
-                <div className="p-3 bg-indigo-50 dark:bg-slate-900 rounded-lg space-y-1 border border-indigo-100">
-                  <span className="text-slate-500">Annual Increase</span>
-                  <div className="text-base font-bold text-indigo-900 dark:text-indigo-300">+₹{hikeAmount.toLocaleString('en-IN')}</div>
-                  <div className="text-[11px] text-indigo-600">+₹{monthlyDifference.toLocaleString('en-IN')}/mo net gain</div>
-                </div>
-
-                <div className="p-3 bg-purple-50 dark:bg-slate-900 rounded-lg space-y-1 border border-purple-100">
-                  <span className="text-slate-500">Effective Date</span>
-                  <div className="text-base font-bold text-purple-900 dark:text-purple-300">{effectiveFrom}</div>
-                  <div className="text-[11px] text-purple-600">Active Effective Date</div>
-                </div>
-              </div>
-
-              {/* 🌟 Itemized Salary Components Breakdown Grid */}
-              <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
-                <span className="text-[11px] font-black uppercase text-indigo-900 dark:text-indigo-300 tracking-wide block">
-                  Current Assigned Components Breakdown ({activeEmp.name}):
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase">Basic Pay (50%)</span>
-                    <div className="font-extrabold text-foreground">₹{Math.round(empMonthlyGross * 0.5).toLocaleString('en-IN')}/mo</div>
-                  </div>
-                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase">HRA (50% Basic)</span>
-                    <div className="font-extrabold text-foreground">₹{Math.round(empMonthlyGross * 0.25).toLocaleString('en-IN')}/mo</div>
-                  </div>
-                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase">Special Allowance</span>
-                    <div className="font-extrabold text-foreground">₹{Math.round(empMonthlyGross * 0.25).toLocaleString('en-IN')}/mo</div>
-                  </div>
-                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
-                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold uppercase">Est. Net Take-Home</span>
-                    <div className="font-extrabold text-emerald-600 dark:text-emerald-400">₹{Math.round(empMonthlyGross * 0.88).toLocaleString('en-IN')}/mo</div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Reason / Appraisal Note</label>
-                <Input
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Justification for salary revision"
-                  className="h-10 text-sm bg-white dark:bg-slate-800"
-                />
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowForm(false)} className="text-xs font-bold cursor-pointer">Cancel</Button>
+            {/* 🌟 Side-by-Side Comparison: Current vs Proposed Slab Component Breakdown */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  Slab Formula Breakdown ({currentSlabName}): Current vs Proposed
+                </span>
+              </div>
 
-              <Button onClick={() => handleCreateRevision(false)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer">
-                <Send className="w-4 h-4" /> Submit Revision Request
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left: Current Breakdown */}
+                <div className="border border-border/80 rounded-xl p-4 bg-muted/10 space-y-3">
+                  <div className="flex justify-between items-center border-b border-border/60 pb-2">
+                    <span className="text-xs font-bold text-muted-foreground uppercase">Current Salary</span>
+                    <span className="text-xs font-black text-foreground">₹{currentCtcVal.toLocaleString('en-IN')} / yr <span className="text-[10px] text-muted-foreground font-normal">(₹{currentMonthlyGross.toLocaleString('en-IN')}/mo)</span></span>
+                  </div>
+
+                  {/* Earnings */}
+                  <div className="space-y-1.5 text-xs">
+                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Earnings Breakup</p>
+                    {currentBreakdown.earningsList.map((e, idx) => (
+                      <div key={idx} className="flex justify-between text-muted-foreground">
+                        <span>{e.name}</span>
+                        <span className="font-semibold text-foreground">₹{Math.round(e.amount).toLocaleString('en-IN')}/mo</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Deductions */}
+                  {currentBreakdown.deductionsList.length > 0 && (
+                    <div className="space-y-1.5 text-xs border-t border-border/40 pt-2">
+                      <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Statutory Deductions</p>
+                      {currentBreakdown.deductionsList.map((d, idx) => (
+                        <div key={idx} className="flex justify-between text-rose-600 dark:text-rose-400">
+                          <span>{d.name}</span>
+                          <span className="font-semibold">-₹{Math.round(d.amount).toLocaleString('en-IN')}/mo</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Est. Net Take-Home */}
+                  <div className="flex justify-between font-bold text-foreground pt-2 border-t border-border/60 text-xs">
+                    <span>Est. Net Take-Home</span>
+                    <span className="font-black text-foreground">₹{Math.round(currentBreakdown.netSalary).toLocaleString('en-IN')}/mo</span>
+                  </div>
+                </div>
+
+                {/* Right: Proposed / Revised Breakdown */}
+                <div className="border border-emerald-500/30 rounded-xl p-4 bg-emerald-500/5 space-y-3">
+                  <div className="flex justify-between items-center border-b border-emerald-500/20 pb-2">
+                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase">Revised Proposed Salary</span>
+                    <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">₹{proposedCtcVal.toLocaleString('en-IN')} / yr <span className="text-[10px] text-emerald-600/80 font-normal">(₹{proposedMonthlyGross.toLocaleString('en-IN')}/mo)</span></span>
+                  </div>
+
+                  {/* Earnings */}
+                  <div className="space-y-1.5 text-xs">
+                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Earnings Breakup</p>
+                    {proposedBreakdown.earningsList.map((e, idx) => (
+                      <div key={idx} className="flex justify-between text-muted-foreground">
+                        <span>{e.name}</span>
+                        <span className="font-semibold text-foreground">₹{Math.round(e.amount).toLocaleString('en-IN')}/mo</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Deductions */}
+                  {proposedBreakdown.deductionsList.length > 0 && (
+                    <div className="space-y-1.5 text-xs border-t border-emerald-500/20 pt-2">
+                      <p className="text-[10px] font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Statutory Deductions</p>
+                      {proposedBreakdown.deductionsList.map((d, idx) => (
+                        <div key={idx} className="flex justify-between text-rose-600 dark:text-rose-400">
+                          <span>{d.name}</span>
+                          <span className="font-semibold">-₹{Math.round(d.amount).toLocaleString('en-IN')}/mo</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Est. New Net Take-Home */}
+                  <div className="flex justify-between font-bold text-emerald-700 dark:text-emerald-300 pt-2 border-t border-emerald-500/20 text-xs">
+                    <span>Est. New Net Take-Home</span>
+                    <span className="font-black text-emerald-600 dark:text-emerald-400">₹{Math.round(proposedBreakdown.netSalary).toLocaleString('en-IN')}/mo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Appraisal Reason & Note */}
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1.5">Revision Justification / Notes</label>
+              <Input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Appraisal justification or revision notes..."
+                className="h-9 text-xs bg-background"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-3 border-t border-border">
+              <Button
+                variant="outline"
+                onClick={() => setShowForm(false)}
+                className="h-9 text-xs font-bold cursor-pointer"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                onClick={() => handleCreateRevision(false)}
+                className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 shadow-xs cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5" /> Submit Revision Request
               </Button>
 
               {isAdmin && (
-                <Button onClick={() => handleCreateRevision(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer">
-                  <CheckCircle className="w-4 h-4" /> Create &amp; Instantly Approve
+                <Button
+                  onClick={() => handleCreateRevision(true)}
+                  className="h-9 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-xs cursor-pointer"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" /> Apply &amp; Instantly Approve
                 </Button>
               )}
             </div>
@@ -534,104 +833,105 @@ export const SalaryRevisionManagement: React.FC = () => {
         </Card>
       )}
 
-      {/* Revision History & Status Table */}
-      <Card className="shadow border-slate-200 dark:border-slate-800">
-        <CardHeader className="border-b pb-4 flex flex-row items-center justify-between">
+      {/* ── Revision History & Approval Register ── */}
+      <Card className="border border-border/80 shadow-xs bg-card overflow-hidden">
+        <CardHeader className="border-b border-border/60 bg-muted/20 p-4 flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-emerald-600" /> {isAdmin ? 'Salary Revision Approval Register' : 'Salary Revision Requests & Register'}
+            <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <FileCheck className="w-4.5 h-4.5 text-primary" />
+              Salary Revision Register &amp; Approvals
             </CardTitle>
-            <CardDescription>
-              {isAdmin
-                ? 'Review and approve HR-submitted salary revisions and appraisal hikes.'
-                : 'Track all HR submitted salary revisions, appraisal hikes, and Admin approvals.'}
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              History of all employee salary revisions, assigned slabs, proposed CTCs, and approval statuses.
             </CardDescription>
           </div>
-          <Badge variant="outline" className="font-bold">{revisionsList.length} Total Records</Badge>
+          <Badge variant="outline" className="font-bold text-xs">
+            {revisionsList.length} Records
+          </Badge>
         </CardHeader>
+
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
-                <tr>
-                  <th className="px-6 py-3">Employee</th>
-                  <th className="px-6 py-3">Revision Type</th>
-                  <th className="px-6 py-3">Current CTC</th>
-                  <th className="px-6 py-3">Proposed CTC</th>
-                  <th className="px-6 py-3">Effective Date</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr className="border-b border-border bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+                  <th className="py-3 px-4">Employee</th>
+                  <th className="py-3 px-4">Assigned Slab</th>
+                  <th className="py-3 px-4">Revision Type</th>
+                  <th className="py-3 px-4">Current CTC</th>
+                  <th className="py-3 px-4">Proposed CTC</th>
+                  <th className="py-3 px-4">Hike</th>
+                  <th className="py-3 px-4">Effective Date</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y divide-border/60">
                 {revisionsList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500 text-sm font-medium">
+                    <td colSpan={9} className="py-8 text-center text-xs text-muted-foreground">
                       No salary revision requests recorded yet.
                     </td>
                   </tr>
                 ) : (
-                  revisionsList.map((rev) => (
-                    <tr key={rev.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
-                      <td className="px-6 py-4 font-semibold">
-                        <div className="text-slate-900 dark:text-white">{rev.empName}</div>
-                        <div className="text-xs text-slate-400 font-mono">{rev.empCode}</div>
-                      </td>
-                      <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">
-                        {rev.revisionType}
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-600 dark:text-slate-400">
-                        ₹{(rev.currentCtc / 100000).toFixed(2)} Lakhs
-                      </td>
-                      <td className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-400">
-                        ₹{(rev.proposedCtc / 100000).toFixed(2)} Lakhs
-                      </td>
-                      <td className="px-6 py-4 text-xs font-medium text-slate-600 dark:text-slate-400">
-                        {rev.effectiveFrom}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant="outline" className={`font-bold capitalize ${getBadgeStyle(rev.status)}`}>
-                          {rev.status === 'submitted' || rev.status === 'pending' ? 'Pending Admin Approval' : rev.status}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {isAdmin && (rev.status === 'submitted' || rev.status === 'pending') && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => handleApprove(rev.id)}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 px-3 font-bold shadow-xs"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleReject(rev.id)}
-                              className="text-rose-600 border-rose-200 text-xs h-8 px-3 font-bold hover:bg-rose-50 shadow-xs"
-                            >
-                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
-                            </Button>
-                          </>
-                        )}
-                        {!isAdmin && (rev.status === 'submitted' || rev.status === 'pending') && (
-                          <Badge variant="outline" className="bg-amber-50 text-amber-800 font-bold border-amber-200 text-xs">
-                            Pending Admin Approval
+                  revisionsList.map((rev) => {
+                    const hikeAmt = Math.max(0, rev.proposedCtc - rev.currentCtc);
+                    const hikePct = rev.currentCtc > 0 ? ((hikeAmt / rev.currentCtc) * 100).toFixed(1) : '0.0';
+
+                    return (
+                      <tr key={rev.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-foreground">{rev.empName}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{rev.empCode}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px] font-bold">
+                            {rev.slabName || 'Standard Slab'}
                           </Badge>
-                        )}
-                        {rev.status === 'approved' && (
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-800 font-bold border-emerald-200 text-xs">
-                            Approved by Admin
-                          </Badge>
-                        )}
-                        {rev.status === 'rejected' && (
-                          <Badge variant="outline" className="bg-rose-50 text-rose-800 font-bold border-rose-200 text-xs">
-                            Rejected by Admin
-                          </Badge>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="py-3 px-4 text-muted-foreground font-medium">
+                          {rev.revisionType}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-semibold text-foreground">
+                          ₹{rev.currentCtc.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                          ₹{rev.proposedCtc.toLocaleString('en-IN')}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-emerald-600">
+                          +{hikePct}%
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-foreground">
+                          {formatPayrollDate(rev.effectiveFrom)}
+                        </td>
+                        <td className="py-3 px-4">
+                          {getStatusBadge(rev.status)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {(rev.status === 'submitted' || rev.status === 'pending') && isAdmin ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleApprove(rev)}
+                                className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] cursor-pointer shadow-2xs transition-colors"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleReject(rev)}
+                                className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] cursor-pointer shadow-2xs transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground font-medium">
+                              {rev.status === 'approved' ? '✓ Applied' : 'Completed'}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

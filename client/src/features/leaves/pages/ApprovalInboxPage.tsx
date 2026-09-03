@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLeaveApprovals, useApproveLeave, useRejectLeave, useProcessedApprovals } from '../hooks/useLeaveApprovals';
-import { CheckCircle2, XCircle, Clock, Inbox, Calendar, AlertCircle, RefreshCw, Info } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Inbox, Calendar, AlertCircle, RefreshCw, Info, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
@@ -13,6 +13,12 @@ export function ApprovalInboxPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'processed' | 'encashment'>('pending');
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // HR Override modal states
+  const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
+  const [overrideAction, setOverrideAction] = useState<'force_approve' | 'force_reject' | 'grant_without_deduction' | 'convert_to_lop'>('force_approve');
+  const [overrideNotes, setOverrideNotes] = useState('');
+  const [overrideLoading, setOverrideLoading] = useState(false);
 
   // Encashment states
   const [encashmentRequests, setEncashmentRequests] = useState<any[]>([]);
@@ -135,6 +141,37 @@ export function ApprovalInboxPage() {
     }
   };
 
+  const handleHrOverride = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const appId = selectedApp?.id || selectedApplicationId;
+    if (!appId) return;
+
+    if (!overrideNotes.trim()) {
+      toast.error('Please enter administrative override notes / justification.');
+      return;
+    }
+
+    setOverrideLoading(true);
+    try {
+      const res = await apiClient.post(`/leaves/applications/${appId}/hr-override`, {
+        decision: overrideAction,
+        adminNotes: overrideNotes.trim(),
+        comment: overrideNotes.trim(),
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message || 'HR Override executed successfully!');
+        setIsOverrideModalOpen(false);
+        setOverrideNotes('');
+        setSelectedApplicationId(null);
+        refetch();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to execute HR override');
+    } finally {
+      setOverrideLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-5 w-full">
@@ -151,7 +188,7 @@ export function ApprovalInboxPage() {
         {error && (
           <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{error}</span>
+            <span>{typeof error === 'string' ? error : (error as any)?.message || 'An error occurred'}</span>
           </div>
         )}
 
@@ -540,6 +577,18 @@ export function ApprovalInboxPage() {
                           <span>{rejectLoading ? 'Rejecting...' : 'Reject Request'}</span>
                         </button>
                       </div>
+
+                      {/* HR Admin Override Section */}
+                      <div className="pt-3 border-t border-dashed border-border/80">
+                        <button
+                          type="button"
+                          onClick={() => setIsOverrideModalOpen(true)}
+                          className="w-full py-2 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg shadow-2xs transition-all flex items-center justify-center space-x-1.5"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          <span>⚡ HR Admin Override</span>
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -548,6 +597,106 @@ export function ApprovalInboxPage() {
           </div>
         )}
       </div>
+
+      {/* ─── HR Admin Override Modal ────────────────────────────────────────── */}
+      {isOverrideModalOpen && selectedApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-md border border-border rounded-2xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between bg-indigo-50/50 dark:bg-indigo-950/30">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">HR Administrative Override</h3>
+                  <p className="text-[11px] text-muted-foreground">Directly override workflow or grant special approval</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOverrideModalOpen(false)}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleHrOverride} className="p-5 space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Employee:</span>
+                  <span className="font-bold text-foreground">
+                    {(selectedApp as any).employeeFirstName || (selectedApp as any).employee_first_name} {(selectedApp as any).employeeLastName || (selectedApp as any).employee_last_name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Duration:</span>
+                  <span className="font-semibold text-foreground">
+                    {(selectedApp as any).totalDays || (selectedApp as any).total_days} Days ({(selectedApp as any).applicationStartDate || (selectedApp as any).application_start_date} to {(selectedApp as any).applicationEndDate || (selectedApp as any).application_end_date})
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground block">
+                  Override Decision *
+                </label>
+                <select
+                  value={overrideAction}
+                  onChange={(e: any) => setOverrideAction(e.target.value)}
+                  className="w-full p-2.5 text-xs bg-background border border-input rounded-md focus-visible:outline-none font-semibold"
+                >
+                  <option value="force_approve">Force Approve (Bypass Manager)</option>
+                  <option value="force_reject">Force Reject</option>
+                  <option value="grant_without_deduction">Grant Without Deduction (Special Discretion)</option>
+                  <option value="convert_to_lop">Convert Excess Days to LOP (Loss of Pay)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground block">
+                  Administrative Reason / Justification *
+                </label>
+                <textarea
+                  value={overrideNotes}
+                  onChange={(e) => setOverrideNotes(e.target.value)}
+                  rows={3}
+                  className="w-full p-2.5 text-xs bg-background border border-input rounded-md focus-visible:outline-none"
+                  placeholder="State the administrative rationale for this override (logged for audit)..."
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsOverrideModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={overrideLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {overrideLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Executing Override...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Execute Override</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

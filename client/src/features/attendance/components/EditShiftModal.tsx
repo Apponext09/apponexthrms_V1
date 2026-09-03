@@ -88,6 +88,11 @@ function calculateTotalTimeFromStartEnd(startTime: string, endTime: string): str
   return formatMinutesToHHMM(diff);
 }
 
+const STRICT_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+function isValidHHMM(value: string): boolean {
+  return STRICT_HHMM.test(value.trim());
+}
+
 // ─────────────────────────────────────────────────────
 // Main Edit Shift Modal Component
 // ─────────────────────────────────────────────────────
@@ -96,6 +101,7 @@ export function EditShiftModal({
   open,
   onClose,
   shift,
+  shifts,
   onShiftUpdated,
   updateShift,
 }: EditShiftModalProps) {
@@ -325,6 +331,42 @@ export function EditShiftModal({
       return;
     }
 
+    if (!isFlexible && startTime && endTime && startTime === endTime) {
+      toast.error('Shift end time must be different from the start time.');
+      return;
+    }
+
+    for (const [label, value] of [
+      ['Buffer Time', bufferTime],
+      ['Total Time', totalTime],
+      ['Log Break Time', logBreakTime],
+    ] as const) {
+      if (value && !isValidHHMM(value)) {
+        toast.error(`${label} must be a valid HH:MM value (e.g. 01:30), not "${value}".`);
+        return;
+      }
+    }
+
+    const computedIsNightShift = !isFlexible && !!startTime && !!endTime && endTime < startTime;
+
+    const duplicateShift = !isFlexible && startTime && endTime
+      ? (shifts || []).find((s: any) => {
+          if (s.id === shift.id) return false; // don't compare against itself
+          const sStart = s.startTime || s.start_time;
+          const sEnd = s.endTime || s.end_time;
+          const sIsRoster = (s.shiftType || s.shift_type) === 'roster';
+          const isActive = (s.status || 'active') === 'active';
+          return isActive && sIsRoster === (shiftType === 'Roster')
+            && sStart === `${startTime}:00` && sEnd === `${endTime}:00`;
+        })
+      : null;
+    if (duplicateShift) {
+      toast.error(
+        `"${duplicateShift.shiftName || duplicateShift.shift_name}" already uses ${startTime}–${endTime}. Choose different timings or edit that shift instead.`
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const isRoster = shiftType === 'Roster';
@@ -381,6 +423,8 @@ export function EditShiftModal({
         start_time: !isFlexible && startTime ? `${startTime}:00` : null,
         endTime: !isFlexible && endTime ? `${endTime}:00` : null,
         end_time: !isFlexible && endTime ? `${endTime}:00` : null,
+        isNightShift: computedIsNightShift,
+        is_night_shift: computedIsNightShift,
         checkInTime: startTime,
         totalTime,
         logBreakTime,
