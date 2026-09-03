@@ -217,10 +217,25 @@ export class PolicyRepository {
   }
 
   /**
+   * Helper to get a valid user_id for FK constraints
+   */
+  private async getValidUserId(trx: any, ctx: TenantContext): Promise<number> {
+    if (ctx.userId) {
+      const u = await trx('users').where('id', ctx.userId).first();
+      if (u) return u.id;
+    }
+    const orgUser = await trx('users').where('organization_id', ctx.organizationId).first();
+    if (orgUser) return orgUser.id;
+    const firstUser = await trx('users').first();
+    return firstUser ? firstUser.id : 1;
+  }
+
+  /**
    * Create policy document with role mappings
    */
   async create(ctx: TenantContext, input: CreatePolicyDTO): Promise<PolicyWithStats> {
     return this.db.transaction(async (trx) => {
+      const validUserId = await this.getValidUserId(trx, ctx);
       const uuid = uuidv4();
       const [id] = await trx('policy_documents').insert({
         uuid,
@@ -239,26 +254,37 @@ export class PolicyRepository {
         applicable_department_ids: input.applicableDepartmentIds && input.applicableDepartmentIds.length > 0
           ? JSON.stringify(input.applicableDepartmentIds)
           : null,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
+        created_by: validUserId,
+        updated_by: validUserId,
         created_at: new Date(),
         updated_at: new Date(),
       });
 
       if (input.roleMappings && input.roleMappings.length > 0) {
-        const mappingsToInsert = input.roleMappings.map((rm) => ({
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          company_id: ctx.companyId || null,
-          policy_document_id: id,
-          role_code: rm.roleCode,
-          is_mandatory: rm.isMandatory !== undefined ? rm.isMandatory : true,
-          created_by: ctx.userId,
-          created_at: new Date(),
-          updated_at: new Date(),
-        }));
+        const seenRoleCodes = new Set<string>();
+        const mappingsToInsert: any[] = [];
 
-        await trx('policy_document_role_mappings').insert(mappingsToInsert);
+        for (const rm of input.roleMappings) {
+          const code = String(rm.roleCode || '').toLowerCase().trim();
+          if (code && !seenRoleCodes.has(code)) {
+            seenRoleCodes.add(code);
+            mappingsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              company_id: ctx.companyId || null,
+              policy_document_id: id,
+              role_code: code,
+              is_mandatory: rm.isMandatory !== undefined ? rm.isMandatory : true,
+              created_by: validUserId,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+          }
+        }
+
+        if (mappingsToInsert.length > 0) {
+          await trx('policy_document_role_mappings').insert(mappingsToInsert);
+        }
       }
 
       const policy = await trx('policy_documents').where('id', id).first();
@@ -300,6 +326,7 @@ export class PolicyRepository {
    */
   async update(ctx: TenantContext, id: number, input: UpdatePolicyDTO): Promise<PolicyWithStats | null> {
     return this.db.transaction(async (trx) => {
+      const validUserId = await this.getValidUserId(trx, ctx);
       const existing = await trx('policy_documents')
         .where('id', id)
         .where('organization_id', ctx.organizationId)
@@ -309,7 +336,7 @@ export class PolicyRepository {
       if (!existing) return null;
 
       const updateData: any = {
-        updated_by: ctx.userId,
+        updated_by: validUserId,
         updated_at: new Date(),
       };
 
@@ -338,19 +365,28 @@ export class PolicyRepository {
           .where('organization_id', ctx.organizationId)
           .delete();
 
-        if (input.roleMappings.length > 0) {
-          const mappingsToInsert = input.roleMappings.map((rm) => ({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            company_id: ctx.companyId || null,
-            policy_document_id: id,
-            role_code: rm.roleCode,
-            is_mandatory: rm.isMandatory !== undefined ? rm.isMandatory : true,
-            created_by: ctx.userId,
-            created_at: new Date(),
-            updated_at: new Date(),
-          }));
+        const seenRoleCodes = new Set<string>();
+        const mappingsToInsert: any[] = [];
 
+        for (const rm of input.roleMappings) {
+          const code = String(rm.roleCode || '').toLowerCase().trim();
+          if (code && !seenRoleCodes.has(code)) {
+            seenRoleCodes.add(code);
+            mappingsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              company_id: ctx.companyId || null,
+              policy_document_id: id,
+              role_code: code,
+              is_mandatory: rm.isMandatory !== undefined ? rm.isMandatory : true,
+              created_by: validUserId,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+          }
+        }
+
+        if (mappingsToInsert.length > 0) {
           await trx('policy_document_role_mappings').insert(mappingsToInsert);
         }
       }

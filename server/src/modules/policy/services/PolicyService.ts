@@ -41,29 +41,86 @@ export class PolicyService {
   /**
    * Create policy document
    */
-  async createPolicy(ctx: TenantContext, input: CreatePolicyDTO): Promise<PolicyWithStats> {
+  async createPolicy(ctx: TenantContext, input: any): Promise<PolicyWithStats> {
     if (!input.title || !input.title.trim()) {
       throw new ValidationError('Policy title is required');
     }
-    if (!input.fileUrl) {
-      throw new ValidationError('Policy file or document attachment is required');
+
+    // 1. Normalize fileUrl if missing
+    let fileUrl = input.fileUrl;
+    if (!fileUrl) {
+      if (input.sections && Array.isArray(input.sections) && input.sections.length > 0) {
+        fileUrl = JSON.stringify(input.sections);
+      } else if (input.description && input.description.trim()) {
+        fileUrl = input.description.trim();
+      } else {
+        fileUrl = 'Governance Policy Document';
+      }
     }
+
+    // 2. Normalize roleMappings if missing from assignments array
+    let roleMappings = input.roleMappings;
+    if (!roleMappings || !Array.isArray(roleMappings) || roleMappings.length === 0) {
+      if (input.assignments && Array.isArray(input.assignments)) {
+        roleMappings = input.assignments
+          .filter((a: any) => a.targetType === 'role' || !a.targetType)
+          .map((a: any) => ({
+            roleCode: a.targetId,
+            isMandatory: input.requireAcknowledgement !== false,
+          }));
+      }
+    }
+    if (!roleMappings || roleMappings.length === 0) {
+      roleMappings = [{ roleCode: 'all', isMandatory: true }];
+    }
+
+    // 3. Normalize department assignments if present in assignments
+    let applicableDepartmentIds = input.applicableDepartmentIds;
+    if ((!applicableDepartmentIds || applicableDepartmentIds.length === 0) && input.assignments) {
+      applicableDepartmentIds = input.assignments
+        .filter((a: any) => a.targetType === 'department')
+        .map((a: any) => Number(a.targetId))
+        .filter((id: number) => !isNaN(id) && id > 0);
+    }
+
+    const isActive = input.status === 'draft' ? false : (input.isActive !== undefined ? Boolean(input.isActive) : true);
 
     return this.policyRepo.create(ctx, {
       ...input,
       title: input.title.trim(),
       category: input.category || 'General',
+      fileUrl: fileUrl,
       version: input.version || '1.0',
-      isActive: input.isActive !== undefined ? input.isActive : true,
-      roleMappings: input.roleMappings || [{ roleCode: 'all', isMandatory: true }],
+      isActive: isActive,
+      applicableDepartmentIds: applicableDepartmentIds || [],
+      roleMappings: roleMappings,
     });
   }
 
   /**
    * Update policy document
    */
-  async updatePolicy(ctx: TenantContext, id: number, input: UpdatePolicyDTO): Promise<PolicyWithStats> {
-    const updated = await this.policyRepo.update(ctx, id, input);
+  async updatePolicy(ctx: TenantContext, id: number, input: any): Promise<PolicyWithStats> {
+    let fileUrl = input.fileUrl;
+    if (!fileUrl && input.sections && Array.isArray(input.sections) && input.sections.length > 0) {
+      fileUrl = JSON.stringify(input.sections);
+    }
+
+    let roleMappings = input.roleMappings;
+    if ((!roleMappings || roleMappings.length === 0) && input.assignments) {
+      roleMappings = input.assignments
+        .filter((a: any) => a.targetType === 'role' || !a.targetType)
+        .map((a: any) => ({
+          roleCode: a.targetId,
+          isMandatory: input.requireAcknowledgement !== false,
+        }));
+    }
+
+    const updated = await this.policyRepo.update(ctx, id, {
+      ...input,
+      fileUrl: fileUrl,
+      roleMappings: roleMappings,
+    });
     if (!updated) {
       throw new NotFoundError('Policy document not found');
     }

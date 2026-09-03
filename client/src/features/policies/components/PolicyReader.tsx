@@ -266,11 +266,13 @@ export const PolicyReader: React.FC<PolicyReaderProps> = ({
                     <Shield className="w-4 h-4 text-primary" /> Assigned Roles
                   </div>
                   <div className="flex flex-wrap gap-1.5 pt-1">
-                    {(policy.assignedRoles || [policy.roleCode]).map((r) => (
-                      <Badge key={r} variant="secondary" className="text-[10px] uppercase font-bold">
-                        {r.replace('_', ' ')}
-                      </Badge>
-                    ))}
+                    {(policy.targetRoles || policy.assignedRoles || [policy.roleCode || 'all'])
+                      .filter(Boolean)
+                      .map((r, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-[10px] uppercase font-bold">
+                          {String(r || '').replace(/_/g, ' ')}
+                        </Badge>
+                      ))}
                   </div>
                 </div>
 

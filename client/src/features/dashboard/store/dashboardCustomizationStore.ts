@@ -47,6 +47,7 @@ export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
   { id: 'live_tracking_report', title: 'Live Field Geotracking', path: '/live-tracking', description: 'GPS coordinates and live route tracking for field staff', iconName: 'Navigation' },
   { id: 'payroll_reports', title: 'Payroll & Salary Report', path: '/payroll/reports', description: 'Statutory calculations, gross/net distribution & tax deductions', iconName: 'DollarSign' },
   { id: 'leave_burnout_report', title: 'Leave & Burnout Risk Analysis', path: '/leaves/reports/burnout-risk', description: 'Employee fatigue indicators and leave balance utilization', iconName: 'Flame' },
+  { id: 'policy_acknowledgement_report', title: 'Policy Compliance & Acknowledgement', path: '/policies/reports', description: 'Employee sign-off audit, pending acknowledgements and policy version tracking', iconName: 'ShieldCheck' },
 ];
 
 export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
@@ -54,6 +55,7 @@ export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
   { id: 'departments', label: 'Departments', path: '/settings/departments', iconName: 'Building2', category: 'Core HR' },
   { id: 'designations', label: 'Designations', path: '/settings/designations', iconName: 'Briefcase', category: 'Core HR' },
   { id: 'payroll', label: 'Payroll Management', path: '/payroll', iconName: 'CreditCard', category: 'Finance' },
+  { id: 'policy_governance', label: 'Policy Governance', path: '/policies/manage', iconName: 'ShieldCheck', category: 'Governance' },
   { id: 'mrf_request', label: 'Create MRF Request', path: '/recruitment/mrf-request', iconName: 'FilePlus', category: 'Recruitment' },
   { id: 'leave_approvals', label: 'Approvals Inbox', path: '/leaves/approvals', iconName: 'CheckCircle', category: 'Leaves' },
   { id: 'live_tracking', label: 'Live Tracking', path: '/live-tracking', iconName: 'Navigation', category: 'Attendance' },

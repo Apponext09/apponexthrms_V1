@@ -330,10 +330,10 @@ export function AppRoutes() {
           <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
           <Route path="/hr/payroll/gratuity" element={<GratuityPolicyPage />} />
 
-          <Route path="/policies/manage" element={<AdminPolicyDashboardPage />} />
-          <Route path="/policies/create" element={<CreatePolicyPage />} />
-          <Route path="/policies/edit/:id" element={<CreatePolicyPage />} />
-          <Route path="/policies/reports" element={<PolicyAcknowledgementReportPage />} />
+          <Route path="/hr/policies/manage" element={<AdminPolicyDashboardPage />} />
+          <Route path="/hr/policies/create" element={<CreatePolicyPage />} />
+          <Route path="/hr/policies/edit/:id" element={<CreatePolicyPage />} />
+          <Route path="/hr/policies/reports" element={<PolicyAcknowledgementReportPage />} />
 
           {/* Leave & Time */}
           <Route path="/hr/attendance" element={<AttendanceDashboard />} />

@@ -360,6 +360,18 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
+  // ── 14b. Policy Governance ────────────────────────────────────────────────
+  {
+    id: 'policy_management',
+    label: 'POLICY GOVERNANCE',
+    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    items: [
+      { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
+      { name: 'Create & Assign Policy', href: '/policies/create', icon: 'FilePlus' },
+      { name: 'Acknowledgement Report', href: '/policies/reports', icon: 'FileText' },
+    ],
+  },
+
   // ── 15. Masters ───────────────────────────────────────────────────────────
   {
     id: 'masters',

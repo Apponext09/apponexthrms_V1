@@ -111,6 +111,14 @@ const HR_NAV = [
     ],
   },
   {
+    label: 'POLICY GOVERNANCE',
+    items: [
+      { name: 'Policy Dashboard', href: '/hr/policies/manage', icon: ShieldCheck },
+      { name: 'Create Policy', href: '/hr/policies/create', icon: FilePlus },
+      { name: 'Acknowledgement Report', href: '/hr/policies/reports', icon: FileText },
+    ],
+  },
+  {
     label: 'LEAVE & TIME',
     items: [
       {
