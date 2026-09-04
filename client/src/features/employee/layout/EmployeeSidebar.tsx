@@ -16,7 +16,7 @@ import {
   Award,
   CreditCard,
   Calendar,
-  Receipt,
+  ReceiptIndianRupee,
   Compass,
   Briefcase,
   BookOpen,
@@ -196,7 +196,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
         {
           name: 'My Expenses',
           href: '/employee/my-expenses',
-          icon: Receipt,
+          icon: ReceiptIndianRupee,
           color: 'text-amber-500',
         },
         {

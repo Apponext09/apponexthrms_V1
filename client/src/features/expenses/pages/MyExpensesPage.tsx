@@ -18,7 +18,6 @@ import {
   Trash2,
   Upload,
   Calendar,
-  DollarSign,
   Building,
   Info,
   ChevronRight,

@@ -108,7 +108,7 @@ export const CEO_MODULES: ModuleNode[] = [
     id: 'ceo_loan_management',
     name: 'Loan Management',
     description: 'Loan types, requests, and disbursal approvals',
-    iconName: 'Receipt',
+    iconName: 'ReceiptIndianRupee',
     defaultEnabled: true,
     children: [
       { id: 'ceo_loan_types', name: 'Loan Type Settings', defaultEnabled: true },
@@ -119,7 +119,7 @@ export const CEO_MODULES: ModuleNode[] = [
     id: 'ceo_expense_management',
     name: 'Expense Management',
     description: 'Employee expense claims, reimbursements, and approvals',
-    iconName: 'DollarSign',
+    iconName: 'ReceiptIndianRupee',
     defaultEnabled: true,
     children: [
       { id: 'ceo_expense_claims', name: 'Expense Claims', defaultEnabled: true },

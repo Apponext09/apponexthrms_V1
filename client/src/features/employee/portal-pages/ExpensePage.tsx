@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Plus, Receipt, CheckCircle2, Clock, UploadCloud, DollarSign } from 'lucide-react';
+import { FileText, Plus, ReceiptIndianRupee, CheckCircle2, Clock, UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/config/api';
@@ -124,7 +124,7 @@ export default function ExpensePage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-primary" /> Expense Claims & Reimbursement
+              <ReceiptIndianRupee className="w-5 h-5 text-primary" /> Expense Claims & Reimbursement
             </h2>
             <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
               Reimbursements
@@ -145,7 +145,7 @@ export default function ExpensePage() {
               <p className="text-xl font-black text-foreground mt-0.5">₹{totalClaimed.toLocaleString('en-IN')}</p>
             </div>
             <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-              <Receipt className="w-4 h-4" />
+              <ReceiptIndianRupee className="w-4 h-4" />
             </div>
           </div>
         </Card>
@@ -179,7 +179,7 @@ export default function ExpensePage() {
           <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
             <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-                <Receipt className="w-4 h-4 text-primary" /> Submit Expense Claim
+                <ReceiptIndianRupee className="w-4 h-4 text-primary" /> Submit Expense Claim
               </CardTitle>
               <CardDescription className="text-xs">Enter details and upload proof receipts.</CardDescription>
             </CardHeader>
@@ -256,7 +256,7 @@ export default function ExpensePage() {
             <CardContent className="p-0">
               {claims.length === 0 ? (
                 <div className="py-14 text-center text-muted-foreground flex flex-col items-center gap-2">
-                  <Receipt className="w-8 h-8 opacity-40" />
+                  <ReceiptIndianRupee className="w-8 h-8 opacity-40" />
                   <p className="text-xs font-bold text-foreground">No claims submitted yet</p>
                 </div>
               ) : (

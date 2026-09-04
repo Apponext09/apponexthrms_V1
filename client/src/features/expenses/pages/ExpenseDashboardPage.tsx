@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { expenseApi } from '../api/expenseApi';
 import {
-  Receipt,
+  ReceiptIndianRupee,
   Clock,
   CheckCircle2,
   XCircle,
@@ -11,7 +11,7 @@ import {
   FileSpreadsheet,
   PlusCircle,
   Building2,
-  DollarSign
+  IndianRupee
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -97,7 +97,7 @@ export const ExpenseDashboardPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Expenses</span>
             <div className="p-2 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-lg">
-              <Receipt className="w-5 h-5" />
+              <ReceiptIndianRupee className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
@@ -172,7 +172,7 @@ export const ExpenseDashboardPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Reimbursed</span>
             <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-lg">
-              <DollarSign className="w-5 h-5" />
+              <IndianRupee className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-4">
@@ -237,7 +237,7 @@ export const ExpenseDashboardPage: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-purple-500" />
+              <ReceiptIndianRupee className="w-4 h-4 text-purple-500" />
               Category-Wise Spending
             </h3>
           </div>

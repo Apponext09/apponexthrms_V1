@@ -8,7 +8,7 @@ import { apiClient } from '@/lib/api';
 import {
   Users, Calendar as CalendarIcon, FileText, Clock, CheckCircle2,
   Gift, Megaphone, Cake, Briefcase, CreditCard,
-  Receipt, ArrowRight, ClipboardList, Check, User,
+  ArrowRight, ClipboardList, Check, User,
   Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
   Palmtree, Camera, MapPin, AlertTriangle, AlertCircle, Navigation,
   ChevronLeft, Info, HelpCircle, FolderOpen, Download, FileCheck,

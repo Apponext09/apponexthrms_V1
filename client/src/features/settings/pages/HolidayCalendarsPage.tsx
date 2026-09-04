@@ -118,6 +118,26 @@ const FULL_DAY_NAMES: Record<string, string> = {
 
 const HOLIDAY_TYPES = ['National', 'Festival', 'Optional', 'Restricted'] as const;
 
+// Helper to normalize any ISO timestamp or YYYY-MM-DD string to local YYYY-MM-DD
+const normalizeDateString = (rawDate: string | undefined | null): string => {
+  if (!rawDate) return '';
+  const str = String(rawDate).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.substring(0, 10);
+  }
+  const d = new Date(str);
+  if (isNaN(d.getTime())) {
+    return str.split('T')[0].split(' ')[0];
+  }
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export interface HolidayCalendarsPageProps {
   onBackToMasters?: () => void;
 }
@@ -158,6 +178,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
 
   // Holiday Modal State
   const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
+  const [holidayModalMode, setHolidayModalMode] = useState<'view' | 'edit' | 'create'>('view');
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [holidayToEdit, setHolidayToEdit] = useState<HolidayItem | null>(null);
   const [savingHoliday, setSavingHoliday] = useState(false);
@@ -314,24 +335,40 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
     setIsCreateModalOpen(true);
   };
 
-  const handleOpenHolidayModal = (item: HolidayItem | null = null, defaultDate?: string) => {
+  const handleOpenHolidayModal = (
+    item: HolidayItem | null = null,
+    defaultDate?: string,
+    mode?: 'view' | 'edit' | 'create'
+  ) => {
     setHolidayToEdit(item);
+    setHolidayModalMode(mode || (item ? 'view' : 'create'));
     setHolidayError(null);
     if (item) {
       setHName(item.holiday_name);
-      setHDate(item.holiday_date);
+      setHDate(normalizeDateString(item.holiday_date));
       setHType(item.holiday_type || 'National');
       setHIsOptional(!!item.is_optional);
       setHDescription(item.description || '');
     } else {
       const year = calendarDetail?.calendar_year || calendarDetail?.year || currentYear;
       setHName('');
-      setHDate(defaultDate || `${year}-01-01`);
+      setHDate(normalizeDateString(defaultDate) || `${year}-01-01`);
       setHType('National');
       setHIsOptional(false);
       setHDescription('');
     }
     setIsHolidayModalOpen(true);
+  };
+
+  const handleStartEditHoliday = () => {
+    if (holidayToEdit) {
+      setHName(holidayToEdit.holiday_name);
+      setHDate(normalizeDateString(holidayToEdit.holiday_date));
+      setHType(holidayToEdit.holiday_type || 'National');
+      setHIsOptional(!!holidayToEdit.is_optional);
+      setHDescription(holidayToEdit.description || '');
+    }
+    setHolidayModalMode('edit');
   };
 
   const handleSaveHoliday = async (e: React.FormEvent) => {
@@ -705,7 +742,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
           </div>
 
           <p className="text-neutral-400 text-[11px]">
-            💡 Click any date cell to add a holiday. Click holiday pills to edit.
+            💡 Click any date cell or holiday pill to view holiday details.
           </p>
         </div>
 
@@ -758,8 +795,10 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
                 <div
                   key={cell.dateStr}
                   onClick={() => {
-                    if (!isLocked) {
-                      handleOpenHolidayModal(null, cell.dateStr);
+                    if (cellHolidays.length > 0) {
+                      handleOpenHolidayModal(cellHolidays[0], cell.dateStr, 'view');
+                    } else if (!isLocked) {
+                      handleOpenHolidayModal(null, cell.dateStr, 'create');
                     }
                   }}
                   className={cn(
@@ -799,7 +838,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
                           key={h.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleOpenHolidayModal(h);
+                            handleOpenHolidayModal(h, cell.dateStr, 'view');
                           }}
                           className={cn(
                             'p-1.5 rounded-lg border text-[11px] font-semibold leading-tight transition-all hover:scale-[1.02] shadow-2xs',
@@ -1525,14 +1564,45 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
           </div>
         )}
 
-        {/* ─── ADD/EDIT HOLIDAY MODAL ──────────────────────────────────────── */}
+        {/* ─── ADD/EDIT/VIEW HOLIDAY MODAL ──────────────────────────────────────── */}
         <Dialog open={isHolidayModalOpen} onOpenChange={(o) => !o && setIsHolidayModalOpen(false)}>
           <DialogContent className="sm:max-w-[480px] p-6 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xl">
-            <DialogHeader className="pb-3 border-b border-neutral-100 dark:border-neutral-800">
+            <DialogHeader className="pb-3 border-b border-neutral-100 dark:border-neutral-800 flex flex-row items-center justify-between space-y-0 pr-6">
               <DialogTitle className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-indigo-500" />
-                {holidayToEdit ? 'Edit Holiday' : 'Add Holiday'}
+                {holidayModalMode === 'view' ? 'Holiday Details' : holidayToEdit ? 'Edit Holiday' : 'Add Holiday'}
               </DialogTitle>
+
+              {holidayModalMode === 'view' && holidayToEdit && !isLocked && (
+                <div className="flex items-center gap-1.5">
+                  
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsHolidayModalOpen(false);
+                      if (holidayToEdit) handleDeleteHoliday(holidayToEdit);
+                    }}
+                    className="h-8 px-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl"
+                    title="Delete Holiday"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              )}
+
+              {holidayModalMode === 'edit' && holidayToEdit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setHolidayModalMode('view')}
+                  className="h-8 px-3 text-xs font-semibold text-neutral-500 hover:text-neutral-900 dark:hover:text-white rounded-xl"
+                >
+                  View Details
+                </Button>
+              )}
             </DialogHeader>
 
             {holidayError && (
@@ -1542,85 +1612,209 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
               </div>
             )}
 
-            <form onSubmit={handleSaveHoliday} className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Holiday Name <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  placeholder="e.g. Independence Day"
-                  value={hName}
-                  onChange={(e) => setHName(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                  required
-                />
-              </div>
+            {holidayModalMode === 'view' ? (
+              <div className="space-y-4 py-3">
+                {holidayToEdit ? (
+                  <>
+                    {/* Holiday Title & Badges */}
+                    <div className="p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-bold text-neutral-900 dark:text-white">
+                            {holidayToEdit.holiday_name}
+                          </h3>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                            Official organization schedule holiday
+                          </p>
+                        </div>
+                        {renderTypeBadge(holidayToEdit.holiday_type, holidayToEdit.is_optional)}
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-2 gap-3">
+                    {/* Date & Day Information */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 space-y-1">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">
+                          Holiday Date
+                        </span>
+                        <div className="flex items-center gap-2 font-mono font-semibold text-sm text-neutral-900 dark:text-white">
+                          <Calendar className="w-4 h-4 text-indigo-500 shrink-0" />
+                          <span>{formatHolidayDate(holidayToEdit.holiday_date)}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 space-y-1">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">
+                          Day of Week
+                        </span>
+                        <div className="flex items-center gap-2 font-semibold text-sm text-neutral-900 dark:text-white">
+                          <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
+                          <span>{getDayName(holidayToEdit.holiday_date)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status info */}
+                    <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex items-center justify-between text-xs">
+                      <span className="text-neutral-500 dark:text-neutral-400 font-medium">Holiday Type</span>
+                      <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                        {holidayToEdit.is_optional ? 'Floater / Optional Choice' : 'Mandatory Organization Holiday'}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    {holidayToEdit.description ? (
+                      <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 space-y-1 text-xs">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">
+                          Description / Remarks
+                        </span>
+                        <p className="text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                          {holidayToEdit.description}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-xl border border-dashed border-neutral-200 dark:border-neutral-800 text-center text-xs text-neutral-400 italic">
+                        No additional description provided for this holiday.
+                      </div>
+                    )}
+
+                    <DialogFooter className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsHolidayModalOpen(false)}
+                        className="h-9 px-4 text-xs font-semibold rounded-xl"
+                      >
+                        Close
+                      </Button>
+                      {!isLocked && (
+                        <Button
+                          type="button"
+                          onClick={handleStartEditHoliday}
+                          className="h-9 px-5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                          Edit Holiday
+                        </Button>
+                      )}
+                    </DialogFooter>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-6 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700 text-center space-y-2">
+                      <Calendar className="w-8 h-8 text-neutral-400 mx-auto" />
+                      <h4 className="font-bold text-sm text-neutral-900 dark:text-white">
+                        No Holiday Declared
+                      </h4>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        Date: <span className="font-mono font-semibold">{formatHolidayDate(hDate)}</span> ({getDayName(hDate)})
+                      </p>
+                    </div>
+
+                    <DialogFooter className="pt-3 border-t border-neutral-100 dark:border-neutral-800 flex items-center justify-between">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsHolidayModalOpen(false)}
+                        className="h-9 px-4 text-xs font-semibold rounded-xl"
+                      >
+                        Close
+                      </Button>
+                      {!isLocked && (
+                        <Button
+                          type="button"
+                          onClick={() => setHolidayModalMode('create')}
+                          className="h-9 px-5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Holiday on this Date
+                        </Button>
+                      )}
+                    </DialogFooter>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <form onSubmit={handleSaveHoliday} className="space-y-4 py-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold">
-                    Date (YYYY-MM-DD) <span className="text-red-500">*</span>
+                    Holiday Name <span className="text-red-500">*</span>
                   </Label>
                   <Input
-                    type="date"
-                    value={hDate}
-                    onChange={(e) => setHDate(e.target.value)}
+                    placeholder="e.g. Independence Day"
+                    value={hName}
+                    onChange={(e) => setHName(e.target.value)}
                     className="h-10 text-xs rounded-xl"
                     required
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold">Category</Label>
-                  <Select value={hType} onValueChange={setHType}>
-                    <SelectTrigger className="h-10 text-xs rounded-xl">
-                      <SelectValue placeholder="Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {HOLIDAY_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">
+                      Date (YYYY-MM-DD) <span className="text-red-500">*</span>
+                    </Label>
+                    <Input
+                      type="date"
+                      value={hDate}
+                      onChange={(e) => setHDate(e.target.value)}
+                      className="h-10 text-xs rounded-xl"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Category</Label>
+                    <Select value={hType} onValueChange={setHType}>
+                      <SelectTrigger className="h-10 text-xs rounded-xl">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HOLIDAY_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="opt-holiday"
-                  checked={hIsOptional}
-                  onChange={(e) => setHIsOptional(e.target.checked)}
-                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                />
-                <Label htmlFor="opt-holiday" className="text-xs font-semibold cursor-pointer">
-                  Optional / Floater Holiday (Employee choice)
-                </Label>
-              </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="opt-holiday"
+                    checked={hIsOptional}
+                    onChange={(e) => setHIsOptional(e.target.checked)}
+                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <Label htmlFor="opt-holiday" className="text-xs font-semibold cursor-pointer">
+                    Optional / Floater Holiday (Employee choice)
+                  </Label>
+                </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">
-                  Description <span className="text-neutral-400 font-normal text-[11px]">(Optional)</span>
-                </Label>
-                <Input
-                  placeholder="e.g. National holiday observing sovereignty"
-                  value={hDescription}
-                  onChange={(e) => setHDescription(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                />
-              </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">
+                    Description <span className="text-neutral-400 font-normal text-[11px]">(Optional)</span>
+                  </Label>
+                  <Input
+                    placeholder="e.g. National holiday observing sovereignty"
+                    value={hDescription}
+                    onChange={(e) => setHDescription(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                  />
+                </div>
 
-              <DialogFooter className="pt-3 border-t border-neutral-100 dark:border-neutral-800">
-                <Button type="button" variant="outline" onClick={() => setIsHolidayModalOpen(false)} className="h-9 px-4 text-xs font-semibold rounded-xl">
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={savingHoliday} className="h-9 px-5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-                  {savingHoliday ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : holidayToEdit ? 'Save Changes' : 'Add Holiday'}
-                </Button>
-              </DialogFooter>
-            </form>
+                <DialogFooter className="pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                  <Button type="button" variant="outline" onClick={() => setIsHolidayModalOpen(false)} className="h-9 px-4 text-xs font-semibold rounded-xl">
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={savingHoliday} className="h-9 px-5 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
+                    {savingHoliday ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : holidayToEdit ? 'Save Changes' : 'Add Holiday'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
 

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
-  ShieldCheck, FileCheck, TrendingUp, DollarSign,
+  ShieldCheck, FileCheck, TrendingUp, IndianRupee,
   ChevronDown, ChevronUp, Plus, Save, AlertCircle, CheckCircle, User, Calculator
 } from 'lucide-react';
 import apiClient from '@/lib/api';
@@ -298,7 +298,7 @@ export const TaxDeclaration: React.FC = () => {
       <Card className="border border-indigo-200 dark:border-indigo-900 shadow-md bg-white dark:bg-slate-900">
         <CardHeader className="pb-3 border-b bg-indigo-50/50 dark:bg-indigo-950/30">
           <CardTitle className="text-base font-bold text-indigo-950 dark:text-indigo-100 flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-emerald-600" />
+            <IndianRupee className="w-5 h-5 text-emerald-600" />
             Monthly Component &amp; Tax Breakdown — {selectedEmp?.name} ({selectedEmp?.code})
           </CardTitle>
           <CardDescription className="text-xs">

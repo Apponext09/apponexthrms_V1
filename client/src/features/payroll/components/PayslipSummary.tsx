@@ -8,7 +8,7 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
-  DollarSign,
+  IndianRupee,
   TrendingDown,
   TrendingUp,
   Calendar,
@@ -212,7 +212,7 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
               <div className="space-y-1">
                 <div className="font-bold text-foreground text-[11px] flex items-center justify-between">
                   <span className="flex items-center gap-1 text-emerald-600 font-extrabold">
-                    <DollarSign className="w-3 h-3" /> Earnings Components
+                    <IndianRupee className="w-3 h-3" /> Earnings Components
                   </span>
                   <span className="font-bold text-foreground">₹{currentGrossSalary.toLocaleString('en-IN')}</span>
                 </div>

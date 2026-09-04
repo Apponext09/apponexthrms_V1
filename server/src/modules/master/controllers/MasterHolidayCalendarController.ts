@@ -519,8 +519,8 @@ export class MasterHolidayCalendarController {
         return;
       }
 
-      const calId = existing.calendar_id || existing.holiday_calendar_id;
-      const calendar = await this.calendarRepo.getById(ctx, calId);
+      const calId = (existing as any).calendarId || (existing as any).holidayCalendarId || existing.calendar_id || existing.holiday_calendar_id;
+      const calendar = calId ? await this.calendarRepo.getById(ctx, calId) : null;
       if (calendar && calendar.status === 'Archived') {
         res.status(400).json({
           success: false,

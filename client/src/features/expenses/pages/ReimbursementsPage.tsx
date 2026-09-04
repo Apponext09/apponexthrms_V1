@@ -3,7 +3,6 @@ import { expenseApi, ExpenseClaim } from '../api/expenseApi';
 import {
   CreditCard,
   CheckCircle2,
-  DollarSign,
   Calendar,
   Building,
   Hash,

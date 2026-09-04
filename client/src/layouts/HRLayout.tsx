@@ -9,7 +9,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, Clock,
   Target, Briefcase, BarChart3, Settings, LogOut,
-  Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
+  Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, ReceiptIndianRupee, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
@@ -97,7 +97,7 @@ const HR_NAV = [
     label: 'EXPENSE MANAGEMENT',
     items: [
       { name: 'Dashboard', href: '/expenses/dashboard', icon: TrendingUp },
-      { name: 'My Expenses', href: '/expenses/my-expenses', icon: Receipt },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: ReceiptIndianRupee },
       { name: 'Approvals', href: '/expenses/approvals', icon: CheckCircle2 },
       { name: 'Finance Verification', href: '/expenses/finance-verification', icon: FileCheck },
       { name: 'Reimbursements', href: '/expenses/reimbursements', icon: CreditCard },

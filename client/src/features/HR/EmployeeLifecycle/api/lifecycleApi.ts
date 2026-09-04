@@ -146,9 +146,22 @@ export interface ChronologicalMilestoneEvent {
 }
 
 export const lifecycleApi = {
-  getSummaries: async (params?: { search?: string; stage?: string; departmentId?: number; companyId?: number | string }) => {
+  getSummaries: async (params?: {
+    search?: string;
+    stage?: string;
+    departmentId?: number;
+    companyId?: number | string;
+    page?: number;
+    pageSize?: number;
+  }) => {
     const res = await apiClient.get('/hr/lifecycle/employees', { params });
-    return res.data?.data as EmployeeLifecycleSummary[];
+    // Return both data and metadata for pagination
+    return {
+      data: (res.data?.data || []) as EmployeeLifecycleSummary[],
+      total: res.data?.total || 0,
+      page: res.data?.page || 1,
+      pageSize: res.data?.pageSize || 25,
+    };
   },
 
   getDetails: async (employeeId: number) => {

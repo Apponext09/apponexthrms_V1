@@ -45,7 +45,7 @@ export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
   { id: 'timelog_report', title: 'Timelog & Productivity Report', path: '/analytics/timelog', description: 'Working hours, effective time & break analysis', iconName: 'Clock' },
   { id: 'break_logs_report', title: 'Break Logs Report', path: '/attendance/break-logs', description: 'Break duration, exceedances and activity timeline', iconName: 'Coffee' },
   { id: 'live_tracking_report', title: 'Live Field Geotracking', path: '/live-tracking', description: 'GPS coordinates and live route tracking for field staff', iconName: 'Navigation' },
-  { id: 'payroll_reports', title: 'Payroll & Salary Report', path: '/payroll/reports', description: 'Statutory calculations, gross/net distribution & tax deductions', iconName: 'DollarSign' },
+  { id: 'payroll_reports', title: 'Payroll & Salary Report', path: '/payroll/reports', description: 'Statutory calculations, gross/net distribution & tax deductions', iconName: 'IndianRupee' },
   { id: 'leave_burnout_report', title: 'Leave & Burnout Risk Analysis', path: '/leaves/reports/burnout-risk', description: 'Employee fatigue indicators and leave balance utilization', iconName: 'Flame' },
   { id: 'policy_acknowledgement_report', title: 'Policy Compliance & Acknowledgement', path: '/policies/reports', description: 'Employee sign-off audit, pending acknowledgements and policy version tracking', iconName: 'ShieldCheck' },
 ];

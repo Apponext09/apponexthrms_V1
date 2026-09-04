@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '@/lib/api';
-import { useAuthStore } from '@/features/auth/authStore';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   Calendar, Plus, RefreshCw, FileText, CheckCircle2, Clock, XCircle,
   AlertCircle, Ban, Palmtree, Trophy, Flame, Briefcase, Info, Loader2
@@ -347,46 +347,46 @@ export function MyLeavesPage() {
               .map((bal: any) => {
                 const theme = getCardTheme(bal.leave_code);
                 const avail = parseFloat(bal.available_balance as any) || 0;
-              const total = parseFloat(bal.allocated_balance as any) || 12;
-              const consumed = parseFloat(bal.consumed_balance as any) || 0;
+                const total = parseFloat(bal.allocated_balance as any) || 12;
+                const consumed = parseFloat(bal.consumed_balance as any) || 0;
 
-              let showExpired = false;
-              if (bal.allocation_settings) {
-                try {
-                  const alloc = typeof bal.allocation_settings === 'string'
-                    ? JSON.parse(bal.allocation_settings)
-                    : bal.allocation_settings;
-                  showExpired = !!alloc.expireLeaveOnDashboard;
-                } catch (e) {}
-              }
-              const expired = parseFloat(bal.expired_balance as any) || 0;
+                let showExpired = false;
+                if (bal.allocation_settings) {
+                  try {
+                    const alloc = typeof bal.allocation_settings === 'string'
+                      ? JSON.parse(bal.allocation_settings)
+                      : bal.allocation_settings;
+                    showExpired = !!alloc.expireLeaveOnDashboard;
+                  } catch (e) { }
+                }
+                const expired = parseFloat(bal.expired_balance as any) || 0;
 
-              return (
-                <Card key={bal.id} className={`border rounded-2xl p-4.5 bg-card/80 backdrop-blur-sm shadow-sm transition-all ${theme.hover}`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">{bal.leave_name}</span>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold border ${theme.bg} ${theme.text} ${theme.border}`}>
-                       {bal.leave_code}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-baseline justify-between">
-                    <h3 className="text-2xl font-black text-foreground">{avail} <span className="text-xs text-muted-foreground font-semibold">days left</span></h3>
-                  </div>
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
-                      <span>Consumed: {consumed}d</span>
-                      {showExpired && (
-                        <span className={expired > 0 ? "text-red-500 font-bold" : "text-muted-foreground"}>Expired: {expired}d</span>
-                      )}
-                      <span>Allocated: {total}d</span>
+                return (
+                  <Card key={bal.id} className={`border rounded-2xl p-4.5 bg-card/80 backdrop-blur-sm shadow-sm transition-all ${theme.hover}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">{bal.leave_name}</span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold border ${theme.bg} ${theme.text} ${theme.border}`}>
+                        {bal.leave_code}
+                      </span>
                     </div>
-                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${theme.text.replace('text-', 'bg-')}`} style={{ width: `${Math.min(100, (consumed / total) * 100)}%` }} />
+                    <div className="mt-3 flex items-baseline justify-between">
+                      <h3 className="text-2xl font-black text-foreground">{avail} <span className="text-xs text-muted-foreground font-semibold">days left</span></h3>
                     </div>
-                  </div>
-                </Card>
-              );
-            })
+                    <div className="mt-3 space-y-1.5">
+                      <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                        <span>Consumed: {consumed}d</span>
+                        {showExpired && (
+                          <span className={expired > 0 ? "text-red-500 font-bold" : "text-muted-foreground"}>Expired: {expired}d</span>
+                        )}
+                        <span>Allocated: {total}d</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${theme.text.replace('text-', 'bg-')}`} style={{ width: `${Math.min(100, (consumed / total) * 100)}%` }} />
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })
           )}
         </div>
 
@@ -394,21 +394,19 @@ export function MyLeavesPage() {
         <div className="flex border-b border-border gap-4 pb-1">
           <button
             onClick={() => setActiveTab('history')}
-            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-              activeTab === 'history'
+            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'history'
                 ? 'border-violet-600 text-violet-600'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             My Leaves History
           </button>
           <button
             onClick={() => setActiveTab('optional-holidays')}
-            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-              activeTab === 'optional-holidays'
+            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'optional-holidays'
                 ? 'border-violet-600 text-violet-600'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Optional Holidays Pool
           </button>
@@ -423,11 +421,10 @@ export function MyLeavesPage() {
                   <button
                     key={status}
                     onClick={() => setSelectedStatus(status)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${
-                      selectedStatus === status
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${selectedStatus === status
                         ? 'bg-violet-600 text-white shadow-md'
                         : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                    }`}
+                      }`}
                   >
                     {status}
                   </button>
@@ -540,9 +537,8 @@ export function MyLeavesPage() {
                 {optionalHolidays.map((holiday) => (
                   <div
                     key={holiday.id}
-                    className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${
-                      holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
-                    }`}
+                    className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
+                      }`}
                   >
                     <div className="space-y-1">
                       <h4 className="text-xs font-extrabold text-foreground">{holiday.holiday_name}</h4>
@@ -618,12 +614,12 @@ export function MyLeavesPage() {
                   .map((t) => {
                     const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
                     const avail = balanceItem ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0) : 0;
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {t.leave_name} ({t.leave_code}) - Allowance: {avail} days
-                    </option>
-                  );
-                })}
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {t.leave_name} ({t.leave_code}) - Allowance: {avail} days
+                      </option>
+                    );
+                  })}
               </select>
             </div>
 

@@ -23,15 +23,15 @@ function getRecTime(p: RoutePoint): string {
 /**
  * Analyzes a chronological list of route breadcrumb points
  * and detects stationary clusters (stops/breaks).
- * 
+ *
  * @param trail Chronological list of location pings
- * @param minBreakDurationMs Minimum stay time to register as a break (default: 1.5 mins for responsive testing)
- * @param maxClusterRadiusMeters Maximum movement allowed while stopped (default: 25m)
+ * @param minBreakDurationMs Minimum stay time to register as a break (default: 3 mins for meaningful breaks)
+ * @param maxClusterRadiusMeters Maximum movement allowed while stopped (default: 50m for GPS noise tolerance)
  */
 export function detectBreakPoints(
   trail: RoutePoint[],
-  minBreakDurationMs = 30_000, // 30 seconds minimum stay time to detect break
-  maxClusterRadiusMeters = 25
+  minBreakDurationMs = 3 * 60 * 1000, // 3 minutes - real break detection (not traffic lights!)
+  maxClusterRadiusMeters = 50 // 50m tolerance for GPS noise and movement at stop
 ): BreakPoint[] {
   if (!trail || trail.length === 0) return [];
 

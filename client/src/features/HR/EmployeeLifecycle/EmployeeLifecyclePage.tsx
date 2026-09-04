@@ -39,6 +39,7 @@ import { apiClient } from '@/config/api';
 import { lifecycleApi, EmployeeLifecycleSummary, EmployeeLifecycleDetails } from './api/lifecycleApi';
 import { ChronologicalLifecycleFlow } from './components/ChronologicalLifecycleFlow';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
+import { fetchWithFallback, API_ENDPOINTS } from '@/lib/apiHelpers';
 
 import { useLocation } from 'react-router-dom';
 import {
@@ -59,6 +60,11 @@ export default function EmployeeLifecyclePage() {
   const [desigFilter, setDesigFilter] = useState('all');
   const [empTypeFilter, setEmpTypeFilter] = useState('all');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
 
   const hasInitializedCompanyRef = useRef(false);
 
@@ -152,17 +158,23 @@ export default function EmployeeLifecyclePage() {
         ? 'all'
         : (companyFilter || (selectedCompanyId ? String(selectedCompanyId) : undefined));
 
-      const data = await lifecycleApi.getSummaries({
+      const response = await lifecycleApi.getSummaries({
         search,
         stage: stageFilter,
         departmentId: deptFilter !== 'all' ? Number(deptFilter) : undefined,
         companyId: effectiveCompanyId,
+        page,
+        pageSize,
       });
-      setEmployees(Array.isArray(data) ? data : []);
+
+      setEmployees(response.data || []);
+      setTotalCount(response.total || 0);
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to load employee lifecycle directory');
-      console.error(err);
+      const errorMsg = err.response?.data?.message || 'Failed to load employee lifecycle directory';
+      toast.error(errorMsg);
+      console.error('Lifecycle data fetch error:', errorMsg, err);
       setEmployees([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
@@ -170,42 +182,34 @@ export default function EmployeeLifecyclePage() {
 
   const fetchMetadataOptions = async () => {
     try {
-      const [deptRes, locRes, desigRes, compRes] = await Promise.all([
-        apiClient.get('/departments').catch(() => apiClient.get('/settings/departments')).catch(() => ({ data: { data: [] } })),
-        apiClient.get('/locations').catch(() => apiClient.get('/attendance/locations')).catch(() => ({ data: { data: [] } })),
-        apiClient.get('/settings/designations').catch(() => apiClient.get('/designations')).catch(() => apiClient.get('/reports/options')).catch(() => ({ data: { data: [] } })),
-        apiClient.get('/settings/companies').catch(() => ({ data: { data: [] } })),
+      // Use new helper function for consistent fallback handling
+      const [deptList, locList, desigList, compList] = await Promise.all([
+        fetchWithFallback(API_ENDPOINTS.departments()),
+        fetchWithFallback(API_ENDPOINTS.locations()),
+        fetchWithFallback(API_ENDPOINTS.designations()),
+        fetchWithFallback(API_ENDPOINTS.companies()),
       ]);
 
-      const deptList = deptRes.data?.data || deptRes.data || [];
-      const locList = locRes.data?.data || locRes.data || [];
-      
-      let desigList: any[] = [];
-      if (Array.isArray(desigRes.data?.data)) {
-        desigList = desigRes.data.data;
-      } else if (Array.isArray(desigRes.data)) {
-        desigList = desigRes.data;
-      } else if (Array.isArray(desigRes.data?.data?.designations)) {
-        desigList = desigRes.data.data.designations;
-      } else if (Array.isArray(desigRes.data?.designations)) {
-        desigList = desigRes.data.designations;
-      }
+      // Map departments
+      setDepartments(
+        (deptList || []).map((d: any) => ({ id: Number(d.id), name: d.name || d.department_name }))
+      );
 
-      const compList = Array.isArray(compRes.data?.data)
-        ? compRes.data.data
-        : Array.isArray(compRes.data)
-        ? compRes.data
-        : [];
+      // Map locations
+      setLocations(
+        (locList || []).map((l: any) => ({ id: Number(l.id), name: l.locationName || l.location_name || l.name }))
+      );
 
-      if (deptList.length > 0) {
-        setDepartments(deptList.map((d: any) => ({ id: Number(d.id), name: d.name })));
-      }
-      if (locList.length > 0) {
-        setLocations(locList.map((l: any) => ({ id: Number(l.id), name: l.locationName || l.location_name || l.name })));
-      }
-      if (desigList.length > 0) {
-        setDesignations(desigList.map((d: any) => ({ id: Number(d.id), name: d.name || d.designation_name || d.designationName })));
+      // Map designations with fallback
+      const mappedDesignations = (desigList || []).map((d: any) => ({
+        id: Number(d.id),
+        name: d.name || d.designation_name || d.designationName
+      }));
+
+      if (mappedDesignations.length > 0) {
+        setDesignations(mappedDesignations);
       } else {
+        // Fallback defaults
         setDesignations([
           { id: 9, name: 'Senior Manager' },
           { id: 10, name: 'Manager' },
@@ -248,9 +252,16 @@ export default function EmployeeLifecyclePage() {
     }
   }, [selectedCompanyId]);
 
+  // Fetch data when filters or pagination changes
   useEffect(() => {
+    setPage(1); // Reset to first page when filters change
     fetchLifecycleData();
   }, [search, stageFilter, deptFilter, desigFilter, empTypeFilter, companyFilter]);
+
+  // Fetch when page changes
+  useEffect(() => {
+    fetchLifecycleData();
+  }, [page]);
 
   useEffect(() => {
     fetchMetadataOptions();

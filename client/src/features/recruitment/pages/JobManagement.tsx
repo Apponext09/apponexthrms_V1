@@ -53,7 +53,7 @@ export const JobManagement: React.FC = () => {
   const publishJob = usePublishJob();
   
   // Table State
-  const [activeTab, setActiveTab] = useState<'active' | 'closed' | 'ai_suggestions'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);

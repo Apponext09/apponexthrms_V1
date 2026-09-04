@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   PieChart,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Users,
   Building,
   Clock,
@@ -12,7 +12,6 @@ import {
   ChevronRight,
   User,
   Briefcase,
-  IndianRupee
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +45,7 @@ export const ManagerPayrollPortal: React.FC = () => {
           employees: Array.isArray(d.employees) ? d.employees : [],
         });
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -103,11 +102,10 @@ export const ManagerPayrollPortal: React.FC = () => {
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
-              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === key
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${activeTab === key
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-              }`}
+                }`}
             >
               <Icon className="w-3.5 h-3.5" />
               {label}
@@ -125,7 +123,7 @@ export const ManagerPayrollPortal: React.FC = () => {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { title: 'Total Monthly Gross', val: loading ? '—' : fmt(stats.monthlyGrossPayroll), icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
+              { title: 'Total Monthly Gross', val: loading ? '—' : fmt(stats.monthlyGrossPayroll), icon: IndianRupee, color: 'text-primary', bg: 'bg-primary/10' },
               { title: 'Dept Employee Count', val: loading ? '—' : `${stats.totalEmployees} Employees`, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
               { title: 'Average Gross / Head', val: loading ? '—' : fmt(stats.averageSalary), icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
               { title: 'Annual Payroll Outlay', val: loading ? '—' : fmt(stats.annualPayroll), icon: IndianRupee, color: 'text-amber-600', bg: 'bg-amber-500/10' },

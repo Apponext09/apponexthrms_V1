@@ -6,7 +6,6 @@ import {
   Plus,
   Calendar,
   MapPin,
-  DollarSign,
   CheckCircle,
   Clock,
   XCircle

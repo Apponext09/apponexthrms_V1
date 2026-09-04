@@ -16,7 +16,6 @@ import {
   History,
   Search,
   Calendar,
-  DollarSign,
   Filter,
   Mail,
   UserCheck,

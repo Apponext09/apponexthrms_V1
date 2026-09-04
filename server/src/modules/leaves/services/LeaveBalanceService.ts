@@ -62,11 +62,25 @@ export class LeaveBalanceService {
           } catch (e) {}
         }
 
-        // 1. Gender applicability check
-        const genderApplicable = (lt.gender_applicable || lt.genderApplicable || allocSettings.gender || 'all').toString().toLowerCase();
-        if (genderApplicable !== 'all' && genderApplicable !== 'both' && employee.gender) {
-          if (employee.gender.toLowerCase() !== genderApplicable) {
-            continue;
+        // 1. Gender applicability check (only if onlyWhen does not define a dynamic gender rule)
+        const hasGenderInOnlyWhen = (group: any): boolean => {
+          if (!group) return false;
+          const conditions = group.conditions || group.rules;
+          if (!Array.isArray(conditions) || conditions.length === 0) return false;
+          return conditions.some((c: any) => {
+            if (c.conjunction || c.conditions || c.rules) return hasGenderInOnlyWhen(c);
+            const f = (c.fact || c.field || '').toString().toLowerCase().replace(/[\s_-]+/g, '');
+            return f === 'gender' && Boolean(c.operator);
+          });
+        };
+
+        const allocOnlyWhen = allocSettings.onlyWhen || allocSettings.only_when || lt.only_when || lt.onlyWhen;
+        if (!hasGenderInOnlyWhen(allocOnlyWhen)) {
+          const genderApplicable = (lt.gender_applicable || lt.genderApplicable || allocSettings.gender || 'all').toString().toLowerCase();
+          if (genderApplicable !== 'all' && genderApplicable !== 'both' && employee.gender) {
+            if (employee.gender.toLowerCase() !== genderApplicable) {
+              continue;
+            }
           }
         }
 

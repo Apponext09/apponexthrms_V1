@@ -7,7 +7,7 @@ import {
   Calendar,
   BarChart3,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Zap,
   ArrowRight,
 } from 'lucide-react';
@@ -69,7 +69,7 @@ export function AnalyticsDashboard() {
       id: 'payroll',
       title: 'Payroll Analytics',
       description: 'Analyze salary budgets, tax deductions, allowances distribution, and compensation trends.',
-      icon: DollarSign,
+      icon: IndianRupee,
       color: 'text-rose-600 bg-rose-100 dark:bg-rose-950/60',
       href: '#',
       comingSoon: true,

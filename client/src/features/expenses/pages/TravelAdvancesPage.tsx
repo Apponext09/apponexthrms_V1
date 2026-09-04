@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { expenseApi, TravelAdvance, TravelRequest } from '../api/expenseApi';
 import { useAuthStore } from '../../auth/store/authStore';
 import {
-  DollarSign,
+  IndianRupee,
   Plus,
   Compass,
   CheckCircle2,
@@ -87,7 +87,7 @@ export const TravelAdvancesPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <DollarSign className="w-6 h-6 text-emerald-600" />
+            <IndianRupee className="w-6 h-6 text-emerald-600" />
             Travel Advances & Settlement
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -108,7 +108,7 @@ export const TravelAdvancesPage: React.FC = () => {
           <div className="p-8 text-center text-sm text-slate-500">Loading travel advances...</div>
         ) : advances.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center justify-center">
-            <DollarSign className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-3" />
+            <IndianRupee className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-3" />
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No Travel Advances Found</h3>
             <p className="text-xs text-slate-500 max-w-sm mt-1">
               Request cash advances for upcoming approved travel.

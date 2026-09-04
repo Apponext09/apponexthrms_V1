@@ -6,7 +6,6 @@ import {
   XCircle,
   RotateCcw,
   Paperclip,
-  DollarSign,
   AlertCircle,
   Eye,
   Building

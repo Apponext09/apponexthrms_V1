@@ -11,7 +11,7 @@ import {
   Building2,
   Briefcase,
   CreditCard,
-  Receipt,
+  ReceiptIndianRupee,
   Plane,
   Activity,
   Shield,
@@ -61,7 +61,7 @@ const CONSULTANT_NAV = [
   {
     label: 'EXPENSES',
     items: [
-      { name: 'Expense Claims',   href: '/consultant/expenses', icon: Receipt },
+      { name: 'Expense Claims',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
       { name: 'Travel Requests',  href: '/consultant/travel',   icon: Plane },
     ],
   },

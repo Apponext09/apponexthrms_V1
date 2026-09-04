@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiClient } from '@/config/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useSettlement } from '../hooks/index';
 import {
-  UserX, FileText, CheckCircle2, DollarSign, Download,
+  UserX, FileText, CheckCircle2, Download,
   Laptop, ShieldCheck, Clock, Send, AlertCircle, ArrowRight, Plus,
   Upload, Paperclip, FileCheck, Trash2
 } from 'lucide-react';

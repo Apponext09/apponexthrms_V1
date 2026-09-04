@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
   CreditCard, Plus, RefreshCw, CheckCircle2, Clock, XCircle,
-  AlertCircle, Database, User, DollarSign, Calendar, Landmark
+  AlertCircle, Database, User, IndianRupee, Calendar, Landmark
 } from 'lucide-react';
 
 export function LeaveEncashmentPage() {
@@ -334,7 +334,7 @@ export function LeaveEncashmentPage() {
                   {/* PREVIEW CONTAINER */}
                   <div className="pt-4 border-t border-slate-100">
                     <h4 className="text-xs font-bold text-gray-850 dark:text-white mb-2.5 flex items-center gap-1.5">
-                      <DollarSign className="w-4 h-4 text-emerald-600" /> Live Calculation Preview
+                      <IndianRupee className="w-4 h-4 text-emerald-600" /> Live Calculation Preview
                     </h4>
 
                     {previewLoading && (

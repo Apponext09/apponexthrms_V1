@@ -37,7 +37,7 @@ async function permissionCheckAsync(
     return;
   }
 
-  const roles = (req.user?.roles || (req.ctx as any)?.roles || []).map((r: string) => String(r).toLowerCase());
+  const roles = (req.user?.roles || req.ctx?.roles || []).map((r: string) => String(r).toLowerCase());
   if (
     roles.includes('organization_admin') ||
     roles.includes('super_admin') ||

@@ -162,19 +162,24 @@ export class OfferService {
   async sendOffer(
     ctx: TenantContext, 
     offerId: number, 
-    options?: { customSubject?: string; customBody?: string; sendEmails?: boolean }
+    options?: { customSubject?: string; customBody?: string; sendEmails?: boolean; customRecipientEmail?: string }
   ): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId) as any;
+    const db = getKnex();
+    let offer = await this.offerRepo.getById(ctx, offerId) as any;
+    if (!offer) {
+      offer = await db('offers').where('id', offerId).first();
+    }
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
 
-    if (offer.status !== 'draft' && offer.status !== 'sent') {
+    if (offer.status !== 'draft' && offer.status !== 'sent' && offer.status !== 'accepted') {
       throw new ValidationError('Cannot send offers in this status');
     }
 
+    const newStatus = offer.status === 'accepted' ? 'accepted' : 'sent';
     const updated = await this.offerRepo.update(ctx, offerId, {
-      status: 'sent',
+      status: newStatus,
       sent_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
       updated_by: ctx.userId,
     } as any);
@@ -205,7 +210,6 @@ export class OfferService {
     }
 
     // Dynamic notification template check, compilation & SMTP email delivery
-    const db = getKnex();
     try {
       let templateRow = await db('notification_templates')
         .where('organization_id', ctx.organizationId)
@@ -423,20 +427,21 @@ Executive HR
   }
 
   async acceptOffer(ctx: TenantContext, offerId: number): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId) as any;
+    const db = getKnex();
+    let offer = await this.offerRepo.getById(ctx, offerId) as any;
+    if (!offer) {
+      offer = await db('offers').where('id', offerId).first();
+    }
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
 
-    if (offer.status !== 'sent') {
-      throw new ValidationError('Can only accept sent offers');
+    if (offer.status === 'accepted') {
+      return offer;
     }
 
-    // Check expiry
-    const expiryStr = offer.offerExpiryDate || (offer as any).offer_expiry_date;
-    const expiryDate = new Date(expiryStr);
-    if (expiryDate < new Date()) {
-      throw new ValidationError('Offer has expired');
+    if (offer.status !== 'sent' && offer.status !== 'draft') {
+      throw new ValidationError('Can only accept active offers');
     }
 
     const updated = await this.offerRepo.update(ctx, offerId, {
@@ -445,26 +450,25 @@ Executive HR
       updated_by: ctx.userId,
     } as any);
 
-    // Update application status
     const appId = offer.applicationId || (offer as any).application_id;
-    await this.applicationRepo.update(ctx, appId, {
-      application_status: 'hired',
-      updated_by: ctx.userId,
-    } as any);
+    if (appId) {
+      await this.applicationRepo.update(ctx, appId, {
+        application_status: 'hired',
+        updated_by: ctx.userId,
+      } as any).catch(() => {});
+    }
 
     // Trigger onboarding / employee provisioning
     try {
       const { OnboardingIntegrationService } = await import('./OnboardingIntegrationService');
       const onboardingService = new OnboardingIntegrationService();
-      await onboardingService.onCandidateHired(ctx, appId);
+      await onboardingService.onCandidateHired(ctx, appId, offerId);
     } catch (onboardingError: any) {
-      console.error('Failed to auto-provision employee during offer acceptance:', onboardingError);
-      throw onboardingError;
+      console.warn('⚠️ Non-fatal notice during offer auto-provisioning:', onboardingError);
     }
 
     // 🔔 Notify HR admins and Hiring Manager about accepted offer
     try {
-      const db = getKnex();
       const application = appId ? await db('applications').where('id', appId).first() : null;
       let candidateName = 'Unknown';
       if (application?.candidate_id) {
@@ -493,11 +497,26 @@ Executive HR
     return updated;
   }
 
-  async acceptOfferByUuid(uuid: string, signature: string): Promise<Offer> {
+  async acceptOfferByUuid(uuid: string, signature?: string): Promise<any> {
     const db = getKnex();
     const offerRecord = await db('offers').where('uuid', uuid).first();
     if (!offerRecord) {
-      throw new NotFoundError('Offer not found');
+      throw new NotFoundError('Offer letter not found or link has expired');
+    }
+
+    let meta: any = {};
+    try {
+      meta = typeof offerRecord.meta === 'string' ? JSON.parse(offerRecord.meta || '{}') : (offerRecord.meta || {});
+    } catch {
+      meta = {};
+    }
+
+    if (signature) {
+      meta.digitalSignature = signature;
+      meta.acceptedAt = new Date().toISOString();
+      await db('offers').where('id', offerRecord.id).update({
+        meta: JSON.stringify(meta),
+      });
     }
 
     const ctx: TenantContext = {
@@ -509,11 +528,23 @@ Executive HR
     return this.acceptOffer(ctx, offerRecord.id);
   }
 
-  async rejectOfferByUuid(uuid: string, comments: string): Promise<Offer> {
+  async rejectOfferByUuid(uuid: string, comments?: string): Promise<Offer> {
     const db = getKnex();
     const offerRecord = await db('offers').where('uuid', uuid).first();
     if (!offerRecord) {
       throw new NotFoundError('Offer not found');
+    }
+
+    let meta: any = {};
+    try {
+      meta = typeof offerRecord.meta === 'string' ? JSON.parse(offerRecord.meta || '{}') : (offerRecord.meta || {});
+    } catch {
+      meta = {};
+    }
+
+    if (comments) {
+      meta.declineReason = comments;
+      meta.rejectedAt = new Date().toISOString();
     }
 
     const ctx: TenantContext = {
@@ -525,26 +556,37 @@ Executive HR
     const updated = await this.offerRepo.update(ctx, offerRecord.id, {
       status: 'rejected',
       rejected_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      meta: JSON.stringify(meta),
       updated_by: ctx.userId,
     } as any);
 
     const appId = offerRecord.applicationId || (offerRecord as any).application_id;
-    await this.applicationRepo.update(ctx, appId, {
-      application_status: 'rejected',
-      updated_by: ctx.userId,
-    } as any);
+    if (appId) {
+      await this.applicationRepo.update(ctx, appId, {
+        application_status: 'rejected',
+        updated_by: ctx.userId,
+      } as any).catch(() => {});
+    }
 
     return updated;
   }
 
   async rejectOffer(ctx: TenantContext, offerId: number): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId) as any;
+    const db = getKnex();
+    let offer = await this.offerRepo.getById(ctx, offerId) as any;
+    if (!offer) {
+      offer = await db('offers').where('id', offerId).first();
+    }
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
 
-    if (offer.status !== 'sent') {
-      throw new ValidationError('Can only reject sent offers');
+    if (offer.status === 'rejected') {
+      return offer;
+    }
+
+    if (offer.status !== 'sent' && offer.status !== 'draft') {
+      throw new ValidationError('Can only reject active offers');
     }
 
     const updated = await this.offerRepo.update(ctx, offerId, {
@@ -555,10 +597,12 @@ Executive HR
 
     // Update application status
     const appId = offer.applicationId || (offer as any).application_id;
-    await this.applicationRepo.update(ctx, appId, {
-      application_status: 'rejected',
-      updated_by: ctx.userId,
-    } as any);
+    if (appId) {
+      await this.applicationRepo.update(ctx, appId, {
+        application_status: 'rejected',
+        updated_by: ctx.userId,
+      } as any).catch(() => {});
+    }
 
     return updated;
   }
@@ -751,78 +795,32 @@ Executive HR
     await this.offerRepo.delete(ctx, offerId);
   }
 
-  async acceptOfferByUuid(uuid: string, signature: string): Promise<any> {
-    const db = getKnex();
-    const offer = await db('offers').where('uuid', uuid).first();
-    if (!offer) {
-      throw new NotFoundError('Offer letter not found or link has expired');
-    }
-
-    let meta: any = {};
-    try {
-      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
-    } catch {
-      meta = {};
-    }
-
-    meta.digitalSignature = signature;
-    meta.acceptedAt = new Date().toISOString();
-
-    await db('offers').where('id', offer.id).update({
-      status: 'accepted',
-      meta: JSON.stringify(meta),
-      updated_at: new Date(),
-    });
-
-    if (offer.application_id) {
-      await db('applications').where('id', offer.application_id).update({
-        status: 'accepted',
-        stage: 'offered',
-        updated_at: new Date(),
-      }).catch(() => {});
-    }
-
-    return {
-      ...offer,
-      status: 'accepted',
-      meta,
-    };
+  async getOfferOnboardingDetails(ctx: TenantContext, offerId: number): Promise<any> {
+    const { OnboardingIntegrationService } = await import('./OnboardingIntegrationService');
+    const onboardingService = new OnboardingIntegrationService();
+    return onboardingService.getOfferOnboardingDetails(ctx, offerId);
   }
 
-  async rejectOfferByUuid(uuid: string, comments?: string): Promise<any> {
+  async updateEmployeeCredentials(ctx: TenantContext, offerId: number, password: string): Promise<any> {
+    const { OnboardingIntegrationService } = await import('./OnboardingIntegrationService');
+    const onboardingService = new OnboardingIntegrationService();
+    return onboardingService.updateEmployeeCredentials(ctx, offerId, password);
+  }
+
+  async onboardOfferCandidate(ctx: TenantContext, offerId: number): Promise<any> {
     const db = getKnex();
-    const offer = await db('offers').where('uuid', uuid).first();
+    let offer = await this.offerRepo.getById(ctx, offerId) as any;
     if (!offer) {
-      throw new NotFoundError('Offer letter not found or link has expired');
+      offer = await db('offers').where('id', offerId).first();
     }
-
-    let meta: any = {};
-    try {
-      meta = typeof offer.meta === 'string' ? JSON.parse(offer.meta || '{}') : (offer.meta || {});
-    } catch {
-      meta = {};
+    if (!offer) {
+      throw new NotFoundError('Offer not found');
     }
+    const appId = offer.applicationId || (offer as any).application_id;
 
-    meta.declineReason = comments || '';
-    meta.declinedAt = new Date().toISOString();
-
-    await db('offers').where('id', offer.id).update({
-      status: 'rejected',
-      meta: JSON.stringify(meta),
-      updated_at: new Date(),
-    });
-
-    if (offer.application_id) {
-      await db('applications').where('id', offer.application_id).update({
-        status: 'rejected',
-        updated_at: new Date(),
-      }).catch(() => {});
-    }
-
-    return {
-      ...offer,
-      status: 'rejected',
-      meta,
-    };
+    const { OnboardingIntegrationService } = await import('./OnboardingIntegrationService');
+    const onboardingService = new OnboardingIntegrationService();
+    return onboardingService.onCandidateHired(ctx, appId, offerId);
   }
 }
+
