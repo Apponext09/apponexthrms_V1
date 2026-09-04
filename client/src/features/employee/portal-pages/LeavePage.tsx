@@ -762,14 +762,15 @@ export default function LeavePage() {
     ...(employee || {}),
     gender: (employee?.gender || (user as any)?.gender || (user as any)?.personal_info?.gender || '').toString().trim().toLowerCase(),
     marital_status: ((employee as any)?.marital_status || (employee as any)?.maritalStatus || (user as any)?.marital_status || (user as any)?.maritalStatus || '').toString().trim().toLowerCase(),
-    current_department_id: employee?.current_department_id || employee?.currentDepartmentId || (user as any)?.department_id || (user as any)?.departmentId,
-    current_location_id: employee?.current_location_id || employee?.currentLocationId || (user as any)?.location_id || (user as any)?.locationId,
-    current_grade_id: employee?.current_grade_id || employee?.currentGradeId || (employee as any)?.grade_id || (employee as any)?.gradeId,
-    current_designation_id: employee?.current_designation_id || employee?.currentDesignationId || (employee as any)?.designation_id || (employee as any)?.designationId,
-    employment_type: (employee?.employment_type || employee?.employmentType || '').toString(),
+    current_department_id: (employee as any)?.current_department_id || employee?.currentDepartmentId || (user as any)?.department_id || (user as any)?.departmentId,
+    current_location_id: (employee as any)?.current_location_id || employee?.currentLocationId || (user as any)?.location_id || (user as any)?.locationId,
+    current_grade_id: (employee as any)?.current_grade_id || (employee as any)?.grade_id || (employee as any)?.gradeId,
+    current_designation_id: (employee as any)?.current_designation_id || (employee as any)?.designation_id || (employee as any)?.designationId,
+    employment_type: ((employee as any)?.employment_type || employee?.employmentType || '').toString(),
     status: (employee?.status || '').toString(),
-    date_of_joining: employee?.date_of_joining || employee?.dateOfJoining,
-    date_of_confirmation: employee?.date_of_confirmation || employee?.dateOfConfirmation || (employee as any)?.confirmation_date || (employee as any)?.confirmationDate,
+    date_of_joining: (employee as any)?.date_of_joining || employee?.dateOfJoining,
+    date_of_confirmation: (employee as any)?.date_of_confirmation || (employee as any)?.dateOfConfirmation || (employee as any)?.confirmation_date || (employee as any)?.confirmationDate,
+    dateOfBirth: employee?.dateOfBirth ?? (user as any)?.dateOfBirth ?? undefined,
   }), [user, employee]);
 
   const displayBalances = balances.filter(b => {
@@ -879,11 +880,11 @@ export default function LeavePage() {
                     available_balance: t.default_allowance_days || t.defaultAllowanceDays || 0,
                   })))
                     .filter((b) => isLeaveTypeApplicableForGender(b, employeeContext))
-                    .map((b) => {
+                    .map((b: any) => {
                       const name = b.leave_name || b.leaveName || 'Leave';
                       const code = b.leave_code || b.leaveCode || 'PTO';
                       const targetId = b.leave_type_id || b.leaveTypeId || b.id;
-                      const avail = b.available_balance ?? 0;
+                      const avail = b.available_balance ?? b.availableBalance ?? 0;
 
                       return (
                         <option key={targetId} value={targetId}>

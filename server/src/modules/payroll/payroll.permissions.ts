@@ -157,6 +157,26 @@ export const PAYROLL_PERMISSIONS = [
 ];
 
 export const PAYROLL_ROLES = {
+  finance: [
+    'payroll.structure_read',
+    'payroll.structure_write',
+    'payroll.process',
+    'payroll.payslip_read',
+    'payroll.payslip_generate',
+    'payroll.tax_read',
+    'payroll.tax_verify',
+    'payroll.report_read',
+    'payroll.report_export',
+    'payroll.loan_read',
+    'payroll.loan_approve',
+    'payroll.reimbursement_read',
+    'payroll.reimbursement_approve',
+    'payroll.revision_read',
+    'payroll.revision_approve',
+    'payroll.settlement_read',
+    'payroll.settlement_approve',
+  ],
+
   finance_manager: [
     'payroll:view',
     'payroll:generate',

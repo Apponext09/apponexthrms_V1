@@ -500,12 +500,14 @@ export class EmployeeService {
     departmentId?: number | null
   ) {
     const targetRole = accessRole || 'employee';
-    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant'];
+    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'];
     if (!roleCodes.includes(targetRole)) return;
 
-    // Fetch existing system roles for this organization
+    // Fetch existing system roles for this organization or platform (organization_id IS NULL)
     const existingRoles = await db('roles')
-      .where('organization_id', ctx.organizationId)
+      .where(function (this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .whereIn('code', roleCodes);
 
     const roleMap = new Map<string, number>();
@@ -524,6 +526,7 @@ export class EmployeeService {
       employee: 'Employee',
       intern: 'Intern',
       consultant: 'Consultant',
+      finance: 'Finance',
     };
 
     // 1. Ensure target role exists in roles table
@@ -567,10 +570,18 @@ export class EmployeeService {
     // 3. Clear existing role mappings for roleCodes
     const roleIdsToClear = Array.from(roleMap.values());
     await db('user_roles')
-      .where('organization_id', ctx.organizationId)
       .where('user_id', userId)
+      .where(function(this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .whereIn('role_id', roleIdsToClear)
       .delete();
+
+    // Sync role column on users table directly
+    await db('users')
+      .where('id', userId)
+      .update({ role: targetRole, updated_at: new Date() })
+      .catch(() => {});
 
     // 4. Assign base employee role
     await db('user_roles').insert({
@@ -870,18 +881,18 @@ export class EmployeeService {
     try {
       const db = getKnex();
       let existingUser = await db('users')
-        .where({ organization_id: ctx.organizationId, employee_id: employeeId })
+        .where('employee_id', employeeId)
         .first();
 
-      if (!existingUser && employee.email) {
+      const targetEmail = (input.email || updated.email || employee.email || '').trim();
+
+      if (!existingUser && targetEmail) {
         existingUser = await db('users')
-          .where({ organization_id: ctx.organizationId, email: employee.email })
+          .whereRaw('LOWER(email) = ?', [targetEmail.toLowerCase()])
           .first();
       }
 
-      const targetEmail = input.email || updated.email || employee.email;
       let hashedPassword: string | undefined = undefined;
-
       if (input.password) {
         hashedPassword = await hash(input.password, {
           type: 2,
@@ -892,20 +903,32 @@ export class EmployeeService {
       }
 
       let userIdToSync: number | null = null;
+      const targetAccessRole = input.accessRole || input.access_role || input.role || 'employee';
 
       if (existingUser) {
         userIdToSync = existingUser.id;
-        const userUpdateData: Record<string, any> = { updated_at: new Date() };
+        const userUpdateData: Record<string, any> = {
+          updated_at: new Date(),
+          role: targetAccessRole,
+          employee_id: employeeId,
+        };
         if (targetEmail) userUpdateData.email = targetEmail;
         if (hashedPassword) userUpdateData.password_hash = hashedPassword;
         await db('users').where('id', existingUser.id).update(userUpdateData);
-      } else if (hashedPassword && targetEmail) {
+      } else if (targetEmail) {
+        const defaultHash = hashedPassword || await hash('Password@123', {
+          type: 2,
+          memoryCost: 19456,
+          timeCost: 2,
+          parallelism: 1,
+        });
         const [newUserId] = await db('users').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           employee_id: employeeId,
           email: targetEmail,
-          password_hash: hashedPassword,
+          password_hash: defaultHash,
+          role: targetAccessRole,
           status: 'active',
           created_at: new Date(),
           updated_at: new Date(),
@@ -914,7 +937,6 @@ export class EmployeeService {
       }
 
       if (userIdToSync) {
-        const targetAccessRole = input.accessRole || (employee as any).accessRole || 'employee';
         const targetDeptId = input.departmentId ?? updated.current_department_id ?? employee.current_department_id;
         await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId);
       }

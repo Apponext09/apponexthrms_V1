@@ -68,11 +68,11 @@ export function DesignationFormModal({ onSubmit, onClose, editingId }: Designati
           return [];
         };
 
-        setMappedCompanies(parseArr(desig.mapped_companies));
-        setMappedLocations(parseArr(desig.mapped_locations));
-        setMappedDepartments(parseArr(desig.mapped_departments));
-        setMappedShifts(parseArr(desig.mapped_shifts));
-        setMappedGrades(parseArr(desig.mapped_grades));
+        setMappedCompanies(parseArr(desig.mapped_companies ?? desig.mappedCompanies));
+        setMappedLocations(parseArr(desig.mapped_locations ?? desig.mappedLocations));
+        setMappedDepartments(parseArr(desig.mapped_departments ?? desig.mappedDepartments));
+        setMappedShifts(parseArr(desig.mapped_shifts ?? desig.mappedShifts));
+        setMappedGrades(parseArr(desig.mapped_grades ?? desig.mappedGrades));
       }
     }
   }, [editingId, designations]);
@@ -92,9 +92,27 @@ export function DesignationFormModal({ onSubmit, onClose, editingId }: Designati
     currentList: string[],
     setList: React.Dispatch<React.SetStateAction<string[]>>,
     id: string | number,
-    isSingleSelect = false
+    isSingleSelect = false,
+    categoryDataList: any[] = []
   ) => {
     const strId = String(id);
+
+    if (isSingleSelect && categoryDataList.length > 0) {
+      const categoryIds = new Set(
+        categoryDataList.map((item, idx) =>
+          String(item.id ?? item.shiftId ?? item.shift_id ?? item.code ?? idx)
+        )
+      );
+      const otherSelected = currentList.filter((x) => !categoryIds.has(String(x)));
+
+      if (currentList.includes(strId)) {
+        setList(otherSelected);
+      } else {
+        setList([...otherSelected, strId]);
+      }
+      return;
+    }
+
     if (isSingleSelect) {
       if (currentList.includes(strId)) {
         setList([]);
@@ -183,11 +201,11 @@ export function DesignationFormModal({ onSubmit, onClose, editingId }: Designati
                         isSingleSelect ? 'rounded-full' : 'rounded'
                       )}
                       checked={isChecked}
-                      onChange={() => handleCheckbox(selectedList, setSelectedList, strId, isSingleSelect)}
+                      onChange={() => handleCheckbox(selectedList, setSelectedList, strId, isSingleSelect, list)}
                       onClick={(e) => {
                         if (isSingleSelect && isChecked) {
                           e.preventDefault();
-                          handleCheckbox(selectedList, setSelectedList, strId, isSingleSelect);
+                          handleCheckbox(selectedList, setSelectedList, strId, isSingleSelect, list);
                         }
                       }}
                     />

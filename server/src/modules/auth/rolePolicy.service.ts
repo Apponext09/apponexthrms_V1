@@ -59,11 +59,11 @@ export class RolePolicyService {
     }
 
     if (
-      normalized.some((r) => ['finance_manager', 'payroll_manager', 'finance', 'payroll'].includes(r)) ||
-      ['finance_manager', 'payroll_manager'].includes(userRoleStr) ||
+      normalized.some((r) => ['finance', 'finance_manager', 'payroll_manager', 'payroll'].includes(r)) ||
+      ['finance', 'finance_manager', 'payroll_manager'].includes(userRoleStr) ||
       userDesigStr.includes('finance') || userDesigStr.includes('payroll')
     ) {
-      return 'finance_manager';
+      return 'finance';
     }
 
     if (
