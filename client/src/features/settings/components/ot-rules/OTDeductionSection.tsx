@@ -1,36 +1,62 @@
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Checkbox, 
-  FormControlLabel, 
-  TextField, 
-  Select, 
-  MenuItem,
-  FormControl
-} from '@mui/material';
-import styles from './OTRule.module.scss';
+import { Controller, type Control } from 'react-hook-form';
 
-export const OTDeductionSection: React.FC = () => {
+interface OTDeductionSectionProps {
+  prefix:  'normalDay' | 'holiday' | 'weekend';
+  control: Control<any>;
+}
+
+export const OTDeductionSection: React.FC<OTDeductionSectionProps> = ({ prefix, control }) => {
   return (
-    <div className={styles.calculationCard}>
-      <h4>OT Deduction</h4>
+    <div className="border border-border/80 rounded-xl p-4 bg-muted/20 space-y-3">
+      <h4 className="text-xs font-bold text-foreground tracking-wide uppercase">
+        OT Deduction
+      </h4>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-        <FormControlLabel
-          control={<Checkbox size="small" />}
-          label={<Typography sx={{ fontSize: '14px' }}>Calculate OT after</Typography>}
-          sx={{ mr: 1 }}
+      <div className="flex items-center gap-2 flex-wrap text-xs font-medium text-foreground">
+        <Controller
+          name={`${prefix}.deduction.enabled`}
+          control={control}
+          defaultValue={false}
+          render={({ field }) => (
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!field.value}
+                onChange={field.onChange}
+                className="w-3.5 h-3.5 rounded border-input text-primary focus:ring-primary/20 accent-primary cursor-pointer"
+              />
+              <span className="font-semibold text-foreground">Calculate OT after</span>
+            </label>
+          )}
         />
-        <TextField size="small" sx={{ width: 80, '& .MuiInputBase-input': { p: '6px 8px', fontSize: '14px' } }} />
-        <FormControl size="small" sx={{ minWidth: 100 }}>
-          <Select defaultValue="Hours" sx={{ fontSize: '14px', '& .MuiSelect-select': { p: '6px 12px' } }}>
-            <MenuItem value="Minutes">Minutes</MenuItem>
-            <MenuItem value="Hours">Hours</MenuItem>
-            <MenuItem value="Days">Days</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
+        <Controller
+          name={`${prefix}.deduction.value`}
+          control={control}
+          defaultValue={0}
+          render={({ field }) => (
+            <input
+              {...field}
+              type="number"
+              className="w-16 h-8 text-xs font-bold text-center bg-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          )}
+        />
+        <Controller
+          name={`${prefix}.deduction.unit`}
+          control={control}
+          defaultValue="minutes"
+          render={({ field }) => (
+            <select
+              {...field}
+              className="h-8 text-xs font-semibold bg-background border border-input rounded-xl px-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            >
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
+          )}
+        />
+      </div>
     </div>
   );
 };

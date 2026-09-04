@@ -133,6 +133,25 @@ export class OvertimeService {
       approval_date: now,
     });
 
+    // Data Sync: Backfill attendance_records.overtime_minutes if attendance record exists
+    try {
+      const otMins = Math.round(Number((request as any).overtimeHours ?? request.overtime_hours ?? 0) * 60);
+      const empId = Number((request as any).employeeId ?? request.employee_id);
+      const otDate = String((request as any).overtimeDate ?? request.overtime_date ?? '');
+
+      if (otMins > 0 && empId && otDate) {
+        const { getKnex } = await import('../../../db/knex');
+        const db = getKnex();
+        await db('attendance_records')
+          .where('employee_id', empId)
+          .where('organization_id', ctx.organizationId)
+          .whereRaw('DATE(check_in_date) = ?', [otDate.slice(0, 10)])
+          .update({ overtime_minutes: otMins });
+      }
+    } catch (syncErr) {
+      console.warn('[OvertimeService.approve] Failed to sync attendance_records overtime_minutes:', syncErr);
+    }
+
     await this.auditService.log(ctx, {
       action: 'APPROVE_OVERTIME',
       entityType: 'OVERTIME',
@@ -160,6 +179,23 @@ export class OvertimeService {
     const rejected = await this.overtimeRepo.update(ctx, requestId, {
       approval_status: 'rejected',
     });
+
+    // Data Sync: Zero out attendance_records.overtime_minutes if rejected
+    try {
+      const empId = Number((request as any).employeeId ?? request.employee_id);
+      const otDate = String((request as any).overtimeDate ?? request.overtime_date ?? '');
+      if (empId && otDate) {
+        const { getKnex } = await import('../../../db/knex');
+        const db = getKnex();
+        await db('attendance_records')
+          .where('employee_id', empId)
+          .where('organization_id', ctx.organizationId)
+          .whereRaw('DATE(check_in_date) = ?', [otDate.slice(0, 10)])
+          .update({ overtime_minutes: 0 });
+      }
+    } catch (syncErr) {
+      console.warn('[OvertimeService.reject] Failed to reset attendance_records overtime_minutes:', syncErr);
+    }
 
     await this.auditService.log(ctx, {
       action: 'REJECT_OVERTIME',

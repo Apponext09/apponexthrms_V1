@@ -68,11 +68,23 @@ export class AttendanceIntegrationService {
 
     const payableDays = Math.max(0, totalMonthDays - lopDays);
 
+    // Real OT: sum overtime_minutes from attendance_records for the month
+    let overtimeHours = 0;
+    try {
+      const otResult = await db('attendance_records')
+        .where('employee_id', employeeId)
+        .where('organization_id', ctx.organizationId)
+        .whereRaw("DATE_FORMAT(check_in_date, '%Y-%m') = ?", [salaryMonth])
+        .sum('overtime_minutes as total_ot_mins')
+        .first();
+      overtimeHours = Number((otResult as any)?.total_ot_mins || 0) / 60;
+    } catch { overtimeHours = 0; }
+
     return {
       totalMonthDays,
       payableDays,
       lopDays,
-      overtimeHours: 0
+      overtimeHours,
     };
   }
 }

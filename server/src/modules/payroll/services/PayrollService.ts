@@ -828,14 +828,52 @@ export class PayrollService {
               baseAmount = onDemandTds;
             } else if (src === 'overtime' || src === 'ot') {
               try {
-                const otRow = await db('attendance_records')
-                  .where('employee_id', empId)
-                  .whereRaw("DATE_FORMAT(check_in_date, '%Y-%m') = ?", [runMonthStr])
-                  .sum('overtime_minutes as total_ot_mins').first().catch(() => null);
-                const otHours = Number((otRow as any)?.total_ot_mins || 0) / 60;
-                const dailyRate = resolvedGross / totalCycleDays;
-                const hourlyRate = dailyRate / 8;
-                baseAmount = Math.round(otHours * hourlyRate * 2);
+                // Query OT minutes from attendance_records, broken down by day_type from overtime_requests
+                const otRows = await db('attendance_records as ar')
+                  .leftJoin('overtime_requests as ot', function (this: any) {
+                    this.on('ot.employee_id', 'ar.employee_id')
+                      .andOnRaw("DATE(ot.overtime_date) = DATE(ar.check_in_date)")
+                      .andOn(db.raw("ot.approval_status = 'approved'"));
+                  })
+                  .where('ar.employee_id', empId)
+                  .where('ar.organization_id', ctx.organizationId)
+                  .whereRaw("DATE_FORMAT(ar.check_in_date, '%Y-%m') = ?", [runMonthStr])
+                  .where('ar.overtime_minutes', '>', 0)
+                  .select(
+                    db.raw("COALESCE(ot.day_type, 'normal') as day_type"),
+                    db.raw("SUM(ar.overtime_minutes) as ot_mins")
+                  )
+                  .groupByRaw("COALESCE(ot.day_type, 'normal')")
+                  .catch(() => []);
+
+                // Load OT rule for this employee
+                const { OTRuleService } = await import('../../../modules/attendance/services/OTRuleService');
+                const otRuleService = new OTRuleService();
+                const otRule = await otRuleService.getEligibleRule(ctx, empId).catch(() => null);
+
+                const hourlyRate = resolvedGross / totalCycleDays / 8;
+                const dailyRate  = resolvedGross / totalCycleDays;
+
+                for (const row of otRows) {
+                  const mins = Number((row as any).ot_mins || 0);
+                  if (mins <= 0) continue;
+                  const dayType = ((row as any).day_type || 'normal') as 'normal' | 'holiday' | 'weekend';
+                  if (otRule) {
+                    baseAmount += otRuleService.calculateOTPayAmount({
+                      rule:            otRule,
+                      overtimeMinutes: mins,
+                      dayType,
+                      basicAmount:     resolvedBasicMonthly ?? resolvedGross * 0.4,
+                      grossAmount:     resolvedGross,
+                      dailyRate,
+                      hourlyRate,
+                    });
+                  } else {
+                    // Fallback: 1.5x normal, 2x holiday/weekend
+                    const multiplier = dayType === 'normal' ? 1.5 : 2.0;
+                    baseAmount += Math.round((mins / 60) * hourlyRate * multiplier);
+                  }
+                }
               } catch { baseAmount = 0; }
             } else if (src === 'late_deduction' || src === 'late') {
               try {
@@ -1511,20 +1549,19 @@ export class PayrollService {
   async getBankTransferSheet(ctx: TenantContext, payrollRunId: number) {
     const db = getKnex();
     // The global postProcessResponse hook camelCases every knex result row —
-    // reading employees.first_name / employee_compensation.bank_name /
+    // reading employees.first_name / employees.bank_name /
     // payroll_run_employees.net_salary here always returned undefined,
     // producing a blank name and ₹0.00 for every employee.
     const rows: any[] = await db('payroll_run_employees')
       .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
-      .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
       .where('payroll_run_employees.payroll_run_id', payrollRunId)
       .where('payroll_run_employees.organization_id', ctx.organizationId)
       .select(
         'employees.first_name',
         'employees.last_name',
-        db.raw('COALESCE(employees.bank_name, employee_compensation.bank_name) as bank_name'),
-        db.raw('COALESCE(employees.account_no, employee_compensation.account_number) as account_number'),
-        db.raw('COALESCE(employees.ifsc_code, employee_compensation.ifsc_code) as ifsc_code'),
+        'employees.bank_name',
+        'employees.account_no as account_number',
+        'employees.ifsc_code',
         'payroll_run_employees.net_salary'
       );
 
@@ -1546,7 +1583,6 @@ export class PayrollService {
     // We use a subquery to get only the Basic Salary earning row per run-employee.
     const rows: any[] = await db('payroll_run_employees as pre')
       .join('employees as e', 'pre.employee_id', 'e.id')
-      .leftJoin('employee_compensation as ec', 'e.id', 'ec.employee_id')
       .leftJoin(
         db('payroll_earnings')
           .whereRaw("LOWER(component_name) LIKE '%basic%'")
@@ -1560,8 +1596,8 @@ export class PayrollService {
       .select(
         'e.first_name',
         'e.last_name',
-        db.raw('COALESCE(e.uan_no, ec.uan_number) as uan_number'),
-        db.raw('COALESCE(e.esic_no, ec.esic_number) as esic_number'),
+        'e.uan_no as uan_number',
+        'e.esic_no as esic_number',
         db.raw('COALESCE(be.basic_earned, 0) as basic_salary'),
         'pre.total_earnings as gross_salary'
       );

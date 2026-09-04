@@ -4,7 +4,6 @@ import { withTransaction, getKnex } from '../../../db/knex';
 import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
 import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
 import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
-import { EmployeeCompensationRepository } from '../repositories/EmployeeCompensationRepository';
 import { AuditService } from '../../audit/audit.service';
 import { BiometricService } from '../../attendance/services/BiometricService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
@@ -32,14 +31,12 @@ export class EmployeeService {
   private employeeRepo: EmployeeRepository;
   private personalInfoRepo: EmployeePersonalInfoRepository;
   private professionalInfoRepo: EmployeeProfessionalInfoRepository;
-  private compensationRepo: EmployeeCompensationRepository;
   private auditService: AuditService;
 
   constructor() {
     this.employeeRepo = new EmployeeRepository();
     this.personalInfoRepo = new EmployeePersonalInfoRepository();
     this.professionalInfoRepo = new EmployeeProfessionalInfoRepository();
-    this.compensationRepo = new EmployeeCompensationRepository();
     this.auditService = new AuditService();
   }
 

@@ -834,13 +834,206 @@ export class AttendanceService {
       return m.slice(0, 10);
     })();
 
+    // ── AUTO OT CALCULATION ────────────────────────────────────────────────
+    // Non-fatal: any failure here NEVER blocks checkout. Employee always gets their record.
+    let overtimeMinutes = 0;
+    let isAutoApproved = false;
+    try {
+      const { OTRuleService } = await import('./OTRuleService');
+      const otRuleService = new OTRuleService();
+      const otRule = await otRuleService.getEligibleRule(ctx, input.employeeId);
+
+      if (otRule) {
+        const db = getKnex();
+
+        // ── Shift timing & Roster/Type configuration ───────────────────────
+        const shiftRow = await db('employee_shift_assignments as esa')
+          .join('shift_templates as st', 'st.id', 'esa.shift_id')
+          .where('esa.employee_id', input.employeeId)
+          .where('esa.organization_id', ctx.organizationId)
+          .where('esa.effective_from', '<=', today)
+          .where((q: any) =>
+            q.whereNull('esa.effective_to').orWhere('esa.effective_to', '>=', today)
+          )
+          .orderBy('esa.effective_from', 'desc')
+          .select('st.start_time', 'st.end_time', 'st.shift_type', 'st.roster_pattern')
+          .first()
+          .catch(() => null);
+
+        const parseShiftTime = (timeStr: string, dateStr: string): Date => {
+          return new Date(`${dateStr}T${timeStr}`);
+        };
+        let shiftStart = shiftRow?.start_time
+          ? parseShiftTime(String(shiftRow.start_time), today) : null;
+        let shiftEnd = shiftRow?.end_time
+          ? parseShiftTime(String(shiftRow.end_time), today) : null;
+
+        // Overnight shift handling: if shift end time is before/equal shift start time, shift ends on next calendar day
+        if (shiftStart && shiftEnd && shiftEnd.getTime() <= shiftStart.getTime()) {
+          shiftEnd.setDate(shiftEnd.getDate() + 1);
+        }
+
+        // ── Day type detection (Holiday & Weekly Off / Roster Rest Day) ──
+        let isHoliday = false;
+        try {
+          // Direct DB check: is today in any holidays table for this org?
+          const holRow = await db('holidays')
+            .join('holiday_calendars as hc', 'hc.id', 'holidays.holiday_calendar_id')
+            .where('hc.organization_id', ctx.organizationId)
+            .whereNull('holidays.deleted_at')
+            .whereRaw('DATE(holidays.holiday_date) = ?', [today])
+            .first()
+            .catch(() => null);
+          isHoliday = !!holRow;
+        } catch { /* skip */ }
+
+        const dateObj = new Date(today);
+        const dow = dateObj.getDay(); // 0=Sun, 6=Sat
+        let isWeekend = false;
+
+        // 1. If employee has a Roster Shift, check their Shift Roster Pattern:
+        if (shiftRow?.shift_type === 'roster' || shiftRow?.roster_pattern) {
+          const isWorking = this.shiftService.isWorkingDay(dateObj, shiftRow.roster_pattern);
+          isWeekend = !isWorking; // If not a working day in roster, it's their rest day!
+        } else {
+          // 2. For General Shift: Check weekly_off_rules from Holiday Calendars
+          try {
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const weekDayName = dayNames[dow];
+
+            const weekOffRule = await db('weekly_off_rules as wor')
+              .join('holiday_calendars as hc', 'hc.id', 'wor.calendar_id')
+              .where('wor.organization_id', ctx.organizationId)
+              .where('wor.week_day', weekDayName)
+              .whereNull('wor.deleted_at')
+              .first()
+              .catch(() => null);
+
+            if (weekOffRule) {
+              const isAlt = Boolean(weekOffRule.is_alternate || weekOffRule.isAlternate);
+              if (isAlt) {
+                const dayOfMonth = dateObj.getDate();
+                const nthWeekday = Math.floor((dayOfMonth - 1) / 7) + 1;
+                const altWeeksStr = String(weekOffRule.alternate_weeks || weekOffRule.alternateWeeks || '');
+                isWeekend = altWeeksStr.includes(String(nthWeekday));
+              } else {
+                isWeekend = true;
+              }
+            } else {
+              isWeekend = (dow === 0); // Fallback: Sunday is weekly off
+            }
+          } catch {
+            isWeekend = (dow === 0);
+          }
+        }
+
+        const dayType: 'normal' | 'holiday' | 'weekend' =
+          isHoliday ? 'holiday' : isWeekend ? 'weekend' : 'normal';
+
+        // ── Weekly OT already accrued this week ─────────────────────────
+        const dowNum = new Date(today).getDay();
+        const daysFromMonday = dowNum === 0 ? 6 : dowNum - 1;
+        const weekStartDate = new Date(today);
+        weekStartDate.setDate(weekStartDate.getDate() - daysFromMonday);
+        const weekStart = weekStartDate.toISOString().slice(0, 10);
+
+        const weeklyRow = await db('attendance_records')
+          .where('employee_id', input.employeeId)
+          .where('organization_id', ctx.organizationId)
+          .where('check_in_date', '>=', weekStart)
+          .where('check_in_date', '<', today)
+          .sum('overtime_minutes as total')
+          .first()
+          .catch(() => null);
+        const alreadyAccruedWeeklyMinutes = Number((weeklyRow as any)?.total || 0);
+
+        // ── Calculate OT ────────────────────────────────────────────────
+        overtimeMinutes = otRuleService.calculateOvertimeMinutes({
+          rule:                        otRule,
+          checkInTime:                 new Date(existingCheckInTime),
+          checkOutTime:                new Date(now),
+          workDurationMinutes,
+          shiftStartTime:              shiftStart,
+          shiftEndTime:                shiftEnd,
+          dayType,
+          alreadyAccruedWeeklyMinutes,
+        });
+
+        // ── Upsert overtime_request record (prevent duplicate insertion) ─
+        if (overtimeMinutes > 0) {
+          const autoApproveEnabled = Boolean((otRule as any).autoOtApprove ?? (otRule as any).auto_ot_approve);
+          const minMins = (otRule as any).autoApproveMinMinutes ?? (otRule as any).auto_approve_min_minutes;
+          const maxMins = (otRule as any).autoApproveMaxMinutes ?? (otRule as any).auto_approve_max_minutes;
+
+          const autoApprove =
+            autoApproveEnabled &&
+            (minMins == null || overtimeMinutes >= minMins) &&
+            (maxMins == null || overtimeMinutes <= maxMins);
+
+          isAutoApproved = autoApprove;
+
+          const overtimeType = dayType === 'holiday'
+            ? 'holiday_work' : dayType === 'weekend' ? 'weekend_work' : 'extra_hours';
+
+          const existingReq = await db('overtime_requests')
+            .where({
+              employee_id: input.employeeId,
+              organization_id: ctx.organizationId,
+              overtime_date: today,
+              source: 'auto_checkout',
+            })
+            .first()
+            .catch(() => null);
+
+          if (existingReq) {
+            await db('overtime_requests')
+              .where('id', existingReq.id)
+              .update({
+                overtime_hours:   parseFloat((overtimeMinutes / 60).toFixed(2)),
+                overtime_minutes: overtimeMinutes,
+                overtime_type:    overtimeType,
+                day_type:         dayType,
+                approval_status:  autoApprove ? 'approved' : 'pending',
+                approved_by:      autoApprove ? ctx.userId : null,
+                approval_date:    autoApprove
+                  ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+                updated_at:       new Date(),
+                updated_by:       ctx.userId,
+              });
+          } else {
+            await db('overtime_requests').insert({
+              uuid:                 uuidv4(),
+              employee_id:          input.employeeId,
+              organization_id:      ctx.organizationId,
+              overtime_date:        today,
+              overtime_hours:       parseFloat((overtimeMinutes / 60).toFixed(2)),
+              overtime_minutes:     overtimeMinutes,
+              overtime_type:        overtimeType,
+              day_type:             dayType,
+              source:               'auto_checkout',
+              approval_status:      autoApprove ? 'approved' : 'pending',
+              approved_by:          autoApprove ? ctx.userId : null,
+              approval_date:        autoApprove
+                ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null,
+              created_by:           ctx.userId,
+              updated_by:           ctx.userId,
+            });
+          }
+        }
+      }
+    } catch (otErr) {
+      logger.warn('[AttendanceService.checkOut] OT calculation failed (non-fatal):', otErr);
+    }
+    // ── END AUTO OT ────────────────────────────────────────────────────────
+
     record = await this.recordRepo.update(ctx, record.id, {
-      check_out_time: now,
+      check_out_time:        now,
       check_out_location_id: matchedLocationId,
-      check_out_method: cleanOutMethod,
-      duration_minutes: durationMinutes,
-      break_time_minutes: totalBreakMinutes,
+      check_out_method:      cleanOutMethod,
+      duration_minutes:      durationMinutes,
+      break_time_minutes:    totalBreakMinutes,
       work_duration_minutes: workDurationMinutes,
+      overtime_minutes:      isAutoApproved ? overtimeMinutes : 0,
     });
 
     // Create session record

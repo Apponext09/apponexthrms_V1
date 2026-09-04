@@ -1,143 +1,116 @@
-import React, { useState } from 'react';
-import { 
-  Box, 
-  Typography, 
-  TextField, 
-  IconButton
-} from '@mui/material';
-import InfoIcon from '@mui/icons-material/Info';
-import styles from './OTRule.module.scss';
+import React from 'react';
+import { Info } from 'lucide-react';
+import { Controller, type Control, useWatch } from 'react-hook-form';
 
-interface CustomToggleProps {
-  value: boolean;
-  onChange: (val: boolean) => void;
-  activeText: string;
-  inactiveText: string;
+interface PaySectionProps {
+  prefix:  'normalDay' | 'holiday' | 'weekend';
+  control: Control<any>;
 }
 
-const CustomToggle: React.FC<CustomToggleProps> = ({ value, onChange, activeText, inactiveText }) => {
-  return (
-    <Box 
-      onClick={() => onChange(!value)}
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        cursor: 'pointer',
-        width: 100,
-        height: 34,
-        borderRadius: '4px',
-        border: '1px solid #cbd5e1',
-        overflow: 'hidden',
-        userSelect: 'none',
-        bgcolor: value ? '#1c63d5' : '#f1f5f9',
-        transition: 'all 0.2s',
-      }}
-    >
-      <Box 
-        sx={{
-          width: '50%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '12px',
-          fontWeight: '700',
-          color: value ? '#ffffff' : 'transparent',
-          bgcolor: value ? '#1c63d5' : '#ffffff',
-          transition: 'all 0.2s',
-        }}
-      >
-        {activeText}
-      </Box>
-      <Box 
-        sx={{
-          width: '50%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '12px',
-          fontWeight: '700',
-          color: value ? 'transparent' : '#475569',
-          bgcolor: value ? '#ffffff' : '#e2e8f0',
-          transition: 'all 0.2s',
-        }}
-      >
-        {inactiveText}
-      </Box>
-    </Box>
-  );
-};
-
-export const PaySection: React.FC = () => {
-  const [isFormulaActive, setIsFormulaActive] = useState(true);
+export const PaySection: React.FC<PaySectionProps> = ({ prefix, control }) => {
+  const useFormula = useWatch({ control, name: `${prefix}.pay.useFormula`, defaultValue: false });
 
   return (
-    <div className={styles.calculationCard}>
-      <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: '700', color: '#475569' }}>Pay</h4>
+    <div className="border border-border/80 rounded-xl p-4 bg-muted/20 space-y-4">
+      <h4 className="text-xs font-bold text-foreground tracking-wide uppercase">
+        Pay Calculation
+      </h4>
 
-      <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-        
-        {/* Left Column: PAY as per Formula Toggle */}
-        <Box sx={{ width: '220px', minWidth: '220px' }}>
-          <Typography sx={{ fontSize: '15px', fontWeight: '700', mb: 1, color: '#1e293b' }}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+        {/* Toggle */}
+        <div className="md:col-span-4 space-y-1.5">
+          <label className="text-xs font-bold text-foreground block">
             PAY as per Formula
-          </Typography>
-          <CustomToggle 
-            value={isFormulaActive}
-            onChange={setIsFormulaActive}
-            activeText="Yes"
-            inactiveText="No"
+          </label>
+          <Controller
+            name={`${prefix}.pay.useFormula`}
+            control={control}
+            defaultValue={false}
+            render={({ field }) => (
+              <div className="flex border border-input rounded-xl w-fit overflow-hidden bg-muted/30 p-0.5 h-9 items-center">
+                <button
+                  type="button"
+                  onClick={() => field.onChange(true)}
+                  className={`px-4 h-full text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    field.value
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => field.onChange(false)}
+                  className={`px-4 h-full text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    !field.value
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  No
+                </button>
+              </div>
+            )}
           />
-        </Box>
+        </div>
 
-        {/* Right Column: Conditional Formula Input or Default Pay Per Mins */}
-        <Box sx={{ flex: 1, minWidth: '300px' }}>
-          {isFormulaActive ? (
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-                <Typography sx={{ fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>
-                  Pay Amount Formula<span style={{ color: '#ef4444' }}>*</span>
-                </Typography>
-                <InfoIcon sx={{ fontSize: '16px', color: '#475569' }} />
-              </Box>
-              <TextField 
-                multiline
-                rows={4}
-                fullWidth
-                size="small"
-                sx={{ 
-                  '& .MuiOutlinedInput-root': { borderRadius: '4px' },
-                  '& .MuiInputBase-input': { fontSize: '14px' } 
-                }}
+        {/* Right: Formula input OR multiplier */}
+        <div className="md:col-span-8">
+          {useFormula ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1">
+                  Pay Amount Formula <span className="text-rose-500">*</span>
+                </label>
+                <span title="Available variables: OT_HOURS, OT_MINUTES, BASIC, GROSS, DAILY_RATE, HOURLY_RATE">
+                  <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                </span>
+              </div>
+              <Controller
+                name={`${prefix}.pay.formula`}
+                control={control}
+                defaultValue=""
+                render={({ field }) => (
+                  <textarea
+                    {...field}
+                    rows={3}
+                    placeholder="e.g. (BASIC / 26 / 8) * OT_HOURS * 1.5"
+                    className="w-full bg-background border border-input text-foreground text-xs rounded-xl p-2.5 font-mono focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                )}
               />
-              <Typography sx={{ fontSize: '13px', color: '#475569', mt: 1.5, lineHeight: 1.5 }}>
-                Amount given by formula considered as final amount.For mathematical operations use OT Hours in minutes.
-              </Typography>
-            </Box>
+              <p className="text-[11px] text-muted-foreground font-semibold">
+                Variables: <code className="bg-muted px-1 py-0.5 rounded text-[10px]">OT_HOURS</code>, <code className="bg-muted px-1 py-0.5 rounded text-[10px]">OT_MINUTES</code>, <code className="bg-muted px-1 py-0.5 rounded text-[10px]">BASIC</code>, <code className="bg-muted px-1 py-0.5 rounded text-[10px]">GROSS</code>, <code className="bg-muted px-1 py-0.5 rounded text-[10px]">HOURLY_RATE</code>
+              </p>
+            </div>
           ) : (
-            <Box>
-              <Typography sx={{ fontSize: '15px', fontWeight: '700', mb: 1, color: '#1e293b' }}>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground block">
                 Default Calculation Settings
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: '14px', color: '#334155', fontWeight: '500' }}>
-                  OT Amount = Pay Per Mins
-                </Typography>
-                <TextField 
-                  type="number"
-                  size="small" 
-                  sx={{ width: 80, '& .MuiInputBase-input': { p: '6px 8px', fontSize: '14px' } }} 
+              </label>
+              <div className="flex items-center gap-2 flex-wrap text-xs font-medium text-foreground">
+                <span className="font-semibold text-foreground">OT Amount = Hourly Rate ×</span>
+                <Controller
+                  name={`${prefix}.pay.payPerMinMultiplier`}
+                  control={control}
+                  defaultValue={1.5}
+                  render={({ field }) => (
+                    <input
+                      {...field}
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      className="w-16 h-8 text-xs font-bold text-center bg-background border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  )}
                 />
-                <Typography sx={{ fontSize: '14px', color: '#334155', fontWeight: '500' }}>
-                  times
-                </Typography>
-              </Box>
-            </Box>
+                <span className="font-semibold text-muted-foreground">times</span>
+              </div>
+            </div>
           )}
-        </Box>
-
-      </Box>
+        </div>
+      </div>
     </div>
   );
 };

@@ -130,9 +130,6 @@ const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
     { id: 's1', code: 'SHIFT-GEN', name: 'General Shift (09:00 AM - 06:00 PM)', description: 'Standard 9-hour business shift', status: 'Active', createdAt: '2026-01-01' },
     { id: 's2', code: 'SHIFT-EVE', name: 'Evening Support Shift (02:00 PM - 11:00 PM)', description: 'US & Europe client alignment shift', status: 'Active', createdAt: '2026-01-15' },
   ],
-  'ot-rule': [
-    { id: 'ot1', code: 'OT-STD', name: 'Standard 1.5x Multiplier Overtime', description: 'Calculates 150% hourly rate beyond 45 weekly hours', status: 'Active', createdAt: '2026-02-01' },
-  ],
   grade: [
     { id: 'g1', code: 'GRD-L1', name: 'Grade L1 - Associate / Junior', description: 'Entry level workforce band', status: 'Active', createdAt: '2026-01-01' },
     { id: 'g2', code: 'GRD-L2', name: 'Grade L2 - Senior Specialist', description: 'Mid to senior individual contributor band', status: 'Active', createdAt: '2026-01-01' },
