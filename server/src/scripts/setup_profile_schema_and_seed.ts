@@ -9,6 +9,42 @@ import { logger } from '../common/lib/logger';
  */
 export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
   try {
+    // ──────── DEPARTMENTS MASTER SCHEMA REPAIR ────────
+    try {
+      if (await db.schema.hasTable('departments')) {
+        const hasEmail = await db.schema.hasColumn('departments', 'email');
+        const hasColour = await db.schema.hasColumn('departments', 'colour');
+        const hasColor = await db.schema.hasColumn('departments', 'color');
+        const hasCompanyId = await db.schema.hasColumn('departments', 'company_id');
+        const hasIsActive = await db.schema.hasColumn('departments', 'is_active');
+        const hasDescription = await db.schema.hasColumn('departments', 'description');
+
+        await db.schema.alterTable('departments', (table) => {
+          if (!hasEmail) {
+            table.string('email', 255).nullable();
+          }
+          if (!hasColour) {
+            table.string('colour', 50).nullable().defaultTo('#00b4d8');
+          }
+          if (!hasColor) {
+            table.string('color', 50).nullable().defaultTo('#00b4d8');
+          }
+          if (!hasCompanyId) {
+            table.bigInteger('company_id').unsigned().nullable();
+          }
+          if (!hasIsActive) {
+            table.string('is_active', 10).nullable().defaultTo('Yes');
+          }
+          if (!hasDescription) {
+            table.text('description').nullable();
+          }
+        });
+        logger.info('Departments table schema verified/repaired successfully (colour, color, email, is_active, company_id)');
+      }
+    } catch (deptErr: any) {
+      logger.error('Error repairing departments table schema:', deptErr?.message || deptErr);
+    }
+
     // ──────── MASTER RECRUITMENT & PORTAL SCHEMA ALIGNMENT ────────
     try {
       // 1. candidates table repair

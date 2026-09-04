@@ -1019,12 +1019,13 @@ export const ApplicantTrackerPage: React.FC = () => {
                   <TableHead className="text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[120px]">Contact</TableHead>
                   <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[170px]">Pipeline Stage</TableHead>
                   <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[110px]">Actions</TableHead>
+                  <TableHead className="text-center text-[11px] font-bold uppercase tracking-wider py-3.5 px-4 text-muted-foreground min-w-[100px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-border/60">
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-32 text-center text-xs text-muted-foreground bg-background">
+                    <TableCell colSpan={10} className="h-32 text-center text-xs text-muted-foreground bg-background">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                         <span>Loading applicant pipeline records...</span>
@@ -2274,10 +2275,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       <ResumeViewerModal
         open={isResumeViewerOpen}
         onOpenChange={setIsResumeViewerOpen}
-        resumeUrl={selectedCandidateForResumeViewer?.resumeUrl}
-        candidateName={selectedCandidateForResumeViewer?.name}
-        candidateEmail={selectedCandidateForResumeViewer?.email}
-        qualification={selectedCandidateForResumeViewer?.qualification}
+        candidate={selectedCandidateForResumeViewer}
       />
     </div>
   );

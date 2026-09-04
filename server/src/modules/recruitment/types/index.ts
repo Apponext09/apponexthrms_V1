@@ -52,37 +52,37 @@ export const createCandidateSchema = z.object({
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
   email: z.string().email(),
-  phone: z.string().optional(),
-  alternativePhone: z.string().optional(),
-  gender: z.string().optional(),
-  maritalStatus: z.string().optional(),
-  qualification: z.string().optional(),
-  skills: z.string().optional(),
-  dateOfBirth: z.string().optional(),
-  currentLocation: z.number().optional(),
-  preferredLocation: z.number().optional(),
-  currentSalary: z.number().optional(),
-  salaryCurrency: z.string().optional(),
-  expectedSalary: z.number().optional(),
-  noticePeriodDays: z.number().optional(),
-  currentCompany: z.string().optional(),
-  yearsOfExperience: z.number().optional(),
-  linkedinUrl: z.string().url().optional().or(z.literal('')),
-  githubUrl: z.string().url().optional().or(z.literal('')),
-  portfolioUrl: z.string().url().optional().or(z.literal('')),
+  phone: z.string().optional().nullable(),
+  alternativePhone: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  maritalStatus: z.string().optional().nullable(),
+  qualification: z.string().optional().nullable(),
+  skills: z.string().optional().nullable(),
+  dateOfBirth: z.string().optional().nullable(),
+  currentLocation: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  preferredLocation: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  currentSalary: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  salaryCurrency: z.string().optional().nullable(),
+  expectedSalary: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  noticePeriodDays: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  currentCompany: z.string().optional().nullable(),
+  yearsOfExperience: z.union([z.number(), z.string()]).transform(val => val === '' || val === null ? undefined : Number(val)).optional().nullable(),
+  linkedinUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+  githubUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
+  portfolioUrl: z.string().url().optional().or(z.literal('')).or(z.null()),
   source: candidateSourceSchema,
-  resumeUrl: z.string().optional(),
+  resumeUrl: z.string().optional().nullable(),
   status: z.enum(['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected', 'dropped']).optional(),
-});
+}).passthrough();
 
 export const updateCandidateSchema = createCandidateSchema.partial();
 
 // Application schemas
 export const createApplicationSchema = z.object({
-  candidateId: z.number(),
-  jobId: z.number(),
+  candidateId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  jobId: z.union([z.number(), z.string()]).transform(val => Number(val)),
   appliedFromSource: z.string().optional().default('Candidate Management'),
-});
+}).passthrough();
 
 export const moveApplicationStageSchema = z.object({
   stageId: z.number(),

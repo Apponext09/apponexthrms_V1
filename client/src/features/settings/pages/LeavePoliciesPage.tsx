@@ -1912,7 +1912,7 @@ export function LeavePoliciesPage() {
     const onlyWhenGender = extractGenderFromOnlyWhen(formData.allocation?.onlyWhen || formData.allocation?.only_when)
       || extractGenderFromOnlyWhen(formData.application?.onlyWhen || formData.application?.only_when);
 
-    const resolvedGender = onlyWhenGender || (formData.allocation.gender || 'all').toLowerCase();
+    const resolvedGender = onlyWhenGender || 'all';
 
     const allocPayload = {
       ...(formData.allocation || {}),

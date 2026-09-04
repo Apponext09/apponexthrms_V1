@@ -48,6 +48,7 @@ export function initializeKnex(): Knex {
       password: env.DB_PASSWORD,
       database: env.DB_NAME,
       charset: 'utf8mb4',
+      dateStrings: ['DATE'],
     },
     pool: {
       min: 2,
@@ -78,6 +79,16 @@ export function initializeKnex(): Knex {
 export function convertSnakeToCamel(obj: any): any {
   if (obj === null || obj === undefined) {
     return obj;
+  }
+
+  if (obj instanceof Date) {
+    const year = obj.getFullYear();
+    const month = String(obj.getMonth() + 1).padStart(2, '0');
+    const day = String(obj.getDate()).padStart(2, '0');
+    if (obj.getHours() === 0 && obj.getMinutes() === 0 && obj.getSeconds() === 0) {
+      return `${year}-${month}-${day}`;
+    }
+    return obj.toISOString();
   }
 
   if (Array.isArray(obj)) {

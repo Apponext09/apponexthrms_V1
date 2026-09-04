@@ -1124,11 +1124,14 @@ export class RecruitmentController {
 
   listOffers = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
+    const { page = 1, pageSize = 100, status } = req.query;
 
     const result = await this.offerService.listOffers(ctx, {
       page: parseInt(page as string, 10),
       pageSize: parseInt(pageSize as string, 10),
+      filters: {
+        status: status && status !== 'all' ? (status as string) : undefined
+      }
     });
 
     res.json({ success: true, data: result.items, meta: result.meta });
@@ -1939,6 +1942,12 @@ export class RecruitmentController {
     res.json({ success: true, data: result });
   });
 
+  verifyPublicAssessmentProctoring = asyncHandler(async (req: Request, res: Response) => {
+    const { uuid } = req.params;
+    const result = await this.assessmentService.verifyProctoringFrame(uuid, req.body);
+    res.json({ success: true, data: result });
+  });
+
   runPublicAssessmentCode = asyncHandler(async (req: Request, res: Response) => {
     const result = await this.assessmentService.executeCandidateCode(req.body);
     res.json({ success: true, data: result });
@@ -2111,7 +2120,8 @@ export class RecruitmentController {
 
   createReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount } = req.body;
+    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount, resumeUrl, resume_url, resume } = req.body;
+    const resumeFile = (req as any).file;
 
     const referral = await this.referralService.submitReferral(ctx, {
       employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
@@ -2121,6 +2131,8 @@ export class RecruitmentController {
       candidatePhone,
       positionTitle,
       referralRewardAmount: referralRewardAmount ? parseFloat(referralRewardAmount) : undefined,
+      resumeFile,
+      resumeUrl: resumeUrl || resume_url || resume,
     });
 
     res.status(201).json({ success: true, data: referral });
@@ -2131,15 +2143,249 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    let empId = ctx.userId;
-    const emp = await db('employees')
-      .where('organization_id', ctx.organizationId)
-      .where((b) => b.where('user_id', ctx.userId).orWhere('id', ctx.userId))
-      .first();
-    if (emp) empId = emp.id;
+    // Step 1: Get the user record to find their email
+    const user = await db('users').where('id', ctx.userId).first();
+    const userEmail = user?.email || '';
 
-    const result = await this.referralService.getEmployeeReferrals(ctx, empId);
-    res.json({ success: true, data: result.data });
+    // Step 2: Find matching employee record by email or id
+    // NOTE: employees table does NOT have a user_id column — match by email only
+    let empId: number | undefined;
+    if (userEmail) {
+      const emp = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('email', userEmail)
+        .whereNull('deleted_at')
+        .first();
+      empId = emp?.id;
+    }
+
+    // Step 3: Build all IDs we might have stored as referrer_employee_id
+    // Also include user?.employee_id in case the users table links to employees
+    const linkedEmpId = user?.employee_id || user?.employeeId;
+    const possibleEmpIds = [empId, linkedEmpId]
+      .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    // Step 4: Query referrals — match on referrer_employee_id OR created_by
+    // This ensures we always find referrals submitted by this employee
+    const items = await db('referrals')
+      .leftJoin('candidates', 'referrals.candidate_id', 'candidates.id')
+      .leftJoin('employees as ref_emp', 'referrals.referrer_employee_id', 'ref_emp.id')
+      .select(
+        'referrals.*',
+        'candidates.first_name as candidate_first_name',
+        'candidates.last_name as candidate_last_name',
+        'candidates.email as candidate_email',
+        'candidates.phone as candidate_phone',
+        'candidates.current_company as candidate_position',
+        'candidates.resume_url as candidate_resume_url',
+        'ref_emp.first_name as referrer_first_name',
+        'ref_emp.last_name as referrer_last_name',
+        'ref_emp.email as referrer_email'
+      )
+      .where('referrals.organization_id', ctx.organizationId)
+      .whereNull('referrals.deleted_at')
+      .where((builder) => {
+        // Match by employee ID(s) if resolved
+        if (possibleEmpIds.length > 0) {
+          builder.whereIn('referrals.referrer_employee_id', possibleEmpIds);
+        }
+        // Always also include any referral created_by this user's userId
+        builder.orWhere('referrals.created_by', ctx.userId);
+      })
+      .orderBy('referrals.id', 'desc');
+
+    // Step 5: Enrich the rows
+    const enriched = items.map((r: any) => {
+      const fn = r.candidateFirstName || r.candidate_first_name || '';
+      const ln = r.candidateLastName || r.candidate_last_name || '';
+      const candId = r.candidateId || r.candidate_id;
+      const candName = `${fn} ${ln}`.trim() || `Candidate #${candId}`;
+
+      const rfn = r.referrerFirstName || r.referrer_first_name || '';
+      const rln = r.referrerLastName || r.referrer_last_name || '';
+      const refId = r.referrerEmployeeId || r.referrer_employee_id;
+      const refName = `${rfn} ${rln}`.trim() || `Employee #${refId}`;
+
+      const statusVal = r.status || r.referralStatus || r.referral_status || 'submitted';
+      const resumeUrl = r.candidateResumeUrl || r.candidate_resume_url || null;
+      const rewardAmt = r.referralRewardAmount || r.referral_reward_amount || null;
+
+      return {
+        ...r,
+        candidateId: candId,
+        candidate_id: candId,
+        candidateName: candName,
+        candidate_name: candName,
+        candidateEmail: r.candidateEmail || r.candidate_email || '',
+        candidate_email: r.candidateEmail || r.candidate_email || '',
+        candidatePhone: r.candidatePhone || r.candidate_phone || '',
+        candidateResumeUrl: resumeUrl,
+        candidate_resume_url: resumeUrl,
+        resumeUrl,
+        positionTitle: r.candidatePosition || r.candidate_position || 'Open Role',
+        referrerEmployeeId: refId,
+        referrer_employee_id: refId,
+        referrerName: refName,
+        referrer_name: refName,
+        referrerEmail: r.referrerEmail || r.referrer_email || '',
+        referralRewardAmount: rewardAmt,
+        referral_reward_amount: rewardAmt,
+        status: statusVal,
+        referral_status: statusVal,
+        referralStatus: statusVal,
+        rewardStatus: r.rewardStatus || r.reward_status || 'pending',
+        reward_status: r.rewardStatus || r.reward_status || 'pending',
+      };
+    });
+
+    res.json({ success: true, data: enriched });
+  });
+
+  getReferralPositions = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const positions: Array<{ id: string | number; title: string; code?: string; department?: string; source?: string }> = [];
+    const titlesSet = new Set<string>();
+
+    const addPos = (title: string, id?: any, code?: string, department?: string, source?: string) => {
+      const clean = (title || '').trim();
+      if (!clean || titlesSet.has(clean.toLowerCase())) return;
+      titlesSet.add(clean.toLowerCase());
+      positions.push({
+        id: id || clean,
+        title: clean,
+        code: code || undefined,
+        department: department || undefined,
+        source: source || undefined,
+      });
+    };
+
+    // 1. Fetch from jobs table
+    try {
+      const jobsQuery = db('jobs as j')
+        .leftJoin('departments as d', 'j.department_id', 'd.id')
+        .leftJoin('designations as des', 'j.designation_id', 'des.id')
+        .whereNull('j.deleted_at')
+        .whereNull('j.closed_at')
+        .where((q) => {
+          q.whereNull('j.status')
+           .orWhereNotIn('j.status', ['closed', 'archived', 'rejected']);
+        });
+
+      if (ctx?.organizationId) {
+        jobsQuery.andWhere((q) => {
+          q.where('j.organization_id', ctx.organizationId)
+           .orWhereNull('j.organization_id');
+        });
+      }
+
+      const jobs = await jobsQuery.select(
+        'j.id', 'j.job_code', 'j.job_title', 'd.name as dept_name', 'des.name as desig_name'
+      ).orderBy('j.created_at', 'desc');
+
+      for (const j of jobs) {
+        const title = (j as any).jobTitle || (j as any).job_title || (j as any).desigName || (j as any).desig_name;
+        if (title) {
+          addPos(title, j.id, (j as any).jobCode || (j as any).job_code, (j as any).deptName || (j as any).dept_name, 'job');
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching jobs in getReferralPositions:', err);
+    }
+
+    // 2. Fetch from mrf_requests table
+    try {
+      const mrfQuery = db('mrf_requests as m')
+        .leftJoin('departments as d', 'm.department_id', 'd.id')
+        .leftJoin('designations as des', 'm.grade_id', 'des.id')
+        .whereNull('m.deleted_at')
+        .where((q) => {
+          q.whereNull('m.status')
+           .orWhereNotIn('m.status', ['Closed', 'closed', 'Rejected', 'rejected', 'Archived', 'archived']);
+        });
+
+      if (ctx?.organizationId) {
+        mrfQuery.andWhere((q) => {
+          q.where('m.organization_id', ctx.organizationId)
+           .orWhereNull('m.organization_id');
+        });
+      }
+
+      const mrfs = await mrfQuery.select(
+        'm.id', 'm.mr_number', 'm.position_title', 'd.name as dept_name', 'des.name as desig_name'
+      ).orderBy('m.created_at', 'desc');
+
+      for (const m of mrfs) {
+        const title = (m as any).positionTitle || (m as any).position_title || (m as any).desigName || (m as any).desig_name;
+        if (title) {
+          addPos(title, m.id, (m as any).mrNumber || (m as any).mr_number, (m as any).deptName || (m as any).dept_name, 'mrf');
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching MRFs in getReferralPositions:', err);
+    }
+
+    // 3. Fallback / supplementary: Fetch from designations table
+    try {
+      const desigQuery = db('designations as des')
+        .leftJoin('departments as d', 'des.department_id', 'd.id')
+        .whereNull('des.deleted_at');
+
+      if (ctx?.organizationId) {
+        desigQuery.andWhere((q) => {
+          q.where('des.organization_id', ctx.organizationId)
+           .orWhereNull('des.organization_id');
+        });
+      }
+
+      const desigs = await desigQuery.select(
+        'des.id', 'des.name', 'des.title', 'des.code', 'd.name as dept_name'
+      ).limit(100);
+
+      for (const d of desigs) {
+        const title = (d as any).name || (d as any).title;
+        if (title) {
+          addPos(title, d.id, (d as any).code, (d as any).deptName || (d as any).dept_name, 'designation');
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching designations in getReferralPositions:', err);
+    }
+
+    // 4. If still empty, query all designations unconditionally across DB
+    if (positions.length === 0) {
+      try {
+        const allDesigs = await db('designations')
+          .whereNull('deleted_at')
+          .select('id', 'name', 'code')
+          .limit(50);
+        for (const d of allDesigs) {
+          const title = (d as any).name || (d as any).title;
+          if (title) addPos(title, d.id, (d as any).code, undefined, 'designation');
+        }
+      } catch { /* ignore */ }
+    }
+
+    // 5. Ultimate fallback if DB has no designations configured yet
+    if (positions.length === 0) {
+      const defaultPositions = [
+        { title: 'Software Engineer', code: 'SE-01', department: 'IT & Software' },
+        { title: 'Full Stack Developer', code: 'DEV-01', department: 'IT & Software' },
+        { title: 'Frontend Developer (React)', code: 'FE-01', department: 'IT & Software' },
+        { title: 'Backend Developer (Node.js)', code: 'BE-01', department: 'IT & Software' },
+        { title: 'UI/UX Designer', code: 'DES-01', department: 'Design' },
+        { title: 'Sales Executive', code: 'SE-02', department: 'Sales & BD' },
+        { title: 'Business Development Manager', code: 'BDM-01', department: 'Sales & BD' },
+        { title: 'HR Executive', code: 'HR-01', department: 'Human Resources' },
+        { title: 'Accountant', code: 'ACC-01', department: 'Finance & Accounts' },
+        { title: 'Operations Associate', code: 'OPS-01', department: 'Operations' },
+      ];
+      defaultPositions.forEach(p => addPos(p.title, p.code, p.code, p.department, 'default'));
+    }
+
+    res.json({ success: true, data: positions });
   });
 
   listReferrals = asyncHandler(async (req: Request, res: Response) => {
@@ -2166,7 +2412,7 @@ export class RecruitmentController {
   rewardReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
-    const { rewardAmount, rewardType } = req.body;
+    const { rewardAmount, rewardType, newStatus } = req.body;
 
     if (!rewardAmount) {
       throw new ValidationError('rewardAmount is required');
@@ -2175,9 +2421,10 @@ export class RecruitmentController {
     const result = await this.referralService.rewardReferral(ctx, parseInt(id, 10), {
       rewardAmount,
       rewardType: rewardType || 'cash',
+      newStatus: newStatus || 'hired',
     });
 
-    res.json({ success: true, data: result, message: 'Referral reward processed successfully' });
+    res.json({ success: true, data: result, message: 'Referral reward assigned successfully' });
   });
 
   deleteReferral = asyncHandler(async (req: Request, res: Response) => {
@@ -2212,23 +2459,74 @@ export class RecruitmentController {
 
     const { getKnex } = await import('../../../db/knex');
     const { v4: uuidv4 } = await import('uuid');
+    const fs = await import('fs');
+    const path = await import('path');
     const db = getKnex();
     const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
 
-    const [docId] = await db('candidate_documents').insert({
-      uuid: uuidv4(),
+    const hasTable = await db.schema.hasTable('candidate_documents');
+    if (!hasTable) {
+      res.status(400).json({ success: false, error: 'candidate_documents table not available' });
+      return;
+    }
+
+    const hasUuidCol = await db.schema.hasColumn('candidate_documents', 'uuid');
+    const hasFileNameCol = await db.schema.hasColumn('candidate_documents', 'file_name');
+    const hasFileUrlCol = await db.schema.hasColumn('candidate_documents', 'file_url');
+    const hasDocumentUrlCol = await db.schema.hasColumn('candidate_documents', 'document_url');
+    const hasFileSizeCol = await db.schema.hasColumn('candidate_documents', 'file_size');
+    const hasUploadedAtCol = await db.schema.hasColumn('candidate_documents', 'uploaded_at');
+    const hasUpdatedAtCol = await db.schema.hasColumn('candidate_documents', 'updated_at');
+    const hasDocumentTypeCol = await db.schema.hasColumn('candidate_documents', 'document_type');
+
+    let docType = documentType || 'other';
+    if (!hasFileNameCol && !['cover_letter', 'certificate', 'portfolio', 'other'].includes(docType)) {
+      docType = 'other';
+    }
+
+    // Ensure uploads directory exists and persist file buffer to disk
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    const publicUploadDir = path.join(process.cwd(), 'public', 'uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    if (!fs.existsSync(publicUploadDir)) fs.mkdirSync(publicUploadDir, { recursive: true });
+
+    const safeBaseName = (file.originalname || 'document.pdf').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const diskFilename = `${Date.now()}-${safeBaseName}`;
+    const targetPath = path.join(uploadDir, diskFilename);
+    const publicTargetPath = path.join(publicUploadDir, diskFilename);
+
+    if (file.buffer) {
+      fs.writeFileSync(targetPath, file.buffer);
+      fs.writeFileSync(publicTargetPath, file.buffer);
+    }
+
+    const fileUrl = `/uploads/${diskFilename}`;
+    const insertData: any = {
       organization_id: ctx.organizationId,
       candidate_id: parseInt(id, 10),
-      document_type: documentType || 'general',
-      file_name: file.originalname,
-      file_url: `/uploads/${file.filename}`,
-      file_size: file.size,
-      uploaded_at: now,
       created_at: now,
-      updated_at: now,
-    });
+    };
 
-    res.status(201).json({ success: true, data: { id: docId, fileName: file.originalname, fileUrl: `/uploads/${file.filename}` } });
+    if (hasUuidCol) insertData.uuid = uuidv4();
+    if (hasDocumentTypeCol) insertData.document_type = docType;
+    if (hasFileNameCol) insertData.file_name = file.originalname;
+    if (hasFileUrlCol) insertData.file_url = fileUrl;
+    if (hasDocumentUrlCol) insertData.document_url = fileUrl;
+    if (hasFileSizeCol) insertData.file_size = file.size;
+    if (hasUploadedAtCol) insertData.uploaded_at = now;
+    if (hasUpdatedAtCol) insertData.updated_at = now;
+
+    const [docId] = await db('candidate_documents').insert(insertData);
+
+    res.status(201).json({ 
+      success: true, 
+      data: { 
+        id: docId, 
+        fileName: file.originalname, 
+        fileUrl, 
+        documentType: docType 
+      } 
+    });
   });
 
   listCandidateDocuments = asyncHandler(async (req: Request, res: Response) => {
@@ -2237,11 +2535,35 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
+    const hasTable = await db.schema.hasTable('candidate_documents');
+    if (!hasTable) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
     const documents = await db('candidate_documents')
       .where({ organization_id: ctx.organizationId, candidate_id: parseInt(id, 10) })
       .orderBy('created_at', 'desc');
 
-    res.json({ success: true, data: documents });
+    const mapped = documents.map((doc: any) => {
+      const fUrl = doc.fileUrl || doc.file_url || doc.documentUrl || doc.document_url || '';
+      let fName = doc.fileName || doc.file_name;
+      if (!fName && fUrl) {
+        const parts = fUrl.split('/');
+        fName = parts[parts.length - 1];
+        if (fName && fName.includes('-')) {
+          fName = fName.substring(fName.indexOf('-') + 1);
+        }
+      }
+      return {
+        ...doc,
+        fileName: fName || 'Document',
+        fileUrl: fUrl,
+        documentType: doc.documentType || doc.document_type || 'other',
+      };
+    });
+
+    res.json({ success: true, data: mapped });
   });
 
   deleteCandidateDocument = asyncHandler(async (req: Request, res: Response) => {
@@ -2306,7 +2628,11 @@ export class RecruitmentController {
     }
 
     if (hasProficiencyLevelCol) {
-      insertData.proficiency_level = proficiency || 'intermediate';
+      const validProficiencies = ['beginner', 'intermediate', 'expert'];
+      let prof = (proficiency || 'intermediate').toLowerCase();
+      if (prof === 'advanced') prof = 'expert';
+      if (!validProficiencies.includes(prof)) prof = 'intermediate';
+      insertData.proficiency_level = prof;
     } else {
       insertData.proficiency = proficiency || 'intermediate';
     }
@@ -2365,10 +2691,10 @@ export class RecruitmentController {
       return;
     }
 
+    const hasUuidCol = await db.schema.hasColumn('candidate_education', 'uuid');
     const hasGraduationYearCol = await db.schema.hasColumn('candidate_education', 'graduation_year');
     const hasUpdatedAtCol = await db.schema.hasColumn('candidate_education', 'updated_at');
     const insertData: any = {
-      uuid: uuidv4(),
       organization_id: ctx.organizationId,
       candidate_id: parseInt(id, 10),
       degree: degree || '',
@@ -2377,12 +2703,16 @@ export class RecruitmentController {
       created_at: now,
     };
 
+    if (hasUuidCol) {
+      insertData.uuid = uuidv4();
+    }
+
     if (hasUpdatedAtCol) {
       insertData.updated_at = now;
     }
 
     if (hasGraduationYearCol) {
-      insertData.graduation_year = graduationYear || null;
+      insertData.graduation_year = graduationYear ? parseInt(graduationYear, 10) || null : null;
     } else {
       insertData.end_date = graduationYear ? `${graduationYear}-12-31` : null;
     }
@@ -2440,28 +2770,50 @@ export class RecruitmentController {
       return;
     }
 
+    const hasUuidCol = await db.schema.hasColumn('candidate_experience', 'uuid');
     const hasDesignationCol = await db.schema.hasColumn('candidate_experience', 'designation');
+    const hasJobTitleCol = await db.schema.hasColumn('candidate_experience', 'job_title');
+    const hasCurrentlyWorkingCol = await db.schema.hasColumn('candidate_experience', 'currently_working');
+    const hasIsCurrentCol = await db.schema.hasColumn('candidate_experience', 'is_current');
     const hasUpdatedAtCol = await db.schema.hasColumn('candidate_experience', 'updated_at');
+    const hasDescriptionCol = await db.schema.hasColumn('candidate_experience', 'description');
+
+    const isCurrentlyWorking = Boolean(isCurrent);
+    const validStartDate = (startDate && String(startDate).trim()) ? String(startDate).trim() : new Date().toISOString().substring(0, 10);
+    const validEndDate = isCurrentlyWorking ? null : ((endDate && String(endDate).trim()) ? String(endDate).trim() : null);
+
     const insertData: any = {
-      uuid: uuidv4(),
       organization_id: ctx.organizationId,
       candidate_id: parseInt(id, 10),
       company_name: companyName || '',
-      start_date: startDate || null,
-      end_date: endDate || null,
-      is_current: isCurrent || false,
-      description: description || null,
+      start_date: validStartDate,
+      end_date: validEndDate,
       created_at: now,
     };
+
+    if (hasUuidCol) {
+      insertData.uuid = uuidv4();
+    }
 
     if (hasUpdatedAtCol) {
       insertData.updated_at = now;
     }
 
+    if (hasDescriptionCol) {
+      insertData.description = description || null;
+    }
+
     if (hasDesignationCol) {
       insertData.designation = jobTitle || '';
-    } else {
+    } else if (hasJobTitleCol) {
       insertData.job_title = jobTitle || '';
+    }
+
+    if (hasCurrentlyWorkingCol) {
+      insertData.currently_working = isCurrentlyWorking;
+    }
+    if (hasIsCurrentCol) {
+      insertData.is_current = isCurrentlyWorking;
     }
 
     const [expId] = await db('candidate_experience').insert(insertData);

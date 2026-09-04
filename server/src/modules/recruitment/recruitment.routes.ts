@@ -162,7 +162,8 @@ router.get('/rejection/templates', requirePermission('recruitment.application.re
 router.post('/applications/:applicationId/reject-email', requirePermission('recruitment.application.write'), recruitmentController.sendRejectionWithTemplate);
 
 // ==================== Referral Routes ====================
-router.post('/referrals', recruitmentController.createReferral);
+router.post('/referrals', upload.single('resume'), recruitmentController.createReferral);
+router.get('/referrals/positions', recruitmentController.getReferralPositions);
 router.get('/referrals', requirePermission('recruitment.candidate.read'), recruitmentController.listReferrals);
 router.get('/referrals/my-referrals', recruitmentController.getMyReferrals);
 router.get('/referrals/:id', requirePermission('recruitment.candidate.read'), recruitmentController.getReferral);

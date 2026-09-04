@@ -102,6 +102,7 @@ router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOff
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/autosave', recruitmentController.autosavePublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/verify-proctoring', recruitmentController.verifyPublicAssessmentProctoring);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 // ── Report Engine (isolated module) ─────────────────────────────────────────

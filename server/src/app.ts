@@ -56,25 +56,24 @@ export function createApp() {
   );
 
   // Security middleware (after CORS)
-  // Helmet provides comprehensive security headers with Swagger UI support
+  // Helmet provides comprehensive security headers with Swagger UI & Resume Viewer support
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdnjs.cloudflare.com'],
-        imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'", 'http://localhost:5000', 'https:'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: ["'self'", 'http://localhost:5000', 'http://localhost:5173', 'http://localhost:5174', 'https:'],
         fontSrc: ["'self'", 'https://cdnjs.cloudflare.com', 'https:', 'data:'],
-        objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'none'"],
+        objectSrc: ["'self'", 'blob:', 'data:'],
+        mediaSrc: ["'self'", 'blob:', 'data:'],
+        frameSrc: ["'self'", 'http://localhost:5173', 'http://localhost:5174', 'blob:', 'data:'],
+        frameAncestors: ["'self'", 'http://localhost:5173', 'http://localhost:5174', '*'],
         baseUri: ["'self'"],
       },
     },
-    frameguard: {
-      action: 'deny',
-    },
+    frameguard: false, // Disabled so PDF resume previews can be embedded in client iframe modal
     noSniff: true,
     xssFilter: true,
     referrerPolicy: {
@@ -97,9 +96,18 @@ export function createApp() {
 
   // Serve static uploads directory with inline disposition for PDFs & images
   const uploadsDir = path.join(__dirname, '../uploads');
+  const resumesDir = path.join(uploadsDir, 'resumes');
+  const companiesDir = path.join(uploadsDir, 'companies');
   const publicUploadsDir = path.join(process.cwd(), 'public', 'uploads');
+
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  if (!fs.existsSync(resumesDir)) {
+    fs.mkdirSync(resumesDir, { recursive: true });
+  }
+  if (!fs.existsSync(companiesDir)) {
+    fs.mkdirSync(companiesDir, { recursive: true });
   }
   if (!fs.existsSync(publicUploadsDir)) {
     fs.mkdirSync(publicUploadsDir, { recursive: true });
@@ -108,6 +116,8 @@ export function createApp() {
   const staticOptions = {
     setHeaders: (res: any, filePath: string) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.removeHeader('X-Frame-Options');
       if (filePath.toLowerCase().endsWith('.pdf')) {
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'inline');
@@ -118,6 +128,9 @@ export function createApp() {
   };
 
   app.use('/uploads', express.static(uploadsDir, staticOptions));
+  app.use('/uploads/resumes', express.static(resumesDir, staticOptions));
+  app.use('/uploads', express.static(resumesDir, staticOptions));
+  app.use('/uploads', express.static(companiesDir, staticOptions));
   app.use('/uploads', express.static(publicUploadsDir, staticOptions));
 
   // Swagger Documentation Endpoints

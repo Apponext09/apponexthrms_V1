@@ -54,14 +54,14 @@ export class RecruitmentService {
       job_id: input.jobId,
       application_status: 'applied',
       applied_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      applied_from_source: input.appliedFromSource,
+      applied_from_source: input.appliedFromSource || 'Candidate Management',
       initial_screening_status: 'pending',
       screening_completed_by: null,
       screening_completed_at: null,
       pipeline_stage_id: null,
       current_stage_entered_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
+      created_by: ctx.userId || 1,
+      updated_by: ctx.userId || 1,
     } as any);
 
     // Synchronize initial stage and candidate status
