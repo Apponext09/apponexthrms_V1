@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import type { Role } from '@/config/roles';
 import { AppShellLayout } from './layouts/AppShellLayout';
 import { HRLayout } from './layouts/HRLayout';
 import { ManagerLayout } from './layouts/ManagerLayout';
@@ -265,6 +266,14 @@ function RootRedirect() {
   return <Navigate to="/employee/dashboard" replace />;
 }
 
+const MANAGER_ALLOWED_ROLES: Role[] = [
+  'department_head',
+  'manager',
+  'organization_admin',
+  'ceo',
+  'super_admin',
+];
+
 export function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -424,7 +433,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['department_head', 'manager']}>
+            <ProtectedRoute allowedRoles={MANAGER_ALLOWED_ROLES}>
               <ManagerLayout />
             </ProtectedRoute>
           }
@@ -462,6 +471,8 @@ export function AppRoutes() {
           <Route path="/manager/leaves" element={<LeavePage />} />
           <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
           <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
+          <Route path="/manager/policies" element={<PoliciesPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -500,6 +511,7 @@ export function AppRoutes() {
           <Route path="/team-lead/mrf-request" element={<MrfRequestPage />} />
           <Route path="/team-lead/mrf" element={<MrfRequestPage />} />
           <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────

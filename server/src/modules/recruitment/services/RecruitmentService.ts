@@ -458,22 +458,7 @@ Hiring Panel & HR Team
       }
     };
 
-    const toNumber = (row: any, ...keys: string[]): number => {
-      if (row == null) return 0;
-      for (const key of keys) {
-        if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
-          const n = Number(row[key]);
-          if (!Number.isNaN(n)) return n;
-        }
-      }
-      const first = Object.values(row).find((v) => v !== undefined && v !== null && v !== '');
-      const n = Number(first);
-      return Number.isNaN(n) ? 0 : n;
-    };
-
-    const publishedJobStatusSql = "LOWER(COALESCE(jobs.status, '')) = 'published'";
-
-    // 1. Open Positions KPI = count of published job postings only (not drafts, not MRF seats).
+    // 1. Open published jobs count
     let jobsQuery = db('jobs')
       .where('jobs.organization_id', ctx.organizationId)
       .whereNull('jobs.deleted_at');
@@ -487,12 +472,15 @@ Hiring Panel & HR Team
     }
     applyDateFilter(jobsQuery, 'jobs.created_at');
 
-    const publishedJobsRes = await jobsQuery.clone()
-      .whereRaw(publishedJobStatusSql)
-      .clearSelect()
-      .countDistinct('jobs.id as count')
+    const totalOpenJobsRes = await jobsQuery.clone()
+      .where(function() {
+        this.where('jobs.status', 'published')
+          .orWhere('jobs.status', 'active')
+          .orWhere('jobs.status', 'open');
+      })
+      .count('jobs.id as count')
       .first();
-    const totalOpenJobs = toNumber(publishedJobsRes, 'count');
+    const totalOpenJobs = Number(totalOpenJobsRes?.count || (totalOpenJobsRes as any)?.count || 0);
 
     // 2. Applications query with full joins
     let appsQuery = db('applications')
@@ -680,7 +668,7 @@ Hiring Panel & HR Team
       }
     } catch (err) {
       console.warn('Error computing sourceMetrics:', err);
-      sourceMetrics = [{ name: 'Direct Sourcing', value: Math.max(totalAppliedVolume, 1) }];
+      sourceMetrics = totalAppliedVolume > 0 ? [{ name: 'Direct Sourcing', value: totalAppliedVolume }] : [];
     }
 
     // 6. Monthly Trends (Applications & Hires over last 6 months) — independent query, not filtered by dashboard params
@@ -785,9 +773,13 @@ Hiring Panel & HR Team
         const dId = dept.id;
         const dName = dept.name;
 
-        const openJobPos = await db('jobs')
+        const openPos = await db('jobs')
           .where({ organization_id: ctx.organizationId, department_id: dId })
-          .whereRaw("LOWER(COALESCE(status, '')) = 'published'")
+          .where(function() {
+            this.where('status', 'published')
+              .orWhere('status', 'active')
+              .orWhere('status', 'open');
+          })
           .whereNull('deleted_at')
           .count('id as count')
           .first();
@@ -814,7 +806,7 @@ Hiring Panel & HR Team
         return {
           departmentId: dId,
           departmentName: dName,
-          openPositions: toNumber(openJobPos, 'count'),
+          openPositions: Number(openPos?.count || (openPos as any)?.count || 0),
           applications: Number(deptApps?.count || (deptApps as any)?.count || 0),
           hires: Number(deptHires?.count || (deptHires as any)?.count || 0),
         };

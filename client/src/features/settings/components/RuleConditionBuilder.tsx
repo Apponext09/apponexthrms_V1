@@ -79,7 +79,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
       fact: 'gender',
       operator: 'equals',
       valueType: 'static',
-      value: 'Female',
+      value: 'Male',
     };
     const updated = addConditionToGroup(rootGroup, targetGroup.id, newCond);
     updateRootGroup(updated);

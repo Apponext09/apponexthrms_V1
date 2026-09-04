@@ -75,8 +75,12 @@ export function extractFactValue(fact: string, employee: EmployeeFactContext): a
   const f = fact.toLowerCase().replace(/[\s_-]+/g, '');
 
   switch (f) {
-    case 'gender':
-      return (employee.gender || '').toLowerCase();
+    case 'gender': {
+      const g = (employee.gender || (employee as any).sex || '').toLowerCase().trim();
+      if (g === 'm' || g === 'man') return 'male';
+      if (g === 'f' || g === 'woman') return 'female';
+      return g;
+    }
     case 'maritalstatus':
     case 'marital':
       return (employee.marital_status || employee.maritalStatus || employee.marital || '').toLowerCase();

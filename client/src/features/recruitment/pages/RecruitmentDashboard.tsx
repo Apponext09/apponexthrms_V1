@@ -173,18 +173,21 @@ export const RecruitmentDashboard: React.FC = () => {
   const sourcingPieData = useMemo(() => {
     const rawSources = dashboard?.sourceMetrics;
     if (Array.isArray(rawSources) && rawSources.length > 0) {
-      return rawSources;
+      return rawSources.filter((item: any) => Number(item?.value || item?.count || 0) > 0);
     }
     if (rawSources && typeof rawSources === 'object') {
       const entries = Object.entries(rawSources);
       if (entries.length > 0) {
         return entries.map(([key, val]: [string, any]) => ({
           name: !key || key === 'null' || key === 'undefined' ? 'Direct Apply' : key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          value: Number(val.totalCandidates || val.appliedCount || val.value || val || 0),
+          value: Number(val?.totalCandidates || val?.appliedCount || val?.value || val || 0),
         })).filter(item => item.value > 0);
       }
     }
-    return [{ name: 'Direct Sourcing', value: stats.totalApplications > 0 ? stats.totalApplications : 1 }];
+    if (stats.totalApplications > 0) {
+      return [{ name: 'Direct Sourcing', value: stats.totalApplications }];
+    }
+    return [];
   }, [dashboard, stats.totalApplications]);
 
   // Monthly Trend Data
@@ -434,7 +437,7 @@ export const RecruitmentDashboard: React.FC = () => {
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Open Positions</p>
               <p className="text-3xl font-black text-foreground">{stats.totalOpenJobs}</p>
               <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] font-bold px-2 py-0.5">
-                Published Jobs
+                Active Requisitions
               </Badge>
             </div>
             <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
@@ -552,35 +555,49 @@ export const RecruitmentDashboard: React.FC = () => {
             <span className="text-xs text-muted-foreground font-medium">Share Breakdown</span>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="h-52 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={sourcingPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={82}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {sourcingPieData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<ChartTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-border/60 text-xs">
-              {sourcingPieData.slice(0, 6).map((src: any, i: number) => (
-                <div key={src.name || i} className="flex items-center gap-2 p-1.5 rounded-lg bg-muted/40 border border-border/50">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
-                  <span className="text-muted-foreground font-medium truncate text-[11px]">{src.name}</span>
-                  <span className="text-foreground font-bold ml-auto text-xs">{src.value}</span>
+            {sourcingPieData.length > 0 ? (
+              <>
+                <div className="h-52 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={sourcingPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={82}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {sourcingPieData.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={SOURCE_COLORS[index % SOURCE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-border/60 text-xs">
+                  {sourcingPieData.slice(0, 6).map((src: any, i: number) => (
+                    <div key={src.name || i} className="flex items-center gap-2 p-1.5 rounded-lg bg-muted/40 border border-border/50">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: SOURCE_COLORS[i % SOURCE_COLORS.length] }} />
+                      <span className="text-muted-foreground font-medium truncate text-[11px]">{src.name}</span>
+                      <span className="text-foreground font-bold ml-auto text-xs">{src.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-52 flex flex-col items-center justify-center text-center p-4">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3">
+                  <PieIcon className="w-6 h-6" />
+                </div>
+                <p className="text-xs font-bold text-foreground">No Sourcing Data</p>
+                <p className="text-[11px] text-muted-foreground mt-1 max-w-[200px]">
+                  Candidate sourcing channels will appear once applications are received.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -638,7 +655,7 @@ export const RecruitmentDashboard: React.FC = () => {
               <FunnelStep label="Screening to Interview" rate={conversions.screeningToInterview || 0} count={`${funnel.interview}/${funnel.screening}`} color="bg-purple-500" />
               <FunnelStep label="Interview to Offer" rate={conversions.interviewToOffer || 0} count={`${funnel.offer}/${funnel.interview}`} color="bg-amber-500" />
               <FunnelStep label="Offer to Hired" rate={conversions.offerToHired || 0} count={`${funnel.hired}/${funnel.offer}`} color="bg-emerald-500" />
-              <FunnelStep label="Overall Funnel Conversion (Applied → Hired)" rate={conversions.appliedToHired || 0} count={`${funnel.hired}/${stats.totalApplications || funnel.applied || 1}`} color="bg-primary" isHighlight />
+              <FunnelStep label="Overall Funnel Conversion (Applied → Hired)" rate={conversions.appliedToHired || 0} count={`${funnel.hired}/${stats.totalApplications || funnel.applied || 0}`} color="bg-primary" isHighlight />
             </div>
           </CardContent>
         </Card>

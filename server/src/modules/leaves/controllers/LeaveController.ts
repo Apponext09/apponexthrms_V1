@@ -116,28 +116,50 @@ export class LeaveController {
       if (effFrom && todayStr < effFrom) return false; // Not yet active
       if (effTo && todayStr > effTo) return false;     // Expired
 
-      // ── 2. Gender applicability (leave-type level + allocation settings) ──
-      const genderApplicable = (
-        t.gender_applicable || t.genderApplicable || allocSettings.gender || 'all'
-      ).toString().toLowerCase().trim();
-      if (genderApplicable !== 'all' && genderApplicable !== 'both' && genderApplicable !== '') {
-        const empGender = (empCtx.gender || '').toLowerCase().trim();
-        if (empGender && empGender !== genderApplicable) return false;
+      // Helper to check if onlyWhen has a dynamic condition on a specific fact
+      const hasFactInGroup = (group: any, targetFact: string): boolean => {
+        if (!group) return false;
+        const cleanFact = targetFact.toLowerCase().replace(/[\s_-]+/g, '');
+        const list = group.conditions || group.rules;
+        if (!Array.isArray(list) || list.length === 0) return false;
+        return list.some((c: any) => {
+          if (c.conjunction || c.conditions || c.rules) return hasFactInGroup(c, targetFact);
+          const f = (c.fact || c.field || '').toString().toLowerCase().replace(/[\s_-]+/g, '');
+          return f === cleanFact && Boolean(c.operator);
+        });
+      };
+
+      const allocOnlyWhen = allocSettings.onlyWhen || allocSettings.only_when || t.only_when || t.onlyWhen;
+      const appOnlyWhen = appSettings.onlyWhen || appSettings.only_when;
+      const hasOnlyWhenGender = hasFactInGroup(allocOnlyWhen, 'gender') || hasFactInGroup(appOnlyWhen, 'gender');
+      const hasOnlyWhenMarital = hasFactInGroup(allocOnlyWhen, 'marital_status') || hasFactInGroup(appOnlyWhen, 'marital_status');
+
+      // ── 2. Gender applicability (leave-type level + allocation settings, evaluated only if onlyWhen does not define gender rules) ──
+      if (!hasOnlyWhenGender) {
+        const genderApplicable = (
+          t.gender_applicable || t.genderApplicable || allocSettings.gender || 'all'
+        ).toString().toLowerCase().trim();
+        if (genderApplicable !== 'all' && genderApplicable !== 'both' && genderApplicable !== '') {
+          const empGender = (empCtx.gender || '').toLowerCase().trim();
+          if (empGender && empGender !== genderApplicable) return false;
+        }
       }
 
       // ── 3. Marital status ──
-      const maritalReq = (allocSettings.maritalStatus || '').toLowerCase().trim();
-      if (maritalReq && maritalReq !== 'all' && maritalReq !== '') {
-        const empMarital = (empCtx.marital_status || '').toLowerCase().trim();
-        if (empMarital && empMarital !== maritalReq) return false;
+      if (!hasOnlyWhenMarital) {
+        const maritalReq = (allocSettings.maritalStatus || '').toLowerCase().trim();
+        if (maritalReq && maritalReq !== 'all' && maritalReq !== '') {
+          const empMarital = (empCtx.marital_status || '').toLowerCase().trim();
+          if (empMarital && empMarital !== maritalReq) return false;
+        }
       }
 
       // ── 4. onlyWhen rule trees (allocation + application) ──
-      if (allocSettings.onlyWhen || allocSettings.only_when) {
-        if (!evaluateConditionGroup(allocSettings.onlyWhen || allocSettings.only_when, empCtx)) return false;
+      if (allocOnlyWhen) {
+        if (!evaluateConditionGroup(allocOnlyWhen, empCtx)) return false;
       }
-      if (appSettings.onlyWhen || appSettings.only_when) {
-        if (!evaluateConditionGroup(appSettings.onlyWhen || appSettings.only_when, empCtx)) return false;
+      if (appOnlyWhen) {
+        if (!evaluateConditionGroup(appOnlyWhen, empCtx)) return false;
       }
 
       // ── 5. Employment Allocation scope (comprehensive) ──
@@ -541,18 +563,35 @@ export class LeaveController {
       const currentFyStart = calculateFinancialYearStart(toLocalYYYYMMDD(today));
 
       // Fetch employee info for frontend checks
-      const employee = await (this.applicationRepo as any).db('employees')
+      let employee = await (this.applicationRepo as any).db('employees')
         .where('organization_id', ctx.organizationId)
         .where('id', empId)
         .whereNull('deleted_at')
         .first();
 
+      if (!employee && ctx.userId) {
+        const userRec = await (this.applicationRepo as any).db('users').where('id', ctx.userId).first();
+        if (userRec) {
+          employee = {
+            id: empId || userRec.id,
+            first_name: userRec.first_name,
+            last_name: userRec.last_name,
+            gender: userRec.gender || 'male',
+            status: userRec.status || 'active',
+            email: userRec.email,
+          };
+        }
+      }
+
       // Fetch all active leave types for this organization
       const rawTypes = await (this.applicationRepo as any).db('leave_types')
-        .where('organization_id', ctx.organizationId)
-        .orWhereNull('organization_id')
+        .where(function (this: any) {
+          this.where('organization_id', ctx.organizationId)
+            .orWhereNull('organization_id');
+        })
         .where('status', 'active')
-        .whereNull('deleted_at');
+        .whereNull('deleted_at')
+        .orderBy('id', 'asc');
 
       const types = this.filterEligibleLeaveTypes(rawTypes, employee);
 
@@ -636,7 +675,11 @@ export class LeaveController {
             pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
             gender_applicable: t.gender_applicable || t.genderApplicable || 'all',
             probation_excluded: isProbationExcluded,
-            allocation_settings: t.allocation_settings,
+            allocation_settings: t.allocation_settings || t.allocationSettings,
+            application_settings: t.application_settings || t.applicationSettings,
+            employment_allocation_settings: t.employment_allocation_settings || t.employmentAllocationSettings,
+            employment_application_settings: t.employment_application_settings || t.employmentApplicationSettings,
+            only_when: t.only_when || t.onlyWhen,
           };
         } else {
           let defaultQuota = parseFloat(t.annualQuota ?? t.annual_quota ?? 0) || 0;
@@ -664,7 +707,11 @@ export class LeaveController {
             pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
             gender_applicable: t.gender_applicable || t.genderApplicable || 'all',
             probation_excluded: isProbationExcluded,
-            allocation_settings: t.allocation_settings,
+            allocation_settings: t.allocation_settings || t.allocationSettings,
+            application_settings: t.application_settings || t.applicationSettings,
+            employment_allocation_settings: t.employment_allocation_settings || t.employmentAllocationSettings,
+            employment_application_settings: t.employment_application_settings || t.employmentApplicationSettings,
+            only_when: t.only_when || t.onlyWhen,
           };
         }
       });
@@ -672,7 +719,8 @@ export class LeaveController {
       res.json({
         success: true,
         employee: employee ? {
-          gender: employee.gender || 'other',
+          ...employee,
+          gender: (employee.gender || 'male').toLowerCase(),
           status: employee.status || 'active',
           probationEndDate: employee.probation_end_date || employee.probationEndDate || null,
         } : null,

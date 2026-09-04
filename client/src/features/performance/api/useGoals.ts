@@ -53,10 +53,16 @@ export const useGoals = (employeeId?: number, filters?: any) => {
     queryKey: ['goals', employeeId, filters],
     queryFn: () =>
       apiClient.get('/performance/goals', {
-        params: { employeeId, ...filters }
+        params: { ...(employeeId ? { employeeId } : {}), ...filters }
       }),
-    enabled: !!employeeId
   });
+
+  const rawGoals = goalsQuery.data?.data;
+  const goalsList: Goal[] = Array.isArray(rawGoals?.data)
+    ? rawGoals.data
+    : Array.isArray(rawGoals)
+    ? rawGoals
+    : [];
 
   const createGoalMutation = useMutation({
     mutationFn: (data: CreateGoalInput) =>
@@ -96,7 +102,7 @@ export const useGoals = (employeeId?: number, filters?: any) => {
   };
 
   return {
-    goals: goalsQuery.data?.data || [],
+    goals: goalsList,
     isLoading: goalsQuery.isLoading,
     error: goalsQuery.error,
     createGoal: createGoalMutation.mutate,

@@ -42,14 +42,14 @@ export function LoginPage() {
       const roles = currentUser?.roles || [];
       const cleanEmail = (email || '').trim().toLowerCase();
 
-      // Navigate immediately - page will show loading screen while data loads
-      if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
+      // Navigate based on user roles fetched from database
+      if (roles.includes('super_admin')) {
         navigate('/superadmin/dashboard', { replace: true });
-      } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
+      } else if (roles.includes('organization_admin') || roles.includes('ceo')) {
         navigate('/dashboard', { replace: true });
-      } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
+      } else if (roles.includes('department_head') || roles.includes('manager')) {
         navigate('/manager/dashboard', { replace: true });
-      } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
+      } else if (roles.includes('hr_manager') || roles.includes('hr_admin') || roles.includes('support')) {
         navigate('/hr/dashboard', { replace: true });
       } else if (roles.includes('team_lead')) {
         navigate('/team-lead/dashboard', { replace: true });
@@ -60,13 +60,15 @@ export function LoginPage() {
       } else if (roles.includes('employee')) {
         navigate('/employee/dashboard', { replace: true });
       } else {
-        navigate('/employee/dashboard', { replace: true });
+        navigate('/dashboard', { replace: true });
       }
-
-      // Don't wait for setLoading(false) - navigate immediately
-      // Loading screen will handle the wait
-    } catch (err) {
-      setError('Invalid email or password');
+    } catch (err: any) {
+      const serverMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Invalid email or password';
+      setError(serverMsg);
       setLoading(false);
     }
   };

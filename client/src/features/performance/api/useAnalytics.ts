@@ -82,21 +82,37 @@ export interface SuccessionAnalyticsData {
 export const usePerformanceDashboard = () => {
   const dashboardQuery = useQuery({
     queryKey: ['performance-dashboard'],
-    queryFn: () =>
-      apiClient.get('/performance/analytics/dashboard')
+    queryFn: async () => {
+      const res = await apiClient.get('/performance/analytics/dashboard');
+      return res.data;
+    }
   });
 
   const metricsQuery = useQuery({
     queryKey: ['performance-metrics'],
-    queryFn: () =>
-      apiClient.get('/performance/analytics/metrics')
+    queryFn: async () => {
+      const res = await apiClient.get('/performance/analytics/metrics');
+      return res.data;
+    }
   });
 
+  const dashboardRaw = dashboardQuery.data?.data || dashboardQuery.data;
+  const metricsRaw = metricsQuery.data?.data || metricsQuery.data || dashboardRaw;
+
+  const metrics: PerformanceMetricsData = {
+    totalEmployees: Number(metricsRaw?.totalEmployees ?? dashboardRaw?.totalEmployees ?? 0),
+    averageRating: Number(metricsRaw?.averageRating ?? dashboardRaw?.averageRating ?? 0),
+    averageGoalProgress: Number(metricsRaw?.averageGoalProgress ?? dashboardRaw?.averageGoalProgress ?? 0),
+    activeReviews: Number(metricsRaw?.activeReviews ?? dashboardRaw?.activeReviews ?? 0),
+    completedReviews: Number(metricsRaw?.completedReviews ?? dashboardRaw?.completedReviews ?? 0),
+    pendingApprovals: Number(metricsRaw?.pendingApprovals ?? dashboardRaw?.pendingApprovals ?? 0),
+  };
+
   return {
-    dashboard: dashboardQuery.data?.data,
-    metrics: metricsQuery.data?.data,
-    isLoading: dashboardQuery.isLoading || metricsQuery.isLoading,
-    error: dashboardQuery.error || metricsQuery.error
+    dashboard: dashboardRaw,
+    metrics,
+    isLoading: dashboardQuery.isLoading && metricsQuery.isLoading,
+    error: (dashboardQuery.error && metricsQuery.error) ? (metricsQuery.error || dashboardQuery.error) : null
   };
 };
 

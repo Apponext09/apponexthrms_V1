@@ -127,3 +127,58 @@ export const useCreateEmployeeLetter = () => {
     },
   });
 };
+
+/**
+ * Fetch onboarding status and provisioned credentials for an offer
+ */
+export const useOfferOnboardingStatus = (offerId?: number) => {
+  return useQuery({
+    queryKey: ['offer-onboarding-status', offerId],
+    queryFn: async () => {
+      if (!offerId) return null;
+      const response = await api.get(`/recruitment/offers/${offerId}/onboarding-status`);
+      return response.data;
+    },
+    enabled: !!offerId,
+  });
+};
+
+/**
+ * Mutation to manually trigger employee onboarding provisioning for an accepted offer
+ */
+export const useOnboardOfferCandidate = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (offerId: number) => {
+      const response = await api.post(`/recruitment/offers/${offerId}/onboard`);
+      return response.data;
+    },
+    onSuccess: (_, offerId) => {
+      queryClient.invalidateQueries({ queryKey: ['offers'] });
+      queryClient.invalidateQueries({ queryKey: ['offer-onboarding-status', offerId] });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+  });
+};
+
+/**
+ * Mutation to update/customize temporary login credentials for an onboarded employee
+ */
+export const useUpdateOfferEmployeeCredentials = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { offerId: number; password: string }) => {
+      const response = await api.post(`/recruitment/offers/${input.offerId}/update-credentials`, {
+        password: input.password,
+      });
+      return response.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['offers'] });
+      queryClient.invalidateQueries({ queryKey: ['offer-onboarding-status', variables.offerId] });
+    },
+  });
+};
+

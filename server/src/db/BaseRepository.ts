@@ -64,6 +64,9 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Get single record by ID
    */
   async getById(ctx: TenantContext, id: number | string): Promise<T | null> {
+    if (id === undefined || id === null || id === '' || id === 'undefined' || id === 'null') {
+      return null;
+    }
     try {
       // Use raw query to bypass Knex query validation issues
       const idCol = this.isPrimaryKeyUuid(id) ? 'uuid' : 'id';

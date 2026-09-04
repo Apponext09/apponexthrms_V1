@@ -137,7 +137,7 @@ export class JobReferenceController {
       return;
     }
 
-    const result = await (this.jobRefService as any).listPublicJobs(parseInt(organizationId as string, 10), {
+    const result = await this.jobRefService.listPublicJobs(parseInt(organizationId as string, 10), {
       page: parseInt(page as string, 10),
       pageSize: parseInt(pageSize as string, 10),
       search: search as string,

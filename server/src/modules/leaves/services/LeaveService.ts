@@ -406,13 +406,28 @@ export class LeaveService {
       }
 
       // GENDER APPLICABILITY VALIDATION
-      const leaveGender = (leaveType.gender_applicable || leaveType.genderApplicable || allocationSettings.gender || 'all').toString().toLowerCase();
-      if (leaveGender !== 'all' && leaveGender !== 'both') {
-        const empGender = (employee.gender || '').toLowerCase();
-        if (empGender && empGender !== leaveGender) {
-          throw new ValidationError(
-            `This leave type is only applicable for ${leaveGender} employees.`
-          );
+      const allocOnlyWhen = allocationSettings.onlyWhen || allocationSettings.only_when || leaveType.only_when || leaveType.onlyWhen;
+      const appOnlyWhen = applicationSettings.onlyWhen || applicationSettings.only_when;
+      const hasGenderInOnlyWhen = (group: any): boolean => {
+        if (!group) return false;
+        const conditions = group.conditions || group.rules;
+        if (!Array.isArray(conditions) || conditions.length === 0) return false;
+        return conditions.some((c: any) => {
+          if (c.conjunction || c.conditions || c.rules) return hasGenderInOnlyWhen(c);
+          const f = (c.fact || c.field || '').toString().toLowerCase().replace(/[\s_-]+/g, '');
+          return f === 'gender' && Boolean(c.operator);
+        });
+      };
+
+      if (!hasGenderInOnlyWhen(allocOnlyWhen) && !hasGenderInOnlyWhen(appOnlyWhen)) {
+        const leaveGender = (leaveType.gender_applicable || leaveType.genderApplicable || allocationSettings.gender || 'all').toString().toLowerCase();
+        if (leaveGender !== 'all' && leaveGender !== 'both') {
+          const empGender = (employee.gender || '').toLowerCase();
+          if (empGender && empGender !== leaveGender) {
+            throw new ValidationError(
+              `This leave type is only applicable for ${leaveGender} employees.`
+            );
+          }
         }
       }
 

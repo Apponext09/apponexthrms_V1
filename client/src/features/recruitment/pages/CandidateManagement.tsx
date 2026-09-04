@@ -109,6 +109,20 @@ export const CandidateManagement: React.FC = () => {
 
   const candidates = candidatesResponse?.data || [];
   const jobs = Array.isArray(jobsResponse?.data) ? jobsResponse.data : (Array.isArray(jobsResponse?.data?.items) ? jobsResponse.data.items : (Array.isArray(jobsResponse) ? jobsResponse : []));
+
+  const activePublishedJobs = useMemo(() => {
+    if (!jobs || !Array.isArray(jobs)) return [];
+    const todayStr = new Date().toISOString().substring(0, 10);
+    return jobs.filter((job: any) => {
+      const status = String(job.status || '').toLowerCase();
+      if (status === 'closed' || status === 'archived' || status === 'on_hold' || status === 'draft') return false;
+      const deadline = String(job.expiryDate || job.expiry_date || '').slice(0, 10);
+      if (deadline && deadline <= todayStr) return false;
+      if (String(job.jobCode || job.job_code || '').startsWith('JOB-')) return false;
+      return true;
+    });
+  }, [jobs]);
+
   const totalEntries = candidatesResponse?.meta?.total || 0;
   const totalPages = candidatesResponse?.meta?.totalPages || 1;
   const startIndex = (currentPage - 1) * entriesPerPage;
@@ -653,7 +667,7 @@ export const CandidateManagement: React.FC = () => {
                                     className="w-full px-2.5 py-1.5 border border-border rounded-lg bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
                                   >
                                     <option value="">-- Choose Job --</option>
-                                    {jobs.map((job: any) => (
+                                    {activePublishedJobs.map((job: any) => (
                                       <option key={job.id} value={job.id}>
                                         {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
                                       </option>
@@ -739,7 +753,7 @@ export const CandidateManagement: React.FC = () => {
 
       {isCreating && (
         <CandidateFormModal
-          jobs={jobs}
+          jobs={activePublishedJobs}
           onClose={() => setIsCreating(false)}
           onSubmit={handleCreateCandidate}
         />
