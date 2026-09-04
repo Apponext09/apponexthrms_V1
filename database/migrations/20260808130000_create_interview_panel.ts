@@ -5,9 +5,15 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasTable) {
     await knex.schema.createTable('interview_panel', (table) => {
       table.bigIncrements('id').primary();
+<<<<<<< HEAD
+      table.integer('organization_id').unsigned().notNullable();
+      table.integer('interview_id').unsigned().notNullable();
+      table.integer('employee_id').unsigned().notNullable();
+=======
       table.bigInteger('organization_id').unsigned().notNullable();
       table.integer('interview_id').unsigned().notNullable();
       table.bigInteger('employee_id').unsigned().notNullable();
+>>>>>>> 62665b3e70238452c8197eef92b8c101a78458c5
       table.timestamp('created_at').defaultTo(knex.fn.now());
       table.timestamp('updated_at').defaultTo(knex.fn.now());
 

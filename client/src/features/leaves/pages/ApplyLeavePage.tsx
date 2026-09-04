@@ -227,6 +227,9 @@ export function ApplyLeavePage() {
                 {formData.leaveTypeId && (() => {
                   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
                   const paidType = (selectedBalance as any)?.paid_type || (selectedBalance as any)?.paidType || 'paid';
+                  const isGenderRestricted = false;
+                  const leaveGender = '';
+                  const isProbationRestricted = false;
                   return (
                     <div className="space-y-2 pt-0.5">
                       <div className="flex items-center space-x-3 text-xs font-semibold">
@@ -422,6 +425,7 @@ export function ApplyLeavePage() {
               </button>
             </div>
           </form>
+          </div>
         </div>
       </div>
     </div>

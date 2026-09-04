@@ -9,6 +9,23 @@ export async function up(knex: Knex): Promise<void> {
     });
   }
 
+  // Drop stale FK constraint on locations if it exists
+  try {
+    const [fkRows]: any = await knex.raw(`
+      SELECT CONSTRAINT_NAME 
+      FROM information_schema.TABLE_CONSTRAINTS 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'locations'
+        AND CONSTRAINT_NAME = 'locations_branch_id_foreign'
+        AND CONSTRAINT_TYPE = 'FOREIGN KEY'
+    `);
+    if (fkRows && fkRows.length > 0) {
+      await knex.raw('ALTER TABLE `locations` DROP FOREIGN KEY `locations_branch_id_foreign`');
+    }
+  } catch (e) {
+    // Ignore if not present
+  }
+
   // 2. Add company_id to target tables
   const targetTables = [
     'users',

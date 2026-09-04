@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '@/lib/api';
-import { useAuthStore } from '@/features/auth/authStore';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   Calendar, Plus, RefreshCw, FileText, CheckCircle2, Clock, XCircle,
   AlertCircle, Ban, Palmtree, Trophy, Flame, Briefcase, Info, Loader2

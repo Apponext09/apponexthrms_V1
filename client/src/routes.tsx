@@ -130,6 +130,8 @@ const LeavePoliciesPage = lazy(() => import('./features/settings/pages/LeavePoli
 const OrgLeaveSettings = lazy(() => import('./features/settings/pages/OrgLeaveSettings').then(m => ({ default: m.OrgLeaveSettings })));
 const AttendanceModulePage = lazy(() => import('./features/settings/pages/AttendanceModulePage').then(m => ({ default: m.AttendanceModulePage })));
 const MastersHubPage = lazy(() => import('./features/settings/pages/MastersHubPage').then(m => ({ default: m.MastersHubPage })));
+const MasterBuilderPage = lazy(() => import('./features/master-builder/pages/MasterBuilderPage').then(m => ({ default: m.MasterBuilderPage })));
+const MasterBuilderDetailPage = lazy(() => import('./features/master-builder/pages/MasterBuilderDetailPage').then(m => ({ default: m.MasterBuilderDetailPage })));
 const IdCardDesignerPage = lazy(() => import('./features/settings/pages/IdCardDesignerPage').then(m => ({ default: m.IdCardDesignerPage })));
 const AdminConfigurationPage = lazy(() => import('./features/settings/pages/AdminConfigurationPage').then(m => ({ default: m.AdminConfigurationPage })));
 const OnboardingPage = lazy(() => import('./features/employee-lifecycle/pages/OnboardingPage').then(m => ({ default: m.OnboardingPage })));
@@ -387,6 +389,8 @@ export function AppRoutes() {
           <Route path="/hr/performance/reviews" element={<ReviewCyclesPage />} />
 
           {/* Operations */}
+          <Route path="/hr/masters/builder" element={<MasterBuilderPage />} />
+          <Route path="/hr/masters/builder/:id" element={<MasterBuilderDetailPage />} />
           <Route path="/hr/masters" element={<MastersHubPage />} />
           <Route path="/hr/masters/*" element={<MastersHubPage />} />
           <Route path="/hr/workflow" element={<WorkflowListPage />} />
@@ -738,6 +742,10 @@ export function AppRoutes() {
           <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
           <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
           <Route path="/settings/modules" element={<ModuleManagementPage />} />
+          <Route path="/settings/master-builder" element={<MasterBuilderPage />} />
+          <Route path="/settings/master-builder/:id" element={<MasterBuilderDetailPage />} />
+          <Route path="/masters/builder" element={<MasterBuilderPage />} />
+          <Route path="/masters/builder/:id" element={<MasterBuilderDetailPage />} />
           <Route path="/masters" element={<MastersHubPage />} />
           <Route path="/masters/*" element={<MastersHubPage />} />
           <Route path="/modules" element={<ModuleManagementPage />} />

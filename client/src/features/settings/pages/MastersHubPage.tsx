@@ -59,6 +59,10 @@ import { EventMasterForm } from '../components/EventMasterForm';
 import { HolidayMasterForm } from '../components/HolidayMasterForm';
 
 import { OTRulePage } from '../components/ot-rules/OTRulePage';
+import { MasterBuilderPage } from '@/features/master-builder/pages/MasterBuilderPage';
+import { DynamicMasterView } from '@/features/master-builder/components/DynamicMasterView';
+import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
+import { Boxes } from 'lucide-react';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -68,9 +72,11 @@ export interface MasterCategory {
   category: 'Core & Structure' | 'Policies & Rules' | 'Templates & System' | 'Events & Planning';
   description: string;
   defaultItemCount: number;
+  isCustom?: boolean;
 }
 
 export const MASTER_CATEGORIES: MasterCategory[] = [
+  { id: 'master-builder', name: 'Master Builder', icon: Boxes, category: 'Templates & System', description: 'Define custom master entities, dynamic fields, validation rules and choice lists.', defaultItemCount: 4 },
   { id: 'company', name: 'Company', icon: Building2, category: 'Core & Structure', description: 'Manage company profiles, legal entities, and organization details.', defaultItemCount: 3 },
   { id: 'location', name: 'Location', icon: MapPin, category: 'Core & Structure', description: 'Configure office locations, branches, and geographic sites.', defaultItemCount: 8 },
   { id: 'department', name: 'Department', icon: Layers, category: 'Core & Structure', description: 'Manage organizational departments, divisions, and teams.', defaultItemCount: 12 },
@@ -180,6 +186,34 @@ export function MastersHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedMasterId, setSelectedMasterId] = useState<string>('company');
+  const [customMasters, setCustomMasters] = useState<CustomMasterItem[]>([]);
+
+  useEffect(() => {
+    const fetchCustomMasters = async () => {
+      try {
+        const list = await masterBuilderApi.getMasters();
+        setCustomMasters(list);
+      } catch (err) {
+        console.error('Failed to load custom masters list in MastersHubPage:', err);
+      }
+    };
+    fetchCustomMasters();
+  }, []);
+
+  const mergedCategories = useMemo(() => {
+    const customCats: MasterCategory[] = customMasters
+      .filter((cm) => !MASTER_CATEGORIES.some((mc) => mc.id === cm.code))
+      .map((cm) => ({
+        id: cm.code,
+        name: cm.name,
+        icon: Boxes,
+        category: 'Templates & System',
+        description: cm.description || `Custom Master for ${cm.name}`,
+        defaultItemCount: cm.recordsCount || 0,
+        isCustom: true,
+      }));
+    return [...MASTER_CATEGORIES, ...customCats];
+  }, [customMasters]);
 
   useEffect(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
@@ -190,17 +224,21 @@ export function MastersHubPage() {
       masterId = pathSegments[masterIndex + 1];
     }
 
-    if (masterId && MASTER_CATEGORIES.some(m => m.id === masterId)) {
+    if (masterId === 'builder' || masterId === 'master-builder') {
+      setSelectedMasterId('master-builder');
+    } else if (masterId && (mergedCategories.some(m => m.id === masterId) || customMasters.some(cm => cm.code === masterId))) {
       setSelectedMasterId(masterId);
     } else if (searchParams.get('tab')) {
       const tabFromUrl = searchParams.get('tab');
-      if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
+      if (tabFromUrl === 'builder' || tabFromUrl === 'master-builder') {
+        setSelectedMasterId('master-builder');
+      } else if (tabFromUrl && (mergedCategories.some(m => m.id === tabFromUrl) || customMasters.some(cm => cm.code === tabFromUrl))) {
         setSelectedMasterId(tabFromUrl);
       }
     } else {
       setSelectedMasterId('company');
     }
-  }, [location.pathname, searchParams]);
+  }, [location.pathname, searchParams, mergedCategories, customMasters]);
 
   const handleSelectMaster = (id: string) => {
     setSelectedMasterId(id);
@@ -275,13 +313,13 @@ export function MastersHubPage() {
   const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>('Active');
 
   const selectedMaster = useMemo(() => {
-    return MASTER_CATEGORIES.find(m => m.id === selectedMasterId) || MASTER_CATEGORIES[0];
-  }, [selectedMasterId]);
+    return mergedCategories.find(m => m.id === selectedMasterId) || mergedCategories[0];
+  }, [selectedMasterId, mergedCategories]);
 
   const filteredCategories = useMemo(() => {
-    if (categoryFilter === 'all') return MASTER_CATEGORIES;
-    return MASTER_CATEGORIES.filter(m => m.category === categoryFilter);
-  }, [categoryFilter]);
+    if (categoryFilter === 'all') return mergedCategories;
+    return mergedCategories.filter(m => m.category === categoryFilter);
+  }, [categoryFilter, mergedCategories]);
 
   const currentRecords = useMemo(() => {
     let list = records[selectedMasterId] || [];
@@ -385,7 +423,14 @@ export function MastersHubPage() {
 
 
 
-      {selectedMasterId === 'grade' ? (
+      {selectedMasterId === 'master-builder' ? (
+        <MasterBuilderPage />
+      ) : customMasters.some(cm => cm.code === selectedMasterId || String(cm.id) === selectedMasterId) ? (
+        <DynamicMasterView masterIdOrCode={selectedMasterId} onManageFields={() => {
+          const cm = customMasters.find(c => c.code === selectedMasterId || String(c.id) === selectedMasterId);
+          if (cm) navigate(`/masters/builder/${cm.id}`);
+        }} />
+      ) : selectedMasterId === 'grade' ? (
         <GradeMasterCustomUI />
       ) : selectedMasterId === 'emp-type' ? (
         <EmploymentTypeMasterCustomUI />

@@ -13,7 +13,7 @@ import {
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, Shield, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
-  FilePlus, LineChart, ListChecks, UploadCloud, Palette
+  FilePlus, LineChart, ListChecks, UploadCloud, Palette, Boxes
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -153,6 +153,7 @@ const HR_NAV = [
   {
     label: 'MASTERS',
     items: [
+      { name: 'Master Builder', href: '/hr/masters/builder', icon: Boxes },
       { name: 'Company', href: '/hr/masters/company', icon: Building2 },
       { name: 'Location', href: '/hr/masters/location', icon: MapPin },
       { name: 'Department', href: '/hr/masters/department', icon: Layers },

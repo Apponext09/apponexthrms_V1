@@ -9,7 +9,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasLive) {
     await knex.schema.createTable('employee_live_locations', (table) => {
       table.increments('id').primary();
-      table.string('uuid', 36).notNullable().unique().defaultTo(knex.raw('(UUID())'));
+      table.string('uuid', 36).notNullable().unique();
       table.integer('organization_id').unsigned().notNullable().references('id').inTable('organizations').onDelete('CASCADE');
       table.integer('employee_id').unsigned().notNullable();
       table.decimal('latitude', 10, 7).nullable();
@@ -38,7 +38,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasHistory) {
     await knex.schema.createTable('employee_location_history', (table) => {
       table.bigIncrements('id').primary();
-      table.string('uuid', 36).notNullable().unique().defaultTo(knex.raw('(UUID())'));
+      table.string('uuid', 36).notNullable().unique();
       table.integer('organization_id').unsigned().notNullable();
       table.integer('employee_id').unsigned().notNullable();
       table.decimal('latitude', 10, 7).notNullable();
