@@ -11,7 +11,9 @@ import {
   Printer, 
   RotateCw, 
   Layers, 
-  Shield 
+  Shield,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
@@ -33,6 +35,12 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
   }, [refetchTemplate]);
 
   const [isFlipped, setIsFlipped] = useState(false);
+  const [cardDarkMode, setCardDarkMode] = useState<boolean>(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return false;
+  });
   const [avatar, setAvatar] = useState<string | null>(null);
   const [personalDetails, setPersonalDetails] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -300,6 +308,16 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setCardDarkMode(!cardDarkMode)}
+            className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
+          >
+            {cardDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-500" /> : <Moon className="w-3.5 h-3.5 text-indigo-500" />}
+            {cardDarkMode ? 'Light Card' : 'Dark Card'}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setIsFlipped(!isFlipped)}
             className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
           >
@@ -354,6 +372,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
           interactive={true}
           onAvatarClick={handleAvatarClick}
           avatarOverride={avatar}
+          isDarkMode={cardDarkMode}
         />
       </div>
 

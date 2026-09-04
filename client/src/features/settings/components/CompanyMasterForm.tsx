@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
   Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X,
@@ -90,7 +90,8 @@ export function CompanyMasterForm({
   onSave,
 }: CompanyMasterFormProps) {
   const [companies, setCompanies] = useState<CompanyRecordItem[]>(companiesList || []);
-  const [isNewMode, setIsNewMode] = useState<boolean>(isNew);
+  // Always start in New mode so the form opens blank (not showing saved data)
+  const [isNewMode, setIsNewMode] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(false);
 
@@ -135,11 +136,11 @@ export function CompanyMasterForm({
   const [formAddress1, setFormAddress1] = useState(isNew ? '' : selectedCompany?.addressLine1 || '');
   const [formAddress2, setFormAddress2] = useState(isNew ? '' : selectedCompany?.addressLine2 || '');
 
-  // Dependent Location State
-  const [formCountry, setFormCountry] = useState(isNew ? 'India' : selectedCompany?.country || 'India');
-  const [formState, setFormState] = useState(isNew ? 'Maharashtra' : selectedCompany?.state || 'Maharashtra');
-  const [formCity, setFormCity] = useState(isNew ? 'Thane' : selectedCompany?.city || 'Thane');
-  const [formZipCode, setFormZipCode] = useState(isNew ? '400708' : selectedCompany?.zipCode || '400708');
+  // Dependent Location State — start blank for new records
+  const [formCountry, setFormCountry] = useState(isNew ? '' : selectedCompany?.country || '');
+  const [formState, setFormState] = useState(isNew ? '' : selectedCompany?.state || '');
+  const [formCity, setFormCity] = useState(isNew ? '' : selectedCompany?.city || '');
+  const [formZipCode, setFormZipCode] = useState(isNew ? '' : selectedCompany?.zipCode || '');
 
   const [formPanTin, setFormPanTin] = useState(isNew ? '' : selectedCompany?.panTin || '');
   const [formContactNumber, setFormContactNumber] = useState(isNew ? '' : selectedCompany?.contactNumber || '');
@@ -174,10 +175,10 @@ export function CompanyMasterForm({
     setFormCode(`COM-${Math.floor(100 + Math.random() * 900)}`);
     setFormAddress1('');
     setFormAddress2('');
-    setFormCountry('India');
-    setFormState('Maharashtra');
-    setFormCity('Thane');
-    setFormZipCode('400708');
+    setFormCountry('');
+    setFormState('');
+    setFormCity('');
+    setFormZipCode('');
     setFormPanTin('');
     setFormContactNumber('');
     setFormEmail('');
@@ -382,9 +383,8 @@ export function CompanyMasterForm({
             status: c.status || 'Active',
           }));
           setCompanies(mapped);
-          if (mapped.length > 0) {
-            setSelectedId(prev => (prev && mapped.some(m => m.id === prev) ? prev : mapped[0].id));
-          }
+          // Stay in new-record mode after fetching — don't auto-select a saved record
+          // The user can click a company from the list to edit it
         }
       } catch (err) {
         console.warn('DB company fetch error:', err);
@@ -1032,7 +1032,7 @@ export function CompanyMasterForm({
                 className={cn(
                   'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
                   !formLoginPageLogoToggle
-                    ? 'bg-slate-200 dark:bg-slate-700 text-foreground'
+                    ? 'bg-muted dark:bg-slate-700 text-foreground'
                     : 'bg-background text-muted-foreground border-border hover:bg-accent'
                 )}
               >
@@ -1072,7 +1072,7 @@ export function CompanyMasterForm({
               className={cn(
                 'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
                 !formHasCredentials
-                  ? 'bg-slate-200 dark:bg-slate-700 text-foreground border-transparent'
+                  ? 'bg-muted dark:bg-slate-700 text-foreground border-transparent'
                   : 'bg-background text-muted-foreground border-border hover:bg-accent'
               )}
             >

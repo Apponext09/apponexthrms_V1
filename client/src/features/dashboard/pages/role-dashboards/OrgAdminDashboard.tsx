@@ -75,12 +75,22 @@ export function OrgAdminDashboard() {
 
   const companyInfo = dashboardData?.companyInfo;
   const companyName = companyInfo?.name || selectedCompanyName || user?.organizationName || 'Organization';
-  const primaryLocation = companyInfo?.location || user?.organizationLocation || 'Headquarters';
+  const primaryLocation = companyInfo?.location || user?.organizationLocation || 'Not Specified';
 
   const totalEmployees = dashboardData?.kpis?.totalHeadcount ?? 0;
   const totalDepartments = dashboardData?.kpis?.activeDepartments ?? 0;
   const totalLocations = dashboardData?.kpis?.officeLocations ?? 0;
-  const totalOfficers = dashboardData?.kpis?.reportingOfficers ?? 0;
+  const openJobsCount = dashboardData?.kpis?.openJobs ?? 0;
+  const monthlyPayrollVal = dashboardData?.kpis?.monthlyPayrollCost ?? 0;
+
+  const formattedPayrollCost = useMemo(() => {
+    if (isLoading) return '...';
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(monthlyPayrollVal);
+  }, [monthlyPayrollVal, isLoading]);
 
   const growthChartData = dashboardData?.growthTrend || [];
   const departmentBreakdown = dashboardData?.departmentBreakdown || [];
@@ -99,15 +109,9 @@ export function OrgAdminDashboard() {
   const kpiValues: Record<string, { value: string; icon: any; label: string; color?: string }> = {
     totalHeadcount: { label: 'Total Employee Count', value: isLoading ? '...' : String(totalEmployees), icon: Users },
     activeDepartments: { label: 'Active Departments', value: isLoading ? '...' : String(totalDepartments), icon: Building2 },
-    officeLocations: { label: 'Office Locations', value: isLoading ? '...' : String(totalLocations), icon: MapPin },
-    reportingOfficers: { label: 'Reporting Officers', value: isLoading ? '...' : String(totalOfficers), icon: ShieldCheck },
-    presentToday: { label: 'Present Today', value: isLoading ? '...' : String(Math.max(1, Math.round(totalEmployees * 0.92))), icon: UserCheck },
-    onLeaveToday: { label: 'On Leave Today', value: isLoading ? '...' : String(Math.max(0, Math.round(totalEmployees * 0.08))), icon: Palmtree },
-    pendingApprovals: { label: 'Pending Approvals', value: '4', icon: Clock },
-    openJobs: { label: 'Open Job Postings', value: '6', icon: Briefcase },
-    newHiresThisMonth: { label: 'New Hires (This Month)', value: '3', icon: UserPlus },
-    activeAssets: { label: 'Assigned Assets', value: '18', icon: Package },
-    monthlyPayrollCost: { label: 'Est. Monthly Payroll', value: '₹3,85,000', icon: Wallet },
+    officeLocations: { label: 'Office Branches', value: isLoading ? '...' : String(totalLocations), icon: MapPin },
+    openJobs: { label: 'Open Job Postings', value: isLoading ? '...' : String(openJobsCount), icon: Briefcase },
+    monthlyPayrollCost: { label: 'Est. Monthly Payroll', value: formattedPayrollCost, icon: Wallet },
   };
 
   // Filtered active KPIs
@@ -115,7 +119,7 @@ export function OrgAdminDashboard() {
     return (config.enabledKpiIds || [])
       .map((id) => kpiValues[id])
       .filter(Boolean);
-  }, [config.enabledKpiIds, isLoading, totalEmployees, totalDepartments, totalLocations, totalOfficers]);
+  }, [config.enabledKpiIds, isLoading, totalEmployees, totalDepartments, totalLocations, openJobsCount, formattedPayrollCost]);
 
   // Filtered active Quick Actions
   const activeQuickActions = useMemo(() => {
@@ -143,16 +147,7 @@ export function OrgAdminDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {config.showHeaderAddEmployee && (
-            <Button
-              size="sm"
-              onClick={() => navigate('/employees')}
-              className="h-9 rounded-lg px-3 text-xs font-semibold shadow-none cursor-pointer"
-            >
-              <UserPlus className="mr-1.5 size-3.5" />
-              Add Employee
-            </Button>
-          )}
+          
 
           {config.showHeaderAttendanceReport && (
             <Button

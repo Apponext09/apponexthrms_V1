@@ -48,6 +48,10 @@ export function initializeKnex(): Knex {
       password: env.DB_PASSWORD,
       database: env.DB_NAME,
       charset: 'utf8mb4',
+      // Return DATE/DATETIME columns as plain strings (e.g. '2026-09-04') instead of
+      // JS Date objects. This avoids mysql2's UTC-midnight conversion for DATE columns
+      // which caused a -5:30 shift for IST, showing Sept 4 as Sept 3.
+      dateStrings: true,
     },
     pool: {
       min: 2,

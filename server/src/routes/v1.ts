@@ -66,6 +66,7 @@ router.use('/expenses', expenseRoutes);
 router.use('/reimbursements', expenseRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/letters', lettersRouter);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
@@ -161,6 +162,7 @@ router.use('/superadmin', superAdminRoutes);
  * ⚠️ TEMPORARY: One-shot seed endpoint for super_admins table.
  * Remove after running!  POST /api/v1/seed-superadmin
  */
+
 router.post('/seed-superadmin', async (req: Request, res: Response) => {
   try {
     const { getKnex } = await import('../db/knex');

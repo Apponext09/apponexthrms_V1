@@ -4,9 +4,6 @@ import { apiClient } from '@/config/api';
 import { useAttendance, type BreakTypeOption } from '../hooks/useAttendance';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-
 import { useCompanies } from '@/features/settings/hooks/useCompanies';
 
 interface BreakLogRow {
@@ -100,7 +97,7 @@ export const BreakLogsPage: React.FC = () => {
     try {
       const [deptRes, empRes] = await Promise.all([
         apiClient.get('/settings/departments?pageSize=100').catch(() => ({ data: { data: [] } })),
-        apiClient.get('/employees?pageSize=200').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/employees?pageSize=200&is_ceo=0').catch(() => ({ data: { data: [] } })),
       ]);
 
       const deptList = (deptRes.data?.data || deptRes.data?.items || []).map((d: any) => ({
@@ -108,13 +105,21 @@ export const BreakLogsPage: React.FC = () => {
         name: d.name || d.department_name || d.departmentName || `Department #${d.department_id || d.id}`,
       })).filter((d: any) => d.id != null);
 
-      const empList = (empRes.data?.data || empRes.data?.items || []).map((e: any) => ({
-        id: e.employee_id ?? e.id,
-        name: e.first_name || e.firstName || e.lastName
-          ? `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim()
-          : (e.name || `Employee #${e.employee_id || e.id}`),
-        code: e.employee_code || e.employeeCode,
-      })).filter((e: any) => e.id != null);
+      const empList = (empRes.data?.data || empRes.data?.items || [])
+        .filter((e: any) => {
+          const isCeo = Boolean(
+            e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1 ||
+            e.accessRole === 'organization_admin' || e.access_role === 'organization_admin' || e.role === 'organization_admin'
+          );
+          return e.id != null && !isCeo;
+        })
+        .map((e: any) => ({
+          id: e.employee_id ?? e.id,
+          name: e.first_name || e.firstName || e.lastName
+            ? `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim()
+            : (e.name || `Employee #${e.employee_id || e.id}`),
+          code: e.employee_code || e.employeeCode,
+        }));
 
       setDepartments(deptList);
       setEmployees(empList);
@@ -171,16 +176,6 @@ export const BreakLogsPage: React.FC = () => {
 
   // Summary stats
   const totalMinutes = filteredRows.reduce((acc, r) => acc + (getRowDuration(r) || 0), 0);
-  const uniqueEmployees = new Set(filteredRows.map((r) => r.employeeId || r.employee_id)).size;
-  const totalSessions = filteredRows.length;
-
-  // Per-type breakdown for summary
-  const byType = filteredRows.reduce<Record<string, number>>((acc, r) => {
-    const type = getRowBreakType(r);
-    const mins = getRowDuration(r) || 0;
-    acc[type] = (acc[type] || 0) + mins;
-    return acc;
-  }, {});
 
   // Reset all filters
   const handleResetFilters = () => {
@@ -242,59 +237,6 @@ export const BreakLogsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border border-border/80 bg-card shadow-2xs">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Total Sessions</p>
-              <div className="text-2xl font-black text-foreground mt-1">{totalSessions}</div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{uniqueEmployees} employees</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 shrink-0">
-              <Coffee className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/80 bg-card shadow-2xs">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Total Break Time</p>
-              <div className="text-2xl font-black text-foreground mt-1">
-                {totalMinutes >= 60
-                  ? `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`
-                  : `${totalMinutes}m`}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Combined all types</p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-              <Clock className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border border-border/80 bg-card shadow-2xs">
-          <CardContent className="p-4">
-            <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider mb-2">By Break Type</p>
-            {Object.entries(byType).length === 0 ? (
-              <p className="text-xs text-muted-foreground">No data</p>
-            ) : (
-              <div className="space-y-1.5">
-                {Object.entries(byType).slice(0, 4).map(([type, mins]) => (
-                  <div key={type} className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-foreground flex items-center gap-1">
-                      <span>{breakTypeEmoji(type)}</span>
-                      <span className="truncate max-w-[120px]">{type}</span>
-                    </span>
-                    <span className="text-[11px] font-black text-amber-600">{mins}m</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Comprehensive Filter Bar */}
       <div className="bg-card border border-border/80 p-4 rounded-xl shadow-2xs space-y-4">

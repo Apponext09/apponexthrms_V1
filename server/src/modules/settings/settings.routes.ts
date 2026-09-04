@@ -20,6 +20,8 @@ import { MergeCodeController } from './controllers/MergeCodeController';
 import { NotificationTemplateSettingsController } from './controllers/NotificationTemplateSettingsController';
 import { EmployeeTypeController } from './controllers/EmployeeTypeController';
 import { DesignationService } from './services';
+import { EventController } from './controllers/EventController';
+import { IdCardTemplateController } from './controllers/IdCardTemplateController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
 
@@ -4223,13 +4225,17 @@ router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
 // ==========================================
 // EVENTS MASTER CRUD ROUTES
 // ==========================================
-import { EventController } from './controllers/EventController';
 const eventCtrl = new EventController();
+
+router.get('/events',        asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id',    asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events',       asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id',    asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
 
 // ==========================================
 // ID CARD DESIGNER & TEMPLATE CRUD ROUTES
 // ==========================================
-import { IdCardTemplateController } from './controllers/IdCardTemplateController';
 const idCardCtrl = new IdCardTemplateController();
 
 router.get('/id-card/templates', asyncHandler((req, res) => idCardCtrl.list(req, res)));

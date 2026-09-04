@@ -384,7 +384,7 @@ export default function AttendancePage() {
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
       const res = await apiClient.get('/attendance/history', {
-        params: { startDate, endDate, pageSize: 100 },
+        params: { startDate, endDate, pageSize: 500 },
       });
 
       if (res.data?.data) {

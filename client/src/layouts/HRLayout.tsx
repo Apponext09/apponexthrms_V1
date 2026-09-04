@@ -236,10 +236,36 @@ function SidebarNavContent({
                 const Icon = item.icon;
                 const hasSubItems = item.subItems && item.subItems.length > 0;
 
+                const checkActive = (href: string) => {
+                  if (pathname === href) return true;
+                  const exactMatchRoutes = [
+                    '/',
+                    '/dashboard',
+                    '/hr',
+                    '/hr/dashboard',
+                    '/attendance',
+                    '/hr/attendance',
+                    '/leaves',
+                    '/hr/leaves',
+                    '/payroll',
+                    '/hr/payroll',
+                    '/recruitment',
+                    '/hr/recruitment',
+                    '/performance',
+                    '/hr/performance',
+                    '/assets',
+                    '/hr/assets',
+                    '/expenses',
+                    '/hr/expenses',
+                  ];
+                  if (exactMatchRoutes.includes(href)) {
+                    return pathname === href;
+                  }
+                  return pathname.startsWith(href + '/');
+                };
+
                 if (hasSubItems) {
-                  const isSubActive = item.subItems.some((sub: any) =>
-                    pathname === sub.href || pathname.startsWith(sub.href + '/')
-                  );
+                  const isSubActive = item.subItems.some((sub: any) => checkActive(sub.href));
                   const isOpen = openDropdowns[item.href] ?? (isSubActive || true);
 
                   return (
@@ -270,7 +296,7 @@ function SidebarNavContent({
                         <div className="ml-3 mt-1 space-y-1 border-l border-border pl-3">
                           {item.subItems.map((sub: any) => {
                             const SubIcon = sub.icon;
-                            const active = pathname === sub.href || pathname.startsWith(sub.href + '/');
+                            const active = checkActive(sub.href);
                             return (
                               <NavLink
                                 key={sub.href}
@@ -294,7 +320,7 @@ function SidebarNavContent({
                   );
                 }
 
-                const active = pathname === item.href || pathname.startsWith(item.href + '/');
+                const active = checkActive(item.href);
                 return (
                   <NavLink
                     key={item.href}

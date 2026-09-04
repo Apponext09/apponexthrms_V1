@@ -83,11 +83,40 @@ export function EmployeeProfilePage() {
     );
   }
 
+  const empAny = employee as any;
+  const isTargetCeo = Boolean(
+    !isSelf && empAny && (
+      empAny.isCeo ||
+      empAny.is_ceo ||
+      empAny.accessRole === 'organization_admin' ||
+      (empAny.employeeCode || empAny.employee_code || '').startsWith('CEO-')
+    )
+  );
+
+  if (isTargetCeo) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 px-6 bg-card border border-border rounded-xl text-center space-y-3">
+        <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold">
+          <Shield className="w-6 h-6" />
+        </div>
+        <h3 className="text-base font-bold text-foreground">CEO Profile Access Restricted</h3>
+        <p className="text-xs text-muted-foreground max-w-sm">
+          Executive and CEO profiles are protected and cannot be viewed from the directory.
+        </p>
+        <Button size="sm" variant="outline" onClick={() => navigate('/employees')} className="h-8 text-xs cursor-pointer">
+          Back to Employee Directory
+        </Button>
+      </div>
+    );
+  }
+
   const fullName = [employee.firstName, employee.middleName, employee.lastName]
     .filter(Boolean)
     .join(' ');
   const initials = `${employee.firstName?.[0] || ''}${employee.lastName?.[0] || ''}`.toUpperCase();
-  const status = (employee.status || 'active').toLowerCase();
+  const rawStatus = (employee as any)?.employeeStatus || (employee as any)?.employee_status || employee?.status || 'active';
+  const status = String(rawStatus).toLowerCase().replace(/\s+/g, '_');
+  const displayStatus = String(rawStatus).charAt(0).toUpperCase() + String(rawStatus).slice(1);
   const roleLabel =
     employee.accessRole === 'hr_manager'
       ? 'HR Manager'
@@ -185,9 +214,9 @@ export function EmployeeProfilePage() {
 
             {/* Badges Strip */}
             <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className={`text-[11px] font-bold py-0 ${STATUS_STYLES[status] || STATUS_STYLES.active}`}>
+              <Badge variant="outline" className={`text-[11px] font-bold py-0 ${STATUS_STYLES[status] || (status === 'inactive' ? 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30' : STATUS_STYLES.active)}`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-current mr-1 inline-block" />
-                Status: {status.charAt(0).toUpperCase() + status.slice(1)}
+                Status: {displayStatus}
               </Badge>
               <Badge variant="secondary" className="text-[11px] font-semibold bg-primary/10 text-primary border-primary/20 py-0">
                 <Shield className="w-3 h-3 mr-1" /> Role: {roleLabel}

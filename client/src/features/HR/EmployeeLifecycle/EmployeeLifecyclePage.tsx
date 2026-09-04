@@ -154,9 +154,7 @@ export default function EmployeeLifecyclePage() {
   const fetchLifecycleData = async () => {
     try {
       setLoading(true);
-      const effectiveCompanyId = companyFilter === 'all'
-        ? 'all'
-        : (companyFilter || (selectedCompanyId ? String(selectedCompanyId) : undefined));
+      const effectiveCompanyId = selectedCompanyId ? String(selectedCompanyId) : (companyFilter && companyFilter !== 'all' ? companyFilter : undefined);
 
       const response = await lifecycleApi.getSummaries({
         search,
@@ -484,9 +482,16 @@ export default function EmployeeLifecyclePage() {
     || emp.lifecycleStatus === 'alumni'
   );
 
-  const cols = customConfig.tableColumns;
+  const cols = {
+    ...customConfig.tableColumns,
+    location: false,
+    lifecycleStage: false,
+    transfersCount: false,
+    reportingManager: false,
+  };
   const filters = customConfig.filters;
-  const onbCols = customConfig.onboardingColumns || {
+  const onbCols = {
+    ...(customConfig.onboardingColumns || {}),
     employeeNameAvatar: true,
     employeeCode: true,
     interviewer: true,
@@ -497,19 +502,20 @@ export default function EmployeeLifecyclePage() {
     welcomeKitStatus: true,
     documentsStatus: true,
     interviewScore: true,
-    lifecycleStage: true,
+    lifecycleStage: false,
     actions: true,
     actionEditOnboarding: true,
   };
 
-  const trfCols = customConfig.transferColumns || {
+  const trfCols = {
+    ...(customConfig.transferColumns || {}),
     employeeNameAvatar: true,
     employeeCode: true,
     department: true,
     designation: true,
-    location: true,
-    reportingManager: true,
-    transfersCount: true,
+    location: false,
+    reportingManager: false,
+    transfersCount: false,
     lastTransferDate: true,
     transferReason: true,
     actions: true,
@@ -517,7 +523,8 @@ export default function EmployeeLifecyclePage() {
     actionExecuteTransfer: true,
   };
 
-  const offbCols = customConfig.offboardingColumns || {
+  const offbCols = {
+    ...(customConfig.offboardingColumns || {}),
     employeeNameAvatar: true,
     employeeCode: true,
     department: true,
@@ -529,7 +536,7 @@ export default function EmployeeLifecyclePage() {
     exitInterviewer: true,
     assetsReturned: true,
     fnfStatus: true,
-    lifecycleStage: true,
+    lifecycleStage: false,
     actions: true,
     actionEditOffboarding: true,
   };
@@ -562,39 +569,7 @@ export default function EmployeeLifecyclePage() {
         </div>
       </div>
 
-      {/* METRIC CARDS GRID */}
-      {activeKpiList.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-          {activeKpiList.map((kpi) => {
-            const count = kpiValues[kpi.id] ?? 0;
-            return (
-              <Card key={kpi.id} className="border rounded-2xl shadow-xs bg-card hover:shadow-sm transition-shadow">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block truncate">
-                      {kpi.label}
-                    </span>
-                    <span className="text-2xl font-black text-foreground mt-0.5 block">{count}</span>
-                  </div>
-                  <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                    {kpi.icon === 'Users' && <Users className="w-5 h-5" />}
-                    {kpi.icon === 'UserPlus' && <UserPlus className="w-5 h-5" />}
-                    {kpi.icon === 'ArrowLeftRight' && <ArrowLeftRight className="w-5 h-5" />}
-                    {kpi.icon === 'UserMinus' && <UserMinus className="w-5 h-5" />}
-                    {kpi.icon === 'UserCheck' && <UserCheck className="w-5 h-5" />}
-                    {kpi.icon === 'Clock' && <Clock className="w-5 h-5" />}
-                    {kpi.icon === 'ShieldCheck' && <ShieldCheck className="w-5 h-5" />}
-                    {kpi.icon === 'FileCheck' && <FileCheck className="w-5 h-5" />}
-                    {kpi.icon === 'Building2' && <Building2 className="w-5 h-5" />}
-                    {kpi.icon === 'MapPin' && <MapPin className="w-5 h-5" />}
-                    {kpi.icon === 'Briefcase' && <Briefcase className="w-5 h-5" />}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+
 
       {/* ─── DEDICATED TOP LIFECYCLE TABS NAVIGATION ─── */}
       <Tabs value={mainViewTab} onValueChange={(val: any) => setMainViewTab(val)} className="w-full space-y-4">

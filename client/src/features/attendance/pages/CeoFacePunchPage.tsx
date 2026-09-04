@@ -330,7 +330,7 @@ export default function CeoFacePunchPage() {
             className="h-8 text-xs font-bold gap-1.5"
           >
             <CalendarCheck className="w-3.5 h-3.5 text-primary" />
-            My Attendance Report
+            CEO Punch Report
           </Button>
         </div>
       </div>

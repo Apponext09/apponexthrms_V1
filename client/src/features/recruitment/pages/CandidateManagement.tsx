@@ -753,7 +753,7 @@ export const CandidateManagement: React.FC = () => {
 
       {isCreating && (
         <CandidateFormModal
-          jobs={jobs}
+          jobs={activePublishedJobs}
           onClose={() => setIsCreating(false)}
           onSubmit={handleCreateCandidate}
         />

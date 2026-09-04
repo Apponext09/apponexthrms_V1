@@ -317,8 +317,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                 {renderAccordion('Company', 'mapped_companies', mappings.companies)}
                 {renderAccordion('Location', 'mapped_locations', mappings.locations)}
                 {renderAccordion('Department', 'mapped_departments', mappings.departments)}
-                {renderAccordion('General Shift', 'mapped_shifts', mappings.generalShifts, true)}
-                {renderAccordion('Roster Shift', 'mapped_shifts', mappings.rosterShifts, true)}
+                {renderAccordion('Shift', 'mapped_shifts', mappings.shifts, true)}
                 {renderAccordion('Grade', 'mapped_grades', mappings.grades)}
               </div>
 
