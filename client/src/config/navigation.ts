@@ -367,6 +367,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
+      { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes', badge: 'Builder' },
       { name: 'Company', href: '/masters?tab=company', icon: 'Building2' },
       { name: 'Location', href: '/masters?tab=location', icon: 'MapPin' },
       { name: 'Department', href: '/masters?tab=department', icon: 'Layers' },
@@ -414,6 +415,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
+      { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes' },
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {

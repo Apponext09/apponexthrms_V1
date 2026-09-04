@@ -31,6 +31,7 @@ import reportRoutes from '../modules/reports/reports.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
 import policyRoutes from '../modules/policy/policy.routes';
+import masterBuilderRoutes from '../modules/master-builder/masterBuilder.routes';
 
 const router = Router();
 
@@ -71,6 +72,7 @@ router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
 router.use('/policies', policyRoutes);
 router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
+router.use('/master-builder', masterBuilderRoutes);
 
 /**
  * Public Job Reference Routes (no auth required)
