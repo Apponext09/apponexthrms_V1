@@ -17,6 +17,7 @@ import {
   FileText, ExternalLink, FileSpreadsheet, Sparkles, Upload
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatApiError } from '@/lib/apiError';
 import { cn } from '@/lib/utils';
 import { downloadCsvFile } from '@/lib/downloadCsv';
 import { BulkCandidateImportModal } from '../components/BulkCandidateImportModal';
@@ -76,11 +77,10 @@ export const CandidateManagement: React.FC = () => {
   const createCandidate = useCreateCandidate();
   const updateCandidate = useUpdateCandidate(editingCandidate?.id || 0);
   const deleteCandidate = useDeleteCandidate();
-  const { data: jobsResponse } = useJobs();
+  const { data: jobsResponse } = useJobs({ pageSize: 500 });
   const queryClient = useQueryClient();
   
   // Table State
-  const [activeTab, setActiveTab] = useState<'all' | 'applied' | 'interview' | 'offer' | 'rejected'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -104,7 +104,6 @@ export const CandidateManagement: React.FC = () => {
     page: currentPage,
     pageSize: entriesPerPage,
     search: searchQuery,
-    status: activeTab === 'all' ? undefined : activeTab
   });
 
   const candidates = candidatesResponse?.data || [];
@@ -112,13 +111,9 @@ export const CandidateManagement: React.FC = () => {
 
   const activePublishedJobs = useMemo(() => {
     if (!jobs || !Array.isArray(jobs)) return [];
-    const todayStr = new Date().toISOString().substring(0, 10);
     return jobs.filter((job: any) => {
       const status = String(job.status || '').toLowerCase();
-      if (status === 'closed' || status === 'archived' || status === 'on_hold' || status === 'draft') return false;
-      const deadline = String(job.expiryDate || job.expiry_date || '').slice(0, 10);
-      if (deadline && deadline <= todayStr) return false;
-      if (String(job.jobCode || job.job_code || '').startsWith('JOB-')) return false;
+      if (status === 'closed' || status === 'archived') return false;
       return true;
     });
   }, [jobs]);
@@ -167,6 +162,7 @@ export const CandidateManagement: React.FC = () => {
       await updateCandidate.mutateAsync(formData);
       setEditingCandidate(null);
       toast.success('Candidate Updated Successfully');
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
       refetch();
     } catch (error: any) {
       console.error('Failed to update candidate:', error);
@@ -203,23 +199,23 @@ export const CandidateManagement: React.FC = () => {
       return;
     }
     apiClient.post('/recruitment/applications', {
-      candidateId,
+      candidateId: Number(candidateId),
       jobId: Number(selectedJobIdForLink),
-      appliedFromSource: 'Candidate Management',
-      applicationStatus: 'applied'
+      appliedFromSource: 'Candidate Management'
     })
     .then(res => {
       if (res.data?.success) {
         toast.success('Candidate successfully linked to Job!');
         setActiveLinkPopoverId(null);
         setSelectedJobIdForLink('');
+        queryClient.invalidateQueries({ queryKey: ['candidates'] });
       } else {
         toast.error(res.data?.message || 'Failed to link candidate');
       }
     })
     .catch(err => {
       console.error('Failed to create application', err);
-      toast.error('Failed to link candidate');
+      toast.error(formatApiError(err, 'Failed to link candidate'));
     });
   };
 
@@ -242,7 +238,6 @@ export const CandidateManagement: React.FC = () => {
           page: 1,
           pageSize: 1000,
           search: searchQuery || undefined,
-          status: activeTab === 'all' ? undefined : activeTab,
         },
       });
       const rows = res.data?.data || [];
@@ -251,7 +246,7 @@ export const CandidateManagement: React.FC = () => {
         return;
       }
       downloadCsvFile(
-        `candidate_management_${activeTab}_export.csv`,
+        `candidate_management_export.csv`,
         ['First Name', 'Last Name', 'Email', 'Phone', 'Status', 'Source', 'Company', 'Experience', 'ATS Score'],
         rows.map((c: any) => [
           c.firstName || c.first_name || '',
@@ -285,7 +280,7 @@ export const CandidateManagement: React.FC = () => {
       toast.success(`Candidate moved to ${status}`);
     } catch (err: any) {
       console.error('Failed to update candidate status', err);
-      toast.error(err?.response?.data?.error?.message || 'Failed to update candidate pipeline status');
+      toast.error(formatApiError(err, 'Failed to update candidate pipeline status'));
     }
   };
 
@@ -362,90 +357,34 @@ export const CandidateManagement: React.FC = () => {
 
       {/* ── Main Content Area ────────────────────────────────────────────────── */}
       <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-        {/* Toolbar: Segmented Tabs & Search Bar */}
-        <CardHeader className="p-5 border-b border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/60 flex-wrap">
-            <button
-              onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'all'
-                  ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              All Candidates
-            </button>
-            <button
-              onClick={() => { setActiveTab('applied'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'applied'
-                  ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              Applied
-            </button>
-            <button
-              onClick={() => { setActiveTab('interview'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'interview'
-                  ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              Interviewing
-            </button>
-            <button
-              onClick={() => { setActiveTab('offer'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'offer'
-                  ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Offered
-            </button>
-            <button
-              onClick={() => { setActiveTab('rejected'); setCurrentPage(1); }}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTab === 'rejected'
-                  ? 'bg-background text-foreground shadow-xs'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              Rejected
-            </button>
+        {/* Toolbar: Search Bar & Export */}
+        <CardHeader className="p-5 border-b border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search candidates..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 bg-background border-border text-xs rounded-xl h-9"
+            />
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative flex-1 md:w-64">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search candidates..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-background border-border text-xs rounded-xl h-9"
-              />
-            </div>
-
-            <Button
-              onClick={handleExport}
-              variant="outline"
-              size="sm"
-              className="text-xs font-bold gap-1.5 rounded-xl h-9 border-border hover:bg-muted shrink-0"
-            >
-              <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
-            </Button>
-          </div>
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            size="sm"
+            className="text-xs font-bold gap-1.5 rounded-xl h-9 border-border hover:bg-muted shrink-0"
+          >
+            <Download className="w-3.5 h-3.5 text-muted-foreground" /> Export CSV
+          </Button>
         </CardHeader>
 
         <CardContent className="p-0">
           {/* Table Container */}
-          <div className="overflow-x-auto w-full">
+          <div className="overflow-x-auto w-full min-h-[220px]">
             <table className="w-full text-sm text-left border-collapse min-w-[1000px] mrf-table">
               <thead className="bg-muted/50 text-muted-foreground border-b border-border/60 text-[11px] uppercase tracking-wider font-bold">
                 <tr>
@@ -540,22 +479,21 @@ export const CandidateManagement: React.FC = () => {
                           {item.phone && <div className="text-[10px] text-muted-foreground/80 mt-0.5">{item.phone}</div>}
                         </td>
                         <td className="py-3.5 px-5 text-center">
-                          <select
-                            value={['applied', 'screening', 'interview', 'offer', 'hired', 'rejected', 'dropped'].includes(statusStr) ? (statusStr === 'screening' ? 'applied' : statusStr === 'dropped' ? 'rejected' : statusStr) : 'applied'}
-                            onChange={(e) => handlePipelineStatusChange(item.id, statusStr, e.target.value)}
+                          <span
                             className={cn(
-                              "px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full border bg-transparent cursor-pointer",
-                              ['offer', 'hired'].includes(statusStr) ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30' :
-                              ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'text-rose-600 dark:text-rose-400 border-rose-500/30' :
-                              statusStr === 'interview' ? 'text-amber-600 dark:text-amber-400 border-amber-500/30' :
-                              'text-blue-600 dark:text-blue-400 border-blue-500/30'
+                              "inline-block px-2.5 py-0.5 text-[10px] uppercase font-bold tracking-wider rounded-full border",
+                              ['offer', 'hired'].includes(statusStr) ? 'text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10' :
+                              ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'text-rose-600 dark:text-rose-400 border-rose-500/30 bg-rose-500/10' :
+                              statusStr === 'interview' ? 'text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10' :
+                              'text-blue-600 dark:text-blue-400 border-blue-500/30 bg-blue-500/10'
                             )}
                           >
-                            <option value="applied" disabled={!canMovePipelineStatus(statusStr, 'applied')}>Applied</option>
-                            <option value="interview" disabled={!canMovePipelineStatus(statusStr, 'interview')}>Interview</option>
-                            <option value="offer" disabled={!canMovePipelineStatus(statusStr, 'offer')}>Offered</option>
-                            <option value="rejected" disabled={!canMovePipelineStatus(statusStr, 'rejected')}>Rejected</option>
-                          </select>
+                            {['applied', 'screening'].includes(statusStr) ? 'Applied' :
+                             statusStr === 'interview' ? 'Interview' :
+                             ['offer', 'hired'].includes(statusStr) ? 'Offered' :
+                             ['rejected', 'dropped', 'withdrawn'].includes(statusStr) ? 'Rejected' :
+                             (item.status || 'Applied')}
+                          </span>
                         </td>
 
                         {/* Dynamic Columns */}
@@ -629,68 +567,126 @@ export const CandidateManagement: React.FC = () => {
                           );
                         })}
 
-                        <td className="py-3.5 px-5 text-center relative">
-                          {/* Link to Job Button / Popover trigger */}
-                          <div 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveLinkPopoverId(prev => prev === item.id ? null : item.id);
-                              setSelectedJobIdForLink('');
-                            }}
-                            className="inline-flex items-center justify-center p-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary shadow-2xs cursor-pointer transition-colors"
-                            title="Link to Job"
-                          >
-                            <Link2 className="w-4 h-4" />
-                          </div>
+                        <td className="py-3.5 px-5 text-center">
+                          {/* Link to Job Button / Radix Popover with Portal */}
+                          {(() => {
+                            const rawApplied = item.applied_job_ids ?? item.appliedJobIds;
+                            const appliedJobIds: number[] = rawApplied
+                              ? String(rawApplied).split(',').map(Number).filter(Boolean)
+                              : (item.linked_job_id || item.linkedJobId ? [Number(item.linked_job_id || item.linkedJobId)] : []);
+                            
+                            const linkedJobId = item.linked_job_id || item.linkedJobId || item.job_id || item.jobId || (appliedJobIds.length > 0 ? appliedJobIds[0] : null);
 
-                          {/* Link to Job Popover */}
-                          {activeLinkPopoverId === item.id && (
-                            <div 
-                              onClick={(e) => e.stopPropagation()}
-                              className="absolute right-0 sm:left-auto top-10 bg-card border border-border rounded-xl shadow-2xl p-4 text-left z-50 min-w-[280px] max-w-[320px] text-foreground select-none animate-in fade-in zoom-in-95 duration-150"
-                            >
-                              <div className="flex items-center justify-between border-b border-border pb-2 mb-3">
-                                <h4 className="text-xs font-black text-foreground uppercase tracking-wider">Link Candidate to Job</h4>
-                                <button 
-                                  onClick={() => setActiveLinkPopoverId(null)}
-                                  className="text-muted-foreground hover:text-foreground text-xs"
+                            // Available dropdown jobs for this candidate (active jobs + any linked/applied job)
+                            const candidateDropdownJobs = (() => {
+                              const list = [...activePublishedJobs];
+                              if (linkedJobId && !list.some((j: any) => Number(j.id) === Number(linkedJobId))) {
+                                const matchedJob = jobs.find((j: any) => Number(j.id) === Number(linkedJobId));
+                                if (matchedJob) {
+                                  list.unshift(matchedJob);
+                                } else {
+                                  list.unshift({ id: linkedJobId, jobCode: 'JOB', jobTitle: 'Linked Opening' });
+                                }
+                              }
+                              return list;
+                            })();
+
+                            const isSelectedJobApplied = selectedJobIdForLink ? appliedJobIds.includes(Number(selectedJobIdForLink)) : false;
+
+                            return (
+                              <Popover
+                                open={activeLinkPopoverId === item.id}
+                                onOpenChange={(isOpen) => {
+                                  setActiveLinkPopoverId(isOpen ? item.id : null);
+                                  if (isOpen) {
+                                    const defaultJobId = linkedJobId 
+                                      ? String(linkedJobId) 
+                                      : (candidateDropdownJobs[0]?.id ? String(candidateDropdownJobs[0].id) : (activePublishedJobs[0]?.id ? String(activePublishedJobs[0].id) : ''));
+                                    setSelectedJobIdForLink(defaultJobId);
+                                  }
+                                }}
+                              >
+                                <PopoverTrigger asChild>
+                                  <button 
+                                    type="button"
+                                    className="inline-flex items-center justify-center p-1.5 rounded-xl bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary shadow-2xs cursor-pointer transition-colors"
+                                    title="Link to Job"
+                                  >
+                                    <Link2 className="w-4 h-4" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent 
+                                  align="end" 
+                                  side="bottom" 
+                                  sideOffset={8} 
+                                  className="w-80 p-4 bg-card border border-border rounded-2xl shadow-2xl z-[9999] text-foreground"
                                 >
-                                  ✕
-                                </button>
-                              </div>
-                              <div className="space-y-3">
-                                <div>
-                                  <label className="text-[11px] font-bold text-muted-foreground block mb-1">Target Job Opening</label>
-                                  <select
-                                    value={selectedJobIdForLink}
-                                    onChange={(e) => setSelectedJobIdForLink(e.target.value)}
-                                    className="w-full px-2.5 py-1.5 border border-border rounded-lg bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
-                                  >
-                                    <option value="">-- Choose Job --</option>
-                                    {activePublishedJobs.map((job: any) => (
-                                      <option key={job.id} value={job.id}>
-                                        {job.jobCode || job.job_code} - {job.jobTitle || job.job_title}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="flex items-center gap-2 pt-1">
-                                  <button
-                                    onClick={() => setActiveLinkPopoverId(null)}
-                                    className="flex-1 bg-muted hover:bg-muted/80 text-muted-foreground font-bold py-1.5 px-2 rounded-lg text-[11px] text-center cursor-pointer transition-colors"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={() => handleLinkToJob(item.id)}
-                                    className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-1.5 px-2 rounded-lg text-[11px] text-center cursor-pointer transition-colors uppercase tracking-wider"
-                                  >
-                                    Apply to Job
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                                  <div className="flex items-center justify-between border-b border-border pb-2.5 mb-3">
+                                    <h4 className="text-xs font-black text-foreground uppercase tracking-wider">Link Candidate to Job</h4>
+                                    <button 
+                                      type="button"
+                                      onClick={() => setActiveLinkPopoverId(null)}
+                                      className="text-muted-foreground hover:text-foreground text-xs p-1 rounded hover:bg-muted transition-colors cursor-pointer"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                  <div className="space-y-3">
+                                    <div>
+                                      <label className="text-[11px] font-bold text-muted-foreground block mb-1">Target Job Opening</label>
+                                      <select
+                                        value={selectedJobIdForLink}
+                                        onChange={(e) => setSelectedJobIdForLink(e.target.value)}
+                                        className="w-full px-3 py-2 border border-border rounded-xl bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs cursor-pointer"
+                                      >
+                                        {candidateDropdownJobs.length === 0 && (
+                                          <option value="">-- No published jobs available --</option>
+                                        )}
+                                        {candidateDropdownJobs.map((job: any) => {
+                                          const isApplied = appliedJobIds.includes(Number(job.id));
+                                          return (
+                                            <option key={job.id} value={String(job.id)}>
+                                              {job.jobCode || job.job_code || 'JOB'} - {job.jobTitle || job.job_title || 'Untitled'} {isApplied ? '✓ (Currently Applied)' : ''}
+                                            </option>
+                                          );
+                                        })}
+                                      </select>
+                                    </div>
+
+                                    {isSelectedJobApplied && (
+                                      <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold flex items-center gap-1.5">
+                                        <CheckCircle className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                        <span>Candidate is already linked & applied to this job.</span>
+                                      </div>
+                                    )}
+
+                                    <div className="flex items-center gap-2 pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setActiveLinkPopoverId(null)}
+                                        className="flex-1 bg-muted hover:bg-muted/80 text-muted-foreground font-bold py-2 px-2 rounded-xl text-[11px] text-center cursor-pointer transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isSelectedJobApplied || !selectedJobIdForLink}
+                                        onClick={() => handleLinkToJob(item.id)}
+                                        className={cn(
+                                          "flex-1 font-bold py-2 px-2 rounded-xl text-[11px] text-center transition-colors uppercase tracking-wider shadow-xs",
+                                          isSelectedJobApplied || !selectedJobIdForLink
+                                            ? "bg-muted text-muted-foreground cursor-not-allowed opacity-60"
+                                            : "bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
+                                        )}
+                                      >
+                                        {isSelectedJobApplied ? 'Already Linked' : 'Apply to Job'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
@@ -702,7 +698,7 @@ export const CandidateManagement: React.FC = () => {
 
           {/* Pagination Controls */}
           {candidates.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between p-4 border-t border-border/60 text-xs text-muted-foreground gap-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between p-4.5 border-t border-border/80 bg-muted/20 text-xs text-muted-foreground gap-3">
               <div className="font-medium">
                 Showing <span className="font-bold text-foreground">{totalEntries === 0 ? 0 : startIndex + 1}</span> to <span className="font-bold text-foreground">{Math.min(endIndex, totalEntries)}</span> of <span className="font-bold text-foreground">{totalEntries}</span> entries
               </div>
@@ -815,7 +811,26 @@ interface CandidateFormModalProps {
 }
 
 const pickValue = (...values: any[]) => values.find((v) => v !== undefined && v !== null && v !== '') ?? '';
-const toDateInputValue = (value: any) => (value ? String(value).slice(0, 10) : '');
+const toDateInputValue = (value: any) => {
+  if (!value) return '';
+  const str = String(value).trim();
+  if (!str) return '';
+  // If already pure YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // If it's an ISO timestamp with time component (e.g. "2026-02-13T18:30:00.000Z")
+  try {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {}
+  const match = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  return str.slice(0, 10);
+};
 
 const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubmit, initialData, jobs }) => {
   const existingResumeUrl = pickValue(initialData?.resumeUrl, initialData?.resume_url);
@@ -833,11 +848,11 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
     qualification: pickValue(initialData?.qualification),
     skills: pickValue(initialData?.skills),
     dateOfBirth: toDateInputValue(pickValue(initialData?.dateOfBirth, initialData?.dob, initialData?.date_of_birth)),
-    yearsOfExperience: initialData?.yearsOfExperience ?? initialData?.years_of_experience ?? 0,
+    yearsOfExperience: parseFloat(String(initialData?.yearsOfExperience ?? initialData?.years_of_experience ?? 0)) || 0,
     currentCompany: pickValue(initialData?.currentCompany, initialData?.current_company),
-    currentSalary: pickValue(initialData?.currentSalary, initialData?.current_salary),
-    expectedSalary: pickValue(initialData?.expectedSalary, initialData?.expected_salary),
-    noticePeriodDays: initialData?.noticePeriodDays ?? initialData?.notice_period_days ?? 0,
+    currentSalary: initialData?.currentSalary ?? initialData?.current_salary ? parseFloat(String(initialData.currentSalary ?? initialData.current_salary)) : '',
+    expectedSalary: initialData?.expectedSalary ?? initialData?.expected_salary ? parseFloat(String(initialData.expectedSalary ?? initialData.expected_salary)) : '',
+    noticePeriodDays: initialData?.noticePeriodDays ?? initialData?.notice_period_days ? parseInt(String(initialData.noticePeriodDays ?? initialData.notice_period_days), 10) : 0,
     linkedinUrl: pickValue(initialData?.linkedinUrl, initialData?.linkedin_url),
     portfolioUrl: pickValue(initialData?.portfolioUrl, initialData?.portfolio_url),
     source: pickValue(initialData?.source, 'direct_apply'),
@@ -866,7 +881,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
     setFormData(prev => ({
       ...prev,
       [name]: ['yearsOfExperience', 'noticePeriodDays', 'currentSalary', 'expectedSalary'].includes(name) 
-        ? (value ? parseFloat(value) : '') 
+        ? (value !== '' ? parseFloat(value) : '') 
         : value
     }));
   };
@@ -891,10 +906,28 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
           <form id="create-candidate-form" onSubmit={(e) => {
             e.preventDefault();
             
-            // Clean up empty fields to prevent Zod validation errors
+            // Clean up and cast typed fields to prevent Zod validation errors
             const payload: any = { ...formData };
-            if (payload.currentSalary === '') delete payload.currentSalary;
-            if (payload.expectedSalary === '') delete payload.expectedSalary;
+            if (payload.yearsOfExperience !== '' && payload.yearsOfExperience !== undefined && payload.yearsOfExperience !== null) {
+              payload.yearsOfExperience = Number(payload.yearsOfExperience);
+            } else {
+              payload.yearsOfExperience = 0;
+            }
+            if (payload.currentSalary !== '' && payload.currentSalary !== undefined && payload.currentSalary !== null) {
+              payload.currentSalary = Number(payload.currentSalary);
+            } else {
+              delete payload.currentSalary;
+            }
+            if (payload.expectedSalary !== '' && payload.expectedSalary !== undefined && payload.expectedSalary !== null) {
+              payload.expectedSalary = Number(payload.expectedSalary);
+            } else {
+              delete payload.expectedSalary;
+            }
+            if (payload.noticePeriodDays !== '' && payload.noticePeriodDays !== undefined && payload.noticePeriodDays !== null) {
+              payload.noticePeriodDays = Number(payload.noticePeriodDays);
+            } else {
+              delete payload.noticePeriodDays;
+            }
             if (payload.linkedinUrl === '') delete payload.linkedinUrl;
             if (payload.portfolioUrl === '') delete payload.portfolioUrl;
             if (payload.currentCompany === '') delete payload.currentCompany;
@@ -956,7 +989,14 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Date of Birth</label>
-                  <Input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
+                  <Input 
+                    type="date" 
+                    name="dateOfBirth" 
+                    value={formData.dateOfBirth} 
+                    onChange={handleChange} 
+                    max={new Date().toISOString().slice(0, 10)}
+                    className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" 
+                  />
                 </div>
               </div>
             </div>
@@ -1121,6 +1161,7 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
   const [newExp, setNewExp] = useState({ companyName: '', jobTitle: '', startDate: '', endDate: '', isCurrent: false, description: '' });
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState('resume');
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const fetchSkills = () => {
     apiClient.get(`/recruitment/candidates/${candidate.id}/skills`)
@@ -1165,8 +1206,9 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
       toast.success('Skill added');
       setNewSkill({ skillName: '', proficiency: 'intermediate', yearsOfExperience: '' });
       fetchSkills();
-    } catch {
-      toast.error('Failed to add skill');
+    } catch (err: any) {
+      console.error('Failed to add skill', err);
+      toast.error(formatApiError(err, 'Failed to add skill'));
     }
   };
 
@@ -1174,8 +1216,8 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
     try {
       await apiClient.delete(`/recruitment/candidates/${candidate.id}/skills/${id}`);
       fetchSkills();
-    } catch {
-      toast.error('Failed to delete skill');
+    } catch (err: any) {
+      toast.error(formatApiError(err, 'Failed to delete skill'));
     }
   };
 
@@ -1192,8 +1234,9 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
       toast.success('Education record added');
       setNewEdu({ degree: '', fieldOfStudy: '', institution: '', graduationYear: '' });
       fetchEducation();
-    } catch {
-      toast.error('Failed to add education record');
+    } catch (err: any) {
+      console.error('Failed to add education record', err);
+      toast.error(formatApiError(err, 'Failed to add education record'));
     }
   };
 
@@ -1201,8 +1244,8 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
     try {
       await apiClient.delete(`/recruitment/candidates/${candidate.id}/education/${id}`);
       fetchEducation();
-    } catch {
-      toast.error('Failed to delete education record');
+    } catch (err: any) {
+      toast.error(formatApiError(err, 'Failed to delete education record'));
     }
   };
 
@@ -1221,8 +1264,9 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
       toast.success('Experience record added');
       setNewExp({ companyName: '', jobTitle: '', startDate: '', endDate: '', isCurrent: false, description: '' });
       fetchExperience();
-    } catch {
-      toast.error('Failed to add experience record');
+    } catch (err: any) {
+      console.error('Failed to add experience record', err);
+      toast.error(formatApiError(err, 'Failed to add experience record'));
     }
   };
 
@@ -1230,8 +1274,8 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
     try {
       await apiClient.delete(`/recruitment/candidates/${candidate.id}/experience/${id}`);
       fetchExperience();
-    } catch {
-      toast.error('Failed to delete experience record');
+    } catch (err: any) {
+      toast.error(formatApiError(err, 'Failed to delete experience record'));
     }
   };
 
@@ -1247,9 +1291,11 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
       });
       toast.success('Document uploaded');
       setUploadFile(null);
+      setFileInputKey(k => k + 1);
       fetchDocuments();
-    } catch {
-      toast.error('Failed to upload document');
+    } catch (err: any) {
+      console.error('Failed to upload document', err);
+      toast.error(formatApiError(err, 'Failed to upload document'));
     }
   };
 
@@ -1257,8 +1303,8 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
     try {
       await apiClient.delete(`/recruitment/candidates/${candidate.id}/documents/${docId}`);
       fetchDocuments();
-    } catch {
-      toast.error('Failed to delete document');
+    } catch (err: any) {
+      toast.error(formatApiError(err, 'Failed to delete document'));
     }
   };
 
@@ -1300,8 +1346,16 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
                   <p className="font-medium text-slate-800">{candidate.phone || 'N/A'}</p>
                 </div>
                 <div>
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Date of Birth</p>
+                  <p className="font-medium text-slate-800">{toDateInputValue(candidate.dateOfBirth || candidate.dob || candidate.date_of_birth) || 'N/A'}</p>
+                </div>
+                <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Experience</p>
-                  <p className="font-medium text-slate-800">{candidate.years_of_experience || 0} years</p>
+                  <p className="font-medium text-slate-800">{candidate.years_of_experience || candidate.yearsOfExperience || 0} years</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Qualification</p>
+                  <p className="font-medium text-slate-800">{candidate.qualification || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Status</p>
@@ -1309,7 +1363,7 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Company</p>
-                  <p className="font-medium text-slate-800">{candidate.current_company || 'N/A'}</p>
+                  <p className="font-medium text-slate-800">{candidate.current_company || candidate.currentCompany || 'N/A'}</p>
                 </div>
               </div>
 
@@ -1358,18 +1412,34 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
 
               <div className="space-y-2 max-h-[220px] overflow-y-auto">
                 {skills.length === 0 ? <p className="text-xs text-slate-500 text-center">No skills added yet.</p> : (
-                  skills.map((s) => (
-                    <div key={s.id} className="flex justify-between items-center p-2 border rounded text-xs bg-slate-50">
-                      <div>
-                        <span className="font-semibold text-slate-800">{s.skill_name}</span>
-                        <span className="ml-2 text-slate-500 uppercase text-[10px] bg-slate-200 px-1.5 py-0.5 rounded">{s.proficiency}</span>
+                  skills.map((s) => {
+                    const skillName = s.skillName || s.skill_name || s.name || '';
+                    const proficiency = s.proficiency || s.proficiencyLevel || s.proficiency_level || 'intermediate';
+                    const yoe = s.yearsOfExperience ?? s.years_of_experience;
+                    return (
+                      <div key={s.id} className="flex justify-between items-center p-2.5 border border-slate-200 rounded-lg text-xs bg-slate-50">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-800">{skillName}</span>
+                          <span className="text-slate-600 uppercase text-[10px] bg-slate-200/80 font-bold px-2 py-0.5 rounded">
+                            {proficiency}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {yoe !== null && yoe !== undefined && yoe !== '' && (
+                            <span className="text-slate-600 font-medium">{yoe} yrs</span>
+                          )}
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteSkill(s.id)} 
+                            className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 transition-colors"
+                            title="Delete Skill"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        {s.years_of_experience && <span className="text-slate-600">{s.years_of_experience} yrs</span>}
-                        <button onClick={() => handleDeleteSkill(s.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1401,15 +1471,26 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
 
               <div className="space-y-2 max-h-[220px] overflow-y-auto">
                 {education.length === 0 ? <p className="text-xs text-slate-500 text-center">No education records added yet.</p> : (
-                  education.map((e) => (
-                    <div key={e.id} className="p-2 border rounded text-xs bg-slate-50 relative flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-slate-800">{e.degree} in {e.field_of_study || 'N/A'}</p>
-                        <p className="text-slate-500 text-[10px]">{e.institution || 'N/A'} {e.graduation_year ? `(${e.graduation_year})` : ''}</p>
+                  education.map((e) => {
+                    const fieldOfStudy = e.fieldOfStudy || e.field_of_study;
+                    const gradYear = e.graduationYear || e.graduation_year;
+                    return (
+                      <div key={e.id} className="p-2.5 border border-slate-200 rounded-lg text-xs bg-slate-50 relative flex justify-between items-start">
+                        <div>
+                          <p className="font-semibold text-slate-800">{e.degree} {fieldOfStudy ? `in ${fieldOfStudy}` : ''}</p>
+                          <p className="text-slate-500 text-[10px] mt-0.5">{e.institution || 'N/A'} {gradYear ? `(${gradYear})` : ''}</p>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => handleDeleteEdu(e.id)} 
+                          className="text-red-500 hover:text-red-700 mt-1 cursor-pointer p-1 rounded hover:bg-red-50 transition-colors"
+                          title="Delete Education"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => handleDeleteEdu(e.id)} className="text-red-500 hover:text-red-700 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1451,16 +1532,30 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
 
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {experience.length === 0 ? <p className="text-xs text-slate-500 text-center">No experience records added yet.</p> : (
-                  experience.map((e) => (
-                    <div key={e.id} className="p-2 border rounded text-xs bg-slate-50 relative flex justify-between items-start">
-                      <div>
-                        <p className="font-semibold text-slate-800">{e.job_title || 'N/A'} at {e.company_name}</p>
-                        <p className="text-slate-500 text-[10px]">{e.start_date} to {e.is_current ? 'Present' : e.end_date || 'N/A'}</p>
-                        {e.description && <p className="text-slate-600 mt-1 italic">{e.description}</p>}
+                  experience.map((e) => {
+                    const jobTitle = e.jobTitle || e.job_title || e.designation || '';
+                    const companyName = e.companyName || e.company_name || '';
+                    const startDate = e.startDate || e.start_date || '';
+                    const endDate = e.endDate || e.end_date || '';
+                    const isCurrent = Boolean(e.isCurrent ?? e.is_current ?? e.currentlyWorking ?? e.currently_working);
+                    return (
+                      <div key={e.id} className="p-2.5 border border-slate-200 rounded-lg text-xs bg-slate-50 relative flex justify-between items-start">
+                        <div>
+                          <p className="font-semibold text-slate-800">{jobTitle ? `${jobTitle} at ` : ''}{companyName}</p>
+                          <p className="text-slate-500 text-[10px] mt-0.5">{startDate || 'N/A'} to {isCurrent ? 'Present' : (endDate || 'N/A')}</p>
+                          {e.description && <p className="text-slate-600 mt-1 italic">{e.description}</p>}
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => handleDeleteExp(e.id)} 
+                          className="text-red-500 hover:text-red-700 mt-1 cursor-pointer p-1 rounded hover:bg-red-50 transition-colors"
+                          title="Delete Experience"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <button onClick={() => handleDeleteExp(e.id)} className="text-red-500 hover:text-red-700 mt-1"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1471,7 +1566,7 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
               <form onSubmit={handleFileUpload} className="flex gap-2 items-end">
                 <div className="flex-1">
                   <Label className="text-[10px]">Upload Document</Label>
-                  <Input type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="h-8 text-xs" />
+                  <Input key={fileInputKey} type="file" onChange={e => setUploadFile(e.target.files?.[0] || null)} className="h-8 text-xs" />
                 </div>
                 <div className="w-28">
                   <Label className="text-[10px]">Doc Type</Label>
@@ -1490,30 +1585,55 @@ const ViewCandidateModal: React.FC<ViewCandidateModalProps> = ({ candidate, onCl
 
               <div className="space-y-2 max-h-[220px] overflow-y-auto">
                 {documents.length === 0 ? <p className="text-xs text-slate-500 text-center">No documents uploaded yet.</p> : (
-                  documents.map((d) => (
-                    <div key={d.id} className="flex justify-between items-center p-2 border rounded text-xs bg-slate-50">
-                      <div>
-                        <span className="font-semibold text-slate-800">{d.file_name}</span>
-                        <span className="ml-2 text-slate-500 uppercase text-[10px] bg-slate-200 px-1.5 py-0.5 rounded">{d.document_type}</span>
+                  documents.map((d) => {
+                    const fileUrl = d.fileUrl || d.file_url || d.documentUrl || d.document_url || '';
+                    let fileName = d.fileName || d.file_name;
+                    if (!fileName && fileUrl) {
+                      const parts = fileUrl.split('/');
+                      fileName = parts[parts.length - 1]?.replace(/^\d+-/, '');
+                    }
+                    if (!fileName) fileName = 'Document';
+                    const docType = d.documentType || d.document_type || 'file';
+                    return (
+                      <div key={d.id} className="flex justify-between items-center p-2.5 border border-slate-200 rounded-lg text-xs bg-slate-50">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-slate-800">{fileName}</span>
+                          <span className="text-slate-600 uppercase text-[10px] bg-slate-200/80 font-bold px-2 py-0.5 rounded">{docType}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-7 text-[10px] cursor-pointer" 
+                            onClick={() => {
+                              if (!fileUrl) {
+                                toast.error('Document file URL not available');
+                                return;
+                              }
+                              if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('data:')) {
+                                window.open(fileUrl, '_blank');
+                                return;
+                              }
+                              const rawApiUrl = (import.meta as any).env.VITE_API_URL || `http://${window.location.hostname}:5000/api/v1`;
+                              const base = rawApiUrl.replace('/api/v1', '');
+                              const formattedPath = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
+                              window.open(`${base}${formattedPath}`, '_blank');
+                            }}
+                          >
+                            View
+                          </Button>
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteDoc(d.id)} 
+                            className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 transition-colors"
+                            title="Delete Document"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="h-7 text-[10px]" 
-                          onClick={() => {
-                            const rawApiUrl = (import.meta as any).env.VITE_API_URL || `http://${window.location.hostname}:5000/api/v1`;
-                            const base = rawApiUrl.replace('/api/v1', '');
-                            window.open(`${base}${d.file_url}`);
-                          }}
-                        >
-                          View
-                        </Button>
-                        <button onClick={() => handleDeleteDoc(d.id)} className="text-red-500 hover:text-red-700"><Trash2 className="w-3.5 h-3.5" /></button>
-
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

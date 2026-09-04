@@ -77,7 +77,13 @@ export class LeaveController {
       employment_type: (employee.employment_type || employee.employmentType || '').toString(),
       status: (employee.status || '').toString(),
       date_of_joining: employee.date_of_joining || employee.dateOfJoining,
+      date_of_birth: employee.date_of_birth || employee.dateOfBirth,
       date_of_confirmation: employee.date_of_confirmation || employee.dateOfConfirmation || employee.confirmation_date || employee.confirmationDate,
+      last_working_date: employee.last_working_date || employee.lastWorkingDate,
+      resignation_date: employee.resignation_date || employee.resignationDate,
+      sub_department_id: employee.sub_department_id || employee.subDepartmentId,
+      company_id: employee.company_id || employee.companyId,
+      organization_id: employee.organization_id || employee.organizationId,
     };
 
     // Robust overlap helper — matches the logic in LeaveService.checkEmploymentEligibility
@@ -576,7 +582,7 @@ export class LeaveController {
             id: empId || userRec.id,
             first_name: userRec.first_name,
             last_name: userRec.last_name,
-            gender: userRec.gender || 'male',
+            gender: userRec.gender || '',
             status: userRec.status || 'active',
             email: userRec.email,
           };
@@ -720,7 +726,7 @@ export class LeaveController {
         success: true,
         employee: employee ? {
           ...employee,
-          gender: (employee.gender || 'male').toLowerCase(),
+          gender: (employee.gender || '').toLowerCase(),
           status: employee.status || 'active',
           probationEndDate: employee.probation_end_date || employee.probationEndDate || null,
         } : null,
