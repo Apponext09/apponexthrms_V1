@@ -26,12 +26,22 @@ export interface QuickActionOption {
   category: string;
 }
 
+// ─── Fixed KPIs (always shown, not removable) ────────────────────────────────
+// These 4 appear in a permanent pinned row on the dashboard.
+export const FIXED_KPIS = [
+  { id: 'totalHeadcount', label: 'Total Employee Count', iconName: 'Users', path: '/employees' },
+  { id: 'activeDepartments', label: 'Active Departments', iconName: 'Building2', path: '/masters?tab=department' },
+  { id: 'officeLocations', label: 'Office Branches', iconName: 'MapPin', path: '/masters?tab=company' },
+  { id: 'monthlyPayrollCost', label: 'Est. Monthly Payroll', iconName: 'Wallet', path: '/payroll' },
+] as const;
+
+// ─── Optional KPIs (toggled from Customization tab) ──────────────────────────
 export const ALL_AVAILABLE_KPIS: KPIOption[] = [
-  { id: 'totalHeadcount', label: 'Total Employee Count', category: 'Core HR', iconName: 'Users', defaultEnabled: true, color: 'text-primary' },
-  { id: 'activeDepartments', label: 'Active Departments', category: 'Core HR', iconName: 'Building2', defaultEnabled: true, color: 'text-blue-500' },
-  { id: 'officeLocations', label: 'Office Branches', category: 'Core HR', iconName: 'MapPin', defaultEnabled: true, color: 'text-emerald-500' },
-  { id: 'openJobs', label: 'Open Job Postings', category: 'Recruitment', iconName: 'Briefcase', defaultEnabled: true, color: 'text-indigo-500' },
-  { id: 'monthlyPayrollCost', label: 'Est. Monthly Payroll', category: 'Finance', iconName: 'Wallet', defaultEnabled: true, color: 'text-emerald-600' },
+  { id: 'openJobs', label: 'Open Job Postings', category: 'Recruitment', iconName: 'Briefcase', defaultEnabled: false, color: 'text-indigo-500' },
+  { id: 'pendingApprovals', label: 'Pending Approvals', category: 'Workflow', iconName: 'Clock', defaultEnabled: false, color: 'text-amber-500' },
+  { id: 'newHires', label: 'New Hires', category: 'Core HR', iconName: 'UserPlus', defaultEnabled: false, color: 'text-emerald-500' },
+  { id: 'onLeaveToday', label: 'On Leave Today', category: 'Leaves', iconName: 'Palmtree', defaultEnabled: false, color: 'text-sky-500' },
+  { id: 'reportingOfficers', label: 'Reporting Officer', category: 'Core HR', iconName: 'UserCheck', defaultEnabled: false, color: 'text-violet-500' },
 ];
 
 export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
@@ -74,7 +84,7 @@ const DEFAULT_CONFIG: DashboardSectionsConfig = {
   showHeaderAttendanceReport: true,
   selectedReportId: 'attendance_reports',
   showKpiSection: true,
-  enabledKpiIds: ['totalHeadcount', 'activeDepartments', 'officeLocations', 'openJobs', 'monthlyPayrollCost'],
+  enabledKpiIds: [], // Optional KPIs — all off by default
   showGrowthTrendChart: true,
   showEntityDetails: true,
   showRecentRoster: true,
@@ -128,7 +138,7 @@ export const useDashboardCustomizationStore = create<DashboardCustomizationStore
         })),
     }),
     {
-      name: 'apponext_dashboard_customization_v1',
+      name: 'apponext_dashboard_customization_v2',
     }
   )
 );

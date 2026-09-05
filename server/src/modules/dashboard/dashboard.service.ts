@@ -17,6 +17,9 @@ export interface AdminDashboardStats {
     reportingOfficers: number;
     openJobs: number;
     monthlyPayrollCost: number;
+    pendingApprovals: number;
+    newHires: number;
+    onLeaveToday: number;
   };
   growthTrend: Array<{
     month: string;
@@ -141,11 +144,10 @@ export class AdminDashboardService {
       location = 'Not Specified';
     }
 
-    // 2. Query KPIs
-    // Total Active Employees
+    // Total Employees — NO status filter. Mirrors the employee directory exactly:
+    // the directory (BaseRepository.list) counts all non-deleted employees with no status restriction.
     let empQuery = db('employees')
-      .whereNull('deleted_at')
-      .whereIn('status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+      .whereNull('deleted_at');
 
     if (targetCompanyId) {
       empQuery = empQuery.where('company_id', targetCompanyId);
@@ -212,29 +214,111 @@ export class AdminDashboardService {
     const [officerRow] = await officerQuery.countDistinct('reporting_manager_id as count');
     const reportingOfficers = Number(officerRow?.count || 0);
 
-    // Open Job Postings
+    // ── Open Job Postings ─────────────────────────────────────────────────────
+    // Matches the "Open Positions" KPI on /recruitment/jobs:
+    // COUNT jobs WHERE status = 'published' (active open postings only).
     let openJobs = 0;
     try {
       const hasJobsTable = await db.schema.hasTable('jobs');
       if (hasJobsTable) {
         let openJobsQuery = db('jobs')
           .whereNull('deleted_at')
-          .whereIn('status', ['published', 'active', 'open']);
-        if (targetCompanyId) {
-          const hasCompanyIdCol = await db.schema.hasColumn('jobs', 'company_id');
-          if (hasCompanyIdCol) {
-            openJobsQuery = openJobsQuery.where('company_id', targetCompanyId);
-          } else {
-            openJobsQuery = openJobsQuery.where('organization_id', organizationId);
-          }
-        } else {
-          openJobsQuery = openJobsQuery.where('organization_id', organizationId);
-        }
+          .where('status', 'published'); // only 'published' = open on the jobs page
+        openJobsQuery = openJobsQuery.where('organization_id', organizationId);
         const [openJobsRow] = await openJobsQuery.count('* as count');
         openJobs = Number(openJobsRow?.count || 0);
       }
     } catch (err) {
       openJobs = 0;
+    }
+
+    // ── Pending Approvals (Approval Inbox total) ──────────────────────────────
+    // Matches the Approval Inbox count on /approvals/dashboard.
+    // Source: workflow_approvals (any pending-like status) + leave_applications (submitted/pending).
+    let pendingApprovals = 0;
+    try {
+      // workflow_approvals — any status that starts with 'Pending' or 'pending', or is 'submitted'
+      const [waRow] = await db('workflow_approvals')
+        .whereNull('deleted_at')
+        .where('organization_id', organizationId)
+        .where(function () {
+          this.where('status', 'like', 'Pending%')
+            .orWhere('status', 'like', 'pending%')
+            .orWhereIn('status', ['submitted', 'escalated']);
+        })
+        .count('* as count');
+      pendingApprovals += Number(waRow?.count || 0);
+
+      // leave_applications — submitted or any pending variant
+      let laQuery = db('leave_applications')
+        .whereNull('deleted_at')
+        .whereIn('status', ['submitted', 'pending', 'pending_manager', 'pending_hr', 'pending_hr_override', 'escalated']);
+      if (targetCompanyId) {
+        laQuery = laQuery.where('company_id', targetCompanyId);
+      } else {
+        laQuery = laQuery.where('organization_id', organizationId);
+      }
+      const [laRow] = await laQuery.count('* as count');
+      pendingApprovals += Number(laRow?.count || 0);
+    } catch (err) {
+      pendingApprovals = 0;
+    }
+
+    // ── New Hires (Total Offers) ──────────────────────────────────────────────
+    // Matches "Total Offers" KPI on /recruitment/offers OfferManagementPage.
+    // That page counts ALL offers with no status filter: allOffers.length.
+    let newHires = 0;
+    try {
+      const hasOffersTable = await db.schema.hasTable('offers');
+      if (hasOffersTable) {
+        const [offersRow] = await db('offers')
+          .whereNull('deleted_at')
+          .where('organization_id', organizationId)
+          .count('* as count');
+        newHires = Number(offersRow?.count || 0);
+      }
+    } catch (err) {
+      newHires = 0;
+    }
+
+    // ── On Leave Today (Approved leaves only) ─────────────────────────────────
+    // Count distinct employees with an APPROVED leave application that covers today.
+    // Status must be exactly 'approved' — no other statuses.
+    let onLeaveToday = 0;
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const hasLadTable = await db.schema.hasTable('leave_application_dates');
+      if (hasLadTable) {
+        // Precise: join leave_application_dates to get exact per-day granularity
+        let ladQuery = db('leave_applications as la')
+          .join('leave_application_dates as lad', 'lad.application_id', 'la.id')
+          .whereNull('la.deleted_at')
+          .where('la.status', 'approved')
+          .where('lad.leave_date', todayStr);
+        if (targetCompanyId) {
+          ladQuery = ladQuery.where('la.company_id', targetCompanyId);
+        } else {
+          ladQuery = ladQuery.where('la.organization_id', organizationId);
+        }
+        const [ladRow] = await ladQuery.countDistinct('la.employee_id as count');
+        onLeaveToday = Number(ladRow?.count || 0);
+      } else {
+        // Fallback: start_date <= today <= end_date, approved only
+        let ltQuery = db('leave_applications')
+          .whereNull('deleted_at')
+          .where('status', 'approved')
+          .where('start_date', '<=', todayStr)
+          .where('end_date', '>=', todayStr);
+        if (targetCompanyId) {
+          ltQuery = ltQuery.where('company_id', targetCompanyId);
+        } else {
+          ltQuery = ltQuery.where('organization_id', organizationId);
+        }
+        const [ltRow] = await ltQuery.countDistinct('employee_id as count');
+        onLeaveToday = Number(ltRow?.count || 0);
+      }
+    } catch (err) {
+      onLeaveToday = 0;
     }
 
     // Estimated Monthly Payroll
@@ -297,9 +381,10 @@ export class AdminDashboardService {
       const monthLabel = monthNames[targetMonthDate.getMonth()];
       const cutoffIso = targetMonthDate.toISOString().slice(0, 10);
 
+      // No status filter — count all non-deleted employees who joined on or before this month,
+      // exactly matching the employee directory's no-filter approach.
       let trendQuery = db('employees')
         .whereNull('deleted_at')
-        .whereIn('status', ['active', 'probation', 'confirmed', 'onboarding', 'Active'])
         .where(function () {
           this.where('date_of_joining', '<=', cutoffIso)
             .orWhere(function () {
@@ -321,11 +406,11 @@ export class AdminDashboardService {
     }
 
     // 4. Department Breakdown with Employee Counts
+    // No status filter — count all non-deleted employees per department
     let deptBreakdownQuery = db('departments')
       .leftJoin('employees', function () {
         this.on('departments.id', '=', 'employees.current_department_id')
-          .andOnNull('employees.deleted_at')
-          .andOnIn('employees.status', ['active', 'probation', 'confirmed', 'onboarding', 'Active']);
+          .andOnNull('employees.deleted_at');
       })
       .select('departments.id', 'departments.name')
       .count('employees.id as emp_count')
@@ -400,6 +485,9 @@ export class AdminDashboardService {
         reportingOfficers,
         openJobs,
         monthlyPayrollCost,
+        pendingApprovals,
+        newHires,
+        onLeaveToday,
       },
       growthTrend,
       departmentBreakdown,
