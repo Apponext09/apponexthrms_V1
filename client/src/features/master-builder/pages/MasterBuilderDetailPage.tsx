@@ -124,9 +124,11 @@ export function MasterBuilderDetailPage() {
     if (!master?.fields) return [];
     if (!fieldSearch.trim()) return master.fields;
     const q = fieldSearch.toLowerCase().trim();
-    return master.fields.filter(
-      (f) => f.fieldName.toLowerCase().includes(q) || f.fieldKey.toLowerCase().includes(q)
-    );
+    return master.fields.filter((f: any) => {
+      const name = f.fieldName || f.field_name || '';
+      const key = f.fieldKey || f.field_key || '';
+      return name.toLowerCase().includes(q) || key.toLowerCase().includes(q);
+    });
   }, [master?.fields, fieldSearch]);
 
   const selectedField = useMemo(() => {
@@ -135,24 +137,24 @@ export function MasterBuilderDetailPage() {
   }, [master?.fields, selectedFieldId]);
 
   const lookupFields = useMemo(() => {
-    return (master?.fields || []).filter((f) => f.fieldType === 'lookup');
+    return (master?.fields || []).filter((f: any) => (f.fieldType || f.field_type) === 'lookup');
   }, [master?.fields]);
 
   // Field Handlers
-  const handleOpenFieldModal = (field?: CustomMasterField) => {
+  const handleOpenFieldModal = (field?: any) => {
     if (field) {
       setEditingField(field);
-      setFName(field.fieldName);
-      setFKey(field.fieldKey);
-      setFType(field.fieldType);
-      setFRequired(field.isRequired);
-      setFUnique(field.isUnique);
-      setFShowInTable(field.showInTable);
-      setFHelpText(field.helpText || '');
+      setFName(field.fieldName || field.field_name || '');
+      setFKey(field.fieldKey || field.field_key || '');
+      setFType(field.fieldType || field.field_type || 'text');
+      setFRequired(Boolean(field.isRequired ?? field.is_required));
+      setFUnique(Boolean(field.isUnique ?? field.is_unique));
+      setFShowInTable(Boolean(field.showInTable ?? field.show_in_table ?? true));
+      setFHelpText(field.helpText || field.help_text || '');
       setFPlaceholder(field.placeholder || '');
-      setFDefaultValue(field.defaultValue || '');
-      setFChoiceListId(field.choiceListId);
-      setFLookupMasterId(field.lookupMasterId);
+      setFDefaultValue(field.defaultValue || field.default_value || '');
+      setFChoiceListId(field.choiceListId || field.choice_list_id);
+      setFLookupMasterId(field.lookupMasterId || field.lookup_master_id);
     } else {
       setEditingField(null);
       setFName('');
@@ -210,6 +212,7 @@ export function MasterBuilderDetailPage() {
       }
       setIsFieldModalOpen(false);
       loadMaster();
+      window.dispatchEvent(new CustomEvent('custom_masters_updated'));
     } catch (err: any) {
       alert(err?.response?.data?.message || err.message || 'Failed to save field');
     }
@@ -220,6 +223,7 @@ export function MasterBuilderDetailPage() {
       try {
         await masterBuilderApi.deleteField(masterId, fieldId);
         loadMaster();
+        window.dispatchEvent(new CustomEvent('custom_masters_updated'));
       } catch (err) {
         alert('Failed to delete field');
       }
@@ -487,8 +491,13 @@ export function MasterBuilderDetailPage() {
                   No fields configured yet. Click "+ Add field" to create custom fields.
                 </div>
               ) : (
-                filteredFields.map((field) => {
+                filteredFields.map((field: any) => {
                   const isSelected = field.id === selectedField?.id;
+                  const fieldName = field.fieldName || field.field_name || 'Untitled Field';
+                  const fieldKey = field.fieldKey || field.field_key || '';
+                  const fieldType = field.fieldType || field.field_type || 'text';
+                  const isRequired = Boolean(field.isRequired ?? field.is_required);
+                  const isUnique = Boolean(field.isUnique ?? field.is_unique);
                   return (
                     <div
                       key={field.id}
@@ -500,26 +509,26 @@ export function MasterBuilderDetailPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-foreground text-sm group-hover:text-primary transition-colors">
-                            {field.fieldName}
+                            {fieldName}
                           </span>
                           <span className="font-mono text-xs text-muted-foreground">
-                            {field.fieldKey}
+                            {fieldKey}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                           <Badge variant="outline" className="text-[11px] font-normal capitalize">
-                            {field.fieldType === 'text'
+                            {fieldType === 'text'
                               ? 'Text Field'
-                              : field.fieldType === 'choice'
+                              : fieldType === 'choice'
                               ? 'Choice / Dropdown'
-                              : field.fieldType}
+                              : fieldType}
                           </Badge>
-                          {field.isRequired && (
+                          {isRequired && (
                             <Badge variant="secondary" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">
                               Required
                             </Badge>
                           )}
-                          {field.isUnique && (
+                          {isUnique && (
                             <Badge variant="secondary" className="text-[11px] bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300">
                               Unique
                             </Badge>
@@ -539,7 +548,7 @@ export function MasterBuilderDetailPage() {
                               <Edit2 className="h-4 w-4 mr-2" /> Edit Field
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleDeleteField(field.id, field.fieldName)}
+                              onClick={() => handleDeleteField(field.id, fieldName)}
                               className="text-destructive"
                             >
                               <Trash2 className="h-4 w-4 mr-2" /> Delete Field
@@ -558,7 +567,9 @@ export function MasterBuilderDetailPage() {
               {selectedField ? (
                 <>
                   <div className="flex items-center justify-between pb-4 border-b border-border">
-                    <h3 className="text-lg font-bold text-primary">{selectedField.fieldName}</h3>
+                    <h3 className="text-lg font-bold text-primary">
+                      {(selectedField as any).fieldName || (selectedField as any).field_name || 'Untitled Field'}
+                    </h3>
                     <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200">
                       Live
                     </Badge>
@@ -567,20 +578,24 @@ export function MasterBuilderDetailPage() {
                   <div className="space-y-4 text-sm">
                     <div>
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Key</span>
-                      <span className="font-mono text-sm text-foreground mt-0.5 block">{selectedField.fieldKey}</span>
+                      <span className="font-mono text-sm text-foreground mt-0.5 block">
+                        {(selectedField as any).fieldKey || (selectedField as any).field_key || '-'}
+                      </span>
                     </div>
 
                     <div>
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Type</span>
                       <span className="text-sm font-medium text-foreground mt-0.5 capitalize block">
-                        {selectedField.fieldType === 'text' ? 'Text Field' : selectedField.fieldType}
+                        {((selectedField as any).fieldType || (selectedField as any).field_type) === 'text'
+                          ? 'Text Field'
+                          : ((selectedField as any).fieldType || (selectedField as any).field_type)}
                       </span>
                     </div>
 
                     <div>
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Behaviour</span>
                       <div className="flex flex-wrap gap-1.5">
-                        {selectedField.isRequired ? (
+                        {Boolean((selectedField as any).isRequired ?? (selectedField as any).is_required) ? (
                           <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
                             Required
                           </Badge>
@@ -589,12 +604,12 @@ export function MasterBuilderDetailPage() {
                             Optional
                           </Badge>
                         )}
-                        {selectedField.showInTable && (
+                        {Boolean((selectedField as any).showInTable ?? (selectedField as any).show_in_table ?? true) && (
                           <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
                             Shown in table
                           </Badge>
                         )}
-                        {selectedField.isUnique && (
+                        {Boolean((selectedField as any).isUnique ?? (selectedField as any).is_unique) && (
                           <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
                             Unique
                           </Badge>
@@ -602,10 +617,12 @@ export function MasterBuilderDetailPage() {
                       </div>
                     </div>
 
-                    {selectedField.helpText && (
+                    {((selectedField as any).helpText || (selectedField as any).help_text) && (
                       <div>
                         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Help shown on the form</span>
-                        <span className="text-sm text-foreground mt-0.5 block">{selectedField.helpText}</span>
+                        <span className="text-sm text-foreground mt-0.5 block">
+                          {(selectedField as any).helpText || (selectedField as any).help_text}
+                        </span>
                       </div>
                     )}
                   </div>

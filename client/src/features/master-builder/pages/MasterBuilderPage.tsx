@@ -168,6 +168,7 @@ export function MasterBuilderPage() {
         });
         setIsCreateMasterOpen(false);
         loadData();
+        window.dispatchEvent(new CustomEvent('custom_masters_updated'));
       } else {
         const created = await masterBuilderApi.createMaster({
           name: formName.trim(),
@@ -179,6 +180,7 @@ export function MasterBuilderPage() {
           hasHistory: formHasHistory,
         });
         setIsCreateMasterOpen(false);
+        window.dispatchEvent(new CustomEvent('custom_masters_updated'));
         if (created?.id) {
           navigate(`/masters/builder/${created.id}`);
         } else {
@@ -197,6 +199,7 @@ export function MasterBuilderPage() {
       try {
         await masterBuilderApi.deleteMaster(id);
         loadData();
+        window.dispatchEvent(new CustomEvent('custom_masters_updated'));
       } catch (err) {
         alert('Failed to delete master');
       }

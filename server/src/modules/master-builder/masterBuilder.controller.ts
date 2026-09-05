@@ -32,8 +32,11 @@ export class MasterBuilderController {
 
   async getMaster(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
-    const masterId = Number(req.params.id);
-    const master = await masterBuilderService.getMasterById(orgId, masterId);
+    const param = req.params.id;
+    const masterId = Number(param);
+    const master = isNaN(masterId)
+      ? await masterBuilderService.getMasterByCode(orgId, param)
+      : await masterBuilderService.getMasterById(orgId, masterId);
     if (!master) {
       return res.status(404).json({ success: false, error: 'Master not found' });
     }

@@ -50,6 +50,7 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
   const [master, setMaster] = useState<CustomMasterDetail | null>(null);
   const [records, setRecords] = useState<DynamicRecordItem[]>([]);
   const [choiceLists, setChoiceLists] = useState<ChoiceListItem[]>([]);
+  const [lookupRecordsMap, setLookupRecordsMap] = useState<Record<number, DynamicRecordItem[]>>({});
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +91,26 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
         setMaster(mDetail);
         setChoiceLists(cLists);
         setRecords(recRes.records || []);
+
+        // Load lookup records if master has lookup fields
+        const lookupFields = (mDetail?.fields || []).filter(
+          (f: any) => (f.fieldType || f.field_type) === 'lookup' && (f.lookupMasterId || f.lookup_master_id)
+        );
+        if (lookupFields.length > 0) {
+          const map: Record<number, DynamicRecordItem[]> = {};
+          await Promise.all(
+            lookupFields.map(async (lf: any) => {
+              const targetId = lf.lookupMasterId || lf.lookup_master_id;
+              if (targetId) {
+                try {
+                  const res = await masterBuilderApi.getRecords(targetId, { limit: 100 });
+                  map[targetId] = res.records || [];
+                } catch (e) {}
+              }
+            })
+          );
+          setLookupRecordsMap(map);
+        }
       }
     } catch (err) {
       console.error('Failed to load dynamic master records:', err);
@@ -100,6 +121,15 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
 
   useEffect(() => {
     loadMasterAndRecords();
+
+    const handleCustomMastersUpdated = () => {
+      loadMasterAndRecords();
+    };
+
+    window.addEventListener('custom_masters_updated', handleCustomMastersUpdated);
+    return () => {
+      window.removeEventListener('custom_masters_updated', handleCustomMastersUpdated);
+    };
   }, [masterIdOrCode]);
 
   // Display columns from master fields
@@ -145,18 +175,43 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
       setRecordStatus('Active');
       const initial: Record<string, any> = {};
       master?.fields?.forEach((f) => {
-        initial[f.fieldKey] = f.defaultValue || (f.fieldType === 'boolean' ? false : '');
+        const key = f.fieldKey || (f as any).field_key;
+        initial[key] = f.defaultValue || (f.fieldType === 'boolean' ? false : '');
       });
       setFormData(initial);
     }
     setIsRecordModalOpen(true);
   };
 
-  const handleFieldChange = (key: string, value: any) => {
-    setFormData((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+  const handleFieldChange = (key: string, value: any, field?: any) => {
+    setFormData((prev) => {
+      const next = {
+        ...prev,
+        [key]: value,
+      };
+
+      // Check if this field triggers any autofill mappings
+      if (field && (field.fieldType || field.field_type) === 'lookup') {
+        const lookupMasterId = field.lookupMasterId || field.lookup_master_id;
+        const lookupRecords = lookupRecordsMap[lookupMasterId] || [];
+        const selectedRec = lookupRecords.find(
+          (r) => r.recordCode === value || String(r.id) === String(value) || r.data?.name === value || (r.data && Object.values(r.data).includes(value))
+        );
+
+        if (selectedRec && master?.autofillMappings?.length) {
+          master.autofillMappings.forEach((af) => {
+            if (af.isActive && af.lookupFieldKey === key) {
+              const sourceVal = selectedRec.data?.[af.sourceFieldKey] ?? (selectedRec as any)[af.sourceFieldKey];
+              if (sourceVal !== undefined && sourceVal !== null) {
+                next[af.targetFieldKey] = sourceVal;
+              }
+            }
+          });
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleSaveRecord = async (e: React.FormEvent) => {
@@ -324,9 +379,9 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
             <thead>
               <tr className="border-b border-border/80 bg-primary/5 text-xs uppercase tracking-wider text-muted-foreground font-bold">
                 <th className="py-3 px-4 font-bold text-foreground/80">Code</th>
-                {displayColumns.map((col) => (
+                {displayColumns.map((col: any) => (
                   <th key={col.id} className="py-3 px-4 font-bold text-foreground/80">
-                    {col.fieldName}
+                    {col.fieldName || col.field_name}
                   </th>
                 ))}
                 <th className="py-3 px-4 font-bold text-foreground/80">Status</th>
@@ -347,11 +402,13 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
                       {rec.recordCode || `REC-${rec.id}`}
                     </td>
 
-                    {displayColumns.map((col) => {
-                      const val = rec.data?.[col.fieldKey];
+                    {displayColumns.map((col: any) => {
+                      const colKey = col.fieldKey || col.field_key;
+                      const colType = col.fieldType || col.field_type;
+                      const val = rec.data?.[colKey];
                       return (
                         <td key={col.id} className="py-3 px-4 text-foreground text-sm">
-                          {col.fieldType === 'boolean' ? (
+                          {colType === 'boolean' ? (
                             val ? (
                               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                             ) : (
@@ -500,77 +557,106 @@ export function DynamicMasterView({ masterIdOrCode, onManageFields }: DynamicMas
 
             {/* Dynamic fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {master.fields?.map((field) => {
-                const val = formData[field.fieldKey] ?? '';
-                const choiceList = choiceLists.find((cl) => cl.id === field.choiceListId);
+              {master.fields?.filter((f: any) => f.isActive !== false).map((field: any) => {
+                const fieldName = field.fieldName || field.field_name || 'Field';
+                const fieldKey = field.fieldKey || field.field_key || '';
+                const fieldType = field.fieldType || field.field_type || 'text';
+                const isRequired = Boolean(field.isRequired ?? field.is_required);
+                const helpText = field.helpText || field.help_text;
+                const placeholder = field.placeholder;
+                const choiceListId = field.choiceListId || field.choice_list_id;
+
+                const val = formData[fieldKey] ?? '';
+                const choiceList = choiceLists.find((cl) => cl.id === choiceListId);
 
                 return (
                   <div
                     key={field.id}
-                    className={`space-y-1.5 ${field.fieldType === 'textarea' ? 'sm:col-span-2' : ''}`}
+                    className={`space-y-1.5 ${fieldType === 'textarea' ? 'sm:col-span-2' : ''}`}
                   >
                     <label className="text-xs font-semibold text-foreground flex items-center justify-between">
                       <span className="flex items-center gap-1">
-                        {field.fieldName}
-                        {field.isRequired && <span className="text-destructive">*</span>}
+                        {fieldName}
+                        {isRequired && <span className="text-destructive">*</span>}
                       </span>
-                      {field.helpText && (
-                        <span className="text-[11px] text-muted-foreground font-normal" title={field.helpText}>
-                          {field.helpText}
+                      {helpText && (
+                        <span className="text-[11px] text-muted-foreground font-normal" title={helpText}>
+                          {helpText}
                         </span>
                       )}
                     </label>
 
-                    {field.fieldType === 'choice' && choiceList ? (
+                    {fieldType === 'choice' && choiceList ? (
                       <select
                         value={val}
-                        onChange={(e) => handleFieldChange(field.fieldKey, e.target.value)}
-                        required={field.isRequired}
+                        onChange={(e) => handleFieldChange(fieldKey, e.target.value, field)}
+                        required={isRequired}
                         className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                       >
-                        <option value="">-- Select {field.fieldName} --</option>
+                        <option value="">-- Select {fieldName} --</option>
                         {choiceList.options?.map((opt, i) => (
                           <option key={i} value={opt.value}>
                             {opt.label}
                           </option>
                         ))}
                       </select>
-                    ) : field.fieldType === 'textarea' ? (
+                    ) : fieldType === 'lookup' ? (
+                      <select
+                        value={val}
+                        onChange={(e) => handleFieldChange(fieldKey, e.target.value, field)}
+                        required={isRequired}
+                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">-- Select {fieldName} --</option>
+                        {(() => {
+                          const lookupId = Number(field.lookupMasterId || field.lookup_master_id);
+                          const lRecords: DynamicRecordItem[] = (lookupId && lookupRecordsMap[lookupId]) || [];
+                          return lRecords.map((lr: DynamicRecordItem) => {
+                            const label = lr.data?.name || lr.data?.title || lr.recordCode || `Record #${lr.id}`;
+                            return (
+                              <option key={lr.id} value={label}>
+                                {label} {lr.recordCode ? `(${lr.recordCode})` : ''}
+                              </option>
+                            );
+                          });
+                        })()}
+                      </select>
+                    ) : fieldType === 'textarea' ? (
                       <textarea
                         value={val}
-                        onChange={(e) => handleFieldChange(field.fieldKey, e.target.value)}
-                        placeholder={field.placeholder || `Enter ${field.fieldName}`}
-                        required={field.isRequired}
+                        onChange={(e) => handleFieldChange(fieldKey, e.target.value, field)}
+                        placeholder={placeholder || `Enter ${fieldName}`}
+                        required={isRequired}
                         rows={3}
                         className="w-full p-2.5 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
                       />
-                    ) : field.fieldType === 'boolean' ? (
+                    ) : fieldType === 'boolean' ? (
                       <div className="flex items-center gap-2 pt-2">
                         <input
                           type="checkbox"
                           checked={Boolean(val)}
-                          onChange={(e) => handleFieldChange(field.fieldKey, e.target.checked)}
+                          onChange={(e) => handleFieldChange(fieldKey, e.target.checked, field)}
                           className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
                         />
-                        <span className="text-xs text-foreground font-medium">Enable {field.fieldName}</span>
+                        <span className="text-xs text-foreground font-medium">Enable {fieldName}</span>
                       </div>
                     ) : (
                       <Input
                         type={
-                          field.fieldType === 'number'
+                          fieldType === 'number'
                             ? 'number'
-                            : field.fieldType === 'email'
+                            : fieldType === 'email'
                             ? 'email'
-                            : field.fieldType === 'date'
+                            : fieldType === 'date'
                             ? 'date'
-                            : field.fieldType === 'phone'
+                            : fieldType === 'phone'
                             ? 'tel'
                             : 'text'
                         }
                         value={val}
-                        onChange={(e) => handleFieldChange(field.fieldKey, e.target.value)}
-                        placeholder={field.placeholder || `Enter ${field.fieldName}`}
-                        required={field.isRequired}
+                        onChange={(e) => handleFieldChange(fieldKey, e.target.value, field)}
+                        placeholder={placeholder || `Enter ${fieldName}`}
+                        required={isRequired}
                         className="h-10 text-sm"
                       />
                     )}

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
+import { masterBuilderApi } from '@/features/master-builder/api/masterBuilderApi';
 import hrmsLogo from '@/assests/hrms.png';
 
 interface SidebarProps {
@@ -47,19 +48,54 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
   // Get role-filtered navigation on mount and when roles/features/modules change
   useEffect(() => {
-    const refreshSections = () => {
-      const sections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
-      setVisibleSections(sections);
-      expandSectionContainingRoute(location.pathname, sections);
+    let isMounted = true;
+    const refreshSections = async () => {
+      const baseSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
+      try {
+        const customMasters = await masterBuilderApi.getMasters();
+        if (!isMounted) return;
+        if (customMasters && customMasters.length > 0) {
+          const updated = baseSections.map((sec) => {
+            if (sec.id === 'masters') {
+              const existingHrefs = new Set(sec.items.map((i) => i.href.toLowerCase()));
+              const customNavItems = customMasters
+                .filter((cm) => !existingHrefs.has(`/masters?tab=${cm.code}`.toLowerCase()) && !existingHrefs.has(`/masters/${cm.code}`.toLowerCase()))
+                .map((cm) => ({
+                  name: cm.name,
+                  href: `/masters?tab=${cm.code}`,
+                  icon: cm.icon || 'Boxes',
+                  badge: 'Custom',
+                }));
+              return {
+                ...sec,
+                items: [...sec.items, ...customNavItems],
+              };
+            }
+            return sec;
+          });
+          setVisibleSections(updated);
+          expandSectionContainingRoute(location.pathname, updated);
+          return;
+        }
+      } catch (err) {
+        // Fallback to base sections if API fails
+      }
+      if (isMounted) {
+        setVisibleSections(baseSections);
+        expandSectionContainingRoute(location.pathname, baseSections);
+      }
     };
 
     refreshSections();
 
     window.addEventListener('apponext_modules_updated', refreshSections);
+    window.addEventListener('custom_masters_updated', refreshSections);
     window.addEventListener('storage', refreshSections);
 
     return () => {
+      isMounted = false;
       window.removeEventListener('apponext_modules_updated', refreshSections);
+      window.removeEventListener('custom_masters_updated', refreshSections);
       window.removeEventListener('storage', refreshSections);
     };
   }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, location.pathname]);
