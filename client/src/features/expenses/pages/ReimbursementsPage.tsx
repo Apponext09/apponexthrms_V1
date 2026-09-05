@@ -47,13 +47,17 @@ export const ReimbursementsPage: React.FC = () => {
 
   const handleProcessPayment = async () => {
     if (!selectedClaim) return;
+    if (paymentMethod !== 'cash' && !paymentReference.trim()) {
+      alert('Transaction Reference Number / UTR is mandatory for non-cash payments.');
+      return;
+    }
     try {
       setSubmitting(true);
       await expenseApi.processReimbursement(selectedClaim.id, {
         paymentDate,
         paidAmount,
         paymentMethod,
-        paymentReference
+        paymentReference: paymentReference.trim() || undefined
       });
       setSelectedClaim(null);
       fetchPayoutQueue();
@@ -106,7 +110,7 @@ export const ReimbursementsPage: React.FC = () => {
                   const fName = claim.firstName || claim.first_name || '';
                   const lName = claim.lastName || claim.last_name || '';
                   const empCode = claim.employeeCode || claim.employee_code || '';
-                  const dept = claim.departmentName || claim.department_name || 'General';
+                  const dept = claim.departmentName || claim.department_name || '';
                   const cNum = claim.claimNumber || claim.claim_number || `EXP-${claim.id}`;
                   const appAt = claim.approvedAt || claim.approved_at;
                   const totApproved = Number(claim.totalApprovedAmount ?? claim.total_approved_amount ?? claim.totalClaimedAmount ?? claim.total_claimed_amount ?? 0);
@@ -207,17 +211,19 @@ export const ReimbursementsPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                 >
                   <option value="bank_transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
-                  <option value="manual">Manual Payment (Cash / Cheque)</option>
+                  <option value="online">Online Transfer / UPI</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="cash">Cash</option>
                 </select>
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Transaction Reference Number / UTR *
+                  Transaction Reference Number / UTR {paymentMethod === 'cash' ? '(Optional for Cash)' : '*'}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. UTR982347239"
+                  placeholder={paymentMethod === 'cash' ? 'Optional cash receipt ref...' : 'e.g. UTR982347239 or IMPS ref'}
                   value={paymentReference}
                   onChange={(e) => setPaymentReference(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"

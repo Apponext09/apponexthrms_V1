@@ -162,7 +162,7 @@ export const ExpenseDashboardPage: React.FC = () => {
           </div>
           <div className="mt-4">
             <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {kpis.paymentPending || 0}
+              ₹{(kpis.paymentPending || 0).toLocaleString('en-IN')}
             </div>
             <p className="text-xs text-slate-500 mt-1">Awaiting disbursal</p>
           </div>

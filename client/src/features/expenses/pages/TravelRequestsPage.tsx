@@ -1,20 +1,85 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { expenseApi, TravelRequest } from '../api/expenseApi';
+import { apiClient } from '@/config/api';
 import { useAuthStore } from '../../auth/store/authStore';
 import {
   Compass,
   Plus,
-  Calendar,
-  MapPin,
+  Search,
+  Filter,
+  X,
   CheckCircle,
+  XCircle,
   Clock,
-  XCircle
+  ChevronRight,
+  Building2,
+  User,
+  ShieldCheck
 } from 'lucide-react';
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+const PORTAL_BADGE: Record<string, { label: string; cls: string }> = {
+  employee:  { label: 'Employee Portal',  cls: 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300' },
+  team_lead: { label: 'Team Lead Portal', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' },
+  manager:   { label: 'Manager Portal',   cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' },
+  hr:        { label: 'HR Portal',        cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' },
+  admin:     { label: 'Admin Portal',     cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+};
+
+const STATUS_BADGE: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+  pending_level_1:  { label: 'Manager Approval',  cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',     icon: <Clock className="w-3 h-3" /> },
+  pending_level_2:  { label: 'HR / L2 Approval',  cls: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300', icon: <Clock className="w-3 h-3" /> },
+  pending_level_3:  { label: 'CEO / L3 Approval', cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300', icon: <Clock className="w-3 h-3" /> },
+  pending_finance:  { label: 'Finance Queue',      cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',         icon: <ShieldCheck className="w-3 h-3" /> },
+  pending_manager:  { label: 'Manager Approval',   cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',     icon: <Clock className="w-3 h-3" /> },
+  pending:          { label: 'Pending Approval',   cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',     icon: <Clock className="w-3 h-3" /> },
+  approved:         { label: 'Approved',           cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300', icon: <CheckCircle className="w-3 h-3" /> },
+  rejected:         { label: 'Rejected',           cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',         icon: <XCircle className="w-3 h-3" /> },
+};
+
+function getStatusBadge(status: string, approverRole?: string) {
+  const key = (status || '').toLowerCase();
+  const cfg = STATUS_BADGE[key] || { label: approverRole || status, cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', icon: <Clock className="w-3 h-3" /> };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap ${cfg.cls}`}>
+      {cfg.icon}{cfg.label}
+    </span>
+  );
+}
+
+function getPortalBadge(role?: string) {
+  const key = (role || 'employee').toLowerCase();
+  const cfg = PORTAL_BADGE[key] || PORTAL_BADGE.employee;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function isPendingApproval(status: string) {
+  return /^pending/.test(status);
+}
+
+interface Toast { type: 'success' | 'error'; message: string }
+
+// ─── component ───────────────────────────────────────────────────────────────
 
 export const TravelRequestsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<TravelRequest[]>([]);
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [rejectModalId, setRejectModalId] = useState<number | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('');
 
   // Form State
   const [fromLocation, setFromLocation] = useState('');
@@ -32,113 +97,188 @@ export const TravelRequestsPage: React.FC = () => {
   const path = window.location.pathname.toLowerCase();
 
   const isManagement =
-    userRoles.some((r: string) => ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(r.toLowerCase())) ||
-    ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(singleRole) ||
+    userRoles.some((r: string) => ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head', 'finance', 'finance_manager'].includes(r.toLowerCase())) ||
+    ['manager', 'team_lead', 'hr', 'hr_manager', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head', 'finance', 'finance_manager'].includes(singleRole) ||
     path.startsWith('/manager') ||
     path.startsWith('/team-lead') ||
     path.startsWith('/hr') ||
-    path.startsWith('/admin');
+    path.startsWith('/admin') ||
+    path.startsWith('/dashboard');
 
-  const fetchTravelRequests = async () => {
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const fetchDepartments = async () => {
+    try {
+      const res = await apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: [] }));
+      const depts = (res?.data?.data || res?.data || []).map((d: any) => ({ id: Number(d.id), name: d.name || '' })).filter((d: any) => d.id);
+      setDepartments(depts);
+    } catch { /* ignore */ }
+  };
+
+  const fetchTravelRequests = useCallback(async () => {
     try {
       setLoading(true);
-      // For managers/HR/CEO/Admin: fetch all employee travel requests across org/team
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
-      const res = await expenseApi.getTravelRequests(empId);
+      const params: Record<string, any> = {};
+      if (empId) params.employeeId = empId;
+      if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+      if (departmentFilter) params.departmentId = Number(departmentFilter);
+      if (search.trim()) params.search = search.trim();
+      const res = await expenseApi.getTravelRequests(params);
       setRequests(res || []);
     } catch (err) {
       console.error('Failed to load travel requests:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [isManagement, user, statusFilter, departmentFilter, search]);
 
-  useEffect(() => {
-    fetchTravelRequests();
-  }, [user]);
+  useEffect(() => { fetchDepartments(); }, []);
+  useEffect(() => { fetchTravelRequests(); }, [fetchTravelRequests]);
 
   const handleCreateRequest = async () => {
     if (!fromLocation.trim() || !toLocation.trim() || !purpose.trim()) {
-      alert('Please fill in all required travel fields.');
+      setToast({ type: 'error', message: 'Please fill in all required fields (From, To, Purpose).' });
       return;
     }
     try {
       setSubmitting(true);
-      await expenseApi.createTravelRequest({
-        fromLocation,
-        toLocation,
-        purpose,
-        startDate,
-        endDate,
-        estimatedBudget
-      });
+      await expenseApi.createTravelRequest({ fromLocation, toLocation, purpose, startDate, endDate, estimatedBudget });
       setIsModalOpen(false);
+      setFromLocation(''); setToLocation(''); setPurpose(''); setEstimatedBudget(0);
+      setToast({ type: 'success', message: 'Travel request submitted and sent for approval.' });
       fetchTravelRequests();
-      setFromLocation('');
-      setToLocation('');
-      setPurpose('');
-      setEstimatedBudget(0);
     } catch (err: any) {
-      alert(err.message || 'Failed to submit travel request');
+      setToast({ type: 'error', message: err.message || 'Failed to submit travel request.' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleStatusUpdate = async (id: number, status: string) => {
+  const handleApprove = async (id: number) => {
     try {
-      await expenseApi.updateTravelRequestStatus(id, status);
+      setActionLoading(id);
+      await expenseApi.updateTravelRequestStatus(id, 'approve');
+      setToast({ type: 'success', message: 'Travel request approved and advanced to next stage.' });
       fetchTravelRequests();
     } catch (err: any) {
-      alert(err.message || 'Status update failed');
+      setToast({ type: 'error', message: err.message || 'Failed to approve.' });
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const base = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap';
-    switch (status) {
-      case 'approved':
-        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Approved</span>;
-      case 'pending_finance':
-        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
-      case 'rejected':
-        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
-      default:
-        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>Pending</span>;
+  const handleReject = async () => {
+    if (!rejectModalId) return;
+    if (!rejectReason.trim()) {
+      setToast({ type: 'error', message: 'Please provide a rejection reason.' });
+      return;
+    }
+    try {
+      setActionLoading(rejectModalId);
+      await expenseApi.updateTravelRequestStatus(rejectModalId, 'rejected', rejectReason);
+      setToast({ type: 'success', message: 'Travel request rejected.' });
+      setRejectModalId(null);
+      setRejectReason('');
+      fetchTravelRequests();
+    } catch (err: any) {
+      setToast({ type: 'error', message: err.message || 'Failed to reject.' });
+    } finally {
+      setActionLoading(null);
     }
   };
+
+  const currentEmpId = Number(user?.employeeId || (user as any)?.employee_id || 0);
+  const currentUserId = Number(user?.id || 0);
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-5 max-w-7xl mx-auto">
+
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-[200] flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all max-w-sm ${toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/80 dark:border-emerald-700 dark:text-emerald-300' : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/80 dark:border-rose-700 dark:text-rose-300'}`}>
+          {toast.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+          <span className="flex-1">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="opacity-60 hover:opacity-100"><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Compass className="w-6 h-6 text-blue-600" />
-            Travel Management Requests
+            Travel Requests
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Submit official business travel pre-approvals and estimated travel budgets
+            Multi-level pre-approval for official business travel
           </p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-all"
         >
-          <Plus className="w-4 h-4" />
-          Create Travel Request
+          <Plus className="w-4 h-4" /> Create Travel Request
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by name, request #, location..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">All Statuses</option>
+          <option value="pending">Pending Approval</option>
+          <option value="pending_finance">Finance Queue</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+        {isManagement && (
+          <select
+            value={departmentFilter}
+            onChange={e => setDepartmentFilter(e.target.value)}
+            className="px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Departments</option>
+            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        )}
+        {(search || statusFilter !== 'all' || departmentFilter) && (
+          <button
+            onClick={() => { setSearch(''); setStatusFilter('all'); setDepartmentFilter(''); }}
+            className="flex items-center gap-1 px-2.5 py-2 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg"
+          >
+            <X className="w-3 h-3" /> Clear
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading travel requests...</div>
+          <div className="p-10 text-center text-sm text-slate-500 dark:text-slate-400">Loading travel requests...</div>
         ) : requests.length === 0 ? (
-          <div className="p-12 text-center flex flex-col items-center justify-center">
+          <div className="p-14 text-center flex flex-col items-center justify-center">
             <Compass className="w-12 h-12 text-slate-300 dark:text-slate-700 mb-3" />
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">No Travel Requests Found</h3>
-            <p className="text-xs text-slate-500 max-w-sm mt-1">
-              Create a pre-approved travel request before booking flights or requesting advances.
-            </p>
+            <p className="text-xs text-slate-500 max-w-sm mt-1">Create a pre-approved travel request before booking or requesting advances.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -146,11 +286,11 @@ export const TravelRequestsPage: React.FC = () => {
               <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
                 <tr>
                   <th className="py-3.5 px-4">Request #</th>
-                  <th className="py-3.5 px-4">Employee</th>
+                  <th className="py-3.5 px-4">Submitted By</th>
                   <th className="py-3.5 px-4">From → To</th>
                   <th className="py-3.5 px-4">Dates</th>
-                  <th className="py-3.5 px-4">Estimated Budget</th>
-                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4">Budget</th>
+                  <th className="py-3.5 px-4">Current Stage</th>
                   {isManagement && <th className="py-3.5 px-4 text-right">Actions</th>}
                 </tr>
               </thead>
@@ -160,73 +300,81 @@ export const TravelRequestsPage: React.FC = () => {
                   const reqNum = tr.requestNumber || tr.request_number || `TRV-${tr.id}`;
                   const fName = tr.firstName || tr.first_name || '';
                   const lName = tr.lastName || tr.last_name || '';
-                  const dept = tr.departmentName || tr.department_name || 'General';
+                  const dept = tr.departmentName || tr.department_name || '';
+                  const code = tr.employeeCode || tr.employee_code || '';
                   const fromLoc = tr.fromLocation || tr.from_location || '';
                   const toLoc = tr.toLocation || tr.to_location || '';
                   const sDate = tr.startDate || tr.start_date;
                   const eDate = tr.endDate || tr.end_date;
                   const budget = Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0);
-
-                  const formattedStartDate = sDate ? new Date(sDate).toLocaleDateString() : 'N/A';
-                  const formattedEndDate = eDate ? new Date(eDate).toLocaleDateString() : 'N/A';
-
-                  const currentEmpId = Number(user?.employeeId || (user as any)?.employee_id || 0);
-                  const currentUserId = Number(user?.id || 0);
-                  const currentUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim().toLowerCase();
-                  const currentUserEmail = (user?.email || '').toLowerCase();
+                  const role = tr.submittedByRole || tr.submitted_by_role || 'employee';
+                  const approverRole = tr.currentApproverRole || tr.current_approver_role;
+                  const status = String(tr.status || 'pending');
+                  const rejReason = tr.rejectionReason || tr.rejection_reason;
 
                   const reqEmpId = Number(tr.employeeId || tr.employee_id || 0);
-                  const reqUserId = Number(tr.userId || tr.user_id || 0);
-                  const reqEmpName = `${fName} ${lName}`.trim().toLowerCase();
-                  const reqEmail = (tr.email || '').toLowerCase();
-
+                  const reqUserId = Number(tr.userId || tr.user_id || tr.submittedByUserId || tr.submitted_by_user_id || 0);
                   const isOwnRequest =
                     (currentEmpId > 0 && reqEmpId > 0 && currentEmpId === reqEmpId) ||
                     (currentUserId > 0 && reqUserId > 0 && currentUserId === reqUserId) ||
-                    (currentUserId > 0 && reqEmpId > 0 && currentUserId === reqEmpId) ||
-                    (!!reqEmail && reqEmail === currentUserEmail) ||
-                    (!!reqEmpName && !!currentUserName && reqEmpName === currentUserName);
+                    (currentUserId > 0 && reqEmpId > 0 && currentUserId === reqEmpId);
+
+                  const canAct = isManagement && !isOwnRequest && isPendingApproval(status);
 
                   return (
                     <tr key={tr.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">
-                        {reqNum}
-                      </td>
+                      <td className="py-3.5 px-4 font-mono font-semibold text-slate-900 dark:text-white">{reqNum}</td>
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-slate-900 dark:text-white">
                           {fName || lName ? `${fName} ${lName}`.trim() : 'Employee'}
                         </div>
-                        <div className="text-[11px] text-slate-500">{dept}</div>
+                        {dept && <div className="text-[11px] text-slate-500 flex items-center gap-1"><Building2 className="w-3 h-3" />{dept}</div>}
+                        {code && <div className="text-[10px] text-slate-400">{code}</div>}
+                        <div className="mt-1">{getPortalBadge(role)}</div>
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-800 dark:text-slate-200">
-                        {fromLoc} → {toLoc}
-                        <span className="block text-[11px] text-slate-400 font-normal">{tr.purpose}</span>
+                        {fromLoc} <ChevronRight className="w-3 h-3 inline text-slate-400" /> {toLoc}
+                        <span className="block text-[11px] text-slate-400 font-normal mt-0.5 max-w-[200px] line-clamp-2">{tr.purpose}</span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
-                        {formattedStartDate} - {formattedEndDate}
+                      <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                        {sDate ? new Date(sDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : 'N/A'}
+                        {' – '}
+                        {eDate ? new Date(eDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{budget.toLocaleString('en-IN')}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">{getStatusBadge(tr.status)}</td>
-                      <td className="py-3.5 px-4 text-right">
-                        {tr.status === 'pending' && !isOwnRequest && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => handleStatusUpdate(tr.id, 'approved')}
-                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-semibold"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleStatusUpdate(tr.id, 'rejected')}
-                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-semibold"
-                            >
-                              Reject
-                            </button>
-                          </div>
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">₹{budget.toLocaleString('en-IN')}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {getStatusBadge(status, approverRole)}
+                        {status === 'rejected' && rejReason && (
+                          <div className="text-[10px] text-rose-500 mt-1 max-w-[140px] line-clamp-1" title={rejReason}>↳ {rejReason}</div>
+                        )}
+                        {approverRole && !['approved', 'rejected'].includes(status) && (
+                          <div className="text-[10px] text-slate-400 mt-0.5">Next: {approverRole}</div>
                         )}
                       </td>
+                      {isManagement && (
+                        <td className="py-3.5 px-4 text-right">
+                          {canAct ? (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleApprove(tr.id)}
+                                disabled={actionLoading === tr.id}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded text-[11px] font-semibold transition-all"
+                              >
+                                {actionLoading === tr.id ? '...' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => { setRejectModalId(tr.id); setRejectReason(''); }}
+                                disabled={actionLoading === tr.id}
+                                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded text-[11px] font-semibold transition-all"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -236,90 +384,83 @@ export const TravelRequestsPage: React.FC = () => {
         )}
       </div>
 
+      {/* REJECT MODAL */}
+      {rejectModalId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-rose-500" /> Reject Travel Request
+            </h2>
+            <div className="text-xs">
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason for Rejection *</label>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                placeholder="State the reason for rejecting this travel request..."
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button onClick={() => setRejectModalId(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
+              <button
+                onClick={handleReject}
+                disabled={actionLoading !== null}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm"
+              >
+                {actionLoading !== null ? 'Rejecting...' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CREATE MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[92dvh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-auto p-4 sm:p-6 space-y-4">
             <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white shrink-0">Create Travel Request</h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 -mt-2">
+              Request will be routed through the configured approval workflow (Manager → Finance).
+            </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs overflow-y-auto flex-1 pr-1">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">From Location *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Mumbai"
-                  value={fromLocation}
-                  onChange={(e) => setFromLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
+                <input type="text" placeholder="e.g. Mumbai" value={fromLocation} onChange={e => setFromLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">To Location *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Bengaluru"
-                  value={toLocation}
-                  onChange={(e) => setToLocation(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
+                <input type="text" placeholder="e.g. Bengaluru" value={toLocation} onChange={e => setToLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Start Date *</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">End Date *</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Estimated Budget (₹)</label>
-                <input
-                  type="number"
-                  placeholder="e.g. 25000"
-                  value={estimatedBudget}
-                  onChange={(e) => setEstimatedBudget(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                />
+                <input type="number" min={0} placeholder="e.g. 25000" value={estimatedBudget} onChange={e => setEstimatedBudget(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Purpose of Travel *</label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g. Client Annual Strategy Meeting & Product Pitch"
-                  value={purpose}
-                  onChange={(e) => setPurpose(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
+                <textarea rows={3} placeholder="e.g. Client Annual Strategy Meeting & Product Pitch" value={purpose} onChange={e => setPurpose(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={submitting}
-                onClick={handleCreateRequest}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm"
-              >
+              <button onClick={() => setIsModalOpen(false)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
+              <button disabled={submitting} onClick={handleCreateRequest}
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm">
                 {submitting ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>

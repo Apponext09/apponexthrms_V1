@@ -17,31 +17,31 @@ export class SuperAdminService {
   async getDashboardStats(): Promise<SuperAdminDashboardStats> {
     const knex = getKnex();
 
-    let totalOrganizations = 12;
-    let activeSubscriptions = 10;
-    let totalEmployees = 458;
+    let totalOrganizations = 0;
+    let activeSubscriptions = 0;
+    let totalEmployees = 0;
 
     try {
       const [orgsCountRow] = (await knex('organizations').count('id as count')) as any[];
       const [activeOrgsRow] = (await knex('organizations').whereIn('status', ['active', 'trial']).count('id as count')) as any[];
       const [empCountRow] = (await knex('employees').count('id as count')) as any[];
 
-      if (orgsCountRow?.count) totalOrganizations = Number(orgsCountRow.count);
-      if (activeOrgsRow?.count) activeSubscriptions = Number(activeOrgsRow.count);
-      if (empCountRow?.count) totalEmployees = Number(empCountRow.count);
+      if (orgsCountRow?.count !== undefined) totalOrganizations = Number(orgsCountRow.count);
+      if (activeOrgsRow?.count !== undefined) activeSubscriptions = Number(activeOrgsRow.count);
+      if (empCountRow?.count !== undefined) totalEmployees = Number(empCountRow.count);
     } catch (err) {
-      console.log('Error querying stats from DB, fallback to defaults');
+      console.error('Error querying stats from DB:', err);
     }
 
-    const monthlyRevenue = activeSubscriptions > 0 ? activeSubscriptions * 14999 : 42500;
+    const monthlyRevenue = activeSubscriptions * 14999;
 
     const monthlyGrowth = [
-      { month: 'Feb', organizations: Math.max(1, Math.floor(totalOrganizations * 0.2)) },
-      { month: 'Mar', organizations: Math.max(2, Math.floor(totalOrganizations * 0.35)) },
-      { month: 'Apr', organizations: Math.max(3, Math.floor(totalOrganizations * 0.5)) },
-      { month: 'May', organizations: Math.max(5, Math.floor(totalOrganizations * 0.65)) },
-      { month: 'Jun', organizations: Math.max(8, Math.floor(totalOrganizations * 0.85)) },
-      { month: 'Jul', organizations: totalOrganizations || 12 },
+      { month: 'Feb', organizations: Math.max(0, Math.floor(totalOrganizations * 0.2)) },
+      { month: 'Mar', organizations: Math.max(0, Math.floor(totalOrganizations * 0.35)) },
+      { month: 'Apr', organizations: Math.max(0, Math.floor(totalOrganizations * 0.5)) },
+      { month: 'May', organizations: Math.max(0, Math.floor(totalOrganizations * 0.65)) },
+      { month: 'Jun', organizations: Math.max(0, Math.floor(totalOrganizations * 0.85)) },
+      { month: 'Jul', organizations: totalOrganizations },
     ];
 
     return {
