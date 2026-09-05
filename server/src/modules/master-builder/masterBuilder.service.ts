@@ -416,22 +416,22 @@ export class MasterBuilderService {
     }
 
     const rows = await q;
-    return rows.map((r) => ({
+    return rows.map((r: any) => ({
       id: r.id,
       uuid: r.uuid,
       name: r.name,
-      pluralName: r.plural_name,
+      pluralName: r.pluralName || r.plural_name,
       code: r.code,
       description: r.description,
       icon: r.icon || 'Layers',
-      employeeLinkage: r.employee_linkage,
-      hasHierarchy: Boolean(r.has_hierarchy),
-      hasHistory: Boolean(r.has_history),
+      employeeLinkage: r.employeeLinkage || r.employee_linkage,
+      hasHierarchy: Boolean(r.hasHierarchy ?? r.has_hierarchy),
+      hasHistory: Boolean(r.hasHistory ?? r.has_history),
       status: r.status,
-      fieldsCount: Number(r.fields_count || 0),
-      recordsCount: Number(r.records_count || 0),
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
+      fieldsCount: Number(r.fieldsCount || r.fields_count || 0),
+      recordsCount: Number(r.recordsCount || r.records_count || 0),
+      createdAt: r.createdAt || r.created_at,
+      updatedAt: r.updatedAt || r.updated_at,
     }));
   }
 
@@ -447,6 +447,25 @@ export class MasterBuilderService {
 
     if (!master) return null;
 
+    return this.populateMasterDetail(masterId, master);
+  }
+
+  /**
+   * Get custom master by code with fields, validation rules, autofill mappings
+   */
+  async getMasterByCode(orgId: number, code: string) {
+    const master = await this.db('custom_masters')
+      .where('code', code)
+      .where('organization_id', orgId)
+      .whereNull('deleted_at')
+      .first();
+
+    if (!master) return null;
+
+    return this.populateMasterDetail(master.id, master);
+  }
+
+  private async populateMasterDetail(masterId: number, master: any) {
     const fields = await this.db('custom_master_fields')
       .where('master_id', masterId)
       .orderBy('display_order', 'asc');
@@ -469,52 +488,52 @@ export class MasterBuilderService {
       id: master.id,
       uuid: master.uuid,
       name: master.name,
-      pluralName: master.plural_name,
+      pluralName: master.pluralName || master.plural_name,
       code: master.code,
       description: master.description,
       icon: master.icon || 'Layers',
-      employeeLinkage: master.employee_linkage,
-      hasHierarchy: Boolean(master.has_hierarchy),
-      hasHistory: Boolean(master.has_history),
+      employeeLinkage: master.employeeLinkage || master.employee_linkage,
+      hasHierarchy: Boolean(master.hasHierarchy ?? master.has_hierarchy),
+      hasHistory: Boolean(master.hasHistory ?? master.has_history),
       status: master.status,
-      recordsCount: Number(recordCountRes?.cnt || 0),
-      fields: fields.map((f) => ({
+      recordsCount: Number((recordCountRes as any)?.cnt || (recordCountRes as any)?.count || 0),
+      fields: fields.map((f: any) => ({
         id: f.id,
         uuid: f.uuid,
-        fieldName: f.field_name,
-        fieldKey: f.field_key,
-        fieldType: f.field_type,
-        isRequired: Boolean(f.is_required),
-        isUnique: Boolean(f.is_unique),
-        showInTable: Boolean(f.show_in_table),
-        isActive: Boolean(f.is_active),
-        helpText: f.help_text,
+        fieldName: f.fieldName || f.field_name || '',
+        fieldKey: f.fieldKey || f.field_key || '',
+        fieldType: f.fieldType || f.field_type || 'text',
+        isRequired: Boolean(f.isRequired ?? f.is_required),
+        isUnique: Boolean(f.isUnique ?? f.is_unique),
+        showInTable: f.showInTable !== undefined ? Boolean(f.showInTable) : (f.show_in_table !== undefined ? Boolean(f.show_in_table) : true),
+        isActive: f.isActive !== undefined ? Boolean(f.isActive) : (f.is_active !== undefined ? Boolean(f.is_active) : true),
+        helpText: f.helpText || f.help_text,
         placeholder: f.placeholder,
-        defaultValue: f.default_value,
-        lookupMasterId: f.lookup_master_id,
-        choiceListId: f.choice_list_id,
-        optionsJson: typeof f.options_json === 'string' ? JSON.parse(f.options_json) : f.options_json,
-        validationRules: typeof f.validation_rules === 'string' ? JSON.parse(f.validation_rules) : f.validation_rules,
-        displayOrder: f.display_order,
+        defaultValue: f.defaultValue || f.default_value,
+        lookupMasterId: f.lookupMasterId || f.lookup_master_id,
+        choiceListId: f.choiceListId || f.choice_list_id,
+        optionsJson: typeof (f.optionsJson || f.options_json) === 'string' ? JSON.parse(f.optionsJson || f.options_json) : (f.optionsJson || f.options_json),
+        validationRules: typeof (f.validationRules || f.validation_rules) === 'string' ? JSON.parse(f.validationRules || f.validation_rules) : (f.validationRules || f.validation_rules),
+        displayOrder: f.displayOrder || f.display_order || 0,
       })),
-      validationRules: rules.map((r) => ({
+      validationRules: rules.map((r: any) => ({
         id: r.id,
         uuid: r.uuid,
-        ruleName: r.rule_name,
-        fieldA: r.field_a,
+        ruleName: r.ruleName || r.rule_name,
+        fieldA: r.fieldA || r.field_a,
         operator: r.operator,
-        fieldB: r.field_b,
-        customValue: r.custom_value,
-        errorMessage: r.error_message,
-        isActive: Boolean(r.is_active),
+        fieldB: r.fieldB || r.field_b,
+        customValue: r.customValue || r.custom_value,
+        errorMessage: r.errorMessage || r.error_message,
+        isActive: Boolean(r.isActive ?? r.is_active),
       })),
-      autofillMappings: autofill.map((a) => ({
+      autofillMappings: autofill.map((a: any) => ({
         id: a.id,
         uuid: a.uuid,
-        lookupFieldKey: a.lookup_field_key,
-        sourceFieldKey: a.source_field_key,
-        targetFieldKey: a.target_field_key,
-        isActive: Boolean(a.is_active),
+        lookupFieldKey: a.lookupFieldKey || a.lookup_field_key,
+        sourceFieldKey: a.sourceFieldKey || a.source_field_key,
+        targetFieldKey: a.targetFieldKey || a.target_field_key,
+        isActive: Boolean(a.isActive ?? a.is_active),
       })),
     };
   }
@@ -632,7 +651,26 @@ export class MasterBuilderService {
       display_order: payload.displayOrder || 0,
     });
 
-    return this.db('custom_master_fields').where('id', fieldId).first();
+    const f: any = await this.db('custom_master_fields').where('id', fieldId).first();
+    return {
+      id: f.id,
+      uuid: f.uuid,
+      fieldName: f.fieldName || f.field_name || '',
+      fieldKey: f.fieldKey || f.field_key || '',
+      fieldType: f.fieldType || f.field_type || 'text',
+      isRequired: Boolean(f.isRequired ?? f.is_required),
+      isUnique: Boolean(f.isUnique ?? f.is_unique),
+      showInTable: f.showInTable !== undefined ? Boolean(f.showInTable) : (f.show_in_table !== undefined ? Boolean(f.show_in_table) : true),
+      isActive: f.isActive !== undefined ? Boolean(f.isActive) : (f.is_active !== undefined ? Boolean(f.is_active) : true),
+      helpText: f.helpText || f.help_text,
+      placeholder: f.placeholder,
+      defaultValue: f.defaultValue || f.default_value,
+      lookupMasterId: f.lookupMasterId || f.lookup_master_id,
+      choiceListId: f.choiceListId || f.choice_list_id,
+      optionsJson: typeof (f.optionsJson || f.options_json) === 'string' ? JSON.parse(f.optionsJson || f.options_json) : (f.optionsJson || f.options_json),
+      validationRules: typeof (f.validationRules || f.validation_rules) === 'string' ? JSON.parse(f.validationRules || f.validation_rules) : (f.validationRules || f.validation_rules),
+      displayOrder: f.displayOrder || f.display_order || 0,
+    };
   }
 
   async updateField(orgId: number, masterId: number, fieldId: number, payload: Partial<CustomMasterFieldPayload>) {
@@ -664,7 +702,26 @@ export class MasterBuilderService {
       .where('master_id', masterId)
       .update(updateData);
 
-    return this.db('custom_master_fields').where('id', fieldId).first();
+    const f: any = await this.db('custom_master_fields').where('id', fieldId).first();
+    return {
+      id: f.id,
+      uuid: f.uuid,
+      fieldName: f.fieldName || f.field_name || '',
+      fieldKey: f.fieldKey || f.field_key || '',
+      fieldType: f.fieldType || f.field_type || 'text',
+      isRequired: Boolean(f.isRequired ?? f.is_required),
+      isUnique: Boolean(f.isUnique ?? f.is_unique),
+      showInTable: f.showInTable !== undefined ? Boolean(f.showInTable) : (f.show_in_table !== undefined ? Boolean(f.show_in_table) : true),
+      isActive: f.isActive !== undefined ? Boolean(f.isActive) : (f.is_active !== undefined ? Boolean(f.is_active) : true),
+      helpText: f.helpText || f.help_text,
+      placeholder: f.placeholder,
+      defaultValue: f.defaultValue || f.default_value,
+      lookupMasterId: f.lookupMasterId || f.lookup_master_id,
+      choiceListId: f.choiceListId || f.choice_list_id,
+      optionsJson: typeof (f.optionsJson || f.options_json) === 'string' ? JSON.parse(f.optionsJson || f.options_json) : (f.optionsJson || f.options_json),
+      validationRules: typeof (f.validationRules || f.validation_rules) === 'string' ? JSON.parse(f.validationRules || f.validation_rules) : (f.validationRules || f.validation_rules),
+      displayOrder: f.displayOrder || f.display_order || 0,
+    };
   }
 
   async deleteField(orgId: number, masterId: number, fieldId: number) {
@@ -689,7 +746,18 @@ export class MasterBuilderService {
       error_message: payload.errorMessage || null,
       is_active: payload.isActive !== undefined ? Boolean(payload.isActive) : true,
     });
-    return this.db('custom_master_validation_rules').where('id', ruleId).first();
+    const r: any = await this.db('custom_master_validation_rules').where('id', ruleId).first();
+    return {
+      id: r.id,
+      uuid: r.uuid,
+      ruleName: r.ruleName || r.rule_name,
+      fieldA: r.fieldA || r.field_a,
+      operator: r.operator,
+      fieldB: r.fieldB || r.field_b,
+      customValue: r.customValue || r.custom_value,
+      errorMessage: r.errorMessage || r.error_message,
+      isActive: Boolean(r.isActive ?? r.is_active),
+    };
   }
 
   async updateValidationRule(orgId: number, masterId: number, ruleId: number, payload: Partial<CustomMasterValidationRulePayload>) {
@@ -707,7 +775,18 @@ export class MasterBuilderService {
       .where('master_id', masterId)
       .update(updateData);
 
-    return this.db('custom_master_validation_rules').where('id', ruleId).first();
+    const r: any = await this.db('custom_master_validation_rules').where('id', ruleId).first();
+    return {
+      id: r.id,
+      uuid: r.uuid,
+      ruleName: r.ruleName || r.rule_name,
+      fieldA: r.fieldA || r.field_a,
+      operator: r.operator,
+      fieldB: r.fieldB || r.field_b,
+      customValue: r.customValue || r.custom_value,
+      errorMessage: r.errorMessage || r.error_message,
+      isActive: Boolean(r.isActive ?? r.is_active),
+    };
   }
 
   async deleteValidationRule(orgId: number, masterId: number, ruleId: number) {
@@ -729,7 +808,15 @@ export class MasterBuilderService {
       target_field_key: payload.targetFieldKey,
       is_active: payload.isActive !== undefined ? Boolean(payload.isActive) : true,
     });
-    return this.db('custom_master_autofill_mappings').where('id', mappingId).first();
+    const a: any = await this.db('custom_master_autofill_mappings').where('id', mappingId).first();
+    return {
+      id: a.id,
+      uuid: a.uuid,
+      lookupFieldKey: a.lookupFieldKey || a.lookup_field_key,
+      sourceFieldKey: a.sourceFieldKey || a.source_field_key,
+      targetFieldKey: a.targetFieldKey || a.target_field_key,
+      isActive: Boolean(a.isActive ?? a.is_active),
+    };
   }
 
   async deleteAutofillMapping(orgId: number, masterId: number, mappingId: number) {
@@ -747,15 +834,15 @@ export class MasterBuilderService {
       .where('organization_id', orgId)
       .orderBy('name', 'asc');
 
-    return rows.map((r) => ({
+    return rows.map((r: any) => ({
       id: r.id,
       uuid: r.uuid,
       name: r.name,
       code: r.code,
       description: r.description,
-      options: typeof r.options_json === 'string' ? JSON.parse(r.options_json) : r.options_json || [],
+      options: typeof (r.optionsJson || r.options_json) === 'string' ? JSON.parse(r.optionsJson || r.options_json) : (r.optionsJson || r.options_json || []),
       status: r.status,
-      createdAt: r.created_at,
+      createdAt: r.createdAt || r.created_at,
     }));
   }
 
@@ -769,7 +856,17 @@ export class MasterBuilderService {
       options_json: JSON.stringify(payload.optionsJson || []),
       status: payload.status || 'Active',
     });
-    return this.db('custom_master_choice_lists').where('id', id).first();
+    const r: any = await this.db('custom_master_choice_lists').where('id', id).first();
+    return {
+      id: r.id,
+      uuid: r.uuid,
+      name: r.name,
+      code: r.code,
+      description: r.description,
+      options: typeof (r.optionsJson || r.options_json) === 'string' ? JSON.parse(r.optionsJson || r.options_json) : (r.optionsJson || r.options_json || []),
+      status: r.status,
+      createdAt: r.createdAt || r.created_at,
+    };
   }
 
   async updateChoiceList(orgId: number, id: number, payload: Partial<ChoiceListPayload>) {
@@ -785,7 +882,17 @@ export class MasterBuilderService {
       .where('organization_id', orgId)
       .update(updateData);
 
-    return this.db('custom_master_choice_lists').where('id', id).first();
+    const r: any = await this.db('custom_master_choice_lists').where('id', id).first();
+    return {
+      id: r.id,
+      uuid: r.uuid,
+      name: r.name,
+      code: r.code,
+      description: r.description,
+      options: typeof (r.optionsJson || r.options_json) === 'string' ? JSON.parse(r.optionsJson || r.options_json) : (r.optionsJson || r.options_json || []),
+      status: r.status,
+      createdAt: r.createdAt || r.created_at,
+    };
   }
 
   async deleteChoiceList(orgId: number, id: number) {

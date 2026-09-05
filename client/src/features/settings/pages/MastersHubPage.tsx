@@ -205,6 +205,11 @@ export function MastersHubPage() {
       }
     };
     fetchCustomMasters();
+
+    window.addEventListener('custom_masters_updated', fetchCustomMasters);
+    return () => {
+      window.removeEventListener('custom_masters_updated', fetchCustomMasters);
+    };
   }, []);
 
   const mergedCategories = useMemo(() => {

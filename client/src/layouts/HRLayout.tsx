@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
@@ -186,6 +186,8 @@ const HR_NAV = [
   },
 ];
 
+import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
+
 interface SidebarNavContentProps {
   sidebarOpen: boolean;
   setMobileOpen: (open: boolean) => void;
@@ -197,6 +199,7 @@ interface SidebarNavContentProps {
   initials: string;
   handleLogout: () => void;
   navigate: (path: string) => void;
+  customMasters?: CustomMasterItem[];
 }
 
 function SidebarNavContent({
@@ -210,7 +213,28 @@ function SidebarNavContent({
   initials,
   handleLogout,
   navigate,
+  customMasters = [],
 }: SidebarNavContentProps) {
+  const dynamicHRNav = useMemo(() => {
+    return HR_NAV.map((section) => {
+      if (section.label === 'MASTERS' && customMasters.length > 0) {
+        const existingHrefs = new Set(section.items.map((i) => i.href.toLowerCase()));
+        const customItems = customMasters
+          .filter((cm) => !existingHrefs.has(`/hr/masters/${cm.code}`.toLowerCase()) && !existingHrefs.has(`/masters?tab=${cm.code}`.toLowerCase()))
+          .map((cm) => ({
+            name: cm.name,
+            href: `/hr/masters/${cm.code}`,
+            icon: Boxes,
+          }));
+        return {
+          ...section,
+          items: [...section.items, ...customItems],
+        };
+      }
+      return section;
+    });
+  }, [customMasters]);
+
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
@@ -218,7 +242,7 @@ function SidebarNavContent({
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
-        {HR_NAV.map((section) => (
+        {dynamicHRNav.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
               {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
@@ -431,8 +455,25 @@ export function HRLayout() {
   const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
+  const [customMasters, setCustomMasters] = useState<CustomMasterItem[]>([]);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMasters = async () => {
+      try {
+        const list = await masterBuilderApi.getMasters();
+        if (isMounted) setCustomMasters(list || []);
+      } catch (err) {}
+    };
+    fetchMasters();
+    window.addEventListener('custom_masters_updated', fetchMasters);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('custom_masters_updated', fetchMasters);
+    };
+  }, []);
 
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;
@@ -456,6 +497,7 @@ export function HRLayout() {
       initials={initials}
       handleLogout={handleLogout}
       navigate={navigate}
+      customMasters={customMasters}
     />
   );
 
