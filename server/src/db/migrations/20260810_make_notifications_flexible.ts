@@ -21,14 +21,21 @@ export async function up(knex: Knex): Promise<void> {
   const hasTable = await knex.schema.hasTable('notifications');
   if (!hasTable) return;
 
+  // Check and alter nullable columns only if needed
   await knex.schema.alterTable('notifications', (table) => {
     // Make template_id nullable — FK constraint is preserved
     table.bigInteger('template_id').unsigned().nullable().alter();
     // Make event_code nullable
     table.string('event_code', 100).nullable().alter();
-    // Add notification_type label column
-    table.string('notification_type', 100).nullable();
   });
+
+  // Add notification_type only if it doesn't already exist
+  const hasNotifType = await knex.schema.hasColumn('notifications', 'notification_type');
+  if (!hasNotifType) {
+    await knex.schema.alterTable('notifications', (table) => {
+      table.string('notification_type', 100).nullable();
+    });
+  }
 }
 
 export async function down(knex: Knex): Promise<void> {

@@ -77,15 +77,29 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
 
   const handleSelect = (desig: Designation) => {
     setSelectedDesignationId(desig.id);
+
+    const parseArr = (val: any) => {
+      if (Array.isArray(val)) return val.map(String);
+      if (typeof val === 'string' && val.trim()) {
+        try {
+          const p = JSON.parse(val);
+          return Array.isArray(p) ? p.map(String) : [String(val)];
+        } catch {
+          return [String(val)];
+        }
+      }
+      return [];
+    };
+
     setFormData({
       name: desig.name,
       code: desig.code || '',
       status: desig.status || 'active',
-      mapped_companies: Array.isArray(desig.mapped_companies) ? desig.mapped_companies : (typeof desig.mapped_companies === 'string' ? JSON.parse(desig.mapped_companies) : []),
-      mapped_locations: Array.isArray(desig.mapped_locations) ? desig.mapped_locations : (typeof desig.mapped_locations === 'string' ? JSON.parse(desig.mapped_locations) : []),
-      mapped_departments: Array.isArray(desig.mapped_departments) ? desig.mapped_departments : (typeof desig.mapped_departments === 'string' ? JSON.parse(desig.mapped_departments) : []),
-      mapped_shifts: Array.isArray(desig.mapped_shifts) ? desig.mapped_shifts : (typeof desig.mapped_shifts === 'string' ? JSON.parse(desig.mapped_shifts) : []),
-      mapped_grades: Array.isArray(desig.mapped_grades) ? desig.mapped_grades : (typeof desig.mapped_grades === 'string' ? JSON.parse(desig.mapped_grades) : []),
+      mapped_companies: parseArr(desig.mapped_companies ?? desig.mappedCompanies),
+      mapped_locations: parseArr(desig.mapped_locations ?? desig.mappedLocations),
+      mapped_departments: parseArr(desig.mapped_departments ?? desig.mappedDepartments),
+      mapped_shifts: parseArr(desig.mapped_shifts ?? desig.mappedShifts),
+      mapped_grades: parseArr(desig.mapped_grades ?? desig.mappedGrades),
     });
   };
 
@@ -106,10 +120,31 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     setExpandedAccordion(prev => prev === name ? null : name);
   };
 
-  const handleCheckbox = (field: keyof Designation, id: string | number, isSingleSelect: boolean = false) => {
+  const handleCheckbox = (
+    field: keyof Designation,
+    id: string | number,
+    isSingleSelect: boolean = false,
+    categoryDataList: any[] = []
+  ) => {
     const strId = String(id);
     const current = (formData[field] as string[]) || [];
-    
+
+    if (isSingleSelect && categoryDataList.length > 0) {
+      const categoryIds = new Set(
+        categoryDataList.map((item, idx) =>
+          String(item.id ?? item.shiftId ?? item.shift_id ?? item.code ?? idx)
+        )
+      );
+      const otherSelected = current.filter((x) => !categoryIds.has(String(x)));
+
+      if (current.includes(strId)) {
+        setFormData({ ...formData, [field]: otherSelected });
+      } else {
+        setFormData({ ...formData, [field]: [...otherSelected, strId] });
+      }
+      return;
+    }
+
     if (isSingleSelect) {
       if (current.includes(strId)) {
         setFormData({ ...formData, [field]: [] });
@@ -120,7 +155,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     }
 
     if (current.includes(strId)) {
-      setFormData({ ...formData, [field]: current.filter(x => x !== strId) });
+      setFormData({ ...formData, [field]: current.filter((x) => x !== strId) });
     } else {
       setFormData({ ...formData, [field]: [...current, strId] });
     }
@@ -204,12 +239,12 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                       type={isSingleSelect ? "radio" : "checkbox"}
                       className={cn("border-input text-primary focus:ring-primary/20 w-4 h-4 cursor-pointer", isSingleSelect ? "rounded-full" : "rounded")}
                       checked={isChecked}
-                      onChange={() => handleCheckbox(field, strId, isSingleSelect)}
+                      onChange={() => handleCheckbox(field, strId, isSingleSelect, dataList)}
                       onClick={(e) => {
                         // Allow unchecking radio button if clicking the already checked one
                         if (isSingleSelect && isChecked) {
                           e.preventDefault();
-                          handleCheckbox(field, strId, isSingleSelect);
+                          handleCheckbox(field, strId, isSingleSelect, dataList);
                         }
                       }}
                     />
@@ -282,8 +317,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                 {renderAccordion('Company', 'mapped_companies', mappings.companies)}
                 {renderAccordion('Location', 'mapped_locations', mappings.locations)}
                 {renderAccordion('Department', 'mapped_departments', mappings.departments)}
-                {renderAccordion('General Shift', 'mapped_shifts', mappings.generalShifts, true)}
-                {renderAccordion('Roster Shift', 'mapped_shifts', mappings.rosterShifts, true)}
+                {renderAccordion('Shift', 'mapped_shifts', mappings.shifts, true)}
                 {renderAccordion('Grade', 'mapped_grades', mappings.grades)}
               </div>
 

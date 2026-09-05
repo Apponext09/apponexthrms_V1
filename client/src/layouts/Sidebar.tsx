@@ -79,29 +79,35 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   };
 
   const isPathActive = (itemHref: string, currentPath: string): boolean => {
+    if (!itemHref || !currentPath) return false;
     if (itemHref === currentPath) return true;
 
-    // Collect all nav hrefs from visibleSections to check for exact or more specific matches
-    const allHrefs = visibleSections.flatMap(section =>
-      section.items.flatMap(item => [
-        item.href,
-        ...(item.children ? item.children.map(c => c.href) : [])
-      ])
-    );
+    const exactMatchRoutes = [
+      '/',
+      '/dashboard',
+      '/hr',
+      '/hr/dashboard',
+      '/attendance',
+      '/hr/attendance',
+      '/leaves',
+      '/hr/leaves',
+      '/payroll',
+      '/hr/payroll',
+      '/recruitment',
+      '/hr/recruitment',
+      '/performance',
+      '/hr/performance',
+      '/assets',
+      '/hr/assets',
+      '/expenses',
+      '/hr/expenses',
+    ];
 
-    // If another nav item is an exact match for currentPath, this generic item shouldn't be active
-    if (allHrefs.some(h => h === currentPath)) {
-      return itemHref === currentPath;
+    if (exactMatchRoutes.includes(itemHref)) {
+      return currentPath === itemHref;
     }
 
-    // If currentPath starts with itemHref + '/', check if there is a more specific (longer) matching itemHref
-    if (currentPath.startsWith(itemHref + '/')) {
-      const hasMoreSpecificMatch = allHrefs.some(
-        h => h !== itemHref && h.length > itemHref.length && (currentPath === h || currentPath.startsWith(h + '/'))
-      );
-      return !hasMoreSpecificMatch;
-    }
-
+    if (currentPath.startsWith(itemHref + '/')) return true;
     return false;
   };
 

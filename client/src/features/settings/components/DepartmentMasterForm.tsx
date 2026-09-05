@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Plus, X, Info, Layers, Search, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Loader2, Building2, MapPin, Mail, Palette, Edit2
@@ -70,12 +70,34 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
     setDescription(dept.description || '');
     const isInactive = dept.status === 'Inactive' || dept.is_active === 'No' || dept.isActive === 'No';
     setIsActive(isInactive ? 'No' : 'Yes');
-    const compId = dept.company_id || dept.companyId;
-    if (compId) {
-      setSelectedCompanyIds([Number(compId)]);
-    } else {
-      setSelectedCompanyIds([]);
+
+    let compIds: number[] = [];
+    const rawIds = dept.companyIds ?? dept.company_ids;
+    if (Array.isArray(rawIds)) {
+      compIds = rawIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } else if (typeof rawIds === 'string' && rawIds.trim()) {
+      try {
+        const parsed = JSON.parse(rawIds);
+        if (Array.isArray(parsed)) {
+          compIds = parsed.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+        }
+      } catch { }
     }
+    if (compIds.length === 0) {
+      const singleId = dept.company_id || dept.companyId;
+      if (singleId) {
+        compIds = [Number(singleId)];
+      }
+    }
+    setSelectedCompanyIds(compIds);
+
+    const emails = dept.companyEmails || dept.company_emails;
+    if (emails && typeof emails === 'object' && !Array.isArray(emails)) {
+      setDefaultEmails(emails);
+    } else {
+      setDefaultEmails({});
+    }
+
     setSubmitError(null);
   };
 
@@ -130,6 +152,11 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
         description: description.trim() || null,
         companyId: firstCompanyId,
         company_id: firstCompanyId,
+        companyIds: selectedCompanyIds,
+        company_ids: selectedCompanyIds,
+        companyEmails: defaultEmails,
+        company_emails: defaultEmails,
+        defaultEmails,
         isActive,
         is_active: isActive,
       };
@@ -168,12 +195,12 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
     <div className="w-full space-y-6">
       {/* 2-Column Responsive Layout: Left Form Card (lg:col-span-7), Right Display List (lg:col-span-5) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
+
         {/* ========================================================================= */}
         {/* LEFT COLUMN: Add / Update Department Information Form (lg:col-span-7)     */}
         {/* ========================================================================= */}
         <div className="lg:col-span-7 bg-card border border-border/80 rounded-2xl p-5 md:p-6 shadow-xs text-foreground space-y-5">
-          
+
           {/* Title Bar */}
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-3">
@@ -407,7 +434,7 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
         {/* RIGHT COLUMN: Department Display Panel (lg:col-span-5)                    */}
         {/* ========================================================================= */}
         <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4 sticky top-6">
-          
+
           {/* List Header Bar */}
           <div className="flex items-center justify-between pb-2 border-b border-border">
             <div className="flex items-center gap-2">
@@ -497,6 +524,13 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
                           Inactive
                         </span>
                       )}
+                      <span className="bg-background/20 text-white font-mono font-semibold text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs">
+                        {code}
+                      </span>
+                      )}
+                      <span className="bg-background/30 text-white p-1 rounded-md hover:bg-background/40 transition-colors" title="Edit Department">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </span>
                     </div>
                   </div>
 

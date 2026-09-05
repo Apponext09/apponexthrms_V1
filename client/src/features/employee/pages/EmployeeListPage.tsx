@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, FilterIcon, Upload, Download, X } from 'lucide-react';
+import { Plus, Search, FilterIcon, Upload, Download, X, MapPin } from 'lucide-react';
 import { useEmployees } from '../hooks/useEmployees';
 import { EmployeeDataTable } from '../components/EmployeeDataTable';
 import { EmployeeCreateModal } from '../components/EmployeeCreateModal';
@@ -25,18 +25,22 @@ import { useDesignations } from '@/features/settings/hooks/useDesignations';
 import { useLocations } from '@/features/settings/hooks/useLocations';
 import { useEmployeeCustomizationStore } from '../store/employeeCustomizationStore';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
+import { useAdminDashboard } from '@/features/dashboard/hooks/useAdminDashboard';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 export function EmployeeListPage() {
   const { config } = useEmployeeCustomizationStore();
   const { selectedCompanyId, selectedCompanyName } = useCompanyStore();
+  const { data: dashboardData } = useAdminDashboard();
+  const { user } = useAuthStore();
+
+  const orgLocation = dashboardData?.companyInfo?.location || user?.organizationLocation || '';
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(config.defaultPageSize || 25);
-  const [status, setStatus] = useState<string>('');
-  const [employmentType, setEmploymentType] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('');
   const [designationId, setDesignationId] = useState<string>('');
   const [locationId, setLocationId] = useState<string>('');
@@ -52,45 +56,41 @@ export function EmployeeListPage() {
     page: config.enablePagination ? page : 1,
     pageSize: config.enablePagination ? pageSize : 1000,
     search: config.enableSearchBar ? searchTerm : '',
-    status,
-    employmentType,
   });
 
-  // Client-side filtering for department, designation, and location if needed
+  // Robust client-side filtering for department, designation, and location
   const filteredEmployees = React.useMemo(() => {
     return employees.filter((emp: any) => {
-      if (departmentId && String(emp.departmentId || emp.department_id || emp.currentDepartmentId || '') !== departmentId) {
+      if (departmentId && String(emp.departmentId || emp.department_id || emp.currentDepartmentId || emp.department?.id || '') !== departmentId) {
         return false;
       }
-      if (designationId && String(emp.designationId || emp.designation_id || '') !== designationId) {
-        return false;
+      if (designationId) {
+        const empDesigId = String(emp.designationId || emp.designation_id || emp.currentDesignationId || emp.designation?.id || '');
+        const targetDesigObj = designations.find((d: any) => String(d.id) === designationId);
+        const targetDesigName = (targetDesigObj?.name || '').toLowerCase();
+        const empDesigName = (emp.jobTitle || emp.designationName || emp.designation_name || emp.designation?.name || emp.designation || '').toLowerCase();
+
+        const matchesId = empDesigId === designationId;
+        const matchesName = Boolean(targetDesigName && empDesigName && (empDesigName === targetDesigName || empDesigName.includes(targetDesigName)));
+
+        if (!matchesId && !matchesName) {
+          return false;
+        }
       }
-      if (locationId && String(emp.locationId || emp.location_id || '') !== locationId) {
+      if (locationId && String(emp.locationId || emp.location_id || emp.currentLocationId || emp.location?.id || '') !== locationId) {
         return false;
       }
       return true;
     });
-  }, [employees, departmentId, designationId, locationId]);
+  }, [employees, departmentId, designationId, locationId, designations]);
 
   useEffect(() => {
     refetch();
-  }, [page, pageSize, searchTerm, status, employmentType]);
+  }, [page, pageSize, searchTerm]);
 
-  const handleStatusChange = (newStatus: string) => {
-    setStatus(newStatus);
-    setPage(1);
-  };
-
-  const handleEmploymentTypeChange = (newType: string) => {
-    setEmploymentType(newType);
-    setPage(1);
-  };
-
-  const activeFiltersCount = [status, employmentType, departmentId, designationId, locationId].filter(Boolean).length;
+  const activeFiltersCount = [departmentId, designationId, locationId].filter(Boolean).length;
 
   const clearAllFilters = () => {
-    setStatus('');
-    setEmploymentType('');
     setDepartmentId('');
     setDesignationId('');
     setLocationId('');
@@ -102,11 +102,17 @@ export function EmployeeListPage() {
       {/* Top Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Employees Directory</h1>
             {selectedCompanyName && (
               <Badge variant="outline" className="font-bold text-[11px] px-2 bg-primary/5 text-primary border-primary/20">
                 {selectedCompanyName}
+              </Badge>
+            )}
+            {orgLocation && (
+              <Badge variant="outline" className="font-semibold text-[11px] px-2 gap-1 bg-muted/40 text-muted-foreground border-border/60">
+                <MapPin className="w-3 h-3 text-primary shrink-0" />
+                {orgLocation}
               </Badge>
             )}
             {total > 0 && (
@@ -194,38 +200,6 @@ export function EmployeeListPage() {
                   <DropdownMenuLabel className="text-xs font-bold">Filter Employees</DropdownMenuLabel>
                   <DropdownMenuSeparator />
 
-                  {/* Status Submenu */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="text-xs">Status</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 text-xs">
-                      <DropdownMenuRadioGroup value={status} onValueChange={handleStatusChange}>
-                        <DropdownMenuRadioItem value="" className="text-xs">All Statuses</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="active" className="text-xs">Active</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="inactive" className="text-xs">Inactive</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="probation" className="text-xs">Probation</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="candidate" className="text-xs">Candidate</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="onboarding" className="text-xs">Onboarding</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="notice" className="text-xs">Notice</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="exit" className="text-xs">Exit</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="alumni" className="text-xs">Alumni</DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-
-                  {/* Employment Type Submenu */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="text-xs">Employment Type</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-48 text-xs">
-                      <DropdownMenuRadioGroup value={employmentType} onValueChange={handleEmploymentTypeChange}>
-                        <DropdownMenuRadioItem value="" className="text-xs">All Types</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="full_time" className="text-xs">Full Time</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="part_time" className="text-xs">Part Time</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="contract" className="text-xs">Contract</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="internship" className="text-xs">Internship</DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-
                   {/* Department Submenu */}
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger className="text-xs">Department</DropdownMenuSubTrigger>
@@ -291,18 +265,6 @@ export function EmployeeListPage() {
           {activeFiltersCount > 0 && (
             <div className="flex flex-wrap gap-2 items-center text-xs pt-1">
               <span className="text-muted-foreground font-medium">Active Filters:</span>
-              {status && (
-                <Badge variant="outline" className="gap-1 px-2 py-0.5 text-xs bg-muted/40">
-                  Status: {status.charAt(0).toUpperCase() + status.slice(1)}
-                  <X className="w-3 h-3 cursor-pointer hover:text-red-600 ml-1" onClick={() => handleStatusChange('')} />
-                </Badge>
-              )}
-              {employmentType && (
-                <Badge variant="outline" className="gap-1 px-2 py-0.5 text-xs bg-muted/40">
-                  Type: {employmentType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                  <X className="w-3 h-3 cursor-pointer hover:text-red-600 ml-1" onClick={() => handleEmploymentTypeChange('')} />
-                </Badge>
-              )}
               {departmentId && (
                 <Badge variant="outline" className="gap-1 px-2 py-0.5 text-xs bg-muted/40">
                   Dept: {departmentsList.find((d: any) => String(d.id) === departmentId)?.name || departmentId}

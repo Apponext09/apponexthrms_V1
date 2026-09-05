@@ -238,7 +238,7 @@ export const PERFORMANCE_ROLE_PERMISSIONS = {
     'performance.talent_matrix_read',
   ],
 
-  finance_manager: [
+  finance: [
     'performance.goal_read',
     'performance.okr_read',
     'performance.kpi_read',

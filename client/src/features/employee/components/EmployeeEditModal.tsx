@@ -418,6 +418,7 @@ export function EmployeeEditModal({
                       <option value="hr_manager">HR</option>
                       <option value="intern">Intern</option>
                       <option value="consultant">Consultant</option>
+                      <option value="finance">Finance</option>
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
                       Controls which portal they log into.{' '}

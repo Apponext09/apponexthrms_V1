@@ -225,7 +225,7 @@ export function EmployeeCreateModal({
     gender: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
     employmentType: '',
-    status: '',
+    status: 'active',
     reportingManagerId: '',
     avatarUrl: '',
     departmentId: '',
@@ -256,6 +256,7 @@ export function EmployeeCreateModal({
       setFormData(prev => ({
         ...prev,
         employeeCode: initialCode,
+        status: prev.status || 'active',
         ...(initialPwd ? { password: initialPwd, confirmPassword: initialPwd } : {})
       }));
       setFieldErrors({});
@@ -283,11 +284,22 @@ export function EmployeeCreateModal({
     )
     : [];
 
-  const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || [])).map((e: any) => ({
-    id: e.id,
-    name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
-    designation: e.designation || e.designation_name || e.role || 'Employee'
-  }));
+  const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || []))
+    .filter((e: any) => {
+      const role = (e.accessRole || e.access_role || e.role || '').toLowerCase();
+      const code = (e.employeeCode || e.employee_code || '');
+      return (
+        ['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo'].includes(role) ||
+        code.startsWith('CEO-') ||
+        e.isCeo ||
+        e.is_ceo
+      );
+    })
+    .map((e: any) => ({
+      id: e.id,
+      name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
+      designation: e.jobTitle || e.designation || e.designation_name || e.accessRole || 'Manager'
+    }));
 
   const handleOpenChange = (openVal: boolean) => {
     if (!openVal) {
@@ -408,10 +420,7 @@ export function EmployeeCreateModal({
       if (!firstTabWithError) firstTabWithError = 'professional';
     }
 
-    if (!formData.status) {
-      errors.status = 'Employee status is required';
-      if (!firstTabWithError) firstTabWithError = 'professional';
-    }
+
 
     if (!formData.jobTitle) {
       errors.jobTitle = 'Designation (Job Title) is required';
@@ -1060,42 +1069,7 @@ export function EmployeeCreateModal({
                       )}
                     </div>
 
-                    <div>
-                      <Label htmlFor="employeeStatus" className="flex items-center text-xs font-bold text-foreground">
-                        Employee Status <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
-                          id="empStatus"
-                          fieldName="Employee Status"
-                          category="employee-status"
-                          masterName="Employee Status"
-                          path="Settings → Masters Hub → Employee Status"
-                          description="Manage custom employee statuses (e.g. Active, On Probation, Notice Period) in Masters Hub."
-                          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['employeeStatuses'] })}
-                        />
-                      </Label>
-                      <select
-                        id="employeeStatus"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.status && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
-                        )}
-                        value={formData.status}
-                        onChange={(e) => handleFieldChange('status', e.target.value)}
-                      >
-                        <option value="">Select Status...</option>
-                        {employeeStatuses
-                          ?.filter((st: any) => st.status === 'active' || st.isActive === true)
-                          .map((st: any) => (
-                            <option key={st.id} value={st.name}>{st.name}</option>
-                          ))}
-                      </select>
-                      {fieldErrors.status && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.status}</span>
-                        </p>
-                      )}
-                    </div>
+
 
                     {/* Job Title / Designation */}
                     <div>
@@ -1194,7 +1168,8 @@ export function EmployeeCreateModal({
                         <option value="hr_manager">HR Manager (HR Portal View)</option>
                         <option value="intern">Intern (Intern Portal View)</option>
                         <option value="consultant">Consultant (Consultant Portal View)</option>
-                        <option value="admin">System Administrator</option>
+                        <option value="finance">Finance (Finance Portal View)</option>
+                       
                       </select>
                       {fieldErrors.accessRole ? (
                         <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">

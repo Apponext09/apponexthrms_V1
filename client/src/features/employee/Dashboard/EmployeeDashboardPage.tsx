@@ -1281,8 +1281,8 @@ stored in the ApponextHRMS Secure Document Vault.
                   ))
                 ) : (
                   <>
-                    <option value="1">📍 home (Primary Office)</option>
-                    <option value="2">📍 Kosqu Corporate HQ</option>
+                    <option value="1">📍 Corporate HQ (Primary Office)</option>
+                    <option value="2">📍 Main Branch Office</option>
                     <option value="3">📍 Regional Branch Office</option>
                     <option value="4">📍 Client Site / Remote Duty</option>
                   </>
@@ -1598,12 +1598,16 @@ stored in the ApponextHRMS Secure Document Vault.
                             </div>
                           );
                         }
-                        if (!cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave') {
+                        if (myShift && !cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave') {
+                          const sCode = myShift.shiftCode || myShift.shift_code || 'SHIFT';
+                          const sStart = myShift.startTime || myShift.start_time ? formatTimeToDisplay(myShift.startTime || myShift.start_time) : '';
+                          const sEnd = myShift.endTime || myShift.end_time ? formatTimeToDisplay(myShift.endTime || myShift.end_time) : '';
+                          const timeStr = sStart && sEnd ? ` (${sStart}-${sEnd})` : '';
                           return (
                             <div className="flex items-center gap-1 min-w-0">
-                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                              <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wide">
-                                GS (9am-6pm)
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary/70 shrink-0" />
+                              <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wide truncate">
+                                {sCode}{timeStr}
                               </span>
                             </div>
                           );

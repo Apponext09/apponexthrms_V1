@@ -45,7 +45,7 @@ export function SuperAdminProfilePage() {
     email: authUser?.email || 'superadmin@apponext.com',
     phone: '+91 9876543210',
     avatarUrl: authUser?.avatarUrl || '',
-    designation: 'Platform SuperAdmin & System Administrator',
+    designation: 'SuperAdmin',
     company: 'Apponext Technologies',
     location: 'Bengaluru, Karnataka, India',
     bio: 'Overseeing multi-tenant enterprise HRMS operations, security compliance, and platform licensing.',

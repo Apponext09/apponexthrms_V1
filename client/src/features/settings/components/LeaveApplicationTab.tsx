@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -115,25 +115,25 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
   ];
 
   return (
-    <div className="space-y-5 text-slate-800 dark:text-slate-100">
+    <div className="space-y-5 text-foreground dark:text-slate-100">
       {/* 1. When it can be requested */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               When it can be requested
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Which dates a request may cover, and how far ahead or behind today.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3.5 text-xs text-foreground dark:text-slate-300">
           {/* Checkbox 1: Past dates */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+              <label className="flex items-center gap-2 font-semibold text-foreground dark:text-slate-200 cursor-pointer">
                 <Checkbox
                   checked={app.pastDates !== false}
                   onCheckedChange={(c) => updateApp('pastDates', !!c)}
@@ -164,7 +164,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
                 <select
                   value={app.pastDaysUnit || 'calendar_days'}
                   onChange={(e) => updateApp('pastDaysUnit', e.target.value)}
-                  className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+                  className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
                 >
                   <option value="calendar_days">calendar days</option>
                   <option value="working_days">working days</option>
@@ -177,7 +177,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
           {/* Checkbox 2: Future dates */}
           <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+              <label className="flex items-center gap-2 font-semibold text-foreground dark:text-slate-200 cursor-pointer">
                 <Checkbox
                   checked={app.futureDates !== false}
                   onCheckedChange={(c) => updateApp('futureDates', !!c)}
@@ -226,7 +226,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
                   <select
                     value={app.countBothAs || 'calendar_days'}
                     onChange={(e) => updateApp('countBothAs', e.target.value)}
-                    className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-medium"
+                    className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-medium"
                   >
                     <option value="calendar_days">calendar days</option>
                     <option value="working_days">working days</option>
@@ -239,19 +239,19 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
       </Card>
 
       {/* 2. Size of one request */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Size of one request
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             The shortest and longest a single request may be, and the part-days it may be taken in.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>One request must be between</span>
             <Input
@@ -284,7 +284,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
               ].map((unit) => {
                 const isSelected = (app.allowedUnits || ['fullday', 'halfday']).includes(unit.id);
                 return (
-                  <label key={unit.id} className="flex items-center gap-1.5 cursor-pointer bg-slate-50 dark:bg-slate-900 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-800">
+                  <label key={unit.id} className="flex items-center gap-1.5 cursor-pointer bg-muted/30 dark:bg-slate-900 px-2.5 py-1 rounded-md border border-border/60 dark:border-slate-800">
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleAllowedUnit(unit.id)}
@@ -294,25 +294,25 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
                 );
               })}
             </div>
-            <span className="text-slate-400">— select none to allow every duration</span>
+            <span className="text-muted-foreground/70">— select none to allow every duration</span>
           </div>
         </CardContent>
       </Card>
 
       {/* 3. Gap between requests */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Gap between requests
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             How long an employee must wait before applying again, and which leave the wait is measured against.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>Wait</span>
             <Input
@@ -325,7 +325,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
             <select
               value={app.gapBetweenApplicationUnit || 'Days'}
               onChange={(e) => updateApp('gapBetweenApplicationUnit', e.target.value)}
-              className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+              className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
             >
               <option value="Days">calendar days</option>
               <option value="WorkingDays">working days</option>
@@ -344,19 +344,19 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
       </Card>
 
       {/* 4. How much in a period */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               How much in a period
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             How often this leave can be requested, and how many days can be taken, inside a single period.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>No more than</span>
             <Input
@@ -370,7 +370,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
             <select
               value={app.noOfTimesEmployeeCanApplyUnit || 'Per Month'}
               onChange={(e) => updateApp('noOfTimesEmployeeCanApplyUnit', e.target.value)}
-              className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+              className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
             >
               <option value="Per Month">period (Month)</option>
               <option value="Per Quarter">Quarter</option>
@@ -392,7 +392,7 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
             <select
               value={app.noOfLeavesEmployeeCanApplyUnit || 'Per Month'}
               onChange={(e) => updateApp('noOfLeavesEmployeeCanApplyUnit', e.target.value)}
-              className="h-7 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs font-medium"
+              className="h-7 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs font-medium"
             >
               <option value="Per Month">period (Month)</option>
               <option value="Per Quarter">Quarter</option>
@@ -403,25 +403,25 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
       </Card>
 
       {/* 5. Which days it may cover */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Which days it may cover
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Restrict this leave to particular kinds of day, such as a birthday.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>It may be requested only on a</span>
             <select
               value={app.whichDayType || 'Select'}
               onChange={(e) => updateApp('whichDayType', e.target.value)}
-              className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-semibold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="h-8 rounded-lg border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="Select">Select...</option>
               <option value="birthday">Birthday</option>
@@ -429,32 +429,32 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
               <option value="weekend">Weekend</option>
               <option value="holiday">Public Holiday</option>
             </select>
-            <span className="text-slate-400">— select none to allow any day</span>
+            <span className="text-muted-foreground/70">— select none to allow any day</span>
           </div>
         </CardContent>
       </Card>
 
       {/* 6. Require a supporting document */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <Checkbox
               checked={!!app.supportingDocumentsRequired}
               onCheckedChange={(c) => updateApp('supportingDocumentsRequired', !!c)}
             />
             <div className="flex items-center gap-1.5">
-              <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+              <CardTitle className="text-xs font-bold text-foreground dark:text-white">
                 Require a supporting document
               </CardTitle>
-              <Info className="w-3.5 h-3.5 text-slate-400" />
+              <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
             </div>
           </label>
-          <CardDescription className="text-[11px] text-slate-500 pl-6">
+          <CardDescription className="text-[11px] text-muted-foreground pl-6">
             The request cannot be submitted without an attachment.
           </CardDescription>
         </CardHeader>
         {app.supportingDocumentsRequired && (
-          <CardContent className="p-4 text-xs text-slate-700 dark:text-slate-300 pl-8">
+          <CardContent className="p-4 text-xs text-foreground dark:text-slate-300 pl-8">
             <div className="flex flex-wrap items-center gap-2">
               <span>Only when the request is longer than</span>
               <Input
@@ -471,19 +471,19 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
       </Card>
 
       {/* 7. Restrictions */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Restrictions
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Days that are not counted, and requests that are refused outright.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 space-y-3.5 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 space-y-3.5 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>Do not count</span>
             <MultiSelectDropdown
@@ -520,19 +520,19 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
       </Card>
 
       {/* 8. Clubbing policy */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Clubbing policy
             </CardTitle>
-            <Info className="w-3.5 h-3.5 text-slate-400" />
+            <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             The leave types that cannot be taken together with this one.
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 text-xs text-slate-700 dark:text-slate-300">
+        <CardContent className="p-4 text-xs text-foreground dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span>The leave cannot be taken along with</span>
             <MultiSelectDropdown
@@ -571,15 +571,15 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
       />
 
       {/* 10. Only when */}
-      <Card className="border border-slate-200/90 dark:border-slate-800 shadow-2xs rounded-xl bg-white dark:bg-slate-950">
-        <CardHeader className="bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
+      <Card className="border border-border/60/90 dark:border-slate-800 shadow-2xs rounded-xl bg-background dark:bg-slate-950">
+        <CardHeader className="bg-muted/30/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 pb-3">
           <div className="flex items-center gap-1.5">
-            <GitBranch className="w-3.5 h-3.5 text-slate-500" />
-            <CardTitle className="text-xs font-bold text-slate-900 dark:text-white">
+            <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
+            <CardTitle className="text-xs font-bold text-foreground dark:text-white">
               Only when
             </CardTitle>
           </div>
-          <CardDescription className="text-[11px] text-slate-500">
+          <CardDescription className="text-[11px] text-muted-foreground">
             Leave this empty and these request rules always apply.
           </CardDescription>
         </CardHeader>

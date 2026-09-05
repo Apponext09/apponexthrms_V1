@@ -125,34 +125,7 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
-          {/* Quick Settings Toggles */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted/20 rounded-lg border border-border/60">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
-                  <Globe className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-foreground">Allow Remote Punch</p>
-                  <p className="text-[10px] text-muted-foreground">WFH / Work From Anywhere</p>
-                </div>
-              </div>
-              <Switch checked={allowRemotePunch} onCheckedChange={setAllowRemotePunch} />
-            </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded bg-blue-50 text-blue-600 border border-blue-200">
-                  <Navigation className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-foreground">Allow Field Punch</p>
-                  <p className="text-[10px] text-muted-foreground">Flexible GPS Check-in</p>
-                </div>
-              </div>
-              <Switch checked={allowFieldPunch} onCheckedChange={setAllowFieldPunch} />
-            </div>
-          </div>
 
           {/* Location Assignment Section */}
           <div className="space-y-2.5">

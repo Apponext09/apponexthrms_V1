@@ -769,6 +769,7 @@ export class AuthService {
         lastName: user.lastName || (user as any).last_name || '',
         orgName: org?.name || '',
         roles,
+        accessRole: userWithPerms?.accessRole || (user as any)?.accessRole || (user as any)?.role || 'employee',
         policyAccepted: Boolean((user as any).policy_accepted || (user as any).policyAccepted),
         policyAcceptedAt: (user as any).policy_accepted_at || (user as any).policyAcceptedAt || null,
       } as any,
@@ -781,7 +782,8 @@ export class AuthService {
    */
   async refreshAccessToken(ctx: TenantContext, refreshToken: string): Promise<RefreshTokenResponse> {
     // Verify refresh token signature
-    let decoded;
+    let decoded; 
+  
     try {
       decoded = decodeToken(refreshToken);
       if (!decoded) {
@@ -806,20 +808,22 @@ export class AuthService {
 
     // IMPROVED: Verify session has not expired
     const now = new Date();
-    if (session.expires_at && new Date(session.expires_at) <= now) {
+    const sessionExpiresAt = session.expiresAt || (session as any).expires_at;
+    if (sessionExpiresAt && new Date(sessionExpiresAt) <= now) {
       logger.warn('[Auth] Token refresh failed: Session expired', {
         sessionUuid: decoded.sid,
-        expiresAt: session.expires_at,
+        expiresAt: sessionExpiresAt,
         userId: ctx.userId,
       });
       throw new UnauthorizedError('Session expired. Please login again');
     }
 
     // IMPROVED: Verify session is not revoked
-    if (session.revoked_at) {
+    const isRevoked = session.revokedAt || (session as any).revoked_at;
+    if (isRevoked) {
       logger.warn('[Auth] Token refresh failed: Session revoked', {
         sessionUuid: decoded.sid,
-        revokedAt: session.revoked_at,
+        revokedAt: isRevoked,
         userId: ctx.userId,
       });
       throw new UnauthorizedError('Session has been revoked');
@@ -953,10 +957,11 @@ export class AuthService {
     // with zero role assignments) — silently handing out full admin access.
     let permissions: string[] = [];
     let roles: string[] = [];
+    let userWithPerms: any = null;
 
     if (rawUser && rawUser.id) {
       try {
-        const userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
+        userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
         roles = userWithPerms?.roles || [];
         permissions = userWithPerms?.permissions || [];
       } catch (err) {
@@ -1083,6 +1088,8 @@ export class AuthService {
         organizationName: org?.name || '',
         organizationCode: org?.code || '',
         organizationLocation: org?.location || org?.address_line1 || '',
+        roles,
+        accessRole: userWithPerms?.accessRole || rawUser?.role || rawUser?.access_role || rawUser?.accessRole || (roles.includes('finance') ? 'finance' : 'employee'),
         policyAccepted: Boolean(rawUser.policy_accepted || rawUser.policyAccepted),
         policyAcceptedAt: rawUser.policy_accepted_at || rawUser.policyAcceptedAt || null,
       },

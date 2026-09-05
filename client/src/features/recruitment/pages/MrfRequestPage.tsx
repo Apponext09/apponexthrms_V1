@@ -3008,7 +3008,7 @@ export const MrfRequestPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 5: Experience Desired | Interviewer */}
+              {/* Row 5: Experience Desired */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="experience" className="text-xs font-bold text-slate-700">
@@ -3021,28 +3021,6 @@ export const MrfRequestPage: React.FC = () => {
                     onChange={(e) => setFormFields(prev => ({ ...prev, experienceDesired: e.target.value }))}
                     className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
                   />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="interviewer" className="text-xs font-bold text-slate-700">
-                    Interviewer
-                  </Label>
-                  <Select 
-                    value={formFields.interviewer} 
-                    onValueChange={(val) => setFormFields(prev => ({ ...prev, interviewer: val }))}
-                  >
-                    <SelectTrigger id="interviewer" className="bg-white border-slate-200 text-slate-755 h-10">
-                      <SelectValue placeholder="Choose" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Choose">Choose</SelectItem>
-                      {getDepartmentManagers(formFields.department).map(emp => (
-                        <SelectItem key={emp.id} value={emp.name}>
-                          {emp.name} {emp.designation ? `(${emp.designation})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
 

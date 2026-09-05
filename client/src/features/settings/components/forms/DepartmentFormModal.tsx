@@ -59,8 +59,32 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
       setColour(dept.colour || dept.color || '#00b4d8');
       setDescription(dept.description || '');
       setIsActive(dept.is_active || dept.isActive || 'Yes');
-      if (dept.company_id || dept.companyId) {
-        setSelectedCompanyIds([Number(dept.company_id || dept.companyId)]);
+
+      let compIds: number[] = [];
+      const rawIds = dept.companyIds ?? dept.company_ids;
+      if (Array.isArray(rawIds)) {
+        compIds = rawIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+      } else if (typeof rawIds === 'string' && rawIds.trim()) {
+        try {
+          const parsed = JSON.parse(rawIds);
+          if (Array.isArray(parsed)) {
+            compIds = parsed.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+          }
+        } catch {}
+      }
+      if (compIds.length === 0) {
+        const singleId = dept.company_id || dept.companyId;
+        if (singleId) {
+          compIds = [Number(singleId)];
+        }
+      }
+      setSelectedCompanyIds(compIds);
+
+      const emails = dept.companyEmails || dept.company_emails;
+      if (emails && typeof emails === 'object' && !Array.isArray(emails)) {
+        setDefaultEmails(emails);
+      } else {
+        setDefaultEmails({});
       }
     }
   }, [existingDeptResponse]);
@@ -111,6 +135,11 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
         description: description.trim() || null,
         companyId: firstCompanyId,
         company_id: firstCompanyId,
+        companyIds: selectedCompanyIds,
+        company_ids: selectedCompanyIds,
+        companyEmails: defaultEmails,
+        company_emails: defaultEmails,
+        defaultEmails,
         isActive,
         is_active: isActive,
       };

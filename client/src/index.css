@@ -97,6 +97,83 @@ input[type="week"] {
   color-scheme: dark;
 }
 
+/* ============================================================
+   GLOBAL DARK MODE — Native form elements (select, textarea, input)
+   Covers ALL masters pages as a safety net for any missed inline classes
+   ============================================================ */
+
+/* Native select */
+.dark select {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  color-scheme: dark;
+}
+.dark select option {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+/* Native textarea */
+.dark textarea {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+.dark textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Native text/number/email inputs that may have missed inline styling */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+.dark input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Tables inside masters */
+.dark table thead tr {
+  background-color: hsl(var(--muted) / 0.5);
+}
+.dark table tbody tr:hover {
+  background-color: hsl(var(--muted) / 0.3);
+}
+.dark table td,
+.dark table th {
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+/* ProseMirror / TipTap editor dark mode */
+.dark .ProseMirror {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+}
+.dark .ProseMirror th {
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+.dark .ProseMirror td,
+.dark .ProseMirror th {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Scrollbar styling for dark mode */
+.dark ::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator,

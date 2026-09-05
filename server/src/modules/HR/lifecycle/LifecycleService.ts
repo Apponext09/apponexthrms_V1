@@ -289,6 +289,27 @@ export class LifecycleService {
       ? `${adminUser.first_name || adminUser.firstName || 'Organization'} ${adminUser.last_name || adminUser.lastName || 'Admin'}`.trim()
       : 'Harsh Gawali (Organization Admin)';
 
+    const primaryLocRow = await db('attendance_locations')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .where(function(this: any) {
+        if (effectiveCompanyId) {
+          this.where('company_id', effectiveCompanyId).orWhereNull('company_id');
+        }
+      })
+      .orderBy('is_primary', 'desc')
+      .select('location_name')
+      .first()
+      .catch(() => null);
+
+    const compRow = await db('company')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .first()
+      .catch(() => null);
+
+    const defaultCompanyLoc = primaryLocRow?.location_name || compRow?.name || 'Main Office';
+
     return employees.map((emp: any) => {
       const empId = Number(emp.id);
       const rawFn = emp.firstName || emp.first_name || emp.userFirstName || emp.user_first_name;
@@ -335,7 +356,7 @@ export class LifecycleService {
         reportingManagerId: (emp.reportingManagerId || emp.reporting_manager_id) ? Number(emp.reportingManagerId || emp.reporting_manager_id) : null,
         reportingManager,
         currentLocationId: (emp.currentLocationId || emp.current_location_id) ? Number(emp.currentLocationId || emp.current_location_id) : null,
-        locationName: emp.locationName || emp.location_name || 'Primary Office',
+        locationName: emp.locationName || emp.location_name || defaultCompanyLoc,
         transfersCount: trfData?.count || 0,
         lastTransferDate: trfData?.lastTransferDate || null,
         transferReason: trfData?.transferReason || null,
@@ -563,6 +584,27 @@ export class LifecycleService {
     const obJoiningDate = formatDateISO(onboarding?.joiningDate || onboarding?.joining_date) || joinDateISO;
     const obProbationDate = formatDateISO(onboarding?.probationEndDate || onboarding?.probation_end_date);
 
+    const primaryLocRow = await db('attendance_locations')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .where(function(this: any) {
+        if (resolvedCompanyId) {
+          this.where('company_id', resolvedCompanyId).orWhereNull('company_id');
+        }
+      })
+      .orderBy('is_primary', 'desc')
+      .select('location_name')
+      .first()
+      .catch(() => null);
+
+    const compRow = await db('company')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .first()
+      .catch(() => null);
+
+    const defaultCompanyLoc = primaryLocRow?.location_name || compRow?.name || 'Main Office';
+
     return {
       profile: {
         id: Number(safeEmp.id),
@@ -584,7 +626,7 @@ export class LifecycleService {
         reportingManagerId: (safeEmp.reportingManagerId || safeEmp.reporting_manager_id) ? Number(safeEmp.reportingManagerId || safeEmp.reporting_manager_id) : null,
         reportingManager,
         currentLocationId: (safeEmp.currentLocationId || safeEmp.current_location_id) ? Number(safeEmp.currentLocationId || safeEmp.current_location_id) : null,
-        locationName: safeEmp.locationName || safeEmp.location_name || 'Primary Office',
+        locationName: safeEmp.locationName || safeEmp.location_name || defaultCompanyLoc,
       },
       onboarding: onboarding ? {
         id: Number(onboarding.id),
@@ -665,8 +707,8 @@ export class LifecycleService {
           toDepartmentName: t.toDepartmentName || t.to_department_name || 'General',
           fromDesignationName: t.fromDesignationName || t.from_designation_name || 'Employee',
           toDesignationName: t.toDesignationName || t.to_designation_name || 'Employee',
-          fromLocationName: t.fromLocationName || t.from_location_name || 'Primary Office',
-          toLocationName: t.toLocationName || t.to_location_name || 'Primary Office',
+          fromLocationName: t.fromLocationName || t.from_location_name || defaultCompanyLoc,
+          toLocationName: t.toLocationName || t.to_location_name || defaultCompanyLoc,
           fromManagerName: (t.fromMgrFirstName || t.from_mgr_first_name) ? `${t.fromMgrFirstName || t.from_mgr_first_name} ${t.fromMgrLastName || t.from_mgr_last_name || ''}`.trim() : 'Unassigned',
           toManagerName: (t.toMgrFirstName || t.to_mgr_first_name) ? `${t.toMgrFirstName || t.to_mgr_first_name} ${t.toMgrLastName || t.to_mgr_last_name || ''}`.trim() : 'Unassigned',
           createdBy: (t.creatorFirstName || t.creator_first_name) ? `${t.creatorFirstName || t.creator_first_name} ${t.creatorLastName || t.creator_last_name || ''}`.trim() : 'HR Admin',
@@ -769,7 +811,7 @@ export class LifecycleService {
             title: transferTypeStr === 'promotion' ? `Promoted to ${toDesig}` : `Internal Transfer: ${fromDept} ➔ ${toDept}`,
             subtitle: `Effective: ${effDate}`,
             date: effDate,
-            description: `Transferred from ${fromDept} (${fromDesig}) to ${toDept} (${toDesig}). Location: ${t.toLocationName || t.to_location_name || 'Primary Office'}. Manager: ${t.toManagerName || t.to_mgr_first_name || 'N/A'}. Reason: ${t.transferReason || t.transfer_reason || 'Organizational Realignment'}.`,
+            description: `Transferred from ${fromDept} (${fromDesig}) to ${toDept} (${toDesig}). Location: ${t.toLocationName || t.to_location_name || defaultCompanyLoc}. Manager: ${t.toManagerName || t.to_mgr_first_name || 'N/A'}. Reason: ${t.transferReason || t.transfer_reason || 'Organizational Realignment'}.`,
             status: 'completed',
             iconType: transferTypeStr === 'promotion' ? 'award' : 'arrow_left_right',
             metadata: {

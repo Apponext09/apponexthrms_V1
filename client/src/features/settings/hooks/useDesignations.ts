@@ -13,6 +13,46 @@ export interface Designation {
   mapped_departments?: string[];
   mapped_shifts?: string[];
   mapped_grades?: string[];
+  mappedCompanies?: string[];
+  mappedLocations?: string[];
+  mappedDepartments?: string[];
+  mappedShifts?: string[];
+  mappedGrades?: string[];
+}
+
+export function normalizeDesignation(d: any): Designation {
+  const parseArr = (val: any) => {
+    if (Array.isArray(val)) return val.map(String);
+    if (typeof val === 'string' && val.trim()) {
+      try {
+        const p = JSON.parse(val);
+        return Array.isArray(p) ? p.map(String) : [String(val)];
+      } catch {
+        return [String(val)];
+      }
+    }
+    return [];
+  };
+
+  const companies = parseArr(d.mapped_companies ?? d.mappedCompanies);
+  const locations = parseArr(d.mapped_locations ?? d.mappedLocations);
+  const departments = parseArr(d.mapped_departments ?? d.mappedDepartments);
+  const shifts = parseArr(d.mapped_shifts ?? d.mappedShifts);
+  const grades = parseArr(d.mapped_grades ?? d.mappedGrades);
+
+  return {
+    ...d,
+    mapped_companies: companies,
+    mappedCompanies: companies,
+    mapped_locations: locations,
+    mappedLocations: locations,
+    mapped_departments: departments,
+    mappedDepartments: departments,
+    mapped_shifts: shifts,
+    mappedShifts: shifts,
+    mapped_grades: grades,
+    mappedGrades: grades,
+  };
 }
 
 export function useDesignations() {
@@ -24,11 +64,13 @@ export function useDesignations() {
     queryFn: async () => {
       const res = await apiClient.get('/settings/designations?limit=1000');
       const data = res.data;
-      if (Array.isArray(data)) return data as Designation[];
-      if (Array.isArray(data?.data)) return data.data as Designation[];
-      if (Array.isArray(data?.data?.items)) return data.data.items as Designation[];
-      if (Array.isArray(data?.items)) return data.items as Designation[];
-      return [];
+      let rawList: any[] = [];
+      if (Array.isArray(data)) rawList = data;
+      else if (Array.isArray(data?.data)) rawList = data.data;
+      else if (Array.isArray(data?.data?.items)) rawList = data.data.items;
+      else if (Array.isArray(data?.items)) rawList = data.items;
+
+      return rawList.map(normalizeDesignation);
     },
   });
 
@@ -87,6 +129,7 @@ export function useDummyMappings() {
       }
     }
   });
+
   const locationsQuery = useQuery({
     queryKey: ['mapping_locations'],
     queryFn: async () => {
@@ -102,6 +145,7 @@ export function useDummyMappings() {
       }
     }
   });
+
   const departmentsQuery = useQuery({
     queryKey: ['mapping_departments'],
     queryFn: async () => {
@@ -117,6 +161,7 @@ export function useDummyMappings() {
       }
     }
   });
+
   const shiftsQuery = useQuery({
     queryKey: ['mapping_shifts'],
     queryFn: async () => {
@@ -163,6 +208,7 @@ export function useDummyMappings() {
       return allShifts;
     }
   });
+
   const gradesQuery = useQuery({
     queryKey: ['mapping_grades'],
     queryFn: async () => {
@@ -179,45 +225,16 @@ export function useDummyMappings() {
     }
   });
 
-  const defaultGeneral = [
-    { id: 'gen-1', name: 'General Shift (09:00 AM - 06:00 PM)', isRoster: false },
-    { id: 'gen-2', name: 'Morning General Shift (08:00 AM - 05:00 PM)', isRoster: false },
-    { id: 'gen-3', name: 'Evening General Shift (02:00 PM - 11:00 PM)', isRoster: false },
-    { id: 'gen-4', name: 'Night / Flexible General Shift (10:00 PM - 07:00 AM)', isRoster: false },
-  ];
-
-  const defaultRoster = [
-    { id: 'ros-1', name: 'Rotational 3-Tier Roster', isRoster: true },
-    { id: 'ros-2', name: 'Night Support Roster', isRoster: true },
-  ];
-
   const fetchedGeneral = (shiftsQuery.data || []).filter((s: any) => !s.isRoster);
   const fetchedRoster = (shiftsQuery.data || []).filter((s: any) => s.isRoster);
 
-  const generalShifts = fetchedGeneral.length > 0 ? fetchedGeneral : defaultGeneral;
-  const rosterShifts = fetchedRoster.length > 0 ? fetchedRoster : defaultRoster;
-
   return {
-    companies: (companiesQuery.data && companiesQuery.data.length > 0) ? companiesQuery.data : [
-      { id: '1', name: 'Main Organization / Corporate' }
-    ],
-    locations: (locationsQuery.data && locationsQuery.data.length > 0) ? locationsQuery.data : [
-      { id: 'loc-1', name: 'Headquarters - Tech Park' },
-      { id: 'loc-2', name: 'Regional Office - Delhi' }
-    ],
-    departments: (departmentsQuery.data && departmentsQuery.data.length > 0) ? departmentsQuery.data : [
-      { id: 'dept-1', name: 'Engineering & IT' },
-      { id: 'dept-2', name: 'Sales & Business Development' },
-      { id: 'dept-3', name: 'HR & Operations' },
-      { id: 'dept-4', name: 'Finance & Accounts' }
-    ],
+    companies: companiesQuery.data || [],
+    locations: locationsQuery.data || [],
+    departments: departmentsQuery.data || [],
     shifts: shiftsQuery.data || [],
-    generalShifts,
-    rosterShifts,
-    grades: (gradesQuery.data && gradesQuery.data.length > 0) ? gradesQuery.data : [
-      { id: 'grd-1', name: 'Grade A - Executive Level' },
-      { id: 'grd-2', name: 'Grade B - Senior Level' },
-      { id: 'grd-3', name: 'Grade C - Junior Level' }
-    ],
+    generalShifts: fetchedGeneral,
+    rosterShifts: fetchedRoster,
+    grades: gradesQuery.data || [],
   };
 }

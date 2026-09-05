@@ -2824,6 +2824,7 @@ CREATE TABLE `departments` (
   `uuid` char(36) COLLATE utf8mb4_unicode_ci NOT NULL,
   `organization_id` bigint unsigned NOT NULL,
   `company_id` bigint unsigned DEFAULT NULL,
+  `company_ids` text COLLATE utf8mb4_unicode_ci,
   `name` varchar(150) COLLATE utf8mb4_unicode_ci NOT NULL,
   `code` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `parent_department_id` bigint unsigned DEFAULT NULL,

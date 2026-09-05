@@ -24,6 +24,7 @@ export interface IdCardRendererProps {
   className?: string;
   frontRef?: React.RefObject<HTMLDivElement>;
   backRef?: React.RefObject<HTMLDivElement>;
+  isDarkMode?: boolean;
 }
 
 export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
@@ -42,6 +43,7 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
   className = '',
   frontRef,
   backRef,
+  isDarkMode = false,
 }) => {
   // 0. Auto-recover and normalize config object
   const config = React.useMemo<IdCardConfig>(() => {
@@ -146,7 +148,7 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
   const cardWidth = theme.cardWidth || 320;
   const cardHeight = theme.cardHeight || 490;
 
-  // 3. Stylized KOSQU Corporate Logo & Header
+  // 3. Stylized Corporate Logo & Header
   const renderKosquLogo = (centered = false) => {
     const showLogo = config?.header?.showLogo !== false;
     const customLogoUrl = config?.header?.logoUrl;
@@ -171,9 +173,9 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
                 <rect x="14" y="24" width="7" height="7" fill="#0369a1" rx="1.5" />
                 <rect x="14" y="44" width="7" height="7" fill="#ea580c" rx="1.5" />
                 {/* Main Blue Vertical Bar */}
-                <polygon points="26,10 38,10 38,70 26,70" fill="#1d4ed8" />
+                <polygon points="26,10 38,10 38,70 26,70" fill={isDarkMode ? '#60a5fa' : '#1d4ed8'} />
                 {/* Diagonal Lower Arm */}
-                <polygon points="38,45 68,70 54,70 33,52" fill="#1e40af" />
+                <polygon points="38,45 68,70 54,70 33,52" fill={isDarkMode ? '#3b82f6' : '#1e40af'} />
                 {/* Diagonal Upper Arrow in Orange */}
                 <polygon points="38,38 62,18 50,18 33,32" fill="#f97316" />
                 {/* Arrow Head */}
@@ -184,20 +186,20 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
         )}
 
         {/* Vertical subtle divider */}
-        {showLogo && !centered && <div className="w-[1.5px] h-6.5 bg-slate-300 mx-0.5 shrink-0" />}
+        {showLogo && !centered && <div className={`w-[1.5px] h-6.5 mx-0.5 shrink-0 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-300'}`} />}
 
         {/* Company Wordmark + Subtitle */}
         <div className="leading-none text-left flex flex-col justify-center">
           <span
             className="font-black text-[18px] tracking-tight font-sans block leading-none"
-            style={{ color: config?.header?.orgNameColor || '#0b1e36' }}
+            style={{ color: config?.header?.orgNameColor || (isDarkMode ? '#ffffff' : '#0b1e36') }}
           >
             {orgDisplayName}
           </span>
           {subtitle !== '' && (
             <div
               className="flex items-center gap-1 mt-1 text-[6.5px] font-black tracking-wider uppercase leading-none"
-              style={{ color: config?.header?.subtitleColor || '#1e293b' }}
+              style={{ color: config?.header?.subtitleColor || (isDarkMode ? '#cbd5e1' : '#1e293b') }}
             >
               {subtitle.includes('•') ? (
                 subtitle.split('•').map((part, i, arr) => (
@@ -254,19 +256,19 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
       width: 256,
       margin: 1,
       ecLevel: qrObj?.errorCorrection || 'M',
-      fgColor: qrObj?.fgColor || qrObj?.foregroundColor || '#0b1e36',
-      bgColor: qrObj?.bgColor || qrObj?.backgroundColor || '#ffffff',
+      fgColor: qrObj?.fgColor || qrObj?.foregroundColor || (isDarkMode ? '#ffffff' : '#0b1e36'),
+      bgColor: qrObj?.bgColor || qrObj?.backgroundColor || (isDarkMode ? '#0f172a' : '#ffffff'),
     }).then((url) => {
       if (isMounted && url) setQrCodeDataUrl(url);
     });
     return () => {
       isMounted = false;
     };
-  }, [qrPayload, config?.qrConfig, config?.qrCode]);
+  }, [qrPayload, config?.qrConfig, config?.qrCode, isDarkMode]);
 
   const renderQrCode = (size = 80) => (
     <div
-      className="p-1 bg-white rounded-md shadow-xs border border-slate-200/80 inline-flex items-center justify-center overflow-hidden"
+      className={`p-1 rounded-md shadow-xs border inline-flex items-center justify-center overflow-hidden ${isDarkMode ? 'bg-white border-slate-700' : 'bg-white border-slate-200/80'}`}
       title={`Scan to verify: ${empName} (${empCode})`}
       style={{ width: `${size}px`, height: `${size}px` }}
     >
@@ -299,7 +301,7 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
               y="0"
               width={Math.max(1.2, w * 0.72)}
               height="32"
-              fill="#0b1e36"
+              fill={isDarkMode ? '#f8fafc' : '#0b1e36'}
             />
           );
         })}
@@ -336,12 +338,13 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
   // 7. Holographic Iridescent Background & Geometric Pixel Mosaics
   const renderDecorativePixels = (isBack = false, hasHeaderImage = false) => (
     <>
-      {/* Crisp White Card Base with Iridescent Diagonal Light Flare */}
+      {/* Card Base Background with Iridescent Flare */}
       <div
         className="absolute inset-0 pointer-events-none z-0"
         style={{
-          background:
-            'linear-gradient(118deg, #ffffff 0%, #ffffff 25%, rgba(56,189,248,0.18) 40%, rgba(244,114,182,0.14) 52%, rgba(251,191,36,0.18) 62%, #ffffff 80%, #ffffff 100%)',
+          background: isDarkMode
+            ? 'linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f172a 75%, #090d16 100%)'
+            : 'linear-gradient(118deg, #ffffff 0%, #ffffff 25%, rgba(56,189,248,0.18) 40%, rgba(244,114,182,0.14) 52%, rgba(251,191,36,0.18) 62%, #ffffff 80%, #ffffff 100%)',
         }}
       />
 
@@ -349,8 +352,9 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
       <div
         className="absolute inset-0 pointer-events-none z-0 opacity-60"
         style={{
-          background:
-            'radial-gradient(ellipse at 80% 20%, rgba(56,189,248,0.25) 0%, rgba(244,114,182,0.15) 30%, transparent 70%)',
+          background: isDarkMode
+            ? 'radial-gradient(ellipse at 80% 20%, rgba(99,102,241,0.25) 0%, rgba(56,189,248,0.15) 30%, transparent 70%)'
+            : 'radial-gradient(ellipse at 80% 20%, rgba(56,189,248,0.25) 0%, rgba(244,114,182,0.15) 30%, transparent 70%)',
         }}
       />
 
@@ -387,8 +391,6 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
           </div>
         </>
       )}
-
-      {/* BACK SIDE PIXEL MOSAIC (Removed for clean back aesthetic) */}
     </>
   );
 
@@ -406,8 +408,8 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
         style={{
           width: '112px',
           height: '112px',
-          border: '2.5px solid #0b1e36',
-          backgroundColor: '#f8fafc',
+          border: isDarkMode ? '2.5px solid #38bdf8' : '2.5px solid #0b1e36',
+          backgroundColor: isDarkMode ? '#1e293b' : '#f8fafc',
         }}
       >
         {avatar ? (
@@ -439,16 +441,16 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
     const hasBottomImage = !!(config?.footer?.bottomBarcodeImageUrl || config?.footer?.footerImageUrl);
 
     const cardBgImageUrl = config?.theme?.bgImageUrl;
-    const cardBgColor = config?.theme?.solidBgColor || '#ffffff';
+    const cardBgColor = config?.theme?.solidBgColor || (isDarkMode ? '#0f172a' : '#ffffff');
 
     return (
       <div
         ref={frontRef}
-        className="w-full h-full p-4 text-slate-900 shadow-2xl flex flex-col justify-between overflow-hidden relative select-none"
+        className={`w-full h-full p-4 shadow-2xl flex flex-col justify-between overflow-hidden relative select-none ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
         style={{
           borderRadius: `${borderRadius}px`,
           fontFamily: theme.fontFamily || 'Inter, sans-serif',
-          border: '1px solid rgba(15, 23, 42, 0.14)',
+          border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(15, 23, 42, 0.14)',
           backgroundColor: cardBgColor,
         }}
       >
@@ -488,10 +490,16 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
         <div className="flex flex-col items-center text-center my-auto relative z-10 py-0.5 gap-1.5">
           {renderAvatar()}
           <div className="space-y-0.5 mt-1">
-            <h2 className="font-extrabold text-[17px] tracking-wide text-[#0b1e36] uppercase leading-tight font-sans">
+            <h2
+              className="font-extrabold text-[17px] tracking-wide uppercase leading-tight font-sans"
+              style={{ color: isDarkMode ? '#ffffff' : '#0b1e36' }}
+            >
               {empName}
             </h2>
-            <p className="text-[11px] font-bold text-[#334155] uppercase tracking-wider">
+            <p
+              className="text-[11px] font-bold uppercase tracking-wider"
+              style={{ color: isDarkMode ? '#cbd5e1' : '#334155' }}
+            >
               {designation}
             </p>
           </div>
@@ -518,8 +526,8 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
         ) : (
           <div className="relative z-10 text-center space-y-1 py-1">
             <div className="space-y-0.5">
-              <span className="text-[10px] font-bold tracking-widest text-[#475569] uppercase">
-                ID NO : <span className="font-extrabold text-[#0b1e36]">{empCode}</span>
+              <span className={`text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-slate-400' : 'text-[#475569]'}`}>
+                ID NO : <span className={`font-extrabold ${isDarkMode ? 'text-cyan-400' : 'text-[#0b1e36]'}`}>{empCode}</span>
               </span>
             </div>
 
@@ -536,8 +544,8 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
 
         {/* Footer Tagline */}
         {config?.footer?.visible !== false && (
-          <div className="relative z-10 text-center border-t border-slate-200/80 pt-1.5 pb-0.5">
-            <div className="flex items-center justify-center gap-1.5 text-[8.5px] font-black tracking-widest text-[#0b1e36] uppercase">
+          <div className={`relative z-10 text-center border-t pt-1.5 pb-0.5 ${isDarkMode ? 'border-slate-800' : 'border-slate-200/80'}`}>
+            <div className={`flex items-center justify-center gap-1.5 text-[8.5px] font-black tracking-widest uppercase ${isDarkMode ? 'text-slate-100' : 'text-[#0b1e36]'}`}>
               {config?.footer?.text || config?.theme?.tagline ? (
                 <span>{config?.footer?.text || config?.theme?.tagline}</span>
               ) : (
@@ -561,17 +569,17 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
     const hasBackHeaderImage = !!config?.back?.backHeaderImageUrl;
 
     const backBgImageUrl = config?.back?.bgImageUrl || config?.theme?.bgImageUrl;
-    const backBgColor = config?.theme?.solidBgColor || '#ffffff';
+    const backBgColor = config?.theme?.solidBgColor || (isDarkMode ? '#0f172a' : '#ffffff');
     const orgDisplayName = config?.header?.orgName || 'Company';
 
     return (
       <div
         ref={backRef}
-        className="w-full h-full p-4 text-slate-900 shadow-2xl flex flex-col justify-between overflow-hidden relative select-none text-center"
+        className={`w-full h-full p-4 shadow-2xl flex flex-col justify-between overflow-hidden relative select-none text-center ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}
         style={{
           borderRadius: `${borderRadius}px`,
           fontFamily: theme.fontFamily || 'Inter, sans-serif',
-          border: '1px solid rgba(15, 23, 42, 0.14)',
+          border: isDarkMode ? '1px solid rgba(255, 255, 255, 0.16)' : '1px solid rgba(15, 23, 42, 0.14)',
           backgroundColor: backBgColor,
         }}
       >
@@ -601,7 +609,7 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
           </div>
         ) : config?.back?.headerTitle ? (
           <div className="relative z-10 pt-1 pb-0.5">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
+            <h3 className={`text-xs font-extrabold uppercase tracking-wider ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
               {config.back.headerTitle}
             </h3>
           </div>
@@ -613,7 +621,7 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
             <div className="p-2.5 bg-white/95 rounded-2xl shadow-sm border border-slate-200/90 inline-flex flex-col items-center justify-center">
               {renderQrCode(88)}
             </div>
-            <span className="text-[8.5px] font-black text-slate-600 tracking-widest uppercase mt-1.5">
+            <span className={`text-[8.5px] font-black tracking-widest uppercase mt-1.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
               Scan to verify credentials
             </span>
           </div>
@@ -621,31 +629,31 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
 
         {/* Card Property & Return Info Card */}
         <div className="relative z-10 my-auto space-y-2 px-1 text-center">
-          <div className="bg-white/85 dark:bg-slate-900/60 backdrop-blur-xs rounded-xl p-2.5 border border-slate-200/80 shadow-xs space-y-1">
-            <p className="text-[9.5px] text-slate-500 font-medium leading-none">
+          <div className={`${isDarkMode ? 'bg-slate-900/90 text-white border-slate-700/80' : 'bg-white/85 text-slate-900 border-slate-200/80'} backdrop-blur-xs rounded-xl p-2.5 border shadow-xs space-y-1`}>
+            <p className={`text-[9.5px] font-medium leading-none ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
               {(config?.back as any)?.disclaimerText || config?.back?.disclaimer || 'This credential is the property of'}
             </p>
-            <h4 className="text-[12px] font-extrabold text-slate-900 uppercase tracking-wide">
+            <h4 className={`text-[12px] font-extrabold uppercase tracking-wide ${isDarkMode ? 'text-cyan-400' : 'text-slate-900'}`}>
               {orgDisplayName}
             </h4>
-            <p className="text-[9px] text-slate-600 leading-snug">
+            <p className={`text-[9px] leading-snug ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
               {(config?.back as any)?.returnAddress || 'If found, please return to Human Resources Department.'}
             </p>
           </div>
 
           {/* Contact Details Pill Grid */}
-          <div className="bg-white/85 dark:bg-slate-900/60 backdrop-blur-xs rounded-xl p-2 border border-slate-200/80 shadow-xs space-y-1 text-[10px]">
+          <div className={`${isDarkMode ? 'bg-slate-900/90 text-white border-slate-700/80' : 'bg-white/85 text-slate-900 border-slate-200/80'} backdrop-blur-xs rounded-xl p-2 border shadow-xs space-y-1 text-[10px]`}>
             <div className="flex items-center justify-between px-1">
-              <span className="font-semibold text-slate-500 text-[9.5px]">Emergency:</span>
-              <span className="font-bold text-slate-900 font-mono text-[10.5px]">{emergencyPhone}</span>
+              <span className={`font-semibold text-[9.5px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Emergency:</span>
+              <span className={`font-bold font-mono text-[10.5px] ${isDarkMode ? 'text-emerald-400' : 'text-slate-900'}`}>{emergencyPhone}</span>
             </div>
-            <div className="flex items-center justify-between px-1 border-t border-slate-200/50 pt-1">
-              <span className="font-semibold text-slate-500 text-[9.5px]">Support:</span>
-              <span className="font-medium text-slate-800 text-[9.5px] truncate max-w-[170px]">{supportEmail}</span>
+            <div className={`flex items-center justify-between px-1 border-t pt-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-200/50'}`}>
+              <span className={`font-semibold text-[9.5px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Support:</span>
+              <span className={`font-medium text-[9.5px] truncate max-w-[170px] ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{supportEmail}</span>
             </div>
-            <div className="flex items-center justify-between px-1 border-t border-slate-200/50 pt-1">
-              <span className="font-semibold text-slate-500 text-[9.5px]">Portal:</span>
-              <span className="font-medium text-slate-800 text-[9.5px] truncate max-w-[170px]">{companyWebsite}</span>
+            <div className={`flex items-center justify-between px-1 border-t pt-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-200/50'}`}>
+              <span className={`font-semibold text-[9.5px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Portal:</span>
+              <span className={`font-medium text-[9.5px] truncate max-w-[170px] ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>{companyWebsite}</span>
             </div>
           </div>
 
@@ -659,21 +667,21 @@ export const IdCardRenderer: React.FC<IdCardRendererProps> = ({
                   className="h-8 max-w-[100px] object-contain"
                 />
               )}
-              <span className="text-[8px] font-bold text-slate-600 uppercase border-t border-slate-300 pt-0.5 mt-0.5">
+              <span className={`text-[8px] font-bold uppercase border-t pt-0.5 mt-0.5 ${isDarkMode ? 'text-slate-400 border-slate-700' : 'text-slate-600 border-slate-300'}`}>
                 {config.back.signatoryTitle || 'Authorized Signatory'}
               </span>
             </div>
           )}
 
-          <p className="text-[8.5px] text-slate-500 font-medium italic">
+          <p className={`text-[8.5px] font-medium italic ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
             {(config?.back as any)?.termsAndConditions || 'This card is non-transferable.'}
           </p>
         </div>
 
         {/* Footer Bar */}
         {config?.footer?.visible !== false && (
-          <div className="relative z-10 text-center border-t border-slate-200/80 pt-1.5 pb-0.5">
-            <div className="flex items-center justify-center gap-1 text-[8px] font-black tracking-widest text-[#0b1e36] uppercase">
+          <div className={`relative z-10 text-center border-t pt-1.5 pb-0.5 ${isDarkMode ? 'border-slate-800' : 'border-slate-200/80'}`}>
+            <div className={`flex items-center justify-center gap-1 text-[8px] font-black tracking-widest uppercase ${isDarkMode ? 'text-slate-100' : 'text-[#0b1e36]'}`}>
               {config?.footer?.text || config?.theme?.tagline ? (
                 <span>{config?.footer?.text || config?.theme?.tagline}</span>
               ) : (

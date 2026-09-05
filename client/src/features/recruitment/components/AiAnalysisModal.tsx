@@ -9,6 +9,7 @@ import {
   Layers, Award, UserCheck, ExternalLink,
   Download, Copy, Mail, Phone, Briefcase, CheckCheck
 } from 'lucide-react';
+import { resolveResumeUrl } from './ResumeViewerModal';
 
 interface AiAnalysisModalProps {
   isOpen: boolean;
@@ -460,7 +461,7 @@ export const AiAnalysisModal: React.FC<AiAnalysisModalProps> = ({
                     </Button>
                     {candidate?.resumeUrl && (
                       <a
-                        href={candidate.resumeUrl}
+                        href={resolveResumeUrl(candidate.resumeUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-input bg-background hover:bg-accent text-xs font-medium text-foreground transition-colors"
@@ -474,7 +475,7 @@ export const AiAnalysisModal: React.FC<AiAnalysisModalProps> = ({
                 {isPdf && candidate?.resumeUrl ? (
                   <div className="rounded-lg border border-border overflow-hidden bg-slate-900 shadow-inner">
                     <iframe
-                      src={candidate.resumeUrl}
+                      src={resolveResumeUrl(candidate.resumeUrl)}
                       className="w-full h-[520px] rounded-lg"
                       title="Candidate Resume PDF Preview"
                     />

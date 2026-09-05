@@ -1,5 +1,5 @@
 import http from 'http';
-// reload trigger comment #37 - SMTP email delivery wired up
+// reload trigger comment #38 - departments table schema repair (colour, color, email, is_active)
 import { Server } from 'socket.io';
 import fs from 'fs';
 import { createApp } from './app';

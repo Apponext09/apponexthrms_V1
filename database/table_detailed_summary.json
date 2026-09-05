@@ -1,0 +1,6966 @@
+{
+  "payroll_cycles": {
+    "rowCount": 3,
+    "colCount": 37,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "cycle_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "cycle_code",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "cycle_type",
+        "type": "enum('monthly','biweekly','weekly','fortnightly')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "cycle_start_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "cycle_end_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "salary_credit_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "is_current_cycle",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "status",
+        "type": "enum('open','locked','closed')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "calculation_start_day",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "cutoff_day",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "disbursement_date_str",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payslip_frequency",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_daily_wages",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tolerance_mins",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "frequency",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "start_date",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "start_date_2",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "start_day",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "cutoff_day_name",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "month_offset",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "total_days_calc",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "cap_amount",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "daily_wages_include_paid_holidays",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "daily_wages_include_week_off",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tolerance_enabled",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tolerance_minutes",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_active",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "payroll_runs",
+        "col": "payroll_cycle_id"
+      },
+      {
+        "table": "salary_structures",
+        "col": "cycle_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_cycles_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_cycles_organization_id_cycle_code_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "payroll_cycles_organization_id_cycle_code_unique",
+        "col": "cycle_code",
+        "unique": true
+      },
+      {
+        "name": "payroll_cycles_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_cycles_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_cycles_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_cycles_status_index",
+        "col": "status",
+        "unique": false
+      },
+      {
+        "name": "payroll_cycles_is_current_cycle_index",
+        "col": "is_current_cycle",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_component_groups": {
+    "rowCount": 18,
+    "colCount": 23,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "category",
+        "type": "enum('Earning','Deduction')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "round_format",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "group_function",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "configure_on_profile",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "display_on_profile",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_editable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "contributed_by",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_active",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "recalculate_on_change",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "group_for_payslip",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "display_order",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "disable_arrear",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "display_total_on_process",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tds_same_month",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_taxable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "payroll_components",
+        "col": "group_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_component_groups_organization_id_foreign",
+        "col": "organization_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_components": {
+    "rowCount": 18,
+    "colCount": 31,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "group_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "non_cashable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "based_on_attendance",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_active",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_type",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "amount",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "formula",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "boundary_type",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "min_amount",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_amount",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "effective_from_date",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "effective_to_date",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "condition_on",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "condition_operator",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "condition_value1",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "condition_value2",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "months",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gender_filter",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "grades",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "departments",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "locations",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employees",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "module_source",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "group_id",
+        "refTable": "payroll_component_groups",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "payroll_deductions",
+        "col": "component_id"
+      },
+      {
+        "table": "payroll_earnings",
+        "col": "component_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_components_organization_id_foreign",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_components_group_id_foreign",
+        "col": "group_id",
+        "unique": false
+      }
+    ]
+  },
+  "salary_components": {
+    "rowCount": 0,
+    "colCount": 24,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_code",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_type",
+        "type": "enum('earnings','deductions')",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "earnings_type",
+        "type": "enum('basic','hra','allowance','bonus','variable','overtime','lta')",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deduction_type",
+        "type": "enum('pf','esi','pt','tds','lwf','loan','advance','other')",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_taxable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_recurring",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_monthly",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "percentage_of_basic",
+        "type": "decimal(5,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "calculation_method",
+        "type": "enum('fixed','percentage','formula','formula_based')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "calculation_formula",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "min_limit",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_limit",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "sort_order",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "enum('active','inactive')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "salary_revision_components",
+        "col": "component_id"
+      },
+      {
+        "table": "salary_structure_components",
+        "col": "component_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "salary_components_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "salary_components_organization_id_component_code_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "salary_components_organization_id_component_code_unique",
+        "col": "component_code",
+        "unique": true
+      },
+      {
+        "name": "salary_components_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "salary_components_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "salary_components_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "salary_components_component_type_index",
+        "col": "component_type",
+        "unique": false
+      },
+      {
+        "name": "salary_components_status_index",
+        "col": "status",
+        "unique": false
+      }
+    ]
+  },
+  "pay_component_definitions": {
+    "rowCount": 0,
+    "colCount": 22,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "code",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_code",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "name",
+        "type": "varchar(255)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_type",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "calculation_type",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "formula_expression",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_taxable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_pf_applicable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_esi_applicable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_pt_applicable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_statutory",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "uuid",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "organization_id",
+        "col": "organization_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_slabs": {
+    "rowCount": 2,
+    "colCount": 20,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "name",
+        "type": "varchar(150)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "departments",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "grades",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "locations",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "min_ctc",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_ctc",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "selected_component_ids",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "cycle_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employment_type",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "pf_rate_pct",
+        "type": "decimal(5,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_active",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_slabs_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      }
+    ]
+  },
+  "payroll_slab_components": {
+    "rowCount": 0,
+    "colCount": 6,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "slab_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      }
+    ]
+  },
+  "salary_structures": {
+    "rowCount": 2,
+    "colCount": 29,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "structure_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "structure_code",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "enum('active','inactive')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "annual_ctc",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "basic_monthly",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "hra_monthly",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "special_allowance_monthly",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gross_monthly",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "pf_deduction",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "esi_deduction",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tds_deduction",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "net_take_home",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "earnings_breakup",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deductions_breakup",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "cycle_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "slab_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "custom_components",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "cycle_id",
+        "refTable": "payroll_cycles",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "employee_salary_structures",
+        "col": "salary_structure_id"
+      },
+      {
+        "table": "salary_structure_components",
+        "col": "structure_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "salary_structures_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "salary_structures_organization_id_structure_code_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "salary_structures_organization_id_structure_code_unique",
+        "col": "structure_code",
+        "unique": true
+      },
+      {
+        "name": "salary_structures_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "salary_structures_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "salary_structures_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "salary_structures_status_index",
+        "col": "status",
+        "unique": false
+      },
+      {
+        "name": "salary_structures_cycle_id_foreign",
+        "col": "cycle_id",
+        "unique": false
+      }
+    ]
+  },
+  "employee_salary_structures": {
+    "rowCount": 5,
+    "colCount": 14,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "salary_structure_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "effective_to",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_current",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "salary_structure_id",
+        "refTable": "salary_structures",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "employee_salary_structures_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "employee_salary_structures_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "employee_salary_structures_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "employee_salary_structures_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "employee_salary_structures_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "employee_salary_structures_salary_structure_id_index",
+        "col": "salary_structure_id",
+        "unique": false
+      },
+      {
+        "name": "employee_salary_structures_is_current_index",
+        "col": "is_current",
+        "unique": false
+      }
+    ]
+  },
+  "salary_structure_components": {
+    "rowCount": 0,
+    "colCount": 11,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "structure_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "sort_order",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "component_id",
+        "refTable": "salary_components",
+        "refCol": "id"
+      },
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "structure_id",
+        "refTable": "salary_structures",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "salary_structure_components_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "salary_structure_components_structure_id_component_id_unique",
+        "col": "structure_id",
+        "unique": true
+      },
+      {
+        "name": "salary_structure_components_structure_id_component_id_unique",
+        "col": "component_id",
+        "unique": true
+      },
+      {
+        "name": "salary_structure_components_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "salary_structure_components_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "salary_structure_components_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "salary_structure_components_structure_id_index",
+        "col": "structure_id",
+        "unique": false
+      },
+      {
+        "name": "salary_structure_components_component_id_index",
+        "col": "component_id",
+        "unique": false
+      }
+    ]
+  },
+  "salary_revisions": {
+    "rowCount": 0,
+    "colCount": 23,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "revision_type",
+        "type": "enum('increment','promotion','compensation_change','adjustment')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "effective_from",
+        "type": "date",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "old_ctc",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "new_ctc",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "increment_percentage",
+        "type": "decimal(5,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "increment_amount",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "reason_description",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "workflow_instance_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "status",
+        "type": "enum('draft','submitted','approved','rejected','implemented')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "submitted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approved_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approval_date",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "implemented_date",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "approved_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "workflow_instance_id",
+        "refTable": "workflow_instances",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "salary_revision_components",
+        "col": "revision_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "salary_revisions_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "salary_revisions_workflow_instance_id_foreign",
+        "col": "workflow_instance_id",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_approved_by_foreign",
+        "col": "approved_by",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_status_index",
+        "col": "status",
+        "unique": false
+      },
+      {
+        "name": "salary_revisions_effective_from_index",
+        "col": "effective_from",
+        "unique": false
+      }
+    ]
+  },
+  "salary_revision_components": {
+    "rowCount": 0,
+    "colCount": 9,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "revision_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "old_value",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "new_value",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "component_id",
+        "refTable": "salary_components",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "revision_id",
+        "refTable": "salary_revisions",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "salary_revision_components_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "salary_revision_components_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "salary_revision_components_revision_id_index",
+        "col": "revision_id",
+        "unique": false
+      },
+      {
+        "name": "salary_revision_components_component_id_index",
+        "col": "component_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_runs": {
+    "rowCount": 1,
+    "colCount": 22,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payroll_cycle_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "run_type",
+        "type": "enum('regular','off_cycle','final_settlement','arrears')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "run_month",
+        "type": "date",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "status",
+        "type": "enum('draft','processing','calculated','locked','approved','published','completed')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "locked_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "locked_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approved_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approved_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "published_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "total_employees",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "processed_employees",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "error_count",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "processing_notes",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "approved_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "locked_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_cycle_id",
+        "refTable": "payroll_cycles",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "advance_recoveries",
+        "col": "payroll_run_id"
+      },
+      {
+        "table": "payroll_run_employees",
+        "col": "payroll_run_id"
+      },
+      {
+        "table": "payslips",
+        "col": "payroll_run_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_runs_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_runs_locked_by_foreign",
+        "col": "locked_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_approved_by_foreign",
+        "col": "approved_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_payroll_cycle_id_index",
+        "col": "payroll_cycle_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_status_index",
+        "col": "status",
+        "unique": false
+      },
+      {
+        "name": "payroll_runs_run_month_index",
+        "col": "run_month",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_run_employees": {
+    "rowCount": 2,
+    "colCount": 23,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "status",
+        "type": "enum('pending','processed','error')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "working_days",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "leave_days",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "paid_leave_days",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "unpaid_leave_days",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "overtime_hours",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "total_earnings",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "total_deductions",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "net_salary",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "tax_deducted",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "processing_notes",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "processed_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_run_id",
+        "refTable": "payroll_runs",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "payroll_adjustments",
+        "col": "payroll_run_employee_id"
+      },
+      {
+        "table": "payroll_deductions",
+        "col": "payroll_run_employee_id"
+      },
+      {
+        "table": "payroll_earnings",
+        "col": "payroll_run_employee_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_run_employees_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_run_employees_payroll_run_id_employee_id_unique",
+        "col": "payroll_run_id",
+        "unique": true
+      },
+      {
+        "name": "payroll_run_employees_payroll_run_id_employee_id_unique",
+        "col": "employee_id",
+        "unique": true
+      },
+      {
+        "name": "payroll_run_employees_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_run_employees_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_run_employees_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_run_employees_payroll_run_id_index",
+        "col": "payroll_run_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_run_employees_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_run_employees_status_index",
+        "col": "status",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_earnings": {
+    "rowCount": 10,
+    "colCount": 13,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "calculated_value",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "actual_value",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "formula_used",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "group_name",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_non_cashable",
+        "type": "tinyint",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "component_id",
+        "refTable": "payroll_components",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_run_employee_id",
+        "refTable": "payroll_run_employees",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_earnings_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_earnings_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_earnings_payroll_run_employee_id_index",
+        "col": "payroll_run_employee_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_earnings_component_id_index",
+        "col": "component_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_deductions": {
+    "rowCount": 6,
+    "colCount": 10,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "calculated_value",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "actual_value",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "component_id",
+        "refTable": "payroll_components",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_run_employee_id",
+        "refTable": "payroll_run_employees",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_deductions_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_deductions_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_deductions_payroll_run_employee_id_index",
+        "col": "payroll_run_employee_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_deductions_component_id_index",
+        "col": "component_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_adjustments": {
+    "rowCount": 0,
+    "colCount": 14,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "adjustment_type",
+        "type": "enum('bonus','arrears','deduction','recovery','other')",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "adjustment_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "adjustment_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "reference_document_url",
+        "type": "varchar(500)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_run_employee_id",
+        "refTable": "payroll_run_employees",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_adjustments_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_adjustments_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_adjustments_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_adjustments_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_adjustments_payroll_run_employee_id_index",
+        "col": "payroll_run_employee_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_adjustments_adjustment_type_index",
+        "col": "adjustment_type",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_register_overrides": {
+    "rowCount": 0,
+    "colCount": 41,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "month",
+        "type": "varchar(7)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "cycle_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "salary_days",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "paid_days",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "unpaid_days",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "basic",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "hra",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "standard_allowance",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "meal_allowance",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "communication_allowance",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "children_education_allowance",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "lta",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gross",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "basic_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "hra_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "standard_allowance_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "meal_allowance_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "communication_allowance_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "children_education_allowance_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "lta_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gross_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "total_gross_earned",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "adjustment",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "ot_hours",
+        "type": "decimal(6,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "ot",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "pt",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "pf",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tds",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "esic",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "esic_employer",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "total_deduction",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "net_salary",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "ctc",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payment_status",
+        "type": "varchar(30)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "notes",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "pro_org_emp_month_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "pro_org_emp_month_unique",
+        "col": "employee_id",
+        "unique": true
+      },
+      {
+        "name": "pro_org_emp_month_unique",
+        "col": "month",
+        "unique": true
+      },
+      {
+        "name": "pro_org_month_idx",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "pro_org_month_idx",
+        "col": "month",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_mass_upload_logs": {
+    "rowCount": 0,
+    "colCount": 11,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "file_name",
+        "type": "varchar(255)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "slab_name",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "total_rows",
+        "type": "int unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "success_count",
+        "type": "int unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "fail_count",
+        "type": "int unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "errors",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "uploaded_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "pmul_org_created_idx",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "pmul_org_created_idx",
+        "col": "created_at",
+        "unique": false
+      }
+    ]
+  },
+  "payslips": {
+    "rowCount": 0,
+    "colCount": 28,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "payroll_run_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "payslip_month",
+        "type": "date",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "payslip_number",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "ctc",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "basic_salary",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "gross_salary",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "total_deductions",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "net_salary",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "ytd_gross",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "ytd_tax",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "ytd_net",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "payslip_pdf_url",
+        "type": "varchar(500)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payslip_html",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_locked",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "locked_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "digitally_signed",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "signature_timestamp",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "sent_to_employee_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_run_id",
+        "refTable": "payroll_runs",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payslips_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payslips_organization_id_payslip_number_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "payslips_organization_id_payslip_number_unique",
+        "col": "payslip_number",
+        "unique": true
+      },
+      {
+        "name": "payslips_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "payslips_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "payslips_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payslips_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "payslips_payroll_run_id_index",
+        "col": "payroll_run_id",
+        "unique": false
+      },
+      {
+        "name": "payslips_payslip_month_index",
+        "col": "payslip_month",
+        "unique": false
+      }
+    ]
+  },
+  "payslip_items": {
+    "rowCount": 0,
+    "colCount": 9,
+    "columns": [
+      {
+        "name": "id",
+        "type": "int",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "varchar(36)",
+        "null": "YES",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payslip_id",
+        "type": "int",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "component_type",
+        "type": "enum('earning','deduction')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "amount",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "datetime",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "uuid",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "idx_pi_ps",
+        "col": "payslip_id",
+        "unique": false
+      }
+    ]
+  },
+  "employee_loans": {
+    "rowCount": 0,
+    "colCount": 27,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "loan_type_id",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "loan_type",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "loan_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "loan_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "tenure_months",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "interest_rate",
+        "type": "decimal(5,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "emi",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "total_amount_with_interest",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "repaid_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "outstanding_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approved_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approved_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "rejected_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "rejected_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "rejection_reason",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "loan_repayments",
+        "col": "loan_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "employee_loans_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "employee_loans_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "employee_loans_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "employee_loans_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "employee_loans_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "employee_loans_status_index",
+        "col": "status",
+        "unique": false
+      }
+    ]
+  },
+  "loan_repayments": {
+    "rowCount": 0,
+    "colCount": 17,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "loan_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "emi_number",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "emi_amount",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "interest_amount",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "principal_amount",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "due_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "paid_date",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "enum('pending','paid')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "loan_id",
+        "refTable": "employee_loans",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "loan_repayments_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "loan_repayments_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "loan_repayments_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "loan_repayments_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "loan_repayments_loan_id_index",
+        "col": "loan_id",
+        "unique": false
+      },
+      {
+        "name": "loan_repayments_status_index",
+        "col": "status",
+        "unique": false
+      }
+    ]
+  },
+  "loan_repayment_schedules": {
+    "rowCount": 0,
+    "colCount": 13,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_loan_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "installment_number",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "due_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "principal_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "interest_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "total_installment",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "uuid",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "employee_loan_id",
+        "col": "employee_loan_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_loan_types": {
+    "rowCount": 0,
+    "colCount": 34,
+    "columns": [
+      {
+        "name": "id",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "name",
+        "type": "varchar(255)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "category",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "min_service_months",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "interest_type",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "interest_rate",
+        "type": "decimal(5,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "min_term_months",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_term_months",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gender",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "min_amount",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_amount",
+        "type": "decimal(15,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_applications_per_year",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gap_months",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "restrict_concurrent",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "foreclosure_allowed",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "max_eligibility",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_active",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "approver_role",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "request_form_template",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approved_form_template",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "disbursement_form_template",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "rejection_form_template",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "stop_form_template",
+        "type": "varchar(255)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "departments",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "grades",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_types",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_taxable",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      }
+    ]
+  },
+  "salary_advances": {
+    "rowCount": 0,
+    "colCount": 19,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "advance_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "advance_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "recovery_months",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "reason",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "workflow_instance_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "status",
+        "type": "enum('pending','approved','rejected','recovered')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approved_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approval_date",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "recovery_completed_date",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "approved_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "workflow_instance_id",
+        "refTable": "workflow_instances",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "advance_recoveries",
+        "col": "advance_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "salary_advances_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "salary_advances_workflow_instance_id_foreign",
+        "col": "workflow_instance_id",
+        "unique": false
+      },
+      {
+        "name": "salary_advances_approved_by_foreign",
+        "col": "approved_by",
+        "unique": false
+      },
+      {
+        "name": "salary_advances_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "salary_advances_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "salary_advances_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "salary_advances_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "salary_advances_status_index",
+        "col": "status",
+        "unique": false
+      }
+    ]
+  },
+  "advance_recoveries": {
+    "rowCount": 0,
+    "colCount": 9,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "advance_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "recovery_month",
+        "type": "date",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "recovery_amount",
+        "type": "decimal(12,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "advance_id",
+        "refTable": "salary_advances",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "payroll_run_id",
+        "refTable": "payroll_runs",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "advance_recoveries_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "advance_recoveries_payroll_run_id_foreign",
+        "col": "payroll_run_id",
+        "unique": false
+      },
+      {
+        "name": "advance_recoveries_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "advance_recoveries_advance_id_index",
+        "col": "advance_id",
+        "unique": false
+      },
+      {
+        "name": "advance_recoveries_recovery_month_index",
+        "col": "recovery_month",
+        "unique": false
+      }
+    ]
+  },
+  "tax_declarations": {
+    "rowCount": 0,
+    "colCount": 14,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "financial_year",
+        "type": "varchar(10)",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "pan_number",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "declaration_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "enum('pending','declared','finalized')",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "tax_investments",
+        "col": "tax_declaration_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "tax_declarations_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "tax_declarations_org_emp_year_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "tax_declarations_org_emp_year_unique",
+        "col": "employee_id",
+        "unique": true
+      },
+      {
+        "name": "tax_declarations_org_emp_year_unique",
+        "col": "financial_year",
+        "unique": true
+      },
+      {
+        "name": "tax_declarations_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "tax_declarations_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "tax_declarations_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "tax_declarations_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "tax_declarations_financial_year_index",
+        "col": "financial_year",
+        "unique": false
+      }
+    ]
+  },
+  "tax_investments": {
+    "rowCount": 0,
+    "colCount": 13,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "tax_declaration_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "investment_type",
+        "type": "enum('80c','80d','80tta','other')",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "investment_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "investment_proof_url",
+        "type": "varchar(500)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "tax_declaration_id",
+        "refTable": "tax_declarations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "tax_investments_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "tax_investments_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "tax_investments_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "tax_investments_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "tax_investments_tax_declaration_id_index",
+        "col": "tax_declaration_id",
+        "unique": false
+      },
+      {
+        "name": "tax_investments_investment_type_index",
+        "col": "investment_type",
+        "unique": false
+      }
+    ]
+  },
+  "full_final_settlements": {
+    "rowCount": 0,
+    "colCount": 25,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "exit_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "notice_period_days",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "notice_period_recovery",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "leave_encashment_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "gratuity_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "bonus_settlement",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "asset_recovery_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "other_deductions",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "total_settlement_amount",
+        "type": "decimal(15,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "workflow_instance_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "status",
+        "type": "enum('draft','exit_requested','submitted','approved','rejected','processed')",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "approved_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approval_date",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "processed_date",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "settlement_notes",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "approved_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "workflow_instance_id",
+        "refTable": "workflow_instances",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "full_final_settlements_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "full_final_settlements_workflow_instance_id_foreign",
+        "col": "workflow_instance_id",
+        "unique": false
+      },
+      {
+        "name": "full_final_settlements_approved_by_foreign",
+        "col": "approved_by",
+        "unique": false
+      },
+      {
+        "name": "full_final_settlements_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "full_final_settlements_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "full_final_settlements_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "full_final_settlements_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "full_final_settlements_status_index",
+        "col": "status",
+        "unique": false
+      }
+    ]
+  },
+  "final_settlement": {
+    "rowCount": 0,
+    "colCount": 20,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "varchar(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "resignation_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "settlement_date",
+        "type": "date",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "final_salary",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "gratuity",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "leave_encashment",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "bonus",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "other_benefits",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deductions",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "net_amount",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payment_mode",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payment_date",
+        "type": "date",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "transaction_id",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "NO",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "final_settlement_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      }
+    ]
+  },
+  "payroll_gratuity_rules": {
+    "rowCount": 0,
+    "colCount": 19,
+    "columns": [
+      {
+        "name": "id",
+        "type": "int unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "varchar(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "int unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "name",
+        "type": "varchar(255)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "eligible_years_operator",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "eligible_years_value",
+        "type": "decimal(5,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "rounding_rule",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "formula",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "companies",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "locations",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "departments",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "grades",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employment_types",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "is_active",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      }
+    ]
+  },
+  "payroll_settings": {
+    "rowCount": 0,
+    "colCount": 28,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "esic_calculation_base",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "esic_wage_ceiling",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "sandwich_policy_enabled",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "sandwich_policy_rules",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "loan_setting",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payslip_setting",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payment_status_options",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "checklist_setting",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approval_mode",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "approval_levels",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "require_approval_before_publish",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "process_payroll_tabs",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "freeze_attendance_day",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "ignore_leave_type_ids",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "mass_paid_days",
+        "type": "int",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "double_pay_inclusive",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "bonus_setting",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "attendance_bonus_setting",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "night_allowance_setting",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_settings_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_settings_org_company_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "payroll_settings_org_company_unique",
+        "col": "company_id",
+        "unique": true
+      },
+      {
+        "name": "payroll_settings_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_policies": {
+    "rowCount": 0,
+    "colCount": 18,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "name",
+        "type": "varchar(150)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "code",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "is_default",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "pay_frequency",
+        "type": "enum('monthly','biweekly','weekly')",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "salary_structure",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deductions",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "compliance_settings",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "enum('active','inactive')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [
+      {
+        "table": "employee_compensation",
+        "col": "salary_structure_id"
+      }
+    ],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_policies_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_policies_organization_id_code_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "payroll_policies_organization_id_code_unique",
+        "col": "code",
+        "unique": true
+      },
+      {
+        "name": "payroll_policies_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_policies_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "payroll_policies_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_policies_is_default_index",
+        "col": "is_default",
+        "unique": false
+      },
+      {
+        "name": "payroll_policies_status_index",
+        "col": "status",
+        "unique": false
+      },
+      {
+        "name": "payroll_policies_created_at_index",
+        "col": "created_at",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_ledger_entries": {
+    "rowCount": 0,
+    "colCount": 13,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "payroll_run_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "entry_type",
+        "type": "varchar(50)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "component_code",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(150)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "amount",
+        "type": "decimal(14,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "financial_year",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "salary_month",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_ledger_entries_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "payroll_ledger_entries_organization_id_salary_month_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "payroll_ledger_entries_organization_id_salary_month_index",
+        "col": "salary_month",
+        "unique": false
+      },
+      {
+        "name": "payroll_ledger_entries_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_component_audit_logs": {
+    "rowCount": 10,
+    "colCount": 15,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "component_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "group_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "action",
+        "type": "enum('CREATE','UPDATE','DELETE')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "before_state",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "after_state",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by_name",
+        "type": "varchar(150)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "ip_address",
+        "type": "varchar(45)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "idx_comp_audit_comp_id",
+        "col": "component_id",
+        "unique": false
+      },
+      {
+        "name": "idx_comp_audit_group_id",
+        "col": "group_id",
+        "unique": false
+      },
+      {
+        "name": "idx_comp_audit_org_id",
+        "col": "organization_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_component_group_audit_logs": {
+    "rowCount": 3,
+    "colCount": 14,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "group_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "group_name",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "action",
+        "type": "enum('CREATE','UPDATE','DELETE')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "description",
+        "type": "text",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "before_state",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "after_state",
+        "type": "json",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by_name",
+        "type": "varchar(150)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "ip_address",
+        "type": "varchar(45)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "idx_group_audit_group_id",
+        "col": "group_id",
+        "unique": false
+      },
+      {
+        "name": "idx_group_audit_org_id",
+        "col": "organization_id",
+        "unique": false
+      }
+    ]
+  },
+  "payroll_component_conditions": {
+    "rowCount": 0,
+    "colCount": 12,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "component_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "condition_on",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "operator",
+        "type": "varchar(20)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "value2",
+        "type": "varchar(100)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "payroll_component_conditions_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      }
+    ]
+  },
+  "leave_lop_records": {
+    "rowCount": 0,
+    "colCount": 12,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "leave_application_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "lop_days",
+        "type": "decimal(5,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "month",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "year",
+        "type": "int",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "status",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "leave_application_id",
+        "refTable": "leave_applications",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "leave_lop_records_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "leave_lop_records_organization_id_foreign",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "leave_lop_records_employee_id_foreign",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "leave_lop_records_leave_application_id_foreign",
+        "col": "leave_application_id",
+        "unique": false
+      }
+    ]
+  },
+  "overtime_requests": {
+    "rowCount": 0,
+    "colCount": 20,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "overtime_date",
+        "type": "date",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "overtime_hours",
+        "type": "decimal(4,2)",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "overtime_type",
+        "type": "enum('extra_hours','weekend_work','holiday_work')",
+        "null": "NO",
+        "key": ""
+      },
+      {
+        "name": "reason_description",
+        "type": "text",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "workflow_instance_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approval_status",
+        "type": "enum('pending','approved','rejected')",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approved_by",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "approval_date",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "comp_off_eligible",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "comp_off_used",
+        "type": "tinyint(1)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "approved_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "workflow_instance_id",
+        "refTable": "workflow_instances",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "overtime_requests_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "overtime_requests_workflow_instance_id_foreign",
+        "col": "workflow_instance_id",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_approved_by_foreign",
+        "col": "approved_by",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_employee_id_index",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_approval_status_index",
+        "col": "approval_status",
+        "unique": false
+      },
+      {
+        "name": "overtime_requests_overtime_date_index",
+        "col": "overtime_date",
+        "unique": false
+      }
+    ]
+  },
+  "employee_compensation": {
+    "rowCount": 0,
+    "colCount": 19,
+    "columns": [
+      {
+        "name": "id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "PRI"
+      },
+      {
+        "name": "uuid",
+        "type": "char(36)",
+        "null": "NO",
+        "key": "UNI"
+      },
+      {
+        "name": "organization_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "company_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "employee_id",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "base_salary",
+        "type": "decimal(12,2)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "currency",
+        "type": "varchar(3)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "salary_structure_id",
+        "type": "bigint unsigned",
+        "null": "YES",
+        "key": "MUL"
+      },
+      {
+        "name": "bank_name",
+        "type": "varchar(100)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "account_number",
+        "type": "varchar(30)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "ifsc_code",
+        "type": "varchar(20)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "uan_number",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "esic_number",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "pension_number",
+        "type": "varchar(50)",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "created_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "updated_by",
+        "type": "bigint unsigned",
+        "null": "NO",
+        "key": "MUL"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      },
+      {
+        "name": "deleted_at",
+        "type": "timestamp",
+        "null": "YES",
+        "key": ""
+      }
+    ],
+    "fks": [
+      {
+        "col": "created_by",
+        "refTable": "users",
+        "refCol": "id"
+      },
+      {
+        "col": "employee_id",
+        "refTable": "employees",
+        "refCol": "id"
+      },
+      {
+        "col": "organization_id",
+        "refTable": "organizations",
+        "refCol": "id"
+      },
+      {
+        "col": "salary_structure_id",
+        "refTable": "payroll_policies",
+        "refCol": "id"
+      },
+      {
+        "col": "updated_by",
+        "refTable": "users",
+        "refCol": "id"
+      }
+    ],
+    "refBy": [],
+    "indexes": [
+      {
+        "name": "PRIMARY",
+        "col": "id",
+        "unique": true
+      },
+      {
+        "name": "employee_compensation_uuid_unique",
+        "col": "uuid",
+        "unique": true
+      },
+      {
+        "name": "employee_compensation_organization_id_employee_id_unique",
+        "col": "organization_id",
+        "unique": true
+      },
+      {
+        "name": "employee_compensation_organization_id_employee_id_unique",
+        "col": "employee_id",
+        "unique": true
+      },
+      {
+        "name": "employee_compensation_employee_id_foreign",
+        "col": "employee_id",
+        "unique": false
+      },
+      {
+        "name": "employee_compensation_salary_structure_id_foreign",
+        "col": "salary_structure_id",
+        "unique": false
+      },
+      {
+        "name": "employee_compensation_created_by_foreign",
+        "col": "created_by",
+        "unique": false
+      },
+      {
+        "name": "employee_compensation_updated_by_foreign",
+        "col": "updated_by",
+        "unique": false
+      },
+      {
+        "name": "employee_compensation_organization_id_index",
+        "col": "organization_id",
+        "unique": false
+      }
+    ]
+  }
+}

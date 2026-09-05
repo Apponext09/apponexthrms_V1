@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Plus, Trash2, GitMerge, Layers, HelpCircle, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HelpHint } from './HelpHint';
@@ -127,24 +127,24 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
         key={group.id}
         className={`rounded-xl border p-3.5 transition-all duration-200 ${
           isRoot
-            ? 'bg-slate-50/70 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800'
-            : 'bg-white dark:bg-slate-950 border-indigo-100 dark:border-indigo-950/60 shadow-xs ml-3 sm:ml-4 mt-3'
+            ? 'bg-muted/30/70 dark:bg-slate-900/40 border-border/60 dark:border-slate-800'
+            : 'bg-background dark:bg-slate-950 border-indigo-100 dark:border-indigo-950/60 shadow-xs ml-3 sm:ml-4 mt-3'
         }`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200/70 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-border/60/70 dark:border-slate-800">
           {/* Left: Logic Toggle Pill */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground/70">
               Match
             </span>
-            <div className="inline-flex rounded-lg bg-slate-200/80 dark:bg-slate-800 p-0.5 text-xs font-medium border border-slate-300/40 dark:border-slate-700/60 shadow-2xs">
+            <div className="inline-flex rounded-lg bg-muted/80 dark:bg-slate-800 p-0.5 text-xs font-medium border border-border/40 dark:border-slate-700/60 shadow-2xs">
               <button
                 type="button"
                 onClick={() => toggleConjunction(group.id)}
                 className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                   isAnd
                     ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    : 'text-muted-foreground dark:text-muted-foreground/70 hover:text-foreground dark:hover:text-slate-200'
                 }`}
               >
                 ALL (AND)
@@ -155,7 +155,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
                 className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
                   !isAnd
                     ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    : 'text-muted-foreground dark:text-muted-foreground/70 hover:text-foreground dark:hover:text-slate-200'
                 }`}
               >
                 ANY (OR)
@@ -205,12 +205,12 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
 
         <div className="space-y-2.5 pt-2.5">
           {group.conditions.length === 0 ? (
-            <div className="py-6 px-4 text-center rounded-xl border border-dashed border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20 flex flex-col items-center justify-center gap-1.5">
-              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500">
+            <div className="py-6 px-4 text-center rounded-xl border border-dashed border-border/60/80 dark:border-slate-800 bg-muted/30/40 dark:bg-slate-900/20 flex flex-col items-center justify-center gap-1.5">
+              <div className="p-2 rounded-lg bg-muted/50 dark:bg-slate-800 text-muted-foreground">
                 <SlidersHorizontal className="w-4 h-4" />
               </div>
-              <h4 className="text-xs font-bold text-slate-900 dark:text-white">No conditions yet</h4>
-              <p className="text-[11px] text-slate-500 max-w-xs">
+              <h4 className="text-xs font-bold text-foreground dark:text-white">No conditions yet</h4>
+              <p className="text-[11px] text-muted-foreground max-w-xs">
                 Without conditions this always applies. Add one to narrow down when it does.
               </p>
               <button
@@ -241,9 +241,9 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
     return (
       <div
         key={cond.id}
-        className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all"
+        className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg bg-background dark:bg-slate-950 border border-border/60/80 dark:border-slate-800 shadow-2xs hover:border-border dark:hover:border-slate-700 transition-all"
       >
-        <div className="flex items-center gap-1 text-slate-400">
+        <div className="flex items-center gap-1 text-muted-foreground/70">
           <GitMerge className="w-3.5 h-3.5" />
         </div>
 
@@ -261,7 +261,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
             }
             updateCondition(cond.id, { fact: nextFact, value: defaultVal });
           }}
-          className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="h-8 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-medium text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         >
           {FACT_OPTIONS.map((f) => (
             <option key={f.value} value={f.value}>
@@ -274,7 +274,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
         <select
           value={cond.operator}
           onChange={(e) => updateCondition(cond.id, { operator: e.target.value })}
-          className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs font-medium text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="h-8 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs font-medium text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         >
           {OPERATOR_OPTIONS.map((op) => (
             <option key={op.value} value={op.value}>
@@ -287,7 +287,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
         <select
           value={cond.valueType || 'static'}
           onChange={(e) => updateCondition(cond.id, { valueType: e.target.value as any })}
-          className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 text-xs text-slate-600 dark:text-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="h-8 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2.5 text-xs text-muted-foreground dark:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-indigo-500"
         >
           {VALUE_TYPE_OPTIONS.map((vt) => (
             <option key={vt.value} value={vt.value}>
@@ -302,7 +302,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
             <select
               value={cond.value || ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Select Fact...</option>
               {FACT_OPTIONS.filter((f) => f.value !== cond.fact).map((f) => (
@@ -318,12 +318,12 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
                 value={cond.value ?? ''}
                 onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
                 placeholder="Value"
-                className="w-20 h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="w-20 h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <select
                 value={cond.durationUnit || 'years'}
                 onChange={(e) => updateCondition(cond.id, { durationUnit: e.target.value as any })}
-                className="h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="h-8 rounded-md border border-border/60 dark:border-slate-700 bg-muted/30 dark:bg-slate-900 px-2 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="days">Days</option>
                 <option value="months">Months</option>
@@ -334,7 +334,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
             <select
               value={cond.value || ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Select Option...</option>
               {selectedFact.options?.map((opt) => (
@@ -347,7 +347,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
             <select
               value={cond.value || ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Select Department...</option>
               {departments.map((d) => (
@@ -360,7 +360,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
             <select
               value={cond.value || ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Select Location...</option>
               {locations.map((l) => (
@@ -373,7 +373,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
             <select
               value={cond.value || ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="">Select Grade...</option>
               {grades.map((g) => (
@@ -387,7 +387,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
               type="date"
               value={cond.value ?? ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           ) : selectedFact.type === 'number' ? (
             <input
@@ -395,7 +395,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
               value={cond.value ?? ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
               placeholder="Number"
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           ) : (
             <input
@@ -403,7 +403,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
               value={cond.value ?? ''}
               onChange={(e) => updateCondition(cond.id, { value: e.target.value })}
               placeholder="Value"
-              className="w-full h-8 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full h-8 rounded-md border border-border/60 dark:border-slate-700 bg-background dark:bg-slate-900 px-2.5 text-xs text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
           )}
         </div>
@@ -414,7 +414,7 @@ export const RuleConditionBuilder: React.FC<RuleConditionBuilderProps> = ({
           variant="ghost"
           size="sm"
           onClick={() => removeNode(cond.id)}
-          className="h-8 px-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+          className="h-8 px-2 text-muted-foreground/70 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </Button>

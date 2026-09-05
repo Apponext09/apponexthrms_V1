@@ -271,12 +271,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           color: 'text-blue-500',
         },
         {
-          name: 'Employee Referrals',
-          href: '/employee/referrals',
-          icon: Plus,
-          color: 'text-emerald-500',
-        },
-        {
           name: 'Internal Job Openings',
           href: '/employee/job-openings',
           icon: Briefcase,
@@ -303,20 +297,8 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'RECRUITMENT',
+      label: 'REFER AND EARN',
       items: [
-        {
-          name: 'Assigned Interviews',
-          href: '/employee/interview-schedule',
-          icon: Calendar,
-          color: 'text-indigo-500',
-        },
-        {
-          name: 'Interviewer Ratings',
-          href: '/employee/interviewer-rating',
-          icon: Award,
-          color: 'text-amber-500',
-        },
         {
           name: 'Employee Referrals',
           href: '/employee/referrals',
@@ -402,7 +384,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       'EXPENSE MANAGEMENT': false,
       'TRAVEL MANAGEMENT': false,
       'DEVELOPMENT & ENGAGEMENT': false,
-      'RECRUITMENT': false,
+      'REFER AND EARN': false,
       'TOOLS & SUPPORT': false,
       'TEAM WORKSPACE': false,
     };

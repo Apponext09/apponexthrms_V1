@@ -148,11 +148,13 @@ export function ProtectedRoute({
   // 2. Check role-based access
   if (allowedRoles && allowedRoles.length > 0) {
     const userRoles = user.roles || [];
+    const accessRole = (user.accessRole || (user as any).role || '').toLowerCase();
+    const effectiveRoles = Array.from(new Set([...userRoles.map((r) => String(r).toLowerCase()), accessRole].filter(Boolean)));
 
     // User must have at least one of the allowed roles
-    if (!hasAnyRole(userRoles, allowedRoles)) {
+    if (!hasAnyRole(effectiveRoles, allowedRoles)) {
       console.warn('[ProtectedRoute] Access denied: Insufficient role', {
-        userRoles,
+        userRoles: effectiveRoles,
         allowedRoles,
         pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
         userId: user.id,

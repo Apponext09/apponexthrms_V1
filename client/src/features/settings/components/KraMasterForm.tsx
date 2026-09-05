@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import {
   FileText, Plus, RotateCcw, Search, Clock,
   Check, X, Trash2, Loader2, AlertCircle, Edit2
@@ -449,7 +449,7 @@ export function KraMasterForm({ onCancel, onSave }: KraMasterFormProps) {
                       <span className={cn(
                         'font-semibold px-2 py-0.5 rounded-full text-[10px] border',
                         isSelected
-                          ? 'bg-white/20 text-white border-white/30'
+                          ? 'bg-background/20 text-white border-white/30'
                           : activeStatus === 'Yes'
                           ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                           : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
@@ -464,7 +464,7 @@ export function KraMasterForm({ onCancel, onSave }: KraMasterFormProps) {
                         className={cn(
                           'p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity',
                           isSelected
-                            ? 'text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10'
+                            ? 'text-primary-foreground/80 hover:text-primary-foreground hover:bg-background/10'
                             : 'text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
                         )}
                       >

@@ -10,6 +10,8 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployees, useUpdateEmployee } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
+import { useDesignations } from '../../settings/hooks/useDesignations';
+import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
 import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import type { Employee } from '@/types';
@@ -74,6 +76,12 @@ const statusColors: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
   inactive: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300',
   on_leave: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
+  probation: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
+  onboarding: 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-300',
+  notice: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300',
+  exit: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  alumni: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300',
+  candidate: 'bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300',
 };
 
 const roleColors: Record<string, string> = {
@@ -110,6 +118,8 @@ export function EmployeeBasicInfo({
   const { employees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
   const { employeeTypes } = useEmployeeTypes();
+  const { designations } = useDesignations();
+  const { employeeStatuses } = useEmployeeStatuses();
   const [internalIsEditing, setInternalIsEditing] = useState(false);
 
   const isEditing = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing;
@@ -126,9 +136,11 @@ export function EmployeeBasicInfo({
   useEffect(() => {
     setForm({
       ...(employee || {}),
+      status: (employee as any)?.employeeStatus || (employee as any)?.employee_status || employee?.status || 'active',
+      nationality: employee?.nationality || (employee as any)?.nationality || '',
       password: '',
       confirmPassword: '',
-      jobTitle: (employee as any).jobTitle || '',
+      jobTitle: (employee as any).jobTitle || (employee as any).designation || (employee as any).designationName || (employee.designation as any)?.name || '',
       accessRole: (employee as any).accessRole || 'employee',
     });
   }, [employee]);
@@ -178,6 +190,8 @@ export function EmployeeBasicInfo({
         reportingManagerId: form.reportingManagerId ? Number(form.reportingManagerId) : null,
         avatarUrl: form.avatarUrl || null,
         status: form.status || 'active',
+        employeeStatus: form.status || 'Active',
+        employee_status: form.status || 'Active',
         jobTitle: form.jobTitle || null,
         accessRole: form.accessRole || 'employee',
       };
@@ -186,14 +200,23 @@ export function EmployeeBasicInfo({
         payload.password = newPassword;
       }
 
-      await updateEmployee(payload);
+      const res = await updateEmployee(payload);
+      const updatedData = res?.data || res || {};
+      const newStatus = updatedData.employeeStatus || updatedData.employee_status || payload.employeeStatus;
+      
       // Consume the approved edit permission so employee can't edit again without another approval
       if (isEmployeePortal && approvedRequestId) {
         await consumePermission(approvedRequestId);
       }
       showToast.success('Employee basic information saved');
-      // Clear password fields after save
-      setForm((prev: any) => ({ ...prev, password: '', confirmPassword: '' }));
+      setForm((prev: any) => ({
+        ...prev,
+        ...updatedData,
+        employeeStatus: newStatus,
+        employee_status: newStatus,
+        password: '',
+        confirmPassword: '',
+      }));
       setIsEditing(false);
     } catch (err: any) {
       console.error(err);
@@ -218,12 +241,32 @@ export function EmployeeBasicInfo({
   )?.name || '-';
 
   const accessRole = (employee as any).accessRole;
-  const jobTitle = (employee as any).jobTitle;
+  const jobTitle = (employee as any).jobTitle || (employee as any).designation || (employee as any).designationName || (employee.designation as any)?.name || '-';
+  
+  // Resolve manager name from multiple fallback properties
   const reportingManagerName =
     (employee as any).reportingManagerName ||
-    (employee.reportingManager
-      ? `${(employee.reportingManager as any).firstName || ''} ${(employee.reportingManager as any).lastName || ''}`.trim()
-      : '-');
+    (employee as any).reporting_manager_name ||
+    (typeof (employee as any).reportingManager === 'string'
+      ? (employee as any).reportingManager
+      : (employee.reportingManager
+        ? `${(employee.reportingManager as any).firstName || (employee.reportingManager as any).first_name || ''} ${(employee.reportingManager as any).lastName || (employee.reportingManager as any).last_name || ''}`.trim()
+        : ''));
+
+  // Filter manager options: ONLY Team Lead, Department Manager, HR Manager, or Admin roles
+  const managerCandidates = (employees || []).filter((item: any) => {
+    if (item.id === employee.id) return false;
+    const role = (item.accessRole || item.access_role || item.role || '').toLowerCase();
+    const code = (item.employeeCode || item.employee_code || '');
+    const isCurrentlyAssigned = Number(item.id) === Number(form.reportingManagerId || employee.reportingManagerId || (employee as any).reporting_manager_id);
+    return (
+      isCurrentlyAssigned ||
+      ['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager'].includes(role) ||
+      code.startsWith('CEO-') ||
+      item.isCeo ||
+      item.is_ceo
+    );
+  });
 
   return (
     <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
@@ -405,32 +448,36 @@ export function EmployeeBasicInfo({
                   value={form.reportingManagerId || ''}
                   onChange={(e) => setForm({ ...form, reportingManagerId: e.target.value ? Number(e.target.value) : null })}
                 >
-                  <option value="">-- No reporting manager --</option>
-                  {employees.filter((item: any) => item.id !== employee.id).map((item: any) => (
-                    <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode})</option>
+                  <option value="">-- Select Reporting Manager / Team Lead --</option>
+                  {managerCandidates.map((item: any) => (
+                    <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode} - {item.jobTitle || item.accessRole || 'Lead'})</option>
                   ))}
                 </select>
               )}
             </div>
             <div>
               <Label htmlFor="status" className="flex items-center gap-1">
-                Status {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+                Employee Status {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
               </Label>
               <select
                 id="status"
                 disabled={!isAdmin}
                 className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
-                value={form.status || 'active'}
+                value={(form.status || 'active').toLowerCase().replace(/\s+/g, '_')}
                 onChange={(e) => setForm({ ...form, status: e.target.value })}
               >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="probation">Probation</option>
-                <option value="onboarding">Onboarding</option>
-                <option value="notice">Notice</option>
-                <option value="exit">Exit</option>
-                <option value="alumni">Alumni</option>
-                <option value="candidate">Candidate</option>
+                {employeeStatuses && employeeStatuses.length > 0 ? (
+                  employeeStatuses.map((st: any) => (
+                    <option key={st.id || st.name} value={st.name.toLowerCase().replace(/\s+/g, '_')}>
+                      {st.name}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </>
+                )}
               </select>
             </div>
             <div>
@@ -450,20 +497,30 @@ export function EmployeeBasicInfo({
                 <option value="hr_manager">HR</option>
                 <option value="intern">Intern</option>
                 <option value="consultant">Consultant</option>
+                <option value="finance">Finance</option>
               </select>
             </div>
             <div>
               <Label htmlFor="jobTitle" className="flex items-center gap-1">
-                Job Title {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+                Designation {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
               </Label>
-              <Input
+              <select
                 id="jobTitle"
                 disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
                 value={form.jobTitle || ''}
                 onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
-                className={`mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
-                placeholder="e.g. Software Engineer"
-              />
+              >
+                <option value="">-- Select Designation --</option>
+                {designations.map((desig: any) => (
+                  <option key={desig.id} value={desig.name}>
+                    {desig.name}
+                  </option>
+                ))}
+                {form.jobTitle && !designations.some((d: any) => d.name === form.jobTitle) && (
+                  <option value={form.jobTitle}>{form.jobTitle}</option>
+                )}
+              </select>
             </div>
             {!isAdmin ? (
               <div className="col-span-2 border-t pt-4 mt-2">
@@ -621,13 +678,13 @@ export function EmployeeBasicInfo({
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Status</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Employee Status</p>
                   <div className="mt-0.5">
-                    <InfoBadge value={employee.status || ''} colorMap={statusColors} />
+                    <InfoBadge value={(form as any).employeeStatus || (form as any).employee_status || (employee as any).employeeStatus || (employee as any).employee_status || employee.status || 'Active'} colorMap={statusColors} />
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Job Title</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Designation</p>
                   <p className="mt-0.5 text-xs font-semibold text-foreground">{formatValue(jobTitle)}</p>
                 </div>
                 <div>

@@ -89,14 +89,40 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
 
   async getEmployeeHistory(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
     try {
-      return await this.list(ctx, {
-        ...options,
-        filters: { employee_id: employeeId },
-        sortBy: 'check_in_date',
-        sortOrder: 'desc',
-      });
+      const page = options?.page || 1;
+      const pageSize = options?.pageSize || 100;
+      const offset = (page - 1) * pageSize;
+
+      const baseQuery = this.db('attendance_records')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', employeeId)
+        .whereNull('deleted_at')
+        .where((b) => {
+          if (ctx.companyId) {
+            b.where('company_id', ctx.companyId).orWhereNull('company_id');
+          }
+        });
+
+      const countResult = await baseQuery.clone().count('* as total').first();
+      const total = (countResult as any)?.total ? Number((countResult as any).total) : 0;
+
+      const items = await baseQuery
+        .orderBy('check_in_date', 'desc')
+        .orderBy('id', 'desc')
+        .limit(pageSize)
+        .offset(offset);
+
+      return {
+        items: items as AttendanceRecord[],
+        meta: {
+          total,
+          page,
+          pageSize,
+          totalPages: Math.ceil(total / pageSize),
+          hasMore: page * pageSize < total,
+        },
+      };
     } catch (error) {
-      // Return empty result if table doesn't exist or other DB error occurs
       return {
         items: [] as AttendanceRecord[],
         meta: {
@@ -118,39 +144,60 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
     options?: ListQueryOptions
   ) {
     try {
-      // Never return attendance for dates beyond today, regardless of the
-      // caller-supplied endDate (calendar views request the whole month,
-      // including days that haven't happened yet).
       const now = new Date();
       const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const clampedEndDate = endDate > todayStr ? todayStr : endDate;
+      const page = options?.page || 1;
+      const pageSize = options?.pageSize || 100;
+      const offset = (page - 1) * pageSize;
 
-      const baseQuery = this.query(ctx)
+      const baseQuery = this.db('attendance_records')
+        .where('organization_id', ctx.organizationId)
         .where('employee_id', employeeId)
-        .where('check_in_date', '>=', startDate)
-        .where('check_in_date', '<=', clampedEndDate);
+        .whereNull('deleted_at')
+        .where((b) => {
+          if (ctx.companyId) {
+            b.where('company_id', ctx.companyId).orWhereNull('company_id');
+          }
+        })
+        .where((b) => {
+          b.where((dateBuilder) => {
+            dateBuilder
+              .where('check_in_date', '>=', startDate)
+              .orWhereRaw('DATE(check_in_date) >= ?', [startDate])
+              .orWhereRaw('DATE(check_in_time) >= ?', [startDate]);
+          });
+        })
+        .where((b) => {
+          b.where((dateBuilder) => {
+            dateBuilder
+              .where('check_in_date', '<=', clampedEndDate)
+              .orWhereRaw('DATE(check_in_date) <= ?', [clampedEndDate])
+              .orWhereRaw('DATE(check_in_time) <= ?', [clampedEndDate]);
+          });
+        });
 
       const countQuery = baseQuery.clone().count('* as total').first();
       const dataQuery = baseQuery
         .orderBy('check_in_date', 'desc')
-        .limit(options?.pageSize || 20)
-        .offset(((options?.page || 1) - 1) * (options?.pageSize || 20));
+        .orderBy('id', 'desc')
+        .limit(pageSize)
+        .offset(offset);
 
       const [count, items] = await Promise.all([countQuery, dataQuery]);
-      const total = (count as any).total || 0;
+      const total = (count as any)?.total ? Number((count as any).total) : 0;
 
       return {
         items: items as AttendanceRecord[],
         meta: {
           total,
-          page: options?.page || 1,
-          pageSize: options?.pageSize || 20,
-          totalPages: Math.ceil(total / (options?.pageSize || 20)),
-          hasMore: ((options?.page || 1) * (options?.pageSize || 20)) < total,
+          page,
+          pageSize,
+          totalPages: Math.ceil(total / pageSize),
+          hasMore: page * pageSize < total,
         },
       };
     } catch (error) {
-      // Return empty result if table doesn't exist or other DB error occurs
       return {
         items: [] as AttendanceRecord[],
         meta: {
