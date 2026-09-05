@@ -487,17 +487,16 @@ export function EmployeeCreateModal({
       if (newEmpId && formData.salarySlabId) {
         try {
           const chosenSlab = slabs.find(s => String(s.id) === String(formData.salarySlabId));
-          const defaultMinCtc = Number(chosenSlab?.min_ctc || chosenSlab?.minCtc || 0);
           await apiClient.post('/payroll/structures/assign', {
             employeeId: newEmpId,
             slabId: formData.salarySlabId,
             structureName: chosenSlab?.name || chosenSlab?.slab_name || 'Assigned Salary Slab',
             effectiveFrom: formData.dateOfJoining || new Date().toISOString().slice(0, 10),
-            annualCtc: defaultMinCtc,
-            grossSalary: Math.round(defaultMinCtc / 12),
-            grossMonthly: Math.round(defaultMinCtc / 12),
-            baseSalary: Math.round((defaultMinCtc / 12) * 0.5),
-            netSalary: Math.round((defaultMinCtc / 12) * 0.9)
+            annualCtc: 0,
+            grossSalary: 0,
+            grossMonthly: 0,
+            baseSalary: 0,
+            netSalary: 0
           });
         } catch (e) {
           console.error('Failed to link initial slab:', e);

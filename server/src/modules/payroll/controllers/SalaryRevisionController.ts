@@ -179,9 +179,7 @@ export class SalaryRevisionController {
     const isAdminOrHR =
       userRole.includes('admin') ||
       userRole.includes('hr') ||
-      userRole.includes('owner') ||
-      userRole.includes('manager') ||
-      userRole.includes('lead');
+      userRole.includes('owner');
     const isEmpOnly = !isAdminOrHR;
 
     let empId: number | null = null;
@@ -305,6 +303,15 @@ export class SalaryRevisionController {
       userRole.includes('admin') ||
       userRole.includes('owner') ||
       (req.user as any)?.email === 'kot@gmail.com';
+    const isHR = userRole.includes('hr') || userRole.includes('support');
+
+    if (!isAdmin && !isHR) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only HR and Organization Admin can create or propose salary revisions.'
+      });
+    }
+
     const isInstant = Boolean(body.instantApprove || body.status === 'approved') && isAdmin;
     const initialStatus = isInstant ? 'approved' : 'submitted';
     const currentUserId = req.ctx?.userId || (req.user as any)?.sub || (req.user as any)?.id || 1;
@@ -412,9 +419,14 @@ export class SalaryRevisionController {
       userRole.includes('admin') ||
       userRole.includes('owner') ||
       userRole.includes('ceo') ||
-      userRole.includes('hr') ||
-      userRole === '' ||
-      !userRole;
+      (req.user as any)?.email === 'kot@gmail.com';
+
+    if (!isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only Organization Admin can approve salary revisions.'
+      });
+    }
 
     const currentUserId = req.ctx?.userId || (req.user as any)?.sub || (req.user as any)?.id || 10;
 

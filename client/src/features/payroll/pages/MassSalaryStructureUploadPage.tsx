@@ -16,7 +16,7 @@ import {
   History,
   Search,
   Calendar,
-  DollarSign,
+  IndianRupee,
   Filter,
   Mail,
   UserCheck,

@@ -27,10 +27,15 @@ export function requireRoles(allowedRoles: string[]) {
       const userId = Number(req.user.sub);
       const organizationId = Number(req.user.oid);
 
-      const superAdmin = await knex('super_admins')
-        .where('status', 'active')
-        .where((query) => query.where('id', userId).orWhere('user_id', userId))
-        .first('id');
+      const superAdmin = await knex('super_admins as sa')
+        .leftJoin('users as u', 'u.id', knex.raw('?', [userId]))
+        .where('sa.status', 'active')
+        .where((query) => {
+          query.where('sa.id', userId)
+            .orWhere('sa.user_id', userId)
+            .orWhereRaw('LOWER(sa.email) = LOWER(u.email)');
+        })
+        .first('sa.id');
 
       if (superAdmin && allowedRoles.includes('super_admin')) {
         next();

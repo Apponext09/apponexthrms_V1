@@ -1050,8 +1050,11 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
     if (s === 'locked') {
       return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800"><Lock className="w-3 h-3 text-indigo-600" /> Locked</span>;
     }
-    if (s === 'completed' || s === 'processing' || s === 'processed') {
-      return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800"><RefreshCw className="w-3 h-3 text-amber-600" /> Processed</span>;
+    if (s === 'calculated') {
+      return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800"><RefreshCw className="w-3 h-3 text-amber-600" /> Calculated</span>;
+    }
+    if (s === 'processing') {
+      return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-800"><RefreshCw className="w-3 h-3 text-blue-600 animate-spin" /> Processing...</span>;
     }
     return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700"><ClipboardList className="w-3 h-3 text-slate-500" /> Draft</span>;
   };
@@ -1118,7 +1121,7 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
               <option value="published">Published</option>
               <option value="approved">Approved</option>
               <option value="locked">Locked</option>
-              <option value="completed">Processed</option>
+              <option value="calculated">Calculated</option>
               <option value="draft">Draft</option>
             </select>
 
@@ -1503,6 +1506,9 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
   // already-published month could make a different, unprocessed month look
   // locked as well.
   useEffect(() => {
+    // Clear the register table whenever the cycle or month changes —
+    // prevents stale data from a previous filter appearing for the new selection.
+    setFiltered(false);
     setActiveRunId(null);
     setActiveRunStatus('');
     if (!cycleId || !payrollMonth) return;
@@ -1639,6 +1645,9 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
   // background refetch) even when the current cycle/month selection was
   // invalid or hadn't been filtered yet.
   const [componentDefs, setComponentDefs] = useState<any[]>([]);
+  // Derived from componentDefs — hoisted here so both the header row (<thead>)
+  // and the data rows (<tbody>) can reference it without scope issues.
+  const activeEarnings = (componentDefs || []).filter((c: any) => c.is_earning !== false);
   const { data: rows = [], isLoading, refetch } = useQuery({
     queryKey: ['process-register', companyId, cycleId, payrollMonth, subPeriod, departmentId, locationId, payrollStatus, paymentMode, empStatus, empType, gradeId, designationId, slabId, employeeId, reportingOfficerId, sortBy, bypassCache],
     queryFn: async () => {
@@ -2129,7 +2138,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
       const errorCount = Number(processedRun?.error_count ?? processedRun?.errorCount ?? 0);
 
       setActiveRunId(run.id);
-      setActiveRunStatus(processedRun?.status || 'completed');
+      setActiveRunStatus(processedRun?.status || 'calculated');
 
       if (errorCount > 0) {
         showToast.warning('Payroll Processed with Errors ⚠️', `${errorCount} employee(s) failed to process — see the register for details.`);
@@ -2190,10 +2199,10 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
   // Step 4 — Release payslips to employees. Only allowed once the run is approved.
   const handlePublishPayslips = async () => {
     if (!activeRunId) return;
-    if (!['approved', 'locked'].includes(activeRunStatus)) {
+    if (activeRunStatus !== 'approved') {
       showToast.warning(
         'Approval Required',
-        `Payroll must be approved before publishing. Current status: "${activeRunStatus}". Get approval first.`
+        `Payroll must be approved by CEO before publishing. Current status: "${activeRunStatus}".`
       );
       return;
     }
@@ -2508,69 +2517,117 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
             </button>
           </div>
 
-          {/* Right: 4-Step Process Pipeline */}
-          <div className="flex flex-wrap items-center gap-2">
-            {activeRunStatus && (
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap shadow-2xs ${
-                activeRunStatus === 'published' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' :
-                activeRunStatus === 'approved' ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20' :
-                activeRunStatus === 'locked' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20' :
-                activeRunStatus === 'completed' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20' :
-                'bg-muted/80 text-muted-foreground border-border'
-              }`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
-                Run #{activeRunId} &bull; {activeRunStatus.toUpperCase()}
-              </span>
-            )}
+          {/* Right: Smart Payroll Pipeline — stepper + single active action */}
+          <div className="flex flex-col gap-2.5 items-end">
+            {/* Horizontal stepper progress track */}
+            <div className="flex items-center gap-0">
+              {[
+                { label: 'Calculate', status: 'calculated', activeStatus: ['calculated','locked','approved','published'], icon: CheckCircle2, color: 'emerald' },
+                { label: 'Lock', status: 'locked', activeStatus: ['locked','approved','published'], icon: Lock, color: 'indigo' },
+                { label: 'Approve', status: 'approved', activeStatus: ['approved','published'], icon: CheckCheck, color: 'violet' },
+                { label: 'Publish', status: 'published', activeStatus: ['published'], icon: Send, color: 'sky' },
+              ].map((step, idx, arr) => {
+                const isDone = step.activeStatus.includes(activeRunStatus);
+                const isActive = !isDone && (
+                  (idx === 0 && !activeRunStatus) ||
+                  (idx === 0 && !['calculated','locked','approved','published'].includes(activeRunStatus)) ||
+                  (idx === 1 && activeRunStatus === 'calculated') ||
+                  (idx === 2 && activeRunStatus === 'locked') ||
+                  (idx === 3 && activeRunStatus === 'approved')
+                );
+                const colorMap: Record<string, string> = {
+                  emerald: 'bg-emerald-600 text-white border-emerald-600',
+                  indigo:  'bg-indigo-600 text-white border-indigo-600',
+                  violet:  'bg-violet-600 text-white border-violet-600',
+                  sky:     'bg-sky-600 text-white border-sky-600',
+                };
+                const activeRing: Record<string, string> = {
+                  emerald: 'ring-2 ring-emerald-400/50',
+                  indigo:  'ring-2 ring-indigo-400/50',
+                  violet:  'ring-2 ring-violet-400/50',
+                  sky:     'ring-2 ring-sky-400/50',
+                };
+                const StepIcon = step.icon;
+                return (
+                  <div key={step.label} className="flex items-center">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                        isDone ? colorMap[step.color] :
+                        isActive ? `${colorMap[step.color]} ${activeRing[step.color]} animate-pulse` :
+                        'bg-muted border-border text-muted-foreground'
+                      }`}>
+                        <StepIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className={`text-[9px] font-bold whitespace-nowrap ${isDone ? `text-${step.color}-600 dark:text-${step.color}-400` : isActive ? `text-${step.color}-600` : 'text-muted-foreground'}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                    {idx < arr.length - 1 && (
+                      <div className={`w-8 h-0.5 mb-3 mx-0.5 transition-all ${step.activeStatus.includes(activeRunStatus) ? 'bg-primary/60' : 'bg-border'}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-            {/* Step 1: Process Payroll */}
-            <button
-              onClick={handleProcessPayroll}
-              disabled={isProcessingPayroll || ['completed', 'locked', 'approved', 'published'].includes(activeRunStatus)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs hover:shadow-sm transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isProcessingPayroll ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              {isProcessingPayroll
-                ? 'Processing...'
-                : ['completed', 'locked', 'approved', 'published'].includes(activeRunStatus)
-                ? '1. Processed ✓'
-                : selectedRowIds.size > 0
-                ? `1. Process Payroll (${selectedRowIds.size} Selected)`
-                : '1. Process Payroll'}
-            </button>
+            {/* Single smart action button */}
+            <div className="flex items-center gap-2">
+              {activeRunStatus && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                  activeRunStatus === 'published' ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20' :
+                  activeRunStatus === 'approved'  ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20' :
+                  activeRunStatus === 'locked'    ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20' :
+                  activeRunStatus === 'calculated' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20' :
+                  'bg-muted/80 text-muted-foreground border-border'
+                }`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                  Run #{activeRunId} · {activeRunStatus.toUpperCase()}
+                </span>
+              )}
 
-            {/* Step 2: Lock Figures */}
-            <button
-              onClick={handleLockPayroll}
-              disabled={isLocking || activeRunStatus !== 'completed'}
-              title={activeRunStatus !== 'completed' ? 'Process payroll first' : ''}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs hover:shadow-sm transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isLocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-              {isLocking ? 'Locking...' : ['locked', 'approved', 'published'].includes(activeRunStatus) ? '2. Locked 🔒' : '2. Lock Figures'}
-            </button>
-
-            {/* Step 3: Approve Payroll */}
-            <button
-              onClick={handleApprovePayroll}
-              disabled={isApprovingRun || activeRunStatus !== 'locked'}
-              title={activeRunStatus !== 'locked' ? 'Lock figures first' : ''}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs hover:shadow-sm transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isApprovingRun ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCheck className="w-3.5 h-3.5" />}
-              {isApprovingRun ? 'Approving...' : ['approved', 'published'].includes(activeRunStatus) ? '3. Approved ✓' : '3. Approve Payroll'}
-            </button>
-
-            {/* Step 4: Publish Payslips */}
-            <button
-              onClick={handlePublishPayslips}
-              disabled={isPublishing || activeRunStatus !== 'approved'}
-              title={activeRunStatus !== 'approved' ? 'Approval required before publishing' : ''}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-xs hover:shadow-sm transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
-            >
-              {isPublishing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              {isPublishing ? 'Publishing...' : activeRunStatus === 'published' ? '4. Published 🚀' : '4. Publish Payslips'}
-            </button>
+              {/* Current step action — only one button visible at a time */}
+              {activeRunStatus === 'published' ? (
+                <span className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-lg">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Payslips Published ✓
+                </span>
+              ) : activeRunStatus === 'approved' ? (
+                <button
+                  onClick={handlePublishPayslips}
+                  disabled={isPublishing}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                >
+                  {isPublishing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {isPublishing ? 'Publishing...' : 'Publish Payslips'}
+                </button>
+              ) : activeRunStatus === 'locked' ? (
+                // CEO approval pending — HR cannot approve, only CEO from their portal
+                <span className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold rounded-lg animate-pulse">
+                  <Clock className="w-3.5 h-3.5" /> Awaiting CEO Approval...
+                </span>
+              ) : activeRunStatus === 'calculated' ? (
+                <button
+                  onClick={handleLockPayroll}
+                  disabled={isLocking}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                >
+                  {isLocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                  {isLocking ? 'Locking...' : 'Lock Figures'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleProcessPayroll}
+                  disabled={isProcessingPayroll}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                >
+                  {isProcessingPayroll ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {isProcessingPayroll
+                    ? 'Processing...'
+                    : selectedRowIds.size > 0
+                    ? `Process Payroll (${selectedRowIds.size})`
+                    : 'Process Payroll'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -2720,15 +2777,26 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                       title="Select / Deselect All Rows"
                     />
                   </th>
-                  {[
-                    'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Pay Slab', 'Bank Name',
-                    'Salary Days', 'Paid Days', 'Unpaid Days',
-                    'Basic', 'HRA', 'Standard Allowance', 'Meal Allowance', 'Communication Allowance', 'Children Education Allowance', 'LTA', 'Gross',
-                    'Basic Earned', 'HRA Earned', 'Standard Allowance Earned', 'Meal Allowance Earned', 'Communication Allowance Earned', 'Children Education Earned', 'LTA Earned', 'Gross Earned', 'Total Gross Earned',
-                    'Adjustment', 'OT Hour', 'OT', 'PT', 'PF', 'TDS', 'ESIC Employer', 'ESIC', 'Total Deduction', 'Net Salary', 'CTC', 'Notes'
-                  ].map(h => (
-                    <th key={h} className="px-3 py-2 text-left font-bold text-muted-foreground uppercase text-[10px] whitespace-nowrap">{h}</th>
-                  ))}
+                  {(() => {
+                    const masterHeaders = activeEarnings.length > 0
+                      ? [...activeEarnings.map((c: any) => c.name), 'Gross']
+                      : ['Basic', 'HRA', 'Conveyance Allowance', 'Medical Allowance', 'Special Allowance', 'Gross'];
+                    const earnedHeaders = activeEarnings.length > 0
+                      ? [...activeEarnings.map((c: any) => `${c.name} Earned`), 'Gross Earned', 'Total Gross Earned']
+                      : ['Basic Earned', 'HRA Earned', 'Conveyance Earned', 'Medical Earned', 'Special Allowance Earned', 'Gross Earned', 'Total Gross Earned'];
+
+                    const allHeaders = [
+                      'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Pay Slab', 'Bank Name',
+                      'Salary Days', 'Paid Days', 'Unpaid Days',
+                      ...masterHeaders,
+                      ...earnedHeaders,
+                      'Adjustment', 'OT Hour', 'OT', 'PT', 'PF', 'TDS', 'ESIC Employer', 'ESIC', 'Total Deduction', 'Net Salary', 'CTC', 'Notes'
+                    ];
+
+                    return allHeaders.map(h => (
+                      <th key={h} className="px-3 py-2 text-left font-bold text-muted-foreground uppercase text-[10px] whitespace-nowrap">{h}</th>
+                    ));
+                  })()}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -2819,24 +2887,45 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                       {/* Unpaid Days (Computed) */}
                       <td className="px-3 py-2.5 text-center font-bold text-rose-600">{curr.unpaid_days}</td>
 
-                      {/* Master Pay Slab Components (Display) */}
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.basic)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.hra)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.standard_allowance)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.meal_allowance)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.communication_allowance)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.children_education_allowance)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.lta)}</td>
+                      {/* Master Pay Slab Components (Dynamic from Component Definitions) */}
+                      {activeEarnings.length > 0 ? (
+                        activeEarnings.map((c: any) => {
+                          const val = r.component_values?.[c.id]?.monthly ?? (
+                            c.name.toLowerCase().includes('basic') ? curr.basic :
+                            c.name.toLowerCase().includes('hra') ? curr.hra :
+                            c.name.toLowerCase().includes('special') ? curr.special_allowance : 0
+                          );
+                          return <td key={`m_${c.id}`} className="px-3 py-2.5 text-right">{fmt(val)}</td>;
+                        })
+                      ) : (
+                        <>
+                          <td className="px-3 py-2.5 text-right">{fmt(curr.basic)}</td>
+                          <td className="px-3 py-2.5 text-right">{fmt(curr.hra)}</td>
+                          <td className="px-3 py-2.5 text-right">{fmt(curr.special_allowance)}</td>
+                        </>
+                      )}
                       <td className="px-3 py-2.5 text-right font-bold bg-muted/20">{fmt(curr.gross)}</td>
 
                       {/* Earned Components (Computed based on Paid Days) */}
-                      <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.basic_earned)}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.hra_earned)}</td>
-                      <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.standard_allowance_earned)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.meal_allowance_earned)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.communication_allowance_earned)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.children_education_allowance_earned)}</td>
-                      <td className="px-3 py-2.5 text-right">{fmt(curr.lta_earned)}</td>
+                      {activeEarnings.length > 0 ? (
+                        activeEarnings.map((c: any) => {
+                          const ratio = (curr.salary_days || 30) > 0 ? (curr.paid_days / (curr.salary_days || 30)) : 1;
+                          const val = r.component_values?.[c.id]?.earned ?? Math.round((
+                            r.component_values?.[c.id]?.monthly ?? (
+                              c.name.toLowerCase().includes('basic') ? curr.basic :
+                              c.name.toLowerCase().includes('hra') ? curr.hra :
+                              c.name.toLowerCase().includes('special') ? curr.special_allowance : 0
+                            )
+                          ) * ratio);
+                          return <td key={`e_${c.id}`} className="px-3 py-2.5 text-right font-semibold">{fmt(val)}</td>;
+                        })
+                      ) : (
+                        <>
+                          <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.basic_earned)}</td>
+                          <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.hra_earned)}</td>
+                          <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.special_allowance_earned)}</td>
+                        </>
+                      )}
                       <td className="px-3 py-2.5 text-right font-bold bg-muted/20">{fmt(curr.gross_earned)}</td>
                       <td className="px-3 py-2.5 text-right font-black bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300">{fmt(curr.total_gross_earned)}</td>
 

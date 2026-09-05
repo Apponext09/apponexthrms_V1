@@ -311,7 +311,7 @@ export class PayrollRunController {
           totalGross,
           totalNet,
           totalDeductions,
-          status: latestRun?.status || 'Draft',
+          status: latestRun?.status || 'draft',
           runMonth: monthStr,
         },
       });

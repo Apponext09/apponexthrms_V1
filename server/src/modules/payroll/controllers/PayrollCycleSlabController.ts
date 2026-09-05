@@ -21,14 +21,14 @@ async function getActorInfo(req: Request, db: any): Promise<{ id: number | null;
       const fullName = `${userRow.first_name || ''} ${userRow.last_name || ''}`.trim();
       return {
         id: userRow.id,
-        name: fullName || (userRow.email ? userRow.email.split('@')[0] : 'Harsh Gawali')
+        name: fullName || (userRow.email ? userRow.email.split('@')[0] : 'Unknown')
       };
     }
   }
   const fallbackName = reqUser.firstName
     ? `${reqUser.firstName} ${reqUser.lastName || ''}`.trim()
-    : (reqUser.email ? reqUser.email.split('@')[0] : (reqUser.name || 'Harsh Gawali'));
-  return { id: userId ? Number(userId) : null, name: fallbackName || 'Harsh Gawali' };
+    : (reqUser.email ? reqUser.email.split('@')[0] : (reqUser.name || 'Unknown'));
+  return { id: userId ? Number(userId) : null, name: fallbackName || 'Unknown' };
 }
 
 function parseJsonArray(val: any): string[] {
@@ -502,7 +502,8 @@ export class PayrollCycleSlabController {
   async createComponentGroup(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
+      const orgId = req.ctx?.organizationId;
+      if (!orgId) return res.status(400).json({ success: false, message: 'Organization context is required.' });
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
@@ -530,7 +531,7 @@ export class PayrollCycleSlabController {
         const actor = await getActorInfo(req, db);
         await db('payroll_component_group_audit_logs').insert({
           uuid: uuidv4(),
-          organization_id: payload.organization_id || 8,
+          organization_id: payload.organization_id,
           company_id: req.body.companyId || null,
           group_id: id,
           group_name: payload.name,
@@ -615,7 +616,7 @@ export class PayrollCycleSlabController {
             const actor = await getActorInfo(req, db);
             await db('payroll_component_group_audit_logs').insert({
               uuid: uuidv4(),
-              organization_id: getOldVal(oldGroup, 'organization_id') || req.ctx?.organizationId || 8,
+              organization_id: getOldVal(oldGroup, 'organization_id') || req.ctx?.organizationId,
               company_id: getOldVal(oldGroup, 'company_id') || null,
               group_id: oldGroup.id,
               group_name: payload.name || oldGroup.name,
@@ -672,7 +673,7 @@ export class PayrollCycleSlabController {
           const actor = await getActorInfo(req, db);
           await db('payroll_component_group_audit_logs').insert({
             uuid: uuidv4(),
-            organization_id: oldGroup.organization_id || req.ctx?.organizationId || 8,
+            organization_id: oldGroup.organization_id || req.ctx?.organizationId,
             company_id: oldGroup.company_id || null,
             group_id: oldGroup.id,
             group_name: oldGroup.name,
@@ -781,7 +782,8 @@ export class PayrollCycleSlabController {
   async createComponentDefinition(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
+      const orgId = req.ctx?.organizationId;
+      if (!orgId) return res.status(400).json({ success: false, message: 'Organization context is required.' });
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
@@ -818,7 +820,7 @@ export class PayrollCycleSlabController {
         const group = payload.group_id ? await db('payroll_component_groups').where('id', payload.group_id).first().catch(() => null) : null;
         await db('payroll_component_audit_logs').insert({
           uuid: uuidv4(),
-          organization_id: payload.organization_id || 8,
+          organization_id: payload.organization_id,
           company_id: req.body.companyId || null,
           component_id: id,
           component_name: payload.name,
@@ -1006,7 +1008,7 @@ export class PayrollCycleSlabController {
             const actor = await getActorInfo(req, db);
             await db('payroll_component_audit_logs').insert({
               uuid: uuidv4(),
-              organization_id: getOldVal(oldComp, 'organization_id') || req.ctx?.organizationId || 8,
+              organization_id: getOldVal(oldComp, 'organization_id') || req.ctx?.organizationId,
               company_id: getOldVal(oldComp, 'company_id') || null,
               component_id: oldComp.id,
               component_name: payload.name || getOldVal(oldComp, 'name'),
@@ -1044,7 +1046,7 @@ export class PayrollCycleSlabController {
           const actor = await getActorInfo(req, db);
           await db('payroll_component_audit_logs').insert({
             uuid: uuidv4(),
-            organization_id: oldComp.organization_id || req.ctx?.organizationId || 8,
+            organization_id: oldComp.organization_id || req.ctx?.organizationId,
             company_id: oldComp.company_id || null,
             component_id: oldComp.id,
             component_name: oldComp.name,

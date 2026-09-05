@@ -20,7 +20,8 @@ import {
   UserCheck,
   Calendar,
   Check,
-  RotateCcw
+  RotateCcw,
+  ShieldAlert
 } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { formatPayrollDate } from '@/lib/utils';
@@ -54,6 +55,8 @@ export const SalaryRevisionManagement: React.FC = () => {
   const rawRole = (user as any)?.role || (user as any)?.accessRole || (user as any)?.access_role || (Array.isArray((user as any)?.roles) ? (user as any).roles.join(',') : '') || '';
   const userRole = String(rawRole).toLowerCase();
   const isAdmin = userRole.includes('admin') || userRole.includes('owner') || user?.email === 'kot@gmail.com';
+  const isHR = userRole.includes('hr') || userRole.includes('support');
+  const isAllowed = isAdmin || isHR;
 
   const [revisionsList, setRevisionsList] = useState<RevisionRecord[]>([]);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
@@ -480,6 +483,30 @@ export const SalaryRevisionManagement: React.FC = () => {
 
   const currentSlabName = getSlabName(selectedSlabId, currentCtcVal);
 
+  if (!isAllowed) {
+    return (
+      <div className="p-8 max-w-xl mx-auto my-12 text-center space-y-4 bg-card border border-border rounded-2xl shadow-xs">
+        <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h2 className="text-lg font-black text-foreground tracking-tight">HR &amp; Admin Access Only</h2>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Salary Revision Management is exclusively available to HR Personnel and Organization Administrators.
+          HR initiates compensation revisions and appraisal hikes, which are forwarded to the Administrator for approval.
+        </p>
+        <div className="pt-2">
+          <Button
+            onClick={() => window.history.back()}
+            variant="outline"
+            className="text-xs font-bold gap-1.5 cursor-pointer"
+          >
+            Return to Previous Page
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full space-y-6 pb-12">
       {/* ── Modern Header Banner ── */}
@@ -491,14 +518,20 @@ export const SalaryRevisionManagement: React.FC = () => {
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-xl font-black text-foreground tracking-tight">
-                {isAdmin ? 'Salary Revision & Appraisal Approvals' : 'Salary Revision Management'}
+                {isAdmin ? 'Salary Revision Approvals' : 'Salary Revision Management'}
               </h1>
-              <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-                Assigned Slabs &amp; CTC Engine
+              <Badge className={`text-[10px] font-bold ${
+                isAdmin
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30'
+              }`}>
+                {isAdmin ? 'Admin Approval Sign-Off' : 'HR Proposal Mode (Sends Request to Admin)'}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Review assigned salary slabs, adjust annual CTC with live formula breakdown, and process appraisal hikes.
+              {isAdmin
+                ? 'Review, sign-off, and apply salary revision requests submitted by HR into employee payroll structures.'
+                : 'Review assigned salary slabs, propose appraisal hikes, and submit revision requests to Administrator for approval.'}
             </p>
           </div>
         </div>
@@ -508,7 +541,7 @@ export const SalaryRevisionManagement: React.FC = () => {
           className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 shadow-xs cursor-pointer"
         >
           {showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? 'Close Revision Builder' : 'Create Salary Revision'}
+          {showForm ? 'Close Revision Builder' : isAdmin ? 'Create & Approve Revision' : 'Propose Salary Revision'}
         </Button>
       </div>
 
@@ -817,7 +850,7 @@ export const SalaryRevisionManagement: React.FC = () => {
                 onClick={() => handleCreateRevision(false)}
                 className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 shadow-xs cursor-pointer"
               >
-                <Send className="w-3.5 h-3.5" /> Submit Revision Request
+                <Send className="w-3.5 h-3.5" /> {isAdmin ? 'Submit Revision Request' : 'Submit for Admin Approval'}
               </Button>
 
               {isAdmin && (

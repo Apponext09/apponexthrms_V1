@@ -80,10 +80,31 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
   const isPathActive = (itemHref: string, currentPath: string): boolean => {
     if (itemHref === currentPath) return true;
-    if (currentPath.startsWith(itemHref + '/')) return true;
-    if (itemHref.startsWith(currentPath + '/')) return false;
-    return currentPath.startsWith(itemHref);
+
+    // Collect all nav hrefs from visibleSections to check for exact or more specific matches
+    const allHrefs = visibleSections.flatMap(section =>
+      section.items.flatMap(item => [
+        item.href,
+        ...(item.children ? item.children.map(c => c.href) : [])
+      ])
+    );
+
+    // If another nav item is an exact match for currentPath, this generic item shouldn't be active
+    if (allHrefs.some(h => h === currentPath)) {
+      return itemHref === currentPath;
+    }
+
+    // If currentPath starts with itemHref + '/', check if there is a more specific (longer) matching itemHref
+    if (currentPath.startsWith(itemHref + '/')) {
+      const hasMoreSpecificMatch = allHrefs.some(
+        h => h !== itemHref && h.length > itemHref.length && (currentPath === h || currentPath.startsWith(h + '/'))
+      );
+      return !hasMoreSpecificMatch;
+    }
+
+    return false;
   };
+
 
   const getFullName = () => {
     const fName = (user?.firstName || (user as any)?.first_name || '').trim();

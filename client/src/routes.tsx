@@ -465,8 +465,8 @@ export function AppRoutes() {
           <Route path="/manager/expenses/mileage-claims" element={<MileageClaimsPage />} />
           <Route path="/manager/travel" element={<TravelRequestsPage />} />
           <Route path="/manager/payslips" element={<PayslipViewer />} />
-          <Route path="/manager/salary-revisions" element={<SalaryRevisionManagement />} />
-          <Route path="/manager/salary-revision" element={<SalaryRevisionManagement />} />
+          <Route path="/manager/salary-revisions" element={<Navigate to="/manager/payslips" replace />} />
+          <Route path="/manager/salary-revision" element={<Navigate to="/manager/payslips" replace />} />
           <Route path="/manager/performance" element={<PerformanceDashboard />} />
           <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
           <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
@@ -505,8 +505,8 @@ export function AppRoutes() {
           <Route path="/team-lead/expenses/mileage-claims" element={<MileageClaimsPage />} />
           <Route path="/team-lead/travel" element={<TravelRequestsPage />} />
           <Route path="/team-lead/payslips" element={<PayslipViewer />} />
-          <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
-          <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
+          <Route path="/team-lead/salary-revisions" element={<Navigate to="/team-lead/payslips" replace />} />
+          <Route path="/team-lead/salary-revision" element={<Navigate to="/team-lead/payslips" replace />} />
           <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
           <Route path="/team-lead/leaves" element={<LeavePage />} />
           <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />

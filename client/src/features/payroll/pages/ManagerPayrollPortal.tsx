@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   PieChart,
   TrendingUp,
-  DollarSign,
   Users,
   Building,
   Clock,
@@ -125,7 +124,7 @@ export const ManagerPayrollPortal: React.FC = () => {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { title: 'Total Monthly Gross', val: loading ? '—' : fmt(stats.monthlyGrossPayroll), icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
+              { title: 'Total Monthly Gross', val: loading ? '—' : fmt(stats.monthlyGrossPayroll), icon: IndianRupee, color: 'text-primary', bg: 'bg-primary/10' },
               { title: 'Dept Employee Count', val: loading ? '—' : `${stats.totalEmployees} Employees`, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
               { title: 'Average Gross / Head', val: loading ? '—' : fmt(stats.averageSalary), icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
               { title: 'Annual Payroll Outlay', val: loading ? '—' : fmt(stats.annualPayroll), icon: IndianRupee, color: 'text-amber-600', bg: 'bg-amber-500/10' },

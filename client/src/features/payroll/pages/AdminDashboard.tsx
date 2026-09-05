@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { usePayrollDashboard } from '../hooks/index';
 import { 
   Building2, 
-  DollarSign, 
+  IndianRupee, 
   TrendingUp, 
   Users, 
   ShieldCheck, 
@@ -50,7 +50,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-            <DollarSign className="w-5 h-5" />
+            <IndianRupee className="w-5 h-5" />
           </div>
           <div>
             <h1 className="text-lg font-black text-foreground tracking-tight">Payroll Admin Dashboard</h1>
@@ -139,7 +139,7 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-[10px] text-emerald-600 font-semibold">Form 24Q compliant</p>
             </div>
             <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-              <DollarSign className="w-5 h-5" />
+              <IndianRupee className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>

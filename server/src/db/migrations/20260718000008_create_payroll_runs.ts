@@ -11,7 +11,7 @@ export async function up(knex: Knex): Promise<void> {
     table.bigInteger('payroll_cycle_id').unsigned().notNullable();
     table.enum('run_type', ['regular', 'off_cycle', 'final_settlement', 'arrears']).notNullable();
     table.date('run_month').notNullable();
-    table.enum('status', ['draft', 'processing', 'locked', 'approved', 'published', 'completed']).defaultTo('draft');
+    table.enum('status', ['draft', 'processing', 'calculated', 'locked', 'approved', 'published', 'completed']).defaultTo('draft');
     table.bigInteger('locked_by').unsigned().nullable();
     table.timestamp('locked_at').nullable();
     table.bigInteger('approved_by').unsigned().nullable();

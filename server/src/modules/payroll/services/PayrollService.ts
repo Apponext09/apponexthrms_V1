@@ -1183,7 +1183,7 @@ export class PayrollService {
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'completed',
+      status: 'calculated',
       processed_employees: processedCount,
       error_count: errorCount,
       updated_by: ctx.userId
@@ -1243,7 +1243,7 @@ export class PayrollService {
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'draft',
+      status: 'calculated',   // return to calculated — not draft; HR keeps figures, just unlocked for edits
       locked_by: null,
       locked_at: null,
       updated_by: ctx.userId
@@ -1279,8 +1279,8 @@ export class PayrollService {
     const run = await this.runRepo.getById(ctx, payrollRunId);
     if (!run) throw new NotFoundError('Payroll run not found');
 
-    if (!['locked', 'processed', 'completed'].includes(run.status)) {
-      throw new ValidationError('Payroll must be processed, completed, or locked before approval');
+    if (run.status !== 'locked') {
+      throw new ValidationError(`Payroll must be locked before approval. Current status: "${run.status}"`);
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
@@ -1320,9 +1320,8 @@ export class PayrollService {
     const run = withSnakeAliases(await this.runRepo.getById(ctx, payrollRunId));
     if (!run) throw new NotFoundError('Payroll run not found');
 
-    // Simple flow: process → publish (no separate approve step needed)
-    if (!['approved', 'completed', 'processed', 'locked'].includes(run.status)) {
-      throw new ValidationError('Payroll must be processed before publishing');
+    if (run.status !== 'approved') {
+      throw new ValidationError(`Payroll must be approved before publishing. Current status: "${run.status}". CEO/Admin approval is required.`);
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {

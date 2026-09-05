@@ -22,7 +22,7 @@ import {
   Building,
   MapPin,
   Award,
-  DollarSign,
+  IndianRupee,
   ChevronRight,
   Coins,
   ChevronDown,
@@ -39,8 +39,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { MasterPayrollCycle } from '../components/MasterPayrollCycle';
 import { MasterPayrollComponents } from '../components/MasterPayrollComponents';
+import { PayrollReportSettingsTab } from '../components/PayrollReportSettingsTab';
+import { FileText } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -140,11 +143,11 @@ export const PayrollSettingsPage: React.FC = () => {
   const { selectedCompanyId } = useCompanyStore();
   const searchParams = new URLSearchParams(window.location.search);
   const initialTab = (searchParams.get('tab') as any) || 'components';
-  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs' | 'settings'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs' | 'settings' | 'report_settings'>(initialTab);
 
   useEffect(() => {
     const tabParam = new URLSearchParams(window.location.search).get('tab');
-    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs' || tabParam === 'settings') {
+    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs' || tabParam === 'settings' || tabParam === 'report_settings') {
       setActiveTab(tabParam as any);
     }
   }, [window.location.search]);
@@ -1096,8 +1099,24 @@ export const PayrollSettingsPage: React.FC = () => {
             <Settings2 className="w-3.5 h-3.5" />
             Settings
           </button>
+          <button
+            onClick={() => setActiveTab('report_settings')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === 'report_settings'
+                ? 'bg-background text-foreground shadow-xs border border-border/60'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+            Report Settings
+          </button>
         </div>
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          TAB 5: DYNAMIC REPORT SETTINGS
+      ────────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'report_settings' && <PayrollReportSettingsTab />}
 
       {/* ─────────────────────────────────────────────────────────────────────────
           TAB 1: PAYROLL CYCLE
@@ -1170,7 +1189,7 @@ export const PayrollSettingsPage: React.FC = () => {
                         {/* Slab info rows */}
                         <div className="p-2.5 space-y-1 text-xs">
                           <div className="flex items-center gap-2 font-bold text-foreground truncate">
-                            <DollarSign className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <Coins className="w-3.5 h-3.5 text-primary shrink-0" />
                             <span className="truncate">{slab.name}</span>
                           </div>
                           <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
@@ -1220,31 +1239,39 @@ export const PayrollSettingsPage: React.FC = () => {
             <Card className="border border-border/80 bg-card rounded-xl shadow-xs overflow-hidden">
               {/* Form Header */}
               <div className="px-5 py-3.5 border-b border-border/60 flex items-center justify-between bg-muted/25">
-                <span className="text-xs font-bold text-foreground flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center text-primary">
-                    <Plus className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                    <Sliders className="w-4 h-4" />
                   </div>
-                  {selectedSlabId ? 'Edit Payroll Slab' : 'Add Payroll Slab'}
-                </span>
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">
+                      {selectedSlabId ? `Edit Slab: ${slabForm.name || 'Slab'}` : 'New Payroll Slab'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground block">
+                      Configure eligibility rules, CTC thresholds, and salary components
+                    </span>
+                  </div>
+                </div>
                 <Button
                   onClick={handleSaveSlab}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-8 px-4 flex items-center gap-1.5 shadow-2xs hover:shadow-xs transition-all cursor-pointer active:scale-95"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-8 px-4 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                 >
-                  <Save className="w-3.5 h-3.5" /> Save Slab
+                  {selectedSlabId ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  {selectedSlabId ? 'Update Slab' : 'Save Slab'}
                 </Button>
               </div>
 
               <CardContent className="p-5 space-y-4">
                 {/* Row 1: Slab Name */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                  <label className="sm:w-40 shrink-0 text-xs font-bold text-foreground">
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">
                     Payroll Slab Name <span className="text-rose-500">*</span>
                   </label>
                   <Input
                     value={slabForm.name || ''}
                     onChange={e => setSlabForm({ ...slabForm, name: e.target.value })}
-                    placeholder="e.g. Monthly Senior Slab"
-                    className="flex-1 text-xs font-semibold h-9 bg-background"
+                    placeholder="e.g. Engineering Pay Slab, Monthly Senior Slab"
+                    className="text-xs font-semibold h-9 bg-background"
                   />
                 </div>
 
@@ -1252,7 +1279,7 @@ export const PayrollSettingsPage: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Department */}
                   <div className="relative">
-                    <label className="text-xs font-bold text-foreground block mb-1">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Department <span className="text-rose-500">*</span>
                     </label>
                     <button
@@ -1261,7 +1288,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       className="w-full flex items-center justify-between border border-input rounded-lg px-3 py-2 bg-background text-xs font-medium text-foreground cursor-pointer shadow-2xs focus:ring-1 focus:ring-primary"
                     >
                       <span className={slabForm.departments?.[0] ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
-                        {slabForm.departments?.[0] || 'Choose Department'}
+                        {slabForm.departments?.[0] || 'All Departments'}
                       </span>
                       <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-150 ${showDeptDropdown ? 'rotate-180' : ''}`} />
                     </button>
@@ -1298,7 +1325,7 @@ export const PayrollSettingsPage: React.FC = () => {
 
                   {/* Grade */}
                   <div className="relative">
-                    <label className="text-xs font-bold text-foreground block mb-1">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Grade <span className="text-rose-500">*</span>
                     </label>
                     <button
@@ -1307,7 +1334,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       className="w-full flex items-center justify-between border border-input rounded-lg px-3 py-2 bg-background text-xs font-medium text-foreground cursor-pointer shadow-2xs focus:ring-1 focus:ring-primary"
                     >
                       <span className={slabForm.grades?.[0] ? 'text-foreground font-semibold' : 'text-muted-foreground'}>
-                        {slabForm.grades?.[0] || 'Choose Grade'}
+                        {slabForm.grades?.[0] || 'All Pay Grades'}
                       </span>
                       <ChevronDown size={14} className={`text-muted-foreground transition-transform duration-150 ${showGradeDropdown ? 'rotate-180' : ''}`} />
                     </button>
@@ -1343,90 +1370,169 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Location */}
+                {/* Row 3: Applicable Locations (Clean Chip Selector) */}
                 <div>
-                  <label className="text-xs font-bold text-foreground block mb-1.5">Locations</label>
-                  <div className="max-h-36 overflow-y-auto border border-border/80 rounded-xl p-2.5 bg-background flex flex-col gap-1.5">
-                    <label className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer pb-1.5 border-b border-border/60">
-                      <input
-                        type="checkbox"
-                        checked={allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))}
-                        onChange={e => setSlabForm({ ...slabForm, locations: e.target.checked ? [...allLocations] : [] })}
-                        className="rounded accent-primary w-4 h-4 cursor-pointer"
-                      />
-                      Select all locations
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Applicable Locations
                     </label>
-                    {allLocations.map(loc => (
-                      <label key={loc} className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer py-0.5 hover:text-primary transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={slabForm.locations?.includes(loc)}
-                          onChange={e => {
-                            const curr = slabForm.locations || [];
-                            setSlabForm({ ...slabForm, locations: e.target.checked ? [...curr, loc] : curr.filter(l => l !== loc) });
-                          }}
-                          className="rounded accent-primary w-3.5 h-3.5 cursor-pointer"
-                        />
-                        {loc}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* CTC Range */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs font-bold text-foreground">CTC Range <span className="text-rose-500">*</span></label>
-                    <span className="text-xs font-bold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
-                      ₹{Number(slabForm.minCtc || 1).toLocaleString('en-IN')} – ₹{Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
+                    <span className="text-[11px] text-muted-foreground">
+                      {allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))
+                        ? 'All Locations included'
+                        : `${slabForm.locations?.length || 0} selected`}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-xs text-muted-foreground w-8 shrink-0 font-medium">Min</span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10000000"
-                      step="10000"
-                      value={slabForm.minCtc || 1}
-                      onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
-                      className="flex-1 accent-primary cursor-pointer"
-                    />
-                    <input
-                      type="number"
-                      min="1"
-                      max={slabForm.maxCtc || 10000000}
-                      value={slabForm.minCtc || 1}
-                      onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
-                      className="w-24 h-8 border border-input rounded-lg px-2 text-xs font-semibold text-right bg-background"
-                    />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-8 shrink-0 font-medium">Max</span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10000000"
-                      step="10000"
-                      value={slabForm.maxCtc || 10000000}
-                      onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                      className="flex-1 accent-primary cursor-pointer"
-                    />
-                    <input
-                      type="number"
-                      min={slabForm.minCtc || 1}
-                      max="10000000"
-                      value={slabForm.maxCtc || 10000000}
-                      onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                      className="w-24 h-8 border border-input rounded-lg px-2 text-xs font-semibold text-right bg-background"
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-1 font-mono">
-                    <span>₹1</span><span>₹25L</span><span>₹50L</span><span>₹75L</span><span>₹1Cr</span>
+                  <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-border bg-background">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const isAll = allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l));
+                        setSlabForm({ ...slabForm, locations: isAll ? [] : [...allLocations] });
+                      }}
+                      className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                        allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))
+                          ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
+                          : 'bg-muted/40 hover:bg-muted text-muted-foreground border-border'
+                      }`}
+                    >
+                      {allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l)) && <Check className="w-3.5 h-3.5" />}
+                      Select All Locations
+                    </button>
+                    {allLocations.filter(loc => loc.toLowerCase() !== 'all locations').map(loc => {
+                      const isSelected = slabForm.locations?.includes(loc);
+                      return (
+                        <button
+                          key={loc}
+                          type="button"
+                          onClick={() => {
+                            const curr = slabForm.locations || [];
+                            setSlabForm({
+                              ...slabForm,
+                              locations: isSelected ? curr.filter(l => l !== loc) : [...curr, loc]
+                            });
+                          }}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border ${
+                            isSelected
+                              ? 'bg-primary/10 text-primary border-primary/30 font-semibold shadow-2xs'
+                              : 'bg-muted/30 hover:bg-muted text-muted-foreground border-border'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-primary" />}
+                          <span>{loc}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Components Selector */}
+                {/* Row 4: CTC Range (Clean Presets & Formatted Inputs) */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-foreground">
+                      Annual CTC Range <span className="text-rose-500">*</span>
+                    </label>
+                    <span className="text-xs font-bold text-primary font-mono bg-primary/10 px-2.5 py-0.5 rounded-md border border-primary/20">
+                      ₹{Number(slabForm.minCtc || 0).toLocaleString('en-IN')} – ₹{Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-muted-foreground mr-0.5">Presets:</span>
+                    {[
+                      { label: '0 – 3L', min: 0, max: 300000 },
+                      { label: '3L – 6L', min: 300000, max: 600000 },
+                      { label: '6L – 12L', min: 600000, max: 1200000 },
+                      { label: '12L – 25L', min: 1200000, max: 2500000 },
+                      { label: '25L – 50L', min: 2500000, max: 5000000 },
+                      { label: 'All (0 – 1Cr)', min: 0, max: 10000000 },
+                    ].map(preset => {
+                      const isActive = Number(slabForm.minCtc) === preset.min && Number(slabForm.maxCtc) === preset.max;
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => setSlabForm({ ...slabForm, minCtc: preset.min, maxCtc: preset.max })}
+                          className={`px-2 py-0.5 text-[11px] font-mono rounded-md border transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-primary text-primary-foreground border-primary font-bold shadow-2xs'
+                              : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* 2 Aligned Inputs for Min & Max */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Minimum CTC (₹ / Year)</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          max={slabForm.maxCtc || 10000000}
+                          step="10000"
+                          value={slabForm.minCtc ?? 0}
+                          onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
+                          className="h-8 pl-6 text-xs font-semibold bg-background"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground block mb-1">Maximum CTC (₹ / Year)</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                        <Input
+                          type="number"
+                          min={slabForm.minCtc ?? 0}
+                          max="100000000"
+                          step="10000"
+                          value={slabForm.maxCtc ?? 10000000}
+                          onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
+                          className="h-8 pl-6 text-xs font-semibold bg-background"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Range Sliders */}
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground w-7">Min:</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="10000000"
+                        step="25000"
+                        value={slabForm.minCtc ?? 0}
+                        onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
+                        className="flex-1 accent-primary cursor-pointer h-1.5 bg-muted rounded-lg"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground w-7">Max:</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="10000000"
+                        step="25000"
+                        value={slabForm.maxCtc ?? 10000000}
+                        onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
+                        className="flex-1 accent-primary cursor-pointer h-1.5 bg-muted rounded-lg"
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-muted-foreground px-1 font-mono">
+                      <span>₹0</span><span>₹25L</span><span>₹50L</span><span>₹75L</span><span>₹1Cr</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 5: Payroll Components Selector (Clean 2-Column Grid) */}
                 <div>
                   {(() => {
                     const getUniqueComponents = (): { id: string; name: string; type: string }[] => {
@@ -1465,33 +1571,35 @@ export const PayrollSettingsPage: React.FC = () => {
                     const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
                     const totalCount = uniqueComps.length;
                     const allSelected = totalCount > 0 && selectedCount === totalCount;
+                    const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
                     return (
-                      <>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs font-bold text-foreground">
-                            Payroll Components <span className="text-rose-500">*</span>
-                          </label>
-                          <div className="flex items-center gap-3">
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                              {selectedCount} Selected
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs font-semibold text-foreground">
+                              Payroll Components <span className="text-rose-500">*</span>
+                            </label>
+                            <span className="text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                              {selectedCount} of {totalCount} Selected
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSlabForm({
-                                  ...slabForm,
-                                  selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
-                                });
-                              }}
-                              className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                            >
-                              {allSelected ? 'Deselect All' : 'Select All'}
-                            </button>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSlabForm({
+                                ...slabForm,
+                                selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
+                              });
+                            }}
+                            className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                          >
+                            {allSelected ? 'Deselect All' : 'Select All'}
+                          </button>
                         </div>
 
-                        <div className="space-y-2 p-3 bg-muted/20 border border-border/80 rounded-xl">
+                        {/* Search Bar & Grid */}
+                        <div className="p-3 bg-muted/20 border border-border/80 rounded-xl space-y-2.5">
                           <div className="relative">
                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
                             <input
@@ -1499,87 +1607,74 @@ export const PayrollSettingsPage: React.FC = () => {
                               placeholder="Search pay component..."
                               value={compSearch}
                               onChange={e => setCompSearch(e.target.value)}
-                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border/80 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
                             />
                           </div>
 
-                          <div className="space-y-1 max-h-56 overflow-y-auto border border-border/60 rounded-lg p-2 bg-background text-xs">
-                            {(() => {
-                              const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
-
-                              if (filtered.length === 0) {
-                                return (
-                                  <p className="text-[11px] text-muted-foreground italic py-2 text-center">
-                                    No matching components found
-                                  </p>
-                                );
-                              }
-
-                              return filtered.map(c => {
+                          {/* 2-Column Responsive Component Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1 text-xs">
+                            {filtered.length === 0 ? (
+                              <p className="col-span-2 text-xs text-muted-foreground italic py-4 text-center">
+                                No matching components found
+                              </p>
+                            ) : (
+                              filtered.map(c => {
                                 const isChecked = isComponentChecked(c);
                                 return (
-                                  <label
+                                  <div
                                     key={c.id}
-                                    className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors border ${
+                                    onClick={() => {
+                                      const current = slabForm.selectedComponentIds || [];
+                                      const cid = String(c.id).trim().toLowerCase();
+                                      const cname = c.name.trim().toLowerCase();
+                                      const cslug = cname.replace(/[^a-z0-9]+/g, '_');
+
+                                      let next;
+                                      if (!isChecked) {
+                                        next = [...new Set([...current, String(c.id), cslug])];
+                                      } else {
+                                        next = current.filter(id => {
+                                          const sid = String(id).trim().toLowerCase();
+                                          const sslug = sid.replace(/[^a-z0-9]+/g, '_');
+                                          return sid !== cid && sid !== cname && sid !== cslug && sslug !== cslug;
+                                        });
+                                      }
+                                      setSlabForm({ ...slabForm, selectedComponentIds: next });
+                                    }}
+                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all border select-none ${
                                       isChecked
-                                        ? 'bg-primary/10 text-foreground font-semibold border-primary/30 shadow-2xs'
-                                        : 'hover:bg-muted text-muted-foreground border-transparent'
+                                        ? 'bg-primary/5 dark:bg-primary/15 text-foreground font-semibold border-primary/30 shadow-2xs'
+                                        : 'hover:bg-muted/40 text-muted-foreground border-border/60 bg-background'
                                     }`}
                                   >
-                                    <div className="flex items-center gap-2.5">
-                                      <input
-                                        type="checkbox"
-                                        checked={isChecked}
-                                        onChange={e => {
-                                          const current = slabForm.selectedComponentIds || [];
-                                          const cid = String(c.id).trim().toLowerCase();
-                                          const cname = c.name.trim().toLowerCase();
-                                          const cslug = cname.replace(/[^a-z0-9]+/g, '_');
-
-                                          let next;
-                                          if (e.target.checked) {
-                                            next = [...new Set([...current, String(c.id), cslug])];
-                                          } else {
-                                            next = current.filter(id => {
-                                              const sid = String(id).trim().toLowerCase();
-                                              const sslug = sid.replace(/[^a-z0-9]+/g, '_');
-                                              return sid !== cid && sid !== cname && sid !== cslug && sslug !== cslug;
-                                            });
-                                          }
-                                          setSlabForm({ ...slabForm, selectedComponentIds: next });
-                                        }}
-                                        className="rounded accent-primary w-4 h-4 cursor-pointer"
-                                      />
-                                      <span className="text-xs">{c.name}</span>
-                                    </div>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
-                                      String(c.type) === 'Derived'
-                                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                        : String(c.type) === 'Module'
-                                        ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20'
-                                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                    }`}>
-                                      {c.type}
-                                    </span>
-                                  </label>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {}} // handled by parent onClick
+                                      className="rounded accent-primary w-4 h-4 cursor-pointer shrink-0"
+                                    />
+                                    <span className="text-xs truncate">{c.name}</span>
+                                  </div>
                                 );
-                              });
-                            })()}
+                              })
+                            )}
                           </div>
                         </div>
-                      </>
+                      </div>
                     );
                   })()}
                 </div>
 
-                {/* Payroll Cycle */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                {/* Row 6: Payroll Cycle & Active Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 items-center">
                   <div>
-                    <label className="text-xs font-bold text-foreground">Payroll Cycle <span className="text-rose-500">*</span></label>
+                    <label className="text-xs font-semibold text-foreground block mb-1">
+                      Payroll Cycle <span className="text-rose-500">*</span>
+                    </label>
                     <select
                       value={slabForm.cycleId || (cycles[0]?.id ? String(cycles[0].id) : '')}
                       onChange={e => setSlabForm({ ...slabForm, cycleId: e.target.value })}
-                      className="w-full mt-1 border border-input bg-background rounded-lg p-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+                      className="w-full h-9 border border-input bg-background text-foreground rounded-lg px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
                     >
                       <option value="">-- Select Payroll Cycle --</option>
                       {cycles.map(c => (
@@ -1587,23 +1682,55 @@ export const PayrollSettingsPage: React.FC = () => {
                       ))}
                     </select>
                   </div>
-                  <div className="flex items-center gap-3 pt-5">
-                    <span className="text-xs font-bold text-foreground">Status</span>
-                    <button
-                      type="button"
-                      onClick={() => setSlabForm({ ...slabForm, isActive: !slabForm.isActive })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                        slabForm.isActive ? 'bg-emerald-600' : 'bg-muted border border-border'
-                      }`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        slabForm.isActive ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
-                    <span className={`text-xs font-bold ${slabForm.isActive ? 'text-emerald-600' : 'text-muted-foreground'}`}>
-                      {slabForm.isActive ? 'Active' : 'Inactive'}
-                    </span>
+
+                  <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors h-[42px] mt-4">
+                    <div className="space-y-0.5">
+                      <label htmlFor="slab-active-switch" className="text-xs font-semibold text-foreground cursor-pointer block leading-none">
+                        Active Status
+                      </label>
+                      <span className="text-[10px] text-muted-foreground block leading-none">
+                        {slabForm.isActive ? 'Slab active in payroll' : 'Disabled'}
+                      </span>
+                    </div>
+                    <Switch
+                      id="slab-active-switch"
+                      checked={Boolean(slabForm.isActive)}
+                      onCheckedChange={(checked) => setSlabForm({ ...slabForm, isActive: checked })}
+                    />
                   </div>
+                </div>
+
+                {/* Bottom Action Bar */}
+                <div className="flex items-center justify-between pt-3 border-t border-border/70">
+                  <Button
+                    onClick={handleSaveSlab}
+                    className="h-9 px-5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    {selectedSlabId ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                    {selectedSlabId ? 'Update Slab' : 'Save Slab'}
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedSlabId('');
+                      setSlabForm({
+                        name: '',
+                        departments: [],
+                        grades: [],
+                        locations: [],
+                        minCtc: 0,
+                        maxCtc: 10000000,
+                        selectedComponentIds: [],
+                        cycleId: cycles.length > 0 ? cycles[0].id : '',
+                        isActive: true,
+                        employmentType: 'Regular'
+                      });
+                    }}
+                    className="h-9 px-4 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-lg flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset Form
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1649,7 +1776,7 @@ export const PayrollSettingsPage: React.FC = () => {
               <Card className="border-slate-200 dark:border-slate-800">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    <IndianRupee className="w-4 h-4 text-emerald-500" />
                     Payment Status Setting
                   </CardTitle>
                   <CardDescription className="text-xs">Statuses shown against each employee's payment while processing a payroll run.</CardDescription>

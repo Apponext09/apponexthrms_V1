@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Receipt, Search, CheckCircle2, XCircle, Clock, DollarSign, RefreshCw, FileText } from 'lucide-react';
+import { Receipt, Search, CheckCircle2, XCircle, Clock, IndianRupee, RefreshCw, FileText } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -177,7 +177,7 @@ export const AdminExpenseClaims: React.FC = () => {
               <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">₹{approvedTotal.toLocaleString('en-IN')}</h3>
             </div>
             <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <DollarSign className="w-5 h-5" />
+              <IndianRupee className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>

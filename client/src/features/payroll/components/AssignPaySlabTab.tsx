@@ -65,18 +65,18 @@ export const AssignPaySlabTab: React.FC = () => {
   const [targetEmp, setTargetEmp] = useState<EmpRow | null>(null);
   const [calcMode, setCalcMode] = useState<'salary_input' | 'component_based'>('salary_input');
   const [modalSlabId, setModalSlabId] = useState('');
-  const [salaryInput, setSalaryInput] = useState('60000');
+  const [salaryInput, setSalaryInput] = useState('');
   const [modalEffectiveFrom, setModalEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
   const [arrearPayMonth, setArrearPayMonth] = useState(new Date().toISOString().slice(0, 10));
 
   // Earnings
-  const [basic, setBasic] = useState('30000');
-  const [hra, setHra] = useState('12000');
+  const [basic, setBasic] = useState('0');
+  const [hra, setHra] = useState('0');
   const [standardAllowance, setStandardAllowance] = useState('0');
   const [mealAllowance, setMealAllowance] = useState('0');
   const [communicationAllowance, setCommunicationAllowance] = useState('0');
   const [childrenEduAllowance, setChildrenEduAllowance] = useState('0');
-  const [lta, setLta] = useState('18000');
+  const [lta, setLta] = useState('0');
 
   // Deductions
   const [esic, setEsic] = useState('0');
@@ -309,21 +309,26 @@ export const AssignPaySlabTab: React.FC = () => {
         if (list && list.length > 0) {
           const s = list[0];
           setCalcMode(s.calculation_mode || s.calcMode || 'salary_input');
-          setSalaryInput(String(s.gross_monthly || s.salary_input || s.salaryInput || 120000));
-          setBasic(String(s.basic_monthly || s.basic || 60000));
-          setHra(String(s.hra_monthly || s.hra || 24000));
-          setPf(String(s.pf_deduction || s.pf || 1800));
-          setPt(String(s.pt_deduction || s.pt || 200));
-          setEsic(String(s.esi_deduction || s.esic || 0));
-          setPfEmployer(String(s.pf_employer || s.pfEmployer || 1800));
+          setSalaryInput(String(s.gross_monthly || s.salary_input || s.salaryInput || ''));
+          setBasic(String(s.basic_monthly || s.basic || '0'));
+          setHra(String(s.hra_monthly || s.hra || '0'));
+          setPf(String(s.pf_deduction || s.pf || '0'));
+          setPt(String(s.pt_deduction || s.pt || '0'));
+          setEsic(String(s.esi_deduction || s.esic || '0'));
+          setPfEmployer(String(s.pf_employer || s.pfEmployer || '0'));
         } else {
-          recalculateFromSalaryInput(120000);
+          // No existing structure — start blank
+          setSalaryInput('');
+          setBasic('0'); setHra('0'); setPf('0'); setPt('0'); setEsic('0'); setPfEmployer('0');
         }
       }).catch(() => {
-        recalculateFromSalaryInput(120000);
+        setSalaryInput('');
+        setBasic('0'); setHra('0'); setPf('0'); setPt('0'); setEsic('0'); setPfEmployer('0');
       });
     } else {
-      recalculateFromSalaryInput(120000);
+      // Multi-employee — start blank, user must enter CTC
+      setSalaryInput('');
+      setBasic('0'); setHra('0'); setPf('0'); setPt('0'); setEsic('0'); setPfEmployer('0');
     }
 
     setModalOpen(true);
@@ -369,26 +374,42 @@ export const AssignPaySlabTab: React.FC = () => {
       await Promise.all(listToSave.map(async emp => {
         const modalSlabObj = slabs.find(s => String(s.id) === modalSlabId);
         
-        const earningsBreakup = [
-          { component_id: 1, code: 'BASIC', name: 'Basic Salary', type: 'Formula', amount: numBasic },
-          { component_id: 2, code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'Formula', amount: numHra },
-          ...(numSa > 0 ? [{ component_id: 4, code: 'STANDARD_ALLOWANCE', name: 'Standard Allowance', type: 'Value', amount: numSa }] : []),
-          ...(numMa > 0 ? [{ component_id: 5, code: 'MEAL_ALLOWANCE', name: 'Meal Allowance', type: 'Value', amount: numMa }] : []),
-          ...(numCa > 0 ? [{ component_id: 6, code: 'COMMUNICATION_ALLOWANCE', name: 'Communication Allowance', type: 'Value', amount: numCa }] : []),
-          ...(numCea > 0 ? [{ component_id: 7, code: 'CHILDREN_EDU_ALLOWANCE', name: 'Children Education Allowance', type: 'Value', amount: numCea }] : []),
-          ...(numLta > 0 ? [{ component_id: 8, code: 'LTA', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: numLta }] : []),
-        ];
+        // Resolve component IDs dynamically from fetched componentDefs — never hardcoded
+        const findComp = (keywords: string[]) =>
+          componentDefs.find((c: any) =>
+            keywords.some(k => (c.name || '').toLowerCase().includes(k.toLowerCase()))
+          );
+
+        const basicDef   = findComp(['basic']);
+        const hraDef     = findComp(['hra', 'house rent']);
+        const saDef      = findComp(['standard allowance']);
+        const maDef      = findComp(['meal allowance']);
+        const caDef      = findComp(['communication allowance']);
+        const ceaDef     = findComp(['children education', 'children edu']);
+        const ltaDef     = findComp(['lta', 'leave travel']);
+        const specialDef = findComp(['special allowance']);
+        const pfDef      = findComp(['provident', 'pf', 'epf']);
+        const ptDef      = findComp(['professional tax', ' pt']);
+        const esicDef    = findComp(['esic', 'esi', 'employee state']);
+
+        const earningsBreakup: any[] = [];
+        if (numBasic > 0 && basicDef) earningsBreakup.push({ component_id: basicDef.id, code: (basicDef.name || 'Basic').toUpperCase().replace(/\s+/g, '_'), name: basicDef.name, type: basicDef.component_type || 'Derived', amount: numBasic });
+        if (numHra > 0 && hraDef)     earningsBreakup.push({ component_id: hraDef.id,   code: (hraDef.name || 'HRA').toUpperCase().replace(/\s+/g, '_'),   name: hraDef.name,   type: hraDef.component_type   || 'Derived', amount: numHra });
+        if (numSa > 0  && saDef)      earningsBreakup.push({ component_id: saDef.id,    code: (saDef.name || '').toUpperCase().replace(/\s+/g, '_'),    name: saDef.name,    type: saDef.component_type    || 'Value',  amount: numSa });
+        if (numMa > 0  && maDef)      earningsBreakup.push({ component_id: maDef.id,    code: (maDef.name || '').toUpperCase().replace(/\s+/g, '_'),    name: maDef.name,    type: maDef.component_type    || 'Value',  amount: numMa });
+        if (numCa > 0  && caDef)      earningsBreakup.push({ component_id: caDef.id,    code: (caDef.name || '').toUpperCase().replace(/\s+/g, '_'),    name: caDef.name,    type: caDef.component_type    || 'Value',  amount: numCa });
+        if (numCea > 0 && ceaDef)     earningsBreakup.push({ component_id: ceaDef.id,   code: (ceaDef.name || '').toUpperCase().replace(/\s+/g, '_'),   name: ceaDef.name,   type: ceaDef.component_type   || 'Value',  amount: numCea });
+        if (numLta > 0 && ltaDef)     earningsBreakup.push({ component_id: ltaDef.id,   code: (ltaDef.name || 'LTA').toUpperCase().replace(/\s+/g, '_'),   name: ltaDef.name,   type: ltaDef.component_type   || 'Value',  amount: numLta });
 
         const specialAllowanceVal = Math.max(0, grossCalculated - earningsBreakup.reduce((acc, cur) => acc + cur.amount, 0));
-        if (specialAllowanceVal > 0) {
-          earningsBreakup.push({ component_id: 3, code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'Derived', amount: specialAllowanceVal });
+        if (specialAllowanceVal > 0 && specialDef) {
+          earningsBreakup.push({ component_id: specialDef.id, code: (specialDef.name || 'Special Allowance').toUpperCase().replace(/\s+/g, '_'), name: specialDef.name, type: specialDef.component_type || 'Derived', amount: specialAllowanceVal });
         }
 
-        const deductionsBreakup = [
-          ...(numPf > 0 ? [{ component_id: 9, code: 'PF', name: 'Employee Provident Fund (EPF)', type: 'Formula', amount: numPf }] : []),
-          ...(numPt > 0 ? [{ component_id: 11, code: 'PT', name: 'Professional Tax', type: 'Value', amount: numPt }] : []),
-          ...(numEsic > 0 ? [{ component_id: 10, code: 'ESIC', name: 'Employee State Insurance (ESIC)', type: 'Formula', amount: numEsic }] : []),
-        ];
+        const deductionsBreakup: any[] = [];
+        if (numPf > 0   && pfDef)   deductionsBreakup.push({ component_id: pfDef.id,   code: (pfDef.name || 'PF').toUpperCase().replace(/\s+/g, '_'),   name: pfDef.name,   type: pfDef.component_type   || 'Derived', amount: numPf });
+        if (numPt > 0   && ptDef)   deductionsBreakup.push({ component_id: ptDef.id,   code: (ptDef.name || 'PT').toUpperCase().replace(/\s+/g, '_'),   name: ptDef.name,   type: ptDef.component_type   || 'Value',  amount: numPt });
+        if (numEsic > 0 && esicDef) deductionsBreakup.push({ component_id: esicDef.id, code: (esicDef.name || 'ESIC').toUpperCase().replace(/\s+/g, '_'), name: esicDef.name, type: esicDef.component_type || 'Derived', amount: numEsic });
 
         const payload = {
           employee_id: emp.id,
