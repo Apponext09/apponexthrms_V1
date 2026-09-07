@@ -152,9 +152,9 @@ export const ExpenseSettingsPage: React.FC = () => {
         wf.levels && wf.levels.length > 0
           ? wf.levels
           : [
-              { levelOrder: 1, approverType: 'reporting_manager', approverRole: 'Reporting Manager', stepName: 'Manager Approval', isMandatory: true },
-              { levelOrder: 2, approverType: 'hr', approverRole: 'Finance / HR Officer', stepName: 'Finance Verification', isMandatory: true }
-            ]
+            { levelOrder: 1, approverType: 'reporting_manager', approverRole: 'Reporting Manager', stepName: 'Manager Approval', isMandatory: true },
+            { levelOrder: 2, approverType: 'hr', approverRole: 'Finance / HR Officer', stepName: 'Finance Verification', isMandatory: true }
+          ]
       );
     } else {
       setEditingWfId(null);
@@ -245,21 +245,19 @@ export const ExpenseSettingsPage: React.FC = () => {
         <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
           <button
             onClick={() => setActiveTab('general')}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'general'
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'general'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
+              }`}
           >
             General & Rates
           </button>
           <button
             onClick={() => setActiveTab('workflows')}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'workflows'
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'workflows'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
+              }`}
           >
             Approval Workflows ({workflows.length})
           </button>

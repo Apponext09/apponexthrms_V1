@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   PieChart,
   TrendingUp,
+<<<<<<< HEAD
+=======
+  IndianRupee,
+>>>>>>> 318d64017a89074e3861c6d51d5eba47980770b1
   Users,
   Building,
   Clock,
@@ -11,7 +15,6 @@ import {
   ChevronRight,
   User,
   Briefcase,
-  IndianRupee
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +48,7 @@ export const ManagerPayrollPortal: React.FC = () => {
           employees: Array.isArray(d.employees) ? d.employees : [],
         });
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -102,11 +105,10 @@ export const ManagerPayrollPortal: React.FC = () => {
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
-              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === key
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${activeTab === key
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-              }`}
+                }`}
             >
               <Icon className="w-3.5 h-3.5" />
               {label}

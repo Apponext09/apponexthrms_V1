@@ -360,10 +360,10 @@ export function AppRoutes() {
           <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
           <Route path="/hr/payroll/gratuity" element={<GratuityPolicyPage />} />
 
-          <Route path="/policies/manage" element={<AdminPolicyDashboardPage />} />
-          <Route path="/policies/create" element={<CreatePolicyPage />} />
-          <Route path="/policies/edit/:id" element={<CreatePolicyPage />} />
-          <Route path="/policies/reports" element={<PolicyAcknowledgementReportPage />} />
+          <Route path="/hr/policies/manage" element={<AdminPolicyDashboardPage />} />
+          <Route path="/hr/policies/create" element={<CreatePolicyPage />} />
+          <Route path="/hr/policies/edit/:id" element={<CreatePolicyPage />} />
+          <Route path="/hr/policies/reports" element={<PolicyAcknowledgementReportPage />} />
 
           {/* Leave & Time */}
           <Route path="/hr/attendance" element={<AttendanceDashboard />} />
@@ -475,8 +475,8 @@ export function AppRoutes() {
           <Route path="/manager/interviewer-rating" element={<InterviewerRatingPage />} />
           <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
           <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
-          <Route path="/manager/expenses" element={<ExpenseApprovalsPage />} />
-          <Route path="/manager/expenses/approvals" element={<ExpenseApprovalsPage />} />
+          <Route path="/manager/expenses" element={<ExpenseApprovalsPage defaultStatusFilter="pending_level_2" allowedStatuses={['pending_level_2','pending_manager','pending_approvals','returned','rejected','all']} portalLabel="Approve your team's expense claims — Level 2 (Manager) queue" />} />
+          <Route path="/manager/expenses/approvals" element={<ExpenseApprovalsPage defaultStatusFilter="pending_level_2" allowedStatuses={['pending_level_2','pending_manager','pending_approvals','returned','rejected','all']} portalLabel="Approve your team's expense claims — Level 2 (Manager) queue" />} />
           <Route path="/manager/expenses/my-expenses" element={<MyExpensesPage />} />
           <Route path="/manager/expenses/travel-requests" element={<TravelRequestsPage />} />
           <Route path="/manager/expenses/travel-advances" element={<TravelAdvancesPage />} />
@@ -516,8 +516,8 @@ export function AppRoutes() {
           <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
           <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
           <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
-          <Route path="/team-lead/expenses" element={<ExpenseApprovalsPage />} />
-          <Route path="/team-lead/expenses/approvals" element={<ExpenseApprovalsPage />} />
+          <Route path="/team-lead/expenses" element={<ExpenseApprovalsPage defaultStatusFilter="pending_level_1" allowedStatuses={['pending_level_1','pending_approvals','returned','rejected','all']} portalLabel="Approve your team's expense claims — Level 1 (Team Lead) queue" />} />
+          <Route path="/team-lead/expenses/approvals" element={<ExpenseApprovalsPage defaultStatusFilter="pending_level_1" allowedStatuses={['pending_level_1','pending_approvals','returned','rejected','all']} portalLabel="Approve your team's expense claims — Level 1 (Team Lead) queue" />} />
           <Route path="/team-lead/expenses/my-expenses" element={<MyExpensesPage />} />
           <Route path="/team-lead/expenses/travel-requests" element={<TravelRequestsPage />} />
           <Route path="/team-lead/expenses/travel-advances" element={<TravelAdvancesPage />} />

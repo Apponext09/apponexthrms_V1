@@ -316,7 +316,7 @@ export const PayrollSettingsPage: React.FC = () => {
           name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() + ` (${e.employeeCode || e.employee_code || `EMP-${e.id}`})`
         })).filter((e: any) => e.id));
       }
-    }).catch(() => {});
+    }).catch(() => { });
 
     // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker
     apiClient.get('/rbac/roles').then((res: any) => {
@@ -324,7 +324,7 @@ export const PayrollSettingsPage: React.FC = () => {
       if (Array.isArray(items) && items.length > 0) {
         setApproverRoles(items.map((r: any) => ({ code: r.code, name: r.name })).filter((r: any) => r.code));
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, [selectedCompanyId]);
 
   // Fetch cycles and slabs whenever selected company changes
@@ -379,15 +379,15 @@ export const PayrollSettingsPage: React.FC = () => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const mappedSlabs: PayrollSlabItem[] = data.map((s: any) => {
-          let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
-          let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
-          let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch {}
+          let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch { }
+          let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch { }
+          let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch { }
 
           if (!Array.isArray(depts) || depts.length === 0 || depts[0] === 'Choose') depts = ['All Departments'];
           if (!Array.isArray(grades) || grades.length === 0 || grades[0] === 'Choose') grades = ['All Pay Grades'];
           if (!Array.isArray(locs) || locs.length === 0) locs = ['All Locations'];
           const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
-          let comps = []; try { comps = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []); } catch {}
+          let comps = []; try { comps = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []); } catch { }
 
           return {
             id: String(s.id),
@@ -417,7 +417,7 @@ export const PayrollSettingsPage: React.FC = () => {
         setSlabs([]);
         setSelectedSlabId('');
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, [selectedCompanyId]);
 
   useEffect(() => {
@@ -526,8 +526,8 @@ export const PayrollSettingsPage: React.FC = () => {
     const raw = (c.type || 'Value').toString();
     const type: 'Value' | 'Derived' | 'Module' =
       raw === 'Formula' || raw === 'formula' || raw === 'derived' ? 'Derived'
-      : raw === 'module' ? 'Module'
-      : 'Value';
+        : raw === 'module' ? 'Module'
+          : 'Value';
     return { ...c, type };
   };
 
@@ -691,7 +691,7 @@ export const PayrollSettingsPage: React.FC = () => {
     if (e) e.stopPropagation();
     if (!id) return;
     if (!window.confirm('Are you sure you want to delete this payroll cycle?')) return;
-    
+
     // Optimistically update UI
     setCycles(prev => {
       const next = prev.filter(c => c.id !== id);
@@ -938,7 +938,7 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       const isEdit = Boolean(selectedSlabId && slabs.some(s => s.id === selectedSlabId));
       if (isEdit) {
-        await apiClient.put(`/payroll/slabs/${selectedSlabId}`, payload).catch(() => {});
+        await apiClient.put(`/payroll/slabs/${selectedSlabId}`, payload).catch(() => { });
         const updatedSlab: PayrollSlabItem = {
           ...slabForm,
           ...payload,
@@ -1031,55 +1031,50 @@ export const PayrollSettingsPage: React.FC = () => {
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/80 shadow-2xs">
           <button
             onClick={() => setActiveTab('cycles')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'cycles'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === 'cycles'
                 ? 'bg-background text-foreground shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            }`}
+              }`}
           >
             <Calendar className="w-3.5 h-3.5" />
             Cycles
           </button>
           <button
             onClick={() => setActiveTab('components')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'components'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === 'components'
                 ? 'bg-background text-foreground shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            }`}
+              }`}
           >
             <Layers className="w-3.5 h-3.5" />
             Components Catalog
           </button>
           <button
             onClick={() => setActiveTab('slabs')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'slabs'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === 'slabs'
                 ? 'bg-background text-foreground shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            }`}
+              }`}
           >
             <Calculator className="w-3.5 h-3.5" />
             Slabs &amp; Statutory Rules
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'settings'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === 'settings'
                 ? 'bg-background text-foreground shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            }`}
+              }`}
           >
             <Settings2 className="w-3.5 h-3.5" />
             Settings
           </button>
           <button
             onClick={() => setActiveTab('report_settings')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === 'report_settings'
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${activeTab === 'report_settings'
                 ? 'bg-background text-foreground shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
-            }`}
+              }`}
           >
             <FileText className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             Report Settings
@@ -1132,18 +1127,16 @@ export const PayrollSettingsPage: React.FC = () => {
                       <div
                         key={slab.id}
                         onClick={() => handleSelectSlab(slab)}
-                        className={`rounded-xl overflow-hidden cursor-pointer border transition-all duration-150 ${
-                          isSelected
+                        className={`rounded-xl overflow-hidden cursor-pointer border transition-all duration-150 ${isSelected
                             ? 'border-primary ring-1 ring-primary/30 shadow-xs bg-primary/5 dark:bg-primary/10'
                             : 'border-border/80 hover:border-border bg-card hover:bg-muted/40'
-                        }`}
+                          }`}
                       >
                         {/* Header banner */}
-                        <div className={`px-3 py-2 flex items-center justify-between border-b ${
-                          isSelected
+                        <div className={`px-3 py-2 flex items-center justify-between border-b ${isSelected
                             ? 'bg-primary text-primary-foreground border-primary/40'
                             : 'bg-muted/40 text-foreground border-border/50'
-                        }`}>
+                          }`}>
                           <div className="flex items-center gap-1.5 font-bold text-xs">
                             <Calendar className="w-3.5 h-3.5 opacity-80" />
                             <span>{cycleName}</span>
@@ -1151,9 +1144,8 @@ export const PayrollSettingsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={(e) => handleDeleteSlab(slab.id, e)}
-                            className={`p-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                              isSelected ? 'hover:bg-primary-foreground/20 text-primary-foreground' : 'text-muted-foreground hover:text-destructive'
-                            }`}
+                            className={`p-0.5 rounded text-[10px] font-bold transition-colors cursor-pointer ${isSelected ? 'hover:bg-primary-foreground/20 text-primary-foreground' : 'text-muted-foreground hover:text-destructive'
+                              }`}
                             title="Delete Slab"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1163,7 +1155,7 @@ export const PayrollSettingsPage: React.FC = () => {
                         {/* Slab info rows */}
                         <div className="p-2.5 space-y-1 text-xs">
                           <div className="flex items-center gap-2 font-bold text-foreground truncate">
-                            <Coins className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <IndianRupee className="w-3.5 h-3.5 text-primary shrink-0" />
                             <span className="truncate">{slab.name}</span>
                           </div>
                           <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
@@ -1282,9 +1274,8 @@ export const PayrollSettingsPage: React.FC = () => {
                               <div
                                 key={dept}
                                 onClick={() => { setSlabForm({ ...slabForm, departments: [dept] }); setShowDeptDropdown(false); }}
-                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
-                                  slabForm.departments?.[0] === dept ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
-                                }`}
+                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${slabForm.departments?.[0] === dept ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
+                                  }`}
                               >
                                 {dept}
                               </div>
@@ -1328,9 +1319,8 @@ export const PayrollSettingsPage: React.FC = () => {
                               <div
                                 key={grade}
                                 onClick={() => { setSlabForm({ ...slabForm, grades: [grade] }); setShowGradeDropdown(false); }}
-                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${
-                                  slabForm.grades?.[0] === grade ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
-                                }`}
+                                className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${slabForm.grades?.[0] === grade ? 'bg-primary text-primary-foreground font-semibold' : 'hover:bg-muted text-foreground'
+                                  }`}
                               >
                                 {grade}
                               </div>
@@ -1363,11 +1353,10 @@ export const PayrollSettingsPage: React.FC = () => {
                         const isAll = allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l));
                         setSlabForm({ ...slabForm, locations: isAll ? [] : [...allLocations] });
                       }}
-                      className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 border ${
-                        allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))
+                      className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 border ${allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))
                           ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
                           : 'bg-muted/40 hover:bg-muted text-muted-foreground border-border'
-                      }`}
+                        }`}
                     >
                       {allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l)) && <Check className="w-3.5 h-3.5" />}
                       Select All Locations
@@ -1385,11 +1374,10 @@ export const PayrollSettingsPage: React.FC = () => {
                               locations: isSelected ? curr.filter(l => l !== loc) : [...curr, loc]
                             });
                           }}
-                          className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border ${
-                            isSelected
+                          className={`px-3 py-1.5 text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border ${isSelected
                               ? 'bg-primary/10 text-primary border-primary/30 font-semibold shadow-2xs'
                               : 'bg-muted/30 hover:bg-muted text-muted-foreground border-border'
-                          }`}
+                            }`}
                         >
                           {isSelected && <Check className="w-3 h-3 text-primary" />}
                           <span>{loc}</span>
@@ -1427,11 +1415,10 @@ export const PayrollSettingsPage: React.FC = () => {
                           key={preset.label}
                           type="button"
                           onClick={() => setSlabForm({ ...slabForm, minCtc: preset.min, maxCtc: preset.max })}
-                          className={`px-2 py-0.5 text-[11px] font-mono rounded-md border transition-all cursor-pointer ${
-                            isActive
+                          className={`px-2 py-0.5 text-[11px] font-mono rounded-md border transition-all cursor-pointer ${isActive
                               ? 'bg-primary text-primary-foreground border-primary font-bold shadow-2xs'
                               : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border'
-                          }`}
+                            }`}
                         >
                           {preset.label}
                         </button>
@@ -1581,11 +1568,10 @@ export const PayrollSettingsPage: React.FC = () => {
                                 <div
                                   key={c.id}
                                   onClick={() => toggleComp(c, !isChecked)}
-                                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border select-none ${
-                                    isChecked ? 'bg-primary/5 dark:bg-primary/15 text-foreground font-semibold border-primary/30 shadow-2xs' : 'hover:bg-muted/40 text-muted-foreground border-border/60 bg-background'
-                                  }`}
+                                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border select-none ${isChecked ? 'bg-primary/5 dark:bg-primary/15 text-foreground font-semibold border-primary/30 shadow-2xs' : 'hover:bg-muted/40 text-muted-foreground border-border/60 bg-background'
+                                    }`}
                                 >
-                                  <input type="checkbox" checked={isChecked} onChange={() => {}} className="rounded accent-primary w-3.5 h-3.5 cursor-pointer shrink-0" />
+                                  <input type="checkbox" checked={isChecked} onChange={() => { }} className="rounded accent-primary w-3.5 h-3.5 cursor-pointer shrink-0" />
                                   <div className="min-w-0">
                                     <span className="text-xs truncate block">{c.name}</span>
                                     <span className="text-[10px] text-muted-foreground truncate block">{c.groupName}</span>
@@ -1806,13 +1792,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateSetting({ requireApprovalBeforePublish: !payrollSettings.requireApprovalBeforePublish })}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
-                          payrollSettings.requireApprovalBeforePublish ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${payrollSettings.requireApprovalBeforePublish ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
                       >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                          payrollSettings.requireApprovalBeforePublish ? 'translate-x-6' : 'translate-x-1'
-                        }`} />
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${payrollSettings.requireApprovalBeforePublish ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
                       </button>
                       <span className="text-xs font-bold text-foreground">Require approval before publish</span>
                     </div>
@@ -1897,13 +1881,11 @@ export const PayrollSettingsPage: React.FC = () => {
                             next[idx] = { ...next[idx], isEnabled: !next[idx].isEnabled };
                             updateSetting({ processPayrollTabs: next });
                           }}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                            tab.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                          }`}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${tab.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
                         >
-                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                            tab.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
-                          }`} />
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${tab.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                            }`} />
                         </button>
                       </div>
                     ))}
@@ -1997,13 +1979,11 @@ export const PayrollSettingsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => updateSetting({ doublePayInclusive: !payrollSettings.doublePayInclusive })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${
-                        payrollSettings.doublePayInclusive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${payrollSettings.doublePayInclusive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        payrollSettings.doublePayInclusive ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${payrollSettings.doublePayInclusive ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
                     </button>
                   </div>
                   <div className="space-y-1">
@@ -2011,13 +1991,11 @@ export const PayrollSettingsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => updateSetting({ sandwichPolicyEnabled: !payrollSettings.sandwichPolicyEnabled })}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${
-                        payrollSettings.sandwichPolicyEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                      }`}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${payrollSettings.sandwichPolicyEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                        payrollSettings.sandwichPolicyEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${payrollSettings.sandwichPolicyEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
                     </button>
                   </div>
                 </CardContent>
@@ -2125,13 +2103,11 @@ export const PayrollSettingsPage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: !payrollSettings.payslipSetting?.[f.key] } })}
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                            payrollSettings.payslipSetting?.[f.key] ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                          }`}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${payrollSettings.payslipSetting?.[f.key] ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                            }`}
                         >
-                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                            payrollSettings.payslipSetting?.[f.key] ? 'translate-x-4.5' : 'translate-x-1'
-                          }`} />
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${payrollSettings.payslipSetting?.[f.key] ? 'translate-x-4.5' : 'translate-x-1'
+                            }`} />
                         </button>
                       </div>
                     ))}
@@ -2207,13 +2183,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, isEnabled: !payrollSettings.bonusSetting?.isEnabled } })}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                          payrollSettings.bonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${payrollSettings.bonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
                       >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                          payrollSettings.bonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
-                        }`} />
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${payrollSettings.bonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
                       </button>
                     </div>
                     {payrollSettings.bonusSetting?.isEnabled && (
@@ -2249,13 +2223,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, isEnabled: !payrollSettings.attendanceBonusSetting?.isEnabled } })}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                          payrollSettings.attendanceBonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${payrollSettings.attendanceBonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
                       >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                          payrollSettings.attendanceBonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
-                        }`} />
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${payrollSettings.attendanceBonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
                       </button>
                     </div>
                     {payrollSettings.attendanceBonusSetting?.isEnabled && (
@@ -2289,13 +2261,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, isEnabled: !payrollSettings.nightAllowanceSetting?.isEnabled } })}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                          payrollSettings.nightAllowanceSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${payrollSettings.nightAllowanceSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
                       >
-                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                          payrollSettings.nightAllowanceSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
-                        }`} />
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${payrollSettings.nightAllowanceSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
                       </button>
                     </div>
                     {payrollSettings.nightAllowanceSetting?.isEnabled && (

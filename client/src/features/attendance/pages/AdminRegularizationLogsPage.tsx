@@ -286,7 +286,7 @@ export const AdminRegularizationLogsPage: React.FC = () => {
                       {/* Date */}
                       <TableCell className="px-4 py-4 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
                         {log.is_date_range && log.end_date ? (
-                          <span>{log.request_date} $\rightarrow$ {log.end_date}</span>
+                          <span>{log.request_date} → {log.end_date}</span>
                         ) : (
                           <span>{log.request_date}</span>
                         )}
@@ -296,7 +296,7 @@ export const AdminRegularizationLogsPage: React.FC = () => {
                       <TableCell className="px-4 py-4 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>{formatTimeDisplay(log.requested_check_in_time)} $\rightarrow$ {formatTimeDisplay(log.requested_check_out_time)}</span>
+                          <span>{formatTimeDisplay(log.requested_check_in_time)} → {formatTimeDisplay(log.requested_check_out_time)}</span>
                         </div>
                       </TableCell>
 

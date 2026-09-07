@@ -87,8 +87,11 @@ export interface ExpenseClaim {
   description?: string;
   projectCostCenter?: string;
   receiptUrl?: string;
-  status: string; // draft, submitted, pending_manager, pending_finance, approved, returned, rejected, payment_pending, paid
+  status: string; // draft, submitted, pending_manager, pending_level_1, pending_level_2, pending_finance, approved, returned, rejected, payment_pending, paid
   currentApproverId?: number;
+  currentApproverRole?: string;
+  currentLevel?: number;
+  workflowId?: number;
   rejectionReason?: string;
   returnComments?: string;
   travelRequestId?: number;
@@ -120,8 +123,13 @@ export interface TravelRequest {
   startDate: string;
   endDate: string;
   estimatedBudget: number;
-  status: string;
+  status: string; // pending_level_1 | pending_level_2 | pending_finance | approved | rejected
+  currentLevel?: number;
+  currentApproverRole?: string;
+  workflowId?: number;
+  submittedByRole?: string; // employee | team_lead | manager | hr | admin
   approverNotes?: string;
+  rejectionReason?: string;
   createdAt: string;
 }
 
@@ -132,6 +140,8 @@ export interface TravelAdvance {
   employeeId: number;
   firstName?: string;
   lastName?: string;
+  employeeCode?: string;
+  departmentName?: string;
   travelRequestId?: number;
   requestNumber?: string;
   travelPurpose?: string;
@@ -140,7 +150,11 @@ export interface TravelAdvance {
   settledAmount: number;
   balanceAmount: number;
   purpose?: string;
-  status: string;
+  status: string; // pending_finance | approved | rejected | disbursed
+  submittedByRole?: string; // employee | team_lead | manager | hr | admin
+  financeNotes?: string;
+  rejectionReason?: string;
+  financeApprovedAt?: string;
   disbursedAt?: string;
   createdAt: string;
 }
@@ -215,7 +229,7 @@ export interface ExpenseWorkflow {
 
 export const expenseApi = {
   // Categories
-  getCategories: () => apiClient.get('/expenses/categories').then((res) => res.data.data),
+  getCategories: (includeInactive?: boolean) => apiClient.get('/expenses/categories', { params: { includeInactive } }).then((res) => res.data.data),
   createCategory: (data: Partial<ExpenseCategory>) => apiClient.post('/expenses/categories', data).then((res) => res.data.data),
   updateCategory: (id: number, data: Partial<ExpenseCategory>) => apiClient.put(`/expenses/categories/${id}`, data).then((res) => res.data.data),
   deleteCategory: (id: number) => apiClient.delete(`/expenses/categories/${id}`).then((res) => res.data),
@@ -241,7 +255,7 @@ export const expenseApi = {
   financeVerifyClaim: (id: number | string, data: { items?: any[]; comments?: string }) => apiClient.post(`/expenses/claims/${id}/finance-verify`, data).then((res) => res.data.data),
   rejectClaim: (id: number | string, reason: string) => apiClient.post(`/expenses/claims/${id}/reject`, { reason }).then((res) => res.data.data),
   returnClaim: (id: number | string, comments: string) => apiClient.post(`/expenses/claims/${id}/return`, { comments }).then((res) => res.data.data),
-  processReimbursement: (id: number | string, data: { paymentDate: string; paidAmount: number; paymentMethod: string; paymentReference: string }) =>
+  processReimbursement: (id: number | string, data: { paymentDate: string; paidAmount: number; paymentMethod: string; paymentReference?: string }) =>
     apiClient.post(`/expenses/claims/${id}/reimburse`, data).then((res) => res.data.data),
 
   // Travel
@@ -257,6 +271,10 @@ export const expenseApi = {
     return apiClient.get('/expenses/travel-advances', { params: p }).then((res) => res.data.data);
   },
   createTravelAdvance: (data: any) => apiClient.post('/expenses/travel-advances', data).then((res) => res.data.data),
+  approveTravelAdvance: (id: number, data: { comments?: string; approvedAmount?: number }) =>
+    apiClient.put(`/expenses/travel-advances/${id}/approve`, data).then((res) => res.data.data),
+  rejectTravelAdvance: (id: number, reason: string) =>
+    apiClient.put(`/expenses/travel-advances/${id}/reject`, { reason }).then((res) => res.data.data),
 
   // Mileage
   getMileageClaims: (params?: Record<string, any> | number | null) => {

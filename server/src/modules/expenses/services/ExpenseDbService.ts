@@ -7,6 +7,7 @@ export class ExpenseDbService {
     try {
       const db = getKnex();
       await this.ensureSubmitterColumns(db);
+      await this.ensureTravelWorkflowColumns(db);
       await this.ensureMileageDesignationRatesTable(db);
 
       const hasCategoriesTable = await db.schema.hasTable('expense_categories');
@@ -145,6 +146,18 @@ export class ExpenseDbService {
         // Safe to ignore if non-MySQL database engine or already LONGTEXT
       }
 
+      try {
+        const hasLevel = await db.schema.hasColumn('expense_claims', 'current_level');
+        if (!hasLevel) {
+          await db.schema.table('expense_claims', (t) => {
+            t.integer('current_level').defaultTo(1);
+            t.bigInteger('workflow_id').unsigned().nullable();
+          });
+        }
+      } catch (err) {
+        // Ignore if exists
+      }
+
       // 5. Expense Approval Logs Table
       const hasLogs = await db.schema.hasTable('expense_approval_logs');
       if (!hasLogs) {
@@ -201,7 +214,7 @@ export class ExpenseDbService {
           table.decimal('settled_amount', 15, 2).defaultTo(0);
           table.decimal('balance_amount', 15, 2).defaultTo(0);
           table.text('purpose').nullable();
-          table.string('status', 50).defaultTo('requested');
+          table.string('status', 50).defaultTo('pending_finance');
           table.timestamp('disbursed_at').nullable();
           table.timestamps(true, true);
           table.index(['organization_id']);
@@ -322,6 +335,56 @@ export class ExpenseDbService {
     });
   }
 
+  private static async ensureTravelWorkflowColumns(db: any): Promise<void> {
+    // travel_requests: add workflow tracking columns
+    const hasTR = await db.schema.hasTable('travel_requests').catch(() => false);
+    if (hasTR) {
+      const hasTRLevel = await db.schema.hasColumn('travel_requests', 'current_level').catch(() => false);
+      if (!hasTRLevel) {
+        await db.schema.alterTable('travel_requests', (t: any) => {
+          t.integer('current_level').defaultTo(1).nullable();
+          t.string('current_approver_role', 100).nullable();
+          t.bigInteger('workflow_id').unsigned().nullable();
+        }).catch(() => null);
+      }
+      const hasTRRole = await db.schema.hasColumn('travel_requests', 'submitted_by_role').catch(() => false);
+      if (!hasTRRole) {
+        await db.schema.alterTable('travel_requests', (t: any) => {
+          t.string('submitted_by_role', 50).nullable(); // employee | team_lead | manager | hr | admin
+        }).catch(() => null);
+      }
+      const hasTRNotes = await db.schema.hasColumn('travel_requests', 'rejection_reason').catch(() => false);
+      if (!hasTRNotes) {
+        await db.schema.alterTable('travel_requests', (t: any) => {
+          t.text('rejection_reason').nullable();
+        }).catch(() => null);
+      }
+    }
+    // travel_advances: add finance approval columns & migrate requested/pending rows
+    const hasTA = await db.schema.hasTable('travel_advances').catch(() => false);
+    if (hasTA) {
+      const hasTARole = await db.schema.hasColumn('travel_advances', 'submitted_by_role').catch(() => false);
+      if (!hasTARole) {
+        await db.schema.alterTable('travel_advances', (t: any) => {
+          t.string('submitted_by_role', 50).nullable();
+          t.bigInteger('finance_approver_id').unsigned().nullable();
+          t.text('finance_notes').nullable();
+          t.text('rejection_reason').nullable();
+          t.timestamp('finance_approved_at').nullable();
+        }).catch(() => null);
+      }
+      // Migrate any advances stuck in 'requested' or 'pending' to 'pending_finance' with approved_amount=0
+      await db('travel_advances')
+        .whereIn('status', ['requested', 'pending'])
+        .update({
+          status: 'pending_finance',
+          approved_amount: 0,
+          balance_amount: 0
+        })
+        .catch(() => null);
+    }
+  }
+
   private static async ensureSubmitterColumns(db: any): Promise<void> {
     const tables = ['expense_claims', 'travel_requests', 'travel_advances', 'mileage_claims'];
     for (const tableName of tables) {
@@ -342,10 +405,11 @@ export class ExpenseDbService {
   }
 
   private static async seedOrgDefaults(db: any, organizationId: number): Promise<void> {
-    const existingCodes = new Set(
-      (await db('expense_categories').where('organization_id', organizationId).select('code'))
-        .map((r: any) => String(r.code || '').toUpperCase())
-    );
+    const totalCategoriesCount = await db('expense_categories')
+      .where('organization_id', organizationId)
+      .count({ count: '*' })
+      .first();
+    const catCount = totalCategoriesCount ? Number(totalCategoriesCount.count || (totalCategoriesCount as any)['count(*)'] || 0) : 0;
 
     const defaultCategories = [
       { name: 'Travel', code: 'TRAVEL', description: 'Flight, train, cab and local travel expenses', spendingLimit: 50000, isReceiptMandatory: true, minAmountForReceipt: 500 },
@@ -360,22 +424,23 @@ export class ExpenseDbService {
       { name: 'Other', code: 'OTHER', description: 'Miscellaneous work-related expense claims', spendingLimit: 10000, isReceiptMandatory: true, minAmountForReceipt: 500 }
     ];
 
-    for (const cat of defaultCategories) {
-      if (existingCodes.has(cat.code)) continue;
-      await db('expense_categories').insert({
-        organization_id: organizationId,
-        name: cat.name,
-        code: cat.code,
-        description: cat.description,
-        spending_limit: cat.spendingLimit,
-        is_receipt_mandatory: cat.isReceiptMandatory,
-        min_amount_for_receipt: cat.minAmountForReceipt,
-        auto_approval_threshold: 0,
-        is_active: true,
-        created_at: new Date(),
-        updated_at: new Date()
-      });
-      existingCodes.add(cat.code);
+    // Only seed defaults if the organization has ZERO categories in the database
+    if (catCount === 0) {
+      for (const cat of defaultCategories) {
+        await db('expense_categories').insert({
+          organization_id: organizationId,
+          name: cat.name,
+          code: cat.code,
+          description: cat.description,
+          spending_limit: cat.spendingLimit,
+          is_receipt_mandatory: cat.isReceiptMandatory,
+          min_amount_for_receipt: cat.minAmountForReceipt,
+          auto_approval_threshold: 0,
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+      }
     }
 
     const existingSettings = await db('expense_settings').where('organization_id', organizationId).first();

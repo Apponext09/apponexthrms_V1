@@ -80,6 +80,21 @@ export class LocationService {
       code = `${autoCode}-${attempt}`;
     }
 
+    const db = getKnex();
+    let validUserId = ctx.userId ? Number(ctx.userId) : null;
+    if (!validUserId) {
+      const firstUser = await db('users').where('organization_id', ctx.organizationId).first('id').catch(() => null);
+      validUserId = firstUser ? Number(firstUser.id) : 1;
+    }
+
+    let companyId = data.companyId ? parseInt(data.companyId, 10) : null;
+    if (companyId) {
+      const branchExists = await db('branches').where('id', companyId).first('id').catch(() => null);
+      if (!branchExists) {
+        companyId = null;
+      }
+    }
+
     const location = await this.locationRepo.create(ctx, {
       uuid: uuidv4(),
       // Backward-compat fields
@@ -102,10 +117,10 @@ export class LocationService {
       location_mail: data.locationMail || null,
       contact_name: data.contactName || null,
       contact_number: data.contactNumber || null,
-      company_id: data.companyId ? parseInt(data.companyId) : null,
+      company_id: companyId,
       is_active: data.isActive === 'No' ? 'No' : 'Yes',
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
+      created_by: validUserId,
+      updated_by: validUserId,
     } as any);
 
     await this.auditService.log(ctx, {
@@ -151,12 +166,20 @@ export class LocationService {
       ...(data.locationMail !== undefined ? { location_mail: data.locationMail } : {}),
       ...(data.contactName !== undefined ? { contact_name: data.contactName } : {}),
       ...(data.contactNumber !== undefined ? { contact_number: data.contactNumber } : {}),
-      ...(data.companyId !== undefined ? { company_id: data.companyId ? parseInt(data.companyId) : null } : {}),
+      ...(data.companyId !== undefined ? {
+        company_id: await (async () => {
+          const cid = data.companyId ? parseInt(data.companyId, 10) : null;
+          if (!cid) return null;
+          const db = getKnex();
+          const branchExists = await db('branches').where('id', cid).first('id').catch(() => null);
+          return branchExists ? cid : null;
+        })()
+      } : {}),
       ...(data.isActive !== undefined ? {
         is_active: data.isActive === 'No' ? 'No' : 'Yes',
         status: data.isActive === 'No' ? 'inactive' : 'active',
       } : {}),
-      updated_by: ctx.userId,
+      updated_by: ctx.userId || 1,
     } as any);
 
     await this.auditService.log(ctx, {

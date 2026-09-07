@@ -9,7 +9,10 @@ import {
   Percent,
   Sliders,
   Building,
+<<<<<<< HEAD
   IndianRupee,
+=======
+>>>>>>> 318d64017a89074e3861c6d51d5eba47980770b1
   Users,
   Globe,
   Layers,

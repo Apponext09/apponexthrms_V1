@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   UserX,
   ArrowRight,
-  Receipt,
+  ReceiptIndianRupee,
   Compass,
   UploadCloud,
   ShieldCheck,
@@ -745,7 +745,7 @@ export const PayrollDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-blue-600" />
+                <ReceiptIndianRupee className="w-4 h-4 text-blue-600" />
                 Recent Payroll Runs &amp; Disbursal History
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">

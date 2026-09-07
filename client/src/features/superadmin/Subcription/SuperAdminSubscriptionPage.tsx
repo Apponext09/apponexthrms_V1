@@ -8,7 +8,6 @@ import {
   Plus,
   Edit,
   Calendar,
-  DollarSign,
   FileText,
   CheckSquare,
   Square,

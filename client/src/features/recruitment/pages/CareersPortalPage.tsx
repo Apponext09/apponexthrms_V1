@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Briefcase, MapPin, DollarSign, Search, Calendar, CheckCircle } from 'lucide-react';
+import { Briefcase, MapPin, Search, Calendar, CheckCircle } from 'lucide-react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient as api } from '@/config/api';
 import { toast } from 'sonner';

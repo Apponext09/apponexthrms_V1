@@ -232,7 +232,7 @@ export function SuperAdminOrganizationPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0 overflow-x-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
           {/* Status Filter Tabs */}
           <div className="flex items-center bg-muted/60 dark:bg-slate-950/80 p-1 rounded-xl border border-border dark:border-slate-800 shrink-0">
             {(['ALL', 'Active', 'Inactive'] as const).map((st) => (
@@ -251,19 +251,19 @@ export function SuperAdminOrganizationPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative w-56 sm:w-64 shrink-0">
+          <div className="relative flex-1 sm:w-64 min-w-[180px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground dark:text-slate-400" />
             <Input
               placeholder="Search name, code, owner..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-background dark:bg-slate-800/80 border-border dark:border-slate-700 text-foreground dark:text-white text-xs h-9 focus:border-indigo-500 rounded-xl"
+              className="pl-9 bg-background dark:bg-slate-800/80 border-border dark:border-slate-700 text-foreground dark:text-white text-xs h-9 focus:border-indigo-500 rounded-xl w-full"
             />
           </div>
 
           {/* Add Org Button */}
           <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 px-4 gap-1.5 font-bold shadow-lg shadow-indigo-500/20 rounded-xl whitespace-nowrap shrink-0"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 px-4 gap-1.5 font-bold shadow-lg shadow-indigo-500/20 rounded-xl whitespace-nowrap shrink-0 ml-auto sm:ml-0"
             onClick={() => setIsModalOpen(true)}
           >
             <Plus className="w-4 h-4" /> Provision Organization

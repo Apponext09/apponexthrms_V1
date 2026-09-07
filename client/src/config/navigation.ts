@@ -195,7 +195,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'payroll',
     label: 'PAYROLL',
     items: [
-      { name: 'Dashboard', href: '/payroll', icon: 'DollarSign' },
+      { name: 'Dashboard', href: '/payroll', icon: 'IndianRupee' },
       {
         name: 'Payroll Master Settings',
         href: '/payroll/settings',
@@ -264,12 +264,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'EXPENSE MANAGEMENT',
     items: [
       { name: 'Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
-      { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'Receipt' },
+      { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'ReceiptIndianRupee' },
       { name: 'Approvals', href: '/expenses/approvals', icon: 'CheckCircle', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager', 'team_lead'] },
       { name: 'Finance Verification', href: '/expenses/finance-verification', icon: 'FileCheck', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
       { name: 'Reimbursements', href: '/expenses/reimbursements', icon: 'CreditCard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
       { name: 'Travel Requests', href: '/expenses/travel-requests', icon: 'Compass' },
-      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: 'DollarSign' },
+      { name: 'Travel Advances', href: '/expenses/travel-advances', icon: 'IndianRupee' },
       { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: 'Car' },
       { name: 'Expense Categories', href: '/expenses/categories', icon: 'Tag', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
       { name: 'Expense Policies', href: '/expenses/policies', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
@@ -351,6 +351,18 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Configuration', href: '/configuration', icon: 'Sliders' },
       { name: 'Announcements', href: '/hr-operations/announcements', icon: 'Megaphone' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },
+    ],
+  },
+
+  // ── 14b. Policy Governance ────────────────────────────────────────────────
+  {
+    id: 'policy_management',
+    label: 'POLICY GOVERNANCE',
+    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    items: [
+      { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
+      { name: 'Create & Assign Policy', href: '/policies/create', icon: 'FilePlus' },
+      { name: 'Acknowledgement Report', href: '/policies/reports', icon: 'FileText' },
     ],
   },
 

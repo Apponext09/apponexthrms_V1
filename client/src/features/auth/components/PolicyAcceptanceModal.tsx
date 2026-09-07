@@ -1,274 +1,366 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { apiClient } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ShieldCheck, LogOut, Lock, FileText, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, LogOut, Lock, CheckCircle2, ChevronDown, FileText, AlertCircle, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface PolicySection {
-  id: string;
-  title: string;
-  content: string;
-}
-
-interface UserPolicyData {
-  policyId: number;
-  roleCode: string;
-  title: string;
-  description: string;
-  sections: PolicySection[] | string;
-  policyAccepted: boolean;
-}
-
 export const PolicyAcceptanceModal: React.FC = () => {
-  const { user, isAuthenticated, acceptPolicy, logout } = useAuthStore();
-  const [policyData, setPolicyData] = useState<UserPolicyData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated, pendingPolicies, acceptPendingPolicy, fetchPendingPolicies, logout } = useAuthStore();
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [hasAgreed, setHasAgreed] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Re-fetch pending policies when component mounts or user becomes authenticated
   useEffect(() => {
-    if (isAuthenticated && user && !user.policyAccepted) {
-      let isMounted = true;
-      setLoading(true);
-      apiClient
-        .get('/auth/my-policies')
-        .then((res) => {
-          if (isMounted) {
-            const data = res.data?.data || res.data;
-            if (data) {
-              setPolicyData(data);
-              if (data.policyAccepted) {
-                useAuthStore.getState().updateUser({ policyAccepted: true });
-              }
-            }
-          }
-        })
-        .catch((err) => {
-          console.error('[PolicyAcceptanceModal] Failed to fetch role policy:', err);
-        })
-        .finally(() => {
-          if (isMounted) setLoading(false);
-        });
-
-      return () => {
-        isMounted = false;
-      };
+    if (isAuthenticated && user) {
+      fetchPendingPolicies();
     }
-  }, [isAuthenticated, user?.id, user?.policyAccepted]);
+  }, [isAuthenticated, user?.id]);
 
-  if (!isAuthenticated || !user || user.policyAccepted) {
+  const currentPolicy = pendingPolicies && pendingPolicies.length > 0 ? pendingPolicies[currentIndex] || pendingPolicies[0] : null;
+
+  // Reset scroll and checkbox state whenever current policy changes
+  useEffect(() => {
+    setHasScrolledToBottom(false);
+    setHasAgreed(false);
+
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+
+    // Check if the policy content fits inside the container without scrolling
+    const timer = setTimeout(() => {
+      if (scrollContainerRef.current) {
+        const { clientHeight, scrollHeight } = scrollContainerRef.current;
+        if (scrollHeight <= clientHeight + 15) {
+          setHasScrolledToBottom(true);
+        }
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [currentPolicy?.id, currentIndex]);
+
+  if (!isAuthenticated || !user || !pendingPolicies || pendingPolicies.length === 0 || !currentPolicy) {
     return null;
   }
 
+  const totalPolicies = pendingPolicies.length;
+  const policyNumber = Math.min(currentIndex + 1, totalPolicies);
+
+  // Handle Scroll Event to detect reaching the bottom
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+    if (Math.ceil(scrollTop + clientHeight) >= scrollHeight - 12) {
+      if (!hasScrolledToBottom) {
+        setHasScrolledToBottom(true);
+      }
+    }
+  };
+
   const handleAccept = async () => {
-    if (!hasAgreed) return;
+    if (!hasScrolledToBottom) {
+      toast.error('Please scroll to the very bottom of the policy content before accepting.');
+      return;
+    }
+
+    if (!hasAgreed) {
+      toast.error('Please confirm that you have read and understood the policy.');
+      return;
+    }
+
     try {
       setSubmitting(true);
-      await acceptPolicy();
-      toast.success('Policy accepted successfully!', {
-        description: 'Welcome to ApponextHRMS portal.',
+      await acceptPendingPolicy(currentPolicy.id);
+      toast.success(`Policy accepted (${policyNumber} of ${totalPolicies})`, {
+        description: `${currentPolicy.title} has been acknowledged.`,
       });
+
+      // If there are more policies, reset for the next policy
+      if (currentIndex >= pendingPolicies.length - 1) {
+        setCurrentIndex(0);
+      }
     } catch (err: any) {
-      toast.error('Failed to accept policy. Please try again.');
+      toast.error('Failed to record policy acceptance. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleReject = () => {
+  const handleDecline = () => {
     toast.error('Policy Declined', {
-      description: 'You have been logged out because role policy acceptance is mandatory.',
+      description: 'You have been logged out because mandatory policy acceptance is required to access ApponextHRMS.',
     });
     logout();
     window.location.href = '/login';
   };
 
-  const formattedRoleBadge = (policyData?.roleCode || user.roles?.[0] || 'Employee')
-    .replace(/_/g, ' ')
-    .toUpperCase();
-
-  // Safely parse sections array even if received as stringified JSON
-  let normalizedSections: PolicySection[] = [];
-  if (policyData?.sections) {
-    let raw: any = policyData.sections;
+  // Format sections if string or object
+  let sections: Array<{ id?: string; title: string; content: string }> = [];
+  if (currentPolicy.sections) {
+    let raw: any = currentPolicy.sections;
     try {
       while (typeof raw === 'string') {
         raw = JSON.parse(raw);
       }
       if (Array.isArray(raw)) {
-        normalizedSections = raw;
+        sections = raw;
       }
     } catch {
-      normalizedSections = [];
+      sections = [];
     }
   }
 
+  const roleName = (user.roles?.[0] || 'Employee').replace(/_/g, ' ').toUpperCase();
+
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-3 sm:p-6 animate-in fade-in duration-200 select-none">
+      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-800 shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[94vh]">
         
         {/* Top Header Banner */}
-        <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div className="px-6 py-4 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/20 text-primary border border-primary/30 flex items-center justify-center shrink-0">
+            <div className="h-10 w-10 rounded-xl bg-primary/20 text-primary border border-primary/30 flex items-center justify-center shrink-0 shadow-inner">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-100">Mandatory Policy Acceptance</h2>
+                <h2 className="text-base font-bold text-slate-100 tracking-tight">Policy Acknowledgement Required</h2>
               </div>
               <p className="text-xs text-slate-400">
-                Official HR Document for <strong>{user.firstName || 'User'} {user.lastName || ''}</strong>
+                Logged in as <strong>{user.firstName || 'User'} {user.lastName || ''}</strong> ({roleName})
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-semibold">
-            <Lock className="w-3.5 h-3.5" />
-            <span>Dashboard Protected</span>
+
+          {/* Sequential Step Progress Badge */}
+          <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+            <div className="px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-extrabold flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              <span>Policy {policyNumber} of {totalPolicies}</span>
+            </div>
+            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[11px] font-semibold">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Access Locked</span>
+            </div>
           </div>
         </div>
 
-        {/* Scrollable Formal Paper Document View */}
-        <div className="p-4 sm:p-8 overflow-y-auto flex-1 bg-slate-950/50">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-3">
-              <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-              <p className="text-xs font-medium text-slate-400">Retrieving formal policy document for your role...</p>
+        {/* Step Progress Dots for Multi-Policy */}
+        {totalPolicies > 1 && (
+          <div className="px-6 py-2 bg-slate-950/70 border-b border-slate-800/80 flex items-center gap-2 overflow-x-auto">
+            {pendingPolicies.map((p, idx) => {
+              const isCurrent = idx === currentIndex;
+              return (
+                <div
+                  key={p.id || idx}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all ${
+                    isCurrent
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-slate-800/50 text-slate-400 border-slate-700/50'
+                  }`}
+                >
+                  <span>{idx + 1}.</span>
+                  <span className="truncate max-w-[120px]">{p.title}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Policy Document Title Header Bar */}
+        <div className="px-6 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs font-semibold text-slate-300">
+          <div className="flex items-center gap-2 truncate">
+            <span className="font-mono text-primary font-bold bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+              POL-{String(currentPolicy.id).padStart(3, '0')}
+            </span>
+            <span className="font-bold text-slate-100 truncate">{currentPolicy.title}</span>
+            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-mono border border-slate-700">
+              v{currentPolicy.version || '1.0'}
+            </span>
+          </div>
+          <span className="text-[11px] text-slate-400 shrink-0 font-medium">
+            Category: <strong className="text-slate-200">{currentPolicy.category || 'General'}</strong>
+          </span>
+        </div>
+
+        {/* Scrollable Fixed-Height Policy Content Container */}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="p-4 sm:p-8 overflow-y-auto flex-1 bg-slate-950/60 max-h-[52vh] min-h-[300px] space-y-6 scroll-smooth border-b border-slate-800"
+        >
+          <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl p-6 sm:p-10 max-w-3xl mx-auto space-y-6 font-sans">
+            
+            {/* Document Header Title */}
+            <div className="text-center space-y-2 border-b-2 border-slate-900 dark:border-slate-100 pb-5">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-widest uppercase">
+                ApponextHRMS Mandatory Policy Document
+              </p>
+              <h1 className="text-xl sm:text-2xl font-black tracking-wide uppercase text-slate-900 dark:text-slate-100 leading-tight">
+                {currentPolicy.title}
+              </h1>
             </div>
-          ) : (
-            <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl p-6 sm:p-10 max-w-3xl mx-auto space-y-6 font-sans">
-              
-              {/* Document Header Title */}
-              <div className="text-center space-y-2 border-b-2 border-slate-900 dark:border-slate-100 pb-5">
-                <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 tracking-widest uppercase">
-                  ApponextHRMS Enterprise Governance Document
-                </p>
-                <h1 className="text-xl sm:text-2xl font-black tracking-wide uppercase text-slate-900 dark:text-slate-100">
-                  {policyData?.title || 'HUMAN RESOURCE POLICY'}
-                </h1>
+
+            {/* Metadata Summary Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700/60">
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Document ID</span>
+                <span className="text-slate-900 dark:text-slate-100 font-bold">POL-{String(currentPolicy.id).padStart(3, '0')}</span>
               </div>
-
-              {/* Metadata Table Header */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 bg-slate-100 dark:bg-slate-800/60 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-slate-700/60">
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Role Scope</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-bold">{formattedRoleBadge}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Document Ref</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-bold">POL-{policyData?.policyId ? String(policyData.policyId).padStart(3, '0') : '001'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Effective Date</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-bold">{new Date().getFullYear()} Annual</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Classification</span>
-                  <span className="text-slate-900 dark:text-slate-100 font-bold">Confidential</span>
-                </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Policy Version</span>
+                <span className="text-slate-900 dark:text-slate-100 font-bold">v{currentPolicy.version || '1.0'}</span>
               </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Category</span>
+                <span className="text-slate-900 dark:text-slate-100 font-bold">{currentPolicy.category || 'HR Policies'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 dark:text-slate-400 block text-[10px] uppercase font-bold">Effective Date</span>
+                <span className="text-slate-900 dark:text-slate-100 font-bold">
+                  {currentPolicy.createdAt ? new Date(currentPolicy.createdAt).toLocaleDateString() : 'Immediate'}
+                </span>
+              </div>
+            </div>
 
-              {/* Policy Description Summary */}
-              {policyData?.description && (
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border-l-4 border-primary rounded-r-lg text-xs leading-relaxed text-slate-700 dark:text-slate-300 italic">
-                  {policyData.description}
-                </div>
-              )}
+            {/* Policy Description Summary */}
+            {currentPolicy.description && (
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border-l-4 border-primary rounded-r-lg text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                <strong className="block text-[11px] uppercase font-bold text-primary mb-1">Policy Objective & Overview</strong>
+                {currentPolicy.description}
+              </div>
+            )}
 
-              {/* Policy Document Sections */}
-              <div className="space-y-6 pt-2">
-                {normalizedSections.length > 0 ? (
-                  normalizedSections.map((sec, idx) => (
-                    <div key={sec.id || idx} className="space-y-2">
-                      <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        {sec.title}
-                      </h3>
-                      <div className="text-xs sm:text-xs leading-relaxed text-slate-700 dark:text-slate-300 space-y-1.5 pl-5">
-                        {sec.content ? (
-                          sec.content.split('\n').map((line, lineIdx) => {
-                            const trimmed = line.trim();
-                            if (trimmed.startsWith('•')) {
-                              return (
-                                <p key={lineIdx} className="pl-3 font-normal leading-relaxed text-slate-800 dark:text-slate-200">
-                                  {line}
-                                </p>
-                              );
-                            }
+            {/* Content Sections */}
+            <div className="space-y-6 pt-2">
+              {sections && sections.length > 0 ? (
+                sections.map((sec, idx) => (
+                  <div key={sec.id || idx} className="space-y-2">
+                    <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-1">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      {sec.title}
+                    </h3>
+                    <div className="text-xs sm:text-xs leading-relaxed text-slate-700 dark:text-slate-300 space-y-1.5 pl-5">
+                      {sec.content ? (
+                        sec.content.split('\n').map((line, lineIdx) => {
+                          const trimmed = line.trim();
+                          if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
                             return (
-                              <p key={lineIdx} className="leading-relaxed font-normal">
+                              <p key={lineIdx} className="pl-3 font-medium text-slate-800 dark:text-slate-200">
                                 {line}
                               </p>
                             );
-                          })
-                        ) : null}
-                      </div>
+                          }
+                          return (
+                            <p key={lineIdx} className="leading-relaxed font-normal">
+                              {line}
+                            </p>
+                          );
+                        })
+                      ) : null}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 space-y-2">
-                    <p className="text-xs text-slate-500">Standard employee governance document.</p>
                   </div>
-                )}
-              </div>
-
-              {/* Document Footer Bar */}
-              <div className="border-t border-slate-300 dark:border-slate-700 pt-4 flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                <span className="truncate max-w-[280px]">{policyData?.title || 'Human Resource Policy'}</span>
-                <span>ApponextHRMS Policy Control | Page 1 of 1</span>
-              </div>
-
+                ))
+              ) : currentPolicy.fileUrl && !currentPolicy.fileUrl.startsWith('http') ? (
+                <div className="text-xs leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-line space-y-2">
+                  {currentPolicy.fileUrl}
+                </div>
+              ) : (
+                <div className="space-y-4 text-xs leading-relaxed text-slate-700 dark:text-slate-300">
+                  <p>
+                    This document defines mandatory compliance requirements, operational guidelines, and ethical standards applicable to your assigned role in ApponextHRMS.
+                  </p>
+                  <p>
+                    All personnel are required to review the complete terms outlined in this policy document and maintain full compliance with organization governance protocols.
+                  </p>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* End of Document Footer Notice */}
+            <div className="border-t border-slate-300 dark:border-slate-700 pt-4 flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              <span className="truncate max-w-[280px]">{currentPolicy.title}</span>
+              <span>*** END OF POLICY DOCUMENT ***</span>
+            </div>
+
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2.5 w-full sm:w-auto">
-            <Checkbox
-              id="accept-policy-check"
-              checked={hasAgreed}
-              onCheckedChange={(checked) => setHasAgreed(Boolean(checked))}
-              className="h-4 w-4 rounded text-primary border-slate-600 focus:ring-primary shrink-0"
-            />
-            <label
-              htmlFor="accept-policy-check"
-              className="text-xs font-semibold text-slate-200 cursor-pointer select-none leading-tight"
-            >
-              I have read, understood, and accept the above policies.
-            </label>
-          </div>
+        {/* Dynamic Bottom Control Bar & Verification */}
+        <div className="px-6 py-4 bg-slate-950 border-t border-slate-800 flex flex-col space-y-3">
+          
+          {/* Scroll Status Notice & Checkbox State */}
+          {!hasScrolledToBottom ? (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-300 animate-pulse">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Please scroll through the entire policy to the bottom to unlock acceptance.</span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                <span>Continue scrolling</span>
+                <ChevronDown className="w-4 h-4 animate-bounce" />
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>✓ You have reached the end of this policy.</span>
+              </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+              {/* Accept Checkbox — ONLY VISIBLE AFTER SCROLLING TO BOTTOM ⭐ */}
+              <div className="flex items-center space-x-2.5">
+                <Checkbox
+                  id="accept-policy-checkbox"
+                  checked={hasAgreed}
+                  onCheckedChange={(checked) => setHasAgreed(Boolean(checked))}
+                  className="h-4 w-4 rounded text-primary border-emerald-500/60 focus:ring-primary shrink-0 bg-slate-900"
+                />
+                <label
+                  htmlFor="accept-policy-checkbox"
+                  className="text-xs font-bold text-slate-100 cursor-pointer select-none leading-tight"
+                >
+                  I have read and understood this policy.
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between gap-4 pt-1">
             <Button
               variant="outline"
               size="sm"
-              onClick={handleReject}
+              onClick={handleDecline}
               disabled={submitting}
-              className="text-xs font-semibold text-rose-400 border-rose-900/50 bg-rose-950/20 hover:bg-rose-950/40 gap-1.5 h-9 px-4"
+              className="text-xs font-semibold text-rose-400 border-rose-900/50 bg-rose-950/20 hover:bg-rose-950/50 gap-1.5 h-9 px-4 shrink-0"
             >
-              <LogOut className="w-3.5 h-3.5" /> Decline / Logout
+              <LogOut className="w-3.5 h-3.5" /> Decline & Logout
             </Button>
+
             <Button
               size="sm"
               onClick={handleAccept}
-              disabled={!hasAgreed || submitting || loading}
-              className="text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 h-9 px-6 shadow-md transition-all disabled:opacity-50"
+              disabled={!hasScrolledToBottom || !hasAgreed || submitting}
+              className="text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-2 h-9 px-6 shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {submitting ? (
                 <>
                   <div className="h-3.5 w-3.5 rounded-full border-2 border-primary-foreground border-t-transparent animate-spin" />
-                  Processing...
+                  Recording Acceptance...
                 </>
               ) : (
                 <>
-                  <ShieldCheck className="w-4 h-4" /> Accept & Continue
+                  <ShieldCheck className="w-4 h-4" /> Accept Policy {totalPolicies > 1 ? `(${policyNumber}/${totalPolicies})` : ''}
                 </>
               )}
             </Button>
           </div>
+
         </div>
 
       </div>

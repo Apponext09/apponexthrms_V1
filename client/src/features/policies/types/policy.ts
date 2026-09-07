@@ -13,6 +13,7 @@ export interface RolePolicyRecord {
   id: number;
   roleCode: string;
   assignedRoles: string[];
+  applicableGender?: string;
   assignments?: TargetAssignment[];
   documentRef?: string;
   category?: string;

@@ -151,9 +151,14 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
               >
                 <CardHeader className="p-4 pb-2 space-y-2">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
-                      {p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                        {p.documentRef || `POL-${String(p.id).padStart(3, '0')}`}
+                      </span>
+                      <Badge variant="secondary" className="text-[9px] font-bold uppercase">
+                        {(p.applicableGender || 'all') === 'all' ? 'Common Policy' : 'Gender-wise Policy'}
+                      </Badge>
+                    </div>
                     <Badge variant="outline" className="text-[10px] font-bold">
                       {p.version || 'v1.0'}
                     </Badge>

@@ -87,7 +87,7 @@ export function ManagerDashboard() {
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                 <div>
                   <p className="font-medium text-foreground">Expense Report - Sarah</p>
-                  <p className="text-sm text-muted-foreground">$1,250 - Conference</p>
+                  <p className="text-sm text-muted-foreground">₹1,250 - Conference</p>
                 </div>
                 <Badge variant="secondary">Pending</Badge>
               </div>

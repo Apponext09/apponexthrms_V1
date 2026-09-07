@@ -17,7 +17,7 @@ import {
   Lock,
   Zap,
   Calendar,
-  DollarSign,
+  IndianRupee,
   Plus,
   Trash2,
   Save,
@@ -134,7 +134,7 @@ const CONFIG_TABS: ConfigTabItem[] = [
   {
     id: 'field-allowance',
     label: 'Field Allowance Setting',
-    icon: DollarSign,
+    icon: IndianRupee,
     description: 'Daily field duty rates, per-km travel reimbursements & approval thresholds.',
     category: 'Policy & Compensation',
   },
