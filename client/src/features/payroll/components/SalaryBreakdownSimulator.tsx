@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import {
   Calculator,
   Sliders,
-  DollarSign,
   TrendingUp,
   Award,
   HelpCircle,

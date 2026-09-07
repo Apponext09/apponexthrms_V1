@@ -29,10 +29,14 @@ router.put('/travel-requests/:id/status', asyncHandler((req, res) => controller.
 
 router.get('/travel-advances', asyncHandler((req, res) => controller.getTravelAdvances(req, res)));
 router.post('/travel-advances', asyncHandler((req, res) => controller.createTravelAdvance(req, res)));
+router.put('/travel-advances/:id/approve', asyncHandler((req, res) => controller.approveTravelAdvance(req, res)));
+router.put('/travel-advances/:id/reject', asyncHandler((req, res) => controller.rejectTravelAdvance(req, res)));
 
 // Mileage Claims
 router.get('/mileage', asyncHandler((req, res) => controller.getMileageClaims(req, res)));
 router.post('/mileage', asyncHandler((req, res) => controller.createMileageClaim(req, res)));
+router.post('/mileage/:id/approve', asyncHandler((req, res) => controller.approveMileageClaim(req, res)));
+router.post('/mileage/:id/reject', asyncHandler((req, res) => controller.rejectMileageClaim(req, res)));
 
 // Dashboard & Reports
 router.get('/dashboard/summary', asyncHandler((req, res) => controller.getDashboardSummary(req, res)));

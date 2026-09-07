@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { expenseApi, ExpenseWorkflow, ExpenseWorkflowLevel, MileageDesignationRate } from '../api/expenseApi';
+import { apiClient } from '@/config/api';
+import { formatMoney } from '../utils/formatMoney';
 import {
   Sliders,
   Car,
@@ -33,6 +35,17 @@ export const ExpenseSettingsPage: React.FC = () => {
   const [multiLevelApproval, setMultiLevelApproval] = useState(true);
   const [enableTravelModule, setEnableTravelModule] = useState(true);
   const [enableMileageModule, setEnableMileageModule] = useState(true);
+  const [currencySymbol, setCurrencySymbol] = useState('₹');
+  const [currencyCode, setCurrencyCode] = useState('INR');
+  const [currencyLocale, setCurrencyLocale] = useState('en-IN');
+  const [claimNumberPrefix, setClaimNumberPrefix] = useState('EXP');
+  const [travelRequestNumberPrefix, setTravelRequestNumberPrefix] = useState('TRV');
+  const [travelAdvanceNumberPrefix, setTravelAdvanceNumberPrefix] = useState('ADV');
+  const [defaultPaymentMethod, setDefaultPaymentMethod] = useState('bank_transfer');
+  const [defaultAdvanceStatus, setDefaultAdvanceStatus] = useState('pending_finance');
+  const [workflowFallbackMaxAmount, setWorkflowFallbackMaxAmount] = useState(10000000);
+  const [numberSequenceDigits, setNumberSequenceDigits] = useState(6);
+  const money = (n: number | string | null | undefined) => formatMoney(n, { currencySymbol, currencyLocale });
 
   // Workflows state
   const [workflows, setWorkflows] = useState<ExpenseWorkflow[]>([]);
@@ -44,23 +57,43 @@ export const ExpenseSettingsPage: React.FC = () => {
   const [wfMaxAmount, setWfMaxAmount] = useState<number>(100000);
   const [wfLevels, setWfLevels] = useState<ExpenseWorkflowLevel[]>([
     { levelOrder: 1, approverType: 'reporting_manager', approverRole: 'Reporting Manager', stepName: 'Manager Approval', isMandatory: true },
-    { levelOrder: 2, approverType: 'hr', approverRole: 'Finance / HR Officer', stepName: 'Finance Verification', isMandatory: true }
+    { levelOrder: 2, approverType: 'hr_admin', approverRole: 'HR Admin', stepName: 'Finance Verification', isMandatory: true }
+  ]);
+
+  // Dynamic roles fetched from DB
+  const [orgRoles, setOrgRoles] = useState<Array<{ id: number; name: string; code: string }>>([
+    { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' }
   ]);
 
   const fetchSettingsAndWorkflows = async () => {
     try {
       setLoading(true);
-      const [settingsRes, wfRes, catRes] = await Promise.all([
+      const [settingsRes, wfRes, catRes, rolesRes] = await Promise.all([
         expenseApi.getSettings(),
         expenseApi.getWorkflows(),
-        expenseApi.getCategories()
+        expenseApi.getCategories(),
+        apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } }))
       ]);
+
+      // Parse roles from RBAC API
+      const rolesData = rolesRes?.data?.data;
+      const rawRoles: Array<{ id: number; name: string; code: string }> = Array.isArray(rolesData)
+        ? rolesData
+        : Array.isArray(rolesData?.items)
+          ? rolesData.items
+          : [];
+      // Build approver role options: special "Reporting Manager" entry + all DB roles (excluding employee/intern/client etc.)
+      const specialEntry = { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' };
+      const filteredRoles = rawRoles
+        .filter((r) => !['super_admin', 'employee', 'intern', 'client', 'consultant'].includes(r.code))
+        .map((r) => ({ id: r.id, name: r.name, code: r.code }));
+      setOrgRoles([specialEntry, ...filteredRoles]);
       if (settingsRes) {
         setAutoApprovalThreshold(settingsRes.autoApprovalThreshold || 500);
         setMileageRateCar(settingsRes.mileageRateCar || 12.00);
         setMileageRateBike(settingsRes.mileageRateBike || 6.00);
         setMileageRatesByDesignation(
-          (settingsRes.mileageRatesByDesignation || []).reduce((acc: MileageDesignationRate[], row: any) => {
+          (settingsRes.mileageRatesByDesignation || []).reduce((acc: MileageDesignationRate[], row: MileageDesignationRate) => {
             const key = String(row.designationName || '').trim().toLowerCase();
             if (!key) return acc;
             const existing = acc.find((r) => r.designationName.trim().toLowerCase() === key);
@@ -89,6 +122,16 @@ export const ExpenseSettingsPage: React.FC = () => {
         setMultiLevelApproval(settingsRes.multiLevelApproval !== undefined ? Boolean(settingsRes.multiLevelApproval) : true);
         setEnableTravelModule(settingsRes.enableTravelModule !== undefined ? Boolean(settingsRes.enableTravelModule) : true);
         setEnableMileageModule(settingsRes.enableMileageModule !== undefined ? Boolean(settingsRes.enableMileageModule) : true);
+        setCurrencySymbol(settingsRes.currencySymbol || '₹');
+        setCurrencyCode(settingsRes.currencyCode || 'INR');
+        setCurrencyLocale(settingsRes.currencyLocale || 'en-IN');
+        setClaimNumberPrefix(settingsRes.claimNumberPrefix || 'EXP');
+        setTravelRequestNumberPrefix(settingsRes.travelRequestNumberPrefix || 'TRV');
+        setTravelAdvanceNumberPrefix(settingsRes.travelAdvanceNumberPrefix || 'ADV');
+        setDefaultPaymentMethod(settingsRes.defaultPaymentMethod || 'bank_transfer');
+        setDefaultAdvanceStatus(settingsRes.defaultAdvanceStatus || 'pending_finance');
+        setWorkflowFallbackMaxAmount(Number(settingsRes.workflowFallbackMaxAmount ?? 10000000));
+        setNumberSequenceDigits(Number(settingsRes.numberSequenceDigits ?? 6));
       }
       setCategoryThresholds(
         (catRes || [])
@@ -130,7 +173,17 @@ export const ExpenseSettingsPage: React.FC = () => {
         requireFinanceApproval,
         multiLevelApproval,
         enableTravelModule,
-        enableMileageModule
+        enableMileageModule,
+        currencySymbol,
+        currencyCode,
+        currencyLocale,
+        claimNumberPrefix,
+        travelRequestNumberPrefix,
+        travelAdvanceNumberPrefix,
+        defaultPaymentMethod,
+        defaultAdvanceStatus,
+        workflowFallbackMaxAmount,
+        numberSequenceDigits
       });
       alert('Expense module settings updated successfully!');
       fetchSettingsAndWorkflows();
@@ -152,9 +205,9 @@ export const ExpenseSettingsPage: React.FC = () => {
         wf.levels && wf.levels.length > 0
           ? wf.levels
           : [
-              { levelOrder: 1, approverType: 'reporting_manager', approverRole: 'Reporting Manager', stepName: 'Manager Approval', isMandatory: true },
-              { levelOrder: 2, approverType: 'hr', approverRole: 'Finance / HR Officer', stepName: 'Finance Verification', isMandatory: true }
-            ]
+            { levelOrder: 1, approverType: 'reporting_manager', approverRole: 'Reporting Manager', stepName: 'Manager Approval', isMandatory: true },
+            { levelOrder: 2, approverType: 'hr_admin', approverRole: 'Hr Admin', stepName: 'Finance Verification', isMandatory: true }
+          ]
       );
     } else {
       setEditingWfId(null);
@@ -171,12 +224,15 @@ export const ExpenseSettingsPage: React.FC = () => {
   };
 
   const handleAddWfLevel = () => {
+    // Default to first available role that isn't already used
+    const usedCodes = wfLevels.map((l) => l.approverType);
+    const nextRole = orgRoles.find((r) => !usedCodes.includes(r.code)) || orgRoles[0];
     setWfLevels([
       ...wfLevels,
       {
         levelOrder: wfLevels.length + 1,
-        approverType: 'department_head',
-        approverRole: 'Department Head',
+        approverType: nextRole?.code || 'reporting_manager',
+        approverRole: nextRole?.name || 'Reporting Manager',
         stepName: `Level ${wfLevels.length + 1} Review`,
         isMandatory: true
       }
@@ -245,21 +301,19 @@ export const ExpenseSettingsPage: React.FC = () => {
         <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
           <button
             onClick={() => setActiveTab('general')}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'general'
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'general'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
+              }`}
           >
             General & Rates
           </button>
           <button
             onClick={() => setActiveTab('workflows')}
-            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
-              activeTab === 'workflows'
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${activeTab === 'workflows'
                 ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
+              }`}
           >
             Approval Workflows ({workflows.length})
           </button>
@@ -298,7 +352,7 @@ export const ExpenseSettingsPage: React.FC = () => {
                           <input
                             type="number"
                             min={0}
-                            value={cat.autoApprovalThreshold}
+                            value={cat.autoApprovalThreshold || ''}
                             onChange={(e) => {
                               const next = [...categoryThresholds];
                               next[idx] = { ...next[idx], autoApprovalThreshold: Number(e.target.value) };
@@ -385,7 +439,7 @@ export const ExpenseSettingsPage: React.FC = () => {
                             type="number"
                             min={0}
                             step="0.5"
-                            value={row.rateCar}
+                            value={row.rateCar || ''}
                             onChange={(e) => {
                               const next = [...mileageRatesByDesignation];
                               next[idx] = { ...next[idx], rateCar: Number(e.target.value) };
@@ -399,7 +453,7 @@ export const ExpenseSettingsPage: React.FC = () => {
                             type="number"
                             min={0}
                             step="0.5"
-                            value={row.rateBike}
+                            value={row.rateBike || ''}
                             onChange={(e) => {
                               const next = [...mileageRatesByDesignation];
                               next[idx] = { ...next[idx], rateBike: Number(e.target.value) };
@@ -505,6 +559,103 @@ export const ExpenseSettingsPage: React.FC = () => {
             </div>
           </div>
 
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Formatting &amp; Numbering</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Currency Symbol</span>
+                <input
+                  type="text"
+                  value={currencySymbol}
+                  onChange={(e) => setCurrencySymbol(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Currency Code</span>
+                <input
+                  type="text"
+                  value={currencyCode}
+                  onChange={(e) => setCurrencyCode(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Currency Locale</span>
+                <input
+                  type="text"
+                  value={currencyLocale}
+                  onChange={(e) => setCurrencyLocale(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Claim Number Prefix</span>
+                <input
+                  type="text"
+                  value={claimNumberPrefix}
+                  onChange={(e) => setClaimNumberPrefix(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Travel Request Number Prefix</span>
+                <input
+                  type="text"
+                  value={travelRequestNumberPrefix}
+                  onChange={(e) => setTravelRequestNumberPrefix(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Travel Advance Number Prefix</span>
+                <input
+                  type="text"
+                  value={travelAdvanceNumberPrefix}
+                  onChange={(e) => setTravelAdvanceNumberPrefix(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Default Payment Method</span>
+                <input
+                  type="text"
+                  value={defaultPaymentMethod}
+                  onChange={(e) => setDefaultPaymentMethod(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">New Advance Status</span>
+                <input
+                  type="text"
+                  value={defaultAdvanceStatus}
+                  onChange={(e) => setDefaultAdvanceStatus(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Workflow Fallback Max Amount</span>
+                <input
+                  type="number"
+                  value={workflowFallbackMaxAmount}
+                  onChange={(e) => setWorkflowFallbackMaxAmount(Number(e.target.value))}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Number Sequence Digits</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={numberSequenceDigits}
+                  onChange={(e) => setNumberSequenceDigits(Number(e.target.value))}
+                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end">
             <button
               disabled={saving}
@@ -549,7 +700,7 @@ export const ExpenseSettingsPage: React.FC = () => {
                     </div>
                     {wf.description && <p className="text-xs text-slate-500 mt-1">{wf.description}</p>}
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Amount Threshold: ₹{wf.minAmount.toLocaleString()} to ₹{wf.maxAmount.toLocaleString()}
+                      Amount Threshold: {money(wf.minAmount)} to {money(wf.maxAmount)}
                     </p>
                   </div>
 
@@ -643,7 +794,7 @@ export const ExpenseSettingsPage: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={wfMinAmount}
+                    value={wfMinAmount || ''}
                     onChange={(e) => setWfMinAmount(Number(e.target.value))}
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                   />
@@ -699,15 +850,18 @@ export const ExpenseSettingsPage: React.FC = () => {
                       value={lvl.approverType}
                       onChange={(e) => {
                         const next = [...wfLevels];
-                        next[idx].approverType = e.target.value as any;
+                        const selectedRole = orgRoles.find((r) => r.code === e.target.value);
+                        next[idx].approverType = e.target.value;
+                        next[idx].approverRole = selectedRole?.name || e.target.value;
                         setWfLevels(next);
                       }}
                       className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                     >
-                      <option value="reporting_manager">Reporting Manager (Org Hierarchy)</option>
-                      <option value="department_head">Department Head</option>
-                      <option value="hr">HR & Finance Officer</option>
-                      <option value="ceo">CEO / Executive Admin</option>
+                      {orgRoles.map((role) => (
+                        <option key={role.code} value={role.code}>
+                          {role.name}
+                        </option>
+                      ))}
                     </select>
 
                     {wfLevels.length > 1 && (

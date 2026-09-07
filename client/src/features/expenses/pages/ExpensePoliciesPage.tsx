@@ -12,8 +12,11 @@ import {
   MapPin
 } from 'lucide-react';
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const ExpensePoliciesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [policies, setPolicies] = useState<ExpensePolicy[]>([]);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -215,13 +218,13 @@ export const ExpensePoliciesPage: React.FC = () => {
                         {pol.location || 'All'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{maxClaim.toLocaleString('en-IN')}
+                        {money(maxClaim)}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{maxMonth.toLocaleString('en-IN')}
+                        {money(maxMonth)}
                       </td>
                       <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-semibold">
-                        ₹{reqReceipt.toLocaleString('en-IN')}
+                        {money(reqReceipt)}
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">

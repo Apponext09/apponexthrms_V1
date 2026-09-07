@@ -5,7 +5,6 @@ import {
   Send, 
   CheckCircle2, 
   Clock, 
-  DollarSign, 
   Tag 
 } from 'lucide-react';
 import { useTimesheet } from '../hooks/useTimesheet';

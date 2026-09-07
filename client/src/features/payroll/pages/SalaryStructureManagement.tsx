@@ -13,7 +13,7 @@ import {
   CheckCircle,
   Clock,
   Send,
-  DollarSign,
+  IndianRupee,
   Calculator,
   UserCheck,
   Edit,
@@ -1396,7 +1396,7 @@ export const SalaryStructureManagement: React.FC = () => {
                 {/* Annual CTC Input */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual CTC (₹) *
+                    <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Annual CTC (₹) *
                   </label>
                   <Input
                     type="number"
@@ -1983,7 +1983,7 @@ export const SalaryStructureManagement: React.FC = () => {
                     {/* 4. Annual CTC */}
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual Cost to Company (CTC INR) *
+                        <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> Annual Cost to Company (CTC INR) *
                       </label>
                       <Input
                         type="number"
@@ -1999,7 +1999,7 @@ export const SalaryStructureManagement: React.FC = () => {
                   {/* ── Section 2: Earnings Configuration ──────────────────────── */}
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                      <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
                       Earnings Configuration
                       <span className="ml-auto text-[11px] font-normal text-slate-500">Check components to include in this salary structure</span>
                     </div>

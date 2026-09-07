@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/config/api';
+import { policiesApi } from '@/features/policies/api/policiesApi';
 
 export interface User {
   id: number;
@@ -34,10 +35,13 @@ export interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  pendingPolicies: any[];
   setUser: (user: User | null) => void;
   updateUser: (partialUser: Partial<User>) => void;
   login: (email: string, password: string) => Promise<void>;
   fetchCurrentUser: () => Promise<void>;
+  fetchPendingPolicies: () => Promise<any[]>;
+  acceptPendingPolicy: (policyId: number) => Promise<void>;
   acceptPolicy: () => Promise<void>;
   logout: () => void;
 }
@@ -49,9 +53,10 @@ export function hasStoredAccessToken(): boolean {
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
+      pendingPolicies: [],
 
       setUser: (user) => set({ user, isAuthenticated: !!user }),
 
@@ -60,6 +65,18 @@ export const useAuthStore = create<AuthState>()(
           if (!state.user) return state;
           return { user: { ...state.user, ...partialUser } };
         }),
+
+      fetchPendingPolicies: async () => {
+        try {
+          const pending = await policiesApi.getPendingPolicies();
+          set({ pendingPolicies: pending });
+          return pending;
+        } catch (error) {
+          console.warn('Failed to fetch pending policies:', error);
+          set({ pendingPolicies: [] });
+          return [];
+        }
+      },
 
       login: async (email: string, password: string) => {
         try {
@@ -113,7 +130,6 @@ export const useAuthStore = create<AuthState>()(
           }
           localStorage.removeItem('last-logout-time');
 
-          // If logging in as a company/branch admin, set the companyStore active company context automatically
           if (compId) {
             try {
               const { useCompanyStore } = await import('@/features/settings/store/companyStore');
@@ -124,6 +140,14 @@ export const useAuthStore = create<AuthState>()(
           }
 
           set({ user, isAuthenticated: true });
+
+          // Fetch pending mandatory policies immediately after login
+          try {
+            const pending = await policiesApi.getPendingPolicies();
+            set({ pendingPolicies: pending });
+          } catch (e) {
+            console.warn('Unable to fetch pending policies on login:', e);
+          }
         } catch (error) {
           console.error('Login error:', error);
           throw error;
@@ -156,9 +180,39 @@ export const useAuthStore = create<AuthState>()(
                 } as User,
               };
             });
+
+            // Re-fetch pending policies upon fetching current user
+            try {
+              const pending = await policiesApi.getPendingPolicies();
+              set({ pendingPolicies: pending });
+            } catch (e) {
+              console.warn('Unable to fetch pending policies on fetchCurrentUser:', e);
+            }
           }
         } catch (error) {
           console.warn('fetchCurrentUser skipped:', error);
+        }
+      },
+
+      acceptPendingPolicy: async (policyId: number) => {
+        try {
+          await policiesApi.acknowledgePolicy(policyId);
+          set((state) => {
+            const remaining = state.pendingPolicies.filter((p) => p.id !== policyId);
+            return {
+              pendingPolicies: remaining,
+              user: state.user
+                ? {
+                    ...state.user,
+                    policyAccepted: remaining.length === 0,
+                    policyAcceptedAt: remaining.length === 0 ? new Date().toISOString() : state.user.policyAcceptedAt,
+                  }
+                : null,
+            };
+          });
+        } catch (error) {
+          console.error('acceptPendingPolicy failed:', error);
+          throw error;
         }
       },
 
@@ -174,6 +228,7 @@ export const useAuthStore = create<AuthState>()(
                   policyAccepted: true,
                   policyAcceptedAt: new Date().toISOString(),
                 },
+                pendingPolicies: [],
               };
             });
           }

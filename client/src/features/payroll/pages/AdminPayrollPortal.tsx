@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   ShieldCheck,
@@ -9,7 +9,6 @@ import {
   Percent,
   Sliders,
   Building,
-  DollarSign,
   Users,
   Globe,
   Layers,

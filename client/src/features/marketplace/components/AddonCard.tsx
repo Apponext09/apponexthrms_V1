@@ -68,7 +68,7 @@ export const AddonCard: React.FC<AddonCardProps> = ({ addon, isSubscribed }) => 
       {/* Pricing */}
       <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
         <div className="text-3xl font-bold text-gray-900">
-          ${addon.base_price}
+          ₹{addon.base_price}
           <span className="text-lg font-normal text-gray-600">/month</span>
         </div>
         {addon.trial_enabled && !isSubscribed && (
@@ -134,7 +134,7 @@ export const AddonCard: React.FC<AddonCardProps> = ({ addon, isSubscribed }) => 
                   {subscribeMutation.isPending ? (
                     <Loader className="w-4 h-4 animate-spin" />
                   ) : (
-                    `Monthly - $${addon.base_price}/month`
+                    `Monthly - ₹${addon.base_price}/month`
                   )}
                 </button>
                 <button
@@ -145,7 +145,7 @@ export const AddonCard: React.FC<AddonCardProps> = ({ addon, isSubscribed }) => 
                   {subscribeMutation.isPending ? (
                     <Loader className="w-4 h-4 animate-spin" />
                   ) : (
-                    `Yearly - $${Math.round(addon.base_price * 11)}/year`
+                    `Yearly - ₹${Math.round(addon.base_price * 11)}/year`
                   )}
                 </button>
                 <button

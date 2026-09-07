@@ -163,6 +163,73 @@ export const PolicyInformationStep: React.FC<PolicyInformationStepProps> = ({
               <option value="published">Publish Immediately</option>
             </select>
           </div>
+
+          {/* Applicable To Scope & Gender Selector */}
+          <div className="md:col-span-2 space-y-3 pt-3 border-t border-border">
+            <label className="block text-foreground font-bold">
+              Applicable To <span className="text-rose-500">*</span>
+            </label>
+            <div className="flex items-center gap-6 text-xs font-medium">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="applicableTo"
+                  value="all"
+                  checked={(formData.applicableTo || 'all') === 'all'}
+                  onChange={() => onChange({ applicableTo: 'all', selectedGenders: ['all'] })}
+                  className="h-4 w-4 text-primary focus:ring-primary"
+                />
+                <span className="font-bold text-foreground">All Employees</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="radio"
+                  name="applicableTo"
+                  value="gender_wise"
+                  checked={formData.applicableTo === 'gender_wise'}
+                  onChange={() => onChange({
+                    applicableTo: 'gender_wise',
+                    selectedGenders: formData.selectedGenders?.filter(g => g !== 'all').length ? formData.selectedGenders : ['female']
+                  })}
+                  className="h-4 w-4 text-primary focus:ring-primary"
+                />
+                <span className="font-bold text-foreground">Gender-wise</span>
+              </label>
+            </div>
+
+            {formData.applicableTo === 'gender_wise' && (
+              <div className="p-4 rounded-xl border border-border bg-muted/20 space-y-2 mt-2">
+                <label className="block text-xs font-bold text-foreground">Select Applicable Gender(s):</label>
+                <div className="flex items-center gap-5 text-xs font-medium pt-1">
+                  {[
+                    { id: 'female', label: 'Female' },
+                    { id: 'male', label: 'Male' },
+                    { id: 'other', label: 'Other / Not Specified' },
+                  ].map((g) => {
+                    const checked = (formData.selectedGenders || []).includes(g.id);
+                    return (
+                      <label key={g.id} className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const current = (formData.selectedGenders || []).filter(x => x !== 'all');
+                            const next = e.target.checked
+                              ? [...current, g.id]
+                              : current.filter(x => x !== g.id);
+                            onChange({ selectedGenders: next.length ? next : ['female'] });
+                          }}
+                          className="rounded border-input text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <span className="text-foreground font-semibold">{g.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

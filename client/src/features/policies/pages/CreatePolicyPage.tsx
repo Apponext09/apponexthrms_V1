@@ -23,15 +23,28 @@ export const CreatePolicyPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Step 1: Info Data
-  const [infoData, setInfoData] = useState({
+  const [infoData, setInfoData] = useState<{
+    title: string;
+    documentRef: string;
+    category: string;
+    description: string;
+    effectiveDate: string;
+    reviewDate: string;
+    expiryDate: string;
+    status: string;
+    applicableTo: 'all' | 'gender_wise';
+    selectedGenders: string[];
+  }>({
     title: '',
     documentRef: 'POL-2026-001',
-    category: 'HR Policies',
+    category: 'Code of Conduct',
     description: '',
     effectiveDate: new Date().toISOString().split('T')[0],
     reviewDate: '',
     expiryDate: '',
     status: 'published',
+    applicableTo: 'all',
+    selectedGenders: ['all'],
   });
 
   // Step 2: Content Sections
@@ -57,15 +70,19 @@ export const CreatePolicyPage: React.FC = () => {
         setLoading(true);
         const p = await policiesApi.getPolicyById(Number(id));
         if (p) {
+          const pGender = (p as any).applicableGender || 'all';
+          const isGenderWise = pGender !== 'all';
           setInfoData({
             title: p.title || '',
             documentRef: p.documentRef || `POL-${String(p.id).padStart(3, '0')}`,
-            category: p.category || 'HR Policies',
+            category: p.category || 'Code of Conduct',
             description: p.description || '',
             effectiveDate: p.effectiveDate ? p.effectiveDate.split('T')[0] : '',
             reviewDate: p.reviewDate ? p.reviewDate.split('T')[0] : '',
             expiryDate: p.expiryDate ? p.expiryDate.split('T')[0] : '',
             status: p.status || 'published',
+            applicableTo: isGenderWise ? 'gender_wise' : 'all',
+            selectedGenders: isGenderWise ? pGender.split(',') : ['all'],
           });
 
           setSections(p.sections || []);
@@ -93,25 +110,63 @@ export const CreatePolicyPage: React.FC = () => {
     loadPolicy();
   }, [id]);
 
+  const buildPayload = (isPublished: boolean) => {
+    const roleMappings = assignments
+      .filter((a) => a.targetType === 'role' || !a.targetType)
+      .map((a) => ({
+        roleCode: a.targetId,
+        isMandatory: options.requireAcknowledgement !== false,
+      }));
+
+    const deptAssignments = assignments
+      .filter((a) => a.targetType === 'department')
+      .map((a) => Number(a.targetId))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    const fileUrl =
+      sections && sections.length > 0
+        ? JSON.stringify(sections)
+        : infoData.description || 'Policy Document';
+
+    const genderVal =
+      infoData.applicableTo === 'gender_wise'
+        ? infoData.selectedGenders?.filter((g) => g !== 'all').join(',') || 'all'
+        : 'all';
+
+    return {
+      title: infoData.title || 'Untitled Policy',
+      documentRef: infoData.documentRef,
+      category: infoData.category || 'Code of Conduct',
+      description: infoData.description,
+      effectiveDate: infoData.effectiveDate,
+      reviewDate: infoData.reviewDate,
+      expiryDate: infoData.expiryDate,
+      status: isPublished ? 'published' : 'draft',
+      isActive: isPublished,
+      fileUrl: fileUrl,
+      version: '1.0',
+      applicableGender: genderVal,
+      applicableDepartmentIds: deptAssignments,
+      roleMappings: roleMappings.length > 0 ? roleMappings : [{ roleCode: 'all', isMandatory: true }],
+      sections: sections,
+      assignments: assignments,
+      sendNotification: options.sendNotification,
+      requireAcknowledgement: options.requireAcknowledgement,
+      allowDownload: options.allowDownload,
+      changeDescription: isEditMode
+        ? isPublished
+          ? 'Updated and published policy'
+          : 'Updated draft policy'
+        : isPublished
+        ? 'Initial published version'
+        : 'Created new draft policy',
+    };
+  };
+
   const handleSaveDraft = async () => {
     try {
       setIsSubmitting(true);
-      const payload = {
-        title: infoData.title || 'Untitled Policy',
-        documentRef: infoData.documentRef,
-        category: infoData.category,
-        description: infoData.description,
-        effectiveDate: infoData.effectiveDate,
-        reviewDate: infoData.reviewDate,
-        expiryDate: infoData.expiryDate,
-        status: 'draft',
-        sections: sections,
-        assignments: assignments,
-        sendNotification: options.sendNotification,
-        requireAcknowledgement: options.requireAcknowledgement,
-        allowDownload: options.allowDownload,
-        changeDescription: isEditMode ? 'Updated draft policy' : 'Created new draft policy',
-      };
+      const payload = buildPayload(false);
 
       if (isEditMode && id) {
         await policiesApi.updatePolicy(Number(id), payload);
@@ -133,22 +188,7 @@ export const CreatePolicyPage: React.FC = () => {
   const handlePublish = async () => {
     try {
       setIsSubmitting(true);
-      const payload = {
-        title: infoData.title,
-        documentRef: infoData.documentRef,
-        category: infoData.category,
-        description: infoData.description,
-        effectiveDate: infoData.effectiveDate,
-        reviewDate: infoData.reviewDate,
-        expiryDate: infoData.expiryDate,
-        status: 'published',
-        sections: sections,
-        assignments: assignments,
-        sendNotification: options.sendNotification,
-        requireAcknowledgement: options.requireAcknowledgement,
-        allowDownload: options.allowDownload,
-        changeDescription: isEditMode ? 'Updated and published policy' : 'Initial published version',
-      };
+      const payload = buildPayload(true);
 
       if (isEditMode && id) {
         await policiesApi.updatePolicy(Number(id), payload);
@@ -159,9 +199,10 @@ export const CreatePolicyPage: React.FC = () => {
       }
 
       navigate('/policies/manage');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to publish policy:', err);
-      toast.error('Failed to publish policy.');
+      const errMsg = err?.response?.data?.message || err?.message || 'Failed to publish policy.';
+      toast.error(errMsg);
     } finally {
       setIsSubmitting(false);
     }

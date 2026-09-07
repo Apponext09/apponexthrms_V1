@@ -112,10 +112,7 @@ interface MasterItemRecord {
 }
 
 const INITIAL_RECORDS: Record<string, MasterItemRecord[]> = {
-  company: [
-    { id: 'c1', code: 'HQ-MAIN', name: 'Apponext Technolabs Pvt Ltd', description: 'Primary Headquarters Entity', status: 'Active', createdAt: '2026-01-01' },
-    { id: 'c2', code: 'GLOBAL-US', name: 'Apponext Global Inc', description: 'US Subsidiary Operations', status: 'Active', createdAt: '2026-02-15' },
-  ],
+  company: [],
   location: [
     { id: 'l1', code: 'LOC-HQ', name: 'Main Corporate Office - Tech Park', description: 'Primary headquarters and R&D facility', status: 'Active', createdAt: '2026-01-10' },
     { id: 'l2', code: 'LOC-DEL', name: 'Regional Office - Delhi NCR', description: 'Sales and North Region Support Operations', status: 'Active', createdAt: '2026-02-01' },

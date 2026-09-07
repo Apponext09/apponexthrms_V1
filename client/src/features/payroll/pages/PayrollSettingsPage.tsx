@@ -22,7 +22,7 @@ import {
   Building,
   MapPin,
   Award,
-  DollarSign,
+  IndianRupee,
   ChevronRight,
   Coins,
   ChevronDown,
@@ -1170,7 +1170,7 @@ export const PayrollSettingsPage: React.FC = () => {
                         {/* Slab info rows */}
                         <div className="p-2.5 space-y-1 text-xs">
                           <div className="flex items-center gap-2 font-bold text-foreground truncate">
-                            <DollarSign className="w-3.5 h-3.5 text-primary shrink-0" />
+                            <IndianRupee className="w-3.5 h-3.5 text-primary shrink-0" />
                             <span className="truncate">{slab.name}</span>
                           </div>
                           <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
@@ -1649,7 +1649,7 @@ export const PayrollSettingsPage: React.FC = () => {
               <Card className="border-slate-200 dark:border-slate-800">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    <IndianRupee className="w-4 h-4 text-emerald-500" />
                     Payment Status Setting
                   </CardTitle>
                   <CardDescription className="text-xs">Statuses shown against each employee's payment while processing a payroll run.</CardDescription>
