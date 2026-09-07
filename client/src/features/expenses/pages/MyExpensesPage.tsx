@@ -423,7 +423,10 @@ export const MyExpensesPage: React.FC = () => {
     return true;
   });
 
-  const getStatusLabel = (status: string): string => {
+  const getStatusLabel = (status: string, currentApproverRole?: string): string => {
+    if (status.startsWith('pending_level_') && currentApproverRole && currentApproverRole.trim()) {
+      return `Pending ${currentApproverRole.trim()}`;
+    }
     switch (status) {
       case 'draft': return 'Draft';
       case 'submitted':
@@ -447,9 +450,9 @@ export const MyExpensesPage: React.FC = () => {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, currentApproverRole?: string) => {
     const base = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap';
-    const label = getStatusLabel(status);
+    const label = getStatusLabel(status, currentApproverRole);
     switch (status) {
       case 'draft':
         return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>{label}</span>;
@@ -630,7 +633,7 @@ export const MyExpensesPage: React.FC = () => {
                       <td className="py-3.5 px-4 font-semibold text-emerald-600 dark:text-emerald-400">
                         {money(totApproved)}
                       </td>
-                      <td className="py-3.5 px-4">{getStatusBadge(claim.status)}</td>
+                      <td className="py-3.5 px-4">{getStatusBadge(claim.status, claim.currentApproverRole || claim.current_approver_role)}</td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {isManagement && ['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status) && (

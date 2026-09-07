@@ -1227,6 +1227,36 @@ export class ExpenseService {
     return 0; // employee
   }
 
+  private async getSubmitterRole(ctx: TenantContext, db: any): Promise<string> {
+    try {
+      const roleRows = await db('user_roles')
+        .join('roles', 'user_roles.role_id', 'roles.id')
+        .where('user_roles.user_id', ctx.userId)
+        .where('user_roles.organization_id', ctx.organizationId)
+        .select('roles.code as role_code', 'roles.name as role_name')
+        .catch(() => []);
+      const roleCodes = (roleRows || []).map((r: any) =>
+        String(r.role_code || r.roleCode || r.code || r.role_name || r.roleName || r.name || '').toLowerCase()
+      );
+      const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase()).filter(Boolean);
+      const allRoles = [...new Set([...roleCodes, ...ctxRoles])];
+
+      if (allRoles.some(c => ['organization_admin', 'super_admin', 'ceo', 'admin'].includes(c) || c.includes('admin') || c.includes('ceo'))) {
+        return 'admin';
+      }
+      if (allRoles.some(c => ['hr', 'hr_admin', 'hr_manager'].includes(c) || c.startsWith('hr'))) {
+        return 'hr';
+      }
+      if (allRoles.some(c => ['manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head'))) {
+        return 'manager';
+      }
+      if (allRoles.some(c => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead'))) {
+        return 'team_lead';
+      }
+    } catch { /* fallback to default employee */ }
+    return 'employee';
+  }
+
   private resolveInitialWorkflowStatus(
     submittedByRole: string,
     levels: any[],
@@ -1246,12 +1276,23 @@ export class ExpenseService {
 
     if (levels && levels.length > 0) {
       // Find the first level whose approver rank is strictly higher than the submitter's rank
-      const targetLevelIndex = levels.findIndex((l: any) => {
+      const targetLevelIndex = levels.findIndex((l: any, idx: number) => {
         const approverType = String(l.approver_type || l.approverType || l.approver_role || l.approverRole || '').toLowerCase();
+        const stepName = String(l.step_name || l.stepName || '').toLowerCase();
+        const levelOrder = Number(l.level_order || l.levelOrder || (idx + 1));
+
+        let levelRank = 0;
         if (approverType === 'reporting_manager') {
-          return submitterRank < 2;
+          if (stepName.includes('team') || stepName.includes('lead')) {
+            levelRank = 1;
+          } else if (levelOrder === 1 && levels.length > 1) {
+            levelRank = 1;
+          } else {
+            levelRank = 2;
+          }
+        } else {
+          levelRank = this.getRoleRank(approverType);
         }
-        const levelRank = this.getRoleRank(approverType);
         return levelRank > submitterRank;
       });
 
@@ -1270,7 +1311,7 @@ export class ExpenseService {
         };
       }
 
-      // If all levels in the workflow are at or below submitter's rank (e.g. TL submitter with only TL level)
+      // If all levels in the workflow are at or below submitter's rank (e.g. Manager submitter with TL + Manager levels)
       return {
         status: defaultSettings.requireFinanceApproval ? 'pending_finance' : 'approved',
         currentLevel: levels.length || 1,
@@ -1291,9 +1332,9 @@ export class ExpenseService {
 
     if (submitterRank === 2) { // Manager
       return {
-        status: 'pending_level_3',
-        currentLevel: 3,
-        currentApproverRole: 'HR / Admin Approval',
+        status: defaultSettings.requireFinanceApproval ? 'pending_finance' : 'approved',
+        currentLevel: 1,
+        currentApproverRole: defaultSettings.requireFinanceApproval ? 'Finance Verification' : 'Auto-Approved',
         workflowId: null,
       };
     }
@@ -1396,31 +1437,7 @@ export class ExpenseService {
     }
 
     const orgId = ctx.organizationId;
-
-    // Detect the submitter's role so routing skips appropriate levels
-    // (e.g. Team Lead submission skips Level 1 and goes directly to Level 2)
-    let submittedByRole = 'employee';
-    try {
-      const roleRows = await db('user_roles')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .where('user_roles.user_id', ctx.userId)
-        .where('user_roles.organization_id', orgId)
-        .select('roles.code as role_code')
-        .catch(() => []);
-      const roleCodes = [
-        ...(roleRows || []).map((r: any) => String(r.role_code || r.code || '').toLowerCase()),
-        ...[ctx.role, ...(ctx.roles || [])].map(r => String(r || '').toLowerCase())
-      ];
-      if (roleCodes.some(c => c.includes('organization_admin') || c.includes('super_admin') || c.includes('ceo'))) {
-        submittedByRole = 'admin';
-      } else if (roleCodes.some(c => c.startsWith('hr'))) {
-        submittedByRole = 'hr';
-      } else if (roleCodes.some(c => ['manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head'))) {
-        submittedByRole = 'manager';
-      } else if (roleCodes.some(c => c.includes('team_lead'))) {
-        submittedByRole = 'team_lead';
-      }
-    } catch { /* use default 'employee' */ }
+    const submittedByRole = await this.getSubmitterRole(ctx, db);
 
     const wfSubmit = await this.resolveSubmitStatus(ctx, validatedItems, isDraft, submittedByRole);
 
@@ -2152,26 +2169,7 @@ export class ExpenseService {
     const config = await this.getConfig(ctx);
     const reqNum = await ExpenseConfigService.nextNumber(ctx.organizationId, 'travel_request', config.travelRequestNumberPrefix, config.numberSequenceDigits);
 
-    // Detect submitter role from context roles
-    const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase());
-    const roleRows = await db('user_roles')
-      .join('roles', 'user_roles.role_id', 'roles.id')
-      .where('user_roles.user_id', ctx.userId)
-      .where('user_roles.organization_id', ctx.organizationId)
-      .select('roles.code as role_code')
-      .catch(() => []);
-    const roleCodes = [...(roleRows || []).map((r: any) => String(r.roleCode || r.role_code || '').toLowerCase()), ...ctxRoles];
-
-    let submittedByRole = 'employee';
-    if (roleCodes.some(r => ['manager', 'department_head', 'dept_head'].includes(r) || r.includes('manager') || r.includes('department_head'))) {
-      submittedByRole = 'manager';
-    } else if (roleCodes.some(r => ['team_lead'].includes(r) || r.includes('team_lead'))) {
-      submittedByRole = 'team_lead';
-    } else if (roleCodes.some(r => ['hr', 'hr_admin', 'hr_manager'].includes(r) || r.startsWith('hr'))) {
-      submittedByRole = 'hr';
-    } else if (roleCodes.some(r => ['organization_admin', 'super_admin', 'ceo', 'admin'].includes(r) || r.includes('admin') || r.includes('ceo'))) {
-      submittedByRole = 'admin';
-    }
+    const submittedByRole = await this.getSubmitterRole(ctx, db);
 
     // Resolve initial workflow status (same as expense claims)
     const estimatedBudget = Number(data.estimatedBudget || 0);
@@ -2373,25 +2371,7 @@ export class ExpenseService {
       }
     }
 
-    // Detect submitter role from context
-    const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase());
-    const roleRows2 = await db('user_roles')
-      .join('roles', 'user_roles.role_id', 'roles.id')
-      .where('user_roles.user_id', ctx.userId)
-      .where('user_roles.organization_id', ctx.organizationId)
-      .select('roles.code as role_code')
-      .catch(() => []);
-    const roleCodes2 = [...(roleRows2 || []).map((r: any) => String(r.roleCode || r.role_code || '').toLowerCase()), ...ctxRoles];
-    let submittedByRole = 'employee';
-    if (roleCodes2.some(r => ['manager', 'department_head'].includes(r) || r.includes('manager') || r.includes('department_head'))) {
-      submittedByRole = 'manager';
-    } else if (roleCodes2.some(r => ['team_lead'].includes(r) || r.includes('team_lead'))) {
-      submittedByRole = 'team_lead';
-    } else if (roleCodes2.some(r => ['hr', 'hr_admin', 'hr_manager'].includes(r) || r.startsWith('hr'))) {
-      submittedByRole = 'hr';
-    } else if (roleCodes2.some(r => ['organization_admin', 'super_admin', 'ceo', 'admin'].includes(r) || r.includes('admin') || r.includes('ceo'))) {
-      submittedByRole = 'admin';
-    }
+    const submittedByRole = await this.getSubmitterRole(ctx, db);
 
     const [id] = await db('travel_advances').insert({
       uuid: uuidv4(),
