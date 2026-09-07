@@ -1,4 +1,4 @@
-﻿import {
+import {
   LayoutDashboard,
   BarChart2,
   CheckSquare,
@@ -12,6 +12,7 @@
   DollarSign,
   FileBarChart,
   TrendingUp,
+  Scan,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -53,6 +54,7 @@ const FINANCE_NAV = [
     label: "TIME & ATTENDANCE",
     items: [
       { name: "Attendance",       href: "/finance/attendance",       icon: Clock },
+      { name: "Face Punch",       href: "/finance/face-punch",       icon: Scan },
       { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
     ],
   },
