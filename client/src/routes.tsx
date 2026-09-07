@@ -63,11 +63,11 @@ const TeamSettlementsPage = lazy(() => import('./features/payroll/pages/TeamSett
 const AdminDashboard = lazy(() => import('./features/payroll/pages/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
 const MassSalaryStructureUploadPage = lazy(() => import('./features/payroll/pages/MassSalaryStructureUploadPage').then(m => ({ default: m.MassSalaryStructureUploadPage })));
 const EmployeeLoanRequest = lazy(() => import('./features/payroll/components/EmployeeLoanRequest').then(m => ({ default: m.EmployeeLoanRequest })));
-const EmployeePayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.EmployeePayrollPortal })));
-const TeamLeadPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.TeamLeadPayrollPortal })));
-const ManagerPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.ManagerPayrollPortal })));
-const HRPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.HRPayrollPortal })));
-const AdminPayrollPortal = lazy(() => import('./features/payroll/pages').then(m => ({ default: m.AdminPayrollPortal })));
+const EmployeePayrollPortal = lazy(() => import('./features/payroll/pages/EmployeePayrollPortal').then(m => ({ default: m.EmployeePayrollPortal })));
+const TeamLeadPayrollPortal = lazy(() => import('./features/payroll/pages/TeamLeadPayrollPortal').then(m => ({ default: m.TeamLeadPayrollPortal })));
+const ManagerPayrollPortal = lazy(() => import('./features/payroll/pages/ManagerPayrollPortal').then(m => ({ default: m.ManagerPayrollPortal })));
+const HRPayrollPortal = lazy(() => import('./features/payroll/pages/HRPayrollPortal').then(m => ({ default: m.HRPayrollPortal })));
+const AdminPayrollPortal = lazy(() => import('./features/payroll/pages/AdminPayrollPortal').then(m => ({ default: m.AdminPayrollPortal })));
 const RecruitmentDashboard = lazy(() => import('./features/recruitment/pages/RecruitmentDashboard').then(m => ({ default: m.RecruitmentDashboard })));
 const MrfRequestPage = lazy(() => import('./features/recruitment/pages/MrfRequestPage').then(m => ({ default: m.MrfRequestPage })));
 const CandidateReportPage = lazy(() => import('./features/recruitment/pages/CandidateReportPage').then(m => ({ default: m.CandidateReportPage })));
@@ -192,23 +192,24 @@ const ConsultantDashboardPage = lazy(() => import('./features/consultant/pages/C
 const FinanceDashboardPage = lazy(() => import('./features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));
 const FinanceReportsPage   = lazy(() => import('./features/finance/pages/FinanceReportsPage').then(m => ({ default: m.FinanceReportsPage })));
 const FinanceApprovalsPage = lazy(() => import('./features/finance/pages/FinanceApprovalsPage').then(m => ({ default: m.FinanceApprovalsPage })));
+const FinanceFacePunchPage = lazy(() => import('./features/finance/pages/FinanceFacePunchPage').then(m => ({ default: m.FinanceFacePunchPage })));
 
-// ── Expense Management Module Pages ─────────────────────────────────────────
-import { ExpenseDashboardPage } from './features/expenses/pages/ExpenseDashboardPage';
-import { MyExpensesPage } from './features/expenses/pages/MyExpensesPage';
-import { ExpenseApprovalsPage } from './features/expenses/pages/ExpenseApprovalsPage';
-import { FinanceVerificationPage } from './features/expenses/pages/FinanceVerificationPage';
-import { ReimbursementsPage } from './features/expenses/pages/ReimbursementsPage';
-import { TravelRequestsPage } from './features/expenses/pages/TravelRequestsPage';
-import { TravelAdvancesPage } from './features/expenses/pages/TravelAdvancesPage';
-import { MileageClaimsPage } from './features/expenses/pages/MileageClaimsPage';
-import { ExpenseCategoriesPage } from './features/expenses/pages/ExpenseCategoriesPage';
-import { ExpensePoliciesPage } from './features/expenses/pages/ExpensePoliciesPage';
-import { ExpenseReportsPage } from './features/expenses/pages/ExpenseReportsPage';
-import { ExpenseSettingsPage } from './features/expenses/pages/ExpenseSettingsPage';
-import { AdminPolicyDashboardPage } from './features/policies/pages/AdminPolicyDashboardPage';
-import { CreatePolicyPage } from './features/policies/pages/CreatePolicyPage';
-import { PolicyAcknowledgementReportPage } from './features/policies/pages/PolicyAcknowledgementReportPage';
+// ── Expense Management Module Pages (lazy — excluded from initial bundle) ─────
+const ExpenseDashboardPage = lazy(() => import('./features/expenses/pages/ExpenseDashboardPage').then(m => ({ default: m.ExpenseDashboardPage })));
+const MyExpensesPage = lazy(() => import('./features/expenses/pages/MyExpensesPage').then(m => ({ default: m.MyExpensesPage })));
+const ExpenseApprovalsPage = lazy(() => import('./features/expenses/pages/ExpenseApprovalsPage').then(m => ({ default: m.ExpenseApprovalsPage })));
+const FinanceVerificationPage = lazy(() => import('./features/expenses/pages/FinanceVerificationPage').then(m => ({ default: m.FinanceVerificationPage })));
+const ReimbursementsPage = lazy(() => import('./features/expenses/pages/ReimbursementsPage').then(m => ({ default: m.ReimbursementsPage })));
+const TravelRequestsPage = lazy(() => import('./features/expenses/pages/TravelRequestsPage').then(m => ({ default: m.TravelRequestsPage })));
+const TravelAdvancesPage = lazy(() => import('./features/expenses/pages/TravelAdvancesPage').then(m => ({ default: m.TravelAdvancesPage })));
+const MileageClaimsPage = lazy(() => import('./features/expenses/pages/MileageClaimsPage').then(m => ({ default: m.MileageClaimsPage })));
+const ExpenseCategoriesPage = lazy(() => import('./features/expenses/pages/ExpenseCategoriesPage').then(m => ({ default: m.ExpenseCategoriesPage })));
+const ExpensePoliciesPage = lazy(() => import('./features/expenses/pages/ExpensePoliciesPage').then(m => ({ default: m.ExpensePoliciesPage })));
+const ExpenseReportsPage = lazy(() => import('./features/expenses/pages/ExpenseReportsPage').then(m => ({ default: m.ExpenseReportsPage })));
+const ExpenseSettingsPage = lazy(() => import('./features/expenses/pages/ExpenseSettingsPage').then(m => ({ default: m.ExpenseSettingsPage })));
+const AdminPolicyDashboardPage = lazy(() => import('./features/policies/pages/AdminPolicyDashboardPage').then(m => ({ default: m.AdminPolicyDashboardPage })));
+const CreatePolicyPage = lazy(() => import('./features/policies/pages/CreatePolicyPage').then(m => ({ default: m.CreatePolicyPage })));
+const PolicyAcknowledgementReportPage = lazy(() => import('./features/policies/pages/PolicyAcknowledgementReportPage').then(m => ({ default: m.PolicyAcknowledgementReportPage })));
 
 // ── Page Loading Fallback Spinner ──────────────────────────────────────────
 function PageLoader() {
@@ -1135,6 +1136,7 @@ export function AppRoutes() {
           <Route path="/finance/approvals"       element={<FinanceApprovalsPage />} />
           <Route path="/finance/profile"         element={<ProfilePage />} />
           <Route path="/finance/attendance"      element={<AttendancePage />} />
+          <Route path="/finance/face-punch"      element={<FaceAttendancePage />} />
           <Route path="/finance/leaves"          element={<LeavePage />} />
           <Route path="/finance/payslips"        element={<PayslipViewer />} />
           <Route path="/finance/documents"       element={<DocumentsPage />} />

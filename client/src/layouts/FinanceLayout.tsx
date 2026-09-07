@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Sun, Moon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 
 // -- Page title helper ----------------------------------------------------------
 function getPageTitle(pathname: string): string {
+  if (pathname.includes("/face-punch"))      return "Face Punch Terminal";
   if (pathname.includes("/reports"))         return "Finance Reports";
   if (pathname.includes("/approvals"))       return "Finance Approvals";
   if (pathname.includes("/dashboard"))       return "Finance Dashboard";
@@ -142,8 +143,15 @@ export function FinanceLayout() {
         </header>
 
         {/* -- Page Content -- */}
-        <main className="flex-1 overflow-y-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
+            <Outlet />
+          </motion.div>
         </main>
       </div>
 
