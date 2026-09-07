@@ -14,8 +14,18 @@ import {
   X,
   CheckCircle,
   IndianRupee,
-  Banknote
+  Banknote,
+  RotateCcw,
+  Eye,
+  Building,
+  CreditCard,
+  AlertTriangle,
+  FileText,
+  User,
+  ExternalLink,
+  ShieldAlert
 } from 'lucide-react';
+import { useExpenseMoney } from '../utils/useExpenseMoney';
 
 // Status pipeline config
 const PIPELINE_STAGES: { status: string; label: string; color: string; bgColor: string; borderColor: string }[] = [
@@ -33,8 +43,8 @@ const PIPELINE_STAGES: { status: string; label: string; color: string; bgColor: 
 ];
 
 function getStageConfig(status: string) {
-  return PIPELINE_STAGES.find(s => s.status === status.toLowerCase()) || {
-    label: status,
+  return PIPELINE_STAGES.find(s => s.status === (status || '').toLowerCase()) || {
+    label: status || 'Pending',
     color: 'text-slate-700 dark:text-slate-300',
     bgColor: 'bg-slate-100 dark:bg-slate-800',
     borderColor: 'border-slate-300 dark:border-slate-700',
@@ -49,6 +59,7 @@ interface ApprovalToast {
 
 export const FinanceVerificationPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [claims, setClaims] = useState<ExpenseClaim[]>([]);
   const [pipelineClaims, setPipelineClaims] = useState<ExpenseClaim[]>([]);
@@ -56,6 +67,17 @@ export const FinanceVerificationPage: React.FC = () => {
   const [travelAdvances, setTravelAdvances] = useState<TravelAdvance[]>([]);
   const [selectedClaim, setSelectedClaim] = useState<ExpenseClaim | null>(null);
   const [activeTab, setActiveTab] = useState<'queue' | 'pipeline'>('queue');
+
+  // Return & Reject modal state for finance
+  const [returnModalClaim, setReturnModalClaim] = useState<ExpenseClaim | null>(null);
+  const [returnComments, setReturnComments] = useState('');
+  const [rejectModalClaim, setRejectModalClaim] = useState<ExpenseClaim | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [actionProcessing, setActionProcessing] = useState(false);
+
+  // Receipt preview modal
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState<string | null>(null);
+
   // Advance approve/reject inline modals
   const [advanceApproveModal, setAdvanceApproveModal] = useState<TravelAdvance | null>(null);
   const [advanceRejectModal, setAdvanceRejectModal] = useState<TravelAdvance | null>(null);
@@ -136,7 +158,6 @@ export const FinanceVerificationPage: React.FC = () => {
         return ['approved', 'pending_finance'].includes(st);
       });
       setTravelRequests(travel);
-      // Always show pending_finance advances in the queue regardless of statusFilter
       setTravelAdvances(advRes || []);
     } catch (err) {
       console.error('Failed to load finance queue:', err);
@@ -148,7 +169,6 @@ export const FinanceVerificationPage: React.FC = () => {
   const fetchPipelineClaims = useCallback(async () => {
     try {
       setPipelineLoading(true);
-      // Fetch ALL claims (all statuses) so Finance can see the complete pipeline
       const allRes = await expenseApi.getClaims({ status: 'all' });
       setPipelineClaims(allRes || []);
     } catch (err) {
@@ -156,12 +176,12 @@ export const FinanceVerificationPage: React.FC = () => {
     } finally {
       setPipelineLoading(false);
     }
-  }, [pipelineSearch]);
-
+  }, []);
 
   useEffect(() => {
     fetchFilterData();
-  }, []);
+    fetchPipelineClaims();
+  }, [fetchPipelineClaims]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -180,26 +200,35 @@ export const FinanceVerificationPage: React.FC = () => {
     try {
       const full = await expenseApi.getClaimById(claimId);
       setSelectedClaim(full);
-      if (full.items) {
+      if (full.items && full.items.length > 0) {
         setItemAdjustments(
           full.items.map((it: any) => ({
             id: it.id,
-            claimedAmount: it.claimedAmount,
-            approvedAmount: it.claimedAmount,
-            adjustmentReason: ''
+            claimedAmount: Number(it.claimedAmount || 0),
+            approvedAmount: Number(it.approvedAmount || it.claimedAmount || 0),
+            adjustmentReason: it.adjustmentReason || ''
           }))
         );
+      } else {
+        setItemAdjustments([
+          {
+            id: 0,
+            claimedAmount: Number(full.totalClaimedAmount || 0),
+            approvedAmount: Number(full.totalClaimedAmount || 0),
+            adjustmentReason: ''
+          }
+        ]);
       }
-      setFinanceComments('');
+      setFinanceComments('Verified and approved by Finance team.');
       setFormErrors([]);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to open claim verification modal:', err);
     }
   };
 
   const handleApprovedAmountChange = (idx: number, val: number) => {
     const next = [...itemAdjustments];
-    next[idx].approvedAmount = val;
+    next[idx].approvedAmount = Math.max(0, val);
     setItemAdjustments(next);
   };
 
@@ -209,29 +238,30 @@ export const FinanceVerificationPage: React.FC = () => {
     setItemAdjustments(next);
   };
 
+  const totalCalculatedApproved = itemAdjustments.reduce((sum, it) => sum + (Number(it.approvedAmount) || 0), 0);
+  const totalCalculatedClaimed = itemAdjustments.reduce((sum, it) => sum + (Number(it.claimedAmount) || 0), 0);
+  const totalCalculatedRejected = Math.max(0, totalCalculatedClaimed - totalCalculatedApproved);
+
   const handleVerifySubmit = async () => {
     if (!selectedClaim) return;
     const errors: string[] = [];
     if (financeComments.trim().length < 5) {
       errors.push('Finance comments are required (at least 5 characters).');
     }
-    if (!itemAdjustments.length) {
-      errors.push('This claim has no line items to verify.');
-    }
     itemAdjustments.forEach((adj, idx) => {
       const claimed = Number(adj.claimedAmount || 0);
       if (Number.isNaN(Number(adj.approvedAmount))) {
-        errors.push(`Line ${idx + 1}: approved amount must be a number.`);
+        errors.push(`Line ${idx + 1}: approved amount must be a valid number.`);
         return;
       }
       if (adj.approvedAmount < 0) {
         errors.push(`Line ${idx + 1}: approved amount cannot be negative.`);
       }
       if (adj.approvedAmount > claimed) {
-        errors.push(`Line ${idx + 1}: approved amount cannot exceed claimed amount (₹${claimed.toLocaleString('en-IN')}).`);
+        errors.push(`Line ${idx + 1}: approved amount cannot exceed claimed amount (${money(claimed)}).`);
       }
       if (adj.approvedAmount !== claimed && !adj.adjustmentReason.trim()) {
-        errors.push(`Line ${idx + 1}: adjustment reason is required for partial approval or rejection.`);
+        errors.push(`Line ${idx + 1}: adjustment reason is required for partial approval or deduction.`);
       }
     });
     if (errors.length > 0) {
@@ -241,15 +271,16 @@ export const FinanceVerificationPage: React.FC = () => {
     try {
       setFormErrors([]);
       setSubmitting(true);
+      const validItemAdjs = itemAdjustments.filter(it => it.id > 0);
       await expenseApi.financeVerifyClaim(selectedClaim.id, {
-        items: itemAdjustments,
+        items: validItemAdjs.length > 0 ? validItemAdjs : undefined,
         comments: financeComments.trim()
       });
       setSelectedClaim(null);
       showToast({
         type: 'success',
-        title: '✅ Finance Verified!',
-        subtitle: 'Claim approved and moved to Payout Processing.',
+        title: '✅ Finance Verified & Approved!',
+        subtitle: `Claim moved to Payout Queue with approved amount ${money(totalCalculatedApproved)}.`,
       });
       fetchFinanceQueue();
       if (activeTab === 'pipeline') fetchPipelineClaims();
@@ -260,9 +291,61 @@ export const FinanceVerificationPage: React.FC = () => {
     }
   };
 
+  const handleReturnClaim = async () => {
+    if (!returnModalClaim) return;
+    if (returnComments.trim().length < 5) {
+      showToast({ type: 'error', title: 'Correction Notes Required', subtitle: 'Please provide at least 5 characters explaining what needs correction.' });
+      return;
+    }
+    try {
+      setActionProcessing(true);
+      await expenseApi.returnClaim(returnModalClaim.id, returnComments.trim());
+      showToast({
+        type: 'success',
+        title: '↩️ Claim Returned to Employee',
+        subtitle: `Claim #${returnModalClaim.claimNumber || returnModalClaim.id} returned for correction.`
+      });
+      setReturnModalClaim(null);
+      setReturnComments('');
+      if (selectedClaim?.id === returnModalClaim.id) setSelectedClaim(null);
+      fetchFinanceQueue();
+      if (activeTab === 'pipeline') fetchPipelineClaims();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Return Failed', subtitle: err.response?.data?.message || err.message || 'Failed to return claim' });
+    } finally {
+      setActionProcessing(false);
+    }
+  };
+
+  const handleRejectClaim = async () => {
+    if (!rejectModalClaim) return;
+    if (rejectReason.trim().length < 5) {
+      showToast({ type: 'error', title: 'Rejection Reason Required', subtitle: 'Please provide at least 5 characters explaining the rejection.' });
+      return;
+    }
+    try {
+      setActionProcessing(true);
+      await expenseApi.rejectClaim(rejectModalClaim.id, rejectReason.trim());
+      showToast({
+        type: 'success',
+        title: '❌ Claim Rejected',
+        subtitle: `Claim #${rejectModalClaim.claimNumber || rejectModalClaim.id} has been rejected.`
+      });
+      setRejectModalClaim(null);
+      setRejectReason('');
+      if (selectedClaim?.id === rejectModalClaim.id) setSelectedClaim(null);
+      fetchFinanceQueue();
+      if (activeTab === 'pipeline') fetchPipelineClaims();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Rejection Failed', subtitle: err.response?.data?.message || err.message || 'Failed to reject claim' });
+    } finally {
+      setActionProcessing(false);
+    }
+  };
+
   const handleVerifyTravel = async (id: number) => {
     try {
-      await expenseApi.updateTravelRequestStatus(id, 'approved', 'Verified by finance');
+      await expenseApi.updateTravelRequestStatus(id, 'approved', 'Verified and approved by Finance');
       showToast({ type: 'success', title: '✅ Travel Request Verified!', subtitle: 'Request approved by finance.' });
       fetchFinanceQueue();
     } catch (err: any) {
@@ -275,7 +358,7 @@ export const FinanceVerificationPage: React.FC = () => {
     try {
       setAdvActionLoading(advanceApproveModal.id);
       await expenseApi.approveTravelAdvance(advanceApproveModal.id, { comments: advApproveNotes, approvedAmount: advApproveAmt || undefined });
-      showToast({ type: 'success', title: '✅ Advance Approved!', subtitle: `₹${(advApproveAmt || advanceApproveModal.advanceAmount).toLocaleString('en-IN')} disbursed to employee.` });
+      showToast({ type: 'success', title: '✅ Advance Approved!', subtitle: `${money(advApproveAmt || advanceApproveModal.advanceAmount)} approved for disbursement.` });
       setAdvanceApproveModal(null);
       setAdvApproveAmt(0);
       setAdvApproveNotes('');
@@ -307,17 +390,15 @@ export const FinanceVerificationPage: React.FC = () => {
     }
   };
 
-  // Force-approve bypasses remaining workflow levels — finance can urgently push through
   const handleForceApprove = async (claim: any) => {
     const claimTitle = claim.title || `Claim #${claim.id}`;
     const confirmed = window.confirm(
-      `⚡ Force Approve: "${claimTitle}"?\n\nThis will bypass remaining approval levels and move the claim directly to Finance Verification. Use only for urgent cases.`
+      `⚡ Force Approve: "${claimTitle}"?\n\nThis will bypass remaining approval levels and move the claim directly to Payout Processing. Use only for urgent cases.`
     );
     if (!confirmed) return;
 
     try {
       setForceApproving(claim.id);
-      // Finance can directly verify even if claim is not yet at pending_finance
       await expenseApi.financeVerifyClaim(claim.id, {
         comments: 'Force approved by Finance — bypassing remaining workflow levels for urgency.'
       });
@@ -354,14 +435,16 @@ export const FinanceVerificationPage: React.FC = () => {
     );
   });
 
-  // Group pipeline by status for summary counters
   const pipelineSummary = {
-    team_lead: filteredPipeline.filter((c: any) => c.status === 'pending_level_1').length,
-    manager: filteredPipeline.filter((c: any) => ['pending_level_2', 'pending_manager', 'submitted'].includes(c.status)).length,
-    hr: filteredPipeline.filter((c: any) => c.status === 'pending_level_3').length,
-    finance: filteredPipeline.filter((c: any) => c.status === 'pending_finance').length,
-    payout: filteredPipeline.filter((c: any) => c.status === 'payment_pending').length,
+    team_lead: pipelineClaims.filter((c: any) => c.status === 'pending_level_1').length,
+    manager: pipelineClaims.filter((c: any) => ['pending_level_2', 'pending_manager', 'submitted'].includes(c.status)).length,
+    hr: pipelineClaims.filter((c: any) => c.status === 'pending_level_3').length,
+    finance: pipelineClaims.filter((c: any) => c.status === 'pending_finance').length,
+    payout: pipelineClaims.filter((c: any) => c.status === 'payment_pending').length,
   };
+
+  const totalQueueAmount = claims.reduce((acc, c: any) => acc + Number(c.totalClaimedAmount ?? c.total_claimed_amount ?? 0), 0);
+  const totalAdvanceAmount = travelAdvances.reduce((acc, a: any) => acc + Number(a.advanceAmount ?? a.advance_amount ?? 0), 0);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -395,14 +478,69 @@ export const FinanceVerificationPage: React.FC = () => {
         </div>
       )}
 
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <FileCheck2 className="w-6 h-6 text-blue-600" />
-          Finance Verification & Approvals
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Verify receipts, perform partial itemized adjustments, and monitor the full approval pipeline
-        </p>
+      {/* Header & KPI Summary */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <FileCheck2 className="w-6 h-6 text-blue-600" />
+            Finance Verification & Approvals
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Review receipts, perform line-item adjustments, verify GST/tax details, and approve for reimbursement payout
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2">
+            <IndianRupee className="w-4 h-4 text-blue-600" />
+            <span>Pending Value: <strong>{money(totalQueueAmount + totalAdvanceAmount)}</strong></span>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center shrink-0">
+            <FileCheck2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{claims.length}</div>
+            <div className="text-[11px] text-slate-500">Claims in Finance Queue</div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0">
+            <Banknote className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{travelAdvances.length}</div>
+            <div className="text-[11px] text-slate-500">Advances to Verify</div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center shrink-0">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">
+              {pipelineSummary.team_lead + pipelineSummary.manager + pipelineSummary.hr}
+            </div>
+            <div className="text-[11px] text-slate-500">In-Flight Pipeline</div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center shrink-0">
+            <CreditCard className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-lg font-bold text-slate-900 dark:text-white">{pipelineSummary.payout}</div>
+            <div className="text-[11px] text-slate-500">Ready for Payout</div>
+          </div>
+        </div>
       </div>
 
       {/* TAB SWITCHER */}
@@ -412,25 +550,25 @@ export const FinanceVerificationPage: React.FC = () => {
           className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
             activeTab === 'queue'
               ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <FileCheck2 className="w-3.5 h-3.5" /> Finance Queue
+          <FileCheck2 className="w-3.5 h-3.5" /> Finance Verification Queue
+          {claims.length + travelAdvances.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+              {claims.length + travelAdvances.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('pipeline')}
           className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
             activeTab === 'pipeline'
               ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
-          <Activity className="w-3.5 h-3.5" /> Pipeline Status
-          {(pipelineSummary.team_lead + pipelineSummary.manager + pipelineSummary.hr + pipelineSummary.finance) > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold">
-              {pipelineSummary.team_lead + pipelineSummary.manager + pipelineSummary.hr + pipelineSummary.finance}
-            </span>
-          )}
+          <Activity className="w-3.5 h-3.5" /> All Workflow Pipeline
         </button>
       </div>
 
@@ -440,17 +578,17 @@ export const FinanceVerificationPage: React.FC = () => {
           {/* FILTER BAR */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-sm">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-              <Filter className="w-3.5 h-3.5" /> Filter Finance Queue
+              <Filter className="w-3.5 h-3.5" /> Filter Verification Queue
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Search Employee</label>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Search Employee / Claim</label>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
                   <input
                     value={employeeSearch}
                     onChange={(e) => setEmployeeSearch(e.target.value)}
-                    placeholder="Name or employee code"
+                    placeholder="Name, code, or title..."
                     className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                   />
                 </div>
@@ -482,16 +620,20 @@ export const FinanceVerificationPage: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Status</label>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Status Queue</label>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                 >
-                  <option value="pending_finance">Pending</option>
-                  <option value="payment_pending">Verified (Payment Pending)</option>
-                  <option value="paid">Paid</option>
-                  <option value="all">All Claims (History)</option>
+                  <option value="pending_finance">Pending Finance Verification (Final Stage)</option>
+                  <option value="pending_approvals">All In-Flight Pending Claims (All Levels)</option>
+                  <option value="pending_level_1">Level 1 (Team Lead Queue)</option>
+                  <option value="pending_level_2">Level 2 (Manager Queue)</option>
+                  <option value="pending_level_3">Level 3 (HR Queue)</option>
+                  <option value="payment_pending">Verified (Payout Pending)</option>
+                  <option value="paid">Paid / Reimbursed</option>
+                  <option value="all">All Claims History</option>
                 </select>
               </div>
             </div>
@@ -500,30 +642,55 @@ export const FinanceVerificationPage: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
             {loading ? (
               <div className="p-8 text-center text-sm text-slate-500">Loading finance queue...</div>
-            ) : claims.length === 0 && travelRequests.length === 0 ? (
-              <div className="p-12 text-center flex flex-col items-center justify-center">
-                <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-3" />
-                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Finance Queue Clear</h3>
-                <p className="text-xs text-slate-500 max-w-sm mt-1">
-                  There are no expense claims or approved travel requests matching the selected filters.
+            ) : claims.length === 0 && travelRequests.length === 0 && travelAdvances.length === 0 ? (
+              <div className="p-10 text-center flex flex-col items-center justify-center space-y-3">
+                <CheckCircle2 className="w-12 h-12 text-emerald-500" />
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Finance Verification Queue Clear</h3>
+                <p className="text-xs text-slate-500 max-w-sm">
+                  {statusFilter === 'pending_finance'
+                    ? "There are no claims currently waiting at the final Finance stage."
+                    : "No claims found matching the selected filter."}
                 </p>
+                {pipelineSummary.team_lead + pipelineSummary.manager + pipelineSummary.hr > 0 && (
+                  <div className="mt-3 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex flex-col sm:flex-row items-center gap-3 text-left max-w-2xl">
+                    <Zap className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div className="text-xs flex-1">
+                      <p className="font-bold text-amber-900 dark:text-amber-200">
+                        {pipelineSummary.team_lead + pipelineSummary.manager + pipelineSummary.hr} claims are currently in-flight in Team Lead / Manager queue
+                      </p>
+                      <p className="text-amber-700 dark:text-amber-300 text-[11px] mt-0.5">
+                        You can audit & verify them right now or switch to the All Workflow Pipeline view.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setStatusFilter('pending_approvals')}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shrink-0 shadow-sm"
+                    >
+                      Audit In-Flight Claims
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-0">
                 {claims.length > 0 && (
                   <div className="overflow-x-auto">
-                    <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
-                      Expense claims pending finance
+                    <div className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <FileCheck2 className="w-3.5 h-3.5 text-blue-600" />
+                        Expense Claims ({claims.length})
+                      </span>
+                      <span className="text-slate-400 font-normal">Total: {money(totalQueueAmount)}</span>
                     </div>
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
                         <tr>
-                          <th className="py-3.5 px-4">Employee</th>
-                          <th className="py-3.5 px-4">Claim</th>
+                          <th className="py-3.5 px-4">Employee & Bank Info</th>
+                          <th className="py-3.5 px-4">Claim Details</th>
                           <th className="py-3.5 px-4">Claimed Amount</th>
-                          <th className="py-3.5 px-4">Payment Method</th>
+                          <th className="py-3.5 px-4">Stage / Status</th>
                           <th className="py-3.5 px-4">Submitted Date</th>
-                          <th className="py-3.5 px-4 text-right">Actions</th>
+                          <th className="py-3.5 px-4 text-right">Finance Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -533,11 +700,14 @@ export const FinanceVerificationPage: React.FC = () => {
                           const lName = claim.lastName || claim.last_name || '';
                           const empCode = claim.employeeCode || claim.employee_code || '';
                           const dept = claim.departmentName || claim.department_name || '';
+                          const bank = claim.bankName || claim.bank_name;
+                          const acc = claim.accountNumber || claim.account_number || claim.account_no;
                           const cNum = claim.claimNumber || claim.claim_number || `EXP-${claim.id}`;
                           const cDate = claim.submittedAt || claim.submitted_at || claim.claimDate || claim.claim_date;
                           const totClaimed = Number(claim.totalClaimedAmount ?? claim.total_claimed_amount ?? 0);
-                          const payMethod = claim.paymentMethod || claim.payment_method || 'Bank Transfer';
                           const formattedDate = cDate ? new Date(cDate).toLocaleDateString() : 'N/A';
+                          const isActionable = !['paid', 'payment_pending', 'rejected', 'returned'].includes(claim.status);
+                          const stageConf = getStageConfig(claim.status || '');
 
                           return (
                             <tr key={claim.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
@@ -548,31 +718,65 @@ export const FinanceVerificationPage: React.FC = () => {
                                 <div className="text-[11px] text-slate-500">
                                   {empCode ? `${empCode} • ` : ''}{dept}
                                 </div>
+                                {bank && (
+                                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+                                    🏦 {bank} {acc ? `(A/C: ••••${String(acc).slice(-4)})` : ''}
+                                  </div>
+                                )}
                               </td>
                               <td className="py-3.5 px-4">
                                 <div className="font-semibold text-slate-800 dark:text-slate-200">{claim.title}</div>
-                                <div className="text-[11px] text-slate-400 font-mono">{cNum}</div>
+                                <div className="text-[11px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                  <span>{cNum}</span>
+                                  {claim.receiptUrl && (
+                                    <button
+                                      onClick={() => setReceiptPreviewUrl(claim.receiptUrl)}
+                                      className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5 text-[10px]"
+                                    >
+                                      <Paperclip className="w-2.5 h-2.5" /> Receipt
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                               <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                                ₹{totClaimed.toLocaleString('en-IN')}
+                                {money(totClaimed)}
                               </td>
-                              <td className="py-3.5 px-4 uppercase font-semibold text-slate-700 dark:text-slate-300">
-                                {payMethod}
+                              <td className="py-3.5 px-4">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${stageConf.color} ${stageConf.bgColor} ${stageConf.borderColor}`}>
+                                  <Clock className="w-2.5 h-2.5" /> {stageConf.label}
+                                </span>
                               </td>
                               <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
                                 {formattedDate}
                               </td>
                               <td className="py-3.5 px-4 text-right">
-                                {claim.status === 'pending_finance' ? (
-                                  <button
-                                    onClick={() => openVerificationModal(claim.id)}
-                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1 ml-auto"
-                                  >
-                                    <FileCheck2 className="w-3.5 h-3.5" /> Verify & Approve
-                                  </button>
+                                {isActionable ? (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => openVerificationModal(claim.id)}
+                                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1"
+                                      title="Open line-item verification and adjustment modal"
+                                    >
+                                      <FileCheck2 className="w-3.5 h-3.5" /> Verify & Adjust
+                                    </button>
+                                    <button
+                                      onClick={() => { setReturnModalClaim(claim); setReturnComments(''); }}
+                                      className="p-1.5 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40 rounded-lg border border-orange-200 dark:border-orange-800"
+                                      title="Return to employee for correction"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => { setRejectModalClaim(claim); setRejectReason(''); }}
+                                      className="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-800"
+                                      title="Reject claim"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 ml-auto">
-                                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> {claim.status === 'paid' ? 'Paid' : 'Verified'}
                                   </span>
                                 )}
                               </td>
@@ -583,76 +787,16 @@ export const FinanceVerificationPage: React.FC = () => {
                     </table>
                   </div>
                 )}
-                {travelRequests.length > 0 && (
-                  <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
-                    <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
-                      Approved travel requests
-                    </div>
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
-                        <tr>
-                          <th className="py-3.5 px-4">Employee</th>
-                          <th className="py-3.5 px-4">Request</th>
-                          <th className="py-3.5 px-4">From → To</th>
-                          <th className="py-3.5 px-4">Estimated Budget</th>
-                          <th className="py-3.5 px-4">Status</th>
-                          <th className="py-3.5 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {travelRequests.map((rawTr) => {
-                          const tr = rawTr as any;
-                          const fName = tr.firstName || tr.first_name || '';
-                          const lName = tr.lastName || tr.last_name || '';
-                          const reqNum = tr.requestNumber || tr.request_number || `TRV-${tr.id}`;
-                          const fromLoc = tr.fromLocation || tr.from_location || '';
-                          const toLoc = tr.toLocation || tr.to_location || '';
-                          const budget = Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0);
-                          const st = String(tr.status || '').toLowerCase();
-                          return (
-                            <tr key={`tr-${tr.id}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                              <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
-                                {fName || lName ? `${fName} ${lName}`.trim() : 'Employee'}
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <div className="font-semibold text-slate-800 dark:text-slate-200">{tr.purpose}</div>
-                                <div className="text-[11px] text-slate-400 font-mono">{reqNum}</div>
-                              </td>
-                              <td className="py-3.5 px-4">{fromLoc} → {toLoc}</td>
-                              <td className="py-3.5 px-4 font-bold">₹{budget.toLocaleString('en-IN')}</td>
-                              <td className="py-3.5 px-4 whitespace-nowrap">
-                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${st === 'pending_finance' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                                  {st === 'pending_finance' ? 'Pending finance' : 'Verified'}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 text-right">
-                                {st === 'pending_finance' ? (
-                                  <button
-                                    onClick={() => handleVerifyTravel(tr.id)}
-                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
-                                  >
-                                    Verify travel
-                                  </button>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 ml-auto">
-                                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+
                 {/* ── TRAVEL ADVANCES PENDING FINANCE ── */}
                 {travelAdvances.length > 0 && (
                   <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
-                    <div className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-blue-50 dark:bg-blue-950/20 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-                      <IndianRupee className="w-3.5 h-3.5 text-blue-500" />
-                      Travel advances pending finance approval
-                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold">{travelAdvances.length}</span>
+                    <div className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-blue-50/70 dark:bg-blue-950/20 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Banknote className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Travel Advances Pending Finance Approval ({travelAdvances.length})</span>
+                      </div>
+                      <span className="text-slate-400 font-normal">Total: {money(totalAdvanceAmount)}</span>
                     </div>
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
@@ -687,27 +831,92 @@ export const FinanceVerificationPage: React.FC = () => {
                               <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
                                 {reqNum ? <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{reqNum}</span> : <span className="italic text-slate-400">Direct Advance</span>}
                               </td>
-                              <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">₹{advAmt.toLocaleString('en-IN')}</td>
-                              <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 max-w-[180px]">
+                              <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{money(advAmt)}</td>
+                              <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400 max-w-[200px]">
                                 <span className="line-clamp-2">{purpose}</span>
                               </td>
                               <td className="py-3.5 px-4 text-right">
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
-                                    onClick={() => { setAdvanceApproveModal(adv as any); setAdvApproveAmt(advAmt); setAdvApproveNotes(''); }}
+                                    onClick={() => { setAdvanceApproveModal(adv as any); setAdvApproveAmt(advAmt); setAdvApproveNotes('Approved for advance disbursement'); }}
                                     disabled={advActionLoading === adv.id}
-                                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-semibold rounded-lg flex items-center gap-1 transition-all"
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center gap-1 transition-all"
                                   >
-                                    <Banknote className="w-3 h-3" /> Approve
+                                    <Banknote className="w-3.5 h-3.5" /> Approve & Disburse
                                   </button>
                                   <button
                                     onClick={() => { setAdvanceRejectModal(adv as any); setAdvRejectReason(''); }}
                                     disabled={advActionLoading === adv.id}
-                                    className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-[11px] font-semibold rounded-lg transition-all"
+                                    className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-all"
                                   >
                                     Reject
                                   </button>
                                 </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* ── TRAVEL REQUESTS ── */}
+                {travelRequests.length > 0 && (
+                  <div className="overflow-x-auto border-t border-slate-200 dark:border-slate-800">
+                    <div className="px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+                      Approved Travel Requests ({travelRequests.length})
+                    </div>
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase">
+                        <tr>
+                          <th className="py-3.5 px-4">Employee</th>
+                          <th className="py-3.5 px-4">Request Purpose</th>
+                          <th className="py-3.5 px-4">From → To</th>
+                          <th className="py-3.5 px-4">Estimated Budget</th>
+                          <th className="py-3.5 px-4">Status</th>
+                          <th className="py-3.5 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {travelRequests.map((rawTr) => {
+                          const tr = rawTr as any;
+                          const fName = tr.firstName || tr.first_name || '';
+                          const lName = tr.lastName || tr.last_name || '';
+                          const reqNum = tr.requestNumber || tr.request_number || `TRV-${tr.id}`;
+                          const fromLoc = tr.fromLocation || tr.from_location || '';
+                          const toLoc = tr.toLocation || tr.to_location || '';
+                          const budget = Number(tr.estimatedBudget ?? tr.estimated_budget ?? 0);
+                          const st = String(tr.status || '').toLowerCase();
+                          return (
+                            <tr key={`tr-${tr.id}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                              <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-white">
+                                {fName || lName ? `${fName} ${lName}`.trim() : 'Employee'}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <div className="font-semibold text-slate-800 dark:text-slate-200">{tr.purpose}</div>
+                                <div className="text-[11px] text-slate-400 font-mono">{reqNum}</div>
+                              </td>
+                              <td className="py-3.5 px-4">{fromLoc} → {toLoc}</td>
+                              <td className="py-3.5 px-4 font-bold">{money(budget)}</td>
+                              <td className="py-3.5 px-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${st === 'pending_finance' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'}`}>
+                                  {st === 'pending_finance' ? 'Pending finance' : 'Verified'}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                {st === 'pending_finance' ? (
+                                  <button
+                                    onClick={() => handleVerifyTravel(tr.id)}
+                                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm"
+                                  >
+                                    Verify Travel
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-emerald-600 font-bold text-[11px] bg-emerald-50 dark:bg-emerald-950/40 px-2 py-1 rounded-md border border-emerald-100 dark:border-emerald-800 ml-auto">
+                                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           );
@@ -734,7 +943,7 @@ export const FinanceVerificationPage: React.FC = () => {
               { label: 'Finance Queue', count: pipelineSummary.finance, color: 'bg-indigo-500' },
               { label: 'Payout Pending', count: pipelineSummary.payout, color: 'bg-emerald-500' },
             ].map((s) => (
-              <div key={s.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-center gap-3">
+              <div key={s.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 flex items-center gap-3 shadow-sm">
                 <div className={`w-2 h-8 rounded-full ${s.color}`} />
                 <div>
                   <div className="text-lg font-bold text-slate-900 dark:text-white">{s.count}</div>
@@ -748,18 +957,18 @@ export const FinanceVerificationPage: React.FC = () => {
           <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl flex items-start gap-2 text-xs text-blue-800 dark:text-blue-300">
             <Activity className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              <strong>Pipeline Monitoring:</strong> This view shows all in-flight expense claims across all approval stages. You can use <strong>Force Approve</strong> to urgently bypass pending approvals for any claim — use only in exceptional cases.
+              <strong>Pipeline Monitoring:</strong> This view shows all in-flight expense claims across all approval stages. You can use <strong>Force Approve</strong> to urgently bypass pending approvals for any claim when authorized.
             </span>
           </div>
 
           {/* Pipeline search */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3 shadow-sm">
             <div className="relative max-w-sm">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
               <input
                 value={pipelineSearch}
                 onChange={(e) => setPipelineSearch(e.target.value)}
-                placeholder="Search by name, claim title..."
+                placeholder="Search by name, claim title, or claim #..."
                 className="w-full pl-8 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
               />
             </div>
@@ -773,7 +982,7 @@ export const FinanceVerificationPage: React.FC = () => {
               <div className="p-12 text-center flex flex-col items-center justify-center">
                 <CheckCircle className="w-12 h-12 text-emerald-500 mb-3" />
                 <h3 className="text-base font-semibold text-slate-800 dark:text-slate-200">Pipeline is Clear</h3>
-                <p className="text-xs text-slate-500 max-w-sm mt-1">No in-flight expense claims found.</p>
+                <p className="text-xs text-slate-500 max-w-sm mt-1">No in-flight expense claims found matching your search.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -817,7 +1026,7 @@ export const FinanceVerificationPage: React.FC = () => {
                             <div className="text-[11px] text-slate-400 font-mono">{cNum}</div>
                           </td>
                           <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                            ₹{totClaimed.toLocaleString('en-IN')}
+                            {money(totClaimed)}
                           </td>
                           <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">
                             {cDate ? new Date(cDate).toLocaleDateString() : 'N/A'}
@@ -865,113 +1074,179 @@ export const FinanceVerificationPage: React.FC = () => {
         </div>
       )}
 
-      {/* FINANCE VERIFICATION & PARTIAL APPROVAL MODAL */}
+      {/* FINANCE VERIFICATION & LINE-ITEM ADJUSTMENT MODAL */}
       {selectedClaim && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
             <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/60">
               <div>
-                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <FileCheck2 className="w-5 h-5 text-blue-600" />
                   Finance Line-Item Verification: {selectedClaim.title}
                 </h2>
                 <p className="text-xs text-slate-500 font-mono">{selectedClaim.claimNumber}</p>
               </div>
-              <button onClick={() => setSelectedClaim(null)} className="text-slate-400 hover:text-white p-1">
+              <button onClick={() => setSelectedClaim(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1">
                 ✕
               </button>
             </div>
 
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto text-xs">
-              {/* Employee Summary */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl flex items-center justify-between">
+              {/* Employee & Bank Details Card */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-700/60 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <span className="text-slate-400 block text-[11px]">Employee</span>
                   <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    {selectedClaim.firstName} {selectedClaim.lastName} ({selectedClaim.employeeCode})
+                    {selectedClaim.firstName} {selectedClaim.lastName}
                   </span>
-                  <span className="text-slate-500 block">{selectedClaim.departmentName}</span>
+                  <span className="text-slate-500 block text-[11px]">{selectedClaim.employeeCode} • {selectedClaim.departmentName}</span>
                 </div>
+
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Disbursal Bank Info</span>
+                  {selectedClaim.bankName || selectedClaim.accountNumber ? (
+                    <div className="text-slate-800 dark:text-slate-200 text-xs">
+                      <div className="font-bold">{selectedClaim.bankName || 'Bank Listed'}</div>
+                      <div className="font-mono text-[11px] text-slate-500">
+                        A/C: {selectedClaim.accountNumber || 'N/A'} • IFSC: {selectedClaim.ifscCode || 'N/A'}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 italic">No bank details stored (will disburse via default method)</span>
+                  )}
+                </div>
+
                 <div className="text-right">
                   <span className="text-slate-400 block text-[11px]">Total Claimed</span>
                   <span className="text-lg font-bold text-slate-900 dark:text-white">
-                    ₹{Number(selectedClaim.totalClaimedAmount).toLocaleString('en-IN')}
+                    {money(selectedClaim.totalClaimedAmount)}
                   </span>
+                  <span className="text-[11px] text-slate-500 block">Method: {selectedClaim.paymentMethod || 'Bank Transfer'}</span>
                 </div>
               </div>
 
               {/* Line Items Adjustment Table */}
               <div>
-                <h4 className="font-bold text-slate-900 dark:text-white mb-2">Itemized Partial Approval & GST Checks</h4>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-bold text-slate-900 dark:text-white">Line Items Verification & Partial Deductions</h4>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-slate-500">Claimed: <strong>{money(totalCalculatedClaimed)}</strong></span>
+                    <span className="text-emerald-600 font-bold">Approved: {money(totalCalculatedApproved)}</span>
+                    {totalCalculatedRejected > 0 && (
+                      <span className="text-rose-600 font-bold">Deduction: -{money(totalCalculatedRejected)}</span>
+                    )}
+                  </div>
+                </div>
+
                 <div className="space-y-3">
-                  {selectedClaim.items?.map((it, idx) => {
-                    const adj = itemAdjustments[idx] || { approvedAmount: it.claimedAmount, adjustmentReason: '' };
-                    const rejectedAmt = Math.max(0, it.claimedAmount - adj.approvedAmount);
+                  {selectedClaim.items && selectedClaim.items.length > 0 ? (
+                    selectedClaim.items.map((it, idx) => {
+                      const adj = itemAdjustments[idx] || { approvedAmount: it.claimedAmount, adjustmentReason: '' };
+                      const itemClaimed = Number(it.claimedAmount || 0);
+                      const rejectedAmt = Math.max(0, itemClaimed - adj.approvedAmount);
 
-                    return (
-                      <div
-                        key={idx}
-                        className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 bg-slate-50/50 dark:bg-slate-800/30"
-                      >
-                        <div className="flex items-center justify-between font-semibold">
-                          <span>{it.categoryName || 'Item'} — {it.description || 'No description'}</span>
-                          <span className="font-bold text-slate-700 dark:text-slate-300">
-                            Claimed: ₹{Number(it.claimedAmount).toLocaleString('en-IN')}
-                          </span>
+                      return (
+                        <div
+                          key={idx}
+                          className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 bg-slate-50/50 dark:bg-slate-800/30"
+                        >
+                          <div className="flex items-center justify-between font-semibold">
+                            <span className="text-slate-900 dark:text-white">
+                              {it.categoryName || 'Item'} — {it.description || 'No description'}
+                            </span>
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              Claimed: {money(itemClaimed)}
+                            </span>
+                          </div>
+
+                          {it.merchantName && (
+                            <div className="text-[11px] text-slate-500">Merchant / Vendor: <strong>{it.merchantName}</strong></div>
+                          )}
+
+                          {it.receiptUrl && (
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setReceiptPreviewUrl(it.receiptUrl || null)}
+                                className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline font-medium text-xs"
+                              >
+                                <Paperclip className="w-3.5 h-3.5" /> View Attached Receipt
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                Approved Amount (₹)
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={itemClaimed}
+                                value={adj.approvedAmount}
+                                onChange={(e) => handleApprovedAmountChange(idx, Number(e.target.value))}
+                                className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-emerald-600 dark:text-emerald-400"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                Deducted / Rejected Amount (₹)
+                              </label>
+                              <input
+                                type="number"
+                                disabled
+                                value={rejectedAmt}
+                                className="w-full px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                Adjustment Reason {rejectedAmt > 0 ? '*' : '(Optional)'}
+                              </label>
+                              <input
+                                type="text"
+                                placeholder={rejectedAmt > 0 ? 'Mandatory reason for deduction...' : 'Optional comment...'}
+                                value={adj.adjustmentReason}
+                                onChange={(e) => handleAdjustmentReasonChange(idx, e.target.value)}
+                                className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                              />
+                            </div>
+                          </div>
                         </div>
-
-                        {it.receiptUrl && (
-                          <a
-                            href={it.receiptUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
-                          >
-                            <Paperclip className="w-3.5 h-3.5" /> View Receipt Document
-                          </a>
-                        )}
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                              Approved Amount (₹)
-                            </label>
-                            <input
-                              type="number"
-                              max={it.claimedAmount}
-                              value={adj.approvedAmount}
-                              onChange={(e) => handleApprovedAmountChange(idx, Number(e.target.value))}
-                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-emerald-600"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                              Rejected Amount (₹)
-                            </label>
-                            <input
-                              type="number"
-                              disabled
-                              value={rejectedAmt}
-                              className="w-full px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-rose-600"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                              Adjustment Reason (If Partial/Rejected)
-                            </label>
-                            <input
-                              type="text"
-                              placeholder="Reason for adjustment..."
-                              value={adj.adjustmentReason}
-                              onChange={(e) => handleAdjustmentReasonChange(idx, e.target.value)}
-                              className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                            />
-                          </div>
+                      );
+                    })
+                  ) : (
+                    <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl space-y-3 bg-slate-50/50 dark:bg-slate-800/30">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-900 dark:text-white">Entire Claim</span>
+                        <span className="font-bold">{money(selectedClaim.totalClaimedAmount)}</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Approved Amount (₹)</label>
+                          <input
+                            type="number"
+                            value={itemAdjustments[0]?.approvedAmount ?? selectedClaim.totalClaimedAmount}
+                            onChange={(e) => handleApprovedAmountChange(0, Number(e.target.value))}
+                            className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-emerald-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">Adjustment Reason (if modified)</label>
+                          <input
+                            type="text"
+                            placeholder="Reason for adjustment..."
+                            value={itemAdjustments[0]?.adjustmentReason || ''}
+                            onChange={(e) => handleAdjustmentReasonChange(0, e.target.value)}
+                            className="w-full px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                          />
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -997,19 +1272,113 @@ export const FinanceVerificationPage: React.FC = () => {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex items-center justify-end gap-3">
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setReturnModalClaim(selectedClaim); setReturnComments(''); }}
+                  className="px-3 py-2 text-xs font-semibold text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/50 hover:bg-orange-100 dark:hover:bg-orange-900/50 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Return for Correction
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setRejectModalClaim(selectedClaim); setRejectReason(''); }}
+                  className="px-3 py-2 text-xs font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800 rounded-lg flex items-center gap-1.5"
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Reject Claim
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSelectedClaim(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={submitting}
+                  onClick={handleVerifySubmit}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {submitting ? 'Verifying...' : `Verify & Send to Payout (${money(totalCalculatedApproved)})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RETURN CLAIM MODAL ── */}
+      {returnModalClaim && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-orange-500" /> Return Claim for Correction
+            </h2>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs space-y-1">
+              <div className="font-semibold text-slate-900 dark:text-white">{returnModalClaim.title}</div>
+              <div className="text-slate-500 font-mono text-[11px]">{returnModalClaim.claimNumber} • {money(returnModalClaim.totalClaimedAmount)}</div>
+            </div>
+            <div className="space-y-1 text-xs">
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Correction Instructions for Employee *
+              </label>
+              <textarea
+                rows={3}
+                value={returnComments}
+                onChange={(e) => setReturnComments(e.target.value)}
+                placeholder="Explain what the employee needs to fix (e.g., upload valid tax invoice, correct item amount)..."
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button onClick={() => setReturnModalClaim(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
               <button
-                onClick={() => setSelectedClaim(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 rounded-lg"
+                disabled={actionProcessing}
+                onClick={handleReturnClaim}
+                className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm"
               >
-                Cancel
+                {actionProcessing ? 'Returning...' : 'Send Back to Employee'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── REJECT CLAIM MODAL ── */}
+      {rejectModalClaim && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-rose-500" /> Reject Expense Claim
+            </h2>
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg text-xs space-y-1">
+              <div className="font-semibold text-slate-900 dark:text-white">{rejectModalClaim.title}</div>
+              <div className="text-slate-500 font-mono text-[11px]">{rejectModalClaim.claimNumber} • {money(rejectModalClaim.totalClaimedAmount)}</div>
+            </div>
+            <div className="space-y-1 text-xs">
+              <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Reason for Rejection *
+              </label>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="State the official reason for rejecting this claim..."
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button onClick={() => setRejectModalClaim(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
               <button
-                disabled={submitting}
-                onClick={handleVerifySubmit}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm"
+                disabled={actionProcessing}
+                onClick={handleRejectClaim}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm"
               >
-                {submitting ? 'Verifying...' : 'Verify & Send to Payment Pending'}
+                {actionProcessing ? 'Rejecting...' : 'Confirm Rejection'}
               </button>
             </div>
           </div>
@@ -1033,31 +1402,40 @@ export const FinanceVerificationPage: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-slate-500">Requested Amount</span>
                 <span className="font-bold text-slate-900 dark:text-white">
-                  ₹{Number((advanceApproveModal as any).advanceAmount ?? (advanceApproveModal as any).advance_amount ?? 0).toLocaleString('en-IN')}
+                  {money(Number((advanceApproveModal as any).advanceAmount ?? (advanceApproveModal as any).advance_amount ?? 0))}
                 </span>
               </div>
             </div>
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Approved Amount (₹) *</label>
-                <input type="number" min={0}
+                <input
+                  type="number"
+                  min={0}
                   max={Number((advanceApproveModal as any).advanceAmount ?? (advanceApproveModal as any).advance_amount ?? 0)}
-                  value={advApproveAmt}
+                  value={advApproveAmt || ''}
                   onChange={e => setAdvApproveAmt(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Finance Notes (Optional)</label>
-                <textarea rows={2} value={advApproveNotes} onChange={e => setAdvApproveNotes(e.target.value)}
+                <textarea
+                  rows={2}
+                  value={advApproveNotes}
+                  onChange={e => setAdvApproveNotes(e.target.value)}
                   placeholder="Add disbursement notes..."
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button onClick={() => setAdvanceApproveModal(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
-              <button onClick={handleApproveAdvance} disabled={advActionLoading !== null}
-                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm">
+              <button
+                onClick={handleApproveAdvance}
+                disabled={advActionLoading !== null}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm"
+              >
                 {advActionLoading !== null ? 'Approving...' : 'Approve & Disburse'}
               </button>
             </div>
@@ -1074,15 +1452,65 @@ export const FinanceVerificationPage: React.FC = () => {
             </h2>
             <div className="text-xs">
               <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason for Rejection *</label>
-              <textarea rows={3} value={advRejectReason} onChange={e => setAdvRejectReason(e.target.value)}
+              <textarea
+                rows={3}
+                value={advRejectReason}
+                onChange={e => setAdvRejectReason(e.target.value)}
                 placeholder="State the reason for rejecting this advance request..."
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500" />
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
             </div>
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button onClick={() => setAdvanceRejectModal(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">Cancel</button>
-              <button onClick={handleRejectAdvance} disabled={advActionLoading !== null}
-                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm">
+              <button
+                onClick={handleRejectAdvance}
+                disabled={advActionLoading !== null}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm"
+              >
                 {advActionLoading !== null ? 'Rejecting...' : 'Confirm Reject'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── RECEIPT PREVIEW MODAL ── */}
+      {receiptPreviewUrl && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Paperclip className="w-4 h-4 text-blue-600" /> Attached Receipt Document
+              </h3>
+              <div className="flex items-center gap-2">
+                <a
+                  href={receiptPreviewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open in New Tab
+                </a>
+                <button onClick={() => setReceiptPreviewUrl(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1">
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[60vh] overflow-auto flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-4 rounded-xl">
+              {receiptPreviewUrl.startsWith('data:image/') || receiptPreviewUrl.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) ? (
+                <img src={receiptPreviewUrl} alt="Receipt Document" className="max-h-[50vh] object-contain rounded-lg shadow" />
+              ) : (
+                <iframe src={receiptPreviewUrl} title="Receipt PDF" className="w-full h-[50vh] rounded-lg border border-slate-200 dark:border-slate-800" />
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setReceiptPreviewUrl(null)}
+                className="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-xs font-semibold rounded-lg hover:bg-slate-300"
+              >
+                Close
               </button>
             </div>
           </div>
@@ -1091,4 +1519,3 @@ export const FinanceVerificationPage: React.FC = () => {
     </div>
   );
 };
-

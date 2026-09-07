@@ -49,6 +49,8 @@ const QUEUE_LABEL: Record<string, string> = {
   returned: 'Returned to Employee',
 };
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const ExpenseApprovalsPage: React.FC<Props> = ({
   defaultStatusFilter = 'pending_approvals',
   allowedStatuses,
@@ -64,6 +66,7 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
   const [locations, setLocations] = useState<FilterOption[]>([]);
 
   const [departmentId, setDepartmentId] = useState('');
+  const money = useExpenseMoney();
   const [designationId, setDesignationId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [employeeName, setEmployeeName] = useState('');
@@ -271,11 +274,10 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
       {/* In-page Toast Notification */}
       {toast && (
         <div
-          className={`fixed top-5 right-5 z-[9999] max-w-sm w-full rounded-2xl shadow-2xl border px-5 py-4 flex items-start gap-3 transition-all duration-300 animate-in slide-in-from-right ${
-            toast.type === 'success'
+          className={`fixed top-5 right-5 z-[9999] max-w-sm w-full rounded-2xl shadow-2xl border px-5 py-4 flex items-start gap-3 transition-all duration-300 animate-in slide-in-from-right ${toast.type === 'success'
               ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-700'
               : 'bg-rose-50 dark:bg-rose-950/90 border-rose-300 dark:border-rose-700'
-          }`}
+            }`}
         >
           <div className={`mt-0.5 shrink-0 rounded-full p-1 ${toast.type === 'success' ? 'bg-emerald-200 dark:bg-emerald-800' : 'bg-rose-200 dark:bg-rose-800'}`}>
             {toast.type === 'success'
@@ -454,42 +456,42 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                     if (st === 'pending_level_1') {
                       return (
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/50 whitespace-nowrap">
-                          Team Lead Queue
+                          {role || 'Team Lead Queue'}
                         </span>
                       );
                     }
-                    if (st === 'pending_level_2' || st === 'pending_manager' || st === 'submitted' || st === 'pending') {
+                    if (st === 'pending_level_2' || st === 'pending_manager') {
                       return (
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300/50 whitespace-nowrap">
-                          Manager Queue
+                          {role || 'Manager Queue'}
                         </span>
                       );
                     }
                     if (st === 'pending_level_3') {
                       return (
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300/50 whitespace-nowrap">
-                          HR Queue
+                          {role || 'HR Queue'}
                         </span>
                       );
                     }
                     if (st.startsWith('pending_level_')) {
                       return (
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300/50 whitespace-nowrap">
-                          {role || QUEUE_LABEL[st] || st} Queue
+                          {role || QUEUE_LABEL[st] || st}
                         </span>
                       );
                     }
                     if (st === 'pending_finance') {
                       return (
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-300/50 whitespace-nowrap">
-                          Finance Queue
+                          Finance Verification
                         </span>
                       );
                     }
                     if (st === 'payment_pending') {
                       return (
                         <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/50 whitespace-nowrap">
-                          Payout Queue
+                          Payout Processing
                         </span>
                       );
                     }
@@ -549,7 +551,7 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 dark:text-slate-400">{formattedDate}</td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{totClaimed.toLocaleString('en-IN')}
+                        {money(totClaimed)}
                       </td>
                       <td className="py-3.5 px-4">
                         {getWorkflowQueueBadge()}
@@ -651,7 +653,7 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-semibold">Total Amount</span>
-                  <span className="font-bold text-emerald-600 text-sm">₹{Number(selectedClaim.totalClaimedAmount).toLocaleString('en-IN')}</span>
+                  <span className="font-bold text-emerald-600 text-sm">{money(selectedClaim.totalClaimedAmount)}</span>
                 </div>
               </div>
 
@@ -679,7 +681,7 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                         {item.merchantName && <p className="text-slate-400 text-[10px] mt-0.5 font-medium">Merchant: {item.merchantName}</p>}
                       </div>
                       <div className="flex items-center gap-3 self-end sm:self-center">
-                        <span className="font-bold text-slate-900 dark:text-white text-sm">₹{Number(item.claimedAmount).toLocaleString('en-IN')}</span>
+                        <span className="font-bold text-slate-900 dark:text-white text-sm">{money(item.claimedAmount)}</span>
                         {item.receiptUrl && (
                           <a href={item.receiptUrl} target="_blank" rel="noreferrer" className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-lg font-medium text-[11px] flex items-center gap-1 border border-blue-200 dark:border-blue-800">
                             <Paperclip className="w-3 h-3" /> View Receipt
@@ -760,9 +762,8 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
               <button
                 disabled={Boolean(processingId)}
                 onClick={handleActionSubmit}
-                className={`px-4 py-2 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm ${
-                  actionType === 'reject' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-purple-600 hover:bg-purple-700'
-                }`}
+                className={`px-4 py-2 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm ${actionType === 'reject' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
               >
                 {processingId ? 'Processing...' : actionType === 'reject' ? 'Confirm Rejection' : 'Return Claim'}
               </button>

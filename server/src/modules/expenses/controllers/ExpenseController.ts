@@ -60,6 +60,7 @@ export class ExpenseController {
   // --- CLAIMS ---
   async getClaims(req: Request, res: Response) {
     const { employeeId, status, departmentId, designationId, locationId, categoryId, search, mode } = req.query;
+    console.log('[DEBUG getClaims] req.query:', req.query, 'ctx:', { userId: req.ctx?.userId, orgId: req.ctx?.organizationId, role: req.ctx?.role, roles: req.ctx?.roles });
     const claims = await this.expenseService.getClaims(req.ctx!, {
       employeeId: employeeId ? Number(employeeId) : undefined,
       status: status as string,
@@ -70,6 +71,7 @@ export class ExpenseController {
       search: search as string,
       mode: mode as string
     });
+    console.log('[DEBUG getClaims] claims returned count:', claims?.length, 'items:', claims);
     res.json({ success: true, data: claims });
   }
 
@@ -257,6 +259,26 @@ export class ExpenseController {
       res.status(201).json({ success: true, data: claim });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message || 'Failed to create mileage claim' });
+    }
+  }
+
+  async approveMileageClaim(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const result = await this.expenseService.approveMileageClaim(req.ctx!, id, req.body?.comments || req.body?.notes);
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Failed to approve mileage claim' });
+    }
+  }
+
+  async rejectMileageClaim(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const result = await this.expenseService.rejectMileageClaim(req.ctx!, id, req.body?.reason || req.body?.remarks || 'Rejected');
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Failed to reject mileage claim' });
     }
   }
 

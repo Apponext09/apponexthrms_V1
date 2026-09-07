@@ -252,7 +252,7 @@ function RootRedirect() {
     accessRole === 'finance' ||
     accessRole === 'finance_manager'
   ) {
-    return <Navigate to="/finance/reports" replace />;
+    return <Navigate to="/finance/dashboard" replace />;
   }
   // CEO and HR (organization_admin, ceo, hr_manager, hr_admin, hr) — all go to Admin portal
   if (
@@ -1117,19 +1117,20 @@ export function AppRoutes() {
 
         {/* ─────────────────────────────────────────────────
           FINANCE PORTAL  (/finance/*)
+        {/* ─────────────────────────────────────────────────
+          FINANCE PORTAL  (/finance/*)
           Emerald-accented sidebar — Finance-only portal.
           STRICT ISOLATION: Only finance / finance_manager roles
-          may access these routes. No other role can enter here,
-          and Finance users cannot navigate to any other portal.
+          (or organization admin / super admin) may access these routes.
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['finance']}>
+            <ProtectedRoute allowedRoles={['finance', 'finance_manager', 'organization_admin', 'super_admin']}>
               <FinanceLayout />
             </ProtectedRoute>
           }
         >
-          <Route path="/finance" element={<Navigate to="/finance/reports" replace />} />
+          <Route path="/finance" element={<Navigate to="/finance/dashboard" replace />} />
           <Route path="/finance/dashboard"       element={<FinanceDashboardPage />} />
           <Route path="/finance/reports"         element={<FinanceReportsPage />} />
           <Route path="/finance/approvals"       element={<FinanceApprovalsPage />} />
@@ -1141,6 +1142,22 @@ export function AppRoutes() {
           <Route path="/finance/holiday-calendar" element={<HolidayCalendarPage />} />
           <Route path="/finance/announcements"   element={<AnnouncementsPage />} />
           <Route path="/finance/org-chart"       element={<OrgChartPage />} />
+
+          {/* ── Finance Expense Management Suite ── */}
+          <Route path="/finance/expenses" element={<Navigate to="/finance/expenses/verification" replace />} />
+          <Route path="/finance/expenses/dashboard" element={<ExpenseDashboardPage />} />
+          <Route path="/finance/expenses/verification" element={<FinanceVerificationPage />} />
+          <Route path="/finance/expenses/finance-verification" element={<FinanceVerificationPage />} />
+          <Route path="/finance/expenses/reimbursements" element={<ReimbursementsPage />} />
+          <Route path="/finance/expenses/approvals" element={<ExpenseApprovalsPage />} />
+          <Route path="/finance/expenses/my-expenses" element={<MyExpensesPage />} />
+          <Route path="/finance/expenses/travel-requests" element={<TravelRequestsPage />} />
+          <Route path="/finance/expenses/travel-advances" element={<TravelAdvancesPage />} />
+          <Route path="/finance/expenses/mileage-claims" element={<MileageClaimsPage />} />
+          <Route path="/finance/expenses/categories" element={<ExpenseCategoriesPage />} />
+          <Route path="/finance/expenses/policies" element={<ExpensePoliciesPage />} />
+          <Route path="/finance/expenses/reports" element={<ExpenseReportsPage />} />
+          <Route path="/finance/expenses/settings" element={<ExpenseSettingsPage />} />
         </Route>
 
         {/* 404 */}

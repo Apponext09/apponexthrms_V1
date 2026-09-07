@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const MyExpensesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuthStore();
@@ -38,6 +40,7 @@ export const MyExpensesPage: React.FC = () => {
   const [selectedDepartment, setSelectedDepartment] = useState<string>('');
   const [departments, setDepartments] = useState<Array<{ id: string | number; name: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const money = useExpenseMoney();
   const [processingId, setProcessingId] = useState<number | string | null>(null);
 
   // Modal / Drawer state
@@ -379,7 +382,12 @@ export const MyExpensesPage: React.FC = () => {
 
   const filteredClaims = claims.filter((claim: any) => {
     if (selectedStatus === 'drafts' && claim.status !== 'draft') return false;
-    if (selectedStatus === 'pending' && !['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status)) return false;
+    if (selectedStatus === 'pending') {
+      const isPendingWorkflow =
+        ['submitted', 'pending_manager', 'pending_finance', 'pending'].includes(claim.status) ||
+        /^pending_level_\d+$/.test(String(claim.status || ''));
+      if (!isPendingWorkflow) return false;
+    }
     if (selectedStatus === 'approved' && !['approved', 'payment_pending'].includes(claim.status)) return false;
     if (selectedStatus === 'returned' && claim.status !== 'returned') return false;
     if (selectedStatus === 'paid' && claim.status !== 'paid') return false;
@@ -415,27 +423,61 @@ export const MyExpensesPage: React.FC = () => {
     return true;
   });
 
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'draft': return 'Draft';
+      case 'submitted':
+      case 'pending': return 'Submitted – Pending Approval';
+      case 'pending_manager': return 'Pending Manager Approval';
+      case 'pending_level_1': return 'Pending Team Lead Approval';
+      case 'pending_level_2': return 'Pending Manager Approval';
+      case 'pending_level_3': return 'Pending HR / Admin Approval';
+      case 'pending_finance': return 'Pending Finance Verification';
+      case 'payment_pending': return 'Finance Approved – Payment Pending';
+      case 'approved': return 'Approved';
+      case 'returned': return 'Returned for Correction';
+      case 'rejected': return 'Rejected';
+      case 'paid': return 'Reimbursed / Paid';
+      default: {
+        // Handle dynamic pending_level_N (e.g. pending_level_4, pending_level_5)
+        const lvlMatch = /^pending_level_(\d+)$/.exec(status);
+        if (lvlMatch) return `Pending Level ${lvlMatch[1]} Approval`;
+        return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      }
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const base = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap';
+    const label = getStatusLabel(status);
     switch (status) {
       case 'draft':
-        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>Draft</span>;
+        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>{label}</span>;
       case 'submitted':
+      case 'pending':
       case 'pending_manager':
-        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>Pending manager</span>;
+      case 'pending_level_1':
+        return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>{label}</span>;
+      case 'pending_level_2':
+      case 'pending_level_3':
+        return <span className={`${base} bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300`}>{label}</span>;
       case 'pending_finance':
-        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>Pending finance</span>;
+        return <span className={`${base} bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300`}>{label}</span>;
       case 'approved':
+        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>{label}</span>;
       case 'payment_pending':
-        return <span className={`${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300`}>Payment pending</span>;
+        return <span className={`${base} bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300`}>{label}</span>;
       case 'returned':
-        return <span className={`${base} bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300`}>Returned</span>;
+        return <span className={`${base} bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300`}>{label}</span>;
       case 'rejected':
-        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>Rejected</span>;
+        return <span className={`${base} bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300`}>{label}</span>;
       case 'paid':
-        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>Paid</span>;
-      default:
-        return <span className={`${base} bg-slate-100 text-slate-700`}>{status}</span>;
+        return <span className={`${base} bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300`}>{label}</span>;
+      default: {
+        const lvlMatch = /^pending_level_(\d+)$/.exec(status);
+        if (lvlMatch) return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300`}>{label}</span>;
+        return <span className={`${base} bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300`}>{label}</span>;
+      }
     }
   };
 
@@ -583,10 +625,10 @@ export const MyExpensesPage: React.FC = () => {
                         {formattedDate}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        ₹{totClaimed.toLocaleString('en-IN')}
+                        {money(totClaimed)}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-emerald-600 dark:text-emerald-400">
-                        ₹{totApproved.toLocaleString('en-IN')}
+                        {money(totApproved)}
                       </td>
                       <td className="py-3.5 px-4">{getStatusBadge(claim.status)}</td>
                       <td className="py-3.5 px-4 text-right">
@@ -927,7 +969,7 @@ export const MyExpensesPage: React.FC = () => {
               <div className="p-3 bg-slate-900 text-white rounded-xl flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="text-[11px] text-slate-400">Total Claimed Amount</span>
-                  <div className="text-base sm:text-lg font-bold">₹{calculateTotal().toLocaleString('en-IN')}</div>
+                  <div className="text-base sm:text-lg font-bold">{money(calculateTotal())}</div>
                 </div>
                 <div className="text-[11px] text-slate-400 text-right">
                   <span>Items: {items.length}</span>
@@ -992,13 +1034,13 @@ export const MyExpensesPage: React.FC = () => {
                 <div>
                   <span className="text-slate-500 block">Claimed Amount</span>
                   <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                    ₹{Number(selectedClaimDetails.totalClaimedAmount).toLocaleString('en-IN')}
+                    {money(Number(selectedClaimDetails.totalClaimedAmount))}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-500 block">Approved Amount</span>
                   <span className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400">
-                    ₹{Number(selectedClaimDetails.totalApprovedAmount || 0).toLocaleString('en-IN')}
+                    {money(Number(selectedClaimDetails.totalApprovedAmount || 0))}
                   </span>
                 </div>
                 <div>
@@ -1015,7 +1057,7 @@ export const MyExpensesPage: React.FC = () => {
                     <div key={i} className="p-3 border border-slate-200 dark:border-slate-800 rounded-lg space-y-1">
                       <div className="flex justify-between font-semibold">
                         <span>{it.categoryName || 'Expense Item'}</span>
-                        <span className="font-bold">₹{Number(it.claimedAmount).toLocaleString('en-IN')}</span>
+                        <span className="font-bold">{money(it.claimedAmount)}</span>
                       </div>
                       <p className="text-slate-500">{it.description || 'No description provided'}</p>
                       {it.receiptUrl && (

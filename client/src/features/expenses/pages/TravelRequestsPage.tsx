@@ -20,22 +20,22 @@ import {
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const PORTAL_BADGE: Record<string, { label: string; cls: string }> = {
-  employee:  { label: 'Employee Portal',  cls: 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300' },
+  employee: { label: 'Employee Portal', cls: 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300' },
   team_lead: { label: 'Team Lead Portal', cls: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300' },
-  manager:   { label: 'Manager Portal',   cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' },
-  hr:        { label: 'HR Portal',        cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' },
-  admin:     { label: 'Admin Portal',     cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+  manager: { label: 'Manager Portal', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' },
+  hr: { label: 'HR Portal', cls: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' },
+  admin: { label: 'Admin Portal', cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
 };
 
 const STATUS_BADGE: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-  pending_level_1:  { label: 'Manager Approval',  cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',     icon: <Clock className="w-3 h-3" /> },
-  pending_level_2:  { label: 'HR / L2 Approval',  cls: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300', icon: <Clock className="w-3 h-3" /> },
-  pending_level_3:  { label: 'CEO / L3 Approval', cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300', icon: <Clock className="w-3 h-3" /> },
-  pending_finance:  { label: 'Finance Queue',      cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300',         icon: <ShieldCheck className="w-3 h-3" /> },
-  pending_manager:  { label: 'Manager Approval',   cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',     icon: <Clock className="w-3 h-3" /> },
-  pending:          { label: 'Pending Approval',   cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',     icon: <Clock className="w-3 h-3" /> },
-  approved:         { label: 'Approved',           cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300', icon: <CheckCircle className="w-3 h-3" /> },
-  rejected:         { label: 'Rejected',           cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300',         icon: <XCircle className="w-3 h-3" /> },
+  pending_level_1: { label: 'Team Lead Approval', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300', icon: <Clock className="w-3 h-3" /> },
+  pending_level_2: { label: 'Manager Approval', cls: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300', icon: <Clock className="w-3 h-3" /> },
+  pending_level_3: { label: 'HR / L3 Approval', cls: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300', icon: <Clock className="w-3 h-3" /> },
+  pending_finance: { label: 'Finance Queue', cls: 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300', icon: <ShieldCheck className="w-3 h-3" /> },
+  pending_manager: { label: 'Manager Approval', cls: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300', icon: <Clock className="w-3 h-3" /> },
+  pending: { label: 'Pending Approval', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300', icon: <Clock className="w-3 h-3" /> },
+  approved: { label: 'Approved', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300', icon: <CheckCircle className="w-3 h-3" /> },
+  rejected: { label: 'Rejected', cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300', icon: <XCircle className="w-3 h-3" /> },
 };
 
 function getStatusBadge(status: string, approverRole?: string) {
@@ -66,8 +66,11 @@ interface Toast { type: 'success' | 'error'; message: string }
 
 // ─── component ───────────────────────────────────────────────────────────────
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const TravelRequestsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [requests, setRequests] = useState<TravelRequest[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -341,14 +344,16 @@ export const TravelRequestsPage: React.FC = () => {
                         {' – '}
                         {eDate ? new Date(eDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">₹{budget.toLocaleString('en-IN')}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{money(budget)}</td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {getStatusBadge(status, approverRole)}
                         {status === 'rejected' && rejReason && (
                           <div className="text-[10px] text-rose-500 mt-1 max-w-[140px] line-clamp-1" title={rejReason}>↳ {rejReason}</div>
                         )}
                         {approverRole && !['approved', 'rejected'].includes(status) && (
-                          <div className="text-[10px] text-slate-400 mt-0.5">Next: {approverRole}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            Next: {status === 'pending_level_2' && approverRole === 'Team Lead' ? 'Reporting Manager' : (approverRole === 'Manager Approval' ? 'Reporting Manager' : approverRole)}
+                          </div>
                         )}
                       </td>
                       {isManagement && (
@@ -447,7 +452,7 @@ export const TravelRequestsPage: React.FC = () => {
               </div>
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Estimated Budget (₹)</label>
-                <input type="number" min={0} placeholder="e.g. 25000" value={estimatedBudget} onChange={e => setEstimatedBudget(Number(e.target.value))}
+                <input type="number" min={0} placeholder="e.g. 25000" value={estimatedBudget || ''} onChange={e => setEstimatedBudget(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="sm:col-span-2">
