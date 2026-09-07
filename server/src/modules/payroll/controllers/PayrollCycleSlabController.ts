@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
 
 /**
  * Dynamic actor resolution helper: pulls live user details from DB without hardcoded fallbacks
@@ -61,9 +62,7 @@ export class PayrollCycleSlabController {
   // ─── PAY CYCLES ────────────────────────────────────────────────────────────
   async listCycles(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const companyId = req.query.companyId || req.query.company_id || req.ctx?.companyId;
 
       let query = db('payroll_cycles as pc')
@@ -154,9 +153,7 @@ export class PayrollCycleSlabController {
 
   async createCycle(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const cycleName = (req.body.cycle_name || req.body.name || 'Monthly Pay Cycle').trim();
       const cycleCode = req.body.cycle_code || req.body.cycleCode || `CYC-${Date.now().toString().slice(-6)}`;
 
@@ -229,7 +226,8 @@ export class PayrollCycleSlabController {
       const validTypes = ['monthly', 'biweekly', 'weekly', 'fortnightly', 'semimonthly', 'bimonthly'];
       const cycleType = validTypes.includes(rawType) ? rawType : 'monthly';
 
-      const cutoffDay = Number(req.body.cutoffDay || req.body.cutoff_day || 25);
+      const rawCutoff = req.body.cutoffDay !== undefined ? req.body.cutoffDay : (req.body.cutoff_day !== undefined ? req.body.cutoff_day : 25);
+      const cutoffDay = Number(rawCutoff);
       const disbursementDay = Number(req.body.disbursementDate || req.body.disbursement_date || req.body.disbursement_date_str || req.body.payoutDay || 28);
       const startDate = Number(req.body.startDate || req.body.start_date || 1);
       const startDayName = req.body.startDay || req.body.start_day || 'Monday';
@@ -248,13 +246,13 @@ export class PayrollCycleSlabController {
         if (startDate <= 15) {
           cycleStartDate = formatLocalYMD(year, month, startDate);
           cycleEndDate = formatLocalYMD(year, month, 15);
-          cutoffDate = formatLocalYMD(year, month, Math.min(cutoffDay, 15));
+          cutoffDate = formatLocalYMD(year, month, Math.min(cutoffDay > 0 ? cutoffDay : 15, 15));
           creditDate = formatLocalYMD(year, month, Math.min(disbursementDay, 15));
         } else {
           const lastD = getLastDay(year, month);
           cycleStartDate = formatLocalYMD(year, month, 16);
           cycleEndDate = formatLocalYMD(year, month, lastD);
-          cutoffDate = formatLocalYMD(year, month, Math.min(Math.max(cutoffDay, 16), lastD));
+          cutoffDate = formatLocalYMD(year, month, cutoffDay > 0 ? Math.min(Math.max(cutoffDay, 16), lastD) : lastD);
           creditDate = formatLocalYMD(year, month, Math.min(Math.max(disbursementDay, 16), lastD));
         }
       } else if (rawType === 'weekly') {
@@ -292,13 +290,13 @@ export class PayrollCycleSlabController {
         const lastD2 = getLastDay(year, month + 1);
         cycleStartDate = formatLocalYMD(year, month, 1);
         cycleEndDate = formatLocalYMD(year, month + 1, lastD2);
-        cutoffDate = formatLocalYMD(year, month + 1, Math.min(cutoffDay, lastD2));
+        cutoffDate = formatLocalYMD(year, month + 1, cutoffDay > 0 ? Math.min(cutoffDay, lastD2) : lastD2);
         creditDate = formatLocalYMD(year, month + 1, Math.min(disbursementDay, lastD2));
       } else {
         const lastD = getLastDay(year, month);
         cycleStartDate = formatLocalYMD(year, month, Math.min(startDate, lastD));
         cycleEndDate = formatLocalYMD(year, month, lastD);
-        cutoffDate = formatLocalYMD(year, month, Math.min(cutoffDay, lastD));
+        cutoffDate = formatLocalYMD(year, month, cutoffDay > 0 ? Math.min(cutoffDay, lastD) : lastD);
         creditDate = formatLocalYMD(year, month, Math.min(disbursementDay, lastD));
       }
 
@@ -307,7 +305,10 @@ export class PayrollCycleSlabController {
         if (rawType === 'weekly') totalDaysCalc = '7';
         else if (rawType === 'biweekly' || rawType === 'fortnightly') totalDaysCalc = '14';
         else if (rawType === 'semimonthly') totalDaysCalc = '15';
-        else totalDaysCalc = String(getLastDay(year, month));
+        else {
+          const effCutoff = cutoffDay > 0 ? cutoffDay : getLastDay(year, month);
+          totalDaysCalc = String(Math.max(1, effCutoff - startDate + 1));
+        }
       }
 
       const cycleData = {
@@ -327,20 +328,8 @@ export class PayrollCycleSlabController {
         cutoff_day: cutoffDay,
         disbursement_date_str: String(disbursementDay),
         is_daily_wages: Boolean(req.body.isDailyWages || req.body.is_daily_wages),
-        daily_wages_include_paid_holidays: Boolean(
-          req.body.dailyWagesIncludePaidHolidays || req.body.daily_wages_include_paid_holidays
-        ),
-        daily_wages_include_week_off: Boolean(
-          req.body.dailyWagesIncludeWeekOff || req.body.daily_wages_include_week_off
-        ),
-        month_offset: req.body.monthOffset || req.body.month_offset || 'Current',
-        total_days_calc: totalDaysCalc,
-        cap_amount: Number(req.body.capAmount || req.body.cap_amount || 1000000),
-        tolerance_enabled: Boolean(req.body.toleranceEnabled || req.body.tolerance_enabled),
-        tolerance_minutes: Number(req.body.toleranceMinutes || req.body.tolerance_minutes || 15),
+        total_days_calc: String(totalDaysCalc),
         is_active: (req.body.isActive ?? req.body.is_active ?? true) ? 1 : 0,
-        is_current_cycle: req.body.is_current_cycle ?? true,
-        status: (req.body.isActive ?? req.body.is_active ?? true) ? 'open' : 'closed',
         created_by: req.ctx?.userId || 10,
         updated_by: req.ctx?.userId || 10
       };
@@ -383,9 +372,11 @@ export class PayrollCycleSlabController {
 
       if (b.cycle_name || b.name) payload.cycle_name = (b.cycle_name || b.name).trim();
       if (b.frequency) payload.frequency = b.frequency;
-      if (b.startDate || b.start_date) payload.start_date = Number(b.startDate || b.start_date);
+      if (b.startDate !== undefined || b.start_date !== undefined) payload.start_date = Number(b.startDate ?? b.start_date);
       if (b.startDay || b.start_day) payload.start_day = b.startDay || b.start_day;
-      if (b.cutoffDay || b.cutoff_day) payload.cutoff_day = Number(b.cutoffDay || b.cutoff_day);
+      if (b.cutoffDay !== undefined || b.cutoff_day !== undefined) {
+        payload.cutoff_day = Number(b.cutoffDay !== undefined ? b.cutoffDay : b.cutoff_day);
+      }
       if (b.disbursementDate || b.disbursement_date || b.disbursement_date_str || b.disbursementDateStr) {
         payload.disbursement_date_str = String(b.disbursementDate || b.disbursement_date || b.disbursement_date_str || b.disbursementDateStr);
       }
@@ -397,17 +388,10 @@ export class PayrollCycleSlabController {
         payload.company_id = req.ctx.companyId;
       }
       if (b.isDailyWages !== undefined || b.is_daily_wages !== undefined) payload.is_daily_wages = Boolean(b.isDailyWages ?? b.is_daily_wages);
-      if (b.dailyWagesIncludePaidHolidays !== undefined || b.daily_wages_include_paid_holidays !== undefined) payload.daily_wages_include_paid_holidays = Boolean(b.dailyWagesIncludePaidHolidays ?? b.daily_wages_include_paid_holidays);
-      if (b.dailyWagesIncludeWeekOff !== undefined || b.daily_wages_include_week_off !== undefined) payload.daily_wages_include_week_off = Boolean(b.dailyWagesIncludeWeekOff ?? b.daily_wages_include_week_off);
-      if (b.monthOffset || b.month_offset) payload.month_offset = b.monthOffset || b.month_offset;
-      if (b.totalDaysCalc || b.total_days_calc) payload.total_days_calc = b.totalDaysCalc || b.total_days_calc;
-      if (b.capAmount !== undefined || b.cap_amount !== undefined) payload.cap_amount = Number(b.capAmount ?? b.cap_amount);
-      if (b.toleranceEnabled !== undefined || b.tolerance_enabled !== undefined) payload.tolerance_enabled = Boolean(b.toleranceEnabled ?? b.tolerance_enabled);
-      if (b.toleranceMinutes !== undefined || b.tolerance_minutes !== undefined) payload.tolerance_minutes = Number(b.toleranceMinutes ?? b.tolerance_minutes);
+      if (b.totalDaysCalc || b.total_days_calc) payload.total_days_calc = String(b.totalDaysCalc || b.total_days_calc);
       if (b.isActive !== undefined || b.is_active !== undefined) {
         const active = (b.isActive ?? b.is_active) ? 1 : 0;
         payload.is_active = active;
-        payload.status = active ? 'open' : 'closed';
       }
 
       // Preserve cycle's month or use provided month parameter rather than overriding with current month
@@ -436,14 +420,14 @@ export class PayrollCycleSlabController {
       const formatLocalYMD = (y: number, mIndex: number, d: number) => `${y}-${pad2(mIndex + 1)}-${pad2(d)}`;
       const getLastDay = (y: number, mIndex: number) => new Date(y, mIndex + 1, 0).getDate();
 
-      const effStartDate = Number(b.startDate || b.start_date || existingCycle.start_date || 1);
-      const effCutoffDay = Number(b.cutoffDay || b.cutoff_day || existingCycle.cutoff_day || 25);
+      const effStartDate = Number(b.startDate !== undefined ? b.startDate : (b.start_date !== undefined ? b.start_date : (existingCycle.start_date ?? 1)));
+      const effCutoffDay = Number(b.cutoffDay !== undefined ? b.cutoffDay : (b.cutoff_day !== undefined ? b.cutoff_day : (existingCycle.cutoff_day ?? 25)));
       const effDisbursement = Number(b.disbursementDate || b.disbursement_date || b.disbursement_date_str || b.disbursementDateStr || existingCycle.disbursement_date_str || 28);
       const lastD = getLastDay(year, month);
 
       payload.cycle_start_date = formatLocalYMD(year, month, Math.min(effStartDate, lastD));
       payload.cycle_end_date = formatLocalYMD(year, month, lastD);
-      payload.payroll_run_date = formatLocalYMD(year, month, Math.min(effCutoffDay, lastD));
+      payload.payroll_run_date = formatLocalYMD(year, month, effCutoffDay > 0 ? Math.min(effCutoffDay, lastD) : lastD);
       payload.salary_credit_date = formatLocalYMD(year, month, Math.min(effDisbursement, lastD));
 
       await db('payroll_cycles').where('id', id).update(payload);
@@ -504,11 +488,29 @@ export class PayrollCycleSlabController {
       const db = getKnex();
       const orgId = req.ctx?.organizationId;
       if (!orgId) return res.status(400).json({ success: false, message: 'Organization context is required.' });
+
+      // Prevent duplicate group name within same org + category
+      const incomingName = (req.body.name || 'New Component Group').trim();
+      const incomingCategory = req.body.category || 'Earning';
+      const existingGroup = await db('payroll_component_groups')
+        .where('organization_id', orgId)
+        .whereRaw('LOWER(TRIM(name)) = ?', [incomingName.toLowerCase()])
+        .where('category', incomingCategory)
+        .whereNull('deleted_at')
+        .first()
+        .catch(() => null);
+      if (existingGroup) {
+        return res.status(400).json({
+          success: false,
+          message: `A ${incomingCategory} group named "${existingGroup.name}" already exists. Please choose a different name.`
+        });
+      }
+
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
-        name: req.body.name || 'New Component Group',
-        category: req.body.category || 'Earning',
+        name: incomingName,
+        category: incomingCategory,
         round_format: req.body.roundFormat || req.body.round_format || 'Round',
         group_function: req.body.groupFunction || req.body.group_function || 'Sum',
         configure_on_profile: req.body.configureOnProfile ?? req.body.configure_on_profile ?? false,
@@ -1073,9 +1075,7 @@ export class PayrollCycleSlabController {
   // ─── PAYROLL SLABS ─────────────────────────────────────────────────────────
   async listSlabs(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const companyId = req.query.companyId || req.query.company_id || req.ctx?.companyId;
 
       let query = db('payroll_slabs')
@@ -1146,9 +1146,7 @@ export class PayrollCycleSlabController {
 
   async getSlab(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const { id } = req.params;
       const r = await db('payroll_slabs')
         .where('id', id)
@@ -1211,9 +1209,7 @@ export class PayrollCycleSlabController {
 
   async createSlab(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const body = req.body || {};
       const slabName = (body.name || body.slab_name || body.slabName || 'New Pay Slab').trim();
 
@@ -1272,9 +1268,7 @@ export class PayrollCycleSlabController {
 
   async updateSlab(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 1);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const { id } = req.params;
       const body = req.body || {};
       const slabName = body.name || body.slab_name || body.slabName;

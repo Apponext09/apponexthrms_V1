@@ -7,6 +7,7 @@
  */
 
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
 import { withSnakeAliases, positiveNum } from '../utils/payroll.utils';
 import { PayrollFormulaEvaluator, FormulaContext } from '../utils/PayrollFormulaEvaluator';
 
@@ -92,8 +93,8 @@ export class SalaryCalculationService {
       }
     }
 
-    // 3. Attendance LOP Factor for attendance-linked value components
-    if (basedOnAttendance && type === 'Value' && lopFactor < 1) {
+    // 3. Attendance LOP Factor for attendance-linked components
+    if (basedOnAttendance && lopFactor < 1) {
       computedValue = Math.round(computedValue * lopFactor);
     }
 
@@ -123,8 +124,7 @@ export class SalaryCalculationService {
     }
   ) {
     const service = new SalaryCalculationService();
-    const firstOrg = await getKnex()('organizations').first().catch(() => null);
-    const orgId = Number(ctx?.organizationId || firstOrg?.id || 1);
+    const orgId = requireOrgId(ctx);
     return service.calculateDynamicSalaryStructure({
       orgId,
       companyId: ctx?.companyId,
@@ -200,6 +200,33 @@ export class SalaryCalculationService {
       if (defaultCycle) cycleId = defaultCycle.id;
     }
 
+    // 2b. Resolve Payroll Policy & Cycle Working Days — used for working-day basis & LOP formula
+    const policy = await db('payroll_policies')
+      .where('organization_id', params.orgId)
+      .whereNull('deleted_at')
+      .first()
+      .catch(() => null);
+    // fixed_working_days from policy (e.g. 26), fallback to 30 (calendar month)
+    const policyWorkingDays = policy?.fixed_working_days ? Number(policy.fixed_working_days) : 30;
+    const lopFormula: string = policy?.lop_deduction_formula || 'gross_divided_by_days';
+
+    // Prefer cycle's total_days_calc / frequency over policy default so CTC preview matches actual batch run
+    let cycleWorkingDays = policyWorkingDays;
+    if (cycleId) {
+      const cycleRow = await db('payroll_cycles').where('id', cycleId).whereNull('deleted_at').first().catch(() => null);
+      if (cycleRow) {
+        if (cycleRow.total_days_calc && !isNaN(Number(cycleRow.total_days_calc)) && Number(cycleRow.total_days_calc) > 0) {
+          cycleWorkingDays = Number(cycleRow.total_days_calc);
+        } else if (cycleRow.frequency === 'Weekly') {
+          cycleWorkingDays = 7;
+        } else if (cycleRow.frequency === 'Bi-Weekly' || cycleRow.frequency === 'Fortnightly') {
+          cycleWorkingDays = 14;
+        } else if (cycleRow.frequency === 'Semi-Monthly') {
+          cycleWorkingDays = 15;
+        }
+      }
+    }
+
     // 3. Resolve Selected Components
     let selectedComponentIds: string[] = [];
     if (slab?.selected_component_ids) {
@@ -215,7 +242,9 @@ export class SalaryCalculationService {
     let componentsQuery = db('payroll_components as c')
       .leftJoin('payroll_component_groups as g', 'c.group_id', 'g.id')
       .select('c.*', 'g.category as group_category', 'g.name as group_name')
-      .where('c.organization_id', params.orgId);
+      .where('c.organization_id', params.orgId)
+      .where('c.is_active', 1)          // Skip inactive components
+      .whereNull('c.deleted_at');        // Skip soft-deleted components
 
     if (selectedComponentIds.length > 0) {
       componentsQuery = componentsQuery.whereIn('c.id', selectedComponentIds);
@@ -297,7 +326,7 @@ export class SalaryCalculationService {
     };
 
     // 4. Build Evaluation Context
-    const totalDays = Number(params.totalDays || 30);
+    const totalDays = Number(params.totalDays || cycleWorkingDays);
     const presentDays = params.presentDays !== undefined ? Number(params.presentDays) : totalDays;
     const attFactor = params.attendanceFactor !== undefined
       ? Number(params.attendanceFactor)
@@ -319,7 +348,22 @@ export class SalaryCalculationService {
     const earningComponents: any[] = [];
     const deductionComponents: any[] = [];
 
+    // Effective date window check — both dates are optional.
+    // If set, the component is only included within its active date range.
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const evalMonth = (params as any).month
+      ? String((params as any).month).slice(0, 10)
+      : today;
+
     for (const c of components) {
+      // Skip if effective_from_date is set and payroll month is before it
+      const effFrom = c.effective_from_date || c.effectiveFromDate;
+      if (effFrom && String(effFrom).slice(0, 10) > evalMonth) continue;
+
+      // Skip if effective_to_date is set and payroll month is after it
+      const effTo = c.effective_to_date || c.effectiveToDate;
+      if (effTo && String(effTo).slice(0, 10) < evalMonth) continue;
+
       if (!checkDemographicEligibility(c)) continue;
       const cat = (c.group_category || c.category || '').toLowerCase();
       if (cat.includes('deduct')) {
@@ -575,6 +619,7 @@ export class SalaryCalculationService {
 
     // No hardcoded fallback — if no deduction components are in the slab, deductions = 0.
     // HR must configure deduction components (PF, PT, ESIC, TDS) in Settings → Components.
+    // lopFormula is available here for future per-component LOP override if needed: lopFormula
 
     const netTakeHome = Math.max(0, grossMonthly - totalDeductions);
 

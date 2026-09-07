@@ -1720,9 +1720,10 @@ export const MasterPayrollComponents: React.FC = () => {
                 {/* Date Pickers Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-semibold text-foreground block mb-1.5">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Effective From Date
                     </label>
+                    <p className="text-[10px] text-muted-foreground mb-1">Leave blank = active from the beginning</p>
                     <Input
                       type="date"
                       value={compForm.effectiveFromDate}
@@ -1732,9 +1733,10 @@ export const MasterPayrollComponents: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-foreground block mb-1.5">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Effective To Date
                     </label>
+                    <p className="text-[10px] text-muted-foreground mb-1">Leave blank = no expiry, runs indefinitely</p>
                     <Input
                       type="date"
                       value={compForm.effectiveToDate}
@@ -1763,153 +1765,147 @@ export const MasterPayrollComponents: React.FC = () => {
 
             {isConditionOpen && (
               <div className="p-4 space-y-3 border-t border-border/60 bg-muted/5 text-xs animate-in fade-in duration-150">
+
+                {/* Condition On + Operator row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Condition On
-                    </label>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Condition On</label>
                     <select
                       value={compForm.conditionOn}
-                      onChange={e => setCompForm({ ...compForm, conditionOn: e.target.value })}
+                      onChange={e => setCompForm({ ...compForm, conditionOn: e.target.value, conditionValue1: '', conditionValue2: '' })}
                       className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2 text-xs font-semibold"
                     >
-                      <option value="Choose">Choose</option>
-                      <option value="Gross">Gross Salary</option>
-                      <option value="Basic">Basic Salary</option>
-                      <option value="CTC">Annual CTC</option>
-                      <option value="Attend.">Attendance Days</option>
-                      {allComponentNames.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
+                      <option value="Choose">— No Condition (Always applies) —</option>
+                      <optgroup label="Base Salary">
+                        <option value="Gross">Gross Salary</option>
+                        <option value="Basic">Basic Salary</option>
+                        <option value="CTC">Annual CTC</option>
+                        <option value="Attend.">Attendance Days</option>
+                      </optgroup>
+                      {allComponentNames.length > 0 && (
+                        <optgroup label="Other Components">
+                          {allComponentNames.map(name => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Operator
-                    </label>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Operator</label>
                     <select
                       value={compForm.conditionOperator}
-                      onChange={e => setCompForm({ ...compForm, conditionOperator: e.target.value })}
+                      onChange={e => setCompForm({ ...compForm, conditionOperator: e.target.value, conditionValue1: '', conditionValue2: '' })}
                       className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2 text-xs font-semibold"
+                      disabled={!compForm.conditionOn || compForm.conditionOn === 'Choose'}
                     >
-                      <option value="Choose">Choose</option>
+                      <option value="Choose">Choose Operator</option>
                       <option value="Equals">Equals (=)</option>
                       <option value="Greater">Greater Than (&gt;)</option>
-                      <option value="GreaterThanEqual">Greater Than Equal (&gt;=)</option>
+                      <option value="GreaterThanEqual">Greater Than or Equal (&gt;=)</option>
                       <option value="Less">Less Than (&lt;)</option>
-                      <option value="LessThanEqual">Less Than Equal (&lt;=)</option>
-                      <option value="Between">Between</option>
+                      <option value="LessThanEqual">Less Than or Equal (&lt;=)</option>
+                      <option value="Between">Between (Range)</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Value 1
-                    </label>
-                    <Input
-                      value={compForm.conditionValue1}
-                      onChange={e => setCompForm({ ...compForm, conditionValue1: e.target.value })}
-                      placeholder="e.g. 21000"
-                      className="h-8 text-xs font-semibold bg-background"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Value 2 {compForm.conditionOperator !== 'Between' && '(Optional)'}
-                    </label>
-                    <Input
-                      value={compForm.conditionValue2}
-                      onChange={e => setCompForm({ ...compForm, conditionValue2: e.target.value })}
-                      placeholder="e.g. 50000"
-                      className="h-8 text-xs font-semibold bg-background"
-                    />
-                  </div>
-                </div>
-
-                {/* [+] Months Filter Box (inside Condition Setting matching Hoshi 1:1) */}
-                <div className="border border-border/80 rounded-lg overflow-hidden bg-background">
-                  <div
-                    onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
-                    className="p-2.5 bg-muted/30 hover:bg-muted/50 text-foreground font-semibold flex items-center justify-between cursor-pointer transition-colors"
-                  >
-                    <span>{isMonthFilterOpen ? '[-] Months' : '[+] Months'}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      {compForm.months.length === 0 ? 'All Months' : `${compForm.months.length} selected`}
-                    </span>
-                  </div>
-
-                  {isMonthFilterOpen && (
-                    <div className="p-3 border-t border-border/60 space-y-2 max-h-48 overflow-y-auto">
-                      <label className="flex items-center gap-2 font-bold cursor-pointer pb-1.5 border-b border-border/40">
-                        <input
-                          type="checkbox"
-                          checked={compForm.months.length === monthOptions.length && monthOptions.length > 0}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setCompForm({ ...compForm, months: [...monthOptions] });
-                            } else {
-                              setCompForm({ ...compForm, months: [] });
-                            }
-                          }}
-                          className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
+                {/* Smart Value Inputs — only shown when operator is selected */}
+                {compForm.conditionOn !== 'Choose' && compForm.conditionOperator !== 'Choose' && (() => {
+                  const isAttend = (compForm.conditionOn || '').toLowerCase().includes('attend');
+                  const unit = isAttend ? ' days' : ' (₹)';
+                  const isBetween = compForm.conditionOperator === 'Between';
+                  const v1Label = (() => {
+                    switch (compForm.conditionOperator) {
+                      case 'Equals': return `Exact Value${unit}`;
+                      case 'Greater': return `Above${unit}`;
+                      case 'GreaterThanEqual': return `Minimum${unit}`;
+                      case 'Less': return `Below${unit}`;
+                      case 'LessThanEqual': return `Maximum${unit}`;
+                      case 'Between': return `From${unit}`;
+                      default: return `Value 1${unit}`;
+                    }
+                  })();
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-foreground block mb-1">{v1Label}</label>
+                        <Input
+                          type="number"
+                          value={compForm.conditionValue1}
+                          onChange={e => setCompForm({ ...compForm, conditionValue1: e.target.value })}
+                          placeholder={isAttend ? 'e.g. 26' : 'e.g. 21000'}
+                          className="h-8 text-xs font-semibold bg-background"
                         />
-                        <span>Select All</span>
-                      </label>
-
-                      {monthOptions.map(month => {
-                        const isChecked = compForm.months.includes(month);
-                        return (
-                          <label key={month} className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                if (isChecked) {
-                                  setCompForm({ ...compForm, months: compForm.months.filter(x => x !== month) });
-                                } else {
-                                  setCompForm({ ...compForm, months: [...compForm.months, month] });
-                                }
-                              }}
-                              className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
-                            />
-                            <span>{month}</span>
-                          </label>
-                        );
-                      })}
+                      </div>
+                      {isBetween && (
+                        <div>
+                          <label className="text-[11px] font-bold text-foreground block mb-1">To{unit}</label>
+                          <Input
+                            type="number"
+                            value={compForm.conditionValue2}
+                            onChange={e => setCompForm({ ...compForm, conditionValue2: e.target.value })}
+                            placeholder={isAttend ? 'e.g. 30' : 'e.g. 50000'}
+                            className="h-8 text-xs font-semibold bg-background"
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
 
-                {/* Gender Selector (matching Hoshi 1:1) */}
-                <div>
-                  <label className="text-[11px] font-bold text-foreground block mb-1.5">
-                    Gender
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {(['All', 'Male', 'Female'] as const).map(g => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, genderFilter: g })}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                          compForm.genderFilter.toLowerCase() === g.toLowerCase()
-                            ? 'bg-primary text-primary-foreground shadow-2xs'
-                            : 'bg-muted/50 hover:bg-muted text-muted-foreground border border-border/60'
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Live Condition Preview Sentence */}
+                {(() => {
+                  const on = compForm.conditionOn;
+                  const op = compForm.conditionOperator;
+                  const v1 = compForm.conditionValue1;
+                  const v2 = compForm.conditionValue2;
+                  if (!on || on === 'Choose' || !op || op === 'Choose' || !v1) return null;
+                  const isAttend = on.toLowerCase().includes('attend');
+                  const unit = isAttend ? ' days' : '';
+                  const fmt = (v: string) => isAttend ? `${v} days` : `₹${Number(v).toLocaleString('en-IN')}`;
+                  const labelMap: Record<string, string> = {
+                    Gross: 'Gross Salary', Basic: 'Basic Salary', CTC: 'Annual CTC', 'Attend.': 'Attendance Days'
+                  };
+                  const onLabel = labelMap[on] || on;
+                  const opLabel: Record<string, string> = {
+                    Equals: 'is exactly', Greater: 'is greater than', GreaterThanEqual: 'is at least',
+                    Less: 'is less than', LessThanEqual: 'is at most', Between: 'is between'
+                  };
+                  const sentence = op === 'Between' && v2
+                    ? `Component applies when ${onLabel} ${opLabel[op] || op} ${fmt(v1)} and ${fmt(v2)}`
+                    : `Component applies when ${onLabel} ${opLabel[op] || op} ${fmt(v1)}`;
+                  return (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-300 text-[11px] font-semibold">
+                      <span className="text-sm">→</span>
+                      <span>{sentence}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* Helper when no condition selected */}
+                {(!compForm.conditionOn || compForm.conditionOn === 'Choose') && (
+                  <p className="text-[10px] text-muted-foreground italic">
+                    No condition set — this component applies to all eligible employees. Use a condition to restrict it based on salary or attendance thresholds.
+                  </p>
+                )}
               </div>
             )}
           </div>
 
-          {/* 3. Employment Setting Accordion (Collapsible bar matching Hoshi HRMS 1:1) */}
+          {/* 3. Employment Setting Accordion */}
+          {(() => {
+            // Active filter summary for accordion header badge
+            const parts: string[] = [];
+            const gf = compForm.genderFilter;
+            if (gf && gf !== 'All') parts.push(gf);
+            if (compForm.grades.length > 0) parts.push(`${compForm.grades.length} Grade${compForm.grades.length > 1 ? 's' : ''}`);
+            if (compForm.departments.length > 0) parts.push(`${compForm.departments.length} Dept${compForm.departments.length > 1 ? 's' : ''}`);
+            if (compForm.locations.length > 0) parts.push(`${compForm.locations.length} Location${compForm.locations.length > 1 ? 's' : ''}`);
+            if (compForm.employees.length > 0) parts.push(`${compForm.employees.length} Emp${compForm.employees.length > 1 ? 's' : ''}`);
+            if (compForm.months.length > 0 && compForm.months.length < 12) parts.push(`${compForm.months.length} Month${compForm.months.length > 1 ? 's' : ''}`);
+            return (
           <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-2xs">
             <button
               type="button"
@@ -1919,12 +1915,40 @@ export const MasterPayrollComponents: React.FC = () => {
               <div className="flex items-center gap-1.5 text-primary">
                 <User className="w-3.5 h-3.5" />
                 <span className="font-semibold text-xs">Employment Setting</span>
+                {parts.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-primary/10 text-primary rounded-full border border-primary/20">
+                    {parts.join(' • ')}
+                  </span>
+                )}
               </div>
               {isEmploymentOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
             </button>
 
             {isEmploymentOpen && (
               <div className="p-4 space-y-3.5 border-t border-border/60 bg-muted/5 text-xs animate-in fade-in duration-150">
+
+                {/* Gender — moved here from Condition Setting */}
+                <div>
+                  <label className="text-[11px] font-bold text-foreground block mb-1.5">Gender Eligibility</label>
+                  <p className="text-[10px] text-muted-foreground mb-1.5">One component covers all genders — no duplicate needed.</p>
+                  <div className="flex items-center gap-2">
+                    {(['All', 'Male', 'Female'] as const).map(g => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setCompForm({ ...compForm, genderFilter: g })}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          compForm.genderFilter?.toLowerCase() === g.toLowerCase()
+                            ? 'bg-primary text-primary-foreground shadow-2xs'
+                            : 'bg-muted/50 hover:bg-muted text-muted-foreground border border-border/60'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* 1. [+] Grade Filter Box */}
                 <div className="border border-border/80 rounded-lg overflow-hidden bg-background">
                   <div
@@ -2140,9 +2164,62 @@ export const MasterPayrollComponents: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* 5. [+] Months Filter — moved from Condition Setting */}
+                <div className="border border-border/80 rounded-lg overflow-hidden bg-background">
+                  <div
+                    onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
+                    className="p-2.5 bg-muted/30 hover:bg-muted/50 text-foreground font-semibold flex items-center justify-between cursor-pointer transition-colors"
+                  >
+                    <span>{isMonthFilterOpen ? '[-] Applicable Months' : '[+] Applicable Months'}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {compForm.months.length === 0 ? 'All Months' : `${compForm.months.length} selected`}
+                    </span>
+                  </div>
+
+                  {isMonthFilterOpen && (
+                    <div className="p-3 border-t border-border/60 space-y-2 max-h-48 overflow-y-auto">
+                      <label className="flex items-center gap-2 font-bold cursor-pointer pb-1.5 border-b border-border/40">
+                        <input
+                          type="checkbox"
+                          checked={compForm.months.length === monthOptions.length && monthOptions.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) setCompForm({ ...compForm, months: [...monthOptions] });
+                            else setCompForm({ ...compForm, months: [] });
+                          }}
+                          className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
+                        />
+                        <span>Select All (component runs every month)</span>
+                      </label>
+
+                      <div className="grid grid-cols-3 gap-1">
+                        {monthOptions.map(month => {
+                          const isChecked = compForm.months.includes(month);
+                          return (
+                            <label key={month} className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) setCompForm({ ...compForm, months: compForm.months.filter(x => x !== month) });
+                                  else setCompForm({ ...compForm, months: [...compForm.months, month] });
+                                }}
+                                className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
+                              />
+                              <span>{month.slice(0, 3)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
           </div>
+          );
+          })()}
 
           {/* Bottom Action Buttons: Save/Update (Left), Delete (Middle if editing) & Cancel (Right) */}
           <div className="flex items-center justify-between pt-3 border-t border-border/70">

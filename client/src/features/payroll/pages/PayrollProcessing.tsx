@@ -42,6 +42,7 @@ import {
   CheckCheck,
   TrendingUp,
   Clock,
+  Printer,
 } from 'lucide-react';
 
 interface PayrollCycle {
@@ -1648,6 +1649,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
   // Derived from componentDefs — hoisted here so both the header row (<thead>)
   // and the data rows (<tbody>) can reference it without scope issues.
   const activeEarnings = (componentDefs || []).filter((c: any) => c.is_earning !== false);
+  const activeDeductions = (componentDefs || []).filter((c: any) => c.is_earning === false);
+  const [previewPayslipRow, setPreviewPayslipRow] = useState<any | null>(null);
   const { data: rows = [], isLoading, refetch } = useQuery({
     queryKey: ['process-register', companyId, cycleId, payrollMonth, subPeriod, departmentId, locationId, payrollStatus, paymentMode, empStatus, empType, gradeId, designationId, slabId, employeeId, reportingOfficerId, sortBy, bypassCache],
     queryFn: async () => {
@@ -1846,6 +1849,27 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
     const unpaidDays = Math.max(0, salaryDays - paidDays);
     const ratio = salaryDays > 0 ? paidDays / salaryDays : 1;
 
+    // Handle dynamic component values dictionary
+    let dynamicComponentValues: Record<string, any> = {};
+    if (merged.component_values && typeof merged.component_values === 'object') {
+      dynamicComponentValues = { ...merged.component_values };
+    }
+    if (overrides.component_values) {
+      dynamicComponentValues = { ...dynamicComponentValues, ...overrides.component_values };
+    }
+
+    // Prorate attendance-based dynamic components
+    for (const [id, comp] of Object.entries<any>(dynamicComponentValues)) {
+      if (comp && comp.category !== 'Deduction') {
+        const monthly = Number(comp.monthly ?? comp.earned ?? 0);
+        const earned = comp.based_on_attendance === false ? monthly : Math.round(monthly * ratio);
+        dynamicComponentValues[id] = { ...comp, monthly, earned };
+      }
+    }
+
+    const dynEarningComps = Object.values(dynamicComponentValues).filter((c: any) => c && c.category !== 'Deduction');
+    const dynDeductionComps = Object.values(dynamicComponentValues).filter((c: any) => c && c.category === 'Deduction');
+
     const basic = Number(merged.basic ?? 0);
     const hra = Number(merged.hra ?? 0);
     const specialAllow = Number(merged.special_allowance ?? merged.special_allowance_monthly ?? merged.specialAllowance ?? 0);
@@ -1865,7 +1889,12 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
     const commEarned = Math.round(comm * ratio);
     const eduEarned = Math.round(edu * ratio);
     const ltaEarned = Math.round(lta * ratio);
-    const grossEarned = basicEarned + hraEarned + specialEarned + stdEarned + mealEarned + commEarned + eduEarned + ltaEarned;
+    let grossEarned = basicEarned + hraEarned + specialEarned + stdEarned + mealEarned + commEarned + eduEarned + ltaEarned;
+
+    if (dynEarningComps.length > 0) {
+      const sumEarned = dynEarningComps.reduce((s: number, c: any) => s + Number(c.earned || 0), 0);
+      if (sumEarned > 0) grossEarned = sumEarned;
+    }
 
     const adjustment = Number(merged.adjustment ?? 0);
     const otHours = Number(merged.ot_hours ?? 0);
@@ -1879,7 +1908,12 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
     const esicEmployer = Number(merged.esic_employer ?? 0);
     const loanDeduction = Number(merged.loan_deduction ?? baseRow.loan_deduction ?? baseRow.loanDeduction ?? 0);
 
-    const totalDeduction = pt + pf + tds + esic + loanDeduction;
+    let totalDeduction = pt + pf + tds + esic + loanDeduction;
+    if (dynDeductionComps.length > 0) {
+      const sumDed = dynDeductionComps.reduce((s: number, c: any) => s + Number(c.earned ?? c.monthly ?? 0), 0);
+      if (sumDed > 0) totalDeduction = sumDed + loanDeduction;
+    }
+
     const netSalary = Math.max(0, totalGrossEarned - totalDeduction);
     // CTC = the fixed annual value set in the employee's salary structure.
     // Never recompute from gross × 12 — that inflates when employer contributions
@@ -1922,6 +1956,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
       total_deduction: totalDeduction,
       net_salary: netSalary,
       ctc,
+      component_values: dynamicComponentValues,
       payment_status: merged.payment_status || 'Freeze',
       notes: merged.notes || '',
       isDirty: true
@@ -2167,6 +2202,31 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
       showToast.error('Lock Failed', err?.response?.data?.message || err?.message || 'Could not lock payroll');
     } finally {
       setIsLocking(false);
+    }
+  };
+
+  // Step 2b — Unlock payroll run back to draft so HR can make corrections.
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const handleUnlockPayroll = async () => {
+    if (!activeRunId) {
+      showToast.error('Missing Run', 'No active payroll run to unlock.');
+      return;
+    }
+    const reason = window.prompt(
+      'Enter reason for unlocking payroll (e.g., Attendance corrections, salary structure adjustments):',
+      'Corrections needed before approval'
+    );
+    if (!reason || !reason.trim()) return;
+    setIsUnlocking(true);
+    try {
+      await apiClient.post(`/payroll/${activeRunId}/unlock`, { reason: reason.trim() });
+      setActiveRunStatus('draft');
+      showToast.success('Payroll Unlocked 🔓', `Run #${activeRunId} reverted to Draft for adjustments.`);
+      refetch();
+    } catch (err: any) {
+      showToast.error('Unlock Failed', err?.response?.data?.message || err?.message || 'Could not unlock payroll run.');
+    } finally {
+      setIsUnlocking(false);
     }
   };
 
@@ -2585,34 +2645,83 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                 </span>
               )}
 
-              {/* Current step action — only one button visible at a time */}
+              {/* Current step actions */}
               {activeRunStatus === 'published' ? (
-                <span className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-lg">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Payslips Published ✓
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-xs font-bold rounded-lg">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Payslips Published ✓
+                  </span>
+                  <button
+                    onClick={() => {
+                      const url = new URL(window.location.href);
+                      url.pathname = '/payroll/payslips';
+                      window.location.href = url.toString();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold rounded-lg cursor-pointer shadow-2xs"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> View All Payslips
+                  </button>
+                </div>
               ) : activeRunStatus === 'approved' ? (
-                <button
-                  onClick={handlePublishPayslips}
-                  disabled={isPublishing}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
-                >
-                  {isPublishing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                  {isPublishing ? 'Publishing...' : 'Publish Payslips'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handlePublishPayslips}
+                    disabled={isPublishing}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                  >
+                    {isPublishing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    {isPublishing ? 'Publishing...' : 'Publish Payslips'}
+                  </button>
+                  <button
+                    onClick={handleUnlockPayroll}
+                    disabled={isUnlocking}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-bold rounded-lg cursor-pointer"
+                    title="Unlock to revert approval and make corrections"
+                  >
+                    {isUnlocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                    Unlock & Edit
+                  </button>
+                </div>
               ) : activeRunStatus === 'locked' ? (
-                // CEO approval pending — HR cannot approve, only CEO from their portal
-                <span className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold rounded-lg animate-pulse">
-                  <Clock className="w-3.5 h-3.5" /> Awaiting CEO Approval...
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleApprovePayroll}
+                    disabled={isApprovingRun}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                  >
+                    {isApprovingRun ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    {isApprovingRun ? 'Approving...' : 'Approve Payroll'}
+                  </button>
+                  <button
+                    onClick={handleUnlockPayroll}
+                    disabled={isUnlocking}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-xs font-bold rounded-lg cursor-pointer"
+                    title="Unlock figures to modify attendance or register data"
+                  >
+                    {isUnlocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Unlock Figures
+                  </button>
+                </div>
               ) : activeRunStatus === 'calculated' ? (
-                <button
-                  onClick={handleLockPayroll}
-                  disabled={isLocking}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
-                >
-                  {isLocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
-                  {isLocking ? 'Locking...' : 'Lock Figures'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleLockPayroll}
+                    disabled={isLocking}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                  >
+                    {isLocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                    {isLocking ? 'Locking...' : 'Lock Figures'}
+                  </button>
+                  <button
+                    onClick={handleProcessPayroll}
+                    disabled={isProcessingPayroll}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-muted hover:bg-muted/80 text-foreground border border-border text-xs font-bold rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                    title="Re-run calculation with latest attendance and overrides"
+                  >
+                    {isProcessingPayroll ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                    Re-Calculate
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={handleProcessPayroll}
@@ -2785,12 +2894,19 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                       ? [...activeEarnings.map((c: any) => `${c.name} Earned`), 'Gross Earned', 'Total Gross Earned']
                       : ['Basic Earned', 'HRA Earned', 'Conveyance Earned', 'Medical Earned', 'Special Allowance Earned', 'Gross Earned', 'Total Gross Earned'];
 
+                    const deductionHeaders = activeDeductions.length > 0
+                      ? activeDeductions.map((c: any) => c.name)
+                      : ['PT', 'PF', 'TDS', 'ESIC'];
+
                     const allHeaders = [
                       'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Pay Slab', 'Bank Name',
                       'Salary Days', 'Paid Days', 'Unpaid Days',
                       ...masterHeaders,
                       ...earnedHeaders,
-                      'Adjustment', 'OT Hour', 'OT', 'PT', 'PF', 'TDS', 'ESIC Employer', 'ESIC', 'Total Deduction', 'Net Salary', 'CTC', 'Notes'
+                      'Adjustment', 'OT Hour', 'OT',
+                      ...deductionHeaders,
+                      'ESIC Employer',
+                      'Total Deduction', 'Net Salary', 'CTC', 'Notes'
                     ];
 
                     return allHeaders.map(h => (
@@ -2843,6 +2959,13 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                             title="Re-sync row with Contractual Master Salary Structure"
                           >
                             <RefreshCw className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => setPreviewPayslipRow(curr)}
+                            className="p-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 rounded transition-colors cursor-pointer border border-emerald-200 dark:border-emerald-800 shadow-2xs"
+                            title="Preview Payslip for this Employee"
+                          >
+                            <FileText className="w-3 h-3" />
                           </button>
                         </div>
                       </td>
@@ -2965,56 +3088,100 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                         />
                       </td>
 
-                      {/* PT - EDITABLE */}
-                      <td className="px-1.5 py-2 text-right">
-                        <input
-                          type="number"
-                          value={curr.pt}
-                          disabled={isFrozen}
-                          onChange={e => handleFieldChange(r, 'pt', e.target.value)}
-                          onBlur={() => handleSaveRow(r)}
-                          className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
-                        />
-                      </td>
+                      {/* Dynamic Deductions from Component Master */}
+                      {activeDeductions.length > 0 ? (
+                        activeDeductions.map((c: any) => {
+                          const val = curr.component_values?.[c.id]?.earned ?? curr.component_values?.[c.id]?.monthly ?? (
+                            c.name.toLowerCase().includes('pf') ? curr.pf :
+                            c.name.toLowerCase().includes('pt') ? curr.pt :
+                            c.name.toLowerCase().includes('esic') ? curr.esic :
+                            c.name.toLowerCase().includes('tds') ? curr.tds : 0
+                          );
+                          return (
+                            <td key={`d_${c.id}`} className="px-1.5 py-2 text-right">
+                              <input
+                                type="number"
+                                value={val}
+                                disabled={isFrozen}
+                                onChange={e => {
+                                  const num = Number(e.target.value);
+                                  const updatedCompVals = {
+                                    ...(curr.component_values || {}),
+                                    [c.id]: {
+                                      ...(curr.component_values?.[c.id] || {}),
+                                      id: c.id,
+                                      name: c.name,
+                                      category: 'Deduction',
+                                      earned: num,
+                                      monthly: num,
+                                    }
+                                  };
+                                  handleFieldChange(r, 'component_values', updatedCompVals);
+                                  if (c.name.toLowerCase().includes('pf')) handleFieldChange(r, 'pf', num);
+                                  else if (c.name.toLowerCase().includes('pt')) handleFieldChange(r, 'pt', num);
+                                  else if (c.name.toLowerCase().includes('esic')) handleFieldChange(r, 'esic', num);
+                                  else if (c.name.toLowerCase().includes('tds')) handleFieldChange(r, 'tds', num);
+                                }}
+                                onBlur={() => handleSaveRow(r)}
+                                className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
+                              />
+                            </td>
+                          );
+                        })
+                      ) : (
+                        <>
+                          {/* PT - EDITABLE */}
+                          <td className="px-1.5 py-2 text-right">
+                            <input
+                              type="number"
+                              value={curr.pt}
+                              disabled={isFrozen}
+                              onChange={e => handleFieldChange(r, 'pt', e.target.value)}
+                              onBlur={() => handleSaveRow(r)}
+                              className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
+                            />
+                          </td>
 
-                      {/* PF - EDITABLE */}
-                      <td className="px-1.5 py-2 text-right">
-                        <input
-                          type="number"
-                          value={curr.pf}
-                          disabled={isFrozen}
-                          onChange={e => handleFieldChange(r, 'pf', e.target.value)}
-                          onBlur={() => handleSaveRow(r)}
-                          className="w-18 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
-                        />
-                      </td>
+                          {/* PF - EDITABLE */}
+                          <td className="px-1.5 py-2 text-right">
+                            <input
+                              type="number"
+                              value={curr.pf}
+                              disabled={isFrozen}
+                              onChange={e => handleFieldChange(r, 'pf', e.target.value)}
+                              onBlur={() => handleSaveRow(r)}
+                              className="w-18 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
+                            />
+                          </td>
 
-                      {/* TDS - EDITABLE */}
-                      <td className="px-1.5 py-2 text-right">
-                        <input
-                          type="number"
-                          value={curr.tds}
-                          disabled={isFrozen}
-                          onChange={e => handleFieldChange(r, 'tds', e.target.value)}
-                          onBlur={() => handleSaveRow(r)}
-                          className="w-18 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
-                        />
-                      </td>
+                          {/* TDS - EDITABLE */}
+                          <td className="px-1.5 py-2 text-right">
+                            <input
+                              type="number"
+                              value={curr.tds}
+                              disabled={isFrozen}
+                              onChange={e => handleFieldChange(r, 'tds', e.target.value)}
+                              onBlur={() => handleSaveRow(r)}
+                              className="w-18 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
+                            />
+                          </td>
+
+                          {/* ESIC Employee - EDITABLE */}
+                          <td className="px-1.5 py-2 text-right">
+                            <input
+                              type="number"
+                              value={curr.esic}
+                              disabled={isFrozen}
+                              onChange={e => handleFieldChange(r, 'esic', e.target.value)}
+                              onBlur={() => handleSaveRow(r)}
+                              className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
+                            />
+                          </td>
+                        </>
+                      )}
 
                       {/* ESIC Employer (Display) */}
                       <td className="px-3 py-2.5 text-right text-muted-foreground">{fmt(curr.esic_employer)}</td>
-
-                      {/* ESIC Employee - EDITABLE */}
-                      <td className="px-1.5 py-2 text-right">
-                        <input
-                          type="number"
-                          value={curr.esic}
-                          disabled={isFrozen}
-                          onChange={e => handleFieldChange(r, 'esic', e.target.value)}
-                          onBlur={() => handleSaveRow(r)}
-                          className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors disabled:opacity-75 disabled:cursor-not-allowed"
-                        />
-                      </td>
 
                       {/* Total Deduction (Computed) */}
                       <td className="px-3 py-2.5 text-right font-black text-rose-700 bg-rose-50/50 dark:bg-rose-950/30">{fmt(curr.total_deduction)}</td>
@@ -3114,75 +3281,156 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                     Earnings & Allowances
                   </span>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Basic Salary</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.basic}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { basic: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'basic', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {activeEarnings.length > 0 ? (
+                      activeEarnings.map((c: any) => {
+                        const comp = selectedViewItem.component_values?.[c.id];
+                        const monthlyVal = comp?.monthly ?? (
+                          c.name.toLowerCase().includes('basic') ? (selectedViewItem.basic ?? 0) :
+                          c.name.toLowerCase().includes('hra') ? (selectedViewItem.hra ?? 0) :
+                          c.name.toLowerCase().includes('special') ? (selectedViewItem.special_allowance ?? 0) :
+                          c.name.toLowerCase().includes('standard') ? (selectedViewItem.standard_allowance ?? 0) : 0
+                        );
+                        const earnedVal = comp?.earned ?? (
+                          c.name.toLowerCase().includes('basic') ? (selectedViewItem.basic_earned ?? selectedViewItem.basic ?? 0) :
+                          c.name.toLowerCase().includes('hra') ? (selectedViewItem.hra_earned ?? selectedViewItem.hra ?? 0) :
+                          c.name.toLowerCase().includes('special') ? (selectedViewItem.special_allowance_earned ?? selectedViewItem.special_allowance ?? 0) :
+                          c.name.toLowerCase().includes('standard') ? (selectedViewItem.standard_allowance_earned ?? selectedViewItem.standard_allowance ?? 0) : 0
+                        );
+                        const isDerived = String(c.calculation_type || c.calculationType || '').toLowerCase() === 'derived';
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">House Rent Allowance (HRA)</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.hra}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { hra: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'hra', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                        return (
+                          <div key={`m_earn_${c.id}`} className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-emerald-100/40 dark:hover:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/30">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-foreground truncate">{c.name}</span>
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                                  isDerived ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                }`}>
+                                  {isDerived ? 'Derived' : 'Fixed'}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium block">
+                                Earned: ₹{fmt(earnedVal)}
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              value={monthlyVal}
+                              onChange={e => {
+                                const num = Number(e.target.value);
+                                const salDays = Number(selectedViewItem.salary_days || 30);
+                                const pdDays = Number(selectedViewItem.paid_days ?? salDays);
+                                const ratio = salDays > 0 ? pdDays / salDays : 1;
+                                const earned = c.based_on_attendance === false ? num : Math.round(num * ratio);
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Special / Standard Allowance</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.standard_allowance}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { standard_allowance: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'standard_allowance', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                                const updatedCompVals = {
+                                  ...(selectedViewItem.component_values || {}),
+                                  [c.id]: {
+                                    ...(selectedViewItem.component_values?.[c.id] || {}),
+                                    id: c.id,
+                                    name: c.name,
+                                    category: c.category || 'Allowance',
+                                    calculation_type: c.calculation_type || 'value',
+                                    monthly: num,
+                                    earned: earned,
+                                    based_on_attendance: c.based_on_attendance !== false,
+                                  }
+                                };
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Adjustment / Bonus</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.adjustment}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { adjustment: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'adjustment', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                                const overrides: any = { component_values: updatedCompVals };
+                                if (c.name.toLowerCase().includes('basic')) overrides.basic = num;
+                                else if (c.name.toLowerCase().includes('hra')) overrides.hra = num;
+                                else if (c.name.toLowerCase().includes('special')) overrides.special_allowance = num;
+                                else if (c.name.toLowerCase().includes('standard')) overrides.standard_allowance = num;
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Overtime Pay (OT)</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.ot}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { ot: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'ot', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
+                                const updated = computeRowValues(selectedViewItem, overrides);
+                                setSelectedViewItem(updated);
+                                handleFieldChange(selectedViewItem, 'component_values', updatedCompVals);
+                                if (overrides.basic !== undefined) handleFieldChange(selectedViewItem, 'basic', num);
+                                if (overrides.hra !== undefined) handleFieldChange(selectedViewItem, 'hra', num);
+                                if (overrides.special_allowance !== undefined) handleFieldChange(selectedViewItem, 'special_allowance', num);
+                                if (overrides.standard_allowance !== undefined) handleFieldChange(selectedViewItem, 'standard_allowance', num);
+                              }}
+                              className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background shrink-0"
+                            />
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">Basic Salary</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.basic}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { basic: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'basic', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">House Rent Allowance (HRA)</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.hra}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { hra: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'hra', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">Special / Standard Allowance</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.standard_allowance}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { standard_allowance: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'standard_allowance', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pt-2 border-t border-emerald-200 dark:border-emerald-900/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-muted-foreground">Adjustment / Bonus</span>
+                        <input
+                          type="number"
+                          value={selectedViewItem.adjustment}
+                          onChange={e => {
+                            const updated = computeRowValues(selectedViewItem, { adjustment: Number(e.target.value) });
+                            setSelectedViewItem(updated);
+                            handleFieldChange(selectedViewItem, 'adjustment', Number(e.target.value));
+                          }}
+                          className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-muted-foreground">Overtime Pay (OT)</span>
+                        <input
+                          type="number"
+                          value={selectedViewItem.ot}
+                          onChange={e => {
+                            const updated = computeRowValues(selectedViewItem, { ot: Number(e.target.value) });
+                            setSelectedViewItem(updated);
+                            handleFieldChange(selectedViewItem, 'ot', Number(e.target.value));
+                          }}
+                          className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -3198,67 +3446,133 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                     Statutory & Other Deductions
                   </span>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Provident Fund (EPF)</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.pf}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { pf: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'pf', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {activeDeductions.length > 0 ? (
+                      activeDeductions.map((c: any) => {
+                        const comp = selectedViewItem.component_values?.[c.id];
+                        const val = comp?.earned ?? comp?.monthly ?? (
+                          c.name.toLowerCase().includes('pf') ? (selectedViewItem.pf ?? 0) :
+                          c.name.toLowerCase().includes('pt') ? (selectedViewItem.pt ?? 0) :
+                          c.name.toLowerCase().includes('esic') ? (selectedViewItem.esic ?? 0) :
+                          c.name.toLowerCase().includes('tds') ? (selectedViewItem.tds ?? 0) : 0
+                        );
+                        const isDerived = String(c.calculation_type || c.calculationType || '').toLowerCase() === 'derived';
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Employee ESIC</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.esic}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { esic: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'esic', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                        return (
+                          <div key={`m_ded_${c.id}`} className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-rose-100/40 dark:hover:bg-rose-950/30 border border-rose-100 dark:border-rose-900/30">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-foreground truncate">{c.name}</span>
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                                  isDerived ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                                }`}>
+                                  {isDerived ? 'Derived' : 'Fixed'}
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              type="number"
+                              value={val}
+                              onChange={e => {
+                                const num = Number(e.target.value);
+                                const updatedCompVals = {
+                                  ...(selectedViewItem.component_values || {}),
+                                  [c.id]: {
+                                    ...(selectedViewItem.component_values?.[c.id] || {}),
+                                    id: c.id,
+                                    name: c.name,
+                                    category: 'Deduction',
+                                    calculation_type: c.calculation_type || 'value',
+                                    monthly: num,
+                                    earned: num,
+                                  }
+                                };
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Professional Tax (PT)</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.pt}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { pt: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'pt', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                                const overrides: any = { component_values: updatedCompVals };
+                                if (c.name.toLowerCase().includes('pf')) overrides.pf = num;
+                                else if (c.name.toLowerCase().includes('pt')) overrides.pt = num;
+                                else if (c.name.toLowerCase().includes('esic')) overrides.esic = num;
+                                else if (c.name.toLowerCase().includes('tds')) overrides.tds = num;
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Income Tax (TDS)</span>
-                      <input
-                        type="number"
-                        value={selectedViewItem.tds}
-                        onChange={e => {
-                          const updated = computeRowValues(selectedViewItem, { tds: Number(e.target.value) });
-                          setSelectedViewItem(updated);
-                          handleFieldChange(selectedViewItem, 'tds', Number(e.target.value));
-                        }}
-                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                                const updated = computeRowValues(selectedViewItem, overrides);
+                                setSelectedViewItem(updated);
+                                handleFieldChange(selectedViewItem, 'component_values', updatedCompVals);
+                                if (overrides.pf !== undefined) handleFieldChange(selectedViewItem, 'pf', num);
+                                if (overrides.pt !== undefined) handleFieldChange(selectedViewItem, 'pt', num);
+                                if (overrides.esic !== undefined) handleFieldChange(selectedViewItem, 'esic', num);
+                                if (overrides.tds !== undefined) handleFieldChange(selectedViewItem, 'tds', num);
+                              }}
+                              className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background shrink-0 text-rose-600"
+                            />
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">Provident Fund (EPF)</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.pf}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { pf: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'pf', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-muted-foreground">Loan EMI Deduction</span>
-                      <div className="w-28 h-7 text-right flex items-center justify-end px-1.5 text-xs font-bold text-muted-foreground">
-                        ₹{fmt(selectedViewItem.loan_deduction || selectedViewItem.loanDeduction || 0)}
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">Employee ESIC</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.esic}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { esic: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'esic', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">Professional Tax (PT)</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.pt}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { pt: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'pt', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-muted-foreground">Income Tax (TDS)</span>
+                          <input
+                            type="number"
+                            value={selectedViewItem.tds}
+                            onChange={e => {
+                              const updated = computeRowValues(selectedViewItem, { tds: Number(e.target.value) });
+                              setSelectedViewItem(updated);
+                              handleFieldChange(selectedViewItem, 'tds', Number(e.target.value));
+                            }}
+                            className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="pt-2 border-t border-rose-200 dark:border-rose-900/40">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-muted-foreground">Loan EMI Deduction</span>
+                        <div className="w-28 h-7 text-right flex items-center justify-end px-1.5 text-xs font-bold text-muted-foreground">
+                          ₹{fmt(selectedViewItem.loan_deduction || selectedViewItem.loanDeduction || 0)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -3344,6 +3658,265 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
                     </tbody>
                   </table>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Employee Payslip Preview Modal ────────────────────────────── */}
+        {previewPayslipRow && (
+          <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95">
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between border-b border-border/80 pb-3.5 print:hidden">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">Employee Payslip Preview</h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Period: {payrollMonth} • Run Status: <span className="font-bold text-primary capitalize">{activeRunStatus || 'Draft'}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-lg border border-border flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> Print / PDF
+                  </button>
+                  <button
+                    onClick={() => setPreviewPayslipRow(null)}
+                    className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Printable Payslip Card */}
+              <div className="border border-border/80 rounded-xl p-5 bg-card space-y-4 shadow-xs print:border-none print:shadow-none">
+                {/* Org & Payslip Header */}
+                <div className="border-b border-border/70 pb-4 text-center space-y-1">
+                  <h2 className="text-base font-extrabold tracking-wide uppercase text-foreground">
+                    {uniqueCompanies.find((c: any) => String(c.id) === String(previewPayslipRow.company_id || selectedCompanyId))?.name ||
+                      uniqueCompanies[0]?.name ||
+                      'Apponext HRMS'}
+                  </h2>
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">
+                    Payslip for the month of {new Date(`${payrollMonth}-01`).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground font-mono">
+                    Slip Reference: PS-{previewPayslipRow.employee_code || previewPayslipRow.id}-{payrollMonth.replace('-', '')}
+                  </p>
+                </div>
+
+                {/* Employee Details Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 bg-muted/30 rounded-xl border border-border/60 text-xs">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Employee Name</span>
+                    <span className="font-bold text-foreground">
+                      {previewPayslipRow.first_name || previewPayslipRow.firstName || 'Employee'} {previewPayslipRow.last_name || previewPayslipRow.lastName || ''}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Employee Code</span>
+                    <span className="font-bold text-foreground font-mono">
+                      {previewPayslipRow.employee_code || previewPayslipRow.employeeCode || `EMP-${previewPayslipRow.id}`}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Designation</span>
+                    <span className="font-bold text-foreground">
+                      {previewPayslipRow.designation || previewPayslipRow.job_title || 'Staff Member'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Department</span>
+                    <span className="font-bold text-foreground">
+                      {previewPayslipRow.department_name || previewPayslipRow.department || 'General'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Bank Name</span>
+                    <span className="font-bold text-foreground">{previewPayslipRow.bank_name || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Account Number</span>
+                    <span className="font-bold text-foreground font-mono">
+                      {previewPayslipRow.account_number || previewPayslipRow.account_no ? `••••${String(previewPayslipRow.account_number || previewPayslipRow.account_no).slice(-4)}` : 'N/A'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Total Days / Paid Days</span>
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                      {previewPayslipRow.salary_days || 30} Days / {previewPayslipRow.paid_days ?? previewPayslipRow.salary_days ?? 30} Days
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-medium">Loss of Pay (LOP)</span>
+                    <span className="font-bold text-rose-600 dark:text-rose-400">
+                      {previewPayslipRow.unpaid_days ?? 0} Days
+                    </span>
+                  </div>
+                </div>
+
+                {/* Earnings & Deductions Tables */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* Earnings */}
+                  <div className="border border-border/80 rounded-xl overflow-hidden">
+                    <div className="bg-emerald-50/70 dark:bg-emerald-950/40 px-3 py-2 border-b border-border/80 flex justify-between items-center">
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300 uppercase text-[11px]">Earnings</span>
+                      <span className="font-bold text-emerald-800 dark:text-emerald-300 text-[10px]">Earned (₹)</span>
+                    </div>
+                    <div className="divide-y divide-border/40 p-2 space-y-1">
+                      {activeEarnings.length > 0 ? (
+                        activeEarnings.map((c: any) => {
+                          const comp = previewPayslipRow.component_values?.[c.id];
+                          const earned = comp?.earned ?? (
+                            c.name.toLowerCase().includes('basic') ? (previewPayslipRow.basic_earned ?? previewPayslipRow.basic ?? 0) :
+                            c.name.toLowerCase().includes('hra') ? (previewPayslipRow.hra_earned ?? previewPayslipRow.hra ?? 0) :
+                            c.name.toLowerCase().includes('special') ? (previewPayslipRow.special_allowance_earned ?? previewPayslipRow.special_allowance ?? 0) : 0
+                          );
+                          if (!earned && !comp) return null;
+                          return (
+                            <div key={`p_e_${c.id}`} className="flex justify-between items-center py-1 px-1">
+                              <span className="text-muted-foreground">{c.name}</span>
+                              <span className="font-semibold text-foreground font-mono">₹{fmt(earned)}</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">Basic Salary</span>
+                            <span className="font-semibold text-foreground font-mono">₹{fmt(previewPayslipRow.basic_earned ?? previewPayslipRow.basic)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">House Rent Allowance</span>
+                            <span className="font-semibold text-foreground font-mono">₹{fmt(previewPayslipRow.hra_earned ?? previewPayslipRow.hra)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">Special Allowance</span>
+                            <span className="font-semibold text-foreground font-mono">₹{fmt(previewPayslipRow.special_allowance_earned ?? previewPayslipRow.special_allowance)}</span>
+                          </div>
+                        </>
+                      )}
+
+                      {Number(previewPayslipRow.adjustment || 0) !== 0 && (
+                        <div className="flex justify-between items-center py-1 px-1">
+                          <span className="text-muted-foreground">Adjustment / Bonus</span>
+                          <span className="font-semibold text-foreground font-mono">₹{fmt(previewPayslipRow.adjustment)}</span>
+                        </div>
+                      )}
+                      {Number(previewPayslipRow.ot || 0) > 0 && (
+                        <div className="flex justify-between items-center py-1 px-1">
+                          <span className="text-muted-foreground">Overtime Pay</span>
+                          <span className="font-semibold text-foreground font-mono">₹{fmt(previewPayslipRow.ot)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-emerald-50/40 dark:bg-emerald-950/20 px-3 py-2 border-t border-border/80 flex justify-between items-center font-bold text-emerald-800 dark:text-emerald-300">
+                      <span>Total Gross Earnings</span>
+                      <span className="font-mono">₹{fmt(previewPayslipRow.total_gross_earned || previewPayslipRow.gross_earned)}</span>
+                    </div>
+                  </div>
+
+                  {/* Deductions */}
+                  <div className="border border-border/80 rounded-xl overflow-hidden">
+                    <div className="bg-rose-50/70 dark:bg-rose-950/40 px-3 py-2 border-b border-border/80 flex justify-between items-center">
+                      <span className="font-bold text-rose-800 dark:text-rose-300 uppercase text-[11px]">Deductions</span>
+                      <span className="font-bold text-rose-800 dark:text-rose-300 text-[10px]">Amount (₹)</span>
+                    </div>
+                    <div className="divide-y divide-border/40 p-2 space-y-1">
+                      {activeDeductions.length > 0 ? (
+                        activeDeductions.map((c: any) => {
+                          const comp = previewPayslipRow.component_values?.[c.id];
+                          const ded = comp?.earned ?? comp?.monthly ?? (
+                            c.name.toLowerCase().includes('pf') ? previewPayslipRow.pf :
+                            c.name.toLowerCase().includes('pt') ? previewPayslipRow.pt :
+                            c.name.toLowerCase().includes('esic') ? previewPayslipRow.esic :
+                            c.name.toLowerCase().includes('tds') ? previewPayslipRow.tds : 0
+                          );
+                          if (!ded && !comp) return null;
+                          return (
+                            <div key={`p_d_${c.id}`} className="flex justify-between items-center py-1 px-1">
+                              <span className="text-muted-foreground">{c.name}</span>
+                              <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">₹{fmt(ded)}</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">Provident Fund (EPF)</span>
+                            <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">₹{fmt(previewPayslipRow.pf)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">Employee ESIC</span>
+                            <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">₹{fmt(previewPayslipRow.esic)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">Professional Tax (PT)</span>
+                            <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">₹{fmt(previewPayslipRow.pt)}</span>
+                          </div>
+                          <div className="flex justify-between items-center py-1 px-1">
+                            <span className="text-muted-foreground">TDS / Income Tax</span>
+                            <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">₹{fmt(previewPayslipRow.tds)}</span>
+                          </div>
+                        </>
+                      )}
+
+                      {Number(previewPayslipRow.loan_deduction || previewPayslipRow.loanDeduction || 0) > 0 && (
+                        <div className="flex justify-between items-center py-1 px-1">
+                          <span className="text-muted-foreground">Loan EMI Deduction</span>
+                          <span className="font-semibold text-rose-600 dark:text-rose-400 font-mono">
+                            ₹{fmt(previewPayslipRow.loan_deduction || previewPayslipRow.loanDeduction)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-rose-50/40 dark:bg-rose-950/20 px-3 py-2 border-t border-border/80 flex justify-between items-center font-bold text-rose-800 dark:text-rose-300">
+                      <span>Total Deductions</span>
+                      <span className="font-mono">₹{fmt(previewPayslipRow.total_deduction)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Net Take-Home Highlight Card */}
+                <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-indigo-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wide block">
+                      Net Salary Payable (Take-Home)
+                    </span>
+                    <span className="text-2xl font-black text-emerald-700 dark:text-emerald-300 font-mono">
+                      ₹{fmt(previewPayslipRow.net_salary)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-muted-foreground uppercase font-bold block">Annual CTC</span>
+                    <span className="text-sm font-bold text-foreground font-mono">
+                      ₹{fmt(previewPayslipRow.ctc)}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground text-center italic pt-1">
+                  This is a confidential system-generated payslip generated by Apponext HRMS.
+                </p>
+              </div>
+
+              {/* Modal Footer Buttons */}
+              <div className="flex justify-end gap-2 border-t border-border pt-3 print:hidden">
+                <button
+                  onClick={() => setPreviewPayslipRow(null)}
+                  className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                >
+                  Close Preview
+                </button>
               </div>
             </div>
           </div>

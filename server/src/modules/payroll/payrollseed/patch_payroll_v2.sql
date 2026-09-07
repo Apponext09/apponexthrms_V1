@@ -77,11 +77,8 @@ ALTER TABLE `salary_structures`
   ADD COLUMN IF NOT EXISTS `slab_id`  BIGINT UNSIGNED NULL COMMENT 'Payroll slab this structure is under',
   ADD COLUMN IF NOT EXISTS `cycle_id` BIGINT UNSIGNED NULL COMMENT 'Payroll cycle this structure belongs to';
 
--- ── FIX 8: payroll_slab_components — add org_id for isolation ─
--- Bridge table used by slab ↔ component mapping
--- Ensure organization_id exists for multi-tenant safety
-ALTER TABLE `payroll_slab_components`
-  ADD COLUMN IF NOT EXISTS `organization_id` BIGINT UNSIGNED NULL COMMENT 'Tenant isolation';
+-- ── FIX 8: payroll_slab_components (deprecated - components stored in payroll_slabs.selected_component_ids) ─
+DROP TABLE IF EXISTS `payroll_slab_components`;
 
 -- ── INDEXES: Performance on common queries ────────────────────
 -- payroll_earnings: fast lookup by run employee

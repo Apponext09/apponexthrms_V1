@@ -9,7 +9,7 @@ export interface PayrollRun {
   payroll_cycle_id: number;
   run_type: 'regular' | 'off_cycle' | 'final_settlement' | 'arrears';
   run_month: string;
-  status: 'draft' | 'processing' | 'calculated' | 'locked' | 'approved' | 'published' | 'completed';
+  status: 'draft' | 'processing' | 'locked' | 'approved' | 'published' | 'completed';
   locked_by: number | null;
   locked_at: string | null;
   approved_by: number | null;

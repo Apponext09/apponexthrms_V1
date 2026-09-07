@@ -39,6 +39,25 @@ export function withSnakeAliases<T extends Record<string, any>>(
   return out as T;
 }
 
+// ─── Tenant context guard ────────────────────────────────────────────────────
+
+/**
+ * Extracts organizationId from ctx and throws a clear error if it is missing.
+ * Use this everywhere a hardcoded `|| 1` / `|| 68` / `firstOrg?.id` fallback
+ * previously existed. A missing org ID must NEVER silently serve another org's data.
+ *
+ * @example
+ *   const orgId = requireOrgId(req.ctx);
+ */
+export function requireOrgId(ctx: { organizationId?: number | string } | null | undefined): number {
+  const id = Number(ctx?.organizationId);
+  if (!id || id <= 0) {
+    throw Object.assign(new Error('Authentication required — no tenant context'), { statusCode: 401 });
+  }
+  return id;
+}
+
+
 // ─── Run month resolution ────────────────────────────────────────────────────
 
 /**
@@ -109,11 +128,12 @@ export function findComponentId(defs: any[], hints: string[]): number | null {
  * numeric condition expression.
  */
 export function matchesComponentCondition(
-  comp: any,
+  rawComp: any,
   emp: any,
   struct: any,
   targetMonthStr?: string
 ): boolean {
+  const comp = withSnakeAliases(rawComp) || rawComp;
   // 1. Department filter — match by ID or name
   const depts = parseJsonArr(comp.departments);
   if (depts.length > 0) {
@@ -157,10 +177,20 @@ export function matchesComponentCondition(
 
   // 5. Month filter — only apply in specified months
   const allowedMonths = parseJsonArr(comp.months);
-  const checkDate = targetMonthStr ? new Date(`${targetMonthStr.slice(0, 7)}-01`) : new Date();
   if (allowedMonths.length > 0) {
-    const currentMonth = checkDate.getMonth() + 1;
-    const currentMonthName = checkDate.toLocaleString('default', { month: 'long' });
+    let currentMonth = new Date().getMonth() + 1; // 1–12
+    let currentMonthName = new Date().toLocaleString('default', { month: 'long' }); // 'January'
+    if (targetMonthStr) {
+      const parts = String(targetMonthStr).split('-');
+      if (parts.length >= 2) {
+        const mNum = parseInt(parts[1], 10);
+        if (!isNaN(mNum) && mNum >= 1 && mNum <= 12) {
+          currentMonth = mNum;
+          const d = new Date(parseInt(parts[0], 10), mNum - 1, 1);
+          currentMonthName = d.toLocaleString('default', { month: 'long' });
+        }
+      }
+    }
     const matches = allowedMonths.some(
       (m: string) =>
         String(m) === String(currentMonth) ||
@@ -169,19 +199,29 @@ export function matchesComponentCondition(
     if (!matches) return false;
   }
 
-  // 6. Effective Date Range filter
+  // 6. Effective Date Range filter — compare against the PAYROLL RUN PERIOD
   const effFrom =
     comp.effective_from_date || comp.effectiveFromDate || comp.effective_from;
   const effTo =
     comp.effective_to_date || comp.effectiveToDate || comp.effective_to;
   
+  let periodStart: Date;
+  let periodEnd: Date;
+  if (targetMonthStr && /^\d{4}-\d{2}$/.test(targetMonthStr)) {
+    const [y, m] = targetMonthStr.split('-').map(Number);
+    periodStart = new Date(y, m - 1, 1);          // 1st of run month
+    periodEnd = new Date(y, m, 0);               // last day of run month
+  } else {
+    periodStart = new Date();
+    periodEnd = new Date();
+  }
   if (effFrom) {
     const fromDate = new Date(effFrom);
-    if (!isNaN(fromDate.getTime()) && fromDate > checkDate) return false;
+    if (!isNaN(fromDate.getTime()) && fromDate > periodEnd) return false;
   }
   if (effTo) {
     const toDate = new Date(effTo);
-    if (!isNaN(toDate.getTime()) && toDate < checkDate) return false;
+    if (!isNaN(toDate.getTime()) && toDate < periodStart) return false;
   }
 
   // 7. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)

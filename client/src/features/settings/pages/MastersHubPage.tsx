@@ -24,7 +24,8 @@ import {
   Users,
   Grid,
   Code2,
-  ChevronRight
+  ChevronRight,
+  Boxes
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +40,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
+import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
 
 // Lazy-load all heavy master components so only the active tab loads
 const LocationMasterForm = lazy(() => import('../components/LocationMasterForm').then(m => ({ default: m.LocationMasterForm })));
@@ -59,6 +61,8 @@ const ResourcePlanMasterForm = lazy(() => import('../components/ResourcePlanMast
 const EventMasterForm = lazy(() => import('../components/EventMasterForm').then(m => ({ default: m.EventMasterForm })));
 const HolidayMasterForm = lazy(() => import('../components/HolidayMasterForm').then(m => ({ default: m.HolidayMasterForm })));
 const OTRulePage = lazy(() => import('../components/ot-rules/OTRulePage').then(m => ({ default: m.OTRulePage })));
+const MasterBuilderPage = lazy(() => import('@/features/master-builder/pages/MasterBuilderPage').then(m => ({ default: m.MasterBuilderPage })));
+const DynamicMasterView = lazy(() => import('@/features/master-builder/components/DynamicMasterView').then(m => ({ default: m.DynamicMasterView })));
 
 // Lightweight spinner shown while a lazy tab loads
 function MasterTabLoader() {
@@ -522,6 +526,10 @@ export function MastersHubPage() {
           <OTRulePage />
         ) : selectedMasterId === 'event' ? (
           <EventMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'master-builder' ? (
+          <MasterBuilderPage />
+        ) : selectedMaster?.isCustom ? (
+          <DynamicMasterView masterIdOrCode={selectedMasterId} />
         ) : (
 
           /* Active Master Details Card & Actions Bar */

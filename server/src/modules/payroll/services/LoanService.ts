@@ -162,10 +162,7 @@ export class LoanService {
         .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
         .leftJoin('roles as r', 'ur.role_id', 'r.id')
         .where('u.organization_id', orgId)
-        .where(function () {
-          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
-            .orWhere('u.email', 'ajay@gmail.com');
-        })
+        .whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
         .whereNull('u.deleted_at')
         .select('u.id')
         .distinct();

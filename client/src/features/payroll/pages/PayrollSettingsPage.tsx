@@ -53,8 +53,6 @@ interface PayrollCycleItem {
   name: string;
   cycle_name?: string;
   isDailyWages: boolean;
-  dailyWagesIncludePaidHolidays?: boolean;
-  dailyWagesIncludeWeekOff?: boolean;
   frequency: 'Monthly' | 'Bi-monthly' | 'Semi-Monthly' | 'Weekly' | 'Bi-Weekly';
   startDate: number | string;
   startDate2?: number | string;
@@ -62,11 +60,7 @@ interface PayrollCycleItem {
   cutoffDay: number | string;
   cutoffDayName?: string;
   totalDaysCalc?: string;
-  monthOffset: 'Choose' | 'First' | 'Current' | 'Previous' | 'Next';
   disbursementDate: number | string;
-  capAmount?: number | string;
-  toleranceEnabled?: boolean;
-  toleranceMinutes?: number;
   companyId?: string | number | null;
   company_id?: string | number | null;
   isActive: boolean;
@@ -213,11 +207,7 @@ export const PayrollSettingsPage: React.FC = () => {
     frequency: 'Monthly',
     startDate: 1,
     cutoffDay: 25,
-    monthOffset: 'Current',
     disbursementDate: 1,
-    capAmount: 1000000,
-    toleranceEnabled: true,
-    toleranceMinutes: 15,
     isActive: true
   });
 
@@ -357,10 +347,8 @@ export const PayrollSettingsPage: React.FC = () => {
             frequency: c.frequency || 'Monthly',
             startDate: c.startDate ?? c.start_date ?? 1,
             cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 25,
-            monthOffset: c.monthOffset || c.month_offset || 'Current',
             disbursementDate: c.disbursementDate ?? c.disbursement_date ?? 1,
-            capAmount: c.capAmount ?? c.cap_amount ?? 1000000,
-            isActive: c.isActive ?? (c.status !== 'closed' && (c.is_active ?? true))
+            isActive: c.isActive ?? ((c.is_active ?? true) !== 0 && (c.is_active ?? true) !== false)
           };
         });
 
@@ -635,16 +623,10 @@ export const PayrollSettingsPage: React.FC = () => {
       company_id: effectiveCompanyId,
       companyId: effectiveCompanyId,
       is_daily_wages: cycleForm.isDailyWages,
-      daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
-      daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
       frequency: cycleForm.frequency || "Monthly",
       start_date: cycleForm.startDate || 1,
       cutoff_day: cycleForm.cutoffDay || 25,
-      month_offset: cycleForm.monthOffset || "Current",
       disbursement_date: cycleForm.disbursementDate || 1,
-      cap_amount: cycleForm.capAmount || 1000000,
-      tolerance_enabled: cycleForm.toleranceEnabled,
-      tolerance_minutes: cycleForm.toleranceMinutes,
       is_active: cycleForm.isActive !== false
     };
 
@@ -667,10 +649,8 @@ export const PayrollSettingsPage: React.FC = () => {
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
           cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 25,
-          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'Current',
           disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 1,
-          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 1000000,
-          isActive: serverData?.status !== 'closed' && (serverData?.is_active ?? cycleForm.isActive ?? true)
+          isActive: (serverData?.is_active ?? cycleForm.isActive ?? true) !== 0 && (serverData?.is_active ?? cycleForm.isActive ?? true) !== false
         };
 
         setCycles(prev => prev.map(c => String(c.id) === String(selectedCycleId) ? updatedItem : c));
@@ -689,10 +669,8 @@ export const PayrollSettingsPage: React.FC = () => {
           frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
           startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
           cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 25,
-          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'Current',
           disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 1,
-          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 1000000,
-          isActive: serverData?.status !== 'closed' && (serverData?.is_active ?? cycleForm.isActive ?? true)
+          isActive: (serverData?.is_active ?? cycleForm.isActive ?? true) !== 0 && (serverData?.is_active ?? cycleForm.isActive ?? true) !== false
         };
 
         setSelectedCycleId(newItem.id);
@@ -729,11 +707,7 @@ export const PayrollSettingsPage: React.FC = () => {
             frequency: 'Monthly',
             startDate: 1,
             cutoffDay: 25,
-            monthOffset: 'Current',
             disbursementDate: 1,
-            capAmount: 1000000,
-            toleranceEnabled: true,
-            toleranceMinutes: 15,
             isActive: true
           });
         }
@@ -1532,35 +1506,31 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Row 5: Payroll Components Selector (Clean 2-Column Grid) */}
+                {/* Row 5: Payroll Components Selector — Grouped by Earning / Deduction */}
                 <div>
                   {(() => {
-                    const getUniqueComponents = (): { id: string; name: string; type: string }[] => {
-                      const masterComps: { id: string; name: string; type: string }[] = (groups || []).flatMap(g =>
-                        (g.components || []).map((c: any) => ({
-                          id: String(c.id),
-                          name: String(c.name || ''),
-                          type: String(c.type || 'Derived')
-                        }))
-                      ).filter(c => c.name.trim().length > 0);
+                    const earningComps: { id: string; name: string; groupName: string }[] = [];
+                    const deductionComps: { id: string; name: string; groupName: string }[] = [];
+                    const seenNames = new Set<string>();
+                    for (const g of (groups || [])) {
+                      for (const c of (g.components || [])) {
+                        const nameKey = (c.name || '').trim().toLowerCase();
+                        if (!nameKey || seenNames.has(nameKey)) continue;
+                        seenNames.add(nameKey);
+                        const entry = { id: String(c.id), name: c.name || '', groupName: g.name };
+                        if ((g.category || '').toLowerCase().includes('deduct')) deductionComps.push(entry);
+                        else earningComps.push(entry);
+                      }
+                    }
+                    const allComps = [...earningComps, ...deductionComps];
+                    const totalCount = allComps.length;
 
-                      const seen = new Set<string>();
-                      return masterComps.filter(c => {
-                        const k = c.name.trim().toLowerCase();
-                        if (seen.has(k)) return false;
-                        seen.add(k);
-                        return true;
-                      });
-                    };
-
-                    const uniqueComps = getUniqueComponents();
                     const isComponentChecked = (comp: { id: string; name: string }) => {
                       const selected = slabForm.selectedComponentIds || [];
                       if (!selected || selected.length === 0) return false;
                       const cid = String(comp.id).trim().toLowerCase();
                       const cname = comp.name.trim().toLowerCase();
                       const cslug = cname.replace(/[^a-z0-9]+/g, '_');
-
                       return selected.some(id => {
                         const sid = String(id).trim().toLowerCase();
                         const sslug = sid.replace(/[^a-z0-9]+/g, '_');
@@ -1568,96 +1538,86 @@ export const PayrollSettingsPage: React.FC = () => {
                       });
                     };
 
-                    const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
-                    const totalCount = uniqueComps.length;
+                    const toggleComp = (c: { id: string; name: string }, checked: boolean) => {
+                      const current = slabForm.selectedComponentIds || [];
+                      const cslug = c.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                      const cid = String(c.id).trim().toLowerCase();
+                      const cname = c.name.trim().toLowerCase();
+                      let next;
+                      if (checked) {
+                        next = [...new Set([...current, String(c.id), cslug])];
+                      } else {
+                        next = current.filter(id => {
+                          const sid = String(id).trim().toLowerCase();
+                          const sslug = sid.replace(/[^a-z0-9]+/g, '_');
+                          return sid !== cid && sid !== cname && sid !== cslug && sslug !== cslug;
+                        });
+                      }
+                      setSlabForm({ ...slabForm, selectedComponentIds: next });
+                    };
+
+                    const selectedCount = allComps.filter(c => isComponentChecked(c)).length;
                     const allSelected = totalCount > 0 && selectedCount === totalCount;
-                    const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
+
+                    const renderGroup = (title: string, comps: { id: string; name: string; groupName: string }[], color: 'emerald' | 'rose') => {
+                      const filtered = comps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
+                      if (filtered.length === 0 && compSearch) return null;
+                      const groupChecked = filtered.filter(c => isComponentChecked(c)).length;
+                      const colorCls = color === 'emerald'
+                        ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50'
+                        : 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800/50';
+                      return (
+                        <div key={title} className="space-y-1.5">
+                          <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-bold border ${colorCls}`}>
+                            <span>{title}</span>
+                            <span className="font-mono">{groupChecked} / {filtered.length} selected</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {filtered.length === 0 ? (
+                              <p className="col-span-2 text-xs text-muted-foreground italic py-2 text-center">No {title} components configured yet</p>
+                            ) : filtered.map(c => {
+                              const isChecked = isComponentChecked(c);
+                              return (
+                                <div
+                                  key={c.id}
+                                  onClick={() => toggleComp(c, !isChecked)}
+                                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border select-none ${
+                                    isChecked ? 'bg-primary/5 dark:bg-primary/15 text-foreground font-semibold border-primary/30 shadow-2xs' : 'hover:bg-muted/40 text-muted-foreground border-border/60 bg-background'
+                                  }`}
+                                >
+                                  <input type="checkbox" checked={isChecked} onChange={() => {}} className="rounded accent-primary w-3.5 h-3.5 cursor-pointer shrink-0" />
+                                  <div className="min-w-0">
+                                    <span className="text-xs truncate block">{c.name}</span>
+                                    <span className="text-[10px] text-muted-foreground truncate block">{c.groupName}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    };
 
                     return (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <label className="text-xs font-semibold text-foreground">
-                              Payroll Components <span className="text-rose-500">*</span>
-                            </label>
-                            <span className="text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
-                              {selectedCount} of {totalCount} Selected
-                            </span>
+                            <label className="text-xs font-semibold text-foreground">Payroll Components <span className="text-rose-500">*</span></label>
+                            <span className="text-[10px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">{selectedCount} of {totalCount} Selected</span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSlabForm({
-                                ...slabForm,
-                                selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
-                              });
-                            }}
-                            className="text-xs font-semibold text-primary hover:underline cursor-pointer"
-                          >
+                          <button type="button" onClick={() => setSlabForm({ ...slabForm, selectedComponentIds: allSelected ? [] : allComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')]) })} className="text-xs font-semibold text-primary hover:underline cursor-pointer">
                             {allSelected ? 'Deselect All' : 'Select All'}
                           </button>
                         </div>
-
-                        {/* Search Bar & Grid */}
-                        <div className="p-3 bg-muted/20 border border-border/80 rounded-xl space-y-2.5">
+                        <div className="p-3 bg-muted/20 border border-border/80 rounded-xl space-y-3">
                           <div className="relative">
                             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                            <input
-                              type="text"
-                              placeholder="Search pay component..."
-                              value={compSearch}
-                              onChange={e => setCompSearch(e.target.value)}
-                              className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-                            />
+                            <input type="text" placeholder="Search components..." value={compSearch} onChange={e => setCompSearch(e.target.value)} className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs" />
                           </div>
-
-                          {/* 2-Column Responsive Component Grid */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1 text-xs">
-                            {filtered.length === 0 ? (
-                              <p className="col-span-2 text-xs text-muted-foreground italic py-4 text-center">
-                                No matching components found
-                              </p>
-                            ) : (
-                              filtered.map(c => {
-                                const isChecked = isComponentChecked(c);
-                                return (
-                                  <div
-                                    key={c.id}
-                                    onClick={() => {
-                                      const current = slabForm.selectedComponentIds || [];
-                                      const cid = String(c.id).trim().toLowerCase();
-                                      const cname = c.name.trim().toLowerCase();
-                                      const cslug = cname.replace(/[^a-z0-9]+/g, '_');
-
-                                      let next;
-                                      if (!isChecked) {
-                                        next = [...new Set([...current, String(c.id), cslug])];
-                                      } else {
-                                        next = current.filter(id => {
-                                          const sid = String(id).trim().toLowerCase();
-                                          const sslug = sid.replace(/[^a-z0-9]+/g, '_');
-                                          return sid !== cid && sid !== cname && sid !== cslug && sslug !== cslug;
-                                        });
-                                      }
-                                      setSlabForm({ ...slabForm, selectedComponentIds: next });
-                                    }}
-                                    className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer transition-all border select-none ${
-                                      isChecked
-                                        ? 'bg-primary/5 dark:bg-primary/15 text-foreground font-semibold border-primary/30 shadow-2xs'
-                                        : 'hover:bg-muted/40 text-muted-foreground border-border/60 bg-background'
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => {}} // handled by parent onClick
-                                      className="rounded accent-primary w-4 h-4 cursor-pointer shrink-0"
-                                    />
-                                    <span className="text-xs truncate">{c.name}</span>
-                                  </div>
-                                );
-                              })
-                            )}
+                          <div className="space-y-3 max-h-72 overflow-y-auto">
+                            {totalCount === 0 ? (
+                              <p className="text-xs text-muted-foreground italic py-4 text-center">No components defined yet. Add components in Settings → Components first.</p>
+                            ) : (<>{renderGroup('Earnings', earningComps, 'emerald')}{renderGroup('Deductions', deductionComps, 'rose')}</>)}
                           </div>
                         </div>
                       </div>

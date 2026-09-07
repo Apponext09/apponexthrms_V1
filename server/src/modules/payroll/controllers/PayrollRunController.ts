@@ -8,6 +8,7 @@
 
 import type { Request, Response } from 'express';
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
 import { PayrollService } from '../services/PayrollService';
 
 export class PayrollRunController {
@@ -263,24 +264,17 @@ export class PayrollRunController {
   async getPayrollStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
-      const monthStr = req.query.month
-        ? String(req.query.month).slice(0, 7)
-        : new Date().toISOString().slice(0, 7);
+      const orgId = requireOrgId(req.ctx);
 
       const latestRun = await db('payroll_runs')
-        .where((b) => {
-          if (orgId) b.where('organization_id', orgId).orWhereNull('organization_id');
-        })
+        .where('organization_id', orgId)
         .whereNull('deleted_at')
         .orderBy('id', 'desc')
         .first()
         .catch(() => null);
 
       const totalEmployeesCount = await db('employees')
-        .where((b) => {
-          if (orgId) b.where('organization_id', orgId).orWhereNull('organization_id');
-        })
+        .where('organization_id', orgId)
         .where('status', 'ACTIVE')
         .whereNull('deleted_at')
         .count('id as count')
@@ -312,7 +306,7 @@ export class PayrollRunController {
           totalNet,
           totalDeductions,
           status: latestRun?.status || 'draft',
-          runMonth: monthStr,
+          runMonth: latestRun ? String(latestRun.run_month || latestRun.runMonth || '') : new Date().toISOString().slice(0, 7),
         },
       });
     } catch (err: any) {
@@ -323,13 +317,11 @@ export class PayrollRunController {
   async getManagerDeptStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 1;
+      const orgId = requireOrgId(req.ctx);
 
       const deptStats = await db('employees as e')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
-        .where((b) => {
-          if (orgId) b.where('e.organization_id', orgId).orWhereNull('e.organization_id');
-        })
+        .where('e.organization_id', orgId)
         .whereNull('e.deleted_at')
         .groupBy('d.id', 'd.name')
         .select(

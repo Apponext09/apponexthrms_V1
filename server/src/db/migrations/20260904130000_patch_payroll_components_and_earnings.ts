@@ -23,15 +23,7 @@ export async function up(knex: Knex): Promise<void> {
     }
   }
 
-  const hasSlabCompTable = await knex.schema.hasTable('payroll_slab_components');
-  if (hasSlabCompTable) {
-    const hasOrgId = await knex.schema.hasColumn('payroll_slab_components', 'organization_id');
-    if (!hasOrgId) {
-      await knex.schema.alterTable('payroll_slab_components', (table) => {
-        table.bigInteger('organization_id').unsigned().nullable();
-      });
-    }
-  }
+  await knex.schema.dropTableIfExists('payroll_slab_components');
 }
 
 export async function down(knex: Knex): Promise<void> {

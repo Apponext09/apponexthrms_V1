@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
 import { TaxDeclarationRepository } from '../repositories/TaxDeclarationRepository';
-import { TaxInvestmentRepository } from '../repositories/TaxInvestmentRepository';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
@@ -11,21 +10,12 @@ interface CreateDeclarationInput {
   panNumber?: string;
 }
 
-interface AddInvestmentInput {
-  declarationId: number;
-  investmentType: '80c' | '80d' | '80tta' | 'other';
-  investmentAmount: number;
-  investmentProofUrl?: string;
-}
-
 export class TaxService {
   private declarationRepo: TaxDeclarationRepository;
-  private investmentRepo: TaxInvestmentRepository;
   private auditService: AuditService;
 
   constructor() {
     this.declarationRepo = new TaxDeclarationRepository();
-    this.investmentRepo = new TaxInvestmentRepository();
     this.auditService = new AuditService();
   }
 
@@ -62,31 +52,6 @@ export class TaxService {
     return declaration;
   }
 
-  async addInvestment(ctx: TenantContext, input: AddInvestmentInput) {
-    const declaration = await this.declarationRepo.getById(ctx, input.declarationId);
-    if (!declaration) throw new NotFoundError('Tax declaration not found');
-
-    const investment = await this.investmentRepo.create(ctx, {
-      uuid: uuidv4(),
-      organization_id: ctx.organizationId,
-      tax_declaration_id: input.declarationId,
-      investment_type: input.investmentType,
-      investment_amount: input.investmentAmount,
-      investment_proof_url: input.investmentProofUrl,
-      created_by: ctx.userId,
-      updated_by: ctx.userId
-    });
-
-    await this.auditService.log(ctx, {
-      action: 'CREATE',
-      entityType: 'TAX_INVESTMENT',
-      entityId: investment.id,
-      afterState: { investment }
-    });
-
-    return investment;
-  }
-
   async finalizeDeclaration(ctx: TenantContext, declarationId: number) {
     const declaration = await this.declarationRepo.getById(ctx, declarationId);
     if (!declaration) throw new NotFoundError('Tax declaration not found');
@@ -105,12 +70,8 @@ export class TaxService {
     return this.declarationRepo.getForEmployee(ctx, employeeId);
   }
 
-  async getDeclarationInvestments(ctx: TenantContext, declarationId: number) {
-    return this.investmentRepo.getForDeclaration(ctx, declarationId);
-  }
-
-  async getTotalInvestments(ctx: TenantContext, declarationId: number): Promise<number> {
-    return this.investmentRepo.getTotalInvestments(ctx, declarationId);
+  async getTotalInvestments(_ctx: TenantContext, _declarationId: number): Promise<number> {
+    return 0;
   }
 
   async calculateTDS(
@@ -155,6 +116,19 @@ export class TaxService {
         tax = Math.max(0, tax - 12500);
       }
 
+      // Surcharge for High Net Worth Earners
+      let surcharge = 0;
+      if (taxableIncome > 50000000) {
+        surcharge = tax * 0.37;
+      } else if (taxableIncome > 20000000) {
+        surcharge = tax * 0.25;
+      } else if (taxableIncome > 10000000) {
+        surcharge = tax * 0.15;
+      } else if (taxableIncome > 5000000) {
+        surcharge = tax * 0.10;
+      }
+      tax += surcharge;
+
       // Health & Education Cess (4%)
       const cess = tax > 0 ? tax * 0.04 : 0;
       tax += cess;
@@ -194,6 +168,17 @@ export class TaxService {
       if (taxableIncome <= 700000) {
         tax = Math.max(0, tax - 25000);
       }
+
+      // Surcharge (Capped at 25% under New Regime)
+      let surcharge = 0;
+      if (taxableIncome > 20000000) {
+        surcharge = tax * 0.25;
+      } else if (taxableIncome > 10000000) {
+        surcharge = tax * 0.15;
+      } else if (taxableIncome > 5000000) {
+        surcharge = tax * 0.10;
+      }
+      tax += surcharge;
 
       // Health & Education Cess (4%)
       const cess = tax > 0 ? tax * 0.04 : 0;

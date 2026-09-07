@@ -278,17 +278,6 @@ export class LoanTaxSettlementController {
     res.json({ success: true, data: declaration });
   }
 
-  async addTaxInvestment(req: Request, res: Response) {
-    const investment = await this.taxService.addInvestment(req.ctx, req.body);
-    res.status(201).json({ success: true, data: investment });
-  }
-
-  async getTaxInvestments(req: Request, res: Response) {
-    const { declarationId } = req.query;
-    const investments = await this.taxService.getDeclarationInvestments(req.ctx, parseInt(declarationId as string));
-    res.json({ success: true, data: investments });
-  }
-
   async finalizeTaxDeclaration(req: Request, res: Response) {
     const { id } = req.params;
     const declaration = await this.taxService.finalizeDeclaration(req.ctx, parseInt(id));

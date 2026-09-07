@@ -4,269 +4,33 @@ import { PayrollRunRepository } from '../repositories/PayrollRunRepository';
 import { PayrollRunEmployeeRepository } from '../repositories/PayrollRunEmployeeRepository';
 import { PayrollEarningsRepository } from '../repositories/PayrollEarningsRepository';
 import { PayrollDeductionsRepository } from '../repositories/PayrollDeductionsRepository';
-import { PayrollCycleRepository } from '../repositories/PayrollCycleRepository';
 import { PayslipRepository } from '../repositories/PayslipRepository';
 import { EmployeeLoanRepository } from '../repositories/EmployeeLoanRepository';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { AuditService } from '../../audit/audit.service';
 import { TaxService } from './TaxService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
-import { positiveNum, withSnakeAliases, resolveRunMonthStr } from '../utils/payroll.utils';
+import {
+  positiveNum,
+  withSnakeAliases,
+  resolveRunMonthStr,
+  mysqlNow,
+  parseJsonArr,
+  findComponentId,
+  matchesComponentCondition,
+  resolveComponentOverrides,
+} from '../utils/payroll.utils';
 import type { TenantContext } from '../../../db/types';
 import { SalaryCalculationService } from './SalaryCalculationService';
 import { PayrollFormulaEvaluator } from '../utils/PayrollFormulaEvaluator';
 
 export { positiveNum, withSnakeAliases };
 
-// ─── Component Condition Matching Engine ───────────────────────────────────
-
-/** Parse a JSON-encoded array from DB, returning [] on failure */
-function parseJsonArr(val: any): string[] {
-  if (!val) return [];
-  if (Array.isArray(val)) return val.map(String);
-  try { return (JSON.parse(val) as any[]).map(String); } catch { return []; }
-}
-
-/**
- * Best-effort match of a payslip line-item label to a real payroll_components
- * row, so payroll_earnings/payroll_deductions.component_id (a real FK) can be
- * populated. Not every generated line (LOP, ad-hoc adjustment) has a catalog
- * counterpart — callers must handle a null return.
- */
-function findComponentId(defs: any[], hints: string[]): number | null {
-  for (const hint of hints) {
-    const h = hint.toLowerCase();
-    const match = defs.find(d => String(d.name || '').toLowerCase().includes(h));
-    if (match) return match.id;
-  }
-  return null;
-}
-
-/**
- * Returns true if this component definition should apply to the given employee.
- * Checks: departments, grades, locations, gender, and the numeric condition.
- */
-function matchesComponentCondition(rawComp: any, emp: any, struct: any, runMonthStr?: string): boolean {
-  const comp = withSnakeAliases(rawComp) || rawComp;
-  // 1. Department filter — match by ID or name
-  const depts = parseJsonArr(comp.departments);
-  if (depts.length > 0) {
-    const empDeptId = String(emp.department_id || emp.current_department_id || '');
-    const empDeptName = String(emp.department_name || emp.department || '').toLowerCase();
-    const matches = depts.some(d => d === empDeptId || d.toLowerCase() === empDeptName);
-    if (!matches) return false;
-  }
-
-  // 2. Grade filter — match by ID or name
-  const grades = parseJsonArr(comp.grades);
-  if (grades.length > 0) {
-    const empGradeId = String(emp.grade_id || emp.pay_grade_id || '');
-    const empGradeName = String(emp.grade || emp.pay_grade || emp.designation || '').toLowerCase();
-    const matches = grades.some(g => g === empGradeId || g.toLowerCase() === empGradeName);
-    if (!matches) return false;
-  }
-
-  // 3. Location filter — match by ID or name
-  const locs = parseJsonArr(comp.locations);
-  if (locs.length > 0) {
-    const empLocId = String(emp.work_location_id || emp.location_id || '');
-    const empLocName = String(emp.location || emp.work_location || '').toLowerCase();
-    const matches = locs.some(l => l === empLocId || l.toLowerCase() === empLocName);
-    if (!matches) return false;
-  }
-
-  // 4. Gender filter
-  const gf = (comp.gender_filter || comp.genderFilter || 'All').toLowerCase();
-  if (gf && gf !== 'all') {
-    if ((emp.gender || '').toLowerCase() !== gf) return false;
-  }
-
-  // 5. Month filter — only apply in specified months
-  const allowedMonths = parseJsonArr(comp.months);
-  if (allowedMonths.length > 0) {
-    let currentMonth = new Date().getMonth() + 1; // 1–12
-    let currentMonthName = new Date().toLocaleString('default', { month: 'long' }); // 'January'
-    if (runMonthStr) {
-      const parts = String(runMonthStr).split('-');
-      if (parts.length >= 2) {
-        const mNum = parseInt(parts[1], 10);
-        if (!isNaN(mNum) && mNum >= 1 && mNum <= 12) {
-          currentMonth = mNum;
-          const d = new Date(parseInt(parts[0], 10), mNum - 1, 1);
-          currentMonthName = d.toLocaleString('default', { month: 'long' });
-        }
-      }
-    }
-    const matches = allowedMonths.some(
-      (m: string) => String(m) === String(currentMonth) || m.toLowerCase() === currentMonthName.toLowerCase()
-    );
-    if (!matches) return false;
-  }
-
-  // 6. Effective Date Range filter — compare against the PAYROLL RUN PERIOD, not today
-  // runMonthStr format: 'YYYY-MM'. Compare effective_from against end of run month,
-  // and effective_to against start of run month so past-month processing works correctly.
-  const effFrom = comp.effective_from_date || comp.effectiveFromDate || comp.effective_from;
-  const effTo = comp.effective_to_date || comp.effectiveToDate || comp.effective_to;
-  // Build period reference dates from runMonthStr (e.g. '2026-07')
-  let periodStart: Date;
-  let periodEnd: Date;
-  if (runMonthStr && /^\d{4}-\d{2}$/.test(runMonthStr)) {
-    const [y, m] = runMonthStr.split('-').map(Number);
-    periodStart = new Date(y, m - 1, 1);          // 1st of run month
-    periodEnd = new Date(y, m, 0);               // last day of run month
-  } else {
-    periodStart = new Date();
-    periodEnd = new Date();
-  }
-  if (effFrom) {
-    const fromDate = new Date(effFrom);
-    // Component not yet effective at the END of the run period
-    if (!isNaN(fromDate.getTime()) && fromDate > periodEnd) return false;
-  }
-  if (effTo) {
-    const toDate = new Date(effTo);
-    // Component already expired BEFORE the START of the run period
-    if (!isNaN(toDate.getTime()) && toDate < periodStart) return false;
-  }
-
-  // 7. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)
-  //    and word operators (Greater, Less, LessThanEqual, Equals, Between)
-  const condOn = (comp.condition_on || comp.conditionOn || '').trim();
-  const condOp = (comp.condition_operator || comp.conditionOperator || '').trim();
-  const cVal1 = comp.condition_value1 ?? comp.conditionValue1 ?? '';
-  const cVal2 = comp.condition_value2 ?? comp.conditionValue2 ?? '';
-
-  if (condOn && condOn !== 'Choose' && cVal1 !== '' && cVal1 !== null) {
-    // Resolve what value to compare against based on conditionOn
-    const gross = positiveNum(
-      struct?.gross_monthly,
-      positiveNum(struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0, positiveNum(emp.gross_salary, 0))
-    );
-    const basic = positiveNum(struct?.basic_monthly, positiveNum(struct?.basic_salary, Math.round(gross * 0.50)));
-    const condOnLower = condOn.toLowerCase();
-
-    let compareValue = gross; // default to gross
-    if (condOnLower.includes('basic')) compareValue = basic;
-    if (condOnLower.includes('gross')) compareValue = gross;
-    if (condOnLower.includes('days')) compareValue = 30; // can override later
-    if (condOnLower.includes('attend')) compareValue = gross; // attendance-linked
-
-    const t1 = Number(cVal1);
-    const t2 = Number(cVal2 || 0);
-
-    // Match both symbol and word operators
-    const op = condOp;
-    const isGt = op === '>' || op.includes('Greater') && !op.includes('Equal');
-    const isGte = op === '>=' || (op.includes('Greater') && op.includes('Equal'));
-    const isLt = op === '<' || (op.includes('Less') && !op.includes('Equal') && !op.includes('Than'));
-    const isLte = op === '<=' || op === 'LessThanEqual' || (op.includes('Less') && op.includes('Equal'));
-    const isEq = op === '=' || op === '==' || op.includes('Equals');
-    const isBtw = op === 'BETWEEN' || op.includes('Between');
-
-    if (isGt && !(compareValue > t1)) return false;
-    if (isGte && !(compareValue >= t1)) return false;
-    if (isLt && !(compareValue < t1)) return false;
-    if (isLte && !(compareValue <= t1)) return false;
-    if (isEq && compareValue !== t1) return false;
-    if (isBtw && (compareValue < t1 || compareValue > t2)) return false;
-  }
-
-  return true;
-}
-
-/**
- * Given the list of component definitions that match an employee,
- * compute override values for Basic, HRA, and other allowances.
- * Returns an object with optional overrides — only fields where a matching
- * component definition was found will be present.
- */
-function resolveComponentOverrides(
-  matchedComps: any[],
-  grossMonthly: number,
-  structFallbackBasic: number
-): { basic?: number; hra?: number; lta?: number; meal?: number; comm?: number; cea?: number } {
-  const overrides: Record<string, number> = {};
-
-  const computeAmount = (comp: any, base: number): number => {
-    const type = (comp.component_type || comp.componentType || 'Value').toLowerCase();
-    const formula = (comp.formula || '').toLowerCase();
-    const amount = Number(comp.amount || 0);
-
-    if (type === 'value') return amount;
-    if (type !== 'derived') return 0;
-
-    // 🔧 FIX: the old fallback — "grab the first number anywhere in the
-    // formula and treat it as a raw percentage" — silently corrupted any
-    // formula written as "(N * X) / 100" (e.g. Hoshi-style "(50 * CTC) / 100"):
-    // it read the 50 as 5000% instead of resolving the /100, producing
-    // wildly wrong Basic/HRA overrides (e.g. HRA = grossMonthly * 25).
-    // Parse explicit "N%" first, then "(N * X) / 100" style, then a bare
-    // "X * 0.N" decimal fraction. A formula with no recognizable pattern
-    // (e.g. "BASIC" / "[HRA]" — a same-value reference, not a percentage)
-    // intentionally yields 0 so it's skipped below, same as before.
-    const pctMatch = formula.match(/(\d+(?:\.\d+)?)\s*%/);
-    const divBy100Match = formula.match(/(\d+(?:\.\d+)?)\s*\*[^/]*\/\s*100/);
-    const decimalMultMatch = formula.match(/\*\s*(0?\.\d+)/);
-    const pct = pctMatch ? Number(pctMatch[1]) / 100
-      : divBy100Match ? Number(divBy100Match[1]) / 100
-        : decimalMultMatch ? Number(decimalMultMatch[1])
-          : 0;
-    return pct > 0 ? Math.round(base * pct) : 0;
-  };
-
-  // Pass 1 — resolve Basic first. Its own formula only ever references
-  // CTC/GROSS (never itself), so grossMonthly is always the right base here.
-  for (const comp of matchedComps) {
-    if (!(comp.name || '').toLowerCase().includes('basic')) continue;
-    const computed = computeAmount(comp, grossMonthly);
-    if (computed > 0) overrides.basic = computed;
-  }
-  const resolvedBasic = overrides.basic ?? structFallbackBasic;
-
-  // Pass 2 — everything else. Multiplying every formula against grossMonthly
-  // regardless of what it actually references silently doubled HRA whenever
-  // a formula read "BASIC * 0.4" (40% of Basic ≈ ₹8,000) — it computed 40%
-  // of gross instead (₹16,000), which then ate into Special Allowance since
-  // that's derived as whatever's left of gross after the other components.
-  // Pick the base the formula text actually names.
-  for (const comp of matchedComps) {
-    const name = (comp.name || '').toLowerCase();
-    if (name.includes('basic')) continue;
-    const formula = (comp.formula || '').toLowerCase();
-    const base = formula.includes('basic') ? resolvedBasic : grossMonthly;
-    const computed = computeAmount(comp, base);
-    if (computed <= 0) continue;
-
-    if (name.includes('hra') || name.includes('house')) overrides['hra'] = computed;
-    else if (name.includes('lta') || name.includes('travel')) overrides['lta'] = computed;
-    else if (name.includes('meal') || name.includes('food')) overrides['meal'] = computed;
-    else if (name.includes('comm')) overrides['comm'] = computed;
-    else if (name.includes('child') || name.includes('cea')) overrides['cea'] = computed;
-  }
-
-  return overrides;
-}
-
-/**
- * MySQL DATETIME columns reject new Date().toISOString()'s ISO 8601 format
- * ('2026-08-16T13:45:06.197Z') — it needs 'YYYY-MM-DD HH:MM:SS'. Every
- * *_at timestamp written directly in this service (processed_at, locked_at,
- * approved_at, published_at) must go through this instead.
- */
-function mysqlNow(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
 export class PayrollService {
   private runRepo: PayrollRunRepository;
   private runEmployeeRepo: PayrollRunEmployeeRepository;
   private earningsRepo: PayrollEarningsRepository;
   private deductionsRepo: PayrollDeductionsRepository;
-  private cycleRepo: PayrollCycleRepository;
   private payslipRepo: PayslipRepository;
   private loanRepo: EmployeeLoanRepository;
   private notificationService: NotificationService;
@@ -278,7 +42,6 @@ export class PayrollService {
     this.runEmployeeRepo = new PayrollRunEmployeeRepository();
     this.earningsRepo = new PayrollEarningsRepository();
     this.deductionsRepo = new PayrollDeductionsRepository();
-    this.cycleRepo = new PayrollCycleRepository();
     this.payslipRepo = new PayslipRepository();
     this.loanRepo = new EmployeeLoanRepository();
     this.notificationService = new NotificationService();
@@ -299,18 +62,26 @@ export class PayrollService {
     },
     monthParam?: string
   ) {
+    const db = getKnex();
     let resolvedCycleId = Number(payrollCycleId);
-    let cycle = !isNaN(resolvedCycleId) && resolvedCycleId > 0 ? await this.cycleRepo.getById(ctx, resolvedCycleId) : null;
+    let cycle = !isNaN(resolvedCycleId) && resolvedCycleId > 0
+      ? await db('payroll_cycles').where('id', resolvedCycleId).whereNull('deleted_at').first()
+      : null;
     if (!cycle) {
-      cycle = await this.cycleRepo.getCurrentCycle(ctx)
-        || await this.cycleRepo.query(ctx).whereNull('deleted_at').orderBy('id', 'desc').first();
+      cycle = await db('payroll_cycles')
+        .where(function () {
+          if (ctx.organizationId) this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+        })
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
+        .first();
     }
     if (!cycle) throw new NotFoundError('Payroll cycle not found');
     payrollCycleId = cycle.id;
 
-    const isCycleActive = cycle.status === 'open' || (cycle as any).isActive === true || (cycle as any).is_active === 1 || (cycle as any).isActive === 1 || !cycle.status;
-    if (!isCycleActive && cycle.status === 'closed') {
-      throw new ValidationError('Payroll cycle is not open for processing');
+    const isCycleActive = (cycle as any).is_active === 1 || (cycle as any).is_active === true || (cycle as any).isActive === true || (cycle as any).isActive === 1 || (cycle as any).is_active === undefined;
+    if (!isCycleActive) {
+      throw new ValidationError('Payroll cycle is not active for processing');
     }
 
     // Resolve target month dynamically
@@ -356,7 +127,6 @@ export class PayrollService {
         if (empIds.length > 0) {
           await db0('payroll_earnings').whereIn('payroll_run_employee_id', empIds).del();
           await db0('payroll_deductions').whereIn('payroll_run_employee_id', empIds).del();
-          await db0('payroll_adjustments').whereIn('payroll_run_employee_id', empIds).del();
         }
         await db0('advance_recoveries').where('payroll_run_id', runId).del().catch(() => { });
         await db0('payslips').where('payroll_run_id', runId).del();
@@ -379,8 +149,6 @@ export class PayrollService {
         run = withSnakeAliases(await db0('payroll_runs').where('id', runId).first());
       }
     }
-
-    const db = getKnex();
 
     if (!run) {
       run = await this.runRepo.create(ctx, {
@@ -432,12 +200,16 @@ export class PayrollService {
     const sCycle = (cycle as any);
     let initCycleDays: number;
     const freq = sCycle.frequency || sCycle.cycle_frequency || '';
-    if (freq === 'Weekly') initCycleDays = 7;
+    if (sCycle.total_days_calc && !isNaN(Number(sCycle.total_days_calc)) && Number(sCycle.total_days_calc) > 0) {
+      initCycleDays = Number(sCycle.total_days_calc);
+    } else if (freq === 'Weekly') initCycleDays = 7;
     else if (freq === 'Bi-Weekly' || freq === 'Fortnightly') initCycleDays = 14;
     else if (freq === 'Semi-Monthly') initCycleDays = 15;
     else {
-      const cStart = Number(sCycle.calculation_start_day || sCycle.start_date || 1);
-      const cEnd = Number(sCycle.cutoff_day || 28);
+      const cStart = Number(sCycle.start_date || 1);
+      const rawCutoff = Number(sCycle.cutoff_day);
+      const monthDaysInit = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+      const cEnd = (sCycle.cutoff_day !== null && sCycle.cutoff_day !== undefined && rawCutoff > 0) ? Math.min(monthDaysInit, rawCutoff) : monthDaysInit;
       initCycleDays = Math.max(1, cEnd - cStart + 1);
     }
 
@@ -530,13 +302,6 @@ export class PayrollService {
             .orderBy('id', 'desc')
             .first()
             .catch(() => null)
-          || await db('employee_salary_structures as ess')
-            .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-            .where({ 'ess.employee_id': empId, 'ess.is_current': true })
-            .whereNull('ess.deleted_at')
-            .select('ss.*')
-            .first()
-            .catch(() => null)
           || await db('salary_structures')
             .where('employee_id', empId)
             .whereNull('deleted_at')
@@ -572,13 +337,17 @@ export class PayrollService {
         if (run.payroll_cycle_id) {
           cycleRow = await db('payroll_cycles').where('id', run.payroll_cycle_id).whereNull('deleted_at').first().catch(() => null);
           if (cycleRow) {
-            if (cycleRow.start_date || cycleRow.calculation_start_day) {
-              cycleStartDay = Math.max(1, Math.min(monthDays, Number(cycleRow.start_date || cycleRow.calculation_start_day)));
+            if (cycleRow.start_date) {
+              cycleStartDay = Math.max(1, Math.min(monthDays, Number(cycleRow.start_date)));
             }
-            if (cycleRow.cutoff_day) {
-              cycleCutoffDay = Math.max(1, Math.min(monthDays, Number(cycleRow.cutoff_day)));
+            const rawCutoffNum = Number(cycleRow.cutoff_day);
+            if (cycleRow.cutoff_day != null && rawCutoffNum > 0) {
+              cycleCutoffDay = Math.max(1, Math.min(monthDays, rawCutoffNum));
+            } else {
+              // cutoff_day = 0 or null -> full calendar month
+              cycleCutoffDay = monthDays;
             }
-            if (cycleRow.total_days_calc && !isNaN(Number(cycleRow.total_days_calc))) {
+            if (cycleRow.total_days_calc && !isNaN(Number(cycleRow.total_days_calc)) && Number(cycleRow.total_days_calc) > 0) {
               totalCycleDays = Number(cycleRow.total_days_calc);
             } else if (cycleRow.frequency === 'Weekly') totalCycleDays = 7;
             else if (cycleRow.frequency === 'Bi-Weekly') totalCycleDays = 14;
@@ -852,7 +621,7 @@ export class PayrollService {
                 const otRule = await otRuleService.getEligibleRule(ctx, empId).catch(() => null);
 
                 const hourlyRate = resolvedGross / totalCycleDays / 8;
-                const dailyRate  = resolvedGross / totalCycleDays;
+                const dailyRate = resolvedGross / totalCycleDays;
 
                 for (const row of otRows) {
                   const mins = Number((row as any).ot_mins || 0);
@@ -860,11 +629,11 @@ export class PayrollService {
                   const dayType = ((row as any).day_type || 'normal') as 'normal' | 'holiday' | 'weekend';
                   if (otRule) {
                     baseAmount += otRuleService.calculateOTPayAmount({
-                      rule:            otRule,
+                      rule: otRule,
                       overtimeMinutes: mins,
                       dayType,
-                      basicAmount:     resolvedBasicMonthly ?? resolvedGross * 0.4,
-                      grossAmount:     resolvedGross,
+                      basicAmount: resolvedBasicMonthly ?? resolvedGross * 0.4,
+                      grossAmount: resolvedGross,
                       dailyRate,
                       hourlyRate,
                     });
@@ -1025,6 +794,33 @@ export class PayrollService {
             .where('month', runMonthStr).first();
         } catch { regOverride = null; }
 
+        // Apply component_values overrides to individual component breakdown rows
+        if (regOverride?.component_values) {
+          try {
+            const parsedCompVals = typeof regOverride.component_values === 'string'
+              ? JSON.parse(regOverride.component_values)
+              : regOverride.component_values;
+            if (parsedCompVals && typeof parsedCompVals === 'object') {
+              for (const row of earnedRows) {
+                if (row.componentId && parsedCompVals[row.componentId]) {
+                  const ov = parsedCompVals[row.componentId];
+                  if (ov.earned !== undefined && ov.earned !== null) row.earnedAmount = Number(ov.earned);
+                  if (ov.monthly !== undefined && ov.monthly !== null) row.baseAmount = Number(ov.monthly);
+                }
+              }
+              for (const row of deductionRows) {
+                if (row.componentId && parsedCompVals[row.componentId]) {
+                  const ov = parsedCompVals[row.componentId];
+                  const ovAmt = ov.earned ?? ov.monthly ?? ov.amount;
+                  if (ovAmt !== undefined && ovAmt !== null) {
+                    row.amount = Number(ovAmt);
+                  }
+                }
+              }
+            }
+          } catch { /* ignore JSON parse */ }
+        }
+
         // ── Final totals ──────────────────────────────────────────────────────
         let totalEarnings = earnedRows.reduce((s, r) => s + r.earnedAmount, 0) + arrearsAmount;
         let totalDeductions = deductionRows.reduce((s, r) => s + r.amount, 0);
@@ -1134,7 +930,7 @@ export class PayrollService {
           const payslipNum = `PS-${runMonthStr.replace(/-/g, '')}-${empId}`;
           const empCompanyId = empRow?.company_id || (run as any).company_id || ctx.companyId || null;
           const existing = await db('payslips')
-            .where({ employee_id: empId, payslip_month: payslipMonthDate })
+            .where({ organization_id: ctx.organizationId, employee_id: empId, payslip_month: payslipMonthDate })
             .whereNull('deleted_at').first().catch(() => null);
 
           if (existing) {
@@ -1183,7 +979,7 @@ export class PayrollService {
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'calculated',
+      status: 'completed',
       processed_employees: processedCount,
       error_count: errorCount,
       updated_by: ctx.userId
@@ -1213,9 +1009,19 @@ export class PayrollService {
             .orWhere('is_admin', true);
         });
 
-      const runPeriod = (run as any).payroll_month || (run as any).month || 'Active Period';
-      const staffCount = (run as any).employee_count || (run as any).total_employees || 0;
-      const netPay = Math.round(Number((run as any).total_net_pay || 0)).toLocaleString('en-IN');
+      const runPeriod = (run as any).run_month
+        ? new Date((run as any).run_month).toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+        : 'Active Period';
+      const staffCount = (run as any).total_employees || 0;
+      // Aggregate net salary from run employees since payroll_runs has no total_net_pay column
+      const db2 = getKnex();
+      const netPayRow: any = await db2('payroll_run_employees')
+        .where('payroll_run_id', payrollRunId)
+        .where('organization_id', ctx.organizationId)
+        .sum('net_salary as total')
+        .first()
+        .catch(() => ({ total: 0 }));
+      const netPay = Math.round(Number(netPayRow?.total || 0)).toLocaleString('en-IN');
 
       for (const u of adminUsers) {
         await db('notifications').insert({
@@ -1243,7 +1049,7 @@ export class PayrollService {
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'calculated',   // return to calculated — not draft; HR keeps figures, just unlocked for edits
+      status: 'processing',   // return to processing — figures exist but lock removed; HR can adjust before re-locking
       locked_by: null,
       locked_at: null,
       updated_by: ctx.userId
@@ -1345,14 +1151,9 @@ export class PayrollService {
       const empTotalDeductions = Number((emp as any).totalDeductions ?? (emp as any).total_deductions ?? 0);
       const empNetSalary = Number((emp as any).netSalary ?? (emp as any).net_salary ?? 0);
 
-      const struct = withSnakeAliases(await db('employee_salary_structures as ess')
-        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .where({ 'ess.employee_id': empId, 'ess.is_current': true })
-        .whereNull('ess.deleted_at')
-        .select('ss.*')
-        .first()
-        .catch(() => null)
-        || await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').first().catch(() => null));
+      const struct = withSnakeAliases(
+        await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').orderBy('id', 'desc').first().catch(() => null));
+
 
       const rawRunMonth = resolveRunMonthStr(run);
       const payslipMonthVal = `${rawRunMonth}-01`;
@@ -1361,6 +1162,7 @@ export class PayrollService {
 
       // Check for existing payslip (created as preview during processPayroll)
       const existingPayslip = await db('payslips')
+        .where('organization_id', ctx.organizationId)
         .where('employee_id', empId)
         .where('payslip_month', payslipMonthVal)
         .whereNull('deleted_at')
@@ -1615,37 +1417,6 @@ export class PayrollService {
     return csv;
   }
 
-  // getCycles defined below (delegating to PayrollCycleService)
-
-  // ── Cycle CRUD — delegates to PayrollCycleService (single source of truth) ──────────────────
-  // Duplicate implementations previously lived here AND in PayrollCycleService.
-  // All calls now go through PayrollCycleService to avoid double-maintenance bugs.
-
-  async getCycles(ctx: TenantContext) {
-    const { PayrollCycleService } = await import('./PayrollCycleService');
-    return new PayrollCycleService().getCycles(ctx);
-  }
-
-  async createCycle(ctx: TenantContext, data: any) {
-    const { PayrollCycleService } = await import('./PayrollCycleService');
-    return new PayrollCycleService().createCycle(ctx, data);
-  }
-
-  async getCycle(ctx: TenantContext, id: number | string) {
-    const { PayrollCycleService } = await import('./PayrollCycleService');
-    return new PayrollCycleService().getCycle(ctx, id);
-  }
-
-  async updateCycle(ctx: TenantContext, id: number | string, data: any) {
-    const { PayrollCycleService } = await import('./PayrollCycleService');
-    return new PayrollCycleService().updateCycle(ctx, id, data);
-  }
-
-  async deleteCycle(ctx: TenantContext, id: number | string) {
-    const { PayrollCycleService } = await import('./PayrollCycleService');
-    return new PayrollCycleService().deleteCycle(ctx, id);
-  }
-
   /**
    * UNIVERSAL PAYROLL COMPONENT CALCULATION ENGINE
    * Handles all 5 core scenarios:
@@ -1656,88 +1427,24 @@ export class PayrollService {
    * 5. Employer Contribution Tracking (EPF 3.67%+8.33%, ESIC 3.25%)
    */
   evaluateComponent(params: {
-    type: 'Value' | 'Derived' | 'Module';
+    type: 'Value' | 'Derived' | 'Module' | string;
     fixedAmount?: number;
     formula?: string;
     moduleSource?: string;
-    parentValues: { basic: number; gross: number; earnedBasic: number; earnedGross: number };
-    lopFactor: number;
+    parentValues?: { basic: number; gross: number; earnedBasic?: number; earnedGross?: number };
+    lopFactor?: number;
     basedOnAttendance?: boolean;
     minBoundary?: number;
     maxBoundary?: number;
+    boundaryType?: string;
+    conditionOn?: string;
+    conditionOperator?: string;
+    conditionValue1?: string | number;
+    conditionValue2?: string | number;
     loanEmiAmount?: number;
   }): number {
-    const {
-      type,
-      fixedAmount = 0,
-      formula = '',
-      parentValues,
-      lopFactor = 1,
-      basedOnAttendance = true,
-      minBoundary,
-      maxBoundary,
-      loanEmiAmount = 0
-    } = params;
-
-    let computedValue = 0;
-
-    if (type === 'Value') {
-      computedValue = fixedAmount;
-    } else if (type === 'Derived') {
-      if (formula && formula.trim()) {
-        try {
-          let expr = formula.toLowerCase();
-          const epfEpsWages = Math.min(parentValues.earnedBasic || parentValues.basic || 0, 15000);
-
-          expr = expr
-            .replace(/\[epf_eps_wages\]/g, String(epfEpsWages))
-            .replace(/\[earned_basic\]/g, String(parentValues.earnedBasic || 0))
-            .replace(/\[earned_gross\]/g, String(parentValues.earnedGross || 0))
-            .replace(/\[basic\]/g, String(parentValues.basic || 0))
-            .replace(/\[gross\]/g, String(parentValues.gross || 0))
-            .replace(/\[lop_factor\]/g, String(lopFactor || 1))
-            .replace(/\[attendance_days\]/g, String(lopFactor || 1))
-            .replace(/\[salary_days\]/g, String(lopFactor || 1))
-            .replace(/\bbasic\b/g, String(parentValues.basic || 0))
-            .replace(/\bgross\b/g, String(parentValues.gross || 0));
-
-          // Strip any characters except digits, decimals, basic operators, and parentheses
-          const safeExpr = expr.replace(/[^0-9.\+\-\*\/\(\)\s]/g, '');
-          if (safeExpr.trim()) {
-            const evalResult = new Function(`"use strict"; return (${safeExpr});`)();
-            if (typeof evalResult === 'number' && !isNaN(evalResult)) {
-              computedValue = Math.round(evalResult);
-            }
-          }
-        } catch (err) {
-          console.error('Error evaluating formula expression:', formula, err);
-          computedValue = fixedAmount;
-        }
-      } else {
-        computedValue = fixedAmount;
-      }
-    } else if (type === 'Module') {
-      if (params.moduleSource === 'Loan' || formula.toLowerCase().includes('loan')) {
-        computedValue = loanEmiAmount;
-      } else {
-        computedValue = fixedAmount;
-      }
-    }
-
-    // Apply attendance proration factor if enabled
-    if (basedOnAttendance && type === 'Value') {
-      computedValue = Math.round(computedValue * lopFactor);
-    }
-
-    // Apply Min / Max boundary guardrails
-    if (minBoundary !== undefined && computedValue < minBoundary) {
-      computedValue = minBoundary;
-    }
-    if (maxBoundary !== undefined && computedValue > maxBoundary) {
-      computedValue = maxBoundary;
-    }
-
-    return Math.max(0, computedValue);
+    const salaryCalcService = new SalaryCalculationService();
+    return salaryCalcService.evaluateComponent(params as any);
   }
 
   async getReconciliation(ctx: TenantContext, currentRunId: number) {
