@@ -423,7 +423,7 @@ export function EmployeeCreateModal({
 
 
     if (!formData.jobTitle) {
-      errors.jobTitle = 'Designation (Job Title) is required';
+      errors.jobTitle = 'Job title is required';
       if (!firstTabWithError) firstTabWithError = 'professional';
     }
 
@@ -1072,17 +1072,17 @@ export function EmployeeCreateModal({
 
 
 
-                    {/* Job Title / Designation */}
+                    {/* Job Title */}
                     <div>
                       <Label htmlFor="jobTitle" className="flex items-center text-xs font-bold text-foreground">
-                        Designation (Job Title) <span className="text-red-500 ml-0.5">*</span>
+                        Job Title <span className="text-red-500 ml-0.5">*</span>
                         <MasterFieldInfo
                           id="designation"
                           fieldName="Designation"
                           category="designation"
                           masterName="Designation"
                           path="Settings → Masters Hub → Designation"
-                          description="Add or manage official job titles and designations in Masters Hub."
+                          description="Maintain the official designation master list. The employee job title is stored separately and can differ from the designation reference when needed."
                           onRefresh={() => queryClient.invalidateQueries({ queryKey: ['designations'] })}
                         />
                       </Label>
@@ -1095,7 +1095,7 @@ export function EmployeeCreateModal({
                         value={formData.jobTitle}
                         onChange={(e) => handleFieldChange('jobTitle', e.target.value)}
                       >
-                        <option value="">-- Select Designation --</option>
+                        <option value="">-- Select Job Title --</option>
                         {designations.map((desig: any) => (
                           <option key={desig.id} value={desig.name}>
                             {desig.name}
@@ -1108,7 +1108,7 @@ export function EmployeeCreateModal({
                           <span>{fieldErrors.jobTitle}</span>
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Choose the employee’s job title. Designation is maintained separately in the master list.</p>
                       )}
                     </div>
 

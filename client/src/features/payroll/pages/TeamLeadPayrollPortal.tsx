@@ -5,7 +5,7 @@ import {
   XCircle,
   Clock,
   FileText,
-  DollarSign,
+  IndianRupee,
   Lock,
   UserX,
 } from 'lucide-react';
@@ -81,7 +81,7 @@ export const TeamLeadPayrollPortal: React.FC = () => {
       <div className="bg-card/80 backdrop-blur-md border border-border/70 p-1.5 rounded-2xl shadow-2xs">
         <div className="flex items-center gap-1 overflow-x-auto">
           {[
-            { key: 'loans', label: 'Loans', badgeCount: pendingLoans, icon: DollarSign },
+            { key: 'loans', label: 'Loans', badgeCount: pendingLoans, icon: IndianRupee },
             { key: 'attendance', label: 'Attendance & OT Lock', badgeCount: 0, icon: Lock },
             { key: 'settlements', label: 'Team Exit Clearances', badgeCount: 0, icon: UserX },
             { key: 'payslips', label: 'Team Payslips', badgeCount: 0, icon: FileText },

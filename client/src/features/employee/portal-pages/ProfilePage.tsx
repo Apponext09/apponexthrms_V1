@@ -35,7 +35,7 @@ import {
   Palette,
   Check,
   Edit2,
-  DollarSign,
+  IndianRupee,
   Layers,
   FileEdit,
   AlertTriangle,
@@ -657,7 +657,7 @@ export default function ProfilePage() {
 
             {[
               { id: 'details',   label: 'Combined Details',      icon: User,           desc: 'Basic, Contact & Emergency info' },
-              { id: 'payroll',   label: 'Payroll & Salary',     icon: DollarSign,     desc: 'Salary structure & revisions' },
+              { id: 'payroll',   label: 'Payroll & Salary',     icon: IndianRupee,     desc: 'Salary structure & revisions' },
               { id: 'documents', label: 'Documents',            icon: Layers,         desc: 'KYC & Employee certificates' },
               { id: 'statutory', label: 'Statutory Details',    icon: Lock,           desc: 'PF, ESI, PAN & Tax parameters' },
               { id: 'checkin',   label: 'Check-In Mode',        icon: MapPin,         desc: 'Geo & Attendance settings' },

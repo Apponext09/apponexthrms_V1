@@ -26,7 +26,7 @@ import {
   BarChart3,
   PieChart as PieIcon,
   Calendar,
-  DollarSign,
+  IndianRupee,
   Users,
   ShieldCheck,
   CheckCircle2,
@@ -800,7 +800,7 @@ export const PayrollReportsPage: React.FC = () => {
               <p className="text-[10px] text-muted-foreground font-semibold">Avg: ₹{avgGross.toLocaleString('en-IN')}/staff</p>
             </div>
             <div className="p-3 rounded-xl bg-primary/10 text-primary">
-              <DollarSign className="w-5 h-5" />
+              <IndianRupee className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { IndianRupee, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 interface Component {
   id?: number | string;
@@ -51,7 +51,7 @@ export const EarningsDeductionsBreakdown: React.FC<EarningsDeductionsBreakdownPr
         <Card className="border border-border/80 shadow-xs bg-card">
           <CardHeader className="pb-3 border-b border-border/60 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1.5">
-              <DollarSign className="w-4 h-4 text-emerald-600" /> Earnings & Allowances
+              <IndianRupee className="w-4 h-4 text-emerald-600" /> Earnings & Allowances
             </CardTitle>
             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]">
               ₹{calcTotalEarnings.toLocaleString('en-IN')}

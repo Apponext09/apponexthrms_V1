@@ -207,7 +207,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     if (this.companyScoped && ctx?.companyId && insertPayload.company_id === undefined) {
       insertPayload.company_id = ctx.companyId;
     }
-    const [id] = await this.query(ctx).insert(insertPayload);
+    const [id] = await this.db(this.tableName).insert(insertPayload);
 
     const created = await this.getById(ctx, id);
     if (!created) {
@@ -229,7 +229,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       updated_at: now,
     }));
 
-    const [firstId] = await (this.query(ctx).insert(prepared as any) as any);
+    const [firstId] = await (this.db(this.tableName).insert(prepared as any) as any);
 
     const created = await (this.query(ctx)
       .whereIn('id', Array.from({ length: dataArray.length }, (_, i) => Number(firstId) + i))

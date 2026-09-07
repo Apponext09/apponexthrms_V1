@@ -115,7 +115,7 @@ export function PlatformAdminDashboard() {
         <StatCard
           icon={TrendingUp}
           label="Monthly Revenue"
-          value="$82,000"
+          value="₹82,000"
           delta={15}
           deltaLabel="MoM growth"
           variant="success"
@@ -150,7 +150,7 @@ export function PlatformAdminDashboard() {
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '8px',
                   }}
-                  formatter={(value) => `$${value.toLocaleString()}`}
+                  formatter={(value) => `₹${value.toLocaleString()}`}
                 />
                 <Line
                   type="monotone"

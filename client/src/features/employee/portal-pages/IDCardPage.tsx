@@ -57,7 +57,7 @@ export const IDCardPage: React.FC<IDCardPageProps> = ({ employeeId }) => {
     const rawFirst = employee?.firstName || (employee as any)?.first_name || user?.firstName || (user as any)?.first_name || '';
     const rawLast = employee?.lastName || (employee as any)?.last_name || user?.lastName || (user as any)?.last_name || '';
     const rawCode = employee?.employeeCode || (employee as any)?.employee_code || (user as any)?.employeeCode || (user as any)?.employee_code || (user as any)?.code || (user?.id ? `EMP${String(user.id).padStart(3, '0')}` : '');
-    const rawDesig = employee?.designation || (employee as any)?.designation_name || (employee as any)?.jobTitle || (employee as any)?.job_title || (user as any)?.designation || (user as any)?.designation_name || (user as any)?.role || 'TEAM MEMBER';
+    const rawDesig = employee?.designation || (employee as any)?.designation_name || (employee as any)?.designationName || (employee as any)?.currentDesignationName || (employee as any)?.current_designation_name || (employee as any)?.jobTitle || (employee as any)?.job_title || (user as any)?.designation || (user as any)?.designation_name || (user as any)?.role || 'TEAM MEMBER';
     const rawDept = employee?.department || (employee as any)?.department_name || (user as any)?.department || (user as any)?.department_name || 'CORPORATE';
     const rawEmail = (employee as any)?.workEmail || (employee as any)?.work_email || (employee as any)?.email || user?.email || (user as any)?.work_email || '';
 

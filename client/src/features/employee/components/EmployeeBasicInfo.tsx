@@ -140,7 +140,7 @@ export function EmployeeBasicInfo({
       nationality: employee?.nationality || (employee as any)?.nationality || '',
       password: '',
       confirmPassword: '',
-      jobTitle: (employee as any).jobTitle || (employee as any).designation || (employee as any).designationName || (employee.designation as any)?.name || '',
+      jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
     });
   }, [employee]);
@@ -229,7 +229,7 @@ export function EmployeeBasicInfo({
       ...(employee || {}),
       password: '',
       confirmPassword: '',
-      jobTitle: (employee as any).jobTitle || '',
+      jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
     });
     setIsEditing(false);
@@ -241,8 +241,9 @@ export function EmployeeBasicInfo({
   )?.name || '-';
 
   const accessRole = (employee as any).accessRole;
-  const jobTitle = (employee as any).jobTitle || (employee as any).designation || (employee as any).designationName || (employee.designation as any)?.name || '-';
-  
+  const designation = (employee as any).designation || (employee as any).designationName || (employee as any).designation_name || (employee as any).currentDesignationName || (employee as any).current_designation_name || '-';
+  const jobTitle = (employee as any).jobTitle || (employee as any).job_title || (employee as any).positionTitle || (employee as any).position_title || '-';
+
   // Resolve manager name from multiple fallback properties
   const reportingManagerName =
     (employee as any).reportingManagerName ||
@@ -685,6 +686,10 @@ export function EmployeeBasicInfo({
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Designation</p>
+                  <p className="mt-0.5 text-xs font-semibold text-foreground">{formatValue(designation)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Job Title</p>
                   <p className="mt-0.5 text-xs font-semibold text-foreground">{formatValue(jobTitle)}</p>
                 </div>
                 <div>

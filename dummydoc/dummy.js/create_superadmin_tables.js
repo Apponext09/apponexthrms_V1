@@ -83,6 +83,7 @@ require('dotenv').config();
         `INSERT INTO super_admins (uuid, user_id, email, password_hash, first_name, last_name, access_level, status)
          VALUES (?, ?, ?, ?, 'Super', 'Admin', 'owner', 'active')`,
         [uuidv4(), userId, superAdminEmail, passwordHash]
+        
       );
       superAdminId = res.insertId;
       console.log(`✅ Seeded Super Admin credentials into super_admins table (ID: ${superAdminId})`);

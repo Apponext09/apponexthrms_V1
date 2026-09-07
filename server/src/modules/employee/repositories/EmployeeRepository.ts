@@ -190,8 +190,13 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .select('name')
         .first();
       if (desig) {
-        (employee as any).jobTitle = desig.name;
+        const jobTitleValue = (employee as any).jobTitle ?? (employee as any).job_title ?? null;
+        if (!jobTitleValue) {
+          (employee as any).jobTitle = desig.name;
+        }
         (employee as any).designation = desig.name;
+        (employee as any).designationName = desig.name;
+        (employee as any).designation_name = desig.name;
       }
     }
 
@@ -393,7 +398,10 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         const desigId = item.currentDesignationId || item.current_designation_id;
         if (desigId) {
           const dgName = desigMap.get(Number(desigId)) || null;
-          (item as any).jobTitle = dgName;
+          const jobTitleValue = item.jobTitle ?? item.job_title ?? null;
+          if (!jobTitleValue && dgName) {
+            (item as any).jobTitle = dgName;
+          }
           (item as any).designation = dgName;
           (item as any).designationName = dgName;
           (item as any).designation_name = dgName;
