@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -83,14 +83,10 @@ const OPTIONAL_KPI_PATHS: Record<string, string> = {
 
 export function OrgAdminDashboard() {
   const navigate = useNavigate();
-  const { user, fetchCurrentUser } = useAuthStore();
+  const { user } = useAuthStore();
   const { selectedCompanyId, selectedCompanyName } = useCompanyStore();
   const { data: dashboardData, isLoading } = useAdminDashboard();
   const { config } = useDashboardCustomizationStore();
-
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
 
   const companyInfo = dashboardData?.companyInfo;
   const companyName = companyInfo?.name || selectedCompanyName || user?.organizationName || 'Organization';

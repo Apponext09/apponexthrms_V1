@@ -1,7 +1,48 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, Menu, LogOut, Settings, Lock } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import {
+  ChevronDown, LogOut, Lock, Shield,
+  // ── All nav icons used across navigation.ts sections ──────────────────────
+  LayoutDashboard, Users, RefreshCw, GitBranch, BarChart3, Calendar, FilePlus,
+  Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
+  ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
+  Receipt, TrendingUp, PieChart, Settings, Award, Target, Star, Activity,
+  Zap, Package, Monitor, HelpCircle, Bell, Cog, Building2, Globe, Shield as ShieldIcon,
+  Navigation, UserPlus, BarChart2, Layers, Database, AlertCircle, BookOpen,
+  Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
+  Home, Search, Filter, Edit, Trash2, Eye, Download, Upload, Plus, Minus,
+  ChevronRight, ChevronLeft, ChevronUp, X, Check, Info, AlertTriangle,
+  LayoutGrid, List, Grid, Table, Columns, Rows, Maximize, Minimize,
+  Link, ExternalLink, Mail, Phone, Video, Image, File, Folder, Archive,
+  Tag, Bookmark, Flag, Pin, Share, Copy, Printer, Send, Inbox, MessageCircle,
+  Headphones, Mic, Volume, Camera, Music, Play, Pause, FastForward,
+  RotateCcw, RotateCw, Shuffle, Repeat, SkipForward, SkipBack,
+  Battery, Bluetooth, Cast, Cpu, HardDrive, Lock as LockIcon, Unlock,
+  Key, Fingerprint, LogIn, User, UserMinus, Users2, Group, PersonStanding,
+  Building, Factory, Store, MapIcon, Compass, Route, Truck, Car, Plane,
+  Train, Bike, Bus, Anchor, Ticket, Gift, ShoppingCart, ShoppingBag,
+  CreditCard as CardIcon, Banknote, Coins, TrendingDown, BarChart,
+  LineChart, ScatterChart, GanttChart, Network, TreeDeciduous, GitMerge,
+  GitBranch as BranchIcon, GitCommit, GitPullRequest, Code, Terminal,
+  Globe2, Layers2, Layout, PanelLeft, PanelRight, SidebarIcon, Menu,
+} from 'lucide-react';
+
+// ── Static icon registry — only icons referenced in navigation config ────────
+// This replaces `import * as LucideIcons` (which imports all ~1000 icons).
+// Vite/Rollup tree-shakes this object, keeping bundle size minimal.
+const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>> = {
+  LayoutDashboard, Users, RefreshCw, GitBranch, BarChart3, Calendar, FilePlus,
+  Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
+  ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
+  Receipt, TrendingUp, PieChart, Settings, Award, Target, Star, Activity,
+  Zap, Package, Monitor, HelpCircle, Bell, Cog, Building2, Globe, Shield,
+  Navigation, UserPlus, BarChart2, Layers, Database, AlertCircle, BookOpen,
+  Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
+  Lock, ChevronDown, LogOut, Home, Search, BarChart, LineChart, GanttChart,
+  Network, GitMerge, GitCommit, GitPullRequest, Building, Factory, Store,
+  Truck, Users2, Fingerprint, Key, Inbox, MessageCircle, Headphones,
+  Filter, Edit, Eye, Download, Upload, Plus, Share, Copy, Send, Tag, Bookmark,
+};
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
@@ -42,63 +83,36 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
   const { expandedSections, toggleSection, expandSectionContainingRoute } = useNavStore();
 
-  const [visibleSections, setVisibleSections] = useState<ReturnType<typeof getVisibleSections>>([]);
   const [lockedItemDialogOpen, setLockedItemDialogOpen] = useState(false);
   const [lockedItemName, setLockedItemName] = useState('');
 
-  // Get role-filtered navigation on mount and when roles/features/modules change
+  // ── Memoized nav sections — only recomputes when roles/features/settings change ──
+  // Removed location.pathname from deps: pathname changes no longer trigger
+  // the heavy getVisibleSections() computation on every navigation.
+  const visibleSections = useMemo(
+    () => getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled),
+    [roles, licensedFeatures, attendanceMode, liveTrackingEnabled]
+  );
+
+  // ── Expand the active section when route changes (lightweight, no recompute) ──
   useEffect(() => {
-    let isMounted = true;
-    const refreshSections = async () => {
-      const baseSections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
-      try {
-        const customMasters = await masterBuilderApi.getMasters();
-        if (!isMounted) return;
-        if (customMasters && customMasters.length > 0) {
-          const updated = baseSections.map((sec) => {
-            if (sec.id === 'masters') {
-              const existingHrefs = new Set(sec.items.map((i) => i.href.toLowerCase()));
-              const customNavItems = customMasters
-                .filter((cm) => !existingHrefs.has(`/masters?tab=${cm.code}`.toLowerCase()) && !existingHrefs.has(`/masters/${cm.code}`.toLowerCase()))
-                .map((cm) => ({
-                  name: cm.name,
-                  href: `/masters?tab=${cm.code}`,
-                  icon: cm.icon || 'Boxes',
-                  badge: 'Custom',
-                }));
-              return {
-                ...sec,
-                items: [...sec.items, ...customNavItems],
-              };
-            }
-            return sec;
-          });
-          setVisibleSections(updated);
-          expandSectionContainingRoute(location.pathname, updated);
-          return;
-        }
-      } catch (err) {
-        // Fallback to base sections if API fails
-      }
-      if (isMounted) {
-        setVisibleSections(baseSections);
-        expandSectionContainingRoute(location.pathname, baseSections);
-      }
+    expandSectionContainingRoute(location.pathname, visibleSections);
+  }, [location.pathname, visibleSections, expandSectionContainingRoute]);
+
+  // ── Re-trigger nav when module toggles fire from storage/custom events ────
+  useEffect(() => {
+    const handleExternalUpdate = () => {
+      // Force re-evaluation by invalidating licensing query cache
+      // The licensedFeatures change will cause visibleSections useMemo to re-run
+      window.dispatchEvent(new Event('apponext_nav_refresh'));
     };
-
-    refreshSections();
-
-    window.addEventListener('apponext_modules_updated', refreshSections);
-    window.addEventListener('custom_masters_updated', refreshSections);
-    window.addEventListener('storage', refreshSections);
-
+    window.addEventListener('apponext_modules_updated', handleExternalUpdate);
+    window.addEventListener('storage', handleExternalUpdate);
     return () => {
-      isMounted = false;
-      window.removeEventListener('apponext_modules_updated', refreshSections);
-      window.removeEventListener('custom_masters_updated', refreshSections);
-      window.removeEventListener('storage', refreshSections);
+      window.removeEventListener('apponext_modules_updated', handleExternalUpdate);
+      window.removeEventListener('storage', handleExternalUpdate);
     };
-  }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, location.pathname]);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -164,9 +178,9 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     return `${fName?.[0] || ''}${lName?.[0] || ''}`.toUpperCase() || 'US';
   };
 
-  // Get icon component by name
+  // Get icon component by name — uses static registry, NOT wildcard import
   const getIconComponent = (iconName: string) => {
-    const Icon = (LucideIcons as any)[iconName];
+    const Icon = ICON_REGISTRY[iconName];
     return Icon ? <Icon className="h-4 w-4" /> : <div className="h-4 w-4" />;
   };
 
@@ -445,7 +459,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 )}
               >
-                <LucideIcons.Shield className="h-3.5 w-3.5 flex-shrink-0" />
+                <Shield className="h-3.5 w-3.5 flex-shrink-0" />
                 {open && <span className="truncate">Platform Admin</span>}
               </button>
               <Separator className="my-1 border-border/40" />

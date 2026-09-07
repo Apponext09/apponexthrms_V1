@@ -13,8 +13,38 @@ import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobS
 import { startAutoCheckOutCron } from './modules/attendance/services/AutoCheckOutService';
 
 
-// Force restart trigger
 const env = getEnv();
+
+/**
+ * Repair corrupted super_admin password hash in the background.
+ * Runs AFTER server starts listening so it never blocks incoming requests.
+ */
+async function repairSuperAdminHashIfNeeded(): Promise<void> {
+  try {
+    const db = getKnex();
+    const hasSA = await db.schema.hasTable('super_admins');
+    if (!hasSA) return;
+
+    const sa = await db('super_admins').whereRaw('LOWER(email) = ?', ['superadmin@apponext.com']).first();
+    const curHash = sa?.password_hash || sa?.passwordHash;
+    if (sa && (curHash?.startsWith('$2a$') || !curHash?.startsWith('$argon2'))) {
+      const { hash: argon2Hash } = await import('argon2');
+      const validArgon2Hash = await argon2Hash('SuperAdmin@2026!Secure', {
+        memoryCost: 12288,
+        timeCost: 3,
+        parallelism: 1,
+        type: 1,
+      });
+      await db('super_admins').where('id', sa.id).update({
+        password_hash: validArgon2Hash,
+        updated_at: new Date(),
+      });
+      logger.info(`[DB REPAIR] ✅ Fixed corrupted super_admins password_hash for superadmin@apponext.com`);
+    }
+  } catch (e: any) {
+    logger.warn(`[DB REPAIR] Could not check super_admins password hash: ${e?.message}`);
+  }
+}
 
 /**
  * Start the HTTP server
@@ -25,32 +55,6 @@ async function start() {
     logger.info('Initializing database connection...');
     initializeKnex();
     logger.info('Database connection initialized');
-
-    // Ensure super_admins table has valid Argon2 hash in database
-    try {
-      const db = getKnex();
-      const hasSA = await db.schema.hasTable('super_admins');
-      if (hasSA) {
-        const sa = await db('super_admins').whereRaw('LOWER(email) = ?', ['superadmin@apponext.com']).first();
-        const curHash = sa?.password_hash || sa?.passwordHash;
-        if (sa && (curHash?.startsWith('$2a$') || !curHash?.startsWith('$argon2'))) {
-          const { hash: argon2Hash } = await import('argon2');
-          const validArgon2Hash = await argon2Hash('SuperAdmin@2026!Secure', {
-            memoryCost: 12288,
-            timeCost: 3,
-            parallelism: 1,
-            type: 1,
-          });
-          await db('super_admins').where('id', sa.id).update({
-            password_hash: validArgon2Hash,
-            updated_at: new Date(),
-          });
-          logger.info(`[DB REPAIR] ✅ Fixed corrupted super_admins password_hash in MySQL database for superadmin@apponext.com`);
-        }
-      }
-    } catch (e: any) {
-      logger.warn(`[DB REPAIR] Could not check super_admins password hash: ${e?.message}`);
-    }
 
     // Create Express app
     const app = createApp();
@@ -78,6 +82,8 @@ async function start() {
       server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
 
+      // Repair super_admin hash in background — does NOT block server startup
+      repairSuperAdminHashIfNeeded();
       // Run schema checks and profile seeding asynchronously in background
       setupProfileSchemaAndSeed(getKnex()).catch((err) => {
         logger.error('Background setupProfileSchemaAndSeed error:', err?.message || err);

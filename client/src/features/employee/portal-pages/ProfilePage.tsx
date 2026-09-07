@@ -337,8 +337,11 @@ export default function ProfilePage() {
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   // Role Determination & Theme Switcher
-  const roleCode = (user?.accessRole || user?.role || user?.roles?.[0] || 'employee').toLowerCase();
-  const normalizedRole = roleCode.includes('intern')
+  // Always read from auth store (user) — it is updated on login and reflects the assigned role correctly.
+  const roleCode = (user?.accessRole || user?.roles?.[0] || user?.role || 'employee').toLowerCase();
+  const normalizedRole = roleCode.includes('finance')
+    ? 'finance'
+    : roleCode.includes('intern')
     ? 'intern'
     : roleCode.includes('consultant')
     ? 'consultant'
@@ -467,18 +470,25 @@ export default function ProfilePage() {
   const initials = `${activeEmp.firstName?.[0] || ''}${activeEmp.lastName?.[0] || ''}`.toUpperCase() || 'EMP';
   const status = (activeEmp.status || 'active').toLowerCase();
 
-  const roleLabel =
-    activeEmp.accessRole === 'hr_manager'
-      ? 'HR Manager'
-      : activeEmp.accessRole === 'department_head'
-      ? 'Department Manager'
-      : activeEmp.accessRole === 'team_lead'
-      ? 'Team Lead'
-      : activeEmp.accessRole === 'intern'
-      ? 'Intern'
-      : activeEmp.accessRole === 'consultant'
-      ? 'Consultant'
-      : 'Employee';
+  // Use auth store's roleCode (already computed above) — it always reflects the correct assigned role.
+  const ROLE_LABEL_MAP: Record<string, string> = {
+    super_admin: 'Super Admin',
+    organization_admin: 'CEO',
+    ceo: 'CEO',
+    hr_admin: 'HR',
+    hr: 'HR',
+    hr_manager: 'HR Manager',
+    support: 'Support',
+    finance: 'Finance',
+    finance_manager: 'Finance Manager',
+    department_head: 'Department Manager',
+    manager: 'Manager',
+    team_lead: 'Team Lead',
+    consultant: 'Consultant',
+    intern: 'Intern',
+    employee: 'Employee',
+  };
+  const roleLabel = ROLE_LABEL_MAP[roleCode] || (roleCode ? roleCode.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Employee');
 
   const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (activeEmp as any)?.jobTitle || roleLabel;
   const department = activeEmp.department || (activeEmp as any)?.department_name || (user as any)?.departmentName || 'Engineering & Product';

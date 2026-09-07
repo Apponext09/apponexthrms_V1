@@ -117,14 +117,33 @@ export function EmployeeProfilePage() {
   const rawStatus = (employee as any)?.employeeStatus || (employee as any)?.employee_status || employee?.status || 'active';
   const status = String(rawStatus).toLowerCase().replace(/\s+/g, '_');
   const displayStatus = String(rawStatus).charAt(0).toUpperCase() + String(rawStatus).slice(1);
-  const roleLabel =
-    employee.accessRole === 'hr_manager'
-      ? 'HR Manager'
-      : employee.accessRole === 'department_head'
-      ? 'Department Manager'
-      : employee.accessRole === 'team_lead'
-      ? 'Team Lead'
-      : 'Employee';
+  // Resolve role label: prefer accessRole, then fall back to the first entry in roles[]
+  // (mirrors the priority logic in getWithPermissions on the server)
+  const empRoleCode = (
+    (employee as any).accessRole ||
+    ((employee as any).roles?.[0]) ||
+    'employee'
+  ).toLowerCase();
+  const ROLE_LABEL_MAP: Record<string, string> = {
+    super_admin: 'Super Admin',
+    organization_admin: 'CEO',
+    ceo: 'CEO',
+    hr_admin: 'HR',
+    hr: 'HR',
+    hr_manager: 'HR Manager',
+    support: 'Support',
+    finance: 'Finance',
+    finance_manager: 'Finance Manager',
+    department_head: 'Department Manager',
+    manager: 'Manager',
+    team_lead: 'Team Lead',
+    consultant: 'Consultant',
+    intern: 'Intern',
+    employee: 'Employee',
+  };
+  const roleLabel = ROLE_LABEL_MAP[empRoleCode] ||
+    (empRoleCode ? empRoleCode.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'Employee');
+
 
   const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (employee as any)?.jobTitle || roleLabel;
 
