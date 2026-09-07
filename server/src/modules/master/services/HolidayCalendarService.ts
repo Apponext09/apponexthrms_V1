@@ -63,23 +63,25 @@ export class HolidayCalendarService {
     const locationId = employee.current_location_id || employee.currentLocationId || null;
     const departmentId = employee.current_department_id || employee.currentDepartmentId || null;
 
-    // 2. Fetch calendars for this organization & year (prioritize Published, then Draft)
+    // 2. Fetch calendars for this organization & year
+    // Accept 'Published', 'Active', 'active', or any non-deleted calendar for the year
     let publishedCalendars = await query('holiday_calendars')
       .where('organization_id', ctx.organizationId)
-      .where('status', 'Published')
+      .whereIn('status', ['Published', 'Active', 'active', 'published', 'Draft', 'draft'])
       .where((builder) => {
         builder.where('calendar_year', year).orWhere('year', year);
       })
       .whereNull('deleted_at');
 
     if (!publishedCalendars || publishedCalendars.length === 0) {
+      // Final fallback: any non-deleted calendar for this year
       publishedCalendars = await query('holiday_calendars')
         .where('organization_id', ctx.organizationId)
         .where((builder) => {
           builder.where('calendar_year', year).orWhere('year', year);
         })
         .whereNull('deleted_at')
-        .orderByRaw("CASE WHEN status = 'Published' THEN 1 WHEN status = 'Draft' THEN 2 ELSE 3 END");
+        .orderByRaw("CASE WHEN status IN ('Published', 'Active', 'active') THEN 1 WHEN status IN ('Draft', 'draft') THEN 2 ELSE 3 END");
     }
 
     if (!publishedCalendars || publishedCalendars.length === 0) {
@@ -172,15 +174,33 @@ export class HolidayCalendarService {
   ): Promise<OffDayCheckResult> {
     const query = trxOrDb || db;
     const dateObj = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-    const dateStr = dateObj.toISOString().split('T')[0];
+
+    // Build a local YYYY-MM-DD string that accounts for IST (+5:30).
+    // Holidays are commonly stored in DB as UTC timestamps that represent midnight IST
+    // (i.e. holiday_date '2026-01-01 IST' = '2025-12-31T18:30:00Z').
+    // We compare using both the UTC date and the IST date so we catch both storage conventions.
+    const utcDateStr = dateObj.toISOString().split('T')[0];
+    // IST = UTC + 5:30 = UTC + 330 minutes
+    const istOffset = 5 * 60 + 30;
+    const istMs = dateObj.getTime() + istOffset * 60 * 1000;
+    const istDateStr = new Date(istMs).toISOString().split('T')[0];
+    // Use the IST date for comparison (it matches what users see on screen)
+    const dateStr = istDateStr;
 
     // 1. Check if date exists in holidays table
+    // Use DATE(CONVERT_TZ(holiday_date, '+00:00', '+05:30')) to handle IST-stored UTC dates
     const holiday = await query('holidays')
       .where('organization_id', ctx.organizationId)
       .where((builder) => {
         builder.where('calendar_id', calendarId).orWhere('holiday_calendar_id', calendarId);
       })
-      .whereRaw('DATE(holiday_date) = ?', [dateStr])
+      .where((builder) => {
+        // Match either the UTC date or IST-adjusted date to handle both storage conventions
+        builder
+          .whereRaw("DATE(CONVERT_TZ(holiday_date, '+00:00', '+05:30')) = ?", [dateStr])
+          .orWhereRaw('DATE(holiday_date) = ?', [dateStr])
+          .orWhereRaw('DATE(holiday_date) = ?', [utcDateStr]);
+      })
       .whereNull('deleted_at')
       .first();
 

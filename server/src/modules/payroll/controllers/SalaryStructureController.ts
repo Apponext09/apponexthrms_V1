@@ -27,7 +27,7 @@ export class SalaryStructureController {
         .leftJoin('payroll_slabs', 'salary_structures.slab_id', 'payroll_slabs.id')
         .select(
           'salary_structures.*',
-          'payroll_slabs.name as slab_name',
+          'payroll_slabs.slab_name as slab_name',
           'payroll_slabs.selected_component_ids as slab_component_ids'
         )
         .whereNull('salary_structures.deleted_at')

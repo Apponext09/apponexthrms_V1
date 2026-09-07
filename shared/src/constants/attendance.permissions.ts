@@ -170,7 +170,7 @@ export const ATTENDANCE_ROLE_PERMISSIONS = {
     'attendance.analytics_read',
   ],
 
-  finance_manager: [
+  finance: [
     'attendance.read',
     'attendance.overtime_read',
     'attendance.timesheet_read',

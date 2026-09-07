@@ -434,7 +434,7 @@ export const RecruitmentDashboard: React.FC = () => {
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Open Positions</p>
               <p className="text-3xl font-black text-foreground">{stats.totalOpenJobs}</p>
               <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] font-bold px-2 py-0.5">
-                Published Jobs
+                Active Requisitions
               </Badge>
             </div>
             <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">

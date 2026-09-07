@@ -347,7 +347,7 @@ export class SalaryRevisionController {
             .leftJoin('roles as r', 'ur.role_id', 'r.id')
             .where('u.organization_id', orgId)
             .where(function (this: any) {
-              this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager']).orWhere(
+              this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager']).orWhere(
                 'u.email',
                 'ajay@gmail.com'
               );

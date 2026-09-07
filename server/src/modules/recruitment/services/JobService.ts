@@ -309,6 +309,21 @@ export class JobService {
   }
 
   async listJobs(ctx: TenantContext, options?: ListQueryOptions) {
+    const db = getKnex();
+    try {
+      const todayStr = new Date().toISOString().substring(0, 10);
+      await db('jobs')
+        .where('organization_id', ctx.organizationId)
+        .where('status', 'published')
+        .whereNotNull('expiry_date')
+        .where('expiry_date', '<', todayStr)
+        .update({
+          status: 'closed',
+          closed_at: db.raw('NOW()'),
+        });
+    } catch (err) {
+      console.warn('Auto-close expired jobs query notice:', err);
+    }
     return this.jobRepo.list(ctx, options);
   }
 

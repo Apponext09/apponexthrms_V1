@@ -64,12 +64,24 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Get single record by ID
    */
   async getById(ctx: TenantContext, id: number | string): Promise<T | null> {
+    if (id === undefined || id === null || id === '' || id === 'undefined' || id === 'null') {
+      return null;
+    }
     try {
+      let cleanId: number | string = id;
+      if (typeof cleanId === 'string' && cleanId.includes(':') && !this.isPrimaryKeyUuid(cleanId)) {
+        const firstPart = cleanId.split(':')[0];
+        const num = parseInt(firstPart, 10);
+        if (!isNaN(num) && num > 0) {
+          cleanId = num;
+        }
+      }
+
       // Use raw query to bypass Knex query validation issues
-      const idCol = this.isPrimaryKeyUuid(id) ? 'uuid' : 'id';
+      const idCol = this.isPrimaryKeyUuid(cleanId) ? 'uuid' : 'id';
       const result = await this.db.raw(
         `SELECT * FROM ?? WHERE ?? = ? AND ?? = ? LIMIT 1`,
-        [this.tableName, 'organization_id', ctx.organizationId, idCol, id]
+        [this.tableName, 'organization_id', ctx.organizationId, idCol, cleanId]
       ) as any;
 
       // Extract results from raw query response
@@ -82,7 +94,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       return convertSnakeToCamel(rows[0]);
     } catch (error) {
       console.error('[BaseRepository.getById] Error:', error instanceof Error ? error.message : String(error));
-      throw error;
+      return null;
     }
   }
 

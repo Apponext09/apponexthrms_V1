@@ -24,6 +24,10 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
   } else if (accessRole === 'consultant' || roles.includes('consultant')) {
     roleTitle = 'Consultant';
     roleCode = 'consultant';
+  } else if (accessRole === 'finance' || roles.includes('finance')) {
+    roleTitle = 'Finance';
+    roleCode = 'finance';
+    defaultDept = 'Finance & Accounts';
   } else if (accessRole === 'team_lead' || roles.includes('team_lead') || accessRole.includes('team_lead') || designation.includes('team lead') || designation.includes('team_lead')) {
     roleTitle = 'Team Lead';
     roleCode = 'team_lead';

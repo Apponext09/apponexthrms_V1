@@ -22,48 +22,48 @@ export interface ConditionGroup {
 }
 
 export interface EmployeeFactContext {
-  id?: number;
-  gender?: string;
-  marital_status?: string;
-  maritalStatus?: string;
-  date_of_joining?: string | Date;
-  dateOfJoining?: string | Date;
-  date_of_birth?: string | Date;
-  dateOfBirth?: string | Date;
-  date_of_confirmation?: string | Date;
-  dateOfConfirmation?: string | Date;
-  confirmation_date?: string | Date;
-  confirmationDate?: string | Date;
-  resignation_date?: string | Date;
-  resignationDate?: string | Date;
-  last_working_date?: string | Date;
-  lastWorkingDate?: string | Date;
-  current_department_id?: number;
-  currentDepartmentId?: number;
-  department_id?: number;
-  departmentId?: number;
-  current_location_id?: number;
-  currentLocationId?: number;
-  location_id?: number;
-  locationId?: number;
-  branch_id?: number;
-  branchId?: number;
-  current_grade_id?: number | string;
-  currentGradeId?: number | string;
-  grade_id?: number | string;
-  gradeId?: number | string;
-  grade?: string | number;
-  current_designation_id?: number;
-  currentDesignationId?: number;
-  designation_id?: number;
-  designationId?: number;
-  employment_type?: string;
-  employmentType?: string;
-  status?: string;
-  company_id?: number;
-  companyId?: number;
-  organization_id?: number;
-  organizationId?: number;
+  id?: number | null;
+  gender?: string | null;
+  marital_status?: string | null;
+  maritalStatus?: string | null;
+  date_of_joining?: string | Date | null;
+  dateOfJoining?: string | Date | null;
+  date_of_birth?: string | Date | null;
+  dateOfBirth?: string | Date | null;
+  date_of_confirmation?: string | Date | null;
+  dateOfConfirmation?: string | Date | null;
+  confirmation_date?: string | Date | null;
+  confirmationDate?: string | Date | null;
+  resignation_date?: string | Date | null;
+  resignationDate?: string | Date | null;
+  last_working_date?: string | Date | null;
+  lastWorkingDate?: string | Date | null;
+  current_department_id?: number | null;
+  currentDepartmentId?: number | null;
+  department_id?: number | null;
+  departmentId?: number | null;
+  current_location_id?: number | null;
+  currentLocationId?: number | null;
+  location_id?: number | null;
+  locationId?: number | null;
+  branch_id?: number | null;
+  branchId?: number | null;
+  current_grade_id?: number | string | null;
+  currentGradeId?: number | string | null;
+  grade_id?: number | string | null;
+  gradeId?: number | string | null;
+  grade?: string | number | null;
+  current_designation_id?: number | null;
+  currentDesignationId?: number | null;
+  designation_id?: number | null;
+  designationId?: number | null;
+  employment_type?: string | null;
+  employmentType?: string | null;
+  status?: string | null;
+  company_id?: number | null;
+  companyId?: number | null;
+  organization_id?: number | null;
+  organizationId?: number | null;
   [key: string]: any;
 }
 
@@ -75,8 +75,12 @@ export function extractFactValue(fact: string, employee: EmployeeFactContext): a
   const f = fact.toLowerCase().replace(/[\s_-]+/g, '');
 
   switch (f) {
-    case 'gender':
-      return (employee.gender || '').toLowerCase().trim();
+    case 'gender': {
+      const g = (employee.gender || (employee as any).sex || '').toLowerCase().trim();
+      if (g === 'm' || g === 'man') return 'male';
+      if (g === 'f' || g === 'woman') return 'female';
+      return g;
+    }
     case 'maritalstatus':
     case 'marital':
       return (employee.marital_status || employee.maritalStatus || employee.marital || '').toLowerCase().trim();
@@ -356,44 +360,65 @@ export const isLeaveTypeApplicableForGender = (
   const empAllocSettings = parseJson(item.employment_allocation_settings || item.employmentAllocationSettings || item.employment_allocation);
   const empAppSettings = parseJson(item.employment_application_settings || item.employmentApplicationSettings || item.employment_application);
 
-  // 1. Direct gender field checks
-  const directGender = (
-    item.gender_applicable ||
-    item.genderApplicable ||
-    item.gender ||
-    allocSettings.gender ||
-    'all'
-  ).toString().trim().toLowerCase();
+  // Helper to determine if an onlyWhen group contains an active rule for a specific fact
+  const hasFactInConditionGroup = (group: any, targetFact: string): boolean => {
+    if (!group) return false;
+    const cleanFact = targetFact.toLowerCase().replace(/[\s_-]+/g, '');
+    const list = group.conditions || group.rules;
+    if (!Array.isArray(list) || list.length === 0) return false;
+    return list.some((c: any) => {
+      if (c.conjunction || c.conditions || c.rules) return hasFactInConditionGroup(c, targetFact);
+      const f = (c.fact || c.field || '').toString().toLowerCase().replace(/[\s_-]+/g, '');
+      return f === cleanFact && Boolean(c.operator);
+    });
+  };
 
-  const empGender = (empCtx.gender || '').toString().trim().toLowerCase();
-  if (directGender !== 'all' && directGender !== 'both' && directGender !== '') {
-    if (empGender && empGender !== directGender) {
-      return false;
+  const allocOnlyWhen = allocSettings.onlyWhen || allocSettings.only_when || item.only_when || item.onlyWhen;
+  const appOnlyWhen = appSettings.onlyWhen || appSettings.only_when;
+  const parsedAllocOnlyWhen = allocOnlyWhen ? (typeof allocOnlyWhen === 'string' ? parseJson(allocOnlyWhen) : allocOnlyWhen) : null;
+  const parsedAppOnlyWhen = appOnlyWhen ? (typeof appOnlyWhen === 'string' ? parseJson(appOnlyWhen) : appOnlyWhen) : null;
+
+  const hasOnlyWhenGender = hasFactInConditionGroup(parsedAllocOnlyWhen, 'gender') || hasFactInConditionGroup(parsedAppOnlyWhen, 'gender');
+  const hasOnlyWhenMarital = hasFactInConditionGroup(parsedAllocOnlyWhen, 'marital_status') || hasFactInConditionGroup(parsedAppOnlyWhen, 'marital_status');
+
+  // 1. Direct gender field checks (only if onlyWhen does not specify a dynamic gender rule)
+  if (!hasOnlyWhenGender) {
+    const directGender = (
+      item.gender_applicable ||
+      item.genderApplicable ||
+      item.gender ||
+      allocSettings.gender ||
+      'all'
+    ).toString().trim().toLowerCase();
+
+    const empGender = (empCtx.gender || '').toString().trim().toLowerCase();
+    if (directGender !== 'all' && directGender !== 'both' && directGender !== '') {
+      if (empGender && empGender !== directGender) {
+        return false;
+      }
     }
   }
 
-  // 2. Direct marital status check
-  const directMarital = (allocSettings.maritalStatus || '').toString().trim().toLowerCase();
-  const empMarital = (empCtx.marital_status || empCtx.maritalStatus || empCtx.marital || '').toString().trim().toLowerCase();
-  if (directMarital !== 'all' && directMarital !== '') {
-    if (empMarital && empMarital !== directMarital) {
-      return false;
+  // 2. Direct marital status check (only if onlyWhen does not specify a dynamic marital rule)
+  if (!hasOnlyWhenMarital) {
+    const directMarital = (allocSettings.maritalStatus || '').toString().trim().toLowerCase();
+    const empMarital = (empCtx.marital_status || empCtx.maritalStatus || empCtx.marital || '').toString().trim().toLowerCase();
+    if (directMarital !== 'all' && directMarital !== '') {
+      if (empMarital && empMarital !== directMarital) {
+        return false;
+      }
     }
   }
 
   // 3. Condition builder rule checks ("only_when" or "onlyWhen")
-  const allocOnlyWhen = allocSettings.onlyWhen || allocSettings.only_when || item.only_when || item.onlyWhen;
-  if (allocOnlyWhen) {
-    let parsed = typeof allocOnlyWhen === 'string' ? parseJson(allocOnlyWhen) : allocOnlyWhen;
-    if (!evaluateConditionGroup(parsed, empCtx)) {
+  if (parsedAllocOnlyWhen) {
+    if (!evaluateConditionGroup(parsedAllocOnlyWhen, empCtx)) {
       return false;
     }
   }
 
-  const appOnlyWhen = appSettings.onlyWhen || appSettings.only_when;
-  if (appOnlyWhen) {
-    let parsed = typeof appOnlyWhen === 'string' ? parseJson(appOnlyWhen) : appOnlyWhen;
-    if (!evaluateConditionGroup(parsed, empCtx)) {
+  if (parsedAppOnlyWhen) {
+    if (!evaluateConditionGroup(parsedAppOnlyWhen, empCtx)) {
       return false;
     }
   }

@@ -150,9 +150,12 @@ router.get('/offer/templates', requirePermission('recruitment.offer.read'), recr
 router.post('/offers', requirePermission('recruitment.offer.write'), recruitmentController.generateOffer);
 router.get('/offers', requirePermission('recruitment.offer.read'), recruitmentController.listOffers);
 router.get('/offers/:offerId', requirePermission('recruitment.offer.read'), recruitmentController.getOffer);
+router.get('/offers/:offerId/onboarding-status', requirePermission('recruitment.offer.read'), recruitmentController.getOfferOnboardingStatus);
 router.post('/offers/:offerId/accept', requirePermission('recruitment.offer.write'), recruitmentController.acceptOffer);
 router.post('/offers/:offerId/reject', requirePermission('recruitment.offer.write'), recruitmentController.rejectOffer);
 router.post('/offers/:offerId/send', requirePermission('recruitment.offer.write'), recruitmentController.sendOfferWithTemplate);
+router.post('/offers/:offerId/onboard', requirePermission('recruitment.offer.write'), recruitmentController.onboardOfferCandidate);
+router.post('/offers/:offerId/update-credentials', requirePermission('recruitment.offer.write'), recruitmentController.updateOfferEmployeeCredentials);
 
 // ==================== Rejection / Regret Routes ====================
 router.get('/rejection/templates', requirePermission('recruitment.application.read'), recruitmentController.getRejectionTemplates);

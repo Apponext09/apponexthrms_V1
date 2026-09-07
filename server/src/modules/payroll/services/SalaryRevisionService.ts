@@ -146,7 +146,7 @@ export class SalaryRevisionService {
         .leftJoin('roles as r', 'ur.role_id', 'r.id')
         .where('u.organization_id', ctx.organizationId)
         .where(function () {
-          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager'])
+          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
             .orWhere('u.email', 'ajay@gmail.com');
         })
         .whereNull('u.deleted_at')

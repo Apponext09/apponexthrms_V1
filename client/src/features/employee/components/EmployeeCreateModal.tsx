@@ -604,7 +604,7 @@ export function EmployeeCreateModal({
 
                     {/* Job Title / Designation */}
                     <div>
-                      <Label htmlFor="jobTitle">Designation (Job Title)</Label>
+                      <Label htmlFor="jobTitle">Designation</Label>
                       <select
                         id="jobTitle"
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -653,6 +653,7 @@ export function EmployeeCreateModal({
                         <option value="hr_manager">HR Manager (HR Portal View)</option>
                         <option value="intern">Intern (Intern Portal View)</option>
                         <option value="consultant">Consultant (Consultant Portal View)</option>
+                        <option value="finance">Finance (Finance Portal View)</option>
                         <option value="admin">System Administrator</option>
                       </select>
                       <p className="text-xs text-muted-foreground mt-1">

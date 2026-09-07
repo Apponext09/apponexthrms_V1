@@ -17,6 +17,7 @@ export const SYSTEM_ROLES = {
   MANAGER: 'manager',
   INTERN: 'intern',          // Internship portal — /intern/*
   CONSULTANT: 'consultant',  // Consultant portal — /consultant/*
+  FINANCE: 'finance',        // Finance portal — /finance/*
 } as const;
 
 export type Role = typeof SYSTEM_ROLES[keyof typeof SYSTEM_ROLES];
@@ -36,6 +37,7 @@ export const ROLE_LABELS: Record<string, string> = {
   employee: 'Employee',
   intern: 'Intern',
   consultant: 'Consultant',
+  finance: 'Finance',
 };
 
 export const ROLE_HIERARCHY: Record<string, number> = {
@@ -46,6 +48,7 @@ export const ROLE_HIERARCHY: Record<string, number> = {
   hr: 4,
   hr_manager: 3,  // Support
   support: 3,
+  finance: 3,
   department_head: 2,
   manager: 2,
   team_lead: 2,

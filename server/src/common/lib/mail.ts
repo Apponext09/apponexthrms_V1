@@ -55,19 +55,32 @@ export async function sendMail(options: {
   }
 
   try {
-    const cleanPass = (host.includes('gmail') || port === 465 || port === 587) ? pass.replace(/\s+/g, '') : pass;
-    const transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: {
-        user,
-        pass: cleanPass,
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    const cleanPass = pass.replace(/\s+/g, '');
+    const transporterConfig: any = host.includes('gmail')
+      ? {
+          service: 'gmail',
+          auth: {
+            user,
+            pass: cleanPass,
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        }
+      : {
+          host,
+          port,
+          secure: port === 465,
+          auth: {
+            user,
+            pass: cleanPass,
+          },
+          tls: {
+            rejectUnauthorized: false
+          }
+        };
+
+    const transporter = nodemailer.createTransport(transporterConfig);
 
     const info = await transporter.sendMail({
       from,

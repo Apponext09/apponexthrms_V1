@@ -152,7 +152,8 @@ export async function getOrgLeaveSettings(
         disable_leave_application_reminder: disableLeaveApplicationReminder,
         show_popup_on_week_off_or_holiday: showPopupOnWeekOffOrHoliday,
         leave_application_date_restriction: leaveApplicationDateRestriction,
-      } as any;
+        enable_backup_person: enableBackupPerson,
+      };
     }
   } catch (err: any) {
     // Table doesn't exist yet — return fallback defaults silently

@@ -434,8 +434,6 @@ export function MastersHubPage() {
         />
       ) : selectedMasterId === 'designation' ? (
         <DesignationMaster onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'employee-status' ? (
-        <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'break' ? (
         <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'roles-responsibility' ? (
@@ -450,8 +448,6 @@ export function MastersHubPage() {
         <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'resource-plan' ? (
         <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
-      ) : selectedMasterId === 'events' ? (
-        <EventMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'ot-rule' ? (
         <OTRulePage />
       ) : (

@@ -1890,8 +1890,33 @@ export function LeavePoliciesPage() {
     const effective_to = (formData as any).effective_to || selectedLeaveType?.effective_to || null;
     const description = (formData as any).description || selectedLeaveType?.description || '';
 
+    // Helper to extract gender fact from onlyWhen condition trees if present
+    const extractGenderFromOnlyWhen = (group: any): string | null => {
+      if (!group) return null;
+      const conditions = group.conditions || group.rules;
+      if (!Array.isArray(conditions) || conditions.length === 0) return null;
+      for (const c of conditions) {
+        if (c.conjunction || c.conditions || c.rules) {
+          const nested = extractGenderFromOnlyWhen(c);
+          if (nested) return nested;
+        }
+        const fact = (c.fact || c.field || '').toString().toLowerCase().replace(/[\s_-]+/g, '');
+        if (fact === 'gender' && (c.operator === 'equals' || c.operator === '=' || c.operator === 'is equal to (=)')) {
+          const val = (c.value || '').toString().toLowerCase().trim();
+          if (val === 'male' || val === 'female' || val === 'other') return val;
+        }
+      }
+      return null;
+    };
+
+    const onlyWhenGender = extractGenderFromOnlyWhen(formData.allocation?.onlyWhen || (formData.allocation as any)?.only_when)
+      || extractGenderFromOnlyWhen(formData.application?.onlyWhen || (formData.application as any)?.only_when);
+
+    const resolvedGender = onlyWhenGender || (formData.allocation.gender || 'all').toLowerCase();
+
     const allocPayload = {
       ...(formData.allocation || {}),
+      gender: resolvedGender,
       color,
       icon,
       effective_from,
@@ -1905,7 +1930,7 @@ export function LeavePoliciesPage() {
       status: formData.status,
       paid_type: formData.allocation.noPayment ? 'unpaid' : formData.paid_type,
       annual_quota: computedQuota,
-      gender_applicable: (formData.allocation.gender || 'all').toLowerCase(),
+      gender_applicable: resolvedGender,
       sandwich_rule_enabled: selectedLeaveType?.sandwich_rule_enabled ?? selectedLeaveType?.sandwichRuleEnabled ?? false,
       allow_negative_balance: selectedLeaveType?.allow_negative_balance ?? selectedLeaveType?.allowNegativeBalance ?? false,
       negative_balance_action: selectedLeaveType?.negative_balance_action ?? selectedLeaveType?.negativeBalanceAction ?? 'BLOCK',

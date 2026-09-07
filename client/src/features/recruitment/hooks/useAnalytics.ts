@@ -18,7 +18,6 @@ export const useDashboard = (filters?: RecruitmentDashboardFilters) => {
       const response = await api.get('/recruitment/dashboard', { params: filters });
       return response.data.data;
     },
-    refetchOnMount: 'always',
   });
 };
 

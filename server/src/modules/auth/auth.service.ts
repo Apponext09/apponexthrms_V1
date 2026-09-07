@@ -667,6 +667,7 @@ export class AuthService {
         lastName: user.lastName || (user as any).last_name || '',
         orgName: org?.name || '',
         roles,
+        accessRole: userWithPerms?.accessRole || (user as any)?.accessRole || (user as any)?.role || 'employee',
         policyAccepted: Boolean((user as any).policy_accepted || (user as any).policyAccepted),
         policyAcceptedAt: (user as any).policy_accepted_at || (user as any).policyAcceptedAt || null,
       } as any,
@@ -679,26 +680,61 @@ export class AuthService {
    */
   async refreshAccessToken(ctx: TenantContext, refreshToken: string): Promise<RefreshTokenResponse> {
     // Verify refresh token signature
-    let decoded;
+    let decoded; 
+  
     try {
       decoded = decodeToken(refreshToken);
       if (!decoded) {
+        logger.warn('[Auth] Token refresh failed: Decoded token is null');
         throw new UnauthorizedError('Invalid refresh token');
       }
-    } catch {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Token verification failed';
+      logger.warn('[Auth] Token refresh failed: Token decode error', { error: msg });
       throw new UnauthorizedError('Invalid refresh token');
     }
 
     // Get session from DB (with tenant isolation check)
     const session = await this.sessionRepo.getActiveByUuid(decoded.sid, ctx);
     if (!session) {
+      logger.warn('[Auth] Token refresh failed: Session not found or expired', {
+        sessionUuid: decoded.sid,
+        userId: ctx.userId,
+      });
       throw new UnauthorizedError('Session expired or revoked');
+    }
+
+    // IMPROVED: Verify session has not expired
+    const now = new Date();
+    const sessionExpiresAt = session.expiresAt || (session as any).expires_at;
+    if (sessionExpiresAt && new Date(sessionExpiresAt) <= now) {
+      logger.warn('[Auth] Token refresh failed: Session expired', {
+        sessionUuid: decoded.sid,
+        expiresAt: sessionExpiresAt,
+        userId: ctx.userId,
+      });
+      throw new UnauthorizedError('Session expired. Please login again');
+    }
+
+    // IMPROVED: Verify session is not revoked
+    const isRevoked = session.revokedAt || (session as any).revoked_at;
+    if (isRevoked) {
+      logger.warn('[Auth] Token refresh failed: Session revoked', {
+        sessionUuid: decoded.sid,
+        revokedAt: isRevoked,
+        userId: ctx.userId,
+      });
+      throw new UnauthorizedError('Session has been revoked');
     }
 
     // Verify refresh token hash matches (use constant-time comparison to prevent timing attacks)
     const refreshTokenHash = hashSha256(refreshToken);
     const sessionTokenHash = session.refreshTokenHash || (session as any).refresh_token_hash;
     if (!constantTimeCompare(sessionTokenHash, refreshTokenHash)) {
+      logger.warn('[Auth] Token refresh failed: Invalid refresh token hash', {
+        sessionUuid: decoded.sid,
+        userId: ctx.userId,
+      });
       throw new UnauthorizedError('Invalid refresh token');
     }
 
@@ -707,7 +743,23 @@ export class AuthService {
       parseInt(decoded.sub, 10) !== ctx.userId ||
       parseInt(decoded.oid, 10) !== ctx.organizationId
     ) {
+      logger.error('[Auth] Token refresh failed: Claims mismatch', {
+        expectedUserId: ctx.userId,
+        actualUserId: parseInt(decoded.sub, 10),
+        expectedOrgId: ctx.organizationId,
+        actualOrgId: parseInt(decoded.oid, 10),
+      });
       throw new UnauthorizedError('Token claims do not match context');
+    }
+
+    // IMPROVED: Verify user is still active
+    const user = await this.userRepo.getById(ctx, ctx.userId);
+    if (!user || user.status !== 'active') {
+      logger.warn('[Auth] Token refresh failed: User not active', {
+        userId: ctx.userId,
+        userStatus: user?.status,
+      });
+      throw new UnauthorizedError('User is not active');
     }
 
     // Generate new tokens
@@ -727,7 +779,7 @@ export class AuthService {
     // Revoke old session
     await this.sessionRepo.revoke(ctx, session.uuid, 'token_refresh');
 
-    // Create new session
+    // Create new session with improved data
     const newRefreshTokenHash = hashSha256(newRefreshToken);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -743,6 +795,12 @@ export class AuthService {
       last_active_at: new Date(),
       expires_at: expiresAt,
     } as any);
+
+    logger.debug('[Auth] Token refresh successful', {
+      userId: ctx.userId,
+      oldSessionUuid: session.uuid,
+      newSessionUuid,
+    });
 
     return {
       accessToken: newAccessToken,
@@ -797,10 +855,11 @@ export class AuthService {
     // with zero role assignments) — silently handing out full admin access.
     let permissions: string[] = [];
     let roles: string[] = [];
+    let userWithPerms: any = null;
 
     if (rawUser && rawUser.id) {
       try {
-        const userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
+        userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
         roles = userWithPerms?.roles || [];
         permissions = userWithPerms?.permissions || [];
       } catch (err) {
@@ -927,6 +986,8 @@ export class AuthService {
         organizationName: org?.name || '',
         organizationCode: org?.code || '',
         organizationLocation: org?.location || org?.address_line1 || '',
+        roles,
+        accessRole: userWithPerms?.accessRole || rawUser?.role || rawUser?.access_role || rawUser?.accessRole || (roles.includes('finance') ? 'finance' : 'employee'),
         policyAccepted: Boolean(rawUser.policy_accepted || rawUser.policyAccepted),
         policyAcceptedAt: rawUser.policy_accepted_at || rawUser.policyAcceptedAt || null,
       },

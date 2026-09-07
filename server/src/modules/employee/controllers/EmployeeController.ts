@@ -794,6 +794,29 @@ export class EmployeeController {
     const result = await this.service.getMyProfileUpdateRequests(empId);
     return res.json({ success: true, data: result });
   });
+
+  /**
+   * GET /employees/org-hierarchy/rules
+   */
+  getOrgHierarchyRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { OrgHierarchyService } = await import('../services/OrgHierarchyService');
+    const service = new OrgHierarchyService();
+    const rules = await service.getHierarchyRules(ctx);
+    res.json({ success: true, data: rules });
+  });
+
+  /**
+   * PUT /employees/org-hierarchy/rules
+   */
+  saveOrgHierarchyRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { rules } = req.body;
+    const { OrgHierarchyService } = await import('../services/OrgHierarchyService');
+    const service = new OrgHierarchyService();
+    await service.saveHierarchyRules(ctx, rules || []);
+    res.json({ success: true, message: 'Org hierarchy rules saved successfully' });
+  });
 }
 
 export const employeeController = new EmployeeController();

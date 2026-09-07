@@ -305,7 +305,7 @@ export async function up(knex: Knex): Promise<void> {
       ])
     },
     {
-      role_code: 'finance_manager',
+      role_code: 'finance',
       document_ref: 'POL-007',
       status: 'published',
       title: 'FINANCIAL CONTROLS, PAYROLL GOVERNANCE & FISCAL PRIVACY POLICY',
