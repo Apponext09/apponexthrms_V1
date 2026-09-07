@@ -49,16 +49,16 @@ const friendlyBiometricError = (error: any, fallback: string): string => {
 
 const REGISTERED_LOCATIONS: LocationTarget[] = [
   {
-    id: 'arham',
-    name: 'Arham IT Solution',
-    city: 'Ahilyanagar',
+    id: 'hq',
+    name: 'Corporate HQ',
+    city: 'Main Office',
     lat: 19.0948,
     lng: 74.7480,
   },
   {
-    id: 'kosqu',
-    name: 'Kosqu Technolab',
-    city: 'Navi Mumbai',
+    id: 'branch',
+    name: 'Regional Branch Office',
+    city: 'Branch Office',
     lat: 19.0330,
     lng: 73.0297,
   },

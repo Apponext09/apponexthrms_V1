@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import {
   Coffee, Plus, RotateCcw, Search, Clock,
   Check, X, Cpu, Trash2, Loader2, AlertCircle
@@ -573,7 +573,7 @@ export function BreakMasterForm({ onCancel, onSave }: BreakMasterFormProps) {
                             ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30'
                             : breakTypeDisplay === 'Auto'
                             ? 'bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400 border-blue-500/20'
-                            : 'bg-slate-500/10 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400 border-slate-500/20'
+                            : 'bg-muted/300/10 text-muted-foreground dark:bg-muted/300/20 dark:text-muted-foreground/70 border-slate-500/20'
                         )}
                       >
                         {breakTypeDisplay}
@@ -586,7 +586,7 @@ export function BreakMasterForm({ onCancel, onSave }: BreakMasterFormProps) {
                         className={cn(
                           'p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity',
                           isSelected
-                            ? 'text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10'
+                            ? 'text-primary-foreground/80 hover:text-primary-foreground hover:bg-background/10'
                             : 'text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
                         )}
                       >
@@ -613,7 +613,7 @@ export function BreakMasterForm({ onCancel, onSave }: BreakMasterFormProps) {
                     <span className={cn(
                       'font-semibold px-1.5 rounded text-[10px]',
                       isSelected
-                        ? 'bg-white/20 text-white'
+                        ? 'bg-background/20 text-white'
                         : activeStatus === 'Yes'
                         ? 'text-emerald-600 dark:text-emerald-400'
                         : 'text-rose-600 dark:text-rose-400'

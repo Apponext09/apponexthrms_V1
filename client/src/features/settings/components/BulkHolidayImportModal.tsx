@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -478,7 +478,7 @@ export function BulkHolidayImportModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-[720px] p-6 rounded-2xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[720px] p-6 rounded-2xl bg-background dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <DialogHeader className="pb-3 border-b border-neutral-100 dark:border-neutral-800 space-y-1">
           <div className="flex items-center justify-between">
@@ -514,7 +514,7 @@ export function BulkHolidayImportModal({
               variant="outline"
               size="sm"
               onClick={handleDownloadExcel}
-              className="h-8 px-2.5 text-[11px] font-semibold rounded-lg bg-white dark:bg-neutral-800 border-indigo-200 dark:border-indigo-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 shadow-xs flex items-center gap-1.5"
+              className="h-8 px-2.5 text-[11px] font-semibold rounded-lg bg-background dark:bg-neutral-800 border-indigo-200 dark:border-indigo-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 shadow-xs flex items-center gap-1.5"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               Excel (.xlsx)
@@ -525,7 +525,7 @@ export function BulkHolidayImportModal({
               variant="outline"
               size="sm"
               onClick={handleDownloadCSV}
-              className="h-8 px-2.5 text-[11px] font-semibold rounded-lg bg-white dark:bg-neutral-800 border-indigo-200 dark:border-indigo-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 shadow-xs flex items-center gap-1.5"
+              className="h-8 px-2.5 text-[11px] font-semibold rounded-lg bg-background dark:bg-neutral-800 border-indigo-200 dark:border-indigo-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 shadow-xs flex items-center gap-1.5"
             >
               <FileText className="w-3.5 h-3.5" />
               CSV (.csv)
@@ -536,7 +536,7 @@ export function BulkHolidayImportModal({
               variant="outline"
               size="sm"
               onClick={handleDownloadPDF}
-              className="h-8 px-2.5 text-[11px] font-semibold rounded-lg bg-white dark:bg-neutral-800 border-indigo-200 dark:border-indigo-800 text-purple-700 dark:text-purple-400 hover:bg-purple-50 shadow-xs flex items-center gap-1.5"
+              className="h-8 px-2.5 text-[11px] font-semibold rounded-lg bg-background dark:bg-neutral-800 border-indigo-200 dark:border-indigo-800 text-purple-700 dark:text-purple-400 hover:bg-purple-50 shadow-xs flex items-center gap-1.5"
             >
               <File className="w-3.5 h-3.5" />
               PDF Reference
@@ -627,7 +627,7 @@ export function BulkHolidayImportModal({
                 </div>
 
                 {selectedFile && (
-                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-mono text-neutral-800 dark:text-neutral-200">
+                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-background dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-xs font-mono text-neutral-800 dark:text-neutral-200">
                     <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                     <span>{selectedFile.name}</span>
                     <span className="text-[10px] text-neutral-400">({(selectedFile.size / 1024).toFixed(1)} KB)</span>

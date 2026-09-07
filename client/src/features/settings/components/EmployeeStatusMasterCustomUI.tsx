@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,7 +121,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
     <div className="space-y-6 max-w-[1200px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
       
       {/* Top Header Controls */}
-      <Card className="shadow-sm border-0 bg-white/70 backdrop-blur-md">
+      <Card className="shadow-sm border-0 bg-background/70 backdrop-blur-md">
         <CardContent className="p-4 flex items-center gap-4">
           <select className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm max-w-[120px]">
             <option>All</option>
@@ -131,7 +131,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder="Search term..." 
-              className="pl-9 bg-slate-50/50"
+              className="pl-9 bg-muted/30/50"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -159,29 +159,29 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
         {/* Left Form Area */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 mb-2">
-            <Plus className="w-5 h-5 text-slate-700" />
-            <h2 className="text-xl font-bold text-slate-800">
+            <Plus className="w-5 h-5 text-foreground" />
+            <h2 className="text-xl font-bold text-foreground">
               {editingId ? 'Update Employee Status' : 'Add Employee Status'}
             </h2>
           </div>
           
           <Card className="border-0 shadow-sm relative overflow-visible rounded-xl">
             {/* "Default Setting" Badge */}
-            <div className="absolute -top-3 left-6 bg-white border border-slate-200 px-3 py-1 rounded-full text-xs font-semibold text-slate-700 shadow-sm">
+            <div className="absolute -top-3 left-6 bg-background border border-border/60 px-3 py-1 rounded-full text-xs font-semibold text-foreground shadow-sm">
               Default Setting
             </div>
             
             <CardContent className="p-6 pt-8 space-y-6">
               
               <div className="space-y-2">
-                <Label className="text-sm font-semibold text-slate-700">
+                <Label className="text-sm font-semibold text-foreground">
                   Employee Status <span className="text-red-500">*</span>
                 </Label>
                 <Input 
                   placeholder="Enter employee status name" 
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  className="bg-slate-50 border-slate-200 h-11"
+                  className="bg-muted/30 border-border/60 h-11"
                 />
               </div>
 
@@ -195,16 +195,16 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                     className="data-[state=checked]:bg-[#1e40af] data-[state=checked]:text-white mt-1"
                   />
                   <div className="space-y-3 flex-1">
-                    <Label htmlFor="isProbation" className="text-sm font-bold text-slate-700 leading-none cursor-pointer">
+                    <Label htmlFor="isProbation" className="text-sm font-bold text-foreground leading-none cursor-pointer">
                       Probation Status
                     </Label>
                     
                     {formData.isProbationStatus && (
                       <div className="pl-1 pt-2 space-y-3 animate-in fade-in slide-in-from-top-2">
-                        <Label className="text-xs font-bold text-slate-700">Period : <span className="text-red-500">*</span></Label>
+                        <Label className="text-xs font-bold text-foreground">Period : <span className="text-red-500">*</span></Label>
                         <div className="flex items-center gap-3">
                           <select 
-                            className="flex h-10 w-[150px] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                            className="flex h-10 w-[150px] rounded-md border border-border/60 bg-background px-3 py-2 text-sm"
                             value={formData.probationPeriodUnit || 'Months'}
                             onChange={(e) => setFormData({...formData, probationPeriodUnit: e.target.value})}
                           >
@@ -215,7 +215,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                           <Input 
                             type="number"
                             placeholder="Period" 
-                            className="bg-slate-50 border-slate-200 h-10 max-w-[120px]"
+                            className="bg-muted/30 border-border/60 h-10 max-w-[120px]"
                             value={formData.probationPeriodValue || ''}
                             onChange={(e) => setFormData({...formData, probationPeriodValue: e.target.value ? parseInt(e.target.value) : null})}
                           />
@@ -226,7 +226,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                             checked={formData.notifyOnCompletion}
                             onCheckedChange={(c) => setFormData({...formData, notifyOnCompletion: !!c})}
                           />
-                          <Label htmlFor="notifyComp" className="text-sm font-medium text-slate-700 cursor-pointer">
+                          <Label htmlFor="notifyComp" className="text-sm font-medium text-foreground cursor-pointer">
                             Notify on Completion
                           </Label>
                         </div>
@@ -241,7 +241,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                     checked={formData.isConfirmationStatus}
                     onCheckedChange={(c) => setFormData({...formData, isConfirmationStatus: !!c})}
                   />
-                  <Label htmlFor="isConfirm" className="text-sm font-medium text-slate-700 cursor-pointer">Confirmation Status</Label>
+                  <Label htmlFor="isConfirm" className="text-sm font-medium text-foreground cursor-pointer">Confirmation Status</Label>
                 </div>
                 
                 <div className="flex items-center space-x-3">
@@ -250,7 +250,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                     checked={formData.isResignationStatus}
                     onCheckedChange={(c) => setFormData({...formData, isResignationStatus: !!c})}
                   />
-                  <Label htmlFor="isResign" className="text-sm font-medium text-slate-700 cursor-pointer">Resignation Status</Label>
+                  <Label htmlFor="isResign" className="text-sm font-medium text-foreground cursor-pointer">Resignation Status</Label>
                 </div>
 
                 <div className="flex items-center space-x-3">
@@ -259,22 +259,22 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                     checked={formData.inactiveOnStatusChange}
                     onCheckedChange={(c) => setFormData({...formData, inactiveOnStatusChange: !!c})}
                   />
-                  <Label htmlFor="inactiveChange" className="text-sm font-medium text-slate-700 cursor-pointer">Inactive on Status Change</Label>
+                  <Label htmlFor="inactiveChange" className="text-sm font-medium text-foreground cursor-pointer">Inactive on Status Change</Label>
                 </div>
               </div>
 
               {/* Status Color */}
               <div className="space-y-2 pt-2 border-t">
-                <Label className="text-sm font-bold text-slate-700">Status Color</Label>
+                <Label className="text-sm font-bold text-foreground">Status Color</Label>
                 <div className="flex items-center gap-3">
                   <Input 
                     value={formData.statusColor || ''}
                     onChange={(e) => setFormData({...formData, statusColor: e.target.value})}
-                    className="bg-slate-50 border-slate-200 h-10 w-[180px]"
+                    className="bg-muted/30 border-border/60 h-10 w-[180px]"
                     placeholder="#00B4D8"
                   />
                   <div 
-                    className="w-10 h-10 rounded border border-slate-200 shadow-sm"
+                    className="w-10 h-10 rounded border border-border/60 shadow-sm"
                     style={{ backgroundColor: formData.statusColor || '#00B4D8' }}
                   />
                   <Input 
@@ -290,14 +290,14 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
 
               {/* Active Toggle */}
               <div className="space-y-2 pt-2 pb-4">
-                <Label className="text-sm font-bold text-slate-700">Active</Label>
+                <Label className="text-sm font-bold text-foreground">Active</Label>
                 <div className="flex items-center">
                   <Switch 
                     checked={formData.status === 'active'}
                     onCheckedChange={(checked) => setFormData({...formData, status: checked ? 'active' : 'inactive'})}
                     className="data-[state=checked]:bg-[#3b82f6]"
                   />
-                  <span className="ml-2 text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                  <span className="ml-2 text-xs font-semibold text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md">
                     {formData.status === 'active' ? 'Yes' : 'No'}
                   </span>
                 </div>
@@ -344,10 +344,10 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
 
         {/* Right List Area */}
         <div className="space-y-4">
-          <Card className="border border-slate-200 shadow-sm rounded-xl overflow-hidden bg-white/90 backdrop-blur">
-            <CardHeader className="bg-slate-50/80 border-b py-4">
+          <Card className="border border-border/60 shadow-sm rounded-xl overflow-hidden bg-background/90 backdrop-blur">
+            <CardHeader className="bg-muted/30/80 border-b py-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-800">
+                <div className="flex items-center gap-2 text-foreground">
                   <CheckCircle className="w-5 h-5 text-[#3b82f6]" />
                   <CardTitle className="text-lg font-bold">Employee Status</CardTitle>
                 </div>
@@ -379,15 +379,15 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-sm tracking-wide">{status.name}</span>
-                          {status.isProbationStatus && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded uppercase tracking-wider font-bold">Probation</span>}
+                          {status.isProbationStatus && <span className="text-[10px] bg-background/20 px-2 py-0.5 rounded uppercase tracking-wider font-bold">Probation</span>}
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-16 px-4">
-                    <p className="text-lg font-bold text-slate-400 mb-1">No employee status records found</p>
-                    <p className="text-sm text-slate-400/80">Try adjusting your search or active filter.</p>
+                    <p className="text-lg font-bold text-muted-foreground/70 mb-1">No employee status records found</p>
+                    <p className="text-sm text-muted-foreground/70/80">Try adjusting your search or active filter.</p>
                   </div>
                 )}
               </div>

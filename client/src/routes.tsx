@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import type { Role } from '@/config/roles';
 import { AppShellLayout } from './layouts/AppShellLayout';
 import { HRLayout } from './layouts/HRLayout';
 import { ManagerLayout } from './layouts/ManagerLayout';
@@ -36,6 +37,7 @@ const AdminRegularizationLogsPage = lazy(() => import('./features/attendance/pag
 const CeoFacePunchPage = lazy(() => import('./features/attendance/pages/CeoFacePunchPage'));
 const LiveTrackingDashboardPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
+const EmployeeTrackingPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.EmployeeTrackingPage })));
 const MyLeavesPage = lazy(() => import('./features/leaves/pages/MyLeavesPage').then(m => ({ default: m.MyLeavesPage })));
 const ApplyLeavePage = lazy(() => import('./features/leaves/pages/ApplyLeavePage').then(m => ({ default: m.ApplyLeavePage })));
 const LeaveBalancePage = lazy(() => import('./features/leaves/pages/LeaveBalancePage').then(m => ({ default: m.LeaveBalancePage })));
@@ -283,6 +285,14 @@ function RootRedirect() {
   return <Navigate to="/employee/dashboard" replace />;
 }
 
+const MANAGER_ALLOWED_ROLES: Role[] = [
+  'department_head',
+  'manager',
+  'organization_admin',
+  'ceo',
+  'super_admin',
+];
+
 export function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -433,7 +443,6 @@ export function AppRoutes() {
           </Route>
           <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
           <Route path="/hr/live-tracking/history" element={<TrackingHistoryPage />} />
-          <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -442,7 +451,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['department_head', 'manager']}>
+            <ProtectedRoute allowedRoles={MANAGER_ALLOWED_ROLES}>
               <ManagerLayout />
             </ProtectedRoute>
           }
@@ -480,6 +489,9 @@ export function AppRoutes() {
           <Route path="/manager/leaves" element={<LeavePage />} />
           <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
           <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
+          <Route path="/manager/policies" element={<PoliciesPage />} />
+          <Route path="/manager/live-tracking/history" element={<TrackingHistoryPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -518,6 +530,8 @@ export function AppRoutes() {
           <Route path="/team-lead/mrf-request" element={<MrfRequestPage />} />
           <Route path="/team-lead/mrf" element={<MrfRequestPage />} />
           <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
+          <Route path="/team-lead/live-tracking/history" element={<TrackingHistoryPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -577,6 +591,8 @@ export function AppRoutes() {
           <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
           <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
           <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/live-tracking/history" element={<TrackingHistoryPage />} />
+          <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
           {/* CEO Face Punch Terminal */}
           <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
 
@@ -1046,6 +1062,7 @@ export function AppRoutes() {
           <Route path="/employee/notifications" element={<NotificationCenterPage />} />
           <Route path="/employee/approvals" element={<ApprovalsPage />} />
           <Route path="/employee/settings" element={<SettingsSecurityPage />} />
+          <Route path="/employee/live-tracking" element={<EmployeeTrackingPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────

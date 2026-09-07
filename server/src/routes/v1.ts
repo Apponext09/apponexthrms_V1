@@ -66,6 +66,7 @@ router.use('/expenses', expenseRoutes);
 router.use('/reimbursements', expenseRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/letters', lettersRouter);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
@@ -102,6 +103,7 @@ router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOff
 router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
 router.post('/public/assessments/attempts/:uuid/autosave', recruitmentController.autosavePublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/verify-proctoring', recruitmentController.verifyPublicAssessmentProctoring);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 // ── Report Engine (isolated module) ─────────────────────────────────────────
@@ -161,6 +163,7 @@ router.use('/superadmin', superAdminRoutes);
  * ⚠️ TEMPORARY: One-shot seed endpoint for super_admins table.
  * Remove after running!  POST /api/v1/seed-superadmin
  */
+
 router.post('/seed-superadmin', async (req: Request, res: Response) => {
   try {
     const { getKnex } = await import('../db/knex');

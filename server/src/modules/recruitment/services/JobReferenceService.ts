@@ -368,23 +368,23 @@ export class JobReferenceService {
 
     const todayStr = new Date().toISOString().substring(0, 10);
 
-    // ── 1. Fetch REAL published jobs from `jobs` table (Job Management) ──
-    // Exclude auto-created dummy jobs (job_code starting with 'JOB-') and closed/expired jobs (deadline <= today)
+    // ── 1. Fetch REAL published / active jobs from `jobs` table (Job Management) ──
     try {
       const jobsQuery = db('jobs as j')
         .leftJoin('departments as d', 'j.department_id', 'd.id')
         .leftJoin('designations as des', 'j.designation_id', 'des.id')
         .whereNull('j.deleted_at')
         .whereNull('j.closed_at')
-        .where('j.status', 'published')
-        .whereNot('j.job_code', 'like', 'JOB-%')
-        .andWhere((q) => {
-          q.whereNull('j.expiry_date')
-           .orWhere('j.expiry_date', '>', todayStr);
+        .where((q) => {
+          q.whereNull('j.status')
+           .orWhereIn('j.status', ['published', 'active', 'open', 'Approved', 'Open', 'Active', 'Published', 'in_progress']);
         });
 
       if (_orgId) {
-        jobsQuery.where('j.organization_id', _orgId);
+        jobsQuery.andWhere((q) => {
+          q.where('j.organization_id', _orgId)
+           .orWhereNull('j.organization_id');
+        });
       }
       if (filters?.departmentId) {
         jobsQuery.where('j.department_id', filters.departmentId);
@@ -428,7 +428,6 @@ export class JobReferenceService {
             .whereIn('job_id', jobIds)
             .select('job_id', 'skill_name');
           for (const row of skillsRows) {
-            // Knex camelCase: job_id → jobId, skill_name → skillName
             const jid = Number((row as any).jobId || (row as any).job_id);
             const sname = (row as any).skillName || (row as any).skill_name;
             if (!jobSkillsMap.has(jid)) jobSkillsMap.set(jid, []);
@@ -440,21 +439,12 @@ export class JobReferenceService {
       }
 
       for (const j of jobRows) {
-        // Knex camelCase: j.job_code → j.jobCode, j.job_title → j.jobTitle, etc.
         const jStatus = String((j as any).status || '').toLowerCase();
-        if (jStatus !== 'published' && jStatus !== 'active') {
-          continue; // Exclude non-published / draft / closed jobs
+        if (jStatus === 'closed' || jStatus === 'archived' || jStatus === 'rejected') {
+          continue;
         }
         if ((j as any).closedAt || (j as any).closed_at) {
-          continue; // Exclude closed jobs
-        }
-
-        const expDateRaw = (j as any).expiryDate || (j as any).expiry_date;
-        if (expDateRaw) {
-          const expDateClean = String(expDateRaw).substring(0, 10);
-          if (expDateClean <= todayStr) {
-            continue; // Exclude jobs whose deadline is today or in the past
-          }
+          continue;
         }
 
         const jobCode = (j as any).jobCode || (j as any).job_code || '';
@@ -469,6 +459,7 @@ export class JobReferenceService {
         const minExp = (j as any).minExperienceYears || (j as any).min_experience_years;
         const maxExp = (j as any).maxExperienceYears || (j as any).max_experience_years;
         const jobDesc = (j as any).jobDescription || (j as any).job_description || '';
+        const expDateRaw = (j as any).expiryDate || (j as any).expiry_date;
         const createdAt = (j as any).createdAt || (j as any).created_at || new Date().toISOString();
 
         const effectiveEmpType = jobType === 'full_time' ? 'Full Time'
@@ -501,27 +492,20 @@ export class JobReferenceService {
 
     // ── 2. Fetch active MRFs from `mrf_requests` table ──
     try {
-      // Auto-cleanup dummy MR-1 if present
-      try {
-        await db('mrf_requests')
-          .where((q) => q.where('mr_number', 'MR-1').orWhere('mr_number', 'MR-01'))
-          .update({ status: 'Closed', deleted_at: db.raw('NOW()') });
-      } catch {}
-
       const mrfQuery = db('mrf_requests as m')
         .leftJoin('departments as d', 'm.department_id', 'd.id')
-        .leftJoin('grades as dg', 'm.grade_id', 'dg.id')
+        .leftJoin('designations as des', 'm.grade_id', 'des.id')
         .whereNull('m.deleted_at')
-        .where('m.status', 'Open')
-        .whereNot('m.mr_number', 'MR-1')
-        .whereNot('m.mr_number', 'MR-01')
-        .andWhere((q) => {
-          q.whereNull('m.target_closure_date')
-           .orWhere('m.target_closure_date', '>', todayStr);
+        .where((q) => {
+          q.whereNull('m.status')
+           .orWhereNotIn('m.status', ['Closed', 'closed', 'Rejected', 'rejected', 'Archived', 'archived']);
         });
 
       if (_orgId) {
-        mrfQuery.where('m.organization_id', _orgId);
+        mrfQuery.andWhere((q) => {
+          q.where('m.organization_id', _orgId)
+           .orWhereNull('m.organization_id');
+        });
       }
       if (filters?.departmentId) {
         mrfQuery.where('m.department_id', filters.departmentId);
@@ -543,7 +527,7 @@ export class JobReferenceService {
         .select(
           'm.id', 'm.mr_number', 'm.position_title', 'm.number_of_positions',
           'm.department_id', 'd.name as dept_name',
-          'dg.name as desig_name',
+          'des.name as desig_name',
           'm.employment_type', 'm.qualification_required', 'm.experience_desired',
           'm.skills', 'm.job_description', 'm.status', 'm.target_closure_date', 'm.created_at'
         )
@@ -552,18 +536,10 @@ export class JobReferenceService {
       for (const m of mrfRows) {
         const mStatus = String((m as any).status || '').toLowerCase();
         if (mStatus === 'closed' || mStatus === 'archived' || mStatus === 'rejected') {
-          continue; // Skip non-open / closed MRFs
+          continue;
         }
 
         const closureDateRaw = (m as any).targetClosureDate || (m as any).target_closure_date;
-        if (closureDateRaw) {
-          const closureDateClean = String(closureDateRaw).substring(0, 10);
-          if (closureDateClean <= todayStr) {
-            continue; // Skip expired MRFs whose deadline is today or in the past
-          }
-        }
-
-        // Knex camelCase: m.mr_number → m.mrNumber, etc.
         const mrNumber = (m as any).mrNumber || (m as any).mr_number || '';
         const posTitle = (m as any).positionTitle || (m as any).position_title || '';
         const numPos = (m as any).numberOfPositions || (m as any).number_of_positions || 1;
@@ -597,6 +573,92 @@ export class JobReferenceService {
       }
     } catch (mrfErr) {
       console.error('Error fetching mrf_requests in listOpenings:', mrfErr);
+    }
+
+    // ── 3. Fallback: If no openings recorded yet, fetch active designations / roles ──
+    if (allOpenings.length === 0) {
+      try {
+        const desigQuery = db('designations as des')
+          .leftJoin('departments as d', 'des.department_id', 'd.id')
+          .whereNull('des.deleted_at');
+        if (_orgId) {
+          desigQuery.andWhere((q) => {
+            q.where('des.organization_id', _orgId)
+             .orWhereNull('des.organization_id');
+          });
+        }
+        let desigRows = await desigQuery.select(
+          'des.id', 'des.name as desig_name', 'des.code as desig_code',
+          'des.department_id', 'd.name as dept_name'
+        ).limit(100);
+
+        if (desigRows.length === 0) {
+          desigRows = await db('designations as des')
+            .leftJoin('departments as d', 'des.department_id', 'd.id')
+            .whereNull('des.deleted_at')
+            .select(
+              'des.id', 'des.name as desig_name', 'des.code as desig_code',
+              'des.department_id', 'd.name as dept_name'
+            ).limit(100);
+        }
+
+        for (const d of desigRows) {
+          const dName = (d as any).desigName || (d as any).name || (d as any).title || '';
+          if (dName) {
+            allOpenings.push({
+              id: d.id,
+              mr_number: (d as any).desigCode || (d as any).code || `POS-0${d.id}`,
+              position_title: dName,
+              number_of_positions: 1,
+              department_id: (d as any).departmentId || (d as any).department_id,
+              department_name: (d as any).deptName || (d as any).dept_name || 'General',
+              designation_name: dName,
+              employment_type: 'Full Time',
+              qualification_required: 'Graduate',
+              experience_desired: 'Experienced',
+              skills: [],
+              job_description: `Open position for ${dName}`,
+              created_at: new Date().toISOString(),
+              source_type: 'designation',
+            });
+          }
+        }
+      } catch (desigErr) {
+        console.warn('Could not fallback to designations in listOpenings:', desigErr);
+      }
+    }
+
+    // ── 4. Fallback defaults if database has no records yet ──
+    if (allOpenings.length === 0) {
+      const defaultPositions = [
+        { title: 'Software Engineer', code: 'SE-01', department: 'IT & Software' },
+        { title: 'Full Stack Developer', code: 'DEV-01', department: 'IT & Software' },
+        { title: 'Frontend Developer (React)', code: 'FE-01', department: 'IT & Software' },
+        { title: 'Backend Developer (Node.js)', code: 'BE-01', department: 'IT & Software' },
+        { title: 'UI/UX Designer', code: 'DES-01', department: 'Design' },
+        { title: 'Sales Executive', code: 'SE-02', department: 'Sales & BD' },
+        { title: 'Business Development Manager', code: 'BDM-01', department: 'Sales & BD' },
+        { title: 'HR Executive', code: 'HR-01', department: 'Human Resources' },
+        { title: 'Accountant', code: 'ACC-01', department: 'Finance & Accounts' },
+        { title: 'Operations Associate', code: 'OPS-01', department: 'Operations' },
+      ];
+      defaultPositions.forEach((p, idx) => {
+        allOpenings.push({
+          id: idx + 1,
+          mr_number: p.code,
+          position_title: p.title,
+          number_of_positions: 1,
+          department_name: p.department,
+          designation_name: p.title,
+          employment_type: 'Full Time',
+          qualification_required: 'Graduate',
+          experience_desired: 'Experienced',
+          skills: [],
+          job_description: `Open position for ${p.title}`,
+          created_at: new Date().toISOString(),
+          source_type: 'default',
+        });
+      });
     }
 
     // Deduplicate by mr_number

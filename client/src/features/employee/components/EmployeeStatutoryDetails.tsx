@@ -109,6 +109,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
     accountNumber: '',
     ifscCode: '',
     companyBank: '',
+    companyBankBranch: '',
     uidaiNumber: '',
     panNumber: '',
     uanNumber: '',
@@ -141,6 +142,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
       accountNumber: e?.accountNo || e?.account_no || e?.account_number || e?.bank_account_number || e?.accountNumber || '',
       ifscCode: e?.ifscCode || e?.ifsc_code || '',
       companyBank: e?.companyBank || e?.company_bank || '',
+      companyBankBranch: e?.branchName || e?.branch_name || e?.companyBankBranch || e?.company_bank_branch || '',
       uidaiNumber: e?.aadharNumber || e?.aadhaarNumber || e?.aadhar_number || e?.aadhaar_number || e?.uidaiNumber || '',
       panNumber: e?.panNumber || e?.pan_number || e?.pan || '',
       uanNumber: e?.uanNo || e?.uan_no || e?.uan_number || e?.uanNumber || '',
@@ -171,6 +173,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             accountNumber: d.accountNo || d.account_no || d.account_number || d.bank_account_number || d.accountNumber || '',
             ifscCode: d.ifscCode || d.ifsc_code || '',
             companyBank: d.companyBank || d.company_bank || '',
+            companyBankBranch: d.branchName || d.branch_name || d.companyBankBranch || d.company_bank_branch || '',
             uidaiNumber: d.aadharNumber || d.aadhaarNumber || d.aadhar_number || d.aadhaar_number || d.uidaiNumber || '',
             panNumber: d.panNumber || d.pan_number || d.pan || '',
             uanNumber: d.uanNo || d.uan_no || d.uan_number || d.uanNumber || '',
@@ -213,6 +216,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         accountNumber: d.accountNo || d.account_no || d.bank_account_number || prev.accountNumber,
         ifscCode: d.ifscCode || d.ifsc_code || prev.ifscCode,
         companyBank: d.companyBank || d.company_bank || prev.companyBank,
+        companyBankBranch: d.branchName || d.branch_name || d.companyBankBranch || prev.companyBankBranch,
         panNumber: d.panNumber || d.pan_number || prev.panNumber,
         uidaiNumber: d.aadharNumber || d.aadhaarNumber || d.aadhar_number || d.aadhaar_number || prev.uidaiNumber,
         pfNumber: d.pfNo || d.pf_no || d.pf_number || prev.pfNumber,
@@ -231,21 +235,38 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
   const handleSave = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.put(`/employees/${employee.id}`, {
+      const payload: any = {
         bankName: formData.bankName,
+        bank_name: formData.bankName,
         accountNo: formData.accountNumber,
+        account_no: formData.accountNumber,
         ifscCode: formData.ifscCode,
+        ifsc_code: formData.ifscCode,
         companyBank: formData.companyBank,
+        company_bank: formData.companyBank,
+        branchName: formData.companyBankBranch || formData.companyBank,
+        branch_name: formData.companyBankBranch || formData.companyBank,
         panNumber: formData.panNumber,
+        pan_number: formData.panNumber,
         aadharNumber: formData.uidaiNumber,
+        aadhar_number: formData.uidaiNumber,
         pfNo: formData.pfNumber,
+        pf_no: formData.pfNumber,
         uanNo: formData.uanNumber,
+        uan_no: formData.uanNumber,
         esicNo: formData.esicNumber,
+        esic_no: formData.esicNumber,
         userBand: formData.userBand,
+        user_band: formData.userBand,
         panStatus: formData.panStatus,
+        pan_status: formData.panStatus,
         eligibleForEps: formData.eligibleForEps,
+        eligible_for_eps: formData.eligibleForEps,
         backgroundVerification: formData.backgroundVerification,
-      });
+        background_verification: formData.backgroundVerification,
+      };
+
+      const res = await apiClient.patch(`/employees/${employee.id}`, payload);
 
       const updatedEmp = res.data?.data || res.data;
       if (updatedEmp) {
@@ -254,6 +275,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
           accountNumber: updatedEmp.accountNo || updatedEmp.account_no || updatedEmp.account_number || updatedEmp.accountNumber || formData.accountNumber,
           ifscCode: updatedEmp.ifscCode || updatedEmp.ifsc_code || formData.ifscCode,
           companyBank: updatedEmp.companyBank || updatedEmp.company_bank || formData.companyBank,
+          companyBankBranch: updatedEmp.branchName || updatedEmp.branch_name || updatedEmp.companyBankBranch || formData.companyBankBranch,
           uidaiNumber: updatedEmp.aadharNumber || updatedEmp.aadhaarNumber || updatedEmp.aadhar_number || updatedEmp.aadhaar_number || updatedEmp.uidaiNumber || formData.uidaiNumber,
           panNumber: updatedEmp.panNumber || updatedEmp.pan_number || formData.panNumber,
           uanNumber: updatedEmp.uanNo || updatedEmp.uan_no || updatedEmp.uan_number || updatedEmp.uanNumber || formData.uanNumber,
@@ -396,10 +418,10 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             />
             <FieldItem
               label="Company Bank Branch"
-              value={formData.companyBank}
+              value={formData.companyBankBranch}
               placeholder="e.g. HDFC Main Branch"
               isEditing={isEditing}
-              onChange={v => handleChange('companyBank', v)}
+              onChange={v => handleChange('companyBankBranch', v)}
             />
           </div>
         </div>

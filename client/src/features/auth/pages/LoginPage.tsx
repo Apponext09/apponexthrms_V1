@@ -60,17 +60,19 @@ export function LoginPage() {
       const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
       const cleanEmail = (email || '').trim().toLowerCase();
 
-      // Navigate immediately - page will show loading screen while data loads
-      if (cleanEmail.includes('superadmin') || userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
+      // Navigate based on user roles fetched from database
+      if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
         navigate('/superadmin/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('finance') || accessRole === 'finance' || cleanEmail.includes('finance')) {
+      } else if (userRolesNorm.includes('finance') || accessRole === 'finance') {
         navigate('/finance/reports', { replace: true });
-      } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || userRolesNorm.includes('organization_admin') || accessRole === 'organization_admin') {
+      } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
         navigate('/dashboard', { replace: true });
-      } else if (cleanEmail.includes('pp') || userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
-        navigate('/manager/dashboard', { replace: true });
-      } else if (userRolesNorm.includes('hr_manager') || cleanEmail.includes('hr') || accessRole === 'hr_manager') {
+      } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || userRolesNorm.includes('hr') || accessRole === 'hr_manager' || accessRole === 'hr_admin' || accessRole === 'hr') {
         navigate('/hr/dashboard', { replace: true });
+      } else if (userRolesNorm.includes('support') || accessRole === 'support') {
+        navigate('/hr/dashboard', { replace: true });
+      } else if (userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
+        navigate('/manager/dashboard', { replace: true });
       } else if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead') {
         navigate('/team-lead/dashboard', { replace: true });
       } else if (userRolesNorm.includes('intern') || accessRole === 'intern') {
@@ -80,11 +82,13 @@ export function LoginPage() {
       } else {
         navigate('/employee/dashboard', { replace: true });
       }
-
-      // Don't wait for setLoading(false) - navigate immediately
-      // Loading screen will handle the wait
-    } catch (err) {
-      setError('Invalid email or password');
+    } catch (err: any) {
+      const serverMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Invalid email or password';
+      setError(serverMsg);
       setLoading(false);
     }
   };

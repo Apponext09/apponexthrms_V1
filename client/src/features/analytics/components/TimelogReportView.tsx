@@ -57,6 +57,7 @@ export function TimelogReportView() {
   const [toDate, setToDate] = useState(getTodayStr());
   const [status, setStatus] = useState('choose');
   const [lastDayOfWeek, setLastDayOfWeek] = useState('Sunday');
+  const [saturdayRule, setSaturdayRule] = useState('all_off');
   // false = timings view (default), true = status table view
   const [viewStatusTable, setViewStatusTable] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(true);
@@ -64,8 +65,8 @@ export function TimelogReportView() {
 
   const [queryParams, setQueryParams] = useState<{
     fromDate: string; toDate: string; companies?: string[]; employees?: string[]; locations?: string[];
-    departments?: string[]; reportingOfficers?: string[]; status?: string;
-  }>({ fromDate: get14DaysAgoStr(), toDate: getTodayStr() });
+    departments?: string[]; reportingOfficers?: string[]; status?: string; saturdayRule?: string;
+  }>({ fromDate: get14DaysAgoStr(), toDate: getTodayStr(), saturdayRule: 'all_off' });
 
   React.useEffect(() => {
     const year = currentMonthDate.getFullYear();
@@ -88,7 +89,8 @@ export function TimelogReportView() {
     setQueryParams({
       fromDate: newFrom,
       toDate: newTo,
-      status: 'choose'
+      status: 'choose',
+      saturdayRule
     });
   }, [currentMonthDate]);
 
@@ -122,14 +124,14 @@ export function TimelogReportView() {
     setSelectedCompanies([]); setSelectedLocations([]); setSelectedDepartments([]);
     setSelectedReportingOfficers([]); setSelectedEmployees([]);
     setFromDate(get14DaysAgoStr()); setToDate(getTodayStr());
-    setStatus('choose'); setLastDayOfWeek('Sunday'); setViewStatusTable(false);
-    setQueryParams({ fromDate: get14DaysAgoStr(), toDate: getTodayStr() });
+    setStatus('choose'); setLastDayOfWeek('Sunday'); setSaturdayRule('all_off'); setViewStatusTable(false);
+    setQueryParams({ fromDate: get14DaysAgoStr(), toDate: getTodayStr(), saturdayRule: 'all_off' });
     setHasSubmitted(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setQueryParams({ fromDate, toDate, companies: selectedCompanies, employees: selectedEmployees, locations: selectedLocations, departments: selectedDepartments, reportingOfficers: selectedReportingOfficers, status });
+    setQueryParams({ fromDate, toDate, companies: selectedCompanies, employees: selectedEmployees, locations: selectedLocations, departments: selectedDepartments, reportingOfficers: selectedReportingOfficers, status, saturdayRule });
     setHasSubmitted(true);
   };
 
@@ -254,39 +256,45 @@ export function TimelogReportView() {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200 text-[11px]">
-          {matrixLogs.map(row => (
-            <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-              <td className="py-2 px-3 font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.location}</td>
-              <td className="py-2 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeName}</td>
-              <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeCode}</td>
-              {weekChunks.map(chunk => (
-                <React.Fragment key={`td-wk-${chunk.weekNum}`}>
-                  {chunk.dates.map(d => {
-                    const timing = row.dailyTimings?.[d] || '';
-                    const statusVal = row.dailyStatus[d] || 'NP';
-                    const display = timing || statusVal;
-                    const isWeekOff = display === 'Week-Off' || statusVal === 'W/O';
-                    const isZero = display === '00:00-00:00';
-                    return (
-                      <td key={d} className={`py-2 px-2 text-center font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap ${isWeekOff ? 'text-slate-500 dark:text-slate-500 bg-slate-50/60 dark:bg-slate-900/40' : isZero ? 'text-slate-400 dark:text-slate-600' : 'text-slate-800 dark:text-slate-200'}`}>
-                        {display}
-                      </td>
-                    );
-                  })}
-                  <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/20 whitespace-nowrap">
-                    {row.weeklyTotalHours?.[chunk.weekNum] || '00:00'}
-                  </td>
-                  <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/20 whitespace-nowrap">
-                    {row.weeklyAvgHours?.[chunk.weekNum] || '00:00'}
-                  </td>
-                </React.Fragment>
-              ))}
-              <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.grandTotal || '00:00'}</td>
-              <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.grandAverage || '00:00'}</td>
-              <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.totalBreakHours || '00:00'}</td>
-              <td className="py-2 px-3 text-center font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.actualWorkHours || '00:00'}</td>
-            </tr>
-          ))}
+          {isMatrixLoading ? (
+            renderLoadingRow(3 + dateList.length + weekChunks.length * 2 + 4)
+          ) : matrixLogs.length === 0 ? (
+            renderEmptyRow(3 + dateList.length + weekChunks.length * 2 + 4)
+          ) : (
+            matrixLogs.map(row => (
+              <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                <td className="py-2 px-3 font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.location}</td>
+                <td className="py-2 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeName}</td>
+                <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeCode}</td>
+                {weekChunks.map(chunk => (
+                  <React.Fragment key={`td-wk-${chunk.weekNum}`}>
+                    {chunk.dates.map(d => {
+                      const timing = row.dailyTimings?.[d] || '';
+                      const statusVal = row.dailyStatus[d] || 'NP';
+                      const display = timing || statusVal;
+                      const isWeekOff = display === 'Week-Off' || statusVal === 'W/O';
+                      const isZero = display === '00:00-00:00';
+                      return (
+                        <td key={d} className={`py-2 px-2 text-center font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap ${isWeekOff ? 'text-slate-500 dark:text-slate-500 bg-slate-50/60 dark:bg-slate-900/40' : isZero ? 'text-slate-400 dark:text-slate-600' : 'text-slate-800 dark:text-slate-200'}`}>
+                          {display}
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/20 whitespace-nowrap">
+                      {row.weeklyTotalHours?.[chunk.weekNum] || '00:00'}
+                    </td>
+                    <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/20 whitespace-nowrap">
+                      {row.weeklyAvgHours?.[chunk.weekNum] || '00:00'}
+                    </td>
+                  </React.Fragment>
+                ))}
+                <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.grandTotal || '00:00'}</td>
+                <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.grandAverage || '00:00'}</td>
+                <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.totalBreakHours || '00:00'}</td>
+                <td className="py-2 px-3 text-center font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.actualWorkHours || '00:00'}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -315,33 +323,39 @@ export function TimelogReportView() {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200 text-[11px]">
-          {matrixLogs.map(row => (
-            <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-              <td className="py-2.5 px-3 font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.location}</td>
-              <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeName}</td>
-              <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeCode}</td>
-              {dateList.map(d => {
-                const s = row.dailyStatus[d] || 'NP';
-                return (
-                  <td key={d} className={`py-2.5 px-2 text-center font-bold border-r border-slate-200 dark:border-slate-800 ${
-                    s === 'W/O' ? 'text-slate-500 dark:text-slate-500 bg-slate-50/50 dark:bg-slate-900/30'
-                    : s === 'P' ? 'text-emerald-600 dark:text-emerald-400'
-                    : s === 'PL' || s === 'PLV' ? 'text-purple-600 dark:text-purple-400'
-                    : s === 'LWP' ? 'text-rose-500 dark:text-rose-400'
-                    : s === 'HD' ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-blue-600 dark:text-blue-400'
-                  }`}>{s}</td>
-                );
-              })}
-              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.presentDays}</td>
-              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.lwp}</td>
-              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.pl}</td>
-              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.plv}</td>
-              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.wo}</td>
-              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.totalHoliday}</td>
-              <td className="py-2.5 px-3 text-center font-bold text-slate-900 dark:text-slate-100">{row.payableDays}</td>
-            </tr>
-          ))}
+          {isMatrixLoading ? (
+            renderLoadingRow(3 + dateList.length + 7)
+          ) : matrixLogs.length === 0 ? (
+            renderEmptyRow(3 + dateList.length + 7)
+          ) : (
+            matrixLogs.map(row => (
+              <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                <td className="py-2.5 px-3 font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.location}</td>
+                <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeName}</td>
+                <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeCode}</td>
+                {dateList.map(d => {
+                  const s = row.dailyStatus[d] || 'NP';
+                  return (
+                    <td key={d} className={`py-2.5 px-2 text-center font-bold border-r border-slate-200 dark:border-slate-800 ${
+                      s === 'W/O' ? 'text-slate-500 dark:text-slate-500 bg-slate-50/50 dark:bg-slate-900/30'
+                      : s === 'P' ? 'text-emerald-600 dark:text-emerald-400'
+                      : s === 'PL' || s === 'PLV' ? 'text-purple-600 dark:text-purple-400'
+                      : s === 'LWP' ? 'text-rose-500 dark:text-rose-400'
+                      : s === 'HD' ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-blue-600 dark:text-blue-400'
+                    }`}>{s}</td>
+                  );
+                })}
+                <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.presentDays}</td>
+                <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.lwp}</td>
+                <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.pl}</td>
+                <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.plv}</td>
+                <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.wo}</td>
+                <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.totalHoliday}</td>
+                <td className="py-2.5 px-3 text-center font-bold text-slate-900 dark:text-slate-100">{row.payableDays}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -351,18 +365,84 @@ export function TimelogReportView() {
     <div className="space-y-6">
       {/* Info Modal */}
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
-        <DialogContent className="max-w-md bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Info className="w-4 h-4 text-[#00c0ef]" /><span>Timelog Report Guide & Calculation Info</span>
+        <DialogContent className="max-w-lg bg-card border border-border shadow-xl rounded-xl">
+          <DialogHeader className="border-b border-border/60 pb-3">
+            <DialogTitle className="text-sm font-extrabold text-foreground flex items-center gap-2">
+              <Info className="w-4 h-4 text-[#00c0ef]" />
+              <span>Timelog Report Guide & Calculation Info</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-xs text-muted-foreground pt-2">
-            <p>ï¿½ <strong>Timings View (default):</strong> Shows actual check-in/out times per day with weekly total & average working hours, plus grand Total, Average, Total Break Hours, Actual Work Hours.</p>
-            <p>ï¿½ <strong>Status Table View (checkbox checked):</strong> Shows attendance codes ï¿½ NP = Not Present, P = Present, W/O = Week Off, PL = Paid Leave, PLV = Privilege Leave, LWP = Leave Without Pay ï¿½ with summary counts.</p>
-            <p>ï¿½ <strong>Export:</strong> Download the current view in CSV format using 'Export Excel'.</p>
+
+          <div className="space-y-4 text-xs text-foreground/90 pt-3 max-h-[70vh] overflow-y-auto pr-1">
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-800 space-y-1.5">
+              <h4 className="font-bold text-xs text-primary flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" /> View Modes
+              </h4>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                • <strong>Timings View (Default):</strong> Displays exact daily check-in / check-out times (<code className="font-mono bg-muted px-1 py-0.5 rounded">09:30-18:30</code>), weekly total working hours, weekly averages, grand totals, and net actual work hours.
+              </p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                • <strong>Status Table View (Checkbox Checked):</strong> Displays daily attendance status codes (<code className="font-mono bg-muted px-1 py-0.5 rounded">P</code>, <code className="font-mono bg-muted px-1 py-0.5 rounded">HD</code>, <code className="font-mono bg-muted px-1 py-0.5 rounded">W/O</code>, etc.) alongside summary day counts.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="font-bold text-xs text-foreground">Attendance Status Codes</h4>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="flex items-center gap-2 p-1.5 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
+                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400 w-8">P</span>
+                  <span className="text-muted-foreground">Present (Full Day)</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900">
+                  <span className="font-extrabold text-amber-600 dark:text-amber-400 w-8">HD</span>
+                  <span className="text-muted-foreground">Half Day (0.5 Day)</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700">
+                  <span className="font-extrabold text-slate-600 dark:text-slate-400 w-8">W/O</span>
+                  <span className="text-muted-foreground">Week Off (Sun/Sat Rule)</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900">
+                  <span className="font-extrabold text-purple-600 dark:text-purple-400 w-8">PL</span>
+                  <span className="text-muted-foreground">Paid Leave</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900">
+                  <span className="font-extrabold text-purple-600 dark:text-purple-400 w-8">PLV</span>
+                  <span className="text-muted-foreground">Privilege Leave</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900">
+                  <span className="font-extrabold text-rose-600 dark:text-rose-400 w-8">LWP</span>
+                  <span className="text-muted-foreground">Leave Without Pay</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900">
+                  <span className="font-extrabold text-blue-600 dark:text-blue-400 w-12 font-mono text-[10px]">Holiday</span>
+                  <span className="text-muted-foreground">Org Holiday</span>
+                </div>
+                <div className="flex items-center gap-2 p-1.5 rounded bg-rose-100/50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900">
+                  <span className="font-extrabold text-rose-700 dark:text-rose-300 w-8">NP</span>
+                  <span className="text-muted-foreground">Not Present (Missing)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-muted/50 p-3 rounded-lg border border-border/60 space-y-1.5">
+              <h4 className="font-bold text-xs text-foreground">Formulas & Key Rules</h4>
+              <p className="text-[11px] text-muted-foreground">
+                • <strong>Payable Days:</strong> <code className="font-mono bg-background px-1 rounded text-primary font-bold">Present + PL + PLV + W/O + Holidays</code>
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                • <strong>Actual Work Hours:</strong> Net working time after deducting break duration (<code className="font-mono bg-background px-1 rounded">Gross Work Mins - Break Mins</code>).
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                • <strong>Saturday Policy:</strong> Saturdays follow your selected filter policy (All Off, All Working, 2nd & 4th Off, 1st & 3rd Off).
+              </p>
+            </div>
           </div>
-          <div className="pt-4 flex justify-end"><Button variant="outline" onClick={() => setIsInfoOpen(false)} className="h-8 text-xs">Close</Button></div>
+
+          <div className="pt-3 border-t border-border/60 flex justify-end">
+            <Button variant="outline" onClick={() => setIsInfoOpen(false)} className="h-8 text-xs font-semibold px-4">
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -385,7 +465,7 @@ export function TimelogReportView() {
               {renderMultiSelectDropdown('Employee', selectedEmployees, setSelectedEmployees, optionsData?.employees || [])}
             </div>
 
-            {/* Second Row: Dates, Status, Last Day, Checkbox */}
+            {/* Second Row: Dates, Status, Saturday Rule, Checkbox */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end">
               <div className="flex flex-col space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
@@ -416,6 +496,20 @@ export function TimelogReportView() {
               </div>
 
               <div className="flex flex-col space-y-1.5">
+                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Saturday Rule</Label>
+                <select
+                  value={saturdayRule}
+                  onChange={(e) => setSaturdayRule(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs font-semibold focus:outline-none text-slate-800 dark:text-slate-200"
+                >
+                  <option value="all_off">Saturdays: All Off (Week Off)</option>
+                  <option value="all_working">Saturdays: All Working</option>
+                  <option value="second_fourth_off">Saturdays: 2nd & 4th Off</option>
+                  <option value="first_third_off">Saturdays: 1st & 3rd Off</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
                 <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Status</Label>
                 <select
                   value={status}
@@ -426,19 +520,6 @@ export function TimelogReportView() {
                   <option value="active">active</option>
                   <option value="inactive">inactive</option>
                   <option value="both">both</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col space-y-1.5">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Last Day Of Week</Label>
-                <select
-                  value={lastDayOfWeek}
-                  onChange={(e) => setLastDayOfWeek(e.target.value)}
-                  className="h-9 px-3 rounded-md border border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs font-semibold focus:outline-none text-slate-800 dark:text-slate-200"
-                >
-                  <option value="Sunday">Sunday</option>
-                  <option value="Saturday">Saturday</option>
-                  <option value="Friday">Friday</option>
                 </select>
               </div>
 
@@ -525,15 +606,12 @@ export function TimelogReportView() {
             </div>
 
             <div className="flex flex-wrap items-center gap-4">
-              {/* Checkbox status toggle */}
-              
-
               <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 space-x-1.5 shadow-2xs">
                 <Download className="w-3.5 h-3.5 text-primary" /><span>Export Excel</span>
               </Button>
             </div>
           </div>
-          {viewStatusTable ? renderTimingsTable() : renderStatusTable()}
+          {viewStatusTable ? renderStatusTable() : renderTimingsTable()}
         </div>
       </div>
     </div>

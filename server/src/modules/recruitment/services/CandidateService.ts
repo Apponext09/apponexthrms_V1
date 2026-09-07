@@ -211,7 +211,28 @@ export class CandidateService {
     assign('marital_status', 'maritalStatus', 'marital_status');
     assign('qualification', 'qualification');
     assign('skills', 'skills');
-    assign('dob', 'dateOfBirth', 'dob');
+    assign('dob', 'dateOfBirth', 'dob', 'date_of_birth');
+    if (updateData.dob !== undefined) {
+      if (!updateData.dob) {
+        updateData.dob = null;
+        updateData.date_of_birth = null;
+      } else {
+        const str = String(updateData.dob).trim();
+        const match = str.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (match) {
+          updateData.dob = match[1];
+        } else {
+          const d = new Date(str);
+          if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            updateData.dob = `${year}-${month}-${day}`;
+          }
+        }
+        updateData.date_of_birth = updateData.dob;
+      }
+    }
     assign('current_salary', 'currentSalary', 'current_salary');
     assign('expected_salary', 'expectedSalary', 'expected_salary');
     assign('notice_period_days', 'noticePeriodDays', 'notice_period_days');

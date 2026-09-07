@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ShieldCheck, Plus, RotateCcw, Search, Clock,
   Check, X, Trash2, Loader2, AlertCircle, Building2,
@@ -639,7 +639,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
                             variant="outline"
                             className={cn(
                               'text-[10px] font-semibold px-2 py-0.2 rounded-md',
-                              isSelected ? 'bg-white/20 text-white border-white/30' : 'bg-muted/60 text-muted-foreground'
+                              isSelected ? 'bg-background/20 text-white border-white/30' : 'bg-muted/60 text-muted-foreground'
                             )}
                           >
                             {deptName}
@@ -651,7 +651,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
                             variant="outline"
                             className={cn(
                               'text-[10px] font-semibold px-2 py-0.2 rounded-md',
-                              isSelected ? 'bg-white/20 text-white border-white/30' : 'bg-primary/10 text-primary border-primary/20'
+                              isSelected ? 'bg-background/20 text-white border-white/30' : 'bg-primary/10 text-primary border-primary/20'
                             )}
                           >
                             {compName}
@@ -664,7 +664,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
                       <span className={cn(
                         'font-semibold px-2 py-0.5 rounded-full text-[10px] border',
                         isSelected
-                          ? 'bg-white/20 text-white border-white/30'
+                          ? 'bg-background/20 text-white border-white/30'
                           : activeStatus === 'Yes'
                           ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                           : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
@@ -679,7 +679,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
                         className={cn(
                           'p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity',
                           isSelected
-                            ? 'text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/10'
+                            ? 'text-primary-foreground/80 hover:text-primary-foreground hover:bg-background/10'
                             : 'text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
                         )}
                       >
@@ -692,7 +692,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
                   <div
                     className={cn(
                       'tiptap-preview p-2.5 rounded-xl border text-[11px] leading-snug line-clamp-3 overflow-hidden',
-                      isSelected ? 'bg-white/10 border-white/20 text-white/90' : 'bg-muted/30 border-border/40 text-muted-foreground'
+                      isSelected ? 'bg-background/10 border-white/20 text-white/90' : 'bg-muted/30 border-border/40 text-muted-foreground'
                     )}
                     dangerouslySetInnerHTML={{
                       __html: item.responsibilities || '<em>No content provided.</em>'

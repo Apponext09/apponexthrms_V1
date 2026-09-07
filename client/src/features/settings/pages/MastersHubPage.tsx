@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, lazy, Suspense } from 'react';
 import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -38,27 +38,37 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { LocationMasterForm } from '../components/LocationMasterForm';
-import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
-import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
-import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
-import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
-import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
-import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
-import { DesignationMaster } from '../components/DesignationMaster';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
 
-import { BreakMasterForm } from '../components/BreakMasterForm';
-import { RolesResponsibilityMasterForm } from '../components/RolesResponsibilityMasterForm';
-import { KraMasterForm } from '../components/KraMasterForm';
-import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
-import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
-import { OfferTemplateMasterForm } from '../components/OfferTemplateMasterForm';
-import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
-import { EventMasterForm } from '../components/EventMasterForm';
-import { HolidayMasterForm } from '../components/HolidayMasterForm';
+// Lazy-load all heavy master components so only the active tab loads
+const LocationMasterForm           = lazy(() => import('../components/LocationMasterForm').then(m => ({ default: m.LocationMasterForm })));
+const EmployeeStatusMasterForm     = lazy(() => import('../components/EmployeeStatusMasterForm').then(m => ({ default: m.EmployeeStatusMasterForm })));
+const GeneralShiftMasterForm       = lazy(() => import('../components/GeneralShiftMasterForm').then(m => ({ default: m.GeneralShiftMasterForm })));
+const RosterShiftMasterForm        = lazy(() => import('../components/RosterShiftMasterForm').then(m => ({ default: m.RosterShiftMasterForm })));
+const DepartmentMasterForm         = lazy(() => import('../components/DepartmentMasterForm').then(m => ({ default: m.DepartmentMasterForm })));
+const GradeMasterCustomUI          = lazy(() => import('../components/GradeMasterCustomUI').then(m => ({ default: m.GradeMasterCustomUI })));
+const EmploymentTypeMasterCustomUI = lazy(() => import('../components/EmploymentTypeMasterCustomUI').then(m => ({ default: m.EmploymentTypeMasterCustomUI })));
+const DesignationMaster            = lazy(() => import('../components/DesignationMaster').then(m => ({ default: m.DesignationMaster })));
+const BreakMasterForm              = lazy(() => import('../components/BreakMasterForm').then(m => ({ default: m.BreakMasterForm })));
+const RolesResponsibilityMasterForm = lazy(() => import('../components/RolesResponsibilityMasterForm').then(m => ({ default: m.RolesResponsibilityMasterForm })));
+const KraMasterForm                = lazy(() => import('../components/KraMasterForm').then(m => ({ default: m.KraMasterForm })));
+const NotificationTemplateMasterForm = lazy(() => import('../components/NotificationTemplateMasterForm').then(m => ({ default: m.NotificationTemplateMasterForm })));
+const NotificationMergeCodeMasterForm = lazy(() => import('../components/NotificationMergeCodeMasterForm').then(m => ({ default: m.NotificationMergeCodeMasterForm })));
+const OfferTemplateMasterForm      = lazy(() => import('../components/OfferTemplateMasterForm').then(m => ({ default: m.OfferTemplateMasterForm })));
+const ResourcePlanMasterForm       = lazy(() => import('../components/ResourcePlanMasterForm').then(m => ({ default: m.ResourcePlanMasterForm })));
+const EventMasterForm              = lazy(() => import('../components/EventMasterForm').then(m => ({ default: m.EventMasterForm })));
+const HolidayMasterForm            = lazy(() => import('../components/HolidayMasterForm').then(m => ({ default: m.HolidayMasterForm })));
+const OTRulePage                   = lazy(() => import('../components/ot-rules/OTRulePage').then(m => ({ default: m.OTRulePage })));
 
-import { OTRulePage } from '../components/ot-rules/OTRulePage';
+// Lightweight spinner shown while a lazy tab loads
+function MasterTabLoader() {
+  return (
+    <div className="flex items-center justify-center py-20 text-muted-foreground gap-3 text-sm font-medium">
+      <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      Loading...
+    </div>
+  );
+}
 
 // Exact master categories list
 export interface MasterCategory {
@@ -89,6 +99,7 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
   { id: 'kra', name: 'KRA Form', icon: FileText, category: 'Templates & System', description: 'Key Result Area forms, evaluation templates, and performance metrics.', defaultItemCount: 5 },
   { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
+  { id: 'event', name: 'Event', icon: Smile, category: 'Events & Planning', description: 'Company events, townhalls, celebrations, and employee engagement activities.', defaultItemCount: 4 },
 ];
 
 interface MasterItemRecord {
@@ -184,24 +195,50 @@ export function MastersHubPage() {
 
   const [selectedMasterId, setSelectedMasterId] = useState<string>('company');
 
+  // Normalize common URL alias variants to canonical master IDs
+  const TAB_ALIASES: Record<string, string> = {
+    events: 'event',
+    'event-master': 'event',
+    shifts: 'general-shift',
+    'general-shifts': 'general-shift',
+    'roster-shifts': 'roster-shift',
+    departments: 'department',
+    designations: 'designation',
+    grades: 'grade',
+    locations: 'location',
+    companies: 'company',
+    holidays: 'holiday',
+    breaks: 'break',
+    templates: 'offer-templates',
+    'notification-template': 'notification-templates',
+    'merge-codes': 'notification-merge-codes',
+    'resource-plans': 'resource-plan',
+    'ot-rules': 'ot-rule',
+  };
+
+  const resolveTabId = (raw: string | null | undefined): string | null => {
+    if (!raw) return null;
+    if (MASTER_CATEGORIES.some(m => m.id === raw)) return raw;
+    return TAB_ALIASES[raw] || null;
+  };
+
   useEffect(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
-    let masterId = null;
+    let masterId: string | null = null;
 
     if (pathSegments.includes('masters')) {
       const masterIndex = pathSegments.indexOf('masters');
-      masterId = pathSegments[masterIndex + 1];
+      masterId = resolveTabId(pathSegments[masterIndex + 1]);
     }
 
-    if (masterId && MASTER_CATEGORIES.some(m => m.id === masterId)) {
+    if (masterId) {
       setSelectedMasterId(masterId);
-    } else if (searchParams.get('tab')) {
-      const tabFromUrl = searchParams.get('tab');
-      if (tabFromUrl && MASTER_CATEGORIES.some(m => m.id === tabFromUrl)) {
+    } else {
+      const tabFromUrl = resolveTabId(searchParams.get('tab'));
+      if (tabFromUrl) {
         setSelectedMasterId(tabFromUrl);
       }
-    } else {
-      setSelectedMasterId('company');
+      // If neither path nor ?tab resolves, keep current selection (don't reset to 'company')
     }
   }, [location.pathname, searchParams]);
 
@@ -388,6 +425,7 @@ export function MastersHubPage() {
 
 
 
+      <Suspense fallback={<MasterTabLoader />}>
       {selectedMasterId === 'grade' ? (
         <GradeMasterCustomUI />
       ) : selectedMasterId === 'emp-type' ? (
@@ -450,6 +488,8 @@ export function MastersHubPage() {
         <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'ot-rule' ? (
         <OTRulePage />
+      ) : selectedMasterId === 'event' ? (
+        <EventMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (
 
         /* Active Master Details Card & Actions Bar */
@@ -602,6 +642,8 @@ export function MastersHubPage() {
           </div>
         </div>
       )}
+
+      </Suspense>
 
       {/* Add / Edit Master Record Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>

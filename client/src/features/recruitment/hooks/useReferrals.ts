@@ -33,7 +33,7 @@ export const useRewardReferral = (referralId: number) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { rewardAmount: number; rewardType?: string }) => {
+    mutationFn: async (input: { rewardAmount: number; rewardType?: string; newStatus?: string }) => {
       const response = await api.post(`/recruitment/referrals/${referralId}/reward`, input);
       return response.data;
     },

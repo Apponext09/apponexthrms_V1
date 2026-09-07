@@ -864,6 +864,7 @@ export class ShiftService {
       fromDate,
       toDate
     );
+    const defaultShift = await this.shiftRepo.getDefaultShift(ctx).catch(() => null);
 
     const result: any[] = [];
     const start = new Date(fromDate);
@@ -897,6 +898,25 @@ export class ShiftService {
           flexibleStartRangeStart: activeAssign.flexibleStartRangeStart,
           flexibleStartRangeEnd: activeAssign.flexibleStartRangeEnd,
           description: activeAssign.description
+        });
+      } else if (defaultShift) {
+        const isWorking = this.isWorkingDay(d, defaultShift.roster_pattern);
+        result.push({
+          date: dateStr,
+          isOffDay: !isWorking,
+          shiftId: defaultShift.id,
+          shiftName: defaultShift.shift_name,
+          shiftCode: defaultShift.shift_code,
+          startTime: defaultShift.start_time,
+          endTime: defaultShift.end_time,
+          color: defaultShift.color || '#3B82F6',
+          isNightShift: Boolean(defaultShift.is_night_shift),
+          isFlexible: Boolean(defaultShift.is_flexible),
+          breakDurationMinutes: defaultShift.break_duration_minutes,
+          gracePeriodMinutes: defaultShift.grace_period_minutes,
+          flexibleStartRangeStart: defaultShift.flexible_start_range_start,
+          flexibleStartRangeEnd: defaultShift.flexible_start_range_end,
+          description: defaultShift.description
         });
       } else {
         result.push({

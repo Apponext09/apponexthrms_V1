@@ -79,10 +79,36 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   };
 
   const isPathActive = (itemHref: string, currentPath: string): boolean => {
+    if (!itemHref || !currentPath) return false;
     if (itemHref === currentPath) return true;
+
+    const exactMatchRoutes = [
+      '/',
+      '/dashboard',
+      '/hr',
+      '/hr/dashboard',
+      '/attendance',
+      '/hr/attendance',
+      '/leaves',
+      '/hr/leaves',
+      '/payroll',
+      '/hr/payroll',
+      '/recruitment',
+      '/hr/recruitment',
+      '/performance',
+      '/hr/performance',
+      '/assets',
+      '/hr/assets',
+      '/expenses',
+      '/hr/expenses',
+    ];
+
+    if (exactMatchRoutes.includes(itemHref)) {
+      return currentPath === itemHref;
+    }
+
     if (currentPath.startsWith(itemHref + '/')) return true;
-    if (itemHref.startsWith(currentPath + '/')) return false;
-    return currentPath.startsWith(itemHref);
+    return false;
   };
 
   const getFullName = () => {

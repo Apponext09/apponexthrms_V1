@@ -35,6 +35,8 @@ import {
   useDashboardCustomizationStore,
   ALL_AVAILABLE_REPORTS,
   ALL_AVAILABLE_QUICK_ACTIONS,
+  FIXED_KPIS,
+  ALL_AVAILABLE_KPIS,
 } from '@/features/dashboard/store/dashboardCustomizationStore';
 
 const panelClass = 'rounded-xl border-border bg-card shadow-soft-xs hover:shadow-soft-xs';
@@ -62,6 +64,23 @@ const ICON_MAP: Record<string, any> = {
   Settings,
 };
 
+// ─── Fixed KPI paths (always-on pinned row) ───────────────────────────────────
+const FIXED_KPI_PATHS: Record<string, string> = {
+  totalHeadcount: '/org-structure',
+  activeDepartments: '/masters?tab=department',
+  officeLocations: '/settings/company-profile',
+  monthlyPayrollCost: '/payroll',
+};
+
+// ─── Optional KPI paths ───────────────────────────────────────────────────────
+const OPTIONAL_KPI_PATHS: Record<string, string> = {
+  openJobs: '/recruitment/jobs',
+  pendingApprovals: '/leaves/approvals',
+  newHires: '/recruitment/offers',
+  onLeaveToday: '/approvals/dashboard',
+  reportingOfficers: '/org-structure',
+};
+
 export function OrgAdminDashboard() {
   const navigate = useNavigate();
   const { user, fetchCurrentUser } = useAuthStore();
@@ -75,15 +94,31 @@ export function OrgAdminDashboard() {
 
   const companyInfo = dashboardData?.companyInfo;
   const companyName = companyInfo?.name || selectedCompanyName || user?.organizationName || 'Organization';
-  const primaryLocation = companyInfo?.location || user?.organizationLocation || 'Headquarters';
+  const primaryLocation = companyInfo?.location || user?.organizationLocation || 'Not Specified';
 
+  // ── Fixed KPI values ────────────────────────────────────────────────────────
   const totalEmployees = dashboardData?.kpis?.totalHeadcount ?? 0;
   const totalDepartments = dashboardData?.kpis?.activeDepartments ?? 0;
   const totalLocations = dashboardData?.kpis?.officeLocations ?? 0;
-  const totalOfficers = dashboardData?.kpis?.reportingOfficers ?? 0;
+  const monthlyPayrollVal = dashboardData?.kpis?.monthlyPayrollCost ?? 0;
+
+  const formattedPayrollCost = useMemo(() => {
+    if (isLoading) return '...';
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(monthlyPayrollVal);
+  }, [monthlyPayrollVal, isLoading]);
+
+  // ── Optional KPI values ─────────────────────────────────────────────────────
+  const openJobsCount = dashboardData?.kpis?.openJobs ?? 0;
+  const pendingApprovals = dashboardData?.kpis?.pendingApprovals ?? 0;
+  const newHires = dashboardData?.kpis?.newHires ?? 0;
+  const onLeaveToday = dashboardData?.kpis?.onLeaveToday ?? 0;
+  const reportingOfficers = dashboardData?.kpis?.reportingOfficers ?? 0;
 
   const growthChartData = dashboardData?.growthTrend || [];
-  const departmentBreakdown = dashboardData?.departmentBreakdown || [];
   const recentEmployees = dashboardData?.recentEmployees || [];
 
   // Selected report details for the header button
@@ -95,27 +130,45 @@ export function OrgAdminDashboard() {
 
   const ReportIcon = ICON_MAP[activeReport.iconName] || FileBarChart;
 
-  // KPI Value Dictionary
-  const kpiValues: Record<string, { value: string; icon: any; label: string; color?: string }> = {
-    totalHeadcount: { label: 'Total Employee Count', value: isLoading ? '...' : String(totalEmployees), icon: Users },
-    activeDepartments: { label: 'Active Departments', value: isLoading ? '...' : String(totalDepartments), icon: Building2 },
-    officeLocations: { label: 'Office Locations', value: isLoading ? '...' : String(totalLocations), icon: MapPin },
-    reportingOfficers: { label: 'Reporting Officers', value: isLoading ? '...' : String(totalOfficers), icon: ShieldCheck },
-    presentToday: { label: 'Present Today', value: isLoading ? '...' : String(Math.max(1, Math.round(totalEmployees * 0.92))), icon: UserCheck },
-    onLeaveToday: { label: 'On Leave Today', value: isLoading ? '...' : String(Math.max(0, Math.round(totalEmployees * 0.08))), icon: Palmtree },
-    pendingApprovals: { label: 'Pending Approvals', value: '4', icon: Clock },
-    openJobs: { label: 'Open Job Postings', value: '6', icon: Briefcase },
-    newHiresThisMonth: { label: 'New Hires (This Month)', value: '3', icon: UserPlus },
-    activeAssets: { label: 'Assigned Assets', value: '18', icon: Package },
-    monthlyPayrollCost: { label: 'Est. Monthly Payroll', value: '₹3,85,000', icon: Wallet },
+  // ── Fixed KPI cards (always shown) ─────────────────────────────────────────
+  const fixedKpiCards = useMemo(() => {
+    const vals: Record<string, { value: string; icon: any }> = {
+      totalHeadcount: { value: isLoading ? '...' : String(totalEmployees), icon: Users },
+      activeDepartments: { value: isLoading ? '...' : String(totalDepartments), icon: Building2 },
+      officeLocations: { value: isLoading ? '...' : String(totalLocations), icon: MapPin },
+      monthlyPayrollCost: { value: formattedPayrollCost, icon: Wallet },
+    };
+
+    return FIXED_KPIS.map((kpi) => ({
+      id: kpi.id,
+      label: kpi.label,
+      path: kpi.path,
+      ...vals[kpi.id],
+    }));
+  }, [isLoading, totalEmployees, totalDepartments, totalLocations, formattedPayrollCost]);
+
+  // ── Optional KPI cards (enabled via customization) ──────────────────────────
+  const optionalKpiValues: Record<string, { value: string; icon: any; label: string; path: string }> = {
+    openJobs: { label: 'Open Job Postings', value: isLoading ? '...' : String(openJobsCount), icon: Briefcase, path: OPTIONAL_KPI_PATHS.openJobs },
+    pendingApprovals: { label: 'Pending Approvals', value: isLoading ? '...' : String(pendingApprovals), icon: Clock, path: OPTIONAL_KPI_PATHS.pendingApprovals },
+    newHires: { label: 'New Hires', value: isLoading ? '...' : String(newHires), icon: UserPlus, path: OPTIONAL_KPI_PATHS.newHires },
+    onLeaveToday: { label: 'On Leave Today', value: isLoading ? '...' : String(onLeaveToday), icon: Palmtree, path: OPTIONAL_KPI_PATHS.onLeaveToday },
+    reportingOfficers: { label: 'Reporting Officer', value: isLoading ? '...' : String(reportingOfficers), icon: UserCheck, path: OPTIONAL_KPI_PATHS.reportingOfficers },
   };
 
-  // Filtered active KPIs
-  const activeKpis = useMemo(() => {
+  const activeOptionalKpis = useMemo(() => {
     return (config.enabledKpiIds || [])
-      .map((id) => kpiValues[id])
-      .filter(Boolean);
-  }, [config.enabledKpiIds, isLoading, totalEmployees, totalDepartments, totalLocations, totalOfficers]);
+      .map((id) => ({ id, ...optionalKpiValues[id] }))
+      .filter((k) => k && k.label);
+  }, [
+    config.enabledKpiIds,
+    isLoading,
+    openJobsCount,
+    pendingApprovals,
+    newHires,
+    onLeaveToday,
+    reportingOfficers,
+  ]);
 
   // Filtered active Quick Actions
   const activeQuickActions = useMemo(() => {
@@ -126,7 +179,7 @@ export function OrgAdminDashboard() {
 
   return (
     <div className="org-admin-dashboard space-y-5 pb-6">
-      {/* Header section with active Sub-Company / Org context */}
+      {/* Header section */}
       <section className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-card p-5 shadow-soft-xs sm:flex-row sm:items-center">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -143,17 +196,6 @@ export function OrgAdminDashboard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {config.showHeaderAddEmployee && (
-            <Button
-              size="sm"
-              onClick={() => navigate('/employees')}
-              className="h-9 rounded-lg px-3 text-xs font-semibold shadow-none cursor-pointer"
-            >
-              <UserPlus className="mr-1.5 size-3.5" />
-              Add Employee
-            </Button>
-          )}
-
           {config.showHeaderAttendanceReport && (
             <Button
               size="sm"
@@ -168,24 +210,52 @@ export function OrgAdminDashboard() {
         </div>
       </section>
 
-      {/* Overview KPI stats grid (Dynamically Customized) */}
-      {config.showKpiSection && activeKpis.length > 0 && (
-        <section
-          aria-label="Organization overview"
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        >
-          {activeKpis.map(({ icon: Icon, label, value }) => (
-            <Card key={label} className={panelClass}>
+      {/* ── Fixed KPI Row (always pinned, not customizable) ─────────────────── */}
+      {config.showKpiSection && (
+        <section aria-label="Core organization overview" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {fixedKpiCards.map(({ id, icon: Icon, label, value, path }) => (
+            <Card
+              key={id}
+              className={`${panelClass} cursor-pointer group transition-all hover:ring-2 hover:ring-primary/30`}
+              onClick={() => navigate(path)}
+            >
               <CardContent className="flex items-center gap-4 p-5">
-                <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
+                <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10 group-hover:bg-primary/20 transition-colors">
                   <Icon className="size-5" />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-muted-foreground">{label}</p>
                   <p className="mt-1 text-2xl font-extrabold leading-none tracking-tight text-foreground tabular-nums">
                     {value}
                   </p>
                 </div>
+                <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0" />
+              </CardContent>
+            </Card>
+          ))}
+        </section>
+      )}
+
+      {/* ── Optional KPI Row (enabled from customization tab) ───────────────── */}
+      {activeOptionalKpis.length > 0 && (
+        <section aria-label="Additional KPI metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {activeOptionalKpis.map(({ id, icon: Icon, label, value, path }) => (
+            <Card
+              key={id}
+              className={`${panelClass} cursor-pointer group transition-all hover:ring-2 hover:ring-primary/20 border-dashed`}
+              onClick={() => navigate(path)}
+            >
+              <CardContent className="flex items-center gap-4 p-5">
+                <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-border group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                  <Icon className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-2xl font-extrabold leading-none tracking-tight text-foreground tabular-nums">
+                    {value}
+                  </p>
+                </div>
+                <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0" />
               </CardContent>
             </Card>
           ))}
@@ -299,7 +369,7 @@ export function OrgAdminDashboard() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => navigate('/employees')}
+                    onClick={() => navigate('/org-structure')}
                     className="h-8 px-2 text-xs font-semibold text-primary hover:text-primary cursor-pointer"
                   >
                     View All
@@ -315,14 +385,15 @@ export function OrgAdminDashboard() {
                   recentEmployees.slice(0, config.recentRosterLimit || 5).map((emp) => (
                     <div
                       key={emp.id}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 p-2.5 text-xs"
+                      onClick={() => navigate(`/employees/${emp.id}`)}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/50 p-2.5 text-xs cursor-pointer hover:bg-primary/5 hover:border-primary/30 transition-colors group"
                     >
                       <div className="flex min-w-0 items-center gap-2.5">
                         <div className="flex size-8 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 font-bold text-primary">
                           {emp.firstName ? emp.firstName[0].toUpperCase() : 'E'}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate font-semibold text-foreground">
+                          <p className="truncate font-semibold text-foreground group-hover:text-primary transition-colors">
                             {emp.firstName} {emp.lastName}
                           </p>
                           <p className="truncate text-[10px] text-muted-foreground tabular-nums">
@@ -340,7 +411,7 @@ export function OrgAdminDashboard() {
             </Card>
           )}
 
-          {/* Quick Management Shortcuts (Dynamically Configured) */}
+          {/* Quick Management Shortcuts */}
           {config.showQuickActions && activeQuickActions.length > 0 && (
             <Card className={panelClass}>
               <CardHeader className="p-5 pb-2">

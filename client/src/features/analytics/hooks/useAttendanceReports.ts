@@ -133,7 +133,24 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
     queryKey: ['attendanceReportData', filters],
     queryFn: async () => {
       if (!filters) return [];
-      const res = await apiClient.get('/attendance/reports/tabular', { params: filters });
+      const qp = new URLSearchParams();
+      if (filters.fromDate) qp.append('fromDate', filters.fromDate);
+      if (filters.toDate) qp.append('toDate', filters.toDate);
+      if (filters.status) qp.append('status', filters.status);
+      if (filters.workType) qp.append('workType', filters.workType);
+      if (filters.isTabularView !== undefined) qp.append('isTabularView', String(filters.isTabularView));
+
+      (filters.companies || []).forEach((v) => v && v !== 'all' && qp.append('companies', v));
+      (filters.locations || []).forEach((v) => v && qp.append('locations', v));
+      (filters.departments || []).forEach((v) => v && qp.append('departments', v));
+      (filters.reportingOfficers || []).forEach((v) => v && qp.append('reportingOfficers', v));
+      (filters.employees || []).forEach((v) => v && qp.append('employees', v));
+
+      if (filters.statusFilters) {
+        qp.append('statusFilters', JSON.stringify(filters.statusFilters));
+      }
+
+      const res = await apiClient.get(`/attendance/reports/tabular?${qp.toString()}`);
       if (res.data?.success && Array.isArray(res.data?.data)) {
         return res.data.data as AttendanceReportRow[];
       }
@@ -155,6 +172,7 @@ export function useTimelogMatrixQuery(params: {
   departments?: string[];
   reportingOfficers?: string[];
   status?: string;
+  saturdayRule?: string;
 } | null) {
   return useQuery({
     queryKey: ['timelogMatrixData', params],
@@ -166,6 +184,7 @@ export function useTimelogMatrixQuery(params: {
         if (params.fromDate) qp.append('fromDate', params.fromDate);
         if (params.toDate) qp.append('toDate', params.toDate);
         if (params.status && params.status !== 'choose') qp.append('status', params.status);
+        if (params.saturdayRule) qp.append('saturdayRule', params.saturdayRule);
         (params.companies || []).forEach((v) => v && qp.append('companies[]', v));
         (params.employees || []).forEach((v) => v && qp.append('employees[]', v));
         (params.locations || []).forEach((v) => v && qp.append('locations[]', v));

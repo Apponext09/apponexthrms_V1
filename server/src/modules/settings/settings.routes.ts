@@ -20,6 +20,8 @@ import { MergeCodeController } from './controllers/MergeCodeController';
 import { NotificationTemplateSettingsController } from './controllers/NotificationTemplateSettingsController';
 import { EmployeeTypeController } from './controllers/EmployeeTypeController';
 import { DesignationService } from './services';
+import { EventController } from './controllers/EventController';
+import { IdCardTemplateController } from './controllers/IdCardTemplateController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
 
@@ -946,174 +948,6 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json(response);
 }));
 
-// List all managers assigned to one department, including their direct-report count.
-router.get('/departments/:id/managers', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
-  const departmentId = Number(req.params.id);
-  const managers = await db('department_managers as dm')
-    .join('employees as e', 'e.id', 'dm.employee_id')
-    .where({ 'dm.organization_id': ctx.organizationId, 'dm.department_id': departmentId })
-    .select(
-      'dm.id',
-      'dm.manager_type as managerType',
-      'dm.is_primary as isPrimary',
-      'e.id as employeeId',
-      'e.first_name as firstName',
-      'e.last_name as lastName'
-    );
-
-  const result = await Promise.all(
-    managers.map(async (m: any) => {
-      const countRes = await db('employees')
-        .where({ organization_id: ctx.organizationId, reporting_manager_id: m.employeeId })
-        .count('* as count')
-        .first();
-      return {
-        ...m,
-        directReports: Number((countRes as any)?.count || 0),
-      };
-    })
-  );
-
-  res.json({ success: true, data: result });
-}));
-
-// Assign an existing department employee as an additional manager or team lead.
-router.post('/departments/:id/managers', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
-  const departmentId = Number(req.params.id);
-  const { employeeId, managerType = 'department_manager', isPrimary = false } = req.body;
-  const employee = await db('employees').where({ id: employeeId, organization_id: ctx.organizationId, current_department_id: departmentId }).first('id');
-  if (!employee) throw new Error('Manager must be an employee in the selected department');
-  if (isPrimary) await db('department_managers').where({ organization_id: ctx.organizationId, department_id: departmentId }).update({ is_primary: false });
-  const [id] = await db('department_managers').insert({ organization_id: ctx.organizationId, department_id: departmentId, employee_id: employeeId, manager_type: managerType, is_primary: Boolean(isPrimary), assigned_by: ctx.userId, assigned_at: new Date() });
-  res.status(201).json({ success: true, data: { id } });
-}));
-
-async function ensureDepartmentColumns() {
-  try {
-    const db = getKnex();
-    const hasTable = await db.schema.hasTable('departments');
-    if (!hasTable) return;
-
-    const [hasCompanyIds, hasCompanyEmails, hasIsActive, hasColour, hasEmail] = await Promise.all([
-      db.schema.hasColumn('departments', 'company_ids'),
-      db.schema.hasColumn('departments', 'company_emails'),
-      db.schema.hasColumn('departments', 'is_active'),
-      db.schema.hasColumn('departments', 'colour'),
-      db.schema.hasColumn('departments', 'email'),
-    ]);
-
-    if (!hasCompanyIds) {
-      await db.schema.table('departments', (table) => table.json('company_ids').nullable()).catch(() => {});
-    }
-    if (!hasCompanyEmails) {
-      await db.schema.table('departments', (table) => table.json('company_emails').nullable()).catch(() => {});
-    }
-    if (!hasIsActive) {
-      await db.schema.table('departments', (table) => table.string('is_active', 50).defaultTo('Yes')).catch(() => {});
-    }
-    if (!hasColour) {
-      await db.schema.table('departments', (table) => table.string('colour', 50).defaultTo('#00b4d8')).catch(() => {});
-    }
-    if (!hasEmail) {
-      await db.schema.table('departments', (table) => table.string('email', 150).nullable()).catch(() => {});
-    }
-  } catch (err) {
-    console.warn('[ensureDepartmentColumns] schema check error:', err);
-  }
-}
-
-function parseDeptCompanyIds(rawIds: any, singleCompanyId?: any): number[] {
-  let ids: number[] = [];
-  if (Array.isArray(rawIds)) {
-    ids = rawIds.map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
-  } else if (typeof rawIds === 'string' && rawIds.trim()) {
-    try {
-      const parsed = JSON.parse(rawIds);
-      if (Array.isArray(parsed)) {
-        ids = parsed.map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
-      }
-    } catch { }
-  }
-  if (ids.length === 0 && singleCompanyId) {
-    const num = Number(singleCompanyId);
-    if (!isNaN(num) && num > 0) ids = [num];
-  }
-  return ids;
-}
-
-function formatDeptResponse(dept: any) {
-  if (!dept) return dept;
-  const companyIds = parseDeptCompanyIds(dept.company_ids || dept.companyIds, dept.company_id || dept.companyId);
-  let companyEmails = dept.company_emails || dept.companyEmails;
-  if (typeof companyEmails === 'string') {
-    try { companyEmails = JSON.parse(companyEmails); } catch { }
-  }
-  return {
-    ...dept,
-    company_ids: companyIds,
-    companyIds: companyIds,
-    company_emails: companyEmails || {},
-    companyEmails: companyEmails || {},
-  };
-}
-
-router.post('/departments', asyncHandler(async (req: Request, res: Response) => {
-  await ensureDepartmentColumns();
-  const ctx = req.ctx!;
-  const db = getKnex();
-
-  const name = req.body.name || req.body.departmentName || 'Department';
-  const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
-  const email = req.body.email || req.body.departmentMail || null;
-  const colour = req.body.colour || req.body.color || '#00b4d8';
-  const description = req.body.description || null;
-  const isActive = req.body.isActive || req.body.is_active || 'Yes';
-
-  const rawCompanyIds = req.body.companyIds || req.body.company_ids;
-  const rawCompanyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
-  const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, rawCompanyId);
-  const firstCompanyId = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
-  const companyIdsJson = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
-
-  const rawCompanyEmails = req.body.companyEmails || req.body.company_emails || req.body.defaultEmails;
-  const companyEmailsJson = rawCompanyEmails && typeof rawCompanyEmails === 'object' ? JSON.stringify(rawCompanyEmails) : null;
-
-  const statusVal = (isActive === 'Yes' || isActive === 'active' || isActive === true) ? 'active' : 'inactive';
-
-  const [id] = await db('departments').insert({
-    uuid: uuidv4(),
-    organization_id: ctx.organizationId,
-    name,
-    code,
-    email,
-    colour,
-    description,
-    company_id: firstCompanyId,
-    company_ids: companyIdsJson,
-    company_emails: companyEmailsJson,
-    is_active: isActive,
-    status: statusVal,
-    created_by: ctx.userId || 1,
-    updated_by: ctx.userId || 1,
-    created_at: new Date(),
-    updated_at: new Date(),
-  });
-
-  const created = await db('departments').where('id', id).first();
-  const formatted = formatDeptResponse(created);
-
-  const response: ApiResponse = {
-    success: true,
-    data: formatted || { id, name, code, email, colour, is_active: isActive, companyIds: companyIdsArray, company_ids: companyIdsArray, message: 'Department created successfully' },
-  };
-
-  res.status(201).json(response);
-}));
-
 router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
@@ -1190,9 +1024,77 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
     success: true,
     data: { id, name, code, message: 'Location created successfully' },
   };
-
-  res.status(201).json(response);
+  res.json(response);
 }));
+
+async function ensureDepartmentColumns() {
+  try {
+    const db = getKnex();
+    const hasTable = await db.schema.hasTable('departments');
+    if (!hasTable) return;
+
+    const [hasCompanyIds, hasCompanyEmails, hasIsActive, hasColour, hasEmail] = await Promise.all([
+      db.schema.hasColumn('departments', 'company_ids'),
+      db.schema.hasColumn('departments', 'company_emails'),
+      db.schema.hasColumn('departments', 'is_active'),
+      db.schema.hasColumn('departments', 'colour'),
+      db.schema.hasColumn('departments', 'email'),
+    ]);
+
+    if (!hasCompanyIds) {
+      await db.schema.table('departments', (table) => table.json('company_ids').nullable()).catch(() => {});
+    }
+    if (!hasCompanyEmails) {
+      await db.schema.table('departments', (table) => table.json('company_emails').nullable()).catch(() => {});
+    }
+    if (!hasIsActive) {
+      await db.schema.table('departments', (table) => table.string('is_active', 50).defaultTo('Yes')).catch(() => {});
+    }
+    if (!hasColour) {
+      await db.schema.table('departments', (table) => table.string('colour', 50).defaultTo('#00b4d8')).catch(() => {});
+    }
+    if (!hasEmail) {
+      await db.schema.table('departments', (table) => table.string('email', 150).nullable()).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[ensureDepartmentColumns] schema check error:', err);
+  }
+}
+
+function parseDeptCompanyIds(rawIds: any, singleCompanyId?: any): number[] {
+  let ids: number[] = [];
+  if (Array.isArray(rawIds)) {
+    ids = rawIds.map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
+  } else if (typeof rawIds === 'string' && rawIds.trim()) {
+    try {
+      const parsed = JSON.parse(rawIds);
+      if (Array.isArray(parsed)) {
+        ids = parsed.map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
+      }
+    } catch { }
+  }
+  if (ids.length === 0 && singleCompanyId) {
+    const num = Number(singleCompanyId);
+    if (!isNaN(num) && num > 0) ids = [num];
+  }
+  return ids;
+}
+
+function formatDeptResponse(dept: any) {
+  if (!dept) return dept;
+  const companyIds = parseDeptCompanyIds(dept.company_ids || dept.companyIds, dept.company_id || dept.companyId);
+  let companyEmails = dept.company_emails || dept.companyEmails;
+  if (typeof companyEmails === 'string') {
+    try { companyEmails = JSON.parse(companyEmails); } catch { }
+  }
+  return {
+    ...dept,
+    company_ids: companyIds,
+    companyIds: companyIds,
+    company_emails: companyEmails || {},
+    companyEmails: companyEmails || {},
+  };
+}
 
 router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   await ensureDepartmentColumns();
@@ -1223,15 +1125,21 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .limit(pageSize)
     .offset(offset);
 
-  const formattedDepartments = departments.map(formatDeptResponse);
+  const formatted = departments.map((d: any) => ({
+    ...d,
+    colour: d.colour || d.color || '#00b4d8',
+    color: d.color || d.colour || '#00b4d8',
+    is_active: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
+    isActive: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
+  }));
 
   const response: ApiResponse = {
     success: true,
-    data: formattedDepartments,
+    data: formatted,
     meta: {
       page,
       pageSize,
-      total: formattedDepartments.length,
+      total: formatted.length,
       hasMore: false,
       totalPages: 1,
     } as any,
@@ -1343,6 +1251,82 @@ router.post('/departments/:id/managers', asyncHandler(async (req: Request, res: 
   res.status(201).json({ success: true, data: { id } });
 }));
 
+router.post('/departments', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  const name = req.body.name || req.body.departmentName || 'Department';
+  const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const email = req.body.email || req.body.departmentMail || null;
+  const colour = req.body.colour || req.body.color || '#00b4d8';
+  const description = req.body.description || null;
+  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
+  const isActive = req.body.isActive || req.body.is_active || 'Yes';
+  const status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
+
+  // Ensure missing columns on departments table are added if not present yet
+  try {
+    const hasColour = await db.schema.hasColumn('departments', 'colour');
+    const hasColor = await db.schema.hasColumn('departments', 'color');
+    const hasEmail = await db.schema.hasColumn('departments', 'email');
+    const hasIsActive = await db.schema.hasColumn('departments', 'is_active');
+    if (!hasColour || !hasColor || !hasEmail || !hasIsActive) {
+      await db.schema.alterTable('departments', (table) => {
+        if (!hasEmail) table.string('email', 255).nullable();
+        if (!hasColour) table.string('colour', 50).nullable().defaultTo('#00b4d8');
+        if (!hasColor) table.string('color', 50).nullable().defaultTo('#00b4d8');
+        if (!hasIsActive) table.string('is_active', 10).nullable().defaultTo('Yes');
+      });
+    }
+  } catch (e) {
+    // Ignore concurrency/already altered table errors
+  }
+
+  // Safe insertion matching existing table columns
+  const cols = await db('departments').columnInfo().catch(() => ({}));
+  const insertPayload: Record<string, any> = {
+    uuid: uuidv4(),
+    organization_id: ctx.organizationId,
+    name,
+    code,
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
+    created_at: new Date(),
+    updated_at: new Date(),
+  };
+
+  if ('description' in cols) insertPayload.description = description;
+  if ('colour' in cols) insertPayload.colour = colour;
+  if ('color' in cols) insertPayload.color = colour;
+  if ('email' in cols) insertPayload.email = email;
+  if ('company_id' in cols) insertPayload.company_id = companyId ? Number(companyId) : null;
+  if ('is_active' in cols) insertPayload.is_active = isActive;
+  if ('status' in cols) insertPayload.status = status;
+
+  const [id] = await db('departments').insert(insertPayload);
+
+  const created = await db('departments').where('id', id).first();
+
+  const response: ApiResponse = {
+    success: true,
+    data: {
+      ...created,
+      id,
+      name,
+      code,
+      colour: created?.colour || created?.color || colour,
+      color: created?.color || created?.colour || colour,
+      email: created?.email || email,
+      is_active: created?.is_active || isActive,
+      isActive: created?.is_active || isActive,
+      status: created?.status || status,
+    },
+    message: 'Department created successfully',
+  };
+
+  res.status(201).json(response);
+}));
+
 // Get single department by ID
 router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) => {
   await ensureDepartmentColumns();
@@ -1359,7 +1343,16 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
     return;
   }
 
-  res.json({ success: true, data: formatDeptResponse(dept) });
+  res.json({
+    success: true,
+    data: {
+      ...dept,
+      colour: dept.colour || dept.color || '#00b4d8',
+      color: dept.color || dept.colour || '#00b4d8',
+      is_active: dept.is_active || (dept.status === 'inactive' ? 'No' : 'Yes'),
+      isActive: dept.is_active || (dept.status === 'inactive' ? 'No' : 'Yes'),
+    },
+  });
 }));
 
 // Update department by ID (supports PUT and PATCH)
@@ -1381,15 +1374,20 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     updated_by: ctx.userId || 1,
   };
 
+  const cols = await db('departments').columnInfo().catch(() => ({}));
+
   if (name !== undefined) updatePayload.name = name;
   if (code !== undefined) updatePayload.code = code;
-  if (email !== undefined) updatePayload.email = email;
-  if (colour !== undefined) updatePayload.colour = colour;
-  if (description !== undefined) updatePayload.description = description;
+  if (email !== undefined && 'email' in cols) updatePayload.email = email;
+  if (colour !== undefined) {
+    if ('colour' in cols) updatePayload.colour = colour;
+    if ('color' in cols) updatePayload.color = colour;
+  }
+  if (description !== undefined && 'description' in cols) updatePayload.description = description;
+  if (companyId !== undefined && 'company_id' in cols) updatePayload.company_id = companyId ? Number(companyId) : null;
   if (isActive !== undefined) {
-    updatePayload.is_active = isActive;
-    const isActBool = isActive === 'Yes' || isActive === 'active' || isActive === true;
-    updatePayload.status = isActBool ? 'active' : 'inactive';
+    if ('is_active' in cols) updatePayload.is_active = isActive;
+    if ('status' in cols) updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
   }
 
   const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
@@ -1419,7 +1417,17 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     .where({ id, organization_id: ctx.organizationId })
     .first();
 
-  res.json({ success: true, data: formatDeptResponse(updated), message: 'Department updated successfully' });
+  res.json({
+    success: true,
+    data: {
+      ...updated,
+      colour: updated?.colour || updated?.color || colour || '#00b4d8',
+      color: updated?.color || updated?.colour || colour || '#00b4d8',
+      is_active: updated?.is_active || isActive || 'Yes',
+      isActive: updated?.is_active || isActive || 'Yes',
+    },
+    message: 'Department updated successfully',
+  });
 });
 
 router.put('/departments/:id', handleUpdateDepartment);
@@ -2275,6 +2283,9 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
     updateData.gender_applicable = gender_applicable;
   } else if (onlyWhenGender) {
     updateData.gender_applicable = onlyWhenGender;
+  } else if (allocation_settings !== undefined || application_settings !== undefined) {
+    // Conditions were updated but no gender condition found — reset to 'all'
+    updateData.gender_applicable = 'all';
   }
   if (sandwich_rule_enabled !== undefined) updateData.sandwich_rule_enabled = Boolean(sandwich_rule_enabled);
   if (allow_negative_balance !== undefined) updateData.allow_negative_balance = isAllowNeg;
@@ -2304,7 +2315,12 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   if (req.body.effectiveFrom !== undefined) allocObj.effective_from = req.body.effectiveFrom;
   if (req.body.effectiveTo !== undefined) allocObj.effective_to = req.body.effectiveTo;
 
-  if (allocation_settings !== undefined || req.body.color !== undefined || req.body.icon !== undefined || req.body.effective_from !== undefined || req.body.effective_to !== undefined || req.body.effectiveFrom !== undefined || req.body.effectiveTo !== undefined) {
+  // Sync allocObj.gender with the resolved gender_applicable to prevent stale values in JSON
+  if (updateData.gender_applicable) {
+    allocObj.gender = updateData.gender_applicable;
+  }
+
+  if (allocation_settings !== undefined || req.body.color !== undefined || req.body.icon !== undefined || req.body.effective_from !== undefined || req.body.effective_to !== undefined || req.body.effectiveFrom !== undefined || req.body.effectiveTo !== undefined || updateData.gender_applicable) {
     updateData.allocation_settings = stringifyJson(allocObj);
   }
   if (application_settings !== undefined && application_settings !== null) {
@@ -4268,13 +4284,17 @@ router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
 // ==========================================
 // EVENTS MASTER CRUD ROUTES
 // ==========================================
-import { EventController } from './controllers/EventController';
 const eventCtrl = new EventController();
+
+router.get('/events',        asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id',    asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events',       asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id',    asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
 
 // ==========================================
 // ID CARD DESIGNER & TEMPLATE CRUD ROUTES
 // ==========================================
-import { IdCardTemplateController } from './controllers/IdCardTemplateController';
 const idCardCtrl = new IdCardTemplateController();
 
 router.get('/id-card/templates', asyncHandler((req, res) => idCardCtrl.list(req, res)));

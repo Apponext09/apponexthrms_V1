@@ -49,14 +49,14 @@ export function EmployeeDataTable({
     employeeNameAvatar: true,
     employeeCode: true,
     contactInfo: true,
-    statusBadge: true,
+    statusBadge: false,
     accessRole: true,
     department: true,
     designation: true,
     employmentType: true,
-    location: true,
-    reportingManager: true,
-    dateOfJoining: true,
+    location: false,
+    reportingManager: false,
+    dateOfJoining: false,
     actions: true,
     actionViewProfile: true,
     actionEdit: false,
@@ -129,8 +129,10 @@ export function EmployeeDataTable({
                 {/* Employee Name & Avatar */}
                 {cols.employeeNameAvatar && (
                   <TableCell
-                    onClick={() => navigate(`/employees/${employee.id}`)}
-                    className="py-3 px-4 font-medium cursor-pointer"
+                    onClick={() => {
+                      if (!isCeo) navigate(`/employees/${employee.id}`);
+                    }}
+                    className={cn("py-3 px-4 font-medium", isCeo ? "cursor-default" : "cursor-pointer")}
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -166,8 +168,10 @@ export function EmployeeDataTable({
                 {/* Employee Code */}
                 {cols.employeeCode && (
                   <TableCell
-                    onClick={() => navigate(`/employees/${employee.id}`)}
-                    className="py-3 px-4 cursor-pointer font-mono font-semibold text-foreground/80"
+                    onClick={() => {
+                      if (!isCeo) navigate(`/employees/${employee.id}`);
+                    }}
+                    className={cn("py-3 px-4 font-mono font-semibold text-foreground/80", isCeo ? "cursor-default" : "cursor-pointer")}
                   >
                     <span
                       className={cn(
@@ -195,26 +199,34 @@ export function EmployeeDataTable({
                 {/* Status Pill Badge */}
                 {cols.statusBadge && (
                   <TableCell className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                        employee.status === 'active'
-                          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                          : employee.status === 'inactive' || employee.status === 'exit'
-                          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
-                          : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          employee.status === 'active'
-                            ? 'bg-emerald-500'
-                            : employee.status === 'inactive' || employee.status === 'exit'
-                            ? 'bg-rose-500'
-                            : 'bg-amber-500'
-                        }`}
-                      />
-                      {employee.status ? employee.status.charAt(0).toUpperCase() + employee.status.slice(1) : 'Active'}
-                    </span>
+                    {(() => {
+                      const displayStatus = (employee as any).employeeStatus || (employee as any).employee_status || employee.status || 'Active';
+                      const lower = String(displayStatus).toLowerCase();
+                      const isActive = lower === 'active';
+                      const isInactive = lower === 'inactive' || lower === 'exit' || lower === 'terminated';
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            isActive
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+                              : isInactive
+                              ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                              : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isActive
+                                ? 'bg-emerald-500'
+                                : isInactive
+                                ? 'bg-rose-500'
+                                : 'bg-amber-500'
+                            }`}
+                          />
+                          {String(displayStatus).charAt(0).toUpperCase() + String(displayStatus).slice(1)}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                 )}
 
@@ -331,7 +343,7 @@ export function EmployeeDataTable({
                 {cols.actions && (
                   <TableCell className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {cols.actionViewProfile && (
+                      {cols.actionViewProfile && !isCeo && (
                         <Button
                           variant="ghost"
                           size="sm"

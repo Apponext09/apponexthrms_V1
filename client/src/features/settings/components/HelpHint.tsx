@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useId } from 'react';
+﻿import React, { useState, useRef, useEffect, useId } from 'react';
 import { HelpCircle, Info, Sparkles, X } from 'lucide-react';
 
 export interface HelpHintProps {
@@ -151,7 +151,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
         className={`inline-flex items-center justify-center w-4 h-4 rounded-full transition-all cursor-pointer focus:outline-none ml-1.5 shrink-0 ${
           isOpen
             ? 'text-indigo-600 bg-indigo-100 dark:bg-indigo-900/60 dark:text-indigo-300 ring-2 ring-indigo-500/30'
-            : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:text-slate-500 dark:hover:text-indigo-400'
+            : 'text-muted-foreground/70 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 dark:text-muted-foreground dark:hover:text-indigo-400'
         }`}
         title="Click to view setting guidance (English & Hindi)"
       >
@@ -183,7 +183,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
                   className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
                     lang === 'en'
                       ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-muted-foreground/70 hover:text-white'
                   }`}
                   title="Switch to English"
                 >
@@ -195,7 +195,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
                   className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
                     lang === 'hi'
                       ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
+                      : 'text-muted-foreground/70 hover:text-white'
                   }`}
                   title="हिंदी में देखें"
                 >
@@ -206,7 +206,7 @@ export const HelpHint: React.FC<HelpHintProps> = ({
               <button
                 type="button"
                 onClick={closeHint}
-                className="text-slate-400 hover:text-white p-0.5 rounded-md focus:outline-none cursor-pointer"
+                className="text-muted-foreground/70 hover:text-white p-0.5 rounded-md focus:outline-none cursor-pointer"
                 title="Close Hint"
               >
                 <X className="w-3.5 h-3.5" />

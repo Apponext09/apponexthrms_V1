@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useBulkUploadEmployees, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useDesignations } from '../../settings/hooks/useDesignations';
 import { AlertCircle, Upload, CheckCircle2, FileSpreadsheet, X, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { read, utils, writeFile } from 'xlsx';
@@ -38,6 +39,7 @@ export function BulkUploadModal({
 
   const { bulkUploadEmployees, isLoading, error: apiError } = useBulkUploadEmployees();
   const { data: departmentsData } = useDepartments(1, 100);
+  const { designations } = useDesignations();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
 
   const handleDrag = (e: React.DragEvent) => {
@@ -50,10 +52,12 @@ export function BulkUploadModal({
     }
   };
 
-  // Helper to generate and download a sample Excel file (.xlsx) matching database departments and managers
+  // Helper to generate and download a sample Excel file (.xlsx) matching database departments, designations, and managers
   const handleDownloadSampleTemplate = () => {
     try {
       const sampleDept = departmentsData?.data?.[0]?.name || 'Human Resources';
+      const sampleDesig1 = designations?.[0]?.name || 'Software Engineer';
+      const sampleDesig2 = designations?.[1]?.name || 'HR Executive';
       const sampleMgrEmail = allEmployees?.[0]?.email || 'admin@apponexthrms.com';
 
       const sampleData = [
@@ -65,7 +69,7 @@ export function BulkUploadModal({
           'Mobile Number': '9876543210',
           'Date of Joining': new Date().toISOString().split('T')[0],
           'Department Name': sampleDept,
-          'Job Title': 'Software Engineer',
+          'Job Title': sampleDesig1,
           'Reports To (Manager Email / Code)': sampleMgrEmail,
           'Employment Type': 'Full Time',
           'Role': 'Employee',
@@ -80,7 +84,7 @@ export function BulkUploadModal({
           'Mobile Number': '9876543211',
           'Date of Joining': new Date().toISOString().split('T')[0],
           'Department Name': sampleDept,
-          'Job Title': 'HR Executive',
+          'Job Title': sampleDesig2,
           'Reports To (Manager Email / Code)': sampleMgrEmail,
           'Employment Type': 'Full Time',
           'Role': 'HR',
@@ -100,17 +104,55 @@ export function BulkUploadModal({
     }
   };
 
-  const parseCSVContent = (text: string) => {
-    const lines = text.split('\n').map((line) => line.trim());
-    if (lines.length === 0 || !lines[0]) {
-      toast.error('The selected file is empty.');
+  const formatDateToYYYYMMDD = (dateVal: any) => {
+    if (!dateVal) return '';
+    const dateStr = String(dateVal).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr;
+    }
+
+    const parts = dateStr.split(/[-/]/);
+    if (parts.length === 3) {
+      let day = parseInt(parts[0], 10);
+      let month = parseInt(parts[1], 10);
+      let year = parseInt(parts[2], 10);
+
+      if (parts[0].length === 4) {
+        year = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10);
+        day = parseInt(parts[2], 10);
+      } else {
+        if (year < 100) {
+          year += 2000;
+        }
+        if (month > 12 && day <= 12) {
+          const temp = day;
+          day = month;
+          month = temp;
+        }
+      }
+
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+
+    const parsedDate = new Date(dateStr);
+    if (!isNaN(parsedDate.getTime())) {
+      return `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${String(parsedDate.getDate()).padStart(2, '0')}`;
+    }
+    return '';
+  };
+
+  const parseSheet = (sheet: any) => {
+    const rawRows = utils.sheet_to_json(sheet, { raw: false, dateNF: 'yyyy-mm-dd', defval: '' }) as Record<string, any>[];
+    if (rawRows.length === 0) {
+      toast.error('The selected file is empty or has no readable rows.');
       return;
     }
 
-    // Parse headers
-    const rawHeaders = lines[0].split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
+    const parsed: ParsedRow[] = [];
 
-    // Normalize header mapping
     const normalizeHeaderKey = (h: string) => {
       const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (lower.includes('employeecode') || lower === 'code') return 'employeeCode';
@@ -120,9 +162,9 @@ export function BulkUploadModal({
       if (lower.includes('report') || lower.includes('manager')) return 'reportsToInput';
       if (lower.includes('email')) return 'email';
       if (lower.includes('phone') || lower.includes('mobile')) return 'mobile';
-      if (lower.includes('birth')) return 'dateOfBirth';
+      if (lower.includes('birth') || lower.includes('dob')) return 'dateOfBirth';
       if (lower.includes('gender')) return 'gender';
-      if (lower.includes('joining')) return 'dateOfJoining';
+      if (lower.includes('joining') || lower.includes('doj')) return 'dateOfJoining';
       if (lower.includes('employmenttype') || lower.includes('type')) return 'employmentType';
       if (lower.includes('department')) return 'departmentInput';
       if (lower.includes('title') || lower.includes('designation') || lower.includes('job')) return 'jobTitle';
@@ -132,58 +174,20 @@ export function BulkUploadModal({
       return h;
     };
 
-    const headerKeys = rawHeaders.map(normalizeHeaderKey);
-    const parsed: ParsedRow[] = [];
-
-    const formatDateToYYYYMMDD = (dateStr: string) => {
-      if (!dateStr) return '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-        return dateStr;
-      }
-
-      const parts = dateStr.split(/[-/]/);
-      if (parts.length === 3) {
-        let day = parseInt(parts[0], 10);
-        let month = parseInt(parts[1], 10);
-        let year = parseInt(parts[2], 10);
-
-        if (parts[0].length === 4) {
-          year = parseInt(parts[0], 10);
-          month = parseInt(parts[1], 10);
-          day = parseInt(parts[2], 10);
-        } else {
-          if (year < 100) {
-            year += 2000;
-          }
-          if (month > 12 && day <= 12) {
-            const temp = day;
-            day = month;
-            month = temp;
-          }
-        }
-
-        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-          return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        }
-      }
-
-      const parsedDate = new Date(dateStr);
-      if (!isNaN(parsedDate.getTime())) {
-        return `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${String(parsedDate.getDate()).padStart(2, '0')}`;
-      }
-      return '';
-    };
-
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i];
-      if (!line) continue;
-
-      const values = line.split(',').map((val) => val.trim().replace(/^["']|["']$/g, ''));
+    rawRows.forEach((rowObj: Record<string, any>, index: number) => {
       const rowData: Record<string, any> = {};
 
-      headerKeys.forEach((key, index) => {
-        rowData[key] = values[index] || '';
+      // Map raw object keys to normalized keys
+      Object.keys(rowObj).forEach((rawKey) => {
+        const normKey = normalizeHeaderKey(rawKey);
+        const val = rowObj[rawKey] !== undefined ? String(rowObj[rawKey]).trim() : '';
+        if (val) {
+          rowData[normKey] = val;
+        }
       });
+
+      // Skip completely empty rows
+      if (Object.keys(rowData).length === 0) return;
 
       // Default Employee Code if missing
       if (!rowData.employeeCode) {
@@ -195,7 +199,12 @@ export function BulkUploadModal({
         rowData.gender = rowData.gender.toLowerCase();
       }
       if (rowData.employmentType) {
-        rowData.employmentType = rowData.employmentType.toLowerCase().replace(/[- ]/g, '_');
+        const etInput = rowData.employmentType.toLowerCase().replace(/[- ]/g, '_');
+        if (etInput.includes('full')) rowData.employmentType = 'full_time';
+        else if (etInput.includes('part')) rowData.employmentType = 'part_time';
+        else if (etInput.includes('contract')) rowData.employmentType = 'contract';
+        else if (etInput.includes('intern')) rowData.employmentType = 'internship';
+        else rowData.employmentType = 'full_time';
       } else {
         rowData.employmentType = 'full_time';
       }
@@ -263,7 +272,7 @@ export function BulkUploadModal({
       rowData.reportingManagerId = resolvedManagerId;
       rowData.reportingManagerName = resolvedManagerName || rowData.reportsToInput || '';
 
-      // Default Password to Admin@123 if omitted in CSV
+      // Default Password to Admin@123 if omitted
       if (!rowData.password) {
         rowData.password = 'Admin@123';
         rowData.confirmPassword = 'Admin@123';
@@ -288,11 +297,6 @@ export function BulkUploadModal({
         errors.push('Invalid Date of Joining format (expected YYYY-MM-DD)');
       }
 
-      if (rowData.departmentInput && !resolvedDepartmentId) {
-        errors.push(`Department "${rowData.departmentInput}" not found in organization`);
-      }
-
-
       if (rowData.password && rowData.password.length < 6) {
         errors.push('Password must be at least 6 characters long');
       }
@@ -302,12 +306,12 @@ export function BulkUploadModal({
       }
 
       parsed.push({
-        index: i,
+        index: index + 1,
         data: rowData,
         errors,
         isValid: errors.length === 0,
       });
-    }
+    });
 
     setParsedRows(parsed);
   };
@@ -348,8 +352,7 @@ export function BulkUploadModal({
         const workbook = read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const csvContent = utils.sheet_to_csv(sheet);
-        parseCSVContent(csvContent);
+        parseSheet(sheet);
       } catch (err) {
         console.error('Failed to parse file:', err);
         toast.error('Failed to parse the file structure. Please ensure it is a valid Excel or CSV.');
@@ -382,10 +385,14 @@ export function BulkUploadModal({
         dateOfJoining: row.data.dateOfJoining,
         employmentType: row.data.employmentType || 'full_time',
         departmentId: row.data.departmentId || null,
+        department: row.data.departmentName || row.data.departmentInput || null,
         reportingManagerId: row.data.reportingManagerId || null,
+        reportsTo: row.data.reportsToInput || null,
         jobTitle: row.data.jobTitle || null,
+        designation: row.data.jobTitle || null,
         accessRole: row.data.accessRole || 'employee',
         password: row.data.password || 'Admin@123',
+        confirmPassword: row.data.confirmPassword || row.data.password || 'Admin@123',
       }));
 
     if (validEmployees.length === 0) {
@@ -421,7 +428,7 @@ export function BulkUploadModal({
               Bulk Upload Employees
             </DialogTitle>
             <DialogDescription>
-              Upload a CSV or Excel sheet to add multiple employees at once. Department and Manager fields are automatically matched.
+              Upload a CSV or Excel sheet to add multiple employees at once. Department, Designation, and Manager fields are automatically matched.
             </DialogDescription>
           </div>
           <Button
@@ -490,13 +497,28 @@ export function BulkUploadModal({
                   </div>
                 </div>
 
+                {/* Designations */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Designations</span>
+                  <div className="flex flex-wrap gap-1 max-h-[80px] overflow-y-auto pr-1">
+                    {(designations || []).map((des: any) => (
+                      <span key={des.id} className="text-[10px] bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded border border-indigo-100">
+                        {des.name}
+                      </span>
+                    ))}
+                    {(designations || []).length === 0 && (
+                      <span className="text-[10px] text-muted-foreground italic">No designations configured</span>
+                    )}
+                  </div>
+                </div>
+
                 {/* Reporting Managers */}
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase">Reporting Managers (Email/Name)</span>
                   <div className="flex flex-col gap-1 max-h-[100px] overflow-y-auto pr-1">
                     {allEmployees
                       ?.filter((e: any) =>
-                        ['team_lead', 'hr_manager', 'department_head'].includes(e.accessRole || e.access_role || '')
+                        ['team_lead', 'hr_manager', 'department_head', 'organization_admin'].includes(e.accessRole || e.access_role || '')
                       )
                       .slice(0, 10) // Show top 10 managers
                       .map((e: any) => (
@@ -505,7 +527,7 @@ export function BulkUploadModal({
                         </span>
                       ))}
                     {allEmployees?.filter((e: any) =>
-                      ['team_lead', 'hr_manager', 'department_head'].includes(e.accessRole || e.access_role || '')
+                      ['team_lead', 'hr_manager', 'department_head', 'organization_admin'].includes(e.accessRole || e.access_role || '')
                     ).length === 0 && (
                       <span className="text-[10px] text-muted-foreground italic">No managers configured</span>
                     )}

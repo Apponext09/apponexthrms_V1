@@ -136,7 +136,7 @@ export function EventDescriptionEditor({
   };
 
   return (
-    <div className={cn('relative border border-border rounded-2xl overflow-hidden bg-card shadow-2xs', className)}>
+    <div className={cn('relative border border-border rounded-2xl bg-card shadow-2xs', className)} style={{ isolation: 'isolate' }}>
       <style>{`
         .ProseMirror h1 {
           font-size: 2em !important;
@@ -438,7 +438,7 @@ export function EventDescriptionEditor({
       </div>
 
       {/* Editor Body */}
-      <div className="p-3 bg-background min-h-[160px] text-xs leading-relaxed text-foreground">
+      <div className="relative p-3 bg-background min-h-[160px] text-xs leading-relaxed text-foreground">
         <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none min-h-[140px]" />
       </div>
     </div>

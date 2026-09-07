@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
-  BarChart3, Briefcase, Bell, Sun, Moon, Menu,
+  BarChart3, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
   ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield
 } from 'lucide-react';
@@ -105,7 +105,6 @@ const MANAGER_NAV = [
   {
     label: 'HIRING',
     items: [
-      { name: 'Hiring Requests', href: '/manager/hiring', icon: Briefcase },
       { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
       { name: 'Interview Schedule', href: '/manager/interview-schedule', icon: Calendar },
     ],
@@ -114,36 +113,57 @@ const MANAGER_NAV = [
     label: 'APPROVALS & GOVERNANCE',
     items: [
       { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
-      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
+      { name: 'Company Policies', href: '/manager/policies', icon: Shield },
     ],
   },
 ];
 
-export function ManagerLayout() {
-  useNotificationSocket();
-  const { unreadCount } = useNotifications();
-  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
-  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [payrollOpen, setPayrollOpen] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  const { user, logout } = useAuthStore();
-  const { theme, setTheme } = useThemeStore();
-  const navigate = useNavigate();
-  const location = useLocation();
+const ALL_MANAGER_HREFS: string[] = [];
+MANAGER_NAV.forEach(section => {
+  section.items.forEach((item: any) => {
+    if (item.href) ALL_MANAGER_HREFS.push(item.href);
+    if (item.subItems) {
+      item.subItems.forEach((sub: any) => {
+        if (sub.href) ALL_MANAGER_HREFS.push(sub.href);
+      });
+    }
+  });
+});
 
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return null;
+function isItemActive(href: string, pathname: string, allHrefs: string[]): boolean {
+  if (pathname === href) return true;
+  if (!pathname.startsWith(href + '/')) return false;
+  return !allHrefs.some(
+    other => other !== href && other.length > href.length && (pathname === other || pathname.startsWith(other + '/'))
+  );
+}
 
-  const roleInfo = getUserRoleAndDept(user);
-  const currentTheme = theme === 'system'
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    : theme;
-  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
-  const handleLogout = () => { logout(); navigate('/login'); };
+interface ManagerSidebarNavContentProps {
+  sidebarOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
+  payrollOpen: boolean;
+  setPayrollOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  pathname: string;
+  user: any;
+  roleInfo: any;
+  initials: string;
+  handleLogout: () => void;
+  navigate: ReturnType<typeof useNavigate>;
+}
 
-  const SidebarContent = () => (
+function ManagerSidebarNavContent({
+  sidebarOpen,
+  setMobileOpen,
+  payrollOpen,
+  setPayrollOpen,
+  pathname,
+  user,
+  roleInfo,
+  initials,
+  handleLogout,
+  navigate,
+}: ManagerSidebarNavContentProps) {
+  return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
       <PortalSidebarBrand open={sidebarOpen} portalLabel="Manager Portal" />
@@ -170,13 +190,14 @@ export function ManagerLayout() {
 
                 if (hasSubItems) {
                   const isSubActive = item.subItems.some((sub: any) =>
-                    location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')
+                    isItemActive(sub.href, pathname, ALL_MANAGER_HREFS)
                   );
                   const isOpen = payrollOpen || isSubActive;
 
                   return (
                     <div key={item.href} className="space-y-1">
                       <button
+                        type="button"
                         onClick={() => setPayrollOpen(!payrollOpen)}
                         className={cn(
                           'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
@@ -202,11 +223,12 @@ export function ManagerLayout() {
                         <div className="ml-3 mt-1 space-y-1 border-l border-border pl-3">
                           {item.subItems.map((sub: any) => {
                             const SubIcon = sub.icon;
-                            const active = location.pathname === sub.href || location.pathname.startsWith(sub.href + '/');
+                            const active = isItemActive(sub.href, pathname, ALL_MANAGER_HREFS);
                             return (
                               <NavLink
                                 key={sub.href}
                                 to={sub.href}
+                                end
                                 onClick={() => setMobileOpen(false)}
                                 className={cn(
                                   'flex min-h-9 items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
@@ -226,11 +248,12 @@ export function ManagerLayout() {
                   );
                 }
 
-                const active = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+                const active = isItemActive(item.href, pathname, ALL_MANAGER_HREFS);
                 return (
                   <NavLink
                     key={item.href}
                     to={item.href}
+                    end
                     onClick={() => setMobileOpen(false)}
                     title={!sidebarOpen ? item.name : undefined}
                     className={cn(
@@ -292,12 +315,12 @@ export function ManagerLayout() {
               >
                 <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
                   {(() => {
-  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-  if (lName.toLowerCase() === 'user') lName = '';
-  const full = `${fName} ${lName}`.trim();
-  return full || fName || 'User';
-})()}
+                    const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+                    let lName = (user?.lastName || (user as any)?.last_name || '').trim();
+                    if (lName.toLowerCase() === 'user') lName = '';
+                    const full = `${fName} ${lName}`.trim();
+                    return full || fName || 'User';
+                  })()}
                 </p>
                 <p className={cn('text-[10px] font-medium truncate', C.icon)}>
                   {roleInfo.roleTitle}
@@ -308,6 +331,7 @@ export function ManagerLayout() {
 
           {sidebarOpen && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               onClick={(e) => { e.stopPropagation(); handleLogout(); }}
@@ -322,6 +346,46 @@ export function ManagerLayout() {
       </div>
     </div>
   );
+}
+
+export function ManagerLayout() {
+  useNotificationSocket();
+  const { unreadCount } = useNotifications();
+  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
+  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [payrollOpen, setPayrollOpen] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const { user, logout } = useAuthStore();
+  const { theme, setTheme } = useThemeStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  const roleInfo = getUserRoleAndDept(user);
+  const currentTheme = theme === 'system'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    : theme;
+  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+  const handleLogout = () => { logout(); navigate('/login'); };
+
+  const renderSidebarContent = () => (
+    <ManagerSidebarNavContent
+      sidebarOpen={sidebarOpen}
+      setMobileOpen={setMobileOpen}
+      payrollOpen={payrollOpen}
+      setPayrollOpen={setPayrollOpen}
+      pathname={location.pathname}
+      user={user}
+      roleInfo={roleInfo}
+      initials={initials}
+      handleLogout={handleLogout}
+      navigate={navigate}
+    />
+  );
 
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
@@ -329,6 +393,7 @@ export function ManagerLayout() {
       <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-64' : 'w-[72px]')}>
         {!sidebarOpen && (
           <button
+            type="button"
             onClick={() => setSidebarOpen(true)}
             className="absolute right-2 top-20 z-10 hidden size-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground md:flex"
             aria-label="Expand sidebar"
@@ -336,7 +401,7 @@ export function ManagerLayout() {
             <ChevronRight className="h-3 w-3" />
           </button>
         )}
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
 
       {/* ── Mobile Sidebar ── */}
@@ -353,7 +418,7 @@ export function ManagerLayout() {
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
               className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card shadow-2xl md:hidden"
             >
-              <SidebarContent />
+              {renderSidebarContent()}
             </motion.aside>
           </>
         )}

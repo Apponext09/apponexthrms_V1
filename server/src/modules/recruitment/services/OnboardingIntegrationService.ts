@@ -119,7 +119,7 @@ export class OnboardingIntegrationService {
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           employee_code: employeeCode,
-          status: 'onboarding',
+          status: 'active',
           first_name: candFirstName,
           last_name: candLastName,
           email: candEmail,
@@ -146,10 +146,10 @@ export class OnboardingIntegrationService {
         throw insertError;
       }
     } else {
-      // Ensure status is at least onboarding if it was candidate
-      if (existingEmp.status === 'candidate') {
+      // Ensure status is active
+      if (existingEmp.status === 'candidate' || existingEmp.status === 'onboarding') {
         await db('employees').where('id', existingEmp.id).update({
-          status: 'onboarding',
+          status: 'active',
           current_designation_id: offerDesigId || existingEmp.current_designation_id,
           current_department_id: offerDeptId || existingEmp.current_department_id,
           date_of_joining: offerStartDate || existingEmp.date_of_joining,

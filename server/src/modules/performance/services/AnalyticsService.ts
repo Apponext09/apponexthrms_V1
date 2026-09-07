@@ -25,22 +25,80 @@ export class AnalyticsService {
    * Generate performance dashboard metrics
    */
   async generateDashboardMetrics(ctx: TenantContext) {
-    const goals = await this.goalRepo.list(ctx, { pageSize: 1000 });
-    const appraisals = await this.appraisalRepo.list(ctx, { pageSize: 1000 });
-    const reviews = await this.reviewRepo.list(ctx, { pageSize: 1000 });
+    let goals: any = { items: [], meta: { total: 0 } };
+    let appraisals: any = { items: [], meta: { total: 0 } };
+    let reviews: any = { items: [], meta: { total: 0 } };
+    let totalEmployees = 0;
+
+    try {
+      goals = await this.goalRepo.list(ctx, { pageSize: 1000 });
+    } catch (e) {
+      goals = { items: [], meta: { total: 0 } };
+    }
+
+    try {
+      appraisals = await this.appraisalRepo.list(ctx, { pageSize: 1000 });
+    } catch (e) {
+      appraisals = { items: [], meta: { total: 0 } };
+    }
+
+    try {
+      reviews = await this.reviewRepo.list(ctx, { pageSize: 1000 });
+    } catch (e) {
+      reviews = { items: [], meta: { total: 0 } };
+    }
+
+    try {
+      const empCountRes = await this.analyticsRepo.db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .count('* as count');
+      totalEmployees = Number(empCountRes?.[0]?.count || 0);
+    } catch (err) {
+      totalEmployees = 0;
+    }
+
+    const goalsList = Array.isArray(goals?.items) ? goals.items : [];
+    const appraisalsList = Array.isArray(appraisals?.items) ? appraisals.items : [];
+    const reviewsList = Array.isArray(reviews?.items) ? reviews.items : [];
+
+    const totalGoals = goalsList.length;
+    const completedGoals = goalsList.filter((g: any) => g.status === 'completed').length;
+    const activeGoals = goalsList.filter((g: any) => g.status === 'active').length;
+    const averageGoalProgress = totalGoals > 0
+      ? Math.round(goalsList.reduce((sum: number, g: any) => sum + (Number(g.progress) || 0), 0) / totalGoals)
+      : 0;
+
+    const averageRating = this.calculateAverageRating(appraisalsList) || this.calculateAverageRating(reviewsList) || 0;
+    const completedReviews = reviewsList.filter((r: any) => r.status === 'approved' || r.status === 'completed').length;
+    const activeReviews = reviewsList.filter((r: any) => r.status === 'in_review' || r.status === 'draft' || r.status === 'submitted').length;
+    const pendingApprovals = reviewsList.filter((r: any) => r.status === 'submitted').length +
+      appraisalsList.filter((a: any) => a.status === 'submitted').length;
 
     const metrics = {
-      totalGoals: goals.meta.total,
-      completedGoals: goals.items.filter((g) => g.status === 'completed').length,
-      activeGoals: goals.items.filter((g) => g.status === 'active').length,
-      totalAppraisals: appraisals.meta.total,
-      completedAppraisals: appraisals.items.filter((a) => a.status === 'completed').length,
-      averageAppraisalRating: this.calculateAverageRating(appraisals.items),
-      reviewsCompleted: reviews.items.filter((r) => r.status === 'approved').length,
+      totalEmployees: totalEmployees || (reviewsList.length > 0 ? reviewsList.length : 1),
+      averageRating: Number(averageRating.toFixed(1)),
+      averageGoalProgress,
+      activeReviews,
+      completedReviews,
+      pendingApprovals,
+      totalGoals,
+      completedGoals,
+      activeGoals,
+      totalAppraisals: appraisalsList.length,
+      completedAppraisals: appraisalsList.filter((a: any) => a.status === 'completed').length,
+      averageAppraisalRating: Number(averageRating.toFixed(1)),
+      reviewsCompleted: completedReviews,
       generatedAt: new Date().toISOString(),
     };
 
-    await this.analyticsRepo.upsertCache(ctx, 'dashboard_metrics', metrics, ctx.userId);
+    try {
+      await this.analyticsRepo.upsertCache(ctx, 'dashboard_metrics', metrics, ctx.userId);
+      await this.analyticsRepo.upsertCache(ctx, 'metrics', metrics, ctx.userId);
+    } catch (e) {
+      // Ignore cache write errors
+    }
+
     return metrics;
   }
 
@@ -132,15 +190,22 @@ export class AnalyticsService {
    * Get cached metric
    */
   async getMetric(ctx: TenantContext, metricType: string) {
-    const cache = await this.analyticsRepo.getByMetricType(ctx, metricType);
-    if (!cache) return null;
-
-    // Check if cache is stale (> 1 hour)
-    if (this.analyticsRepo.isStale(cache.generated_at, 60)) {
-      return null; // Return null if stale, trigger regeneration
+    if (metricType === 'metrics' || metricType === 'dashboard' || metricType === 'dashboard_metrics') {
+      return this.generateDashboardMetrics(ctx);
     }
 
-    return cache.metric_data;
+    try {
+      const cache = await this.analyticsRepo.getByMetricType(ctx, metricType);
+      if (!cache || this.analyticsRepo.isStale(cache.generated_at, 60)) {
+        if (metricType === 'talent-matrix') {
+          return this.generateTalentMatrix(ctx);
+        }
+        return this.generateDashboardMetrics(ctx);
+      }
+      return cache.metric_data;
+    } catch (err) {
+      return this.generateDashboardMetrics(ctx);
+    }
   }
 
   /**

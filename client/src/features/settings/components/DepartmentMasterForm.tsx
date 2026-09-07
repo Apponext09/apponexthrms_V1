@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   Plus, X, Info, Layers, Search, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Loader2, Building2, MapPin, Mail, Palette, Edit2
@@ -512,11 +512,11 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
 
                     <div className="flex items-center gap-2">
                       {code && (
-                        <span className="bg-white/20 text-white font-mono font-semibold text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs">
+                        <span className="bg-background/20 text-white font-mono font-semibold text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs">
                           {code}
                         </span>
                       )}
-                      <span className="bg-white/30 text-white p-1 rounded-md hover:bg-white/40 transition-colors" title="Edit Department">
+                      <span className="bg-background/30 text-white p-1 rounded-md hover:bg-background/40 transition-colors" title="Edit Department">
                         <Edit2 className="h-3.5 w-3.5" />
                       </span>
                     </div>

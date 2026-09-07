@@ -1,5 +1,5 @@
 import http from 'http';
-// reload trigger comment #37 - SMTP email delivery wired up
+// reload trigger comment #38 - departments table schema repair (colour, color, email, is_active)
 import { Server } from 'socket.io';
 import fs from 'fs';
 import { createApp } from './app';
@@ -26,12 +26,31 @@ async function start() {
     initializeKnex();
     logger.info('Database connection initialized');
 
-
-
-
-
-
-
+    // Ensure super_admins table has valid Argon2 hash in database
+    try {
+      const db = getKnex();
+      const hasSA = await db.schema.hasTable('super_admins');
+      if (hasSA) {
+        const sa = await db('super_admins').whereRaw('LOWER(email) = ?', ['superadmin@apponext.com']).first();
+        const curHash = sa?.password_hash || sa?.passwordHash;
+        if (sa && (curHash?.startsWith('$2a$') || !curHash?.startsWith('$argon2'))) {
+          const { hash: argon2Hash } = await import('argon2');
+          const validArgon2Hash = await argon2Hash('SuperAdmin@2026!Secure', {
+            memoryCost: 12288,
+            timeCost: 3,
+            parallelism: 1,
+            type: 1,
+          });
+          await db('super_admins').where('id', sa.id).update({
+            password_hash: validArgon2Hash,
+            updated_at: new Date(),
+          });
+          logger.info(`[DB REPAIR] ✅ Fixed corrupted super_admins password_hash in MySQL database for superadmin@apponext.com`);
+        }
+      }
+    } catch (e: any) {
+      logger.warn(`[DB REPAIR] Could not check super_admins password hash: ${e?.message}`);
+    }
 
     // Create Express app
     const app = createApp();

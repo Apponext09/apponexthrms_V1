@@ -227,9 +227,6 @@ export function ApplyLeavePage() {
                   {formData.leaveTypeId && (() => {
                     const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
                     const paidType = (selectedBalance as any)?.paid_type || (selectedBalance as any)?.paidType || 'paid';
-                    const leaveGender = (selectedBalance as any)?.applicable_gender || (selectedBalance as any)?.applicableGender || 'all';
-                    const isGenderRestricted = leaveGender !== 'all' && (user as any)?.gender && (user as any).gender.toLowerCase() !== leaveGender.toLowerCase();
-                    const isProbationRestricted = (selectedBalance as any)?.allow_in_probation === false && (user as any)?.status === 'probation';
                     return (
                       <div className="space-y-2 pt-0.5">
                         <div className="flex items-center space-x-3 text-xs font-semibold">
@@ -253,7 +250,7 @@ export function ApplyLeavePage() {
                           <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-semibold flex items-start space-x-2">
                             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
                             <p>
-                              <strong>Gender Restriction!</strong> This leave category is only applicable for <strong>{leaveGender}</strong> employees. Your profile gender is <strong>{(user as any)?.gender || 'not specified'}</strong>.
+                              <strong>Gender Restriction!</strong> This leave category is only applicable for <strong>{leaveGender}</strong> employees. Your profile gender is <strong>{employee?.gender || 'not specified'}</strong>.
                             </p>
                           </div>
                         )}

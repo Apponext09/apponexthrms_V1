@@ -280,10 +280,16 @@ export class EmployeeController {
   updateEmployee = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
+    if (req.body) {
+      if (req.body.accessRole) req.body.accessRole = String(req.body.accessRole).toLowerCase();
+      if (req.body.access_role) req.body.access_role = String(req.body.access_role).toLowerCase();
+      if (req.body.role) req.body.role = String(req.body.role).toLowerCase();
+    }
     console.log('--- UPDATE EMPLOYEE REQUEST BODY ---', req.body);
     const validated = validate(req.body, employeeUpdateSchema);
+    const payloadToUpdate = { ...req.body, ...(validated || {}) };
 
-    const employee = await this.service.updateEmployee(ctx, parseInt(id, 10), validated as any);
+    const employee = await this.service.updateEmployee(ctx, parseInt(id, 10), payloadToUpdate as any);
     const db = getKnex();
     const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
     const fullName = `${employee.first_name || (employee as any).firstName || ''} ${employee.last_name || (employee as any).lastName || ''}`.trim();

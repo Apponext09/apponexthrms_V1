@@ -1,6 +1,18 @@
 import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+const LIST_VIEW_SENSITIVE_FIELDS = [
+  'aadhar_number', 'aadharNumber',
+  'pan_number', 'panNumber', 'pan',
+  'passport_number', 'passportNumber',
+  'bank_name', 'bankName',
+  'account_no', 'accountNo',
+  'ifsc_code', 'ifscCode',
+  'uan_no', 'uanNo',
+  'esic_no', 'esicNo',
+  'pf_no', 'pfNo',
+];
+
 export interface Employee {
   id: number;
   uuid: string;
@@ -197,8 +209,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
         })
         .where('user_roles.user_id', user.id)
-        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
-        .select('roles.code');
+        .select('roles.code', 'roles.name');
 
       if (userRoles.length > 0) {
         const rolePriority: Record<string, number> = {
@@ -226,6 +237,9 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         }
       }
       (employee as any).accessRole = highestRole;
+      const roleList = userRoles.map((ur: any) => ur.name || ur.code);
+      (employee as any).assignedRoles = roleList;
+      (employee as any).roles = roleList;
     }
 
     const managerId = (employee as any).reportingManagerId || (employee as any).reporting_manager_id;
@@ -266,6 +280,11 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     } catch {}
 
+    const statusVal = (employee as any).employee_status || employee.status ;
+    const formattedStatusVal = String(statusVal).split(/[\s_]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    (employee as any).employeeStatus = formattedStatusVal;
+    (employee as any).employee_status = formattedStatusVal;
+
     return employee;
   }
 
@@ -279,21 +298,9 @@ export class EmployeeRepository extends BaseRepository<Employee> {
    * path is used by employees viewing/editing their own profile and by HR
    * screens that legitimately need this data.
    */
-  private static readonly LIST_VIEW_SENSITIVE_FIELDS = [
-    'aadhar_number', 'aadharNumber',
-    'pan_number', 'panNumber', 'pan',
-    'passport_number', 'passportNumber',
-    'bank_name', 'bankName',
-    'account_no', 'accountNo',
-    'ifsc_code', 'ifscCode',
-    'uan_no', 'uanNo',
-    'esic_no', 'esicNo',
-    'pf_no', 'pfNo',
-  ];
-
   private stripSensitiveListFields(items: any[]): void {
     for (const item of items) {
-      for (const field of EmployeeRepository.LIST_VIEW_SENSITIVE_FIELDS) {
+      for (const field of LIST_VIEW_SENSITIVE_FIELDS) {
         delete item[field];
       }
     }

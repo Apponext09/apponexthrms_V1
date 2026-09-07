@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Users, Plus, X, Search, ChevronDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,11 +83,11 @@ export function EmploymentTypeMasterCustomUI() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       
       {/* Left Column - Form */}
-      <div className="lg:col-span-7 bg-white dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-4 md:p-5 flex flex-col">
+      <div className="lg:col-span-7 bg-background dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-4 md:p-5 flex flex-col">
         
         <div className="flex items-center gap-2 mb-4">
-          <Plus className="w-4 h-4 text-slate-800 dark:text-foreground stroke-[2.5]" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-foreground">
+          <Plus className="w-4 h-4 text-foreground dark:text-foreground stroke-[2.5]" />
+          <h3 className="text-base font-bold text-foreground dark:text-foreground">
             {editingId ? 'Update' : 'Add'} Employment Type
           </h3>
         </div>
@@ -97,22 +97,22 @@ export function EmploymentTypeMasterCustomUI() {
         <form onSubmit={handleAddOrUpdate} className="space-y-4">
           
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-foreground flex">
+            <label className="text-sm font-bold text-foreground dark:text-foreground flex">
               Employment Type <span className="text-rose-500 ml-1">*</span>
             </label>
             <Input
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="h-9 bg-white dark:bg-background border-border text-sm rounded-md"
+              className="h-9 bg-background dark:bg-background border-border text-sm rounded-md"
               disabled={isSubmitting}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-foreground">
+            <label className="text-sm font-bold text-foreground dark:text-foreground">
               Active
             </label>
-            <div className="flex border border-border rounded-md w-fit overflow-hidden bg-white dark:bg-background h-9">
+            <div className="flex border border-border rounded-md w-fit overflow-hidden bg-background dark:bg-background h-9">
               <button
                 type="button"
                 disabled={isSubmitting}
@@ -121,7 +121,7 @@ export function EmploymentTypeMasterCustomUI() {
                   "px-6 h-full text-sm font-semibold transition-colors",
                   formData.status === 'active' 
                     ? "bg-[#337ab7] text-white" 
-                    : "text-slate-600 hover:bg-slate-100"
+                    : "text-muted-foreground hover:bg-muted/50"
                 )}
               >
                 Yes
@@ -134,7 +134,7 @@ export function EmploymentTypeMasterCustomUI() {
                   "px-6 h-full text-sm font-semibold border-l border-border transition-colors",
                   formData.status === 'inactive' 
                     ? "bg-rose-500 text-white" 
-                    : "text-slate-600 hover:bg-slate-100"
+                    : "text-muted-foreground hover:bg-muted/50"
                 )}
               >
                 No
@@ -178,11 +178,11 @@ export function EmploymentTypeMasterCustomUI() {
       </div>
 
       {/* Right Column - List */}
-      <div className="lg:col-span-5 bg-white dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-4 md:p-5 flex flex-col">
+      <div className="lg:col-span-5 bg-background dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-4 md:p-5 flex flex-col">
         
         {/* List Header & Add Button */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-slate-800 dark:text-foreground">
+          <h3 className="text-base font-bold text-foreground dark:text-foreground">
             Employment Types List
           </h3>
           <Button 
@@ -198,8 +198,8 @@ export function EmploymentTypeMasterCustomUI() {
         <div className="flex items-center mb-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 px-3 border-r-0 rounded-r-none text-xs font-medium text-slate-700 bg-white">
-                All <ChevronDown className="ml-1 h-3 w-3 text-slate-400" />
+              <Button variant="outline" className="h-9 px-3 border-r-0 rounded-r-none text-xs font-medium text-foreground bg-background">
+                All <ChevronDown className="ml-1 h-3 w-3 text-muted-foreground/70" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -215,13 +215,13 @@ export function EmploymentTypeMasterCustomUI() {
               placeholder="Search term..."
               className="h-9 rounded-none border-x-0 text-sm shadow-none focus-visible:ring-0 px-3 pr-8"
             />
-            <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
           </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-9 px-3 border-l-0 rounded-l-none text-xs font-medium text-slate-700 bg-white">
-                {statusFilter} <ChevronDown className="ml-1 h-3 w-3 text-slate-400" />
+              <Button variant="outline" className="h-9 px-3 border-l-0 rounded-l-none text-xs font-medium text-foreground bg-background">
+                {statusFilter} <ChevronDown className="ml-1 h-3 w-3 text-muted-foreground/70" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
@@ -236,9 +236,9 @@ export function EmploymentTypeMasterCustomUI() {
         <div className="border-t-[2px] border-[#20b2aa] pt-3 mb-3 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <Users className="w-4 h-4 text-[#20b2aa]" />
-            <h4 className="text-sm font-bold text-slate-800 dark:text-foreground">Employment Type</h4>
+            <h4 className="text-sm font-bold text-foreground dark:text-foreground">Employment Type</h4>
           </div>
-          <span className="text-sm font-bold text-slate-800 dark:text-foreground">
+          <span className="text-sm font-bold text-foreground dark:text-foreground">
             {filteredTypes.length}
           </span>
         </div>
@@ -247,7 +247,7 @@ export function EmploymentTypeMasterCustomUI() {
         <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
           {isLoading ? (
             <div className="flex justify-center items-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground/70" />
             </div>
           ) : filteredTypes.length > 0 ? (
             filteredTypes.map((type) => (
@@ -276,7 +276,7 @@ export function EmploymentTypeMasterCustomUI() {
               </div>
             ))
           ) : (
-            <div className="text-center py-8 text-sm text-slate-500 bg-slate-50 dark:bg-card rounded-lg border border-border border-dashed">
+            <div className="text-center py-8 text-sm text-muted-foreground bg-muted/30 dark:bg-card rounded-lg border border-border border-dashed">
               No employment types found matching your criteria.
             </div>
           )}
