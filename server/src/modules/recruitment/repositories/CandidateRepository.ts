@@ -62,14 +62,35 @@ export class CandidateRepository extends BaseRepository<Candidate> {
   private async ensureColumns(): Promise<void> {
     if (CandidateRepository.schemaChecked) return;
     try {
-      const hasResumeBankId = await this.db.schema.hasColumn('candidates', 'resume_bank_id');
-      if (!hasResumeBankId) {
-        await this.db.schema.alterTable('candidates', (table) => {
-          table.bigInteger('resume_bank_id').unsigned().nullable();
-        });
+      const columnsToAdd: { name: string; type: 'string' | 'text' | 'date' | 'bigInteger'; length?: number }[] = [
+        { name: 'resume_bank_id', type: 'bigInteger' },
+        { name: 'dob', type: 'date' },
+        { name: 'date_of_birth', type: 'date' },
+        { name: 'gender', type: 'string', length: 30 },
+        { name: 'marital_status', type: 'string', length: 30 },
+        { name: 'qualification', type: 'string', length: 255 },
+        { name: 'skills', type: 'text' },
+        { name: 'resume_url', type: 'string', length: 500 },
+      ];
+
+      for (const col of columnsToAdd) {
+        const hasCol = await this.db.schema.hasColumn('candidates', col.name).catch(() => false);
+        if (!hasCol) {
+          await this.db.schema.alterTable('candidates', (table) => {
+            if (col.type === 'bigInteger') table.bigInteger(col.name).unsigned().nullable();
+            else if (col.type === 'date') table.date(col.name).nullable();
+            else if (col.type === 'text') table.text(col.name).nullable();
+            else table.string(col.name, col.length || 255).nullable();
+          }).catch(() => {});
+        }
       }
       CandidateRepository.schemaChecked = true;
     } catch (err) {}
+  }
+
+  override async update(ctx: TenantContext, id: number | string, data: Partial<Candidate>): Promise<Candidate> {
+    await this.ensureColumns();
+    return super.update(ctx, id, data);
   }
 
   override async create(ctx: TenantContext, data: Partial<Candidate>): Promise<Candidate> {
@@ -122,6 +143,8 @@ export class CandidateRepository extends BaseRepository<Candidate> {
       .where('candidates.organization_id', ctx.organizationId)
       .whereNull('candidates.deleted_at');
 
+    const hasApplicationsTable = await this.db.schema.hasTable('applications').catch(() => false);
+
     if (hasResumeBankId && hasResumeBankTable) {
       query.leftJoin('resume_bank', 'candidates.resume_bank_id', 'resume_bank.id')
         .select([
@@ -132,6 +155,13 @@ export class CandidateRepository extends BaseRepository<Candidate> {
         ]);
     } else {
       query.select('candidates.*');
+    }
+
+    if (hasApplicationsTable) {
+      query.select([
+        this.db.raw('(SELECT job_id FROM applications WHERE applications.candidate_id = candidates.id ORDER BY applications.id DESC LIMIT 1) as linked_job_id'),
+        this.db.raw('(SELECT GROUP_CONCAT(DISTINCT job_id) FROM applications WHERE applications.candidate_id = candidates.id) as applied_job_ids')
+      ]);
     }
 
     if (options?.filters) {

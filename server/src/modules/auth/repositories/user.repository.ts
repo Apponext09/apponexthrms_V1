@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { User } from '@apponexthrms/shared';
 import type { TenantContext } from '../../../db/types';
 
@@ -60,31 +60,46 @@ export class UserRepository extends BaseRepository<User> {
    * Get user with roles and permissions
    */
   async getWithPermissions(ctx: TenantContext, userId: number) {
-    const user = await this.getById(ctx, userId);
+    const user = await this.db('users').where('id', userId).first();
     if (!user) {
       return null;
     }
 
-    // Fetch roles
-    const roles = await this.db('user_roles')
+    // Fetch roles (support org-level and platform system roles)
+    const rolesRows = await this.db('user_roles')
       .join('roles', 'user_roles.role_id', 'roles.id')
       .where('user_roles.user_id', userId)
-      .where('user_roles.organization_id', ctx.organizationId)
+      .where(function(this: any) {
+        this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
+      })
       .select('roles.code', 'roles.name', 'roles.id');
 
+    const roleCodesSet = new Set<string>(rolesRows.map((r) => r.code));
+
+    // Resolve accessRole from user.role or user_roles
+    let accessRole = (user as any).role || (user as any).access_role || (user as any).accessRole || '';
+
+    if (!accessRole && rolesRows.length > 0) {
+      accessRole = rolesRows[0].code;
+    }
+
+    if (accessRole) {
+      roleCodesSet.add(accessRole.toLowerCase());
+    }
+
     // Fetch permissions via roles
-    const permissions = await this.db('role_permissions')
+    const roleIds = rolesRows.map((r) => r.id);
+    const permissions = roleIds.length > 0 ? await this.db('role_permissions')
       .join('permissions', 'role_permissions.permission_id', 'permissions.id')
-      .whereIn(
-        'role_permissions.role_id',
-        roles.map((r) => r.id)
-      )
+      .whereIn('role_permissions.role_id', roleIds)
       .distinct('permissions.code')
-      .select('permissions.code');
+      .select('permissions.code') : [];
 
     return {
       ...user,
-      roles: roles.map((r) => r.code),
+      accessRole: accessRole || 'employee',
+      access_role: accessRole || 'employee',
+      roles: Array.from(roleCodesSet),
       permissions: permissions.map((p) => p.code),
     };
   }

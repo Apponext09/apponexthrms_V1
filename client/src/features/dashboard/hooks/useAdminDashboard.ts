@@ -16,6 +16,11 @@ export interface AdminDashboardData {
     activeDepartments: number;
     officeLocations: number;
     reportingOfficers: number;
+    openJobs: number;
+    monthlyPayrollCost: number;
+    pendingApprovals: number;
+    newHires: number;
+    onLeaveToday: number;
   };
   growthTrend: Array<{
     month: string;

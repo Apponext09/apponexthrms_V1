@@ -292,16 +292,6 @@ export function AddLocationModal({
                 Primary Physical Office Location
               </label>
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="allowsRemoteWork"
-                checked={allowsRemoteWork}
-                onCheckedChange={(checked) => setAllowsRemoteWork(Boolean(checked))}
-              />
-              <label htmlFor="allowsRemoteWork" className="text-xs font-medium text-foreground cursor-pointer">
-                Allow Remote Punch in this location
-              </label>
-            </div>
           </div>
 
           {/* Modal Action Buttons */}

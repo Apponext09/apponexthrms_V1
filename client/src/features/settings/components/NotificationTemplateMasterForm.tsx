@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Bell, Plus, Search, Check, X, Trash2,
   AlertCircle, Code2, Flag, FileText, Loader2
@@ -599,7 +599,7 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
                       <span className={cn(
                         'text-[10px] font-bold px-2.5 py-0.5 rounded-full border transition-colors',
                         isSelected
-                          ? 'bg-white/20 text-white border-white/30'
+                          ? 'bg-background/20 text-white border-white/30'
                           : activeStatus === 'Yes'
                           ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                           : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
@@ -614,7 +614,7 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
                         className={cn(
                           'p-1.5 rounded-lg transition-colors cursor-pointer',
                           isSelected
-                            ? 'text-primary-foreground/80 hover:text-white hover:bg-white/10'
+                            ? 'text-primary-foreground/80 hover:text-white hover:bg-background/10'
                             : 'text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30'
                         )}
                       >

@@ -480,7 +480,7 @@ export const InterviewerRatingPage: React.FC = () => {
               </label>
               <Textarea
                 placeholder={
-                  actionModal.decision === 'advance' ? 'e.g., Recommended for Senior Developer position at ₹12 LPA' :
+                  actionModal.decision === 'advance' ? 'e.g., Recommended for Senior Developer position at ₹12,00,000 (₹12 LPA)' :
                   actionModal.decision === 'reject' ? 'e.g., Needs more hands-on microservices architecture experience' :
                   'e.g., Strong candidate, awaiting completion of other interview slots'
                 }

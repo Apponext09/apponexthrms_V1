@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -135,7 +135,7 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-xl w-full p-0 gap-0 rounded-3xl overflow-hidden bg-white dark:bg-slate-950 border border-slate-200/90 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh]">
+      <DialogContent className="max-w-xl w-full p-0 gap-0 rounded-3xl overflow-hidden bg-background dark:bg-slate-950 border border-border/60/90 dark:border-slate-800 shadow-2xl flex flex-col max-h-[92vh]">
         
         {/* Header */}
         <div className="p-6 pb-5 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-900 text-white shrink-0 relative overflow-hidden">
@@ -166,39 +166,39 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
             {/* Name, Short Code & Annual Quota */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               <div className="space-y-1.5 sm:col-span-1">
-                <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                   <span>Category Name *</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </label>
                 <Input
                   type="text"
                   value={leaveName}
                   onChange={(e) => setLeaveName(e.target.value)}
                   placeholder="e.g. Sick Leave"
-                  className="h-10 text-xs font-semibold rounded-2xl border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950"
+                  className="h-10 text-xs font-semibold rounded-2xl border-border/60 dark:border-slate-800 bg-muted/30/70 dark:bg-slate-900 focus:bg-background dark:focus:bg-slate-950"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                   <span>Short Code *</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </label>
                 <Input
                   type="text"
                   value={leaveCode}
                   onChange={(e) => setLeaveCode(e.target.value.toUpperCase())}
                   placeholder="e.g. SL"
-                  className="h-10 text-xs font-mono font-bold uppercase rounded-2xl border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900"
+                  className="h-10 text-xs font-mono font-bold uppercase rounded-2xl border-border/60 dark:border-slate-800 bg-muted/30/70 dark:bg-slate-900"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                   <span>Annual Quota (Days) *</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </label>
                 <Input
                   type="number"
@@ -207,7 +207,7 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
                   value={annualQuota}
                   onChange={(e) => setAnnualQuota(e.target.value)}
                   placeholder="e.g. 10"
-                  className="h-10 text-xs font-bold rounded-2xl border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400"
+                  className="h-10 text-xs font-bold rounded-2xl border-border/60 dark:border-slate-800 bg-muted/30/70 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400"
                   required
                 />
               </div>
@@ -215,9 +215,9 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
 
             {/* Color Selector */}
             <div className="space-y-1.5">
-              <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+              <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                 <span>Theme Color Accent</span>
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+                <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
               </label>
               <div className="flex flex-wrap items-center gap-2 pt-0.5">
                 {COLOR_OPTIONS.map(c => (
@@ -228,7 +228,7 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                       color === c.id
                         ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-500 text-indigo-700 dark:text-indigo-300 ring-2 ring-indigo-500/20 shadow-2xs'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                        : 'bg-background dark:bg-slate-900 border-border/60 dark:border-slate-800 text-muted-foreground dark:text-muted-foreground/70 hover:border-border'
                     }`}
                   >
                     <span className={`w-2.5 h-2.5 rounded-full ${c.dot}`} />
@@ -240,11 +240,11 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
 
             {/* Icon Selector */}
             <div className="space-y-1.5">
-              <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+              <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                 <span>Category Icon</span>
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+                <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 pt-0.5 max-h-52 overflow-y-auto p-1.5 border border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50/40 dark:bg-slate-900/40">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2 pt-0.5 max-h-52 overflow-y-auto p-1.5 border border-slate-100 dark:border-slate-800 rounded-2xl bg-muted/30/40 dark:bg-slate-900/40">
                 {ICON_OPTIONS.map(i => (
                   <button
                     key={i.id}
@@ -253,7 +253,7 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
                     className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
                       icon === i.id
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-500/20'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        : 'bg-background dark:bg-slate-900 border-border/60 dark:border-slate-800 text-foreground dark:text-slate-300 hover:bg-muted/50 dark:hover:bg-slate-800'
                     }`}
                   >
                     <span className="text-sm">{i.emoji}</span>
@@ -264,13 +264,13 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
             </div>
 
             {/* Paid Leave Card Toggle */}
-            <div className="p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shadow-2xs">
+            <div className="p-4 rounded-2xl border border-border/60/90 dark:border-slate-800 bg-background dark:bg-slate-900 flex items-center justify-between shadow-2xs">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-extrabold text-slate-900 dark:text-white">Paid Leave Classification</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs font-extrabold text-foreground dark:text-white">Paid Leave Classification</span>
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </div>
-                <p className="text-[11px] text-slate-500 font-medium">
+                <p className="text-[11px] text-muted-foreground font-medium">
                   {isPaid ? 'Employees receive salary for these leaves' : 'Unpaid leave / Leave Without Pay (LWP)'}
                 </p>
               </div>
@@ -283,7 +283,7 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-background shadow-xs transition duration-200 ease-in-out ${
                     isPaid ? 'translate-x-[22px]' : 'translate-x-[2px]'
                   }`}
                 />
@@ -291,25 +291,25 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
             </div>
 
             {/* Counted in Segmented Toggle */}
-            <div className="p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shadow-2xs">
+            <div className="p-4 rounded-2xl border border-border/60/90 dark:border-slate-800 bg-background dark:bg-slate-900 flex items-center justify-between shadow-2xs">
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-extrabold text-slate-900 dark:text-white">Leave Calculation Unit</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs font-extrabold text-foreground dark:text-white">Leave Calculation Unit</span>
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </div>
-                <p className="text-[11px] text-slate-500 font-medium">
+                <p className="text-[11px] text-muted-foreground font-medium">
                   Select whether requests are processed in Days or Hours
                 </p>
               </div>
 
-              <div className="flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200/80 dark:border-slate-700">
+              <div className="flex items-center p-1 bg-muted/50 dark:bg-slate-800 rounded-xl border border-border/60/80 dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setUnit('Days')}
                   className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     unit === 'Days'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-800'
+                      ? 'bg-background dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Days
@@ -319,8 +319,8 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
                   onClick={() => setUnit('Hours')}
                   className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     unit === 'Hours'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
-                      : 'text-slate-500 hover:text-slate-800'
+                      ? 'bg-background dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   Hours
@@ -331,55 +331,55 @@ export const AddLeaveTypeModal: React.FC<AddLeaveTypeModalProps> = ({
             {/* Effective Dates */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                   <span>Effective From</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </label>
                 <Input
                   type="date"
                   value={effectiveFrom}
                   onChange={(e) => setEffectiveFrom(e.target.value)}
-                  className="h-10 text-xs font-medium rounded-2xl border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900"
+                  className="h-10 text-xs font-medium rounded-2xl border-border/60 dark:border-slate-800 bg-muted/30/70 dark:bg-slate-900"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                   <span>Effective To</span>
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                  <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
                 </label>
                 <Input
                   type="date"
                   value={effectiveTo}
                   onChange={(e) => setEffectiveTo(e.target.value)}
-                  className="h-10 text-xs font-medium rounded-2xl border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900"
+                  className="h-10 text-xs font-medium rounded-2xl border-border/60 dark:border-slate-800 bg-muted/30/70 dark:bg-slate-900"
                 />
               </div>
             </div>
 
             {/* Description */}
             <div className="space-y-1.5">
-              <label className="text-xs font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+              <label className="text-xs font-extrabold text-foreground dark:text-slate-200 flex items-center gap-1">
                 <span>Description & Guidelines</span>
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+                <Info className="w-3.5 h-3.5 text-muted-foreground/70" />
               </label>
               <textarea
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add organizational policy notes..."
-                className="w-full p-3 text-xs rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900 focus:bg-white dark:focus:bg-slate-950 focus:outline-none"
+                className="w-full p-3 text-xs rounded-2xl border border-border/60 dark:border-slate-800 bg-muted/30/70 dark:bg-slate-900 focus:bg-background dark:focus:bg-slate-950 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Sticky Footer */}
-          <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/80 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-end gap-3 shrink-0">
+          <div className="p-4 px-6 border-t border-slate-100 dark:border-slate-800/80 bg-muted/30/80 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-end gap-3 shrink-0">
             <Button
               type="button"
               variant="outline"
               onClick={handleClose}
-              className="h-9 px-4 text-xs font-bold rounded-xl border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100"
+              className="h-9 px-4 text-xs font-bold rounded-xl border-border/60 dark:border-slate-800 text-foreground dark:text-slate-300 cursor-pointer hover:bg-muted/50"
             >
               Cancel
             </Button>

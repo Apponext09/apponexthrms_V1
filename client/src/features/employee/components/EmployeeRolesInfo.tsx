@@ -105,14 +105,18 @@ export function EmployeeRolesInfo({ employee, onRoleUpdate, readOnly = false }: 
     );
   };
 
-  // Save Role Changes
   const handleSaveRoles = async () => {
     try {
       setIsSaving(true);
+      const systemRoles = ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'organization_admin', 'super_admin', 'finance', 'intern', 'consultant', 'admin', 'ceo', 'hr_admin', 'hr', 'support'];
+      const matchedSystemRole = assignedRoles.find(r => systemRoles.includes(r.toLowerCase().trim()));
+      const primaryAccessRole = (matchedSystemRole || assignedRoles[0] || 'employee').toLowerCase().trim();
+
       await apiClient.patch(`/employees/${employee.id}`, {
+        accessRole: primaryAccessRole,
         roles: assignedRoles,
         assignedRoles: assignedRoles,
-      }).catch(() => null);
+      });
 
       showToast.success('Employee role permissions updated successfully');
       if (onRoleUpdate) onRoleUpdate();

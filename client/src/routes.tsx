@@ -1,12 +1,14 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import type { Role } from '@/config/roles';
 import { AppShellLayout } from './layouts/AppShellLayout';
 import { HRLayout } from './layouts/HRLayout';
 import { ManagerLayout } from './layouts/ManagerLayout';
 import { TeamLeadLayout } from './layouts/TeamLeadLayout';
 import { InternLayout } from './layouts/InternLayout';
 import { ConsultantLayout } from './layouts/ConsultantLayout';
+import { FinanceLayout } from './layouts/FinanceLayout';
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { SettingsLayout } from './features/settings/pages/SettingsLayout';
 import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
@@ -35,6 +37,7 @@ const AdminRegularizationLogsPage = lazy(() => import('./features/attendance/pag
 const CeoFacePunchPage = lazy(() => import('./features/attendance/pages/CeoFacePunchPage'));
 const LiveTrackingDashboardPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
+const EmployeeTrackingPage = lazy(() => import('./features/Livetracking').then(m => ({ default: m.EmployeeTrackingPage })));
 const MyLeavesPage = lazy(() => import('./features/leaves/pages/MyLeavesPage').then(m => ({ default: m.MyLeavesPage })));
 const ApplyLeavePage = lazy(() => import('./features/leaves/pages/ApplyLeavePage').then(m => ({ default: m.ApplyLeavePage })));
 const LeaveBalancePage = lazy(() => import('./features/leaves/pages/LeaveBalancePage').then(m => ({ default: m.LeaveBalancePage })));
@@ -185,6 +188,11 @@ const SettingsSecurityPage = lazy(() => import('./features/employee/portal-pages
 const InternDashboardPage = lazy(() => import('./features/intern/pages/InternDashboardPage').then(m => ({ default: m.InternDashboardPage })));
 const ConsultantDashboardPage = lazy(() => import('./features/consultant/pages/ConsultantDashboardPage').then(m => ({ default: m.ConsultantDashboardPage })));
 
+// ── Finance Portal Pages ────────────────────────────────────────────────────
+const FinanceDashboardPage = lazy(() => import('./features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));
+const FinanceReportsPage   = lazy(() => import('./features/finance/pages/FinanceReportsPage').then(m => ({ default: m.FinanceReportsPage })));
+const FinanceApprovalsPage = lazy(() => import('./features/finance/pages/FinanceApprovalsPage').then(m => ({ default: m.FinanceApprovalsPage })));
+
 // ── Expense Management Module Pages ─────────────────────────────────────────
 import { ExpenseDashboardPage } from './features/expenses/pages/ExpenseDashboardPage';
 import { MyExpensesPage } from './features/expenses/pages/MyExpensesPage';
@@ -231,39 +239,59 @@ function RootRedirect() {
   }
 
   const roles = user?.roles || [];
+  const accessRole = String((user as any)?.accessRole || (user as any)?.role || '').toLowerCase();
+  const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
 
-  if (roles.includes('super_admin')) {
+  if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
     return <Navigate to="/superadmin/dashboard" replace />;
+  }
+  // Finance role — isolated /finance/* portal
+  if (
+    userRolesNorm.includes('finance') ||
+    userRolesNorm.includes('finance_manager') ||
+    accessRole === 'finance' ||
+    accessRole === 'finance_manager'
+  ) {
+    return <Navigate to="/finance/reports" replace />;
   }
   // CEO and HR (organization_admin, ceo, hr_manager, hr_admin, hr) — all go to Admin portal
   if (
-    roles.includes('organization_admin') ||
-    roles.includes('ceo') ||
-    roles.includes('hr_manager') ||
-    roles.includes('hr_admin') ||
-    roles.includes('hr')
+    userRolesNorm.includes('organization_admin') ||
+    userRolesNorm.includes('ceo') ||
+    userRolesNorm.includes('hr_manager') ||
+    userRolesNorm.includes('hr_admin') ||
+    userRolesNorm.includes('hr') ||
+    ['organization_admin', 'ceo', 'hr_manager', 'hr_admin', 'hr'].includes(accessRole)
   ) {
     return <Navigate to="/dashboard" replace />;
   }
   // Support persona — uses the dedicated /hr/* portal
-  if (roles.includes('support')) {
+  if (userRolesNorm.includes('support') || accessRole === 'support') {
     return <Navigate to="/hr/dashboard" replace />;
   }
-  if (roles.includes('department_head') || roles.includes('manager')) {
+  if (userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
     return <Navigate to="/manager/dashboard" replace />;
   }
-  if (roles.includes('team_lead')) {
+  if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead') {
     return <Navigate to="/team-lead/dashboard" replace />;
   }
-  if (roles.includes('intern')) {
+  if (userRolesNorm.includes('intern') || accessRole === 'intern') {
     return <Navigate to="/intern/dashboard" replace />;
   }
-  if (roles.includes('consultant')) {
+  if (userRolesNorm.includes('consultant') || accessRole === 'consultant') {
     return <Navigate to="/consultant/dashboard" replace />;
   }
 
   return <Navigate to="/employee/dashboard" replace />;
 }
+
+const MANAGER_ALLOWED_ROLES: Role[] = [
+  'department_head',
+  'manager',
+  'organization_admin',
+  'ceo',
+  'super_admin',
+];
 
 export function AppRoutes() {
   return (
@@ -415,7 +443,6 @@ export function AppRoutes() {
           </Route>
           <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
           <Route path="/hr/live-tracking/history" element={<TrackingHistoryPage />} />
-          <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -424,7 +451,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
         <Route
           element={
-            <ProtectedRoute allowedRoles={['department_head', 'manager']}>
+            <ProtectedRoute allowedRoles={MANAGER_ALLOWED_ROLES}>
               <ManagerLayout />
             </ProtectedRoute>
           }
@@ -462,6 +489,9 @@ export function AppRoutes() {
           <Route path="/manager/leaves" element={<LeavePage />} />
           <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
           <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
+          <Route path="/manager/policies" element={<PoliciesPage />} />
+          <Route path="/manager/live-tracking/history" element={<TrackingHistoryPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -500,6 +530,8 @@ export function AppRoutes() {
           <Route path="/team-lead/mrf-request" element={<MrfRequestPage />} />
           <Route path="/team-lead/mrf" element={<MrfRequestPage />} />
           <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
+          <Route path="/team-lead/live-tracking/history" element={<TrackingHistoryPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -559,6 +591,8 @@ export function AppRoutes() {
           <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
           <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
           <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
+          <Route path="/live-tracking/history" element={<TrackingHistoryPage />} />
+          <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
           {/* CEO Face Punch Terminal */}
           <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
 
@@ -1028,6 +1062,7 @@ export function AppRoutes() {
           <Route path="/employee/notifications" element={<NotificationCenterPage />} />
           <Route path="/employee/approvals" element={<ApprovalsPage />} />
           <Route path="/employee/settings" element={<SettingsSecurityPage />} />
+          <Route path="/employee/live-tracking" element={<EmployeeTrackingPage />} />
         </Route>
 
         {/* ─────────────────────────────────────────────────
@@ -1078,6 +1113,34 @@ export function AppRoutes() {
           <Route path="/consultant/announcements" element={<AnnouncementsPage />} />
           <Route path="/consultant/id-card" element={<IDCardPage />} />
           <Route path="/consultant/org-chart" element={<OrgChartPage />} />
+        </Route>
+
+        {/* ─────────────────────────────────────────────────
+          FINANCE PORTAL  (/finance/*)
+          Emerald-accented sidebar — Finance-only portal.
+          STRICT ISOLATION: Only finance / finance_manager roles
+          may access these routes. No other role can enter here,
+          and Finance users cannot navigate to any other portal.
+      ───────────────────────────────────────────────── */}
+        <Route
+          element={
+            <ProtectedRoute allowedRoles={['finance']}>
+              <FinanceLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/finance" element={<Navigate to="/finance/reports" replace />} />
+          <Route path="/finance/dashboard"       element={<FinanceDashboardPage />} />
+          <Route path="/finance/reports"         element={<FinanceReportsPage />} />
+          <Route path="/finance/approvals"       element={<FinanceApprovalsPage />} />
+          <Route path="/finance/profile"         element={<ProfilePage />} />
+          <Route path="/finance/attendance"      element={<AttendancePage />} />
+          <Route path="/finance/leaves"          element={<LeavePage />} />
+          <Route path="/finance/payslips"        element={<PayslipViewer />} />
+          <Route path="/finance/documents"       element={<DocumentsPage />} />
+          <Route path="/finance/holiday-calendar" element={<HolidayCalendarPage />} />
+          <Route path="/finance/announcements"   element={<AnnouncementsPage />} />
+          <Route path="/finance/org-chart"       element={<OrgChartPage />} />
         </Route>
 
         {/* 404 */}

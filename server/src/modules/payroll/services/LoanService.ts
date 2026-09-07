@@ -163,7 +163,7 @@ export class LoanService {
         .leftJoin('roles as r', 'ur.role_id', 'r.id')
         .where('u.organization_id', orgId)
         .where(function () {
-          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager'])
+          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
             .orWhere('u.email', 'ajay@gmail.com');
         })
         .whereNull('u.deleted_at')
@@ -237,7 +237,7 @@ export class LoanService {
 
     // No type-specific approver configured — fall back to the broad check
     return {
-      canAct: roleCodes.includes('hr_manager') || roleCodes.includes('finance_manager'),
+      canAct: roleCodes.includes('hr_manager') || roleCodes.includes('finance') || roleCodes.includes('finance_manager'),
       requiredRole: null
     };
   }

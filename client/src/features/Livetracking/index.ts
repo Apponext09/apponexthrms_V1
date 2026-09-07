@@ -2,7 +2,7 @@
 // Livetracking Module Public Exports
 // client/src/features/Livetracking/index.ts
 // ============================================================
-export { LiveTrackingDashboardPage } from './pages/LiveTrackingDashboardPage';
+export { LiveTrackingDashboardPage, LiveTrackingDashboardPage as EmployeeTrackingPage } from './pages/LiveTrackingDashboardPage';
 export { TrackingHistoryPage } from './pages/TrackingHistoryPage';
 export { useEmployeeLocationTracker } from './hooks/useEmployeeLocationTracker';
 export { useLiveTrackingSocket } from './hooks/useLiveTrackingSocket';

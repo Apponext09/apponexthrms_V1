@@ -53,6 +53,7 @@ export class PayslipController {
     const isAdminOrHR = roleCodes.includes('organization_admin') ||
       roleCodes.includes('super_admin') ||
       roleCodes.includes('hr_manager') ||
+      roleCodes.includes('finance') ||
       roleCodes.includes('finance_manager');
 
     let query = db('payslips as p')

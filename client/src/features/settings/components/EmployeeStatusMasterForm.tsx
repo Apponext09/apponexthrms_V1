@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Save,
@@ -572,8 +572,8 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
                 >
                   <span
                     className={cn(
-                      'inline-block h-6 w-7 rounded-sm bg-white shadow-md transform transition duration-200 ease-in-out text-[11px] font-bold text-center leading-6 select-none',
-                      formIsActive ? 'translate-x-7 text-blue-600' : 'translate-x-0 text-gray-500'
+                      'inline-block h-6 w-7 rounded-sm bg-background shadow-md transform transition duration-200 ease-in-out text-[11px] font-bold text-center leading-6 select-none',
+                      formIsActive ? 'translate-x-7 text-blue-600' : 'translate-x-0 text-muted-foreground'
                     )}
                   >
                     {formIsActive ? 'Yes' : 'No'}

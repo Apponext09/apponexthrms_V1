@@ -143,7 +143,7 @@ export class StatusSyncService {
           application_id: applicationId,
           from_stage_id: prevStageId,
           to_stage_id: targetStageId,
-          moved_by_user_id: options.changedBy || ctx.userId,
+          moved_by_user_id: options.changedBy || ctx.userId || 1,
           notes: notesText,
           moved_at: mysqlNow,
           created_at: mysqlNow,
@@ -160,7 +160,7 @@ export class StatusSyncService {
       }
 
       // 6. Recompute candidate's overall status based on their most active application
-      const candidateId = application.candidateId;
+      const candidateId = application.candidate_id || application.candidateId;
       let updatedCandidate = null;
 
       if (candidateId) {

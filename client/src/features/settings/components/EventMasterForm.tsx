@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, MapPin, Clock, Search, Trash2, Edit3, CheckCircle2, XCircle, Loader2,
   Building2, Users, Layers, Tag, UserCheck, Shield, Award, Sparkles, Filter, RotateCcw,
@@ -180,8 +180,10 @@ export function EventMasterForm({
         showToast.success('Event updated successfully');
         if (onSave) onSave(updated);
       }
-    } catch {
-      showToast.error('Failed to save event details');
+    } catch (err: any) {
+      console.error('[EventMasterForm] Save error:', err);
+      const msg = err?.response?.data?.error?.message || err?.message || 'Failed to save event details';
+      showToast.error(msg);
     }
   };
 
@@ -288,7 +290,7 @@ export function EventMasterForm({
                   <select
                     value={formEventType}
                     onChange={(e) => setFormEventType(e.target.value)}
-                    className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                    className="w-full h-10 px-3 text-xs border border-border rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
                   >
                     <option value="Townhall">Townhall</option>
                     <option value="Celebration">Celebration</option>
@@ -534,7 +536,7 @@ export function EventMasterForm({
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+            <div className="relative z-10 flex items-center justify-end gap-3 pt-4 border-t border-border bg-card rounded-b-2xl">
               {onCancel && (
                 <Button type="button" variant="outline" onClick={onCancel} className="rounded-xl text-xs">
                   Cancel

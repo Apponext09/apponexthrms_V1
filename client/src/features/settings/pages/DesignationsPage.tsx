@@ -66,8 +66,8 @@ export function DesignationsPage() {
         return [];
       };
 
-      const deptIds = parseArr(desig.mapped_departments);
-      const gradeIds = parseArr(desig.mapped_grades);
+      const deptIds = parseArr(desig.mapped_departments ?? desig.mappedDepartments);
+      const gradeIds = parseArr(desig.mapped_grades ?? desig.mappedGrades);
 
       // Resolve department names
       const deptNames = deptIds

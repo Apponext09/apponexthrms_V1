@@ -106,7 +106,10 @@ export const useAuthStore = create<AuthState>()(
             organizationName: orgObj.name || userObj.organizationName || (isDemoKot ? 'Apponext' : `${defaultFirstName}'s Org`),
             organizationCode: orgObj.code || userObj.organizationCode || (isDemoKot ? 'ORG' : `${defaultFirstName.slice(0, 3).toUpperCase()}`),
             organizationLocation: orgObj.location || userObj.organizationLocation || '',
-            roles: loginData.roles || userObj.roles || [],
+            // Deny by default: an empty/missing roles or permissions list from
+            // the server must never be masked by an admin-level fallback here.
+            roles: userObj.roles || loginData.roles || [],
+            accessRole: userObj.accessRole || userObj.access_role || (userObj.roles?.includes('finance') || loginData.roles?.includes('finance') ? 'finance' : undefined),
             permissions: loginData.permissions || userObj.permissions || [],
             employeeId: userObj.employeeId || userObj.employee_id || null,
             avatarUrl: userObj.avatarUrl || userObj.avatar_url || undefined,
@@ -168,8 +171,9 @@ export const useAuthStore = create<AuthState>()(
                   firstName: data.user.firstName || data.user.first_name || previous?.firstName || '',
                   lastName: data.user.lastName || data.user.last_name || previous?.lastName || '',
                   organizationId: data.user.organizationId || data.user.organization_id || previous?.organizationId,
-                  roles: data.roles || data.user.roles || previous?.roles || [],
-                  permissions: data.permissions || data.user.permissions || previous?.permissions || [],
+                  roles: data.user?.roles || data.roles || previous?.roles || [],
+                  accessRole: data.user?.accessRole || data.user?.access_role || previous?.accessRole,
+                  permissions: data.permissions || data.user?.permissions || previous?.permissions || [],
                   departmentName: data.user.departmentName || previous?.departmentName || '',
                   policyAccepted: Boolean(data.user.policyAccepted ?? data.user.policy_accepted ?? previous?.policyAccepted ?? false),
                   policyAcceptedAt: data.user.policyAcceptedAt || data.user.policy_accepted_at || previous?.policyAcceptedAt || null,

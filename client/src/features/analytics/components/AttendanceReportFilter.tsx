@@ -40,16 +40,18 @@ export function AttendanceReportFilter({
   const [toDate, setToDate] = useState<string>(getTodayStr());
   const [isTabularView, setIsTabularView] = useState<boolean>(true);
   const [workType, setWorkType] = useState<'choose' | 'full_day' | 'half_day' | 'both'>('choose');
-  const [statusFilters, setStatusFilters] = useState({
-    present: false,
-    leave: false,
-    absent: false,
-    expected: false,
+  const defaultStatusFilters = {
+    present: true,
+    leave: true,
+    absent: true,
+    expected: true,
     lateMark: false,
     shortWorkingHour: false,
     breakLog: false,
     halfDay: true,
-  });
+  };
+
+  const [statusFilters, setStatusFilters] = useState(defaultStatusFilters);
 
   const { data: optionsData, isLoading: isLoadingOptions } = useReportFilterOptions(
     selectedCompany || null,
@@ -111,16 +113,7 @@ export function AttendanceReportFilter({
     setToDate(getTodayStr());
     setIsTabularView(true);
     setWorkType('choose');
-    setStatusFilters({
-      present: false,
-      leave: false,
-      absent: false,
-      expected: false,
-      lateMark: false,
-      shortWorkingHour: false,
-      breakLog: false,
-      halfDay: false,
-    });
+    setStatusFilters(defaultStatusFilters);
   };
 
   const handleSubmit = (e: React.FormEvent) => {

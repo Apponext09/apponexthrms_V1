@@ -31,6 +31,14 @@ export function hasRole(roles: string[], requiredRole: Role | string): boolean {
     );
   }
 
+  // Finance role
+  if (normRequired === 'finance' || normRequired === 'finance_manager') {
+    return (
+      normRoles.includes('finance') ||
+      normRoles.includes('finance_manager')
+    );
+  }
+
   return normRoles.includes(normRequired);
 }
 
@@ -126,6 +134,8 @@ export function useCanManageRole() {
       hr: 4,
       hr_manager: 3,
       support: 3,
+      finance: 3,
+      finance_manager: 3,
       department_head: 2,
       manager: 2,
       team_lead: 2,

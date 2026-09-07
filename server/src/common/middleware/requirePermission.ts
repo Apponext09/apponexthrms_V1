@@ -58,8 +58,11 @@ async function permissionCheckAsync(
     p === 'recruitment.jobs.read' ||
     p === 'recruitment.application.read'
   );
+  const isPerformanceOp = requiredPermissions.every(p =>
+    p.startsWith('performance.')
+  );
   if (
-    isMrfOrHiringOp &&
+    (isMrfOrHiringOp || isPerformanceOp) &&
     (roles.includes('manager') ||
       roles.includes('department_head') ||
       roles.includes('team_lead') ||
@@ -101,7 +104,7 @@ async function permissionCheckAsync(
 
       // Check manager / team lead role codes in DB
       if (
-        isMrfOrHiringOp &&
+        (isMrfOrHiringOp || isPerformanceOp) &&
         roleCodes.some(r => ['manager', 'department_head', 'team_lead', 'reporting_manager'].includes(r))
       ) {
         next();

@@ -110,12 +110,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       },
       { name: 'Interviewer Rating Details', href: '/recruitment/interviewer-rating', icon: 'ListChecks' },
       { name: 'Employee Referrals', href: '/recruitment/referrals', icon: 'UserPlus' },
-      {
-        name: 'Career Portal Customization',
-        href: '/recruitment/career-customization',
-        icon: 'Palette',
-        minRoles: ['organization_admin', 'hr_manager'],
-      },
     ],
   },
 

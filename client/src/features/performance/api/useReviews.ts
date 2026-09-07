@@ -95,8 +95,15 @@ export const useReviewCycles = () => {
     }
   });
 
+  const rawCycles = cyclesQuery.data?.data;
+  const cyclesList: ReviewCycle[] = Array.isArray(rawCycles?.data)
+    ? rawCycles.data
+    : Array.isArray(rawCycles)
+    ? rawCycles
+    : [];
+
   return {
-    cycles: cyclesQuery.data?.data || [],
+    cycles: cyclesList,
     isLoading: cyclesQuery.isLoading,
     error: cyclesQuery.error,
     createCycle: createCycleMutation.mutate,
@@ -114,6 +121,13 @@ export const useReviews = (cycleId?: number, employeeId?: number) => {
       }),
     enabled: !!cycleId
   });
+
+  const rawReviews = reviewsQuery.data?.data;
+  const reviewsList = Array.isArray(rawReviews?.data)
+    ? rawReviews.data
+    : Array.isArray(rawReviews)
+    ? rawReviews
+    : [];
 
   const createReviewMutation = useMutation({
     mutationFn: (data: any) =>

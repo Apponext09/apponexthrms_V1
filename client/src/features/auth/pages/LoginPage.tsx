@@ -21,12 +21,28 @@ export function LoginPage() {
   useEffect(() => {
     if (!authHydrated || !isAuthenticated || !user) return;
     const roles = user.roles || [];
-    if (roles.includes('super_admin')) navigate('/superadmin/dashboard', { replace: true });
-    else if (roles.includes('organization_admin') || roles.includes('ceo')) navigate('/dashboard', { replace: true });
-    else if (roles.includes('hr_manager') || roles.includes('hr_admin')) navigate('/hr/dashboard', { replace: true });
-    else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard', { replace: true });
-    else if (roles.includes('team_lead')) navigate('/team-lead/dashboard', { replace: true });
-    else navigate('/dashboard', { replace: true });
+    const accessRole = String((user as any)?.accessRole || (user as any)?.role || '').toLowerCase();
+    const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
+
+    if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
+      navigate('/superadmin/dashboard', { replace: true });
+    } else if (userRolesNorm.includes('finance') || accessRole === 'finance') {
+      navigate('/finance/reports', { replace: true });
+    } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
+      navigate('/dashboard', { replace: true });
+    } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || accessRole === 'hr_manager' || accessRole === 'hr_admin') {
+      navigate('/hr/dashboard', { replace: true });
+    } else if (userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
+      navigate('/manager/dashboard', { replace: true });
+    } else if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead') {
+      navigate('/team-lead/dashboard', { replace: true });
+    } else if (userRolesNorm.includes('intern') || accessRole === 'intern') {
+      navigate('/intern/dashboard', { replace: true });
+    } else if (userRolesNorm.includes('consultant') || accessRole === 'consultant') {
+      navigate('/consultant/dashboard', { replace: true });
+    } else {
+      navigate('/employee/dashboard', { replace: true });
+    }
   }, [authHydrated, isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,33 +56,39 @@ export function LoginPage() {
       // Get user data immediately (avoid second fetch)
       const currentUser = useAuthStore.getState().user;
       const roles = currentUser?.roles || [];
+      const accessRole = String((currentUser as any)?.accessRole || (currentUser as any)?.role || '').toLowerCase();
+      const userRolesNorm = roles.map((r: string) => String(r).toLowerCase());
       const cleanEmail = (email || '').trim().toLowerCase();
 
-      // Navigate immediately - page will show loading screen while data loads
-      if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
+      // Navigate based on user roles fetched from database
+      if (userRolesNorm.includes('super_admin') || accessRole === 'super_admin') {
         navigate('/superadmin/dashboard', { replace: true });
-      } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
+      } else if (userRolesNorm.includes('finance') || accessRole === 'finance') {
+        navigate('/finance/reports', { replace: true });
+      } else if (userRolesNorm.includes('organization_admin') || userRolesNorm.includes('ceo') || accessRole === 'organization_admin' || accessRole === 'ceo') {
         navigate('/dashboard', { replace: true });
-      } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
-        navigate('/manager/dashboard', { replace: true });
-      } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
+      } else if (userRolesNorm.includes('hr_manager') || userRolesNorm.includes('hr_admin') || userRolesNorm.includes('hr') || accessRole === 'hr_manager' || accessRole === 'hr_admin' || accessRole === 'hr') {
         navigate('/hr/dashboard', { replace: true });
-      } else if (roles.includes('team_lead')) {
+      } else if (userRolesNorm.includes('support') || accessRole === 'support') {
+        navigate('/hr/dashboard', { replace: true });
+      } else if (userRolesNorm.includes('department_head') || userRolesNorm.includes('manager') || accessRole === 'department_head' || accessRole === 'manager') {
+        navigate('/manager/dashboard', { replace: true });
+      } else if (userRolesNorm.includes('team_lead') || accessRole === 'team_lead') {
         navigate('/team-lead/dashboard', { replace: true });
-      } else if (roles.includes('intern')) {
+      } else if (userRolesNorm.includes('intern') || accessRole === 'intern') {
         navigate('/intern/dashboard', { replace: true });
-      } else if (roles.includes('consultant')) {
+      } else if (userRolesNorm.includes('consultant') || accessRole === 'consultant') {
         navigate('/consultant/dashboard', { replace: true });
-      } else if (roles.includes('employee')) {
-        navigate('/employee/dashboard', { replace: true });
       } else {
         navigate('/employee/dashboard', { replace: true });
       }
-
-      // Don't wait for setLoading(false) - navigate immediately
-      // Loading screen will handle the wait
-    } catch (err) {
-      setError('Invalid email or password');
+    } catch (err: any) {
+      const serverMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Invalid email or password';
+      setError(serverMsg);
       setLoading(false);
     }
   };

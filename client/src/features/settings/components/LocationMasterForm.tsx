@@ -73,7 +73,7 @@ interface LocationMasterFormProps {
 
 export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps) {
   // ── Real API Data ────────────────────────────────────────────────────────────
-  const { data: locationsData, isLoading: locationsLoading } = useLocations();
+  const { data: locationsData, isLoading: locationsLoading, refetch: refetchLocations } = useLocations();
   const { data: companiesData = [], isLoading: companiesLoading } = useCompanies();
   const createLocationMutation = useCreateLocation();
   const updateLocationMutation = useUpdateLocation();
@@ -212,6 +212,7 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
         const result = await createLocationMutation.mutateAsync(payload as any);
         if (onSave) onSave(result);
       }
+      await refetchLocations();
       resetForm();
     } catch (err: any) {
       setSubmitError(err?.response?.data?.message || 'Failed to save location. Please try again.');

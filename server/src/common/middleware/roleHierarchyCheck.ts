@@ -14,7 +14,7 @@ const ROLE_HIERARCHY: Record<string, number> = {
   asset_admin: 4,
   hr_manager: 3,
   support: 3,
-  finance_manager: 3,
+  finance: 3,
   recruitment_manager: 3,
   department_head: 2,
   manager: 2,

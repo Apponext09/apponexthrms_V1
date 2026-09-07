@@ -17,7 +17,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { AiAnalysisModal } from '../components/AiAnalysisModal';
 import { AiSuggestionsTab } from '../components/AiSuggestionsTab';
-import { ResumeViewerModal } from '../components/ResumeViewerModal';
+import { ResumeViewerModal, resolveResumeUrl } from '../components/ResumeViewerModal';
 
 const INITIAL_FILTERS = {
   trackerId: '',
@@ -28,14 +28,7 @@ const INITIAL_FILTERS = {
 };
 
 const getResumeViewUrl = (url: string | null | undefined): string => {
-  if (!url) return '#';
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-    return url;
-  }
-  const rawApiUrl = (import.meta as any).env.VITE_API_URL || `http://${window.location.hostname}:5000/api/v1`;
-  const base = rawApiUrl.replace('/api/v1', '');
-  const formattedPath = url.startsWith('/') ? url : `/${url}`;
-  return `${base}${formattedPath}`;
+  return resolveResumeUrl(url);
 };
 
 const getJobTitle = (j: any): string => {
@@ -272,6 +265,9 @@ export const ResumeBankPage: React.FC = () => {
             atsScore: item.atsScore ?? item.ats_score ?? null,
             jdMatchScore: item.jdMatchScore ?? item.jd_match_score ?? null,
             status: item.status || '-',
+            skills: item.candidateSkills || item.candidate_skills || item.skills || null,
+            university: item.candidateUniversity || item.candidate_university || item.university || null,
+            resumeText: item.resumeText || item.resume_text || null,
             resumeUrl: item.resumeFileUrl || item.resume_file_url || item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
           }));
           setResumesData(mapped);
@@ -913,21 +909,17 @@ export const ResumeBankPage: React.FC = () => {
                               </span>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-4 whitespace-nowrap text-center">
-                              {item.resumeUrl ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedResumeForModal(item);
-                                    setIsResumeModalOpen(true);
-                                  }}
-                                  className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer"
-                                >
-                                  <FileText className="w-3.5 h-3.5 mr-1" /> View CV
-                                </Button>
-                              ) : (
-                                <span className="text-[11px] text-muted-foreground italic">No file</span>
-                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setSelectedResumeForModal(item);
+                                  setIsResumeModalOpen(true);
+                                }}
+                                className="h-7 px-2.5 text-[11px] font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-lg cursor-pointer transition-all"
+                              >
+                                <FileText className="w-3.5 h-3.5 mr-1 text-purple-600 dark:text-purple-400" /> View CV
+                              </Button>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-5 whitespace-nowrap text-right">
                               <Button 
@@ -2020,10 +2012,7 @@ export const ResumeBankPage: React.FC = () => {
       <ResumeViewerModal
         open={isResumeModalOpen}
         onOpenChange={setIsResumeModalOpen}
-        resumeUrl={selectedResumeForModal?.resumeUrl}
-        candidateName={selectedResumeForModal?.name}
-        candidateEmail={selectedResumeForModal?.email}
-        qualification={selectedResumeForModal?.qualification}
+        candidate={selectedResumeForModal}
       />
     </div>
   );

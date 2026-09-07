@@ -2158,7 +2158,7 @@ export class ExpenseService {
       .where('ec.organization_id', ctx.organizationId)
       .select(db.raw("COALESCE(d.name, 'Unassigned') as departmentName"), db.raw("SUM(ec.total_claimed_amount) as totalAmount"))
       .groupBy('d.name')
-      .orderBy('totalAmount', 'desc');
+      .orderBy('totalAmount', 'desc') as unknown as { departmentName: string; totalAmount: number }[];
 
     // Also include all organization departments so real departments appear even if 0 expenses
     const orgDepartments = await db('departments').where('organization_id', ctx.organizationId).select('name');

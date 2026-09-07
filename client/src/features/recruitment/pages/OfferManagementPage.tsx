@@ -25,9 +25,7 @@ export const OfferManagementPage: React.FC = () => {
   const [isActionPending, setIsActionPending] = useState(false);
 
   // Queries
-  const { data: offersResponse, isLoading: isLoadingOffers, refetch } = useOffers({
-    status: statusFilter === 'all' ? undefined : statusFilter,
-  });
+  const { data: offersResponse, isLoading: isLoadingOffers, refetch } = useOffers();
 
   const { data: employeeLettersResponse } = useEmployeeLetters();
 
@@ -78,9 +76,9 @@ export const OfferManagementPage: React.FC = () => {
   // KPI calculations (computed over the full offers list)
   const allOffers = Array.isArray(offersList) ? offersList : [];
   const totalOffersCount = allOffers.length;
-  const sentOffersCount = allOffers.filter((o: any) => o.status === 'sent').length;
-  const acceptedOffersCount = allOffers.filter((o: any) => o.status === 'accepted').length;
-  const draftOffersCount = allOffers.filter((o: any) => o.status === 'draft').length;
+  const sentOffersCount = allOffers.filter((o: any) => (o.status || '').toLowerCase() === 'sent').length;
+  const acceptedOffersCount = allOffers.filter((o: any) => (o.status || '').toLowerCase() === 'accepted').length;
+  const draftOffersCount = allOffers.filter((o: any) => (o.status || '').toLowerCase() === 'draft').length;
   const totalEmployeeLettersCount = employeeLettersList.length;
   const acceptanceRate = totalOffersCount > 0 
     ? Math.round((acceptedOffersCount / (totalOffersCount - draftOffersCount || totalOffersCount)) * 100) 
@@ -132,13 +130,14 @@ export const OfferManagementPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'draft': return <Badge variant="outline" className="bg-slate-100 text-slate-800 border-slate-200">Draft</Badge>;
-      case 'sent': return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Sent</Badge>;
-      case 'accepted': return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Accepted</Badge>;
-      case 'rejected': return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Declined</Badge>;
-      case 'expired': return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Expired</Badge>;
-      default: return <Badge variant="outline" className="capitalize">{status}</Badge>;
+    const s = (status || '').toLowerCase();
+    switch (s) {
+      case 'draft': return <Badge variant="outline" className="bg-slate-100 text-slate-800 border-slate-200 font-bold">Draft</Badge>;
+      case 'sent': return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-bold">Sent</Badge>;
+      case 'accepted': return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold">Accepted</Badge>;
+      case 'rejected': return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-bold">Declined</Badge>;
+      case 'expired': return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold">Expired</Badge>;
+      default: return <Badge variant="outline" className="capitalize font-bold">{status}</Badge>;
     }
   };
 
@@ -158,13 +157,34 @@ export const OfferManagementPage: React.FC = () => {
 
   const filteredOffers = rawCombinedItems.filter((o: any) => {
     if (!o) return false;
+
+    // Status Filter (case-insensitive)
+    if (statusFilter && statusFilter !== 'all') {
+      const itemStatus = (o.status || '').toLowerCase().trim();
+      const targetStatus = statusFilter.toLowerCase().trim();
+      if (itemStatus !== targetStatus) {
+        return false;
+      }
+    }
+
+    // Search Query Filter
     const query = searchQuery.toLowerCase().trim();
     if (!query) return true;
     const candidateName = (o.candidate_name || o.candidateName || '').toLowerCase();
     const pos = (o.position_title || o.positionTitle || '').toLowerCase();
     const code = (o.offer_code || o.offerCode || '').toLowerCase();
-    return candidateName.includes(query) || pos.includes(query) || code.includes(query);
+    const email = (o.candidate_email || o.candidateEmail || '').toLowerCase();
+    return candidateName.includes(query) || pos.includes(query) || code.includes(query) || email.includes(query);
   });
+
+  const statusFilterOptions = [
+    { id: 'all', label: 'All', count: rawCombinedItems.length },
+    { id: 'draft', label: 'Draft', count: rawCombinedItems.filter((o: any) => (o.status || '').toLowerCase() === 'draft').length },
+    { id: 'sent', label: 'Sent', count: rawCombinedItems.filter((o: any) => (o.status || '').toLowerCase() === 'sent').length },
+    { id: 'accepted', label: 'Accepted', count: rawCombinedItems.filter((o: any) => (o.status || '').toLowerCase() === 'accepted').length },
+    { id: 'rejected', label: 'Rejected', count: rawCombinedItems.filter((o: any) => (o.status || '').toLowerCase() === 'rejected').length },
+    { id: 'expired', label: 'Expired', count: rawCombinedItems.filter((o: any) => (o.status || '').toLowerCase() === 'expired').length },
+  ];
 
   return (
     <div className="flex-1 space-y-6 max-w-full overflow-hidden p-6 min-h-[calc(100vh-4rem)]">
@@ -269,7 +289,10 @@ export const OfferManagementPage: React.FC = () => {
           <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/80 shrink-0">
             <button
               type="button"
-              onClick={() => setCategoryFilter('all')}
+              onClick={() => {
+                setCategoryFilter('all');
+                setStatusFilter('all');
+              }}
               className={`text-xs px-3 py-1.5 rounded-lg font-extrabold transition-all cursor-pointer ${
                 categoryFilter === 'all'
                   ? 'bg-background text-foreground shadow-xs'
@@ -307,19 +330,26 @@ export const OfferManagementPage: React.FC = () => {
 
         {/* Row 2: Status Pills (Only when viewing offers or all) */}
         {categoryFilter !== 'employee_letters' && (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none pt-2 border-t border-border/40">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none pt-2 border-t border-border/40">
             <span className="text-[11px] font-bold text-muted-foreground flex items-center mr-2">Status:</span>
-            {['all', 'draft', 'sent', 'accepted', 'rejected', 'expired'].map((status) => (
+            {statusFilterOptions.map((st) => (
               <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`text-xs px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
-                  statusFilter === status 
+                key={st.id}
+                onClick={() => setStatusFilter(st.id)}
+                className={`text-xs px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer flex items-center gap-1.5 ${
+                  statusFilter === st.id 
                     ? 'bg-primary text-primary-foreground shadow-xs' 
                     : 'bg-muted/40 text-muted-foreground hover:bg-muted border border-border/60'
                 }`}
               >
-                {status}
+                <span>{st.label}</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-extrabold ${
+                  statusFilter === st.id
+                    ? 'bg-white/20 text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  {st.count}
+                </span>
               </button>
             ))}
           </div>
