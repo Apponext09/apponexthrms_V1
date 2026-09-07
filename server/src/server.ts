@@ -6,7 +6,7 @@ import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
-import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
+
 import { initializeNotificationSocket } from './realtime/notification.socket';
 import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
 import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
@@ -84,10 +84,7 @@ async function start() {
 
       // Repair super_admin hash in background — does NOT block server startup
       repairSuperAdminHashIfNeeded();
-      // Run schema checks and profile seeding asynchronously in background
-      setupProfileSchemaAndSeed(getKnex()).catch((err) => {
-        logger.error('Background setupProfileSchemaAndSeed error:', err?.message || err);
-      });
+
 
       // Start automatic Leave & Comp-off Expiry Scheduler (runs every 12 hours)
       const expiryJobService = new LeaveExpiryJobService();
