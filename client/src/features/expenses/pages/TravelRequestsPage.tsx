@@ -359,22 +359,12 @@ export const TravelRequestsPage: React.FC = () => {
                       {isManagement && (
                         <td className="py-3.5 px-4 text-right">
                           {canAct ? (
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleApprove(tr.id)}
-                                disabled={actionLoading === tr.id}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded text-[11px] font-semibold transition-all"
-                              >
-                                {actionLoading === tr.id ? '...' : 'Approve'}
-                              </button>
-                              <button
-                                onClick={() => { setRejectModalId(tr.id); setRejectReason(''); }}
-                                disabled={actionLoading === tr.id}
-                                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded text-[11px] font-semibold transition-all"
-                              >
-                                Reject
-                              </button>
-                            </div>
+                            <a
+                              href={path.startsWith('/manager') ? '/manager/expenses/approvals' : (path.startsWith('/team-lead') ? '/team-lead/expenses/approvals' : '/dashboard/expenses/approvals')}
+                              className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded text-[11px] font-semibold transition-all inline-flex items-center gap-1"
+                            >
+                              Approve in Expense Approvals →
+                            </a>
                           ) : (
                             <span className="text-[11px] text-slate-400">—</span>
                           )}

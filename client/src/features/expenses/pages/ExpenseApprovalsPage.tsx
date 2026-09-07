@@ -165,15 +165,15 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
 
       if (claim.status === 'pending_finance') {
         await expenseApi.financeVerifyClaim(claim.id, { comments: 'Verified and approved by Finance' });
-        setClaims((prev) => prev.map((c) => (c.id === claim.id ? { ...c, status: 'payment_pending' } : c)));
-        nextStepName = 'Payout Processing';
+        setClaims((prev) => prev.filter((c) => String(c.id) !== String(claim.id)));
+        nextStepName = 'Payout Processing / Approved';
       } else {
         const res = await expenseApi.managerApproveClaim(claim.id, 'Approved');
-        nextStepName = res?.nextStepName || res?.currentApproverRole || 'next approver';
-        setClaims((prev) => prev.map((c) => (c.id === claim.id ? { ...c, ...res } : c)));
+        nextStepName = res?.nextStepName || res?.currentApproverRole || 'Finance Verification';
+        setClaims((prev) => prev.filter((c) => String(c.id) !== String(claim.id)));
       }
 
-      setSelectedIds((prev) => prev.filter((id) => id !== claim.id));
+      setSelectedIds((prev) => prev.filter((id) => String(id) !== String(claim.id)));
 
       showToast({
         type: 'success',

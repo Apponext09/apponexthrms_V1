@@ -503,21 +503,31 @@ export class ExpenseService {
           return;
         }
 
-        // Check 4 (Option A): If the employee has NO reporting_manager_id set (unassigned),
-        // allow ANY manager/HR in the organization to approve
+        // Check 4: Team Lead role in same department or at Level 1 / Team Lead step
+        const isTeamLead = allUserRoles.some((c) => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead'));
+        const stepName = String(currentLevelConfig.step_name || currentLevelConfig.stepName || '').toLowerCase();
+        const isTeamLeadStep = currentLevelNum === 1 || stepName.includes('team') || stepName.includes('lead');
+        if (isTeamLead && isTeamLeadStep) {
+          if (!claimEmp.current_department_id || !emp.current_department_id || Number(claimEmp.current_department_id) === Number(emp.current_department_id)) {
+            return;
+          }
+        }
+
+        // Check 5 (Option A): If the employee has NO reporting_manager_id set (unassigned),
+        // allow ANY manager/HR/Team Lead in the organization to approve
         if (!claimEmp.reporting_manager_id) {
-          if (isManager || isDeptHead) return;
+          if (isManager || isDeptHead || isTeamLead) return;
           // Also allow HR roles
           const isHr = allUserRoles.some((c) => ['hr', 'hr_admin', 'hr_manager'].includes(c) || c.startsWith('hr'));
           if (isHr) return;
         }
       } else if (!claimEmp) {
-        // Claim employee not found — allow any manager/HR to prevent stuck claims
-        const isAnyManager = allUserRoles.some((c) =>
-          ['manager', 'reporting_manager', 'department_head', 'dept_head', 'hr', 'hr_admin', 'hr_manager'].includes(c)
-          || c.includes('manager') || c.includes('department_head') || c.startsWith('hr')
+        // Claim employee not found — allow any manager/HR/Team Lead to prevent stuck claims
+        const isAnyManagerOrTL = allUserRoles.some((c) =>
+          ['manager', 'reporting_manager', 'department_head', 'dept_head', 'team_lead', 'hr', 'hr_admin', 'hr_manager'].includes(c)
+          || c.includes('manager') || c.includes('department_head') || c.includes('team_lead') || c.startsWith('hr')
         );
-        if (isAnyManager) return;
+        if (isAnyManagerOrTL) return;
       }
 
       const stepLabel = currentLevelConfig.step_name || currentLevelConfig.stepName || 'Reporting Manager';
@@ -529,6 +539,7 @@ export class ExpenseService {
     // For all other role-based types: check if user has the matching role code
     // Legacy mappings for backward compatibility with old workflows
     const legacyMap: Record<string, string[]> = {
+      'team_lead': ['team_lead', 'reporting_manager', 'manager'],
       'department_head': ['department_head', 'dept_head', 'manager'],
       'hr': ['hr_admin', 'hr_manager', 'hr'],
       'ceo': ['organization_admin', 'ceo'],
@@ -1007,13 +1018,12 @@ export class ExpenseService {
             // Level 3 (HR queue): only pending_level_3
             if (params.status === 'pending_level_3' && appStatus !== 'pending_level_3') continue;
             // Legacy pending_manager: any active workflow level
-            if (params.status === 'pending_manager' && !['pending_level_1', 'pending_manager', 'pending', 'submitted'].includes(appStatus) && !appStatus.startsWith('pending_level_')) continue;
+            if (params.status === 'pending_manager' && !['pending_level_1', 'pending_manager', 'pending_finance', 'pending', 'submitted'].includes(appStatus) && !appStatus.startsWith('pending_level_')) continue;
             if (params.status === 'pending_finance' && appStatus !== 'pending_finance') continue;
             if (params.status === 'pending_approvals' && !['pending_level_1', 'pending_manager', 'pending_finance', 'pending', 'submitted'].includes(appStatus) && !appStatus.startsWith('pending_level_')) continue;
             if (params.status === 'approved' && appStatus !== 'approved') continue;
             if (params.status === 'rejected' && appStatus !== 'rejected') continue;
           }
-
 
           if (params.search) {
             const s = params.search.toLowerCase();
@@ -1652,26 +1662,68 @@ export class ExpenseService {
     // Validate that current user's role matches the required approver for this level
     await this.assertApproverMatchesWorkflowLevel(ctx, claim, levels);
 
+    const approverRole = await this.getSubmitterRole(ctx, db);
+    const approverRank = this.getRoleRank(approverRole);
+
     const currentLevelNum = Number(claim.currentLevel ?? claim.current_level ?? 1);
     let nextStatus = 'pending_finance';
     let nextLevelNum = currentLevelNum + 1;
     let nextRoleName = 'Finance Verification';
     let isFinalStep = true;
 
-    if (levels && levels.length > 0 && currentLevelNum < levels.length) {
-      const nextLevelObj = levels[currentLevelNum];
-      const lvlOrder = Number(nextLevelObj.levelOrder ?? nextLevelObj.level_order ?? (currentLevelNum + 1));
-      nextLevelNum = lvlOrder;
-      nextStatus = `pending_level_${nextLevelNum}`;
-      nextRoleName = String(nextLevelObj.stepName || nextLevelObj.step_name || nextLevelObj.approverRole || nextLevelObj.approver_role || `Level ${nextLevelNum} Reviewer`).trim();
-      isFinalStep = false;
+    let foundNext = false;
+    if (levels && levels.length > 0) {
+      for (let i = currentLevelNum; i < levels.length; i++) {
+        const lvl = levels[i];
+        const lvlType = String(lvl.approverType || lvl.approver_type || lvl.approverRole || lvl.approver_role || '').toLowerCase();
+        const lvlStep = String(lvl.stepName || lvl.step_name || '').toLowerCase();
+        let lvlRank = 0;
+        if (lvlType === 'reporting_manager') {
+          if (lvlStep.includes('team') || lvlStep.includes('lead')) lvlRank = 1;
+          else if (i === 0 && levels.length > 1) lvlRank = 1;
+          else lvlRank = 2;
+        } else {
+          lvlRank = this.getRoleRank(lvlType);
+        }
+
+        if (lvlType === 'finance' || lvlType.includes('finance')) {
+          nextStatus = 'pending_finance';
+          nextRoleName = 'Finance Verification';
+          nextLevelNum = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+          foundNext = true;
+          isFinalStep = true;
+          break;
+        }
+
+        if (lvlRank > approverRank) {
+          nextLevelNum = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+          nextStatus = `pending_level_${nextLevelNum}`;
+          nextRoleName = String(lvl.stepName || lvl.step_name || lvl.approverRole || lvl.approver_role || `Level ${nextLevelNum} Approver`).trim();
+          foundNext = true;
+          isFinalStep = false;
+          break;
+        }
+      }
+    }
+
+    if (!foundNext) {
+      const settings = await this.getSettings(ctx);
+      if (settings.requireFinanceApproval) {
+        nextStatus = 'pending_finance';
+        nextRoleName = 'Finance Verification';
+        isFinalStep = true;
+      } else {
+        nextStatus = 'approved';
+        nextRoleName = 'Approved';
+        isFinalStep = true;
+      }
     }
 
     await db('expense_claims')
       .where('id', claimId)
       .update({
         status: nextStatus,
-        current_level: isFinalStep ? currentLevelNum : nextLevelNum,
+        current_level: nextLevelNum,
         current_approver_role: nextRoleName,
         updated_at: new Date()
       });
@@ -1767,7 +1819,17 @@ export class ExpenseService {
         .where('tr.id', trId)
         .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
         .first();
-      return this.mapTravelRequest(row);
+      const mapped = this.mapTravelRequest(row);
+      return {
+        ...mapped,
+        id: `tr_${row.id}`,
+        claimNumber: row.request_number || `TRV-${row.id}`,
+        status: 'approved',
+        currentApproverRole: 'Approved by Finance',
+        nextStepName: 'Approved',
+        isFinalStep: true,
+        message: 'Travel request verified & approved by Finance'
+      };
     }
 
     await this.ensureInitialized(ctx?.organizationId || 1);
@@ -2228,6 +2290,8 @@ export class ExpenseService {
       throw new Error('Employees cannot approve or reject their own travel requests.');
     }
 
+    await this.assertCanManageEmployeeClaim(ctx, travelReq, 'manager');
+
     // Handle rejection directly
     if (status === 'rejected') {
       await db('travel_requests').where('id', id).where('organization_id', ctx.organizationId).update({
@@ -2258,31 +2322,62 @@ export class ExpenseService {
       await this.assertApproverMatchesWorkflowLevel(ctx, travelReq, levels);
     }
 
+    const approverRole = await this.getSubmitterRole(ctx, db);
+    const approverRank = this.getRoleRank(approverRole);
+
     let nextStatus = 'pending_finance';
     let nextLevel = currentLevelNum + 1;
     let nextRoleName = 'Finance Verification';
 
-    if (isCurrentlyAtLevel && levels && levels.length > 0 && currentLevelNum < levels.length) {
-      // More workflow levels remain
-      const nextLevelObj = levels[currentLevelNum]; // 0-indexed, currentLevelNum is 1-indexed
-      const lvlOrder = Number(nextLevelObj.levelOrder ?? nextLevelObj.level_order ?? (currentLevelNum + 1));
-      nextLevel = lvlOrder;
-      nextStatus = `pending_level_${nextLevel}`;
-      nextRoleName = String(nextLevelObj.stepName || nextLevelObj.step_name || nextLevelObj.approverRole || nextLevelObj.approver_role || `Level ${nextLevel} Reviewer`);
-    } else if (isCurrentlyAtLevel) {
-      // All workflow levels passed — go to Finance
-      const settings = await this.getSettings(ctx);
-      if (settings.requireFinanceApproval) {
-        nextStatus = 'pending_finance';
-        nextRoleName = 'Finance Verification';
-      } else {
-        nextStatus = 'approved';
-        nextRoleName = 'Approved';
-      }
-    } else if (currentStatus === 'pending_finance') {
+    if (currentStatus === 'pending_finance') {
       // Finance is approving
       nextStatus = 'approved';
       nextRoleName = 'Approved';
+    } else if (isCurrentlyAtLevel) {
+      let foundNext = false;
+      if (levels && levels.length > 0) {
+        for (let i = currentLevelNum; i < levels.length; i++) {
+          const lvl = levels[i];
+          const lvlType = String(lvl.approverType || lvl.approver_type || lvl.approverRole || lvl.approver_role || '').toLowerCase();
+          const lvlStep = String(lvl.stepName || lvl.step_name || '').toLowerCase();
+          let lvlRank = 0;
+          if (lvlType === 'reporting_manager') {
+            if (lvlStep.includes('team') || lvlStep.includes('lead')) lvlRank = 1;
+            else if (i === 0 && levels.length > 1) lvlRank = 1;
+            else lvlRank = 2;
+          } else {
+            lvlRank = this.getRoleRank(lvlType);
+          }
+
+          if (lvlType === 'finance' || lvlType.includes('finance')) {
+            nextStatus = 'pending_finance';
+            nextRoleName = 'Finance Verification';
+            nextLevel = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+            foundNext = true;
+            break;
+          }
+
+          if (lvlRank > approverRank) {
+            nextLevel = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+            nextStatus = `pending_level_${nextLevel}`;
+            nextRoleName = String(lvl.stepName || lvl.step_name || lvl.approverRole || lvl.approver_role || `Level ${nextLevel} Approver`).trim();
+            foundNext = true;
+            break;
+          }
+        }
+      }
+
+      if (!foundNext) {
+        // All manager/TL levels passed — go to Finance
+        const settings = await this.getSettings(ctx);
+        if (settings.requireFinanceApproval) {
+          nextStatus = 'pending_finance';
+          nextRoleName = 'Finance Verification';
+        } else {
+          nextStatus = 'approved';
+          nextRoleName = 'Approved';
+        }
+      }
     } else {
       // Override / direct status set (admin)
       nextStatus = status === 'pending_manager' ? 'pending_level_1' : status;
@@ -2307,7 +2402,23 @@ export class ExpenseService {
       .where('tr.id', id)
       .select('tr.*', 'e.first_name', 'e.last_name', 'e.employee_code', 'd.name as department_name')
       .first();
-    return this.mapTravelRequest(row);
+
+    const mapped = this.mapTravelRequest(row);
+    const isFinal = nextStatus === 'approved' || nextStatus === 'pending_finance';
+    return {
+      ...mapped,
+      id: `tr_${row.id}`,
+      claimNumber: row.request_number || `TRV-${row.id}`,
+      nextStepName: nextRoleName,
+      isFinalStep: isFinal,
+      currentApproverRole: nextRoleName,
+      status: nextStatus,
+      message: nextStatus === 'approved'
+        ? 'Travel request fully approved'
+        : (nextStatus === 'pending_finance'
+          ? 'Travel request approved and forwarded to Finance Verification'
+          : `Travel request approved and forwarded to next approver: ${nextRoleName}`)
+    };
   }
 
   async getTravelAdvances(ctx: TenantContext, employeeId?: number, filters?: { status?: string; departmentId?: number; search?: string }) {
