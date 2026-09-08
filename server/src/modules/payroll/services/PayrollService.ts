@@ -1061,7 +1061,7 @@ export class PayrollService {
         const db = getKnex();
         const hrUsers = await db('users')
           .where('organization_id', ctx.organizationId)
-          .whereIn('role_code', ['hr_admin', 'hr', 'hr_manager']);
+          .whereIn('role_code', ['hr', 'hr_admin', 'hr_manager']);
 
         for (const u of hrUsers) {
           await db('notifications').insert({

@@ -62,7 +62,7 @@ async function resolveEmployeeId(
 
 /** Determine if user is HR, Admin, or CEO by inspecting JWT claims and DB user_roles */
 async function checkIsHROrAdmin(organizationId: number, userId: number, userClaims: any): Promise<boolean> {
-  const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
+  const adminPatterns = ['admin', 'hr', 'organization_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
 
   // Check claims / JWT if present
   const claimsRoles: string[] = Array.isArray(userClaims?.roles) ? userClaims.roles : [];

@@ -11,7 +11,7 @@ const DEFAULT_PAYMENT_STATUS_OPTIONS = [
 ];
 
 const DEFAULT_APPROVAL_LEVELS = [
-  { level: 1, name: 'HR Review', approverRole: 'hr_manager', approverUserId: null },
+  { level: 1, name: 'HR Review', approverRole: 'hr', approverUserId: null },
   { level: 2, name: 'Final Approval', approverRole: 'organization_admin', approverUserId: null }
 ];
 

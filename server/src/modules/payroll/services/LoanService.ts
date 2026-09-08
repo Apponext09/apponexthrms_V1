@@ -234,7 +234,7 @@ export class LoanService {
 
     // No type-specific approver configured — fall back to the broad check
     return {
-      canAct: roleCodes.includes('hr_manager') || roleCodes.includes('finance') || roleCodes.includes('finance_manager'),
+      canAct: roleCodes.includes('hr') || roleCodes.includes('hr_admin') || roleCodes.includes('hr_manager') || roleCodes.includes('finance') || roleCodes.includes('finance_manager'),
       requiredRole: null
     };
   }

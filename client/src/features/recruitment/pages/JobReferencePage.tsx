@@ -268,7 +268,7 @@ export const JobReferencePage: React.FC = () => {
   const handleBackToHrms = () => {
     const roles = user?.roles || [];
     if (roles.includes('super_admin')) navigate('/superadmin/dashboard');
-    else if (roles.includes('hr_manager')) navigate('/hr/dashboard');
+    else if (roles.includes('hr') || roles.includes('hr_admin') || roles.includes('hr_manager')) navigate('/dashboard');
     else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard');
     else if (roles.includes('team_lead')) navigate('/team-lead/dashboard');
     else if (roles.includes('intern')) navigate('/intern/dashboard');

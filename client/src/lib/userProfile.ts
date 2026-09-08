@@ -44,20 +44,16 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
   } else if (accessRole === 'department_head' || accessRole === 'manager' || roles.includes('department_head') || designation.includes('department head') || designation.includes('manager')) {
     roleTitle = 'Manager';
     roleCode = 'department_head';
-  } else if (accessRole === 'support' || roles.includes('support')) {
-    // Support persona — uses /hr/* portal
-    roleTitle = 'Support';
-    roleCode = 'support';
-    defaultDept = 'Support Operations';
-  } else if (accessRole === 'hr_admin' || roles.includes('hr_admin') || accessRole === 'hr' || roles.includes('hr')) {
-    // HR persona — shares Admin portal with CEO
+  } else if (
+    accessRole === 'hr' || roles.includes('hr') ||
+    accessRole === 'hr_admin' || roles.includes('hr_admin') ||
+    accessRole === 'hr_manager' || roles.includes('hr_manager') ||
+    accessRole === 'support' || roles.includes('support') ||
+    designation.includes('hr manager')
+  ) {
+    // All HR personas — resolved to single 'hr' role
     roleTitle = 'HR';
-    roleCode = 'hr_admin';
-    defaultDept = 'Human Resources';
-  } else if (accessRole === 'hr_manager' || roles.includes('hr_manager') || designation.includes('hr manager')) {
-    // HR Manager — shows as HR on the Admin portal
-    roleTitle = 'HR';
-    roleCode = 'hr_manager';
+    roleCode = 'hr';
     defaultDept = 'Human Resources';
   } else if (roles.includes('super_admin') || accessRole === 'super_admin' || userNameLower.includes('kot')) {
     roleTitle = 'Super Admin';

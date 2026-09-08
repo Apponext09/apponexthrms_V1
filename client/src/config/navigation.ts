@@ -45,14 +45,14 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'core_hr',
     label: 'CORE HR',
-    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     items: [
       { name: 'Employee', href: '/employees', icon: 'Users' },
       {
         name: 'Employee Lifecycle',
         href: '/employee-lifecycle',
         icon: 'RefreshCw',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
     ],
@@ -70,43 +70,43 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Job Management',
         href: '/recruitment/jobs',
         icon: 'Briefcase',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Candidate Management',
         href: '/recruitment/candidates',
         icon: 'Users',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Candidate Report',
         href: '/recruitment/candidate-report',
         icon: 'FileText',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Resume Source Screen Bank',
         href: '/recruitment/resume-bank',
         icon: 'Database',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Applicant Tracker',
         href: '/recruitment/applicant-tracker',
         icon: 'LineChart',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Assessment Management',
         href: '/recruitment/assessments',
         icon: 'Code2',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Offer Management',
         href: '/recruitment/offers',
         icon: 'FileCheck',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Interviewer Rating Details', href: '/recruitment/interviewer-rating', icon: 'ListChecks' },
       { name: 'Employee Referrals', href: '/recruitment/referrals', icon: 'UserPlus' },
@@ -122,26 +122,26 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Dashboard',
         href: '/attendance',
         icon: 'Clock',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       {
         name: 'Live Tracking',
         href: '/live-tracking',
         icon: 'Navigation',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head', 'ceo'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head', 'ceo'],
       },
       {
         name: 'Location Management & Mapping',
         href: '/attendance/locations',
         icon: 'MapPin',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Break Logs', href: '/attendance/break-logs', icon: 'Coffee' },
       {
-        name: 'CEO Face Punch',
+        name: 'HR Face Punch',
         href: '/attendance/face-punch',
         icon: 'ScanFace',
-        minRoles: ['organization_admin'],
+        minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'],
       },
     ],
   },
@@ -150,7 +150,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'shift_management',
     label: 'SHIFT MANAGEMENT',
-    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     items: [
       { name: 'General Shift', href: '/attendance/shifts', icon: 'Clock' },
       { name: 'Roster Shift', href: '/attendance/roster-shifts', icon: 'CalendarClock' },
@@ -166,25 +166,25 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Leave Approvals',
         href: '/leaves/approvals',
         icon: 'CheckCircle',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       {
         name: 'Approvals Dashboard',
         href: '/approvals/dashboard',
         icon: 'BarChart3',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       {
         name: 'Leave Settings',
         href: '/settings/leave-policies',
         icon: 'Settings',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Holiday Manage',
         href: '/holidays',
         icon: 'Calendar',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -199,27 +199,27 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Payroll Master Settings',
         href: '/payroll/settings',
         icon: 'Sliders',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp' },
       {
         name: 'Payroll Processing',
         href: '/payroll/processing',
         icon: 'Activity',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Payslip Management', href: '/payroll/payslips', icon: 'FileText' },
       {
         name: 'Mass Salary Structure Upload',
         href: '/payroll/mass-salary-upload',
         icon: 'UploadCloud',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'Payroll Reports',
         href: '/payroll/reports',
         icon: 'BarChart3',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -251,7 +251,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Loan Type Settings',
         href: '/payroll/loan-types',
         icon: 'Sliders',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: 'Percent' },
     ],
@@ -273,7 +273,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Expense Categories', href: '/expenses/categories', icon: 'Tag', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
       { name: 'Expense Policies', href: '/expenses/policies', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
       { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
-      { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo'] },
+      { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'] },
     ],
   },
 
@@ -286,7 +286,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Dashboard',
         href: '/performance',
         icon: 'TrendingUp',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
       },
       { name: 'Goals & OKRs', href: '/performance/goals', icon: 'Target' },
       { name: 'Reviews', href: '/performance/reviews', icon: 'MessageSquare' },
@@ -303,14 +303,14 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Dashboard',
         href: '/assets',
         icon: 'Package',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       { name: 'My Asset', href: '/assets/my-assets', icon: 'Inbox' },
       {
         name: 'All Asset',
         href: '/assets/list',
         icon: 'List',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -319,7 +319,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'analytics',
     label: 'REPORTS & ANALYTICS',
-    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     items: [
       { name: 'Attendance Report', href: '/analytics/attendance', icon: 'BarChart3' },
       { name: 'Timelog Report', href: '/analytics/timelog', icon: 'FileText' },
@@ -327,14 +327,14 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'CEO Attendance Report',
         href: '/analytics/ceo-attendance',
         icon: 'UserCheck',
-        minRoles: ['organization_admin'],
+        minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'],
       },
       {
         name: 'Report Engine',
         href: '/analytics/report-engine',
         icon: 'Sparkles',
         badge: 'New',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -343,7 +343,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'hr_operations',
     label: 'HR OPERATIONS',
-    minRoles: ['organization_admin', 'hr_manager'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager'],
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
       { name: 'Workflow Builder', href: '/workflow', icon: 'GitBranch' },
@@ -357,7 +357,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'policy_management',
     label: 'POLICY GOVERNANCE',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     items: [
       { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
       { name: 'Create & Assign Policy', href: '/policies/create', icon: 'FilePlus' },
@@ -369,7 +369,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'masters',
     label: 'MASTERS',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
       { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes', badge: 'Builder' },
@@ -400,7 +400,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'module_management',
     label: 'MODULE MANAGEMENT',
     icon: 'Boxes',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
       { name: 'CEO / Admin', href: '/modules?module=ceo', icon: 'ShieldCheck' },
@@ -417,7 +417,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'settings',
     label: 'SETTINGS',
     icon: 'Settings',
-    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
       { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes' },
@@ -427,19 +427,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Workflow Settings',
         href: '/settings/workflows',
         icon: 'GitBranch',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
       {
         name: 'ID Card Designer',
         href: '/settings/id-card-designer',
         icon: 'CreditCard',
-        minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
       },
       {
         name: 'Career Portal Customization',
         href: '/settings/career-customization',
         icon: 'Palette',
-        minRoles: ['organization_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -471,11 +471,16 @@ function matchesRole(userRoles: string[], targetRoles: Role[]): boolean {
 
 function getPersona(userRoles: string[]): 'ceo' | 'hr' | 'manager' | 'tl' | 'emp' {
   const norm = userRoles.map((r) => r.toLowerCase().trim());
-  if (norm.includes('organization_admin') || norm.includes('ceo') || norm.includes('admin')) {
+  if (
+    norm.includes('organization_admin') ||
+    norm.includes('ceo') ||
+    norm.includes('admin') ||
+    norm.includes('hr') ||
+    norm.includes('hr_admin') ||
+    norm.includes('hr_manager')
+  ) {
+    // HR and CEO/Admin share the same persona — HR sees all CEO tabs
     return 'ceo';
-  }
-  if (norm.includes('hr') || norm.includes('hr_admin') || norm.includes('hr_manager')) {
-    return 'hr';
   }
   if (norm.includes('department_head') || norm.includes('manager')) {
     return 'manager';

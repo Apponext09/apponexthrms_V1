@@ -81,7 +81,7 @@ export class ExpenseService {
     const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase());
     const allRoles = [...roleCodes, ...ctxRoles];
     const isHrOrAdmin = allRoles.some((c: string) =>
-      ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'admin', 'finance', 'finance_manager', 'accounts'].includes(c)
+      ['organization_admin', 'super_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager', 'admin', 'finance', 'finance_manager', 'accounts'].includes(c)
       || c.includes('ceo')
       || c.includes('finance')
       || (c.includes('admin') && !c.includes('company_employee'))

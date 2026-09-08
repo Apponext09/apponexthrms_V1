@@ -2250,7 +2250,7 @@ export class LeaveController {
       .join('roles as r', 'ur.role_id', 'r.id')
       .where('ur.user_id', ctx.userId)
       .where('ur.organization_id', ctx.organizationId)
-      .whereIn('r.code', ['admin', 'hr_manager', 'super_admin'])
+      .whereIn('r.code', ['admin', 'hr', 'hr_manager', 'super_admin'])
       .first();
     return !!isAdmin;
   }

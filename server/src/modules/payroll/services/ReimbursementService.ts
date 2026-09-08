@@ -83,7 +83,7 @@ export class ReimbursementService {
           .pluck('roles.code')
           .catch(() => []);
 
-        const isPrivileged = roles.some((r: string) => ['organization_admin', 'super_admin', 'admin', 'hr_manager', 'finance', 'finance_manager', 'department_head'].includes(r));
+        const isPrivileged = roles.some((r: string) => ['organization_admin', 'super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'finance', 'finance_manager', 'department_head'].includes(r));
 
         if (!isPrivileged) {
           const emp = user.employee_id

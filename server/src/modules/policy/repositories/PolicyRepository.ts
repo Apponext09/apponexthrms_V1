@@ -35,6 +35,7 @@ export function expandRoleCodes(roleCodes: string[]): string[] {
       expanded.add('ceo');
       expanded.add('admin');
     }
+    // All HR codes are aliases — 'hr' is canonical, others kept for DB backward compat
     if (['hr', 'hr_admin', 'hr_manager', 'support'].includes(norm)) {
       expanded.add('hr');
       expanded.add('hr_admin');

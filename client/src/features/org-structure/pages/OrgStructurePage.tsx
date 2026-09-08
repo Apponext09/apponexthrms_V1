@@ -372,7 +372,7 @@ export function OrgStructurePage() {
   });
 
   const userRole = (user as any)?.accessRole || (user as any)?.role || '';
-  const isAdminOrManager = ['hr_admin', 'hr_manager', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
+  const isAdminOrManager = ['hr', 'hr_admin', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
   const canExport = isAdminOrManager || isExportEnabledForEmployees;
 
   // Local employees state for optimistic UI updates
@@ -549,14 +549,14 @@ export function OrgStructurePage() {
       ['cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
     );
     const managers = activeList.filter((e) =>
-      ['department_head', 'hr_manager', 'hr_admin'].includes(((e as any).accessRole || '').toLowerCase()) &&
+      ['department_head', 'hr', 'hr_admin'].includes(((e as any).accessRole || '').toLowerCase()) &&
       !cxos.some((c) => c.id === e.id)
     );
     const teamLeads = activeList.filter(
       (e) => ((e as any).accessRole || '').toLowerCase() === 'team_lead'
     );
     const regularEmployees = activeList.filter(
-      (e) => !['department_head', 'hr_manager', 'hr_admin', 'team_lead', 'cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
+      (e) => !['department_head', 'hr', 'hr_admin', 'team_lead', 'cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
     );
 
     // Mark CXOs & managers as claimed at top level

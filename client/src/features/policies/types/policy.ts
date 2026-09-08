@@ -106,7 +106,7 @@ export const POLICY_CATEGORIES = [
 export const AVAILABLE_ROLES = [
   { code: 'super_admin', label: 'Super Admin' },
   { code: 'organization_admin', label: 'Organization Admin' },
-  { code: 'hr_manager', label: 'HR Manager' },
+  { code: 'hr', label: 'HR' },
   { code: 'department_head', label: 'Department Head' },
   { code: 'team_lead', label: 'Team Lead' },
   { code: 'employee', label: 'Employee' },

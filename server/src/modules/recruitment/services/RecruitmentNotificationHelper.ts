@@ -11,7 +11,7 @@ import type { TenantContext } from '../../../db/types';
 export class RecruitmentNotificationHelper {
   /**
    * Get user IDs of all HR admins / HR managers for the organization.
-   * Looks up users whose roles include 'hr_admin', 'hr', 'hr_manager', or 'organization_admin'.
+   * Looks up users whose roles include 'hr', 'hr_admin', 'hr_manager', or 'organization_admin'.
    */
   static async getHrAdminUserIds(ctx: TenantContext): Promise<number[]> {
     const db = getKnex();
@@ -22,7 +22,7 @@ export class RecruitmentNotificationHelper {
         .whereNull('deleted_at')
         .select('id', 'roles');
 
-      const hrRoles = ['hr_admin', 'hr', 'hr_manager', 'organization_admin'];
+      const hrRoles = ['hr', 'hr_admin', 'hr_manager', 'organization_admin'];
       const hrUserIds: number[] = [];
 
       for (const user of users) {

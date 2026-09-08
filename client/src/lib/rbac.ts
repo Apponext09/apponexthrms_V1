@@ -22,8 +22,8 @@ export function hasRole(roles: string[], requiredRole: Role | string): boolean {
     );
   }
 
-  // HR Admin, HR, and HR Manager on dashboard
-  if (normRequired === 'hr' || normRequired === 'hr_admin') {
+  // HR — all sub-roles (hr_admin, hr_manager) are legacy aliases for 'hr'
+  if (normRequired === 'hr' || normRequired === 'hr_admin' || normRequired === 'hr_manager') {
     return (
       normRoles.includes('hr') ||
       normRoles.includes('hr_admin') ||
@@ -96,7 +96,7 @@ export function useRbac() {
  */
 export function useIsAdmin() {
   const { hasAnyRole } = useRbac();
-  return hasAnyRole(['super_admin', 'organization_admin', 'ceo', 'hr_manager', 'hr_admin', 'hr']);
+  return hasAnyRole(['super_admin', 'organization_admin', 'ceo', 'hr']);
 }
 
 /**
@@ -125,15 +125,12 @@ export function useCanManageRole() {
       return targetRole !== 'super_admin';
     }
 
-    // HR admin can only manage lower roles
+    // HR can only manage lower roles
     const ROLE_HIERARCHY: Record<string, number> = {
       super_admin: 5,
       organization_admin: 4,
       ceo: 4,
-      hr_admin: 4,
       hr: 4,
-      hr_manager: 3,
-      support: 3,
       finance: 3,
       finance_manager: 3,
       department_head: 2,
@@ -180,8 +177,8 @@ export function useCanAccessEmployee() {
     // Admin can access any employee in their org
     if (userRoles.includes('organization_admin') ||
         userRoles.includes('ceo') ||
-        userRoles.includes('hr_admin') ||
         userRoles.includes('hr') ||
+        userRoles.includes('hr_admin') ||
         userRoles.includes('hr_manager') ||
         userRoles.includes('super_admin')) {
       // Check org match

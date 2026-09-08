@@ -122,7 +122,7 @@ const ModuleManagementPage = lazy(() => import('../features/modules/modules').th
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
 
 // ── Admin / CEO / HR Shell Routes (/dashboard, /payroll, /recruitment …) ─────
-// Used by: organization_admin, ceo, hr_admin, hr, hr_manager, and shared roles
+// Used by: organization_admin, ceo, hr, and shared roles
 export const adminRoutes = (
   <Route
     element={
@@ -138,7 +138,6 @@ export const adminRoutes = (
           'organization_admin',
           'ceo',
           'super_admin',
-          'support',
           'intern',
           'consultant',
         ]}

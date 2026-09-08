@@ -60,14 +60,15 @@ function RootRedirect() {
   if (
     userRolesNorm.includes('organization_admin') ||
     userRolesNorm.includes('ceo') ||
-    userRolesNorm.includes('hr_manager') ||
-    userRolesNorm.includes('hr_admin') ||
-    userRolesNorm.includes('hr') ||
-    ['organization_admin', 'ceo', 'hr_manager', 'hr_admin', 'hr'].includes(accessRole)
+    ['organization_admin', 'ceo'].includes(accessRole)
   ) return <Navigate to="/dashboard" replace />;
 
-  if (userRolesNorm.includes('support') || accessRole === 'support')
-    return <Navigate to="/hr/dashboard" replace />;
+  if (
+    userRolesNorm.includes('hr') ||
+    userRolesNorm.includes('hr_admin') ||
+    userRolesNorm.includes('hr_manager') ||
+    ['hr', 'hr_admin', 'hr_manager'].includes(accessRole)
+  ) return <Navigate to="/hr/dashboard" replace />;
 
   if (
     userRolesNorm.includes('department_head') ||

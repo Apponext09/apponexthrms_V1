@@ -24,7 +24,7 @@ export function initializeCandidateRoutes(
   router.post(
     '/',
     authenticate,
-    authorize(['super_admin', 'organization_admin', 'hr_manager']),
+    authorize(['super_admin', 'organization_admin', 'hr', 'hr_manager']),
     validateRequest({
       body: {
         organizationId: 'required|uuid',
@@ -99,7 +99,7 @@ export function initializeCandidateRoutes(
   router.get(
     '/',
     authenticate,
-    authorize(['super_admin', 'organization_admin', 'hr_manager', 'department_head']),
+    authorize(['super_admin', 'organization_admin', 'hr', 'hr_manager', 'department_head']),
     validateOrgAccess,
     validatePagination,
     async (req: Request, res: Response) => {
@@ -141,7 +141,7 @@ export function initializeCandidateRoutes(
   router.put(
     '/:id',
     authenticate,
-    authorize(['super_admin', 'organization_admin', 'hr_manager']),
+    authorize(['super_admin', 'organization_admin', 'hr', 'hr_manager']),
     validateOrgAccess,
     validateRequest({
       body: {
@@ -183,7 +183,7 @@ export function initializeCandidateRoutes(
   router.patch(
     '/:id/status',
     authenticate,
-    authorize(['super_admin', 'organization_admin', 'hr_manager']),
+    authorize(['super_admin', 'organization_admin', 'hr', 'hr_manager']),
     validateOrgAccess,
     validateRequest({
       body: {
@@ -219,7 +219,7 @@ export function initializeCandidateRoutes(
   router.delete(
     '/:id',
     authenticate,
-    authorize(['super_admin', 'organization_admin', 'hr_manager']),
+    authorize(['super_admin', 'organization_admin', 'hr', 'hr_manager']),
     validateOrgAccess,
     async (req: Request, res: Response) => {
       try {

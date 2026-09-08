@@ -182,7 +182,7 @@ export class EmployeeService {
 
     // Helper to get Org Admin's employee ID if no reporting manager is specified
     let finalReportingManagerId = input.reportingManagerId || null;
-    if (!finalReportingManagerId && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
+    if (!finalReportingManagerId && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId) {
         finalReportingManagerId = adminEmpId;
@@ -722,8 +722,8 @@ export class EmployeeService {
 
     const targetAccessRole = input.accessRole || input.access_role || input.role || '';
 
-    // Default Manager ('department_head', 'cto', etc.) and HR ('hr_manager') to Admin only if no reporting manager was provided
-    if (targetAccessRole && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
+    // Default Manager ('department_head', 'cto', etc.) and HR ('hr') to Admin only if no reporting manager was provided
+    if (targetAccessRole && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId && adminEmpId !== employeeId) {
@@ -792,7 +792,7 @@ export class EmployeeService {
             .join('roles', 'user_roles.role_id', 'roles.id')
             .where('user_roles.user_id', mgrUser.id)
             .select('roles.code');
-          const validCodes = new Set(['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr', 'executive']);
+          const validCodes = new Set(['team_lead', 'department_head', 'hr', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr_admin', 'hr_manager', 'executive']);
           isManagerRole = mgrRoles.some((r: any) => validCodes.has(r.code)) || validCodes.has(mgrUser.role);
         }
       }

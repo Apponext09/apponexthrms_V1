@@ -109,7 +109,7 @@ export class LoanService {
       .pluck('r.code')
       .catch(() => []);
 
-    const isHRorAdmin = userRoles.some((r: string) => ['organization_admin', 'super_admin', 'admin', 'hr_manager', 'hr'].includes(r)) ||
+    const isHRorAdmin = userRoles.some((r: string) => ['organization_admin', 'super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager'].includes(r)) ||
       creatorUser?.role === 'admin' || creatorUser?.role === 'organization_admin' || creatorUser?.role === 'super_admin';
 
     const isSelfRequest = creatorEmp && Number(creatorEmp.id) === Number(input.employeeId);

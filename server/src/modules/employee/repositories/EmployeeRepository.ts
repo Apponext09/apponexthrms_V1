@@ -220,6 +220,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           cfo: 6,
           coo: 6,
           cxo: 6,
+          hr: 5,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,
@@ -493,7 +494,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
           })
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
+          .whereIn('roles.code', ['employee', 'team_lead', 'hr', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
@@ -504,6 +505,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           cfo: 6,
           coo: 6,
           cxo: 6,
+          hr: 5,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,
