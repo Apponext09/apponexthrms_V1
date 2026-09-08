@@ -1166,22 +1166,19 @@ export function EmployeeCreateModal({
                         <option value="team_lead">Team Lead (Team Portal View)</option>
                         <option value="department_head">Department Head / Manager</option>
                         <option value="hr_manager">HR Manager (HR Portal View)</option>
+                        <option value="cto">CTO (Chief Technology Officer)</option>
+                        <option value="cfo">CFO (Chief Financial Officer)</option>
+                        <option value="coo">COO (Chief Operating Officer)</option>
+                        <option value="ceo">CEO (Chief Executive Officer)</option>
                         <option value="intern">Intern (Intern Portal View)</option>
                         <option value="consultant">Consultant (Consultant Portal View)</option>
                         <option value="finance">Finance (Finance Portal View)</option>
                        
                       </select>
-                      {fieldErrors.accessRole ? (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.accessRole}</span>
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Controls which portal they log into.{' '}
-                          <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Controls which portal they log into.{' '}
+                        <span className="font-medium text-foreground">Executives (CFO, COO, CTO, CEO) & Managers are assigned to their respective departments in the chart.</span>
+                      </p>
 
                       {/* Mapped Policy Preview */}
                       {(() => {

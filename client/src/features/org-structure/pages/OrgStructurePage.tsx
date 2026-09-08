@@ -13,7 +13,7 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { useEmployees, useUpdateEmployee } from '@/features/employee/hooks/useEmployees';
+import { useEmployees } from '@/features/employee/hooks/useEmployees';
 import { EmployeeCreateModal } from '@/features/employee/components/EmployeeCreateModal';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/config/api';
@@ -61,6 +61,7 @@ import {
   ChevronRight,
   Eye,
   Settings,
+  Zap,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
@@ -72,6 +73,41 @@ const ROLE_CONFIG: Record<
   string,
   { label: string; bg: string; border: string; text: string; Icon: React.ElementType }
 > = {
+  ceo: {
+    label: 'CEO',
+    bg: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/40',
+    text: 'text-amber-700 dark:text-amber-300',
+    Icon: Crown,
+  },
+  cfo: {
+    label: 'CFO',
+    bg: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/40',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    Icon: ShieldCheck,
+  },
+  coo: {
+    label: 'COO',
+    bg: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    border: 'border-blue-500/40',
+    text: 'text-blue-700 dark:text-blue-300',
+    Icon: Briefcase,
+  },
+  cto: {
+    label: 'CTO',
+    bg: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+    border: 'border-indigo-500/40',
+    text: 'text-indigo-700 dark:text-indigo-300',
+    Icon: Zap,
+  },
+  cxo: {
+    label: 'Executive (CXO)',
+    bg: 'bg-purple-500/10 text-purple-700 dark:text-purple-300',
+    border: 'border-purple-500/40',
+    text: 'text-purple-700 dark:text-purple-300',
+    Icon: Crown,
+  },
   hr_manager: {
     label: 'HR Manager',
     bg: 'bg-primary/10 text-primary',
@@ -102,9 +138,18 @@ const ROLE_CONFIG: Record<
   },
 };
 
-function roleCfg(role?: string) {
-  if (role === 'hr_manager' || role === 'department_head') return ROLE_CONFIG[role];
-  if (role === 'team_lead') return ROLE_CONFIG.team_lead;
+function roleCfg(role?: string, designation?: string) {
+  const r = (role || '').toLowerCase().trim();
+  const d = (designation || '').toLowerCase().trim();
+
+  if (r === 'ceo' || d === 'ceo' || d.includes('chief executive')) return ROLE_CONFIG.ceo;
+  if (r === 'cfo' || d === 'cfo' || d.includes('chief financial') || d.includes('finance head') || d.includes('director of finance')) return ROLE_CONFIG.cfo;
+  if (r === 'coo' || d === 'coo' || d.includes('chief operating') || d.includes('chief operations') || d.includes('operations head')) return ROLE_CONFIG.coo;
+  if (r === 'cto' || d === 'cto' || d.includes('chief tech') || d.includes('chief technology') || d.includes('tech head') || d.includes('head of engineering')) return ROLE_CONFIG.cto;
+  if (r === 'cxo' || d.startsWith('chief ') || d.includes('c-level')) return ROLE_CONFIG.cxo;
+  if (r === 'hr_manager' || r === 'hr_admin' || r === 'support') return ROLE_CONFIG.hr_manager;
+  if (r === 'department_head' || r === 'manager') return ROLE_CONFIG.department_head;
+  if (r === 'team_lead') return ROLE_CONFIG.team_lead;
   return ROLE_CONFIG.employee;
 }
 
@@ -295,10 +340,16 @@ function TreeBranch({
   onSelectEmp,
   isLevel1Manager = false,
 }: TreeBranchProps) {
-  const isCollapsed = collapsedMap[node.emp.id] ?? true;
+  const isCollapsed = collapsedMap[node.emp.id] ?? false;
   const children = node.children || [];
   const hasChildren = children.length > 0;
-  const deptName = isLevel1Manager ? (node.emp.department || 'Department') : undefined;
+  const deptName = node.isAdmin
+    ? 'Executive Leadership'
+    : node.isCxo
+    ? `C-Suite · ${(node.cxoType || 'CXO').toUpperCase()}`
+    : isLevel1Manager
+    ? (node.emp.department || 'Department')
+    : undefined;
 
   return (
     <div className="flex flex-col items-center shrink-0">
@@ -340,7 +391,7 @@ function TreeBranch({
                   collapsedMap={collapsedMap}
                   onToggleCollapse={onToggleCollapse}
                   onSelectEmp={onSelectEmp}
-                  isLevel1Manager={node.isAdmin}
+                  isLevel1Manager={node.isAdmin || node.isCxo}
                 />
               </div>
             ))}
@@ -362,6 +413,7 @@ export function OrgStructurePage() {
   const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [managerEditId, setManagerEditId] = useState('');
+  const [isUpdatingManager, setIsUpdatingManager] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
@@ -382,6 +434,13 @@ export function OrgStructurePage() {
     setLocalEmps(employees || null);
   }, [employees]);
 
+  useEffect(() => {
+    if (selectedEmp) {
+      const mgrId = selectedEmp.reportingManagerId || (selectedEmp as any).reporting_manager_id || (selectedEmp as any).reportingManagerId || '';
+      setManagerEditId(String(mgrId || ''));
+    }                                           
+  }, [selectedEmp]);
+
   // Collapse State for nodes
   const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
 
@@ -399,7 +458,6 @@ export function OrgStructurePage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const exportTreeRef = useRef<HTMLDivElement>(null);
 
-  const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedEmp?.id || 0);
 
   // Active Dragged Employee for smooth DragOverlay preview
   const [activeDragEmp, setActiveDragEmp] = useState<Employee | null>(null);
@@ -513,61 +571,125 @@ export function OrgStructurePage() {
     toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
   };
 
-  // Build Hierarchy Tree Structure keying off currentDepartmentId / departmentId:
+  // Build Hierarchy Tree Structure: CEO -> CFO, COO, CTO -> Assigned Department -> Team Leads -> Employees
   const treeData = useMemo(() => {
     const rawList = localEmps || (employees as Employee[]);
     if (!rawList || rawList.length === 0) return null;
 
-    const adminName = user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Organization Admin';
-    const adminEmail = user?.email || 'admin@kosqu.com';
+    // Helper to get department name
+    const getDeptKey = (e: Employee): string =>
+      e.department || (e as any).departmentName || (e as any).department_name || 'General';
 
-    // Root Admin Node at Top of Tree
-    const rootAdminEmp: Employee = {
-      id: 999999,
+    // Helper to get department ID
+    const getDeptId = (e: Employee): number | null =>
+      e.currentDepartmentId ?? (e as any).departmentId ?? (e as any).current_department_id ?? null;
+
+    // Helper to categorize CXO type
+    const getCxoCategory = (e: Employee): 'cfo' | 'coo' | 'cto' | 'cxo' | null => {
+      const role = ((e.accessRole || (e as any).role || '') as string).toLowerCase().trim();
+      const desig = (e.designation || e.jobTitle || (e as any).designationName || (e as any).designation_name || '').toLowerCase().trim();
+
+      if (role === 'cfo' || desig === 'cfo' || desig.includes('chief financial') || desig.includes('finance head') || desig.includes('director of finance')) {
+        return 'cfo';
+      }
+      if (role === 'coo' || desig === 'coo' || desig.includes('chief operating') || desig.includes('chief operations') || desig.includes('operations head') || desig.includes('director of operations')) {
+        return 'coo';
+      }
+      if (role === 'cto' || desig === 'cto' || desig.includes('chief tech') || desig.includes('chief technology') || desig.includes('tech head') || desig.includes('head of engineering') || desig.includes('director of engineering')) {
+        return 'cto';
+      }
+      if (role === 'cxo' || desig.startsWith('chief ') || desig.includes('c-level') || desig === 'cmo' || desig === 'cio' || desig === 'cpo' || desig === 'cro' || desig === 'cso') {
+        return 'cxo';
+      }
+      return null;
+    };
+
+    // Helper to match department domain to CXO functional area
+    const isMatchCxoDomain = (cxoCat: string, deptName: string): boolean => {
+      const d = (deptName || '').toLowerCase().trim();
+      if (cxoCat === 'cto') {
+        return /dev|sde|test|qa|cloud|eng|tech|it|infra|soft|data|ai|ml|sec|prod|front|back|full|mob|ui|ux/i.test(d);
+      }
+      if (cxoCat === 'coo') {
+        return /hr|human|operat|admin|supp|logist|facil|legal|compl|peop|serv|help|mgt|manage|gen/i.test(d);
+      }
+      if (cxoCat === 'cfo') {
+        return /finan|sales|sale|account|bill|rev|mark|comm|audit|tax|payr|growth|biz|bd/i.test(d);
+      }
+      return false;
+    };
+
+    // 1. Resolve Root CEO node
+    const ceoEmployee = rawList.find((e: any) => {
+      const isCeoFlag = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+      const role = ((e.accessRole || e.role || '') as string).toLowerCase().trim();
+      const desig = (e.designation || e.jobTitle || (e as any).designationName || '').toLowerCase().trim();
+      return isCeoFlag || role === 'ceo' || desig === 'ceo' || desig === 'chief executive officer';
+    });
+
+    const adminName = ceoEmployee
+      ? `${ceoEmployee.firstName || ''} ${ceoEmployee.lastName || ''}`.trim() || 'Chief Executive Officer'
+      : (user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Chief Executive Officer');
+    
+    const adminEmail = ceoEmployee?.email || user?.email || 'ceo@apponext.com';
+
+    // Root CEO Node at Top of Tree
+    const rootCeoEmp: Employee = {
+      id: ceoEmployee?.id || 999999,
       firstName: adminName,
       lastName: '',
       email: adminEmail,
-      employeeCode: 'ADMIN-01',
-      designation: 'ORGANIZATION ADMIN',
-      department: 'Executive Management',
+      employeeCode: ceoEmployee?.employeeCode || 'CEO-01',
+      designation: 'CHIEF EXECUTIVE OFFICER (CEO)',
+      department: ceoEmployee?.department || 'Executive Leadership',
+      avatarUrl: (ceoEmployee as any)?.avatarUrl,
     };
 
-    // Filter out CEO profile from lower employee list so he doesn't appear twice under Department
+    // Filter out root CEO profile from lower employee list so they don't appear twice
     const activeList = rawList.filter((e: any) => {
+      if (ceoEmployee && e.id === ceoEmployee.id) return false;
       const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
       return !isCeo;
     });
 
-    const getDeptKey = (e: Employee): string =>
-      e.department || (e as any).departmentName || 'General';
-
     // Track claimed employee IDs to guarantee ZERO duplicates across the entire tree
     const claimedEmpIds = new Set<number>();
+    if (ceoEmployee?.id) claimedEmpIds.add(ceoEmployee.id);
 
-    // Separate employees by access role
-    const cxos = activeList.filter((e) =>
-      ['cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
-    );
+    // 2. Identify and sort C-Suite executives: CFO, COO, CTO, then other CXOs
+    const cxoEmployees = activeList.filter((e) => getCxoCategory(e) !== null);
+    const cxoOrderMap: Record<string, number> = { cfo: 1, coo: 2, cto: 3, cxo: 4 };
+    const sortedCxos = [...cxoEmployees].sort((a, b) => {
+      const orderA = cxoOrderMap[getCxoCategory(a) || 'cxo'] || 99;
+      const orderB = cxoOrderMap[getCxoCategory(b) || 'cxo'] || 99;
+      return orderA - orderB;
+    });
+
+    sortedCxos.forEach((c) => { if (c.id) claimedEmpIds.add(c.id); });
+
+    // 3. Department Managers / Heads
     const managers = activeList.filter((e) =>
-      ['department_head', 'hr', 'hr_admin'].includes(((e as any).accessRole || '').toLowerCase()) &&
-      !cxos.some((c) => c.id === e.id)
-    );
-    const teamLeads = activeList.filter(
-      (e) => ((e as any).accessRole || '').toLowerCase() === 'team_lead'
-    );
-    const regularEmployees = activeList.filter(
-      (e) => !['department_head', 'hr', 'hr_admin', 'team_lead', 'cto', 'cfo', 'coo', 'cxo'].includes(((e as any).accessRole || '').toLowerCase())
+      !claimedEmpIds.has(e.id!) &&
+      ['department_head', 'hr_manager', 'hr_admin', 'manager'].includes(((e.accessRole || (e as any).role || '') as string).toLowerCase().trim())
     );
 
-    // Mark CXOs & managers as claimed at top level
-    cxos.forEach((c) => { if (c.id) claimedEmpIds.add(c.id); });
-    managers.forEach((m) => { if (m.id) claimedEmpIds.add(m.id); });
+    // 4. Team Leads
+    const teamLeads = activeList.filter(
+      (e) => !claimedEmpIds.has(e.id!) && ((e.accessRole || (e as any).role || '') as string).toLowerCase().trim() === 'team_lead'
+    );
+
+    // 5. Regular Staff / Employees
+    const regularEmployees = activeList.filter(
+      (e) => !claimedEmpIds.has(e.id!) &&
+        !['department_head', 'hr_manager', 'hr_admin', 'manager', 'team_lead'].includes(((e.accessRole || (e as any).role || '') as string).toLowerCase().trim()) &&
+        getCxoCategory(e) === null
+    );
 
     // Helper to find employees reporting to a parent manager/lead
-    const findDirectChildren = (parentId: number, parentDept?: string): Employee[] => {
+    const findDirectChildren = (parentId: number, parentDept?: string, parentDeptId?: number | null): Employee[] => {
       const results: Employee[] = [];
 
-      // 1. First priority: explicit reportingManagerId match
+      // Priority 1: Explicit reportingManagerId match
       regularEmployees.forEach((emp) => {
         if (emp.id && !claimedEmpIds.has(emp.id) && emp.reportingManagerId === parentId) {
           claimedEmpIds.add(emp.id);
@@ -575,22 +697,26 @@ export function OrgStructurePage() {
         }
       });
 
-      // 2. Second priority: if emp has NO explicit reportingManagerId, match by department name
-      if (parentDept && parentDept !== 'General') {
-        regularEmployees.forEach((emp) => {
-          if (emp.id && !claimedEmpIds.has(emp.id) && !emp.reportingManagerId && getDeptKey(emp) === parentDept) {
+      // Priority 2: Match by departmentId or department name if emp has no explicit reportingManagerId
+      regularEmployees.forEach((emp) => {
+        if (emp.id && !claimedEmpIds.has(emp.id) && !emp.reportingManagerId) {
+          const empDeptId = getDeptId(emp);
+          const empDept = getDeptKey(emp);
+          const isDeptIdMatch = parentDeptId && empDeptId && parentDeptId === empDeptId;
+          const isDeptNameMatch = parentDept && parentDept !== 'General' && empDept === parentDept;
+          if (isDeptIdMatch || isDeptNameMatch) {
             claimedEmpIds.add(emp.id);
             results.push(emp);
           }
-        });
-      }
+        }
+      });
 
       return results;
     };
 
     // Helper to recursively nest sub-reports
     const buildSubTree = (emp: Employee): any => {
-      const childEmps = emp.id ? findDirectChildren(emp.id, getDeptKey(emp)) : [];
+      const childEmps = emp.id ? findDirectChildren(emp.id, getDeptKey(emp), getDeptId(emp)) : [];
       return {
         emp,
         children: childEmps.map(buildSubTree),
@@ -600,26 +726,31 @@ export function OrgStructurePage() {
     // Helper to build manager subtrees
     const buildManagerNode = (m: Employee) => {
       const mDeptKey = getDeptKey(m);
+      const mDeptId = getDeptId(m);
 
       const managerLeads = teamLeads.filter((tl) => {
         if (!tl.id || claimedEmpIds.has(tl.id)) return false;
         if (tl.reportingManagerId) {
           return tl.reportingManagerId === m.id;
         }
-        return mDeptKey !== 'General' && getDeptKey(tl) === mDeptKey;
+        const tlDeptId = getDeptId(tl);
+        const tlDeptKey = getDeptKey(tl);
+        const isDeptIdMatch = mDeptId && tlDeptId && mDeptId === tlDeptId;
+        const isDeptNameMatch = mDeptKey !== 'General' && tlDeptKey === mDeptKey;
+        return isDeptIdMatch || isDeptNameMatch;
       });
 
       managerLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
 
       const leadNodes = managerLeads.map((tl) => {
-        const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl));
+        const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl), getDeptId(tl));
         return {
           emp: tl,
           children: leadEmps.map(buildSubTree),
         };
       });
 
-      const unassignedEmps = findDirectChildren(m.id!, mDeptKey);
+      const unassignedEmps = findDirectChildren(m.id!, mDeptKey, mDeptId);
 
       return {
         emp: m,
@@ -627,40 +758,92 @@ export function OrgStructurePage() {
       };
     };
 
-    // Build CXO subtrees (optional layer)
+    // 6. Build CXO subtrees:
+    // CEO -> [CFO, COO, CTO] -> Assigned Department Subtrees (Managers -> Leads -> Staff)
     const claimedManagerIds = new Set<number>();
-    const cxoNodes = cxos.map((cxo) => {
+    const cxoNodes = sortedCxos.map((cxo) => {
+      const cat = getCxoCategory(cxo) || 'cxo';
       const cxoDeptKey = getDeptKey(cxo);
+      const cxoDeptId = getDeptId(cxo);
 
+      // Helper to check if a manager/lead/employee belongs to this CXO domain
+      const belongsToCxo = (e: Employee): boolean => {
+        if (e.reportingManagerId && e.reportingManagerId === cxo.id) return true;
+        const eDeptId = getDeptId(e);
+        const eDeptKey = getDeptKey(e);
+        const isDeptIdMatch = cxoDeptId && eDeptId && cxoDeptId === eDeptId;
+        const isDeptNameMatch = cxoDeptKey !== 'General' && eDeptKey === cxoDeptKey;
+        if (isDeptIdMatch || isDeptNameMatch) return true;
+        return isMatchCxoDomain(cat, eDeptKey);
+      };
+
+      // 6a. Find managers belonging to this CXO
       const cxoManagers = managers.filter((m) => {
         if (!m.id || claimedManagerIds.has(m.id)) return false;
-        if (m.reportingManagerId) {
-          return m.reportingManagerId === cxo.id;
-        }
-        return cxoDeptKey !== 'General' && getDeptKey(m) === cxoDeptKey;
+        return belongsToCxo(m);
+      });
+      cxoManagers.forEach((m) => { if (m.id) claimedManagerIds.add(m.id); });
+      const subManagerNodes = cxoManagers.map(buildManagerNode);
+
+      // 6b. Find team leads belonging to this CXO domain that are not under a manager
+      const directLeads = teamLeads.filter((tl) => {
+        if (!tl.id || claimedEmpIds.has(tl.id)) return false;
+        return belongsToCxo(tl);
+      });
+      directLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
+      const directLeadNodes = directLeads.map((tl) => {
+        const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl), getDeptId(tl));
+        return {
+          emp: tl,
+          children: leadEmps.map(buildSubTree),
+        };
       });
 
-      cxoManagers.forEach((m) => { if (m.id) claimedManagerIds.add(m.id); });
+      // 6c. Find direct/root staff belonging to this CXO domain
+      // Either reporting to CXO or root in their department
+      const directEmps = regularEmployees.filter((emp) => {
+        if (!emp.id || claimedEmpIds.has(emp.id)) return false;
+        if (!belongsToCxo(emp)) return false;
+        // If they report to another regular employee in this domain, let buildSubTree nest them
+        if (emp.reportingManagerId && emp.reportingManagerId !== cxo.id) {
+          const hasParentInList = regularEmployees.some((other) => other.id === emp.reportingManagerId);
+          if (hasParentInList) return false;
+        }
+        return true;
+      });
+      directEmps.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
+      const directEmpNodes = directEmps.map(buildSubTree);
 
-      const subManagerNodes = cxoManagers.map(buildManagerNode);
-      const directEmps = findDirectChildren(cxo.id!, cxoDeptKey);
+      const cxoDesignation =
+        cat === 'cfo'
+          ? 'CHIEF FINANCIAL OFFICER (CFO)'
+          : cat === 'coo'
+          ? 'CHIEF OPERATING OFFICER (COO)'
+          : cat === 'cto'
+          ? 'CHIEF TECHNOLOGY OFFICER (CTO)'
+          : (cxo.designation || 'EXECUTIVE (CXO)');
+
+      const cxoEnhancedEmp: Employee = {
+        ...cxo,
+        designation: cxoDesignation,
+      };
 
       return {
-        emp: cxo,
-        children: [...subManagerNodes, ...directEmps.map(buildSubTree)],
+        emp: cxoEnhancedEmp,
+        isCxo: true,
+        cxoType: cat,
+        children: [...subManagerNodes, ...directLeadNodes, ...directEmpNodes],
       };
     });
 
-    // Managers not assigned to a CXO attach directly under CEO/Admin
+    // 7. Any remaining unassigned managers/employees (if any) attach under COO or CEO fallback
     const remainingManagers = managers.filter((m) => m.id && !claimedManagerIds.has(m.id));
     const unattachedManagerNodes = remainingManagers.map(buildManagerNode);
 
-    // Handle remaining unclaimed team leads & regular employees as orphan nodes under root
     const unclaimedLeads = teamLeads.filter((tl) => tl.id && !claimedEmpIds.has(tl.id));
     unclaimedLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
-
     const orphanLeadNodes = unclaimedLeads.map((tl) => {
-      const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl));
+      const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl), getDeptId(tl));
       return {
         emp: tl,
         children: leadEmps.map(buildSubTree),
@@ -669,13 +852,34 @@ export function OrgStructurePage() {
 
     const unclaimedEmps = regularEmployees.filter((emp) => emp.id && !claimedEmpIds.has(emp.id));
     unclaimedEmps.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
-
     const orphanEmpNodes = unclaimedEmps.map(buildSubTree);
 
+    // If CXO tier exists, any fallback unattached items attach under COO if available
+    let rootChildren = [...cxoNodes];
+    if (unattachedManagerNodes.length > 0 || orphanLeadNodes.length > 0 || orphanEmpNodes.length > 0) {
+      const cooNode = rootChildren.find((n) => n.cxoType === 'coo');
+      if (cooNode) {
+        cooNode.children = [
+          ...cooNode.children,
+          ...unattachedManagerNodes,
+          ...orphanLeadNodes,
+          ...orphanEmpNodes,
+        ];
+      } else {
+        rootChildren = [
+          ...rootChildren,
+          ...unattachedManagerNodes,
+          ...orphanLeadNodes,
+          ...orphanEmpNodes,
+        ];
+      }
+    }
+
     return {
-      emp: rootAdminEmp,
+      emp: rootCeoEmp,
       isAdmin: true,
-      children: [...cxoNodes, ...unattachedManagerNodes, ...orphanLeadNodes, ...orphanEmpNodes],
+      isCeo: true,
+      children: rootChildren,
     };
   }, [localEmps, employees, user]);
 
@@ -713,12 +917,19 @@ export function OrgStructurePage() {
 
   const handleManagerChange = async (newManagerId: string) => {
     if (!selectedEmp?.id) return;
+    setIsUpdatingManager(true);
     try {
-      await updateEmployee({ reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null } as any);
+      await apiClient.patch(`/employees/${selectedEmp.id}`, {
+        reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null,
+      });
+      toast.success('Reporting manager updated successfully');
       setSelectedEmp(null);
       refetch();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      toast.error(err?.response?.data?.message || 'Failed to update reporting manager');
+    } finally {
+      setIsUpdatingManager(false);
     }
   };
 
@@ -1048,7 +1259,8 @@ export function OrgStructurePage() {
                   onSelectEmp={(e) => {
                     if (e.id === 999999) return;
                     setSelectedEmp(e);
-                    setManagerEditId(String(e.reportingManagerId || ''));
+                    const mgrId = e.reportingManagerId || (e as any).reporting_manager_id || (e as any).reportingManagerId || '';
+                    setManagerEditId(String(mgrId || ''));
                   }}
                 />
               </div>
@@ -1273,7 +1485,7 @@ export function OrgStructurePage() {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     {(() => {
-                      const cfg = roleCfg((selectedEmp as any).accessRole);
+                      const cfg = roleCfg((selectedEmp as any).accessRole, selectedEmp.designation || selectedEmp.jobTitle);
                       const Icon = cfg.Icon;
                       return (
                         <Badge variant="outline" className={`text-[10px] font-bold py-0 ${cfg.bg} ${cfg.border} ${cfg.text}`}>
@@ -1310,19 +1522,24 @@ export function OrgStructurePage() {
               <div className="space-y-2 pt-2 border-t border-border/60">
                 <label className="text-xs font-bold text-foreground block">Assign Reporting Manager</label>
                 <div className="flex gap-2">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={managerEditId}
-                    onChange={(e) => setManagerEditId(e.target.value)}
+                  <select className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={managerEditId} onChange={(e) => setManagerEditId(e.target.value)}
                   >
-                    <option value="">— Reports to Organization Admin —</option>
-                    {(employees as Employee[])
-                      .filter((e: any) => e.id !== selectedEmp.id && !e.isCeo && !e.is_ceo && !e.isCeoProfileHidden && !e.is_ceo_profile_hidden && e.accessRole !== 'organization_admin')
-                      .map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.firstName} {e.lastName} ({e.employeeCode})
-                        </option>
-                      ))}
+                    <option value="">— Reports to Organization Admin / Top CEO —</option>
+                    {((localEmps || employees) as Employee[])
+                      .filter((e: any) => Boolean(e.id) && e.id !== selectedEmp.id && e.id !== 999999)
+                      .map((e: any) => {
+                        const firstName = e.firstName || e.first_name || '';
+                        const lastName = e.lastName || e.last_name || '';
+                        const fullName = `${firstName} ${lastName}`.trim() || e.email || `Employee #${e.id}`;
+                        const code = e.employeeCode || e.employee_code || `EMP${e.id}`;
+                        const desig = e.designation || e.jobTitle || e.designation_name || e.designationName || '';
+                        return (
+                          <option key={e.id} value={String(e.id)}>
+                            {fullName} ({code}){desig ? ` - ${desig}` : ''}
+                          </option>
+                        );
+                      })}
                   </select>
                   <Button
                     size="sm"
