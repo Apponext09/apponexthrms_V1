@@ -439,7 +439,7 @@ export class EmployeeController {
           empId = empByEmail.id;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const result = await this.documentService.getEmployeeDocuments(ctx, empId, {
       page: 1,

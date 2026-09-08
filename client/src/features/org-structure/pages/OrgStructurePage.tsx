@@ -192,8 +192,8 @@ function ReferenceNode({
   const designation = isDeptNode
     ? 'DEPARTMENT'
     : isCeoNode
-    ? 'CEO'
-    : emp.designation || emp.jobTitle || posKey;
+      ? 'CEO'
+      : emp.designation || emp.jobTitle || posKey;
 
   const isDragDisabled = isDeptNode || isAdmin;
 
@@ -224,9 +224,9 @@ function ReferenceNode({
 
   const style: React.CSSProperties = transform
     ? {
-        transform: CSS.Translate.toString(transform),
-        zIndex: isDragging ? 0 : 50,
-      }
+      transform: CSS.Translate.toString(transform),
+      zIndex: isDragging ? 0 : 50,
+    }
     : {};
 
   // Compute live validation status if currently dragging over this node
@@ -243,9 +243,8 @@ function ReferenceNode({
       {/* Live Drop Target Indicator Badge when dragging over */}
       {isOver && !isDragging && (
         <div
-          className={`absolute -top-4 z-50 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-white font-black text-[9px] shadow-xl animate-bounce ${
-            isTargetValid ? 'bg-emerald-600' : 'bg-rose-600'
-          }`}
+          className={`absolute -top-4 z-50 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-white font-black text-[9px] shadow-xl animate-bounce ${isTargetValid ? 'bg-emerald-600' : 'bg-rose-600'
+            }`}
         >
           {isTargetValid ? (
             <>
@@ -269,11 +268,10 @@ function ReferenceNode({
           ref={setCombinedRef}
           onClick={onClick}
           title={`${node.deptName} Department`}
-          className={`group relative flex flex-col items-center py-1 px-3 bg-transparent border-none shadow-none cursor-default select-none transition-all duration-200 ${
-            isOver && isTargetInvalid
-              ? 'ring-2 ring-rose-500 rounded-lg bg-rose-50/50 dark:bg-rose-950/30'
-              : ''
-          }`}
+          className={`group relative flex flex-col items-center py-1 px-3 bg-transparent border-none shadow-none cursor-default select-none transition-all duration-200 ${isOver && isTargetInvalid
+            ? 'ring-2 ring-rose-500 rounded-lg bg-rose-50/50 dark:bg-rose-950/30'
+            : ''
+            }`}
         >
           <div className="flex items-center gap-1.5 font-black text-sm text-[#1e3a8a] dark:text-blue-400 tracking-wide text-center uppercase">
             <Building2 className="w-4 h-4 shrink-0 text-[#1e3a8a] dark:text-blue-400" />
@@ -307,20 +305,19 @@ function ReferenceNode({
           title={isCeoNode ? 'CEO' : `${designation}`}
           className={`group relative flex flex-col items-center bg-card border shadow-xs rounded-xl p-2.5
             w-[165px] min-h-[98px] transition-all duration-200 cursor-grab active:cursor-grabbing select-none
-            ${
-              isPulsing
-                ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
-                : isDragging
+            ${isPulsing
+              ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
+              : isDragging
                 ? 'opacity-35 ring-2 ring-primary/40 border-dashed border-primary bg-primary/5'
                 : isOver && isTargetValid
-                ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
-                : isOver && isTargetInvalid
-                ? 'ring-4 ring-rose-500/80 border-rose-500 bg-rose-500/10 scale-105 shadow-xl z-40 cursor-not-allowed'
-                : highlight
-                ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
-                : isCeoNode
-                ? 'border-primary/60 bg-primary/5'
-                : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
+                  ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
+                  : isOver && isTargetInvalid
+                    ? 'ring-4 ring-rose-500/80 border-rose-500 bg-rose-500/10 scale-105 shadow-xl z-40 cursor-not-allowed'
+                    : highlight
+                      ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
+                      : isCeoNode
+                        ? 'border-primary/60 bg-primary/5'
+                        : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
             }`}
         >
           {/* Top Avatar (No Node/Level Numbers) */}
@@ -730,8 +727,8 @@ export function OrgStructurePage() {
     const adminName = ceoEmpFromDb
       ? [ceoEmpFromDb.firstName, ceoEmpFromDb.lastName].filter(Boolean).join(' ')
       : user
-      ? `${user.firstName} ${user.lastName}`.trim() || user.email
-      : 'CEO';
+        ? `${user.firstName} ${user.lastName}`.trim() || user.email
+        : 'CEO';
 
     const adminEmail = ceoEmpFromDb?.email || user?.email || 'ceo@kosqu.com';
 
@@ -739,14 +736,14 @@ export function OrgStructurePage() {
     const rootAdminEmp: Employee = ceoEmpFromDb
       ? { ...ceoEmpFromDb, designation: 'CEO' }
       : {
-          id: 999999,
-          firstName: adminName,
-          lastName: '',
-          email: adminEmail,
-          employeeCode: 'CEO-01',
-          designation: 'CEO',
-          department: 'Executive Management',
-        };
+        id: 999999,
+        firstName: adminName,
+        lastName: '',
+        email: adminEmail,
+        employeeCode: 'CEO-01',
+        designation: 'CEO',
+        department: 'Executive Management',
+      };
 
     const rootAdminId = ceoEmpFromDb?.id || 999999;
 
@@ -1489,9 +1486,8 @@ export function OrgStructurePage() {
                   <span className="font-bold text-primary">
                     {reassignConfirm.targetIsAdmin
                       ? 'Organization Admin / Executive Management'
-                      : `${reassignConfirm.targetEmp.firstName} ${reassignConfirm.targetEmp.lastName}${
-                          reassignConfirm.targetEmp.department ? ` / ${reassignConfirm.targetEmp.department}` : ''
-                        }`}
+                      : `${reassignConfirm.targetEmp.firstName} ${reassignConfirm.targetEmp.lastName}${reassignConfirm.targetEmp.department ? ` / ${reassignConfirm.targetEmp.department}` : ''
+                      }`}
                   </span>
                 </div>
               </div>
@@ -1554,10 +1550,9 @@ export function OrgStructurePage() {
                       currentDepartmentId: targetDeptId,
                     });
                     toast.success(
-                      `Moved ${confirmState.activeEmp.firstName} under ${
-                        confirmState.targetIsAdmin
-                          ? 'Organization Admin'
-                          : `${confirmState.targetEmp.firstName} ${confirmState.targetEmp.lastName}`
+                      `Moved ${confirmState.activeEmp.firstName} under ${confirmState.targetIsAdmin
+                        ? 'Organization Admin'
+                        : `${confirmState.targetEmp.firstName} ${confirmState.targetEmp.lastName}`
                       } successfully!`
                     );
                     refetch();

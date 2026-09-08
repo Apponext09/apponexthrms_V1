@@ -267,7 +267,7 @@ export class OrgHierarchyService {
         let highestPriority = 0;
         const userRoles = await db('user_roles')
           .join('roles', 'user_roles.role_id', 'roles.id')
-          .where(function(this: any) {
+          .where(function (this: any) {
             this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
           })
           .where('user_roles.user_id', user.id)

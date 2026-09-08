@@ -1042,19 +1042,19 @@ async function ensureDepartmentColumns() {
     ]);
 
     if (!hasCompanyIds) {
-      await db.schema.table('departments', (table) => table.json('company_ids').nullable()).catch(() => {});
+      await db.schema.table('departments', (table) => table.json('company_ids').nullable()).catch(() => { });
     }
     if (!hasCompanyEmails) {
-      await db.schema.table('departments', (table) => table.json('company_emails').nullable()).catch(() => {});
+      await db.schema.table('departments', (table) => table.json('company_emails').nullable()).catch(() => { });
     }
     if (!hasIsActive) {
-      await db.schema.table('departments', (table) => table.string('is_active', 50).defaultTo('Yes')).catch(() => {});
+      await db.schema.table('departments', (table) => table.string('is_active', 50).defaultTo('Yes')).catch(() => { });
     }
     if (!hasColour) {
-      await db.schema.table('departments', (table) => table.string('colour', 50).defaultTo('#00b4d8')).catch(() => {});
+      await db.schema.table('departments', (table) => table.string('colour', 50).defaultTo('#00b4d8')).catch(() => { });
     }
     if (!hasEmail) {
-      await db.schema.table('departments', (table) => table.string('email', 150).nullable()).catch(() => {});
+      await db.schema.table('departments', (table) => table.string('email', 150).nullable()).catch(() => { });
     }
   } catch (err) {
     console.warn('[ensureDepartmentColumns] schema check error:', err);
@@ -4286,10 +4286,10 @@ router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
 // ==========================================
 const eventCtrl = new EventController();
 
-router.get('/events',        asyncHandler((req, res) => eventCtrl.list(req, res)));
-router.get('/events/:id',    asyncHandler((req, res) => eventCtrl.getById(req, res)));
-router.post('/events',       asyncHandler((req, res) => eventCtrl.create(req, res)));
-router.put('/events/:id',    asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.get('/events', asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id', asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events', asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id', asyncHandler((req, res) => eventCtrl.update(req, res)));
 router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
 
 // ==========================================
