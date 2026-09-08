@@ -16,10 +16,7 @@ import {
   History,
   Search,
   Calendar,
-<<<<<<< HEAD
   IndianRupee,
-=======
->>>>>>> 318d64017a89074e3861c6d51d5eba47980770b1
   Filter,
   Mail,
   UserCheck,

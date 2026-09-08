@@ -12,11 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { apiClient } from '@/config/api';
 import {
-<<<<<<< HEAD
   Search, UserCheck, Calendar, IndianRupee, Plus, FileText, User, Filter,
-=======
-  Search, UserCheck, Calendar, Plus, FileText, User, Filter,
->>>>>>> 318d64017a89074e3861c6d51d5eba47980770b1
   AlertCircle, Eye, CheckCircle2, ShieldCheck, XCircle, Clock, Check, X,
   Crown, Coins, CreditCard, Building, Download, FileSpreadsheet, FileCheck,
   Calculator, LayoutGrid, List, ChevronRight, AlertTriangle, Sparkles, RefreshCcw, Trash2

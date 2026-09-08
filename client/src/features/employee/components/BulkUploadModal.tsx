@@ -209,23 +209,46 @@ export function BulkUploadModal({
         rowData.employmentType = 'full_time';
       }
 
-      // Normalize Access Role
-      let normalizedRole = 'employee';
-      if (rowData.accessRole) {
-        const rLower = rowData.accessRole.toLowerCase();
-        if (rLower.includes('hr')) normalizedRole = 'hr_manager';
-        else if (rLower.includes('manager') || rLower.includes('head')) normalizedRole = 'department_head';
-        else if (rLower.includes('lead')) normalizedRole = 'team_lead';
-      }
-      rowData.accessRole = normalizedRole;
+       // Normalize Access Role
+let normalizedRole = 'employee';
 
-      // Format Dates
-      if (rowData.dateOfJoining) {
-        rowData.dateOfJoining = formatDateToYYYYMMDD(rowData.dateOfJoining);
-      }
-      if (rowData.dateOfBirth) {
-        rowData.dateOfBirth = formatDateToYYYYMMDD(rowData.dateOfBirth);
-      }
+if (rowData.accessRole) {
+  const rLower = rowData.accessRole.toLowerCase().trim();
+
+  if (rLower.includes('hr')) {
+    normalizedRole = 'hr_manager';
+  } else if (rLower.includes('finance')) {
+    normalizedRole = 'finance';
+  } else if (
+    rLower.includes('department head') ||
+    rLower.includes('department_head')
+  ) {
+    normalizedRole = 'department_head';
+  } else if (rLower === 'manager' || rLower.includes('manager')) {
+    normalizedRole = 'manager';
+  } else if (
+    rLower.includes('team lead') ||
+    rLower.includes('team_lead') ||
+    rLower.includes('lead')
+  ) {
+    normalizedRole = 'team_lead';
+  } else if (rLower.includes('intern')) {
+    normalizedRole = 'intern';
+  } else if (rLower.includes('consultant')) {
+    normalizedRole = 'consultant';
+  }
+}
+
+rowData.accessRole = normalizedRole;
+
+// Format Dates
+if (rowData.dateOfJoining) {
+  rowData.dateOfJoining = formatDateToYYYYMMDD(rowData.dateOfJoining);
+}
+
+if (rowData.dateOfBirth) {
+  rowData.dateOfBirth = formatDateToYYYYMMDD(rowData.dateOfBirth);
+}
 
       // Dynamic Resolution 1: Department Name or ID -> Department ID
       let resolvedDepartmentId: number | null = null;
