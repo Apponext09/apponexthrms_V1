@@ -11,8 +11,11 @@ import {
   ShieldAlert
 } from 'lucide-react';
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const ExpenseCategoriesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<ExpenseCategory | null>(null);
@@ -204,14 +207,14 @@ export const ExpenseCategoriesPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-slate-500">Spending Limit:</span>
                   <span className="font-bold text-slate-900 dark:text-white">
-                    {cat.spendingLimit > 0 ? `₹${Number(cat.spendingLimit).toLocaleString('en-IN')}` : 'No Limit'}
+                    {cat.spendingLimit > 0 ? money(Number(cat.spendingLimit)) : 'No Limit'}
                   </span>
                 </div>
 
                 <div className="flex justify-between">
                   <span className="text-slate-500">Receipt Required:</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    {cat.isReceiptMandatory ? `Above ₹${cat.minAmountForReceipt}` : 'Optional'}
+                    {cat.isReceiptMandatory ? `Above ${money(cat.minAmountForReceipt)}` : 'Optional'}
                   </span>
                 </div>
               </div>
@@ -268,7 +271,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
                 <input
                   type="number"
                   placeholder="0 for unlimited"
-                  value={spendingLimit}
+                  value={spendingLimit || ''}
                   onChange={(e) => setSpendingLimit(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
                 />
@@ -280,7 +283,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
                   type="number"
                   min={0}
                   placeholder="0 = always need manager approval"
-                  value={autoApprovalThreshold}
+                  value={autoApprovalThreshold || ''}
                   onChange={(e) => setAutoApprovalThreshold(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
                 />

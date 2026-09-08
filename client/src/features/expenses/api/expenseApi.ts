@@ -75,6 +75,10 @@ export interface ExpenseClaim {
   departmentName?: string;
   designationName?: string;
   locationName?: string;
+  bankName?: string;
+  accountNumber?: string;
+  ifscCode?: string;
+  pan?: string;
   title: string;
   categoryId?: number;
   categoryName?: string;
@@ -204,13 +208,25 @@ export interface ExpenseSettings {
   multiLevelApproval: boolean;
   enableTravelModule?: boolean;
   enableMileageModule?: boolean;
+  // Configurable (DB-backed) values — previously hardcoded
+  currencySymbol?: string;
+  currencyCode?: string;
+  currencyLocale?: string;
+  claimNumberPrefix?: string;
+  travelRequestNumberPrefix?: string;
+  travelAdvanceNumberPrefix?: string;
+  defaultPaymentMethod?: string;
+  defaultAdvanceStatus?: string;
+  workflowFallbackMaxAmount?: number;
+  numberSequenceDigits?: number;
+  labels?: Record<string, string>;
 }
 
 export interface ExpenseWorkflowLevel {
   id?: number;
   workflowId?: number;
   levelOrder: number;
-  approverType: 'reporting_manager' | 'department_head' | 'hr' | 'ceo' | 'role';
+  approverType: string;
   approverRole?: string;
   stepName: string;
   isMandatory: boolean;
@@ -225,6 +241,33 @@ export interface ExpenseWorkflow {
   departmentId?: number;
   isActive: boolean;
   levels?: ExpenseWorkflowLevel[];
+}
+
+export interface ExpenseSummary {
+  totalSubmittedClaims?: number;
+  totalPendingManager?: number;
+  totalPendingLevel1?: number;
+  totalPendingLevel2?: number;
+  totalPendingFinance?: number;
+  totalApproved?: number;
+  totalRejected?: number;
+  totalReturned?: number;
+  totalPaid?: number;
+  totalClaimedAmount?: number;
+  totalApprovedAmount: number;
+  totalReimbursedAmount: number;
+  totalPendingAmount?: number;
+  pendingFinanceCount?: number;
+  pendingFinanceAmount?: number;
+  pendingAdvancesCount?: number;
+  pendingAdvancesAmount?: number;
+  categoryBreakdown?: Array<{
+    category: string;
+    amount: number;
+    count?: number;
+  }>;
+  recentClaims?: ExpenseClaim[];
+  [key: string]: any;
 }
 
 export const expenseApi = {
@@ -282,6 +325,10 @@ export const expenseApi = {
     return apiClient.get('/expenses/mileage', { params: p }).then((res) => res.data.data);
   },
   createMileageClaim: (data: any) => apiClient.post('/expenses/mileage', data).then((res) => res.data.data),
+  approveMileageClaim: (id: number, comments?: string) =>
+    apiClient.post(`/expenses/mileage/${id}/approve`, { comments }).then((res) => res.data.data),
+  rejectMileageClaim: (id: number, reason: string) =>
+    apiClient.post(`/expenses/mileage/${id}/reject`, { reason }).then((res) => res.data.data),
 
   // Dashboard & Reports
   getDashboardSummary: () => apiClient.get('/expenses/dashboard/summary').then((res) => res.data.data),

@@ -1,6 +1,5 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuthStore, useAuthHydrated, hasStoredAccessToken } from './features/auth/store/authStore';
 
 // ── Portal Route Modules ──────────────────────────────────────────────────────
@@ -55,8 +54,11 @@ function RootRedirect() {
     userRolesNorm.includes('finance_manager') ||
     accessRole === 'finance' ||
     accessRole === 'finance_manager'
-  ) return <Navigate to="/finance/reports" replace />;
+  ) {
+    return <Navigate to="/finance/dashboard" replace />;
+  }
 
+  // CEO and HR (organization_admin, ceo, hr_manager, hr_admin, hr) — all go to Admin portal
   if (
     userRolesNorm.includes('organization_admin') ||
     userRolesNorm.includes('ceo') ||
@@ -108,7 +110,7 @@ export function AppRoutes() {
         <Route path="/careers" element={<JobReferencePage />} />
         <Route path="/" element={<RootRedirect />} />
 
-        {/* ── Portal Route Modules ── */}
+        {/* ── Modular Portal Route Groups ── */}
         {hrRoutes}
         {managerRoutes}
         {teamLeadRoutes}
@@ -119,7 +121,7 @@ export function AppRoutes() {
         {consultantRoutes}
         {financeRoutes}
 
-        {/* ── 404 ── */}
+        {/* ── Fallback 404 Route ── */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

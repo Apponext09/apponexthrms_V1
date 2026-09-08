@@ -88,6 +88,7 @@ const roleColors: Record<string, string> = {
   hr_manager: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300',
   department_head: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300',
   team_lead: 'bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300',
+  finance: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
   intern: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
   consultant: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
   employee: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
@@ -140,7 +141,7 @@ export function EmployeeBasicInfo({
       nationality: employee?.nationality || (employee as any)?.nationality || '',
       password: '',
       confirmPassword: '',
-      jobTitle: (employee as any).jobTitle || (employee as any).designation || (employee as any).designationName || (employee.designation as any)?.name || '',
+      jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
     });
   }, [employee]);
@@ -212,6 +213,7 @@ export function EmployeeBasicInfo({
       setForm((prev: any) => ({
         ...prev,
         ...updatedData,
+        accessRole: updatedData.accessRole || payload.accessRole || prev.accessRole,
         employeeStatus: newStatus,
         employee_status: newStatus,
         password: '',
@@ -229,7 +231,7 @@ export function EmployeeBasicInfo({
       ...(employee || {}),
       password: '',
       confirmPassword: '',
-      jobTitle: (employee as any).jobTitle || '',
+      jobTitle: (employee as any).jobTitle || (employee as any).job_title || '',
       accessRole: (employee as any).accessRole || 'employee',
     });
     setIsEditing(false);
@@ -241,8 +243,9 @@ export function EmployeeBasicInfo({
   )?.name || '-';
 
   const accessRole = (employee as any).accessRole;
-  const jobTitle = (employee as any).jobTitle || (employee as any).designation || (employee as any).designationName || (employee.designation as any)?.name || '-';
-  
+  const designation = (employee as any).designation || (employee as any).designationName || (employee as any).designation_name || (employee as any).currentDesignationName || (employee as any).current_designation_name || '-';
+  const jobTitle = (employee as any).jobTitle || (employee as any).job_title || (employee as any).positionTitle || (employee as any).position_title || '-';
+
   // Resolve manager name from multiple fallback properties
   const reportingManagerName =
     (employee as any).reportingManagerName ||
@@ -685,6 +688,10 @@ export function EmployeeBasicInfo({
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Designation</p>
+                  <p className="mt-0.5 text-xs font-semibold text-foreground">{formatValue(designation)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Job Title</p>
                   <p className="mt-0.5 text-xs font-semibold text-foreground">{formatValue(jobTitle)}</p>
                 </div>
                 <div>

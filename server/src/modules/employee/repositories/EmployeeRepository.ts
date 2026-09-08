@@ -190,18 +190,41 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .select('name')
         .first();
       if (desig) {
-        (employee as any).jobTitle = desig.name;
+        const jobTitleValue = (employee as any).jobTitle ?? (employee as any).job_title ?? null;
+        if (!jobTitleValue) {
+          (employee as any).jobTitle = desig.name;
+        }
         (employee as any).designation = desig.name;
+        (employee as any).designationName = desig.name;
+        (employee as any).designation_name = desig.name;
       }
     }
 
     const user = await this.db('users')
-      .where('organization_id', ctx.organizationId)
       .where('employee_id', employee.id)
+      .where(function(this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .first();
     if (user) {
-      let highestRole = user.role || 'employee';
-      let highestPriority = 0;
+      const rolePriority: Record<string, number> = {
+        ceo: 8,
+        organization_admin: 8,
+        super_admin: 8,
+        cto: 6,
+        cfo: 6,
+        coo: 6,
+        cxo: 6,
+        hr_manager: 5,
+        department_head: 4,
+        team_lead: 3,
+        finance: 3,
+        intern: 2,
+        consultant: 2,
+        employee: 1,
+      };
+      let highestRole = (user.role || 'employee').toLowerCase();
+      let highestPriority = rolePriority[highestRole] || 0;
 
       const userRoles = await this.db('user_roles')
         .join('roles', 'user_roles.role_id', 'roles.id')
@@ -394,7 +417,10 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         const desigId = item.currentDesignationId || item.current_designation_id;
         if (desigId) {
           const dgName = desigMap.get(Number(desigId)) || null;
-          (item as any).jobTitle = dgName;
+          const jobTitleValue = item.jobTitle ?? item.job_title ?? null;
+          if (!jobTitleValue && dgName) {
+            (item as any).jobTitle = dgName;
+          }
           (item as any).designation = dgName;
           (item as any).designationName = dgName;
           (item as any).designation_name = dgName;
@@ -475,16 +501,13 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
         })
         .whereIn('employee_id', employeeIds)
-        .select('id', 'employee_id', 'role');
+        .select('id', 'employee_id');
 
       if (users.length > 0) {
         for (const u of users) {
           const empId = Number((u as any).employeeId || u.employee_id);
           const uId = Number(u.id);
           userMap.set(empId, uId);
-          if ((u as any).role) {
-            roleMap.set(uId, String((u as any).role).toLowerCase());
-          }
         }
 
         const userIds = users.map((u) => u.id);

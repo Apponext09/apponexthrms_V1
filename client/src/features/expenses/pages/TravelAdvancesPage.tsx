@@ -64,8 +64,11 @@ interface Toast { type: 'success' | 'error'; message: string }
 
 // ─── component ───────────────────────────────────────────────────────────────
 
+import { useExpenseMoney } from '../utils/useExpenseMoney';
+
 export const TravelAdvancesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
+  const money = useExpenseMoney();
   const [advances, setAdvances] = useState<TravelAdvance[]>([]);
   const [travelRequests, setTravelRequests] = useState<TravelRequest[]>([]);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
@@ -173,7 +176,7 @@ export const TravelAdvancesPage: React.FC = () => {
     try {
       setActionLoading(approveModal.id);
       await expenseApi.approveTravelAdvance(approveModal.id, { comments: approveComments, approvedAmount: approvedAmt || undefined });
-      setToast({ type: 'success', message: `Travel advance approved. ₹${(approvedAmt || approveModal.advanceAmount).toLocaleString('en-IN')} disbursed.` });
+      setToast({ type: 'success', message: `Travel advance approved. ${money(approvedAmt || approveModal.advanceAmount)} disbursed.` });
       setApproveModal(null); setApproveComments(''); setApprovedAmt(0);
       fetchData();
     } catch (err: any) {
@@ -352,13 +355,13 @@ export const TravelAdvancesPage: React.FC = () => {
                           <span className="text-slate-400 italic">Direct Advance</span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">₹{advAmt.toLocaleString('en-IN')}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">{money(advAmt)}</td>
                       <td className="py-3.5 px-4 font-semibold text-blue-600 dark:text-blue-400">
-                        {isApproved && appAmt > 0 ? `₹${appAmt.toLocaleString('en-IN')}` : '—'}
+                        {isApproved && appAmt > 0 ? money(appAmt) : '—'}
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-emerald-600 dark:text-emerald-400">₹{setAmt.toLocaleString('en-IN')}</td>
+                      <td className="py-3.5 px-4 font-semibold text-emerald-600 dark:text-emerald-400">{money(setAmt)}</td>
                       <td className="py-3.5 px-4 font-bold text-indigo-600 dark:text-indigo-400">
-                        {isApproved && bal > 0 ? `₹${bal.toLocaleString('en-IN')}` : '—'}
+                        {isApproved && bal > 0 ? money(bal) : '—'}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {getStatusBadge(status)}
@@ -416,14 +419,14 @@ export const TravelAdvancesPage: React.FC = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Requested Amount</span>
-                <span className="font-bold text-slate-900 dark:text-white">₹{Number((approveModal as any).advanceAmount ?? (approveModal as any).advance_amount ?? 0).toLocaleString('en-IN')}</span>
+                <span className="font-bold text-slate-900 dark:text-white">{money(Number((approveModal as any).advanceAmount ?? (approveModal as any).advance_amount ?? 0))}</span>
               </div>
             </div>
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Approved Amount (₹) *</label>
                 <input type="number" min={0} max={Number((approveModal as any).advanceAmount ?? (approveModal as any).advance_amount ?? 0)}
-                  value={approvedAmt} onChange={e => setApprovedAmt(Number(e.target.value))}
+                  value={approvedAmt || ''} onChange={e => setApprovedAmt(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div>
@@ -497,7 +500,7 @@ export const TravelAdvancesPage: React.FC = () => {
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Advance Amount Requested (₹) *</label>
-                <input type="number" placeholder="e.g. 15000" value={advanceAmount} onChange={e => setAdvanceAmount(Number(e.target.value))}
+                <input type="number" placeholder="e.g. 15000" value={advanceAmount || ''} onChange={e => setAdvanceAmount(Number(e.target.value))}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
               <div>

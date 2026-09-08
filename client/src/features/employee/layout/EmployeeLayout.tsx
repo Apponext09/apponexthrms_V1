@@ -52,6 +52,10 @@ export function EmployeeLayout() {
     if (location.pathname.includes('/performance')) return 'Performance Reviews & Feedback';
     if (location.pathname.includes('/assets')) return 'My Assigned Company Assets';
     if (location.pathname.includes('/approvals')) return 'Approval Inbox';
+    if (location.pathname.includes('/travel-advances')) return 'Travel Advance Requests';
+    if (location.pathname.includes('/travel-requests')) return 'Travel Requests';
+    if (location.pathname.includes('/mileage-claims')) return 'Mileage Claims';
+    if (location.pathname.includes('/my-expenses') || location.pathname.includes('/expenses')) return 'My Expenses & Claims';
     return 'Employee Self Service Portal';
   };
 

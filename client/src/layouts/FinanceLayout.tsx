@@ -18,6 +18,19 @@ import { cn } from "@/lib/utils";
 // -- Page title helper ----------------------------------------------------------
 function getPageTitle(pathname: string): string {
   if (pathname.includes("/face-punch"))      return "Face Punch Terminal";
+  if (pathname.includes("/expenses/verification")) return "Finance Expense Verification";
+  if (pathname.includes("/expenses/finance-verification")) return "Finance Expense Verification";
+  if (pathname.includes("/expenses/reimbursements")) return "Reimbursements & Disbursals";
+  if (pathname.includes("/expenses/approvals")) return "Expense Approvals";
+  if (pathname.includes("/expenses/dashboard")) return "Expense Analytics Dashboard";
+  if (pathname.includes("/expenses/my-expenses")) return "My Expenses";
+  if (pathname.includes("/expenses/travel-requests")) return "Travel Requests";
+  if (pathname.includes("/expenses/travel-advances")) return "Travel Advances";
+  if (pathname.includes("/expenses/mileage-claims")) return "Mileage Claims";
+  if (pathname.includes("/expenses/categories")) return "Expense Categories";
+  if (pathname.includes("/expenses/policies")) return "Expense Policies";
+  if (pathname.includes("/expenses/reports")) return "Expense Reports & Export";
+  if (pathname.includes("/expenses/settings")) return "Expense Settings & Workflows";
   if (pathname.includes("/reports"))         return "Finance Reports";
   if (pathname.includes("/approvals"))       return "Finance Approvals";
   if (pathname.includes("/dashboard"))       return "Finance Dashboard";

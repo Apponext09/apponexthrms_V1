@@ -13,6 +13,17 @@ import {
   FileBarChart,
   TrendingUp,
   Scan,
+  FileCheck2,
+  CreditCard,
+  CheckCircle2,
+  ReceiptIndianRupee,
+  Compass,
+  IndianRupee,
+  Navigation,
+  Layers,
+  ShieldCheck,
+  LineChart,
+  Sliders,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -39,33 +50,39 @@ const FINANCE_NAV = [
   {
     label: "OVERVIEW",
     items: [
-      { name: "My Dashboard", href: "/finance/dashboard",  icon: LayoutDashboard },
-      { name: "My Profile",   href: "/finance/profile",    icon: User },
+      { name: "Dashboard", href: "/finance/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    label: "FINANCE",
+    label: "EXPENSE & DISBURSAL",
     items: [
-      { name: "Reports",   href: "/finance/reports",   icon: FileBarChart },
-      { name: "Approvals", href: "/finance/approvals", icon: CheckSquare },
+      { name: "Finance Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
+      { name: "Reimbursements & Payouts", href: "/finance/expenses/reimbursements", icon: CreditCard },
+      { name: "Travel Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
+      { name: "Expense Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
+      { name: "Expense Reports",          href: "/finance/expenses/reports",        icon: LineChart },
     ],
   },
   {
-    label: "TIME & ATTENDANCE",
+    label: "FINANCE & AUDIT",
     items: [
       { name: "Attendance",       href: "/finance/attendance",       icon: Clock },
       { name: "Face Punch",       href: "/finance/face-punch",       icon: Scan },
+      { name: "Financial Reports", href: "/finance/reports",   icon: FileBarChart },
+      { name: "Approval Inbox",    href: "/finance/approvals", icon: CheckSquare },
+    ],
+  },
+  {
+    label: "MY SELF SERVICE",
+    items: [
+      { name: "My Attendance",    href: "/finance/attendance",       icon: Clock },
+      { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
+      { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
       { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
     ],
   },
   {
-    label: "LEAVES",
-    items: [
-      { name: "My Leaves", href: "/finance/leaves", icon: Palmtree },
-    ],
-  },
-  {
-    label: "COMPANY",
+    label: "ORGANISATION",
     items: [
       { name: "Announcements", href: "/finance/announcements", icon: Megaphone },
       { name: "Org Chart",     href: "/finance/org-chart",     icon: Building2 },

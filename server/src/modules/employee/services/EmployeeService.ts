@@ -506,12 +506,6 @@ export class EmployeeService {
   ) {
     const targetRole = accessRole || 'employee';
 
-    // Sync role column on users table directly
-    await db('users')
-      .where('id', userId)
-      .update({ role: targetRole, updated_at: new Date() })
-      .catch(() => {});
-
     // Clear existing role assignments for this user in user_roles
     await db('user_roles')
       .where('user_id', userId)
@@ -567,13 +561,21 @@ export class EmployeeService {
       }
 
       if (roleRecord) {
+        let validAssignedBy = userId;
+        if (ctx.userId) {
+          const userExists = await db('users').where('id', ctx.userId).first().catch(() => null);
+          if (userExists) validAssignedBy = ctx.userId;
+        }
+
         await db('user_roles').insert({
           organization_id: ctx.organizationId,
           user_id: userId,
           role_id: roleRecord.id,
-          assigned_by: ctx.userId || userId,
+          assigned_by: validAssignedBy,
           assigned_at: new Date(),
-        }).catch(() => {});
+        }).catch((err: any) => {
+          console.warn('[EmployeeService] user_roles insert warning:', err?.message || err);
+        });
       }
     }
 
@@ -956,13 +958,13 @@ export class EmployeeService {
       }
 
       let userIdToSync: number | null = null;
-      const targetAccessRole = input.accessRole || input.access_role || input.role || 'employee';
+      const rawRole = input.accessRole || input.access_role || input.role;
+      const targetAccessRole = rawRole ? String(rawRole).toLowerCase() : undefined;
 
       if (existingUser) {
         userIdToSync = existingUser.id;
         const userUpdateData: Record<string, any> = {
           updated_at: new Date(),
-          role: targetAccessRole,
           employee_id: employeeId,
         };
         if (targetEmail) userUpdateData.email = targetEmail;
@@ -981,7 +983,6 @@ export class EmployeeService {
           employee_id: employeeId,
           email: targetEmail,
           password_hash: defaultHash,
-          role: targetAccessRole,
           status: 'active',
           created_at: new Date(),
           updated_at: new Date(),
@@ -989,9 +990,14 @@ export class EmployeeService {
         userIdToSync = newUserId;
       }
 
-      if (userIdToSync) {
+      if (userIdToSync && targetAccessRole) {
         const targetDeptId = input.departmentId ?? updated.current_department_id ?? employee.current_department_id;
-        const rolesList = Array.isArray(input.roles) ? input.roles : (Array.isArray(input.assignedRoles) ? input.assignedRoles : [targetAccessRole]);
+        let rolesList: string[];
+        if (Array.isArray(input.roles) && input.roles.length > 0) {
+          rolesList = [...new Set([...input.roles, targetAccessRole])];
+        } else {
+          rolesList = [targetAccessRole];
+        }
         await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId, rolesList);
       }
     } catch (userSyncErr) {

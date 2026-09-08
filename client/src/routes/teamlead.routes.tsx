@@ -17,6 +17,7 @@ const TravelRequestsPage = lazy(() => import('../features/expenses/pages/TravelR
 const TravelAdvancesPage = lazy(() => import('../features/expenses/pages/TravelAdvancesPage').then(m => ({ default: m.TravelAdvancesPage })));
 const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageClaimsPage').then(m => ({ default: m.MileageClaimsPage })));
 const PayslipViewer = lazy(() => import('../features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
+const SalaryRevisionManagement = lazy(() => import('../features/payroll/pages/SalaryRevisionManagement').then(m => ({ default: m.SalaryRevisionManagement })));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const InterviewCalendarPage = lazy(() => import('../features/recruitment/pages/InterviewCalendarPage').then(m => ({ default: m.InterviewCalendarPage })));
@@ -68,8 +69,8 @@ export const teamLeadRoutes = (
     <Route path="/team-lead/expenses/mileage-claims" element={<MileageClaimsPage />} />
     <Route path="/team-lead/travel" element={<TravelRequestsPage />} />
     <Route path="/team-lead/payslips" element={<PayslipViewer />} />
-    <Route path="/team-lead/salary-revisions" element={<Navigate to="/team-lead/payslips" replace />} />
-    <Route path="/team-lead/salary-revision" element={<Navigate to="/team-lead/payslips" replace />} />
+    <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
+    <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
     <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
     <Route path="/team-lead/leaves" element={<LeavePage />} />
     <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />

@@ -23,6 +23,7 @@ const TravelRequestsPage = lazy(() => import('../features/expenses/pages/TravelR
 const TravelAdvancesPage = lazy(() => import('../features/expenses/pages/TravelAdvancesPage').then(m => ({ default: m.TravelAdvancesPage })));
 const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageClaimsPage').then(m => ({ default: m.MileageClaimsPage })));
 const PayslipViewer = lazy(() => import('../features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
+const SalaryRevisionManagement = lazy(() => import('../features/payroll/pages/SalaryRevisionManagement').then(m => ({ default: m.SalaryRevisionManagement })));
 const PerformanceDashboard = lazy(() => import('../features/performance/pages/PerformanceDashboard').then(m => ({ default: m.PerformanceDashboard })));
 const ReviewCyclesPage = lazy(() => import('../features/performance/pages/ReviewCyclesPage').then(m => ({ default: m.ReviewCyclesPage })));
 const GoalManagementPage = lazy(() => import('../features/performance/pages/GoalManagementPage').then(m => ({ default: m.GoalManagementPage })));
@@ -92,8 +93,8 @@ export const managerRoutes = (
     <Route path="/manager/expenses/mileage-claims" element={<MileageClaimsPage />} />
     <Route path="/manager/travel" element={<TravelRequestsPage />} />
     <Route path="/manager/payslips" element={<PayslipViewer />} />
-    <Route path="/manager/salary-revisions" element={<Navigate to="/manager/payslips" replace />} />
-    <Route path="/manager/salary-revision" element={<Navigate to="/manager/payslips" replace />} />
+    <Route path="/manager/salary-revisions" element={<SalaryRevisionManagement />} />
+    <Route path="/manager/salary-revision" element={<SalaryRevisionManagement />} />
     <Route path="/manager/performance" element={<PerformanceDashboard />} />
     <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
     <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
