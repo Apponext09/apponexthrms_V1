@@ -91,7 +91,7 @@ export function EmployeeCreateModal({
       apiClient.get('/payroll/slabs').then((res: any) => {
         const list = res.data?.data || res.data || [];
         setSlabs(list);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [open]);
 
@@ -367,8 +367,8 @@ export function EmployeeCreateModal({
                 type="button"
                 onClick={() => setActiveTab('basic')}
                 className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'basic'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
                 <UserPlus className="w-3.5 h-3.5" /> Basic Info
@@ -377,8 +377,8 @@ export function EmployeeCreateModal({
                 type="button"
                 onClick={() => setActiveTab('personal')}
                 className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'personal'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
                 👤 Personal Info
@@ -387,8 +387,8 @@ export function EmployeeCreateModal({
                 type="button"
                 onClick={() => setActiveTab('professional')}
                 className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'professional'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
               >
                 💼 Professional Info

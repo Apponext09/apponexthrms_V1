@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useEmployees } from '@/features/employee/hooks/useEmployees';
+import { useDesignations } from '@/features/settings/hooks/useDesignations';
 import { EmployeeCreateModal } from '@/features/employee/components/EmployeeCreateModal';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/config/api';
@@ -153,6 +154,65 @@ function roleCfg(role?: string, designation?: string) {
   return ROLE_CONFIG.employee;
 }
 
+function resolveDesignation(emp?: Employee | null, designationsList?: any[]): string {
+  if (!emp) return '—';
+  const e = emp as any;
+
+  // 1. Direct explicit strings
+  if (e.designation && typeof e.designation === 'string' && e.designation.trim() !== '' && e.designation.trim() !== '—') {
+    return e.designation.trim();
+  }
+  if (e.designationName && typeof e.designationName === 'string' && e.designationName.trim()) {
+    return e.designationName.trim();
+  }
+  if (e.designation_name && typeof e.designation_name === 'string' && e.designation_name.trim()) {
+    return e.designation_name.trim();
+  }
+  if (e.jobTitle && typeof e.jobTitle === 'string' && e.jobTitle.trim()) {
+    return e.jobTitle.trim();
+  }
+  if (e.job_title && typeof e.job_title === 'string' && e.job_title.trim()) {
+    return e.job_title.trim();
+  }
+
+  // 2. ID matching against master list
+  const desigId = e.currentDesignationId ?? e.designationId ?? e.designation_id ?? e.current_designation_id;
+  if (desigId && Array.isArray(designationsList) && designationsList.length > 0) {
+    const matched = designationsList.find((d: any) => String(d.id) === String(desigId));
+    if (matched?.name) return matched.name;
+  }
+
+  // 3. Fallback from role configuration
+  const role = (e.accessRole || e.role || '').toLowerCase().trim();
+  if (role) {
+    const roleLabels: Record<string, string> = {
+      organization_admin: 'Organization Administrator',
+      super_admin: 'Super Admin',
+      hr_admin: 'HR Administrator',
+      hr_manager: 'HR Manager',
+      hr: 'HR Executive',
+      department_head: 'Department Head',
+      manager: 'Manager',
+      team_lead: 'Team Lead',
+      employee: 'Employee',
+      intern: 'Intern',
+      consultant: 'Consultant',
+      ceo: 'Chief Executive Officer',
+      cto: 'Chief Technology Officer',
+      cfo: 'Chief Financial Officer',
+      coo: 'Chief Operating Officer',
+    };
+    if (roleLabels[role]) return roleLabels[role];
+  }
+
+  // 4. Fallback based on department
+  if (e.department) {
+    return `${e.department} Executive`;
+  }
+
+  return 'Employee';
+}
+
 const AVATAR_GRADIENTS = [
   'from-sky-500 to-blue-600',
   'from-violet-500 to-purple-600',
@@ -194,7 +254,7 @@ function ReferenceNode({
   const name = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
   const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase();
   const grad = avatarGrad(emp.id);
-  const designation = emp.designation || emp.jobTitle || (isAdmin ? 'Admin' : 'Employee');
+  const designation = isAdmin ? 'Admin' : resolveDesignation(emp);
 
   const isDeptHeadOrHR = ['department_head', 'hr_manager'].includes((emp as any).accessRole || '');
   const isDragDisabled = isAdmin || isDeptHeadOrHR;
@@ -223,9 +283,9 @@ function ReferenceNode({
 
   const style: React.CSSProperties = transform
     ? {
-        transform: CSS.Translate.toString(transform),
-        zIndex: isDragging ? 0 : 50,
-      }
+      transform: CSS.Translate.toString(transform),
+      zIndex: isDragging ? 0 : 50,
+    }
     : {};
 
   return (
@@ -260,23 +320,22 @@ function ReferenceNode({
           isAdmin
             ? 'Organization Admin'
             : isDeptHeadOrHR
-            ? 'Department Heads and HR Managers report directly to Organization Admin.'
-            : 'Drag node onto a manager to reassign reporting manager'
+              ? 'Department Heads and HR Managers report directly to Organization Admin.'
+              : 'Drag node onto a manager to reassign reporting manager'
         }
         className={`group relative flex flex-col items-center bg-card border shadow-xs rounded-xl p-2.5
           w-[155px] min-h-[92px] transition-all duration-200 cursor-grab active:cursor-grabbing select-none
-          ${
-            isPulsing
-              ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
-              : isDragging
+          ${isPulsing
+            ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
+            : isDragging
               ? 'opacity-35 ring-2 ring-primary/40 border-dashed border-primary bg-primary/5'
               : isOver
-              ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
-              : highlight
-              ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
-              : isAdmin
-              ? 'border-primary/60 bg-primary/5'
-              : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
+                ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
+                : highlight
+                  ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
+                  : isAdmin
+                    ? 'border-primary/60 bg-primary/5'
+                    : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
           }`}
       >
         {/* Top Avatar Icon */}
@@ -346,10 +405,10 @@ function TreeBranch({
   const deptName = node.isAdmin
     ? 'Executive Leadership'
     : node.isCxo
-    ? `C-Suite · ${(node.cxoType || 'CXO').toUpperCase()}`
-    : isLevel1Manager
-    ? (node.emp.department || 'Department')
-    : undefined;
+      ? `C-Suite · ${(node.cxoType || 'CXO').toUpperCase()}`
+      : isLevel1Manager
+        ? (node.emp.department || 'Department')
+        : undefined;
 
   return (
     <div className="flex flex-col items-center shrink-0">
@@ -409,6 +468,7 @@ export function OrgStructurePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
+  const { designations = [] } = useDesignations();
   const [searchTerm, setSearchTerm] = useState('');
   const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -614,7 +674,7 @@ export function OrgStructurePage() {
     const adminName = ceoEmployee
       ? `${ceoEmployee.firstName || ''} ${ceoEmployee.lastName || ''}`.trim() || 'Chief Executive Officer'
       : (user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Chief Executive Officer');
-    
+
     const adminEmail = ceoEmployee?.email || user?.email || 'ceo@apponext.com';
 
     // Root CEO Node at Top of Tree
@@ -1223,9 +1283,8 @@ export function OrgStructurePage() {
                   <span className="font-bold text-primary">
                     {reassignConfirm.targetIsAdmin
                       ? 'Organization Admin / Executive Management'
-                      : `${reassignConfirm.targetEmp.firstName} ${reassignConfirm.targetEmp.lastName}${
-                          reassignConfirm.targetEmp.department ? ` / ${reassignConfirm.targetEmp.department}` : ''
-                        }`}
+                      : `${reassignConfirm.targetEmp.firstName} ${reassignConfirm.targetEmp.lastName}${reassignConfirm.targetEmp.department ? ` / ${reassignConfirm.targetEmp.department}` : ''
+                      }`}
                   </span>
                 </div>
               </div>
@@ -1288,10 +1347,9 @@ export function OrgStructurePage() {
                       currentDepartmentId: targetDeptId,
                     });
                     toast.success(
-                      `Moved ${confirmState.activeEmp.firstName} under ${
-                        confirmState.targetIsAdmin
-                          ? 'Organization Admin'
-                          : `${confirmState.targetEmp.firstName} ${confirmState.targetEmp.lastName}`
+                      `Moved ${confirmState.activeEmp.firstName} under ${confirmState.targetIsAdmin
+                        ? 'Organization Admin'
+                        : `${confirmState.targetEmp.firstName} ${confirmState.targetEmp.lastName}`
                       } successfully!`
                     );
                     refetch();
@@ -1332,7 +1390,7 @@ export function OrgStructurePage() {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     {(() => {
-                      const cfg = roleCfg((selectedEmp as any).accessRole, selectedEmp.designation || selectedEmp.jobTitle);
+                      const cfg = roleCfg((selectedEmp as any).accessRole, resolveDesignation(selectedEmp, designations));
                       const Icon = cfg.Icon;
                       return (
                         <Badge variant="outline" className={`text-[10px] font-bold py-0 ${cfg.bg} ${cfg.border} ${cfg.text}`}>
@@ -1348,47 +1406,7 @@ export function OrgStructurePage() {
               <DialogDescription className="text-xs">Reporting hierarchy and manager assignment</DialogDescription>
             </DialogHeader>
 
-              <div className="grid grid-cols-2 gap-2.5 text-xs bg-muted/40 p-3.5 rounded-xl border border-border/60 shadow-2xs">
-                {(() => {
-                  const allEmpsList = (localEmps || (employees as Employee[]) || []);
-                  const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
-                  const currentMgr = mgrId
-                    ? allEmpsList.find((e) => Number(e.id) === Number(mgrId))
-                    : null;
-                  const ceoEmp = allEmpsList.find((e: any) => {
-                    const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
-                    const desig = (e.designation || e.jobTitle || '').toLowerCase();
-                    return isCeo || desig.includes('ceo') || desig.includes('chief executive');
-                  });
-                  const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
-                  const displayMgrName = isSelectedEmpCeo
-                    ? 'Board of Directors'
-                    : currentMgr
-                    ? `${currentMgr.firstName} ${currentMgr.lastName}`
-                    : (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name || (ceoEmp ? `${ceoEmp.firstName} ${ceoEmp.lastName} (CEO)` : 'Direct Report to CEO');
-
-                  return [
-                    ['Reporting Manager', displayMgrName],
-                    ['Department', selectedEmp.department || '—'],
-                    ['Designation', selectedEmp.designation || selectedEmp.jobTitle || '—'],
-                    ['Email', selectedEmp.email],
-                    ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
-                    ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
-                    ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
-                  ].map(([label, value]) => (
-                    <div key={label} className={label === 'Reporting Manager' ? 'col-span-2 bg-primary/5 p-2 rounded-lg border border-primary/20' : ''}>
-                      <span className={`text-[10px] font-bold uppercase ${label === 'Reporting Manager' ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {label}
-                      </span>
-                      <span className={`font-bold block truncate capitalize text-xs ${label === 'Reporting Manager' ? 'text-foreground' : 'text-foreground'}`}>
-                        {value}
-                      </span>
-                    </div>
-                  ));
-                })()}
-              </div>
-
-              {/* Dedicated Live Database Reporting Manager Banner */}
+            <div className="grid grid-cols-2 gap-2.5 text-xs bg-muted/40 p-3.5 rounded-xl border border-border/60 shadow-2xs">
               {(() => {
                 const allEmpsList = (localEmps || (employees as Employee[]) || []);
                 const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
@@ -1401,79 +1419,119 @@ export function OrgStructurePage() {
                   return isCeo || desig.includes('ceo') || desig.includes('chief executive');
                 });
                 const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
-                const fallbackManagerName = (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name;
+                const displayMgrName = isSelectedEmpCeo
+                  ? 'Board of Directors'
+                  : currentMgr
+                    ? `${currentMgr.firstName} ${currentMgr.lastName}`
+                    : (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name || (ceoEmp ? `${ceoEmp.firstName} ${ceoEmp.lastName} (CEO)` : 'Direct Report to CEO');
 
-                return (
-                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-muted/40 border border-primary/25 text-xs space-y-1.5 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[10px] font-extrabold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                        <Users className="w-3.5 h-3.5 text-primary" />
-                        Direct Reporting Manager
-                      </div>
-                      {currentMgr?.employeeCode && (
-                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-background/80 border border-border/60 text-muted-foreground">
-                          {currentMgr.employeeCode}
-                        </span>
-                      )}
+                return [
+                  ['Reporting Manager', displayMgrName],
+                  ['Department', selectedEmp.department || '—'],
+                  ['Designation', resolveDesignation(selectedEmp, designations)],
+                  ['Email', selectedEmp.email],
+                  ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
+                  ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
+                  ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
+                ].map(([label, value]) => (
+                  <div key={label} className={label === 'Reporting Manager' ? 'col-span-2 bg-primary/5 p-2 rounded-lg border border-primary/20' : ''}>
+                    <span className={`text-[10px] font-bold uppercase ${label === 'Reporting Manager' ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {label}
+                    </span>
+                    <span className={`font-bold block truncate capitalize text-xs ${label === 'Reporting Manager' ? 'text-foreground' : 'text-foreground'}`}>
+                      {value}
+                    </span>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            {/* Dedicated Live Database Reporting Manager Banner */}
+            {(() => {
+              const allEmpsList = (localEmps || (employees as Employee[]) || []);
+              const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
+              const currentMgr = mgrId
+                ? allEmpsList.find((e) => Number(e.id) === Number(mgrId))
+                : null;
+              const ceoEmp = allEmpsList.find((e: any) => {
+                const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+                const desig = (e.designation || e.jobTitle || '').toLowerCase();
+                return isCeo || desig.includes('ceo') || desig.includes('chief executive');
+              });
+              const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
+              const fallbackManagerName = (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name;
+
+              return (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-muted/40 border border-primary/25 text-xs space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] font-extrabold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-primary" />
+                      Direct Reporting Manager
                     </div>
+                    {currentMgr?.employeeCode && (
+                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-background/80 border border-border/60 text-muted-foreground">
+                        {currentMgr.employeeCode}
+                      </span>
+                    )}
+                  </div>
 
-                    <div className="flex items-center gap-3 pt-1">
-                      <Avatar className={`h-10 w-10 rounded-full border-2 border-primary/40 shadow-xs bg-gradient-to-br ${avatarGrad(currentMgr?.id || 1)}`}>
-                        <AvatarImage src={(currentMgr as any)?.avatarUrl || undefined} />
-                        <AvatarFallback className="text-xs font-black text-white">
-                          {currentMgr ? (
-                            `${currentMgr.firstName?.[0] || ''}${currentMgr.lastName?.[0] || ''}`
-                          ) : isSelectedEmpCeo ? (
-                            <ShieldCheck className="w-4 h-4 text-white" />
-                          ) : ceoEmp ? (
-                            `${ceoEmp.firstName?.[0] || ''}${ceoEmp.lastName?.[0] || ''}`
-                          ) : (
-                            <Crown className="w-4 h-4 text-white" />
-                          )}
-                        </AvatarFallback>
-                      </Avatar>
+                  <div className="flex items-center gap-3 pt-1">
+                    <Avatar className={`h-10 w-10 rounded-full border-2 border-primary/40 shadow-xs bg-gradient-to-br ${avatarGrad(currentMgr?.id || 1)}`}>
+                      <AvatarImage src={(currentMgr as any)?.avatarUrl || undefined} />
+                      <AvatarFallback className="text-xs font-black text-white">
+                        {currentMgr ? (
+                          `${currentMgr.firstName?.[0] || ''}${currentMgr.lastName?.[0] || ''}`
+                        ) : isSelectedEmpCeo ? (
+                          <ShieldCheck className="w-4 h-4 text-white" />
+                        ) : ceoEmp ? (
+                          `${ceoEmp.firstName?.[0] || ''}${ceoEmp.lastName?.[0] || ''}`
+                        ) : (
+                          <Crown className="w-4 h-4 text-white" />
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="font-extrabold text-foreground text-sm truncate flex items-center gap-1.5">
-                          {isSelectedEmpCeo ? (
-                            <span>Board of Directors / Shareholders</span>
-                          ) : currentMgr ? (
-                            <span>{currentMgr.firstName} {currentMgr.lastName}</span>
-                          ) : fallbackManagerName ? (
-                            <span>{fallbackManagerName}</span>
-                          ) : ceoEmp ? (
-                            <span className="flex items-center gap-1.5 text-foreground">
-                              {ceoEmp.firstName} {ceoEmp.lastName}
-                              <Badge variant="outline" className="text-[9px] font-extrabold py-0 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40">
-                                CEO
-                              </Badge>
-                            </span>
-                          ) : (
-                            <span className="text-primary font-bold flex items-center gap-1">
-                              <Crown className="w-3.5 h-3.5 text-amber-500 inline" /> Direct Report to CEO
-                            </span>
-                          )}
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-extrabold text-foreground text-sm truncate flex items-center gap-1.5">
+                        {isSelectedEmpCeo ? (
+                          <span>Board of Directors / Shareholders</span>
+                        ) : currentMgr ? (
+                          <span>{currentMgr.firstName} {currentMgr.lastName}</span>
+                        ) : fallbackManagerName ? (
+                          <span>{fallbackManagerName}</span>
+                        ) : ceoEmp ? (
+                          <span className="flex items-center gap-1.5 text-foreground">
+                            {ceoEmp.firstName} {ceoEmp.lastName}
+                            <Badge variant="outline" className="text-[9px] font-extrabold py-0 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40">
+                              CEO
+                            </Badge>
+                          </span>
+                        ) : (
+                          <span className="text-primary font-bold flex items-center gap-1">
+                            <Crown className="w-3.5 h-3.5 text-amber-500 inline" /> Direct Report to CEO
+                          </span>
+                        )}
+                      </div>
 
-                        <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5 font-medium">
-                          {isSelectedEmpCeo ? (
-                            <span>Corporate Executive Governance</span>
-                          ) : currentMgr ? (
-                            <span>
-                              {currentMgr.designation || currentMgr.jobTitle || 'Manager'}
-                              {currentMgr.department ? ` · ${currentMgr.department}` : ''}
-                            </span>
-                          ) : ceoEmp ? (
-                            <span>Chief Executive Officer · Executive Leadership</span>
-                          ) : (
-                            <span>Top-level Executive Organization</span>
-                          )}
-                        </div>
+                      <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5 font-medium">
+                        {isSelectedEmpCeo ? (
+                          <span>Corporate Executive Governance</span>
+                        ) : currentMgr ? (
+                          <span>
+                            {resolveDesignation(currentMgr, designations)}
+                            {currentMgr.department ? ` · ${currentMgr.department}` : ''}
+                          </span>
+                        ) : ceoEmp ? (
+                          <span>Chief Executive Officer · Executive Leadership</span>
+                        ) : (
+                          <span>Top-level Executive Organization</span>
+                        )}
                       </div>
                     </div>
                   </div>
-                );
-              })()}
+                </div>
+              );
+            })()}
 
             <div className="flex items-center justify-between pt-3 border-t border-border/60">
               <Button
