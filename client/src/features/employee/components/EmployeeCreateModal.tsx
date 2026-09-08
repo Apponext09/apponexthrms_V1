@@ -109,7 +109,10 @@ export function EmployeeCreateModal({
   const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || [])).map((e: any) => ({
     id: e.id,
     name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
-    designation: e.designation || e.designation_name || e.role || 'Employee'
+    designation: e.designation || e.designation_name || e.jobTitle || e.role || 'Employee',
+    department: e.department || e.departmentName || e.department_name || 'General',
+    accessRole: ((e.accessRole || e.role || '') as string).toLowerCase(),
+    employeeCode: e.employeeCode || e.employee_code || '',
   }));
 
   const handleOpenChange = (openVal: boolean) => {
@@ -745,25 +748,75 @@ export function EmployeeCreateModal({
                     {/* Reporting Manager */}
                     <div className="col-span-2">
                       <Label htmlFor="reportingManager">Reports To</Label>
-                      {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
-                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium">
-                          🛡️ <strong>Organization Admin</strong> (Manager & HR roles directly report to the Organization Admin)
+                      {formData.accessRole === 'ceo' ? (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium flex items-center gap-2">
+                          👑 <strong>Chief Executive Officer (CEO)</strong> — Organization Root Leader
                         </div>
                       ) : (
                         <>
                           <select
                             id="reportingManager"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
                             value={formData.reportingManagerId}
                             onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
-                            disabled={!formData.departmentId}
                           >
-                            <option value="">-- Select Reporting Manager --</option>
-                            {departmentManagers.map((mgr: any) => (
-                              <option key={mgr.id} value={String(mgr.id)}>
-                                {mgr.name} ({mgr.designation || 'Manager'})
-                              </option>
-                            ))}
+                            <option value="">-- Select Reporting Manager (Defaults to CEO / Dept Head) --</option>
+                            {(() => {
+                              const getCat = (m: any) => {
+                                const r = (m.accessRole || '').toLowerCase();
+                                const d = (m.designation || '').toLowerCase();
+                                if (['cfo', 'coo', 'cto'].includes(r) || d.includes('chief')) return 'cxo';
+                                if (['department_head', 'hr_manager', 'manager'].includes(r) || d.includes('manager') || d.includes('head')) return 'manager';
+                                if (r === 'team_lead' || d.includes('lead')) return 'lead';
+                                return 'other';
+                              };
+
+                              const cxos = departmentManagers.filter((m: any) => getCat(m) === 'cxo');
+                              const mgrs = departmentManagers.filter((m: any) => getCat(m) === 'manager');
+                              const leads = departmentManagers.filter((m: any) => getCat(m) === 'lead');
+                              const others = departmentManagers.filter((m: any) => getCat(m) === 'other');
+
+                              return (
+                                <>
+                                  {cxos.length > 0 && (
+                                    <optgroup label="⚡ C-Suite Executives (CTO, COO, CFO)">
+                                      {cxos.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  {mgrs.length > 0 && (
+                                    <optgroup label="👔 Department Heads & Managers">
+                                      {mgrs.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  {leads.length > 0 && (
+                                    <optgroup label="🎖️ Team Leads">
+                                      {leads.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  {others.length > 0 && (
+                                    <optgroup label="👥 Other Department Members">
+                                      {others.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </select>
                         </>
                       )}

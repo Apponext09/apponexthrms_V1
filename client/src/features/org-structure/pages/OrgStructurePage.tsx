@@ -412,7 +412,6 @@ export function OrgStructurePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-  const [managerEditId, setManagerEditId] = useState('');
   const [isUpdatingManager, setIsUpdatingManager] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -564,7 +563,7 @@ export function OrgStructurePage() {
     toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
   };
 
-  // Build Hierarchy Tree Structure: CEO -> CFO, COO, CTO -> Assigned Department -> Team Leads -> Employees
+  // Build Dynamic Hierarchy Tree Structure from Database
   const treeData = useMemo(() => {
     const rawList = localEmps || (employees as Employee[]);
     if (!rawList || rawList.length === 0) return null;
@@ -576,6 +575,12 @@ export function OrgStructurePage() {
     // Helper to get department ID
     const getDeptId = (e: Employee): number | null =>
       e.currentDepartmentId ?? (e as any).departmentId ?? (e as any).current_department_id ?? null;
+
+    // Helper to get reporting manager ID safely from database record
+    const getMgrId = (e: Employee): number | null => {
+      const val = e.reportingManagerId ?? (e as any).reporting_manager_id;
+      return val !== null && val !== undefined && val !== '' ? Number(val) : null;
+    };
 
     // Helper to categorize CXO type
     const getCxoCategory = (e: Employee): 'cfo' | 'coo' | 'cto' | 'cxo' | null => {
@@ -597,21 +602,6 @@ export function OrgStructurePage() {
       return null;
     };
 
-    // Helper to match department domain to CXO functional area
-    const isMatchCxoDomain = (cxoCat: string, deptName: string): boolean => {
-      const d = (deptName || '').toLowerCase().trim();
-      if (cxoCat === 'cto') {
-        return /dev|sde|test|qa|cloud|eng|tech|it|infra|soft|data|ai|ml|sec|prod|front|back|full|mob|ui|ux/i.test(d);
-      }
-      if (cxoCat === 'coo') {
-        return /hr|human|operat|admin|supp|logist|facil|legal|compl|peop|serv|help|mgt|manage|gen/i.test(d);
-      }
-      if (cxoCat === 'cfo') {
-        return /finan|sales|sale|account|bill|rev|mark|comm|audit|tax|payr|growth|biz|bd/i.test(d);
-      }
-      return false;
-    };
-
     // 1. Resolve Root CEO node
     const ceoEmployee = rawList.find((e: any) => {
       const isCeoFlag = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
@@ -620,6 +610,7 @@ export function OrgStructurePage() {
       return isCeoFlag || role === 'ceo' || desig === 'ceo' || desig === 'chief executive officer';
     });
 
+    const ceoId = ceoEmployee?.id || 999999;
     const adminName = ceoEmployee
       ? `${ceoEmployee.firstName || ''} ${ceoEmployee.lastName || ''}`.trim() || 'Chief Executive Officer'
       : (user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Chief Executive Officer');
@@ -628,7 +619,7 @@ export function OrgStructurePage() {
 
     // Root CEO Node at Top of Tree
     const rootCeoEmp: Employee = {
-      id: ceoEmployee?.id || 999999,
+      id: ceoId,
       firstName: adminName,
       lastName: '',
       email: adminEmail,
@@ -649,50 +640,21 @@ export function OrgStructurePage() {
     const claimedEmpIds = new Set<number>();
     if (ceoEmployee?.id) claimedEmpIds.add(ceoEmployee.id);
 
-    // 2. Identify and sort C-Suite executives: CFO, COO, CTO, then other CXOs
-    const cxoEmployees = activeList.filter((e) => getCxoCategory(e) !== null);
-    const cxoOrderMap: Record<string, number> = { cfo: 1, coo: 2, cto: 3, cxo: 4 };
-    const sortedCxos = [...cxoEmployees].sort((a, b) => {
-      const orderA = cxoOrderMap[getCxoCategory(a) || 'cxo'] || 99;
-      const orderB = cxoOrderMap[getCxoCategory(b) || 'cxo'] || 99;
-      return orderA - orderB;
-    });
-
-    sortedCxos.forEach((c) => { if (c.id) claimedEmpIds.add(c.id); });
-
-    // 3. Department Managers / Heads
-    const managers = activeList.filter((e) =>
-      !claimedEmpIds.has(e.id!) &&
-      ['department_head', 'hr_manager', 'hr_admin', 'manager'].includes(((e.accessRole || (e as any).role || '') as string).toLowerCase().trim())
-    );
-
-    // 4. Team Leads
-    const teamLeads = activeList.filter(
-      (e) => !claimedEmpIds.has(e.id!) && ((e.accessRole || (e as any).role || '') as string).toLowerCase().trim() === 'team_lead'
-    );
-
-    // 5. Regular Staff / Employees
-    const regularEmployees = activeList.filter(
-      (e) => !claimedEmpIds.has(e.id!) &&
-        !['department_head', 'hr_manager', 'hr_admin', 'manager', 'team_lead'].includes(((e.accessRole || (e as any).role || '') as string).toLowerCase().trim()) &&
-        getCxoCategory(e) === null
-    );
-
-    // Helper to find employees reporting to a parent manager/lead
+    // Recursive helper to find all direct reports of an employee from the database
     const findDirectChildren = (parentId: number, parentDept?: string, parentDeptId?: number | null): Employee[] => {
       const results: Employee[] = [];
 
-      // Priority 1: Explicit reportingManagerId match
-      regularEmployees.forEach((emp) => {
-        if (emp.id && !claimedEmpIds.has(emp.id) && emp.reportingManagerId === parentId) {
+      // 1. Priority 1: Direct reporting_manager_id match in database
+      activeList.forEach((emp) => {
+        if (emp.id && !claimedEmpIds.has(emp.id) && getMgrId(emp) === parentId) {
           claimedEmpIds.add(emp.id);
           results.push(emp);
         }
       });
 
-      // Priority 2: Match by departmentId or department name if emp has no explicit reportingManagerId
-      regularEmployees.forEach((emp) => {
-        if (emp.id && !claimedEmpIds.has(emp.id) && !emp.reportingManagerId) {
+      // 2. Priority 2: Department match ONLY if employee has NO reporting manager assigned in database
+      activeList.forEach((emp) => {
+        if (emp.id && !claimedEmpIds.has(emp.id) && !getMgrId(emp)) {
           const empDeptId = getDeptId(emp);
           const empDept = getDeptKey(emp);
           const isDeptIdMatch = parentDeptId && empDeptId && parentDeptId === empDeptId;
@@ -707,172 +669,47 @@ export function OrgStructurePage() {
       return results;
     };
 
-    // Helper to recursively nest sub-reports
+    // Helper to recursively nest subordinates
     const buildSubTree = (emp: Employee): any => {
+      const cat = getCxoCategory(emp);
+      const isCxo = cat !== null;
       const childEmps = emp.id ? findDirectChildren(emp.id, getDeptKey(emp), getDeptId(emp)) : [];
       return {
         emp,
+        isCxo,
+        cxoType: cat,
         children: childEmps.map(buildSubTree),
       };
     };
 
-    // Helper to build manager subtrees
-    const buildManagerNode = (m: Employee) => {
-      const mDeptKey = getDeptKey(m);
-      const mDeptId = getDeptId(m);
-
-      const managerLeads = teamLeads.filter((tl) => {
-        if (!tl.id || claimedEmpIds.has(tl.id)) return false;
-        if (tl.reportingManagerId) {
-          return tl.reportingManagerId === m.id;
-        }
-        const tlDeptId = getDeptId(tl);
-        const tlDeptKey = getDeptKey(tl);
-        const isDeptIdMatch = mDeptId && tlDeptId && mDeptId === tlDeptId;
-        const isDeptNameMatch = mDeptKey !== 'General' && tlDeptKey === mDeptKey;
-        return isDeptIdMatch || isDeptNameMatch;
-      });
-
-      managerLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
-
-      const leadNodes = managerLeads.map((tl) => {
-        const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl), getDeptId(tl));
-        return {
-          emp: tl,
-          children: leadEmps.map(buildSubTree),
-        };
-      });
-
-      const unassignedEmps = findDirectChildren(m.id!, mDeptKey, mDeptId);
-
-      return {
-        emp: m,
-        children: [...leadNodes, ...unassignedEmps.map(buildSubTree)],
-      };
-    };
-
-    // 6. Build CXO subtrees:
-    // CEO -> [CFO, COO, CTO] -> Assigned Department Subtrees (Managers -> Leads -> Staff)
-    const claimedManagerIds = new Set<number>();
-    const cxoNodes = sortedCxos.map((cxo) => {
-      const cat = getCxoCategory(cxo) || 'cxo';
-      const cxoDeptKey = getDeptKey(cxo);
-      const cxoDeptId = getDeptId(cxo);
-
-      // Helper to check if a manager/lead/employee belongs to this CXO domain
-      const belongsToCxo = (e: Employee): boolean => {
-        if (e.reportingManagerId && e.reportingManagerId === cxo.id) return true;
-        const eDeptId = getDeptId(e);
-        const eDeptKey = getDeptKey(e);
-        const isDeptIdMatch = cxoDeptId && eDeptId && cxoDeptId === eDeptId;
-        const isDeptNameMatch = cxoDeptKey !== 'General' && eDeptKey === cxoDeptKey;
-        if (isDeptIdMatch || isDeptNameMatch) return true;
-        return isMatchCxoDomain(cat, eDeptKey);
-      };
-
-      // 6a. Find managers belonging to this CXO
-      const cxoManagers = managers.filter((m) => {
-        if (!m.id || claimedManagerIds.has(m.id)) return false;
-        return belongsToCxo(m);
-      });
-      cxoManagers.forEach((m) => { if (m.id) claimedManagerIds.add(m.id); });
-      const subManagerNodes = cxoManagers.map(buildManagerNode);
-
-      // 6b. Find team leads belonging to this CXO domain that are not under a manager
-      const directLeads = teamLeads.filter((tl) => {
-        if (!tl.id || claimedEmpIds.has(tl.id)) return false;
-        return belongsToCxo(tl);
-      });
-      directLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
-      const directLeadNodes = directLeads.map((tl) => {
-        const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl), getDeptId(tl));
-        return {
-          emp: tl,
-          children: leadEmps.map(buildSubTree),
-        };
-      });
-
-      // 6c. Find direct/root staff belonging to this CXO domain
-      // Either reporting to CXO or root in their department
-      const directEmps = regularEmployees.filter((emp) => {
-        if (!emp.id || claimedEmpIds.has(emp.id)) return false;
-        if (!belongsToCxo(emp)) return false;
-        // If they report to another regular employee in this domain, let buildSubTree nest them
-        if (emp.reportingManagerId && emp.reportingManagerId !== cxo.id) {
-          const hasParentInList = regularEmployees.some((other) => other.id === emp.reportingManagerId);
-          if (hasParentInList) return false;
-        }
-        return true;
-      });
-      directEmps.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
-      const directEmpNodes = directEmps.map(buildSubTree);
-
-      const cxoDesignation =
-        cat === 'cfo'
-          ? 'CHIEF FINANCIAL OFFICER (CFO)'
-          : cat === 'coo'
-          ? 'CHIEF OPERATING OFFICER (COO)'
-          : cat === 'cto'
-          ? 'CHIEF TECHNOLOGY OFFICER (CTO)'
-          : (cxo.designation || 'EXECUTIVE (CXO)');
-
-      const cxoEnhancedEmp: Employee = {
-        ...cxo,
-        designation: cxoDesignation,
-      };
-
-      return {
-        emp: cxoEnhancedEmp,
-        isCxo: true,
-        cxoType: cat,
-        children: [...subManagerNodes, ...directLeadNodes, ...directEmpNodes],
-      };
+    // Find direct reports under CEO:
+    // Any employee whose reporting_manager_id is null, empty, 0, or equals CEO id, OR root-level managers
+    const rootDirectEmps = activeList.filter((emp) => {
+      const mgrId = getMgrId(emp);
+      if (!mgrId || mgrId === ceoId || mgrId === 999999) return true;
+      // If their manager is not in the active list, treat them as direct report under CEO
+      const managerExistsInList = activeList.some((other) => other.id === mgrId);
+      return !managerExistsInList;
     });
 
-    // 7. Any remaining unassigned managers/employees (if any) attach under COO or CEO fallback
-    const remainingManagers = managers.filter((m) => m.id && !claimedManagerIds.has(m.id));
-    const unattachedManagerNodes = remainingManagers.map(buildManagerNode);
-
-    const unclaimedLeads = teamLeads.filter((tl) => tl.id && !claimedEmpIds.has(tl.id));
-    unclaimedLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
-    const orphanLeadNodes = unclaimedLeads.map((tl) => {
-      const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl), getDeptId(tl));
-      return {
-        emp: tl,
-        children: leadEmps.map(buildSubTree),
-      };
+    // Mark root nodes as claimed
+    rootDirectEmps.forEach((emp) => {
+      if (emp.id) claimedEmpIds.add(emp.id);
     });
 
-    const unclaimedEmps = regularEmployees.filter((emp) => emp.id && !claimedEmpIds.has(emp.id));
-    unclaimedEmps.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
-    const orphanEmpNodes = unclaimedEmps.map(buildSubTree);
+    // Build subtrees for each direct report under CEO
+    const rootChildren = rootDirectEmps.map(buildSubTree);
 
-    // If CXO tier exists, any fallback unattached items attach under COO if available
-    let rootChildren = [...cxoNodes];
-    if (unattachedManagerNodes.length > 0 || orphanLeadNodes.length > 0 || orphanEmpNodes.length > 0) {
-      const cooNode = rootChildren.find((n) => n.cxoType === 'coo');
-      if (cooNode) {
-        cooNode.children = [
-          ...cooNode.children,
-          ...unattachedManagerNodes,
-          ...orphanLeadNodes,
-          ...orphanEmpNodes,
-        ];
-      } else {
-        rootChildren = [
-          ...rootChildren,
-          ...unattachedManagerNodes,
-          ...orphanLeadNodes,
-          ...orphanEmpNodes,
-        ];
-      }
-    }
+    // Any remaining unclaimed employees attach safely under CEO
+    const remainingUnclaimed = activeList.filter((emp) => emp.id && !claimedEmpIds.has(emp.id));
+    remainingUnclaimed.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
+    const fallbackChildren = remainingUnclaimed.map(buildSubTree);
 
     return {
       emp: rootCeoEmp,
       isAdmin: true,
       isCeo: true,
-      children: rootChildren,
+      children: [...rootChildren, ...fallbackChildren],
     };
   }, [localEmps, employees, user]);
 
@@ -911,14 +748,33 @@ export function OrgStructurePage() {
   const handleManagerChange = async (newManagerId: string) => {
     if (!selectedEmp?.id) return;
     setIsUpdatingManager(true);
+    const parsedId = newManagerId ? parseInt(newManagerId, 10) : null;
+    const previousEmps = localEmps;
+
+    // Optimistically update localEmps
+    if (localEmps) {
+      setLocalEmps(
+        localEmps.map((emp) =>
+          emp.id === selectedEmp.id ? { ...emp, reportingManagerId: parsedId } : emp
+        )
+      );
+    }
+
     try {
       await apiClient.patch(`/employees/${selectedEmp.id}`, {
-        reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null,
+        reportingManagerId: parsedId,
       });
-      toast.success('Reporting manager updated successfully');
+      const targetMgr = (employees as Employee[] || []).find((e) => e.id === parsedId);
+      toast.success(
+        targetMgr
+          ? `Assigned ${selectedEmp.firstName} to report under ${targetMgr.firstName} ${targetMgr.lastName}`
+          : `Assigned ${selectedEmp.firstName} as direct report to CEO`
+      );
       setSelectedEmp(null);
       refetch();
     } catch (err: any) {
+      // Revert on error
+      setLocalEmps(previousEmps);
       console.error(err);
       toast.error(err?.response?.data?.message || 'Failed to update reporting manager');
     } finally {
@@ -1252,7 +1108,6 @@ export function OrgStructurePage() {
                   onSelectEmp={(e) => {
                     if (e.id === 999999) return;
                     setSelectedEmp(e);
-                    setManagerEditId(String(e.reportingManagerId || ''));
                   }}
                 />
               </div>
@@ -1493,52 +1348,132 @@ export function OrgStructurePage() {
               <DialogDescription className="text-xs">Reporting hierarchy and manager assignment</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-3 rounded-lg border border-border/60">
-                {[
-                  ['Department', selectedEmp.department || '—'],
-                  ['Designation', selectedEmp.designation || selectedEmp.jobTitle || '—'],
-                  ['Email', selectedEmp.email],
-                  ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
-                  ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
-                  ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{label}</span>
-                    <span className="font-semibold text-foreground truncate block capitalize text-xs">{value}</span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-2.5 text-xs bg-muted/40 p-3.5 rounded-xl border border-border/60 shadow-2xs">
+                {(() => {
+                  const allEmpsList = (localEmps || (employees as Employee[]) || []);
+                  const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
+                  const currentMgr = mgrId
+                    ? allEmpsList.find((e) => Number(e.id) === Number(mgrId))
+                    : null;
+                  const ceoEmp = allEmpsList.find((e: any) => {
+                    const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+                    const desig = (e.designation || e.jobTitle || '').toLowerCase();
+                    return isCeo || desig.includes('ceo') || desig.includes('chief executive');
+                  });
+                  const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
+                  const displayMgrName = isSelectedEmpCeo
+                    ? 'Board of Directors'
+                    : currentMgr
+                    ? `${currentMgr.firstName} ${currentMgr.lastName}`
+                    : (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name || (ceoEmp ? `${ceoEmp.firstName} ${ceoEmp.lastName} (CEO)` : 'Direct Report to CEO');
+
+                  return [
+                    ['Reporting Manager', displayMgrName],
+                    ['Department', selectedEmp.department || '—'],
+                    ['Designation', selectedEmp.designation || selectedEmp.jobTitle || '—'],
+                    ['Email', selectedEmp.email],
+                    ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
+                    ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
+                    ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
+                  ].map(([label, value]) => (
+                    <div key={label} className={label === 'Reporting Manager' ? 'col-span-2 bg-primary/5 p-2 rounded-lg border border-primary/20' : ''}>
+                      <span className={`text-[10px] font-bold uppercase ${label === 'Reporting Manager' ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {label}
+                      </span>
+                      <span className={`font-bold block truncate capitalize text-xs ${label === 'Reporting Manager' ? 'text-foreground' : 'text-foreground'}`}>
+                        {value}
+                      </span>
+                    </div>
+                  ));
+                })()}
               </div>
 
-              {/* Reporting Manager Assignment */}
-              <div className="space-y-2 pt-2 border-t border-border/60">
-                <label className="text-xs font-bold text-foreground block">Assign Reporting Manager</label>
-                <div className="flex gap-2">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    value={managerEditId}
-                    onChange={(e) => setManagerEditId(e.target.value)}
-                  >
-                    <option value="">— Reports to Organization Admin —</option>
-                    {(employees as Employee[])
-                      .filter((e: any) => e.id !== selectedEmp.id && !e.isCeo && !e.is_ceo && !e.isCeoProfileHidden && !e.is_ceo_profile_hidden && e.accessRole !== 'organization_admin')
-                      .map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.firstName} {e.lastName} ({e.employeeCode})
-                        </option>
-                      ))}
-                  </select>
-                  <Button
-                    size="sm"
-                    className="h-9 text-xs font-semibold px-3 bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
-                    onClick={() => handleManagerChange(managerEditId)}
-                    disabled={isUpdatingManager}
-                  >
-                    {isUpdatingManager ? 'Saving...' : 'Update'}
-                  </Button>
-                </div>
-              </div>
-            </div>
+              {/* Dedicated Live Database Reporting Manager Banner */}
+              {(() => {
+                const allEmpsList = (localEmps || (employees as Employee[]) || []);
+                const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
+                const currentMgr = mgrId
+                  ? allEmpsList.find((e) => Number(e.id) === Number(mgrId))
+                  : null;
+                const ceoEmp = allEmpsList.find((e: any) => {
+                  const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+                  const desig = (e.designation || e.jobTitle || '').toLowerCase();
+                  return isCeo || desig.includes('ceo') || desig.includes('chief executive');
+                });
+                const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
+                const fallbackManagerName = (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name;
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-muted/40 border border-primary/25 text-xs space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[10px] font-extrabold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-primary" />
+                        Direct Reporting Manager
+                      </div>
+                      {currentMgr?.employeeCode && (
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-background/80 border border-border/60 text-muted-foreground">
+                          {currentMgr.employeeCode}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1">
+                      <Avatar className={`h-10 w-10 rounded-full border-2 border-primary/40 shadow-xs bg-gradient-to-br ${avatarGrad(currentMgr?.id || 1)}`}>
+                        <AvatarImage src={(currentMgr as any)?.avatarUrl || undefined} />
+                        <AvatarFallback className="text-xs font-black text-white">
+                          {currentMgr ? (
+                            `${currentMgr.firstName?.[0] || ''}${currentMgr.lastName?.[0] || ''}`
+                          ) : isSelectedEmpCeo ? (
+                            <ShieldCheck className="w-4 h-4 text-white" />
+                          ) : ceoEmp ? (
+                            `${ceoEmp.firstName?.[0] || ''}${ceoEmp.lastName?.[0] || ''}`
+                          ) : (
+                            <Crown className="w-4 h-4 text-white" />
+                          )}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="font-extrabold text-foreground text-sm truncate flex items-center gap-1.5">
+                          {isSelectedEmpCeo ? (
+                            <span>Board of Directors / Shareholders</span>
+                          ) : currentMgr ? (
+                            <span>{currentMgr.firstName} {currentMgr.lastName}</span>
+                          ) : fallbackManagerName ? (
+                            <span>{fallbackManagerName}</span>
+                          ) : ceoEmp ? (
+                            <span className="flex items-center gap-1.5 text-foreground">
+                              {ceoEmp.firstName} {ceoEmp.lastName}
+                              <Badge variant="outline" className="text-[9px] font-extrabold py-0 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40">
+                                CEO
+                              </Badge>
+                            </span>
+                          ) : (
+                            <span className="text-primary font-bold flex items-center gap-1">
+                              <Crown className="w-3.5 h-3.5 text-amber-500 inline" /> Direct Report to CEO
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5 font-medium">
+                          {isSelectedEmpCeo ? (
+                            <span>Corporate Executive Governance</span>
+                          ) : currentMgr ? (
+                            <span>
+                              {currentMgr.designation || currentMgr.jobTitle || 'Manager'}
+                              {currentMgr.department ? ` · ${currentMgr.department}` : ''}
+                            </span>
+                          ) : ceoEmp ? (
+                            <span>Chief Executive Officer · Executive Leadership</span>
+                          ) : (
+                            <span>Top-level Executive Organization</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
             <div className="flex items-center justify-between pt-3 border-t border-border/60">
               <Button
