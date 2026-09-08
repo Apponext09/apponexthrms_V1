@@ -296,7 +296,7 @@ export const CreatePolicyPage: React.FC = () => {
       {currentStep === 1 && (
         <PolicyInformationStep
           formData={infoData}
-          onChange={(up) => setInfoData((prev) => ({ ...prev, ...up }))}
+          onChange={(up) => setInfoData((prev) => ({ ...prev, ...up } as any))}
           onNext={() => setCurrentStep(2)}
           onSaveDraft={handleSaveDraft}
           onCancel={() => navigate('/policies/manage')}

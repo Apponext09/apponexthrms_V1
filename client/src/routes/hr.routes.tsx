@@ -21,13 +21,22 @@ const SalaryStructureManagement = lazy(() => import('../features/payroll/pages/S
 const SalaryRevisionManagement = lazy(() => import('../features/payroll/pages/SalaryRevisionManagement').then(m => ({ default: m.SalaryRevisionManagement })));
 const TaxDeclaration = lazy(() => import('../features/payroll/pages/TaxDeclaration').then(m => ({ default: m.TaxDeclaration })));
 const FullFinalSettlement = lazy(() => import('../features/payroll/pages/FullFinalSettlement').then(m => ({ default: m.FullFinalSettlement })));
+const AdminPayrollPortal = lazy(() => import('../features/payroll/pages/AdminPayrollPortal').then(m => ({ default: m.AdminPayrollPortal })));
+const HRPayrollPortal = lazy(() => import('../features/payroll/pages/HRPayrollPortal').then(m => ({ default: m.HRPayrollPortal })));
+const PayrollReportsPage = lazy(() => import('../features/payroll/pages/PayrollReportsPage').then(m => ({ default: m.PayrollReportsPage })));
+const PayrollPoliciesPage = lazy(() => import('../features/payroll/pages/PayrollPoliciesPage').then(m => ({ default: m.PayrollPoliciesPage })));
 const GratuityPolicyPage = lazy(() => import('../features/payroll/pages/GratuityPolicyPage').then(m => ({ default: m.GratuityPolicyPage })));
+const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
 const AttendanceDashboard = lazy(() => import('../features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
 const AttendancePoliciesPage = lazy(() => import('../features/attendance/pages/AttendancePoliciesPage').then(m => ({ default: m.AttendancePoliciesPage })));
 const HRAttendanceLocationPage = lazy(() => import('../features/HR/Attendance').then(m => ({ default: m.HRAttendanceLocationPage })));
 const ShiftManagementPage = lazy(() => import('../features/attendance/pages/ShiftManagementPage').then(m => ({ default: m.ShiftManagementPage })));
 const BreakLogsPage = lazy(() => import('../features/attendance/pages/BreakLogsPage').then(m => ({ default: m.BreakLogsPage })));
 const ManagerHRRegularizationApprovals = lazy(() => import('../features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
+const MyLeavesPage = lazy(() => import('../features/leaves/pages/MyLeavesPage').then(m => ({ default: m.MyLeavesPage })));
+const ApplyLeavePage = lazy(() => import('../features/leaves/pages/ApplyLeavePage').then(m => ({ default: m.ApplyLeavePage })));
+const LeaveBalancePage = lazy(() => import('../features/leaves/pages/LeaveBalancePage').then(m => ({ default: m.LeaveBalancePage })));
+const LeaveEncashmentPage = lazy(() => import('../features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
 const ApprovalsDashboardPage = lazy(() => import('../features/leaves/pages/ApprovalsDashboardPage').then(m => ({ default: m.ApprovalsDashboardPage })));
 const HolidayCalendarsPage = lazy(() => import('../features/settings/pages/HolidayCalendarsPage').then(m => ({ default: m.HolidayCalendarsPage })));
@@ -77,7 +86,7 @@ const PerformanceAnalyticsPage = lazy(() => import('../features/performance/page
 // Analytics & Reports
 const AttendanceReportsPage = lazy(() => import('../features/analytics/pages/AttendanceReportsPage').then(m => ({ default: m.AttendanceReportsPage })));
 const TimelogReportPage = lazy(() => import('../features/analytics/pages/TimelogReportPage').then(m => ({ default: m.TimelogReportPage })));
-const CeoAttendanceReportPage = lazy(() => import('../features/analytics/pages/CeoAttendanceReportPage').then(m => ({ default: m.CeoAttendanceReportPage })));
+
 const ReportEnginePage = lazy(() => import('../features/analytics/pages/ReportEnginePage').then(m => ({ default: m.ReportEnginePage })));
 const BurnoutRiskDashboard = lazy(() => import('../features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
 
@@ -145,24 +154,42 @@ export const hrRoutes = (
 
     {/* Payroll */}
     <Route path="/hr/payroll" element={<PayrollDashboard />} />
+    <Route path="/hr/payroll/dashboard" element={<PayrollDashboard />} />
+    <Route path="/hr/payroll/admin-dashboard" element={<PayrollDashboard />} />
+    <Route path="/hr/payroll/admin-portal" element={<AdminPayrollPortal />} />
+    <Route path="/hr/payroll/hr-portal" element={<HRPayrollPortal />} />
     <Route path="/hr/payroll/settings" element={<PayrollSettingsPage />} />
+    <Route path="/hr/payroll/master-settings" element={<PayrollSettingsPage />} />
     <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
-    <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
-    <Route path="/hr/payroll/processing" element={<PayrollProcessing />} />
-    <Route path="/hr/loans" element={<LoanManagement />} />
-    <Route path="/hr/loan-types" element={<LoanManagement />} />
-    <Route path="/hr/payslips" element={<PayslipViewer />} />
-    <Route path="/hr/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
-    <Route path="/hr/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+    <Route path="/hr/payroll/policies" element={<PayrollPoliciesPage />} />
+    <Route path="/hr/payroll/salary-structure" element={<SalaryStructureManagement />} />
+    <Route path="/hr/payroll/salary-structures" element={<SalaryStructureManagement />} />
     <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
     <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
+    <Route path="/hr/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+    <Route path="/hr/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+    <Route path="/hr/payroll/salary-revision" element={<SalaryRevisionManagement />} />
+    <Route path="/hr/payroll/salary-revisions" element={<SalaryRevisionManagement />} />
     <Route path="/hr/salary-revision" element={<SalaryRevisionManagement />} />
     <Route path="/hr/salary-revisions" element={<SalaryRevisionManagement />} />
+    <Route path="/hr/payroll/processing" element={<PayrollProcessing />} />
+    <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
+    <Route path="/hr/payroll/payslips" element={<PayslipViewer />} />
+    <Route path="/hr/payroll/payslip-requests" element={<PayslipViewer />} />
+    <Route path="/hr/payslips" element={<PayslipViewer />} />
+    <Route path="/hr/payroll/tax-declaration" element={<TaxDeclaration />} />
     <Route path="/hr/tax-declaration" element={<TaxDeclaration />} />
+    <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
+    <Route path="/hr/payroll/loans" element={<LoanManagement />} />
+    <Route path="/hr/payroll/loan-types" element={<LoanManagement />} />
+    <Route path="/hr/loans" element={<LoanManagement />} />
+    <Route path="/hr/loan-types" element={<LoanManagement />} />
+    <Route path="/hr/payroll/settlements" element={<FullFinalSettlement />} />
+    <Route path="/hr/payroll/settlement" element={<FullFinalSettlement />} />
     <Route path="/hr/settlements" element={<FullFinalSettlement />} />
-    <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
     <Route path="/hr/payroll/gratuity" element={<GratuityPolicyPage />} />
-    <Route path="/hr/payroll/reports" element={<PayslipViewer />} />
+    <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
+    <Route path="/hr/payroll/team-settlements" element={<TeamSettlementsPage />} />
 
     {/* Expense Management */}
     <Route path="/hr/expenses/dashboard" element={<ExpenseDashboardPage />} />
@@ -200,6 +227,10 @@ export const hrRoutes = (
     <Route path="/hr/attendance/break-logs" element={<BreakLogsPage />} />
     <Route path="/hr/attendance-regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
     <Route path="/hr/regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
+    <Route path="/hr/leaves/my-leaves" element={<MyLeavesPage />} />
+    <Route path="/hr/leaves/apply" element={<ApplyLeavePage />} />
+    <Route path="/hr/leaves/balance" element={<LeaveBalancePage />} />
+    <Route path="/hr/leaves/encashment" element={<LeaveEncashmentPage />} />
     <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
     <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
     <Route path="/hr/approvals/dashboard" element={<ApprovalsDashboardPage />} />
@@ -254,7 +285,7 @@ export const hrRoutes = (
     {/* Reports & Analytics */}
     <Route path="/hr/analytics/attendance" element={<AttendanceReportsPage />} />
     <Route path="/hr/analytics/timelog" element={<TimelogReportPage />} />
-    <Route path="/hr/analytics/ceo-attendance" element={<CeoAttendanceReportPage />} />
+    
     <Route path="/hr/analytics/report-engine" element={<ReportEnginePage />} />
     <Route path="/hr/analytics/burnout-risk" element={<BurnoutRiskDashboard />} />
 

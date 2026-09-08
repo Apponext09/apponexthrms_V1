@@ -9,7 +9,7 @@ import { PaySection } from './PaySection';
 interface AccordionSectionProps {
   title:     string;
   prefix:    'normalDay' | 'holiday' | 'weekend';
-  control:   Control<any>;
+  control:   Control<any, any>;
   shiftType?: 'time_bound' | 'flexible';
 }
 

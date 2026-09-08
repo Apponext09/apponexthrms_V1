@@ -4,7 +4,7 @@ import { Controller, type Control, useWatch } from 'react-hook-form';
 
 interface PaySectionProps {
   prefix:  'normalDay' | 'holiday' | 'weekend';
-  control: Control<any>;
+  control: Control<any, any>;
 }
 
 export const PaySection: React.FC<PaySectionProps> = ({ prefix, control }) => {

@@ -162,6 +162,10 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'leave',
     label: 'LEAVE MANAGEMENT',
     items: [
+      { name: 'My Leaves', href: '/leaves/my-leaves', icon: 'Calendar' },
+      { name: 'Apply Leave', href: '/leaves/apply', icon: 'FilePlus', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
+      { name: 'Leave Balance', href: '/leaves/balance', icon: 'Clock', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
+      { name: 'Leave Encashment', href: '/leaves/encashment', icon: 'DollarSign', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
       {
         name: 'Leave Approvals',
         href: '/leaves/approvals',
@@ -195,32 +199,15 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'PAYROLL',
     items: [
       { name: 'Dashboard', href: '/payroll', icon: 'IndianRupee' },
-      {
-        name: 'Payroll Master Settings',
-        href: '/payroll/settings',
-        icon: 'Sliders',
-        minRoles: ['organization_admin', 'hr', 'hr_manager'],
-      },
-      { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp' },
-      {
-        name: 'Payroll Processing',
-        href: '/payroll/processing',
-        icon: 'Activity',
-        minRoles: ['organization_admin', 'hr', 'hr_manager'],
-      },
+      { name: 'Admin Payroll Portal', href: '/payroll/admin-portal', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Payroll Master Settings', href: '/payroll/settings', icon: 'Sliders', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Salary Structures', href: '/payroll/salary-structure', icon: 'Layers', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Mass Salary Upload', href: '/payroll/mass-salary-upload', icon: 'UploadCloud', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Payroll Processing', href: '/payroll/processing', icon: 'Activity', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Payslip Management', href: '/payroll/payslips', icon: 'FileText' },
-      {
-        name: 'Mass Salary Structure Upload',
-        href: '/payroll/mass-salary-upload',
-        icon: 'UploadCloud',
-        minRoles: ['organization_admin', 'hr', 'hr_manager'],
-      },
-      {
-        name: 'Payroll Reports',
-        href: '/payroll/reports',
-        icon: 'BarChart3',
-        minRoles: ['organization_admin', 'hr', 'hr_manager'],
-      },
+      { name: 'Tax Declarations', href: '/payroll/tax-declaration', icon: 'FileText', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Payroll Reports', href: '/payroll/reports', icon: 'BarChart3', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
     ],
   },
 
@@ -327,7 +314,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'CEO Attendance Report',
         href: '/analytics/ceo-attendance',
         icon: 'UserCheck',
-        minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'ceo'],
       },
       {
         name: 'Report Engine',

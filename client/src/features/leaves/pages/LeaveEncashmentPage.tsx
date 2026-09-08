@@ -277,14 +277,17 @@ export function LeaveEncashmentPage() {
                           return empGender === leaveGender;
                         })
                         .map(type => {
-                          const balItem = myBalances.find(b => b.leave_type_id === type.id);
-                          const balText = balItem ? ` (Balance: ${balItem.available_balance} days)` : '';
-                        return (
-                          <option key={type.id} value={type.id}>
-                            {type.leave_name} ({type.leave_code}){balText}
-                          </option>
-                        );
-                      })}
+                          const balItem = myBalances.find(b => (b.leave_type_id || (b as any).leaveTypeId || b.id) === type.id);
+                          const avail = balItem ? (balItem.available_balance ?? (balItem as any).availableBalance ?? 0) : 0;
+                          const balText = balItem ? ` (Balance: ${avail} days)` : '';
+                          const name = type.leave_name || (type as any).leaveName || (type as any).name || 'Leave Category';
+                          const code = type.leave_code || (type as any).leaveCode || (type as any).code || '';
+                          return (
+                            <option key={type.id} value={type.id}>
+                              {name} {code ? `(${code})` : ''}{balText}
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
 

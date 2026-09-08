@@ -70,7 +70,7 @@ function mapToHRHref(href: string): string {
   if (href === '/attendance/face-punch') return '/hr/face-attendance';
   if (href === '/attendance/shifts') return '/hr/attendance/shifts';
   if (href === '/attendance/roster-shifts') return '/hr/attendance/roster-shifts';
-  if (href === '/leaves/approvals') return '/hr/leaves/approvals';
+  if (href.startsWith('/leaves')) return `/hr${href}`;
   if (href === '/approvals/dashboard') return '/hr/approvals/dashboard';
   if (href === '/settings/leave-policies') return '/hr/settings/leave-policies';
   if (href === '/holidays') return '/hr/holidays';
@@ -93,7 +93,13 @@ function mapToHRHref(href: string): string {
     }
     return `/hr${href}`;
   }
-  if (href.startsWith('/modules')) return '/hr/modules';
+  if (href.startsWith('/modules')) {
+    if (href.includes('?')) {
+      const query = href.substring(href.indexOf('?'));
+      return `/hr/modules${query}`;
+    }
+    return '/hr/modules';
+  }
   if (href.startsWith('/settings')) {
     const sub = href.replace('/settings', '');
     return `/hr/settings${sub}`;
@@ -155,9 +161,9 @@ export function HRLayout() {
       // Insert custom masters if section is MASTERS
       if (sec.id === 'masters' && customMasters.length > 0) {
         const existingHrefs = new Set(items.map((i) => i.href.toLowerCase()));
-        const customItems = customMasters
+        const customItems: NavItem[] = customMasters
           .filter((cm) => !existingHrefs.has(`/hr/masters/${cm.code}`.toLowerCase()))
-          .map((cm) => ({
+          .map((cm): NavItem => ({
             name: cm.name,
             href: `/hr/masters/${cm.code}`,
             icon: 'Boxes',
@@ -179,8 +185,14 @@ export function HRLayout() {
     setExpandedSections((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
   };
 
-  const isPathActive = (itemHref: string, currentPath: string): boolean => {
+  const isPathActive = (itemHref: string, currentPath: string, currentSearch: string = ''): boolean => {
     if (!itemHref || !currentPath) return false;
+    const currentFull = currentSearch ? `${currentPath}${currentSearch}` : currentPath;
+
+    if (itemHref.includes('?')) {
+      return currentFull === itemHref;
+    }
+
     if (itemHref === currentPath) return true;
     const exactMatchRoutes = [
       '/', '/dashboard', '/hr', '/hr/dashboard',
@@ -191,6 +203,8 @@ export function HRLayout() {
       '/performance', '/hr/performance',
       '/assets', '/hr/assets',
       '/expenses', '/hr/expenses',
+      '/modules', '/hr/modules',
+      '/masters', '/hr/masters',
     ];
     if (exactMatchRoutes.includes(itemHref)) return currentPath === itemHref;
     return currentPath.startsWith(itemHref + '/');
@@ -214,8 +228,8 @@ export function HRLayout() {
       <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {hrSections.map((section) => {
           const isActive = section.items.some((item) =>
-            isPathActive(item.href, location.pathname) ||
-            (item.children && item.children.some((c) => isPathActive(c.href, location.pathname)))
+            isPathActive(item.href, location.pathname, location.search) ||
+            (item.children && item.children.some((c) => isPathActive(c.href, location.pathname, location.search)))
           );
           const isExpanded = expandedSections[section.id] ?? true;
 
@@ -266,8 +280,8 @@ export function HRLayout() {
                   <CollapsibleContent className={cn('mt-1 space-y-1', sidebarOpen ? 'ml-3 border-l border-border pl-3' : '')}>
                     {section.items.map((item) => {
                       const hasChildren = item.children && item.children.length > 0;
-                      const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname));
-                      const itemActive = (isPathActive(item.href, location.pathname) && !hasChildren) || isChildActive;
+                      const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname, location.search));
+                      const itemActive = (isPathActive(item.href, location.pathname, location.search) && !hasChildren) || isChildActive;
 
                       if (hasChildren) {
                         return (
@@ -300,7 +314,7 @@ export function HRLayout() {
 
                             <CollapsibleContent className={cn('mt-1 space-y-1', sidebarOpen ? 'ml-3 border-l border-border pl-3' : '')}>
                               {item.children!.map((child) => {
-                                const childActive = isPathActive(child.href, location.pathname);
+                                const childActive = isPathActive(child.href, location.pathname, location.search);
                                 return (
                                   <NavLink
                                     key={child.href}

@@ -3,7 +3,7 @@ import { Controller, type Control } from 'react-hook-form';
 
 interface OTDeductionSectionProps {
   prefix:  'normalDay' | 'holiday' | 'weekend';
-  control: Control<any>;
+  control: Control<any, any>;
 }
 
 export const OTDeductionSection: React.FC<OTDeductionSectionProps> = ({ prefix, control }) => {

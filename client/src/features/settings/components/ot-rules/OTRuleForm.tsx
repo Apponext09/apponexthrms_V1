@@ -581,9 +581,9 @@ export const OTRuleForm: React.FC<OTRuleFormProps> = ({ ruleId, onSaved, onCance
 
       {/* Main Module 2: Day-Type Accordions */}
       <div className="space-y-3">
-        <AccordionSection title="For Normal Days" prefix="normalDay" control={control} shiftType={shiftTypeValue} />
-        <AccordionSection title="For Holidays" prefix="holiday" control={control} shiftType={shiftTypeValue} />
-        <AccordionSection title="For Weekends" prefix="weekend" control={control} shiftType={shiftTypeValue} />
+        <AccordionSection title="For Normal Days" prefix="normalDay" control={control as any} shiftType={shiftTypeValue} />
+        <AccordionSection title="For Holidays" prefix="holiday" control={control as any} shiftType={shiftTypeValue} />
+        <AccordionSection title="For Weekends" prefix="weekend" control={control as any} shiftType={shiftTypeValue} />
       </div>
 
       {/* Main Module 3: Eligibility Rules Card */}

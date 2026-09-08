@@ -128,8 +128,14 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     navigate(href);
   };
 
-  const isPathActive = (itemHref: string, currentPath: string): boolean => {
+  const isPathActive = (itemHref: string, currentPath: string, currentSearch: string = ''): boolean => {
     if (!itemHref || !currentPath) return false;
+    const currentFull = currentSearch ? `${currentPath}${currentSearch}` : currentPath;
+
+    if (itemHref.includes('?')) {
+      return currentFull === itemHref;
+    }
+
     if (itemHref === currentPath) return true;
 
     const exactMatchRoutes = [
@@ -151,6 +157,10 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       '/hr/assets',
       '/expenses',
       '/hr/expenses',
+      '/modules',
+      '/hr/modules',
+      '/masters',
+      '/hr/masters',
     ];
 
     if (exactMatchRoutes.includes(itemHref)) {
@@ -230,7 +240,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
         <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {visibleSections.map((section) => {
             const isActive = section.items.some((item) =>
-              isPathActive(item.href, location.pathname)
+              isPathActive(item.href, location.pathname, location.search)
             );
             const isExpanded = expandedSections[section.id] ?? true;
 
@@ -283,8 +293,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                       {section.items.map((item) => {
                         const hasChildren = item.children && item.children.length > 0;
-                        const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname));
-                        const itemActive = (isPathActive(item.href, location.pathname) && !hasChildren) || isChildActive;
+                        const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname, location.search));
+                        const itemActive = (isPathActive(item.href, location.pathname, location.search) && !hasChildren) || isChildActive;
                         const isLocked = (item as any).isLocked;
 
                         if (hasChildren) {
@@ -326,7 +336,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
                               <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                                 {item.children!.map((child) => {
-                                  const childActive = isPathActive(child.href, location.pathname);
+                                  const childActive = isPathActive(child.href, location.pathname, location.search);
                                   return (
                                     <button
                                       key={child.name}

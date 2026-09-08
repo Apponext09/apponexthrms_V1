@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   PieChart,
   TrendingUp,
-<<<<<<< HEAD
-=======
   IndianRupee,
->>>>>>> 318d64017a89074e3861c6d51d5eba47980770b1
   Users,
   Building,
   Clock,

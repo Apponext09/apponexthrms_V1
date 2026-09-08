@@ -3,11 +3,11 @@ import { Controller, type Control } from 'react-hook-form';
 
 interface OTCalculationSectionProps {
   prefix:     'normalDay' | 'holiday' | 'weekend';
-  control:    Control<any>;
+  control:    Control<any, any>;
   shiftType?: 'time_bound' | 'flexible';
 }
 
-const UnitSelect: React.FC<{ name: string; control: Control<any> }> = ({ name, control }) => (
+const UnitSelect: React.FC<{ name: string; control: Control<any, any> }> = ({ name, control }) => (
   <Controller
     name={name}
     control={control}
