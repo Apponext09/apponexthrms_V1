@@ -752,18 +752,76 @@ export class ExpenseService {
     const config = await this.getConfig(ctx);
     const cur = (n: number) => ExpenseConfigService.formatAmount(n, config);
     const category = categoryId ? await db('expense_categories').where('id', categoryId).first() : null;
-    const policies = await db('expense_policies')
+
+    let empGrade: string | null = null;
+    let empDesignation: string | null = null;
+    let empLocation: string | null = null;
+
+    if (ctx.userId) {
+      try {
+        const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first('employee_id');
+        if (user?.employee_id) {
+          const emp = await db('employees')
+            .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
+            .leftJoin('locations', 'employees.current_location_id', 'locations.id')
+            .where('employees.id', user.employee_id)
+            .first(
+              'employees.grade',
+              db.raw('COALESCE(designations.name, designations.designation_name) as designation_name'),
+              db.raw('COALESCE(locations.name, locations.location_name) as location_name')
+            );
+          if (emp) {
+            empGrade = emp.grade ? String(emp.grade).trim().toLowerCase() : null;
+            empDesignation = emp.designation_name ? String(emp.designation_name).trim().toLowerCase() : null;
+            empLocation = emp.location_name ? String(emp.location_name).trim().toLowerCase() : null;
+          }
+        }
+      } catch (e) {
+        console.error('Error fetching applicant employee details for policy validation:', e);
+      }
+    }
+
+    const allPolicies = await db('expense_policies')
       .where('organization_id', ctx.organizationId)
-      .where('is_active', true)
       .where(function () {
-        this.whereNull('category_id').orWhere('category_id', categoryId);
+        this.where('is_active', true).orWhere('is_active', 1);
+      })
+      .where(function () {
+        this.whereNull('category_id')
+          .orWhere('category_id', 0)
+          .orWhere('category_id', categoryId || 0);
       });
 
+    const matchesAttr = (polVal: string | null | undefined, empVal: string | null | undefined) => {
+      if (!polVal) return true;
+      const p = String(polVal).trim().toLowerCase();
+      if (p === 'all' || p === '') return true;
+      if (!empVal) return true;
+      const e = String(empVal).trim().toLowerCase();
+      return p === e || p.includes(e) || e.includes(p);
+    };
+
+    const policies = allPolicies.filter((pol: any) => {
+      const pGrade = pol.grade ? String(pol.grade).trim().toLowerCase() : 'all';
+      const pDesig = pol.designation ? String(pol.designation).trim().toLowerCase() : 'all';
+      const pLoc = pol.location ? String(pol.location).trim().toLowerCase() : 'all';
+
+      if (pGrade === 'all' || pGrade === '' || !empGrade || matchesAttr(pol.grade, empGrade)) {
+        if (pDesig === 'all' || pDesig === '' || !empDesignation || matchesAttr(pol.designation, empDesignation)) {
+          if (pLoc === 'all' || pLoc === '' || !empLocation || matchesAttr(pol.location, empLocation)) {
+            return true;
+          }
+        }
+      }
+      return true;
+    });
+
     const violations: string[] = [];
+    let allowException = true;
 
     if (category) {
       if (category.spending_limit > 0 && amount > category.spending_limit) {
-        violations.push(`Amount ${cur(amount)} exceeds category limit ${cur(category.spending_limit)}`);
+        violations.push(`Amount ${cur(amount)} exceeds category limit of ${cur(category.spending_limit)} for category '${category.name}'`);
       }
       if (category.is_receipt_mandatory && amount >= category.min_amount_for_receipt && !receiptProvided) {
         violations.push(`Receipt mandatory for ${category.name} above ${cur(category.min_amount_for_receipt)}`);
@@ -771,8 +829,16 @@ export class ExpenseService {
     }
 
     for (const pol of policies) {
-      if (pol.max_limit_per_claim > 0 && amount > pol.max_limit_per_claim) {
-        violations.push(`Amount exceeds policy limit of ${cur(pol.max_limit_per_claim)} for ${pol.policy_name}`);
+      const polMax = Number(pol.max_limit_per_claim || 0);
+      const polMin = Number(pol.min_limit_per_claim || 0);
+      if (polMax > 0 && amount > polMax) {
+        violations.push(`Amount ${cur(amount)} exceeds the set policy limit of ${cur(polMax)} for policy '${pol.policy_name}'`);
+        if (pol.allow_exception === 0 || pol.allow_exception === false) {
+          allowException = false;
+        }
+      }
+      if (polMin > 0 && amount < polMin) {
+        violations.push(`Amount ${cur(amount)} is below the minimum set policy limit of ${cur(polMin)} for policy '${pol.policy_name}'`);
       }
       if (pol.require_receipt_above > 0 && amount > pol.require_receipt_above && !receiptProvided) {
         violations.push(`Receipt mandatory for amounts over ${cur(pol.require_receipt_above)} per policy '${pol.policy_name}'`);
@@ -781,7 +847,8 @@ export class ExpenseService {
 
     return {
       isValid: violations.length === 0,
-      violations
+      violations,
+      allowException
     };
   }
 
@@ -2235,6 +2302,24 @@ export class ExpenseService {
 
     // Resolve initial workflow status (same as expense claims)
     const estimatedBudget = Number(data.estimatedBudget || 0);
+
+    // Validate against Travel category & expense policies
+    const travelCat = await db('expense_categories')
+      .where('organization_id', ctx.organizationId)
+      .where(function() {
+        this.whereRaw('LOWER(name) LIKE ?', ['%travel%']).orWhereRaw('LOWER(code) = ?', ['travel']);
+      })
+      .first();
+
+    const catId = travelCat ? Number(travelCat.id) : 1;
+    const validation = await this.validatePolicyForClaim(ctx, catId, estimatedBudget, false);
+    if (!validation.isValid && validation.violations && validation.violations.length > 0) {
+      const limitViolation = validation.violations.find((v: string) => v.toLowerCase().includes('limit') || v.toLowerCase().includes('exceeds'));
+      if (limitViolation) {
+        throw new Error(`Policy limit exceeded: ${limitViolation}`);
+      }
+    }
+
     const { workflow, levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, estimatedBudget);
     const settings = await this.getSettings(ctx);
     const resolved = this.resolveInitialWorkflowStatus(submittedByRole, levels, settings);
@@ -2782,10 +2867,22 @@ export class ExpenseService {
     const mileageWfItems = [{ categoryId: null, claimedAmount: calculatedAmount, policyValidated: true }];
     const mileageWf = await this.resolveSubmitStatus(ctx, mileageWfItems, false, mileageSubmittedByRole);
 
+    let empId = emp?.id ?? null;
+    if (!empId) {
+      try {
+        const firstEmp = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .first('id')
+          .catch(() => null);
+        if (firstEmp?.id) empId = Number(firstEmp.id);
+      } catch { /* ignore fallback */ }
+    }
+
     const [id] = await db('mileage_claims').insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      employee_id: emp?.id ?? null,
+      employee_id: empId,
       submitted_by_user_id: ctx.userId || null,
       submitted_by_role: mileageSubmittedByRole,
       trip_date: data.tripDate || new Date().toISOString().slice(0, 10),

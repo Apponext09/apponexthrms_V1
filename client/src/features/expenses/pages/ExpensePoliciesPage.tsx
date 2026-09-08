@@ -28,11 +28,11 @@ export const ExpensePoliciesPage: React.FC = () => {
   const [grade, setGrade] = useState('All');
   const [designation, setDesignation] = useState('All');
   const [location, setLocation] = useState('All');
-  const [locationSearch, setLocationSearch] = useState('');
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [orgLocations, setOrgLocations] = useState<Array<{ id: number; name: string }>>([]);
-  const [maxLimitPerClaim, setMaxLimitPerClaim] = useState<number>(25000);
-  const [maxLimitPerMonth, setMaxLimitPerMonth] = useState<number>(75000);
+  const [orgLocations, setOrgLocations] = useState<Array<{ id: number | string; name: string }>>([]);
+  const [orgDesignations, setOrgDesignations] = useState<Array<{ id: number | string; name: string }>>([]);
+  const [orgGrades, setOrgGrades] = useState<Array<{ id: number | string; name: string }>>([]);
+  const [maxLimitPerClaim, setMaxLimitPerClaim] = useState<number>(1000);
+  const [maxLimitPerMonth, setMaxLimitPerMonth] = useState<number>(5000);
   const [requireReceiptAbove, setRequireReceiptAbove] = useState<number>(500);
   const [allowException, setAllowException] = useState(true);
   const [isActive, setIsActive] = useState(true);
@@ -56,17 +56,30 @@ export const ExpensePoliciesPage: React.FC = () => {
 
   useEffect(() => {
     fetchPoliciesAndCategories();
-    apiClient.get('/settings/locations', { params: { pageSize: 200 } })
+    apiClient.get('/settings/scope-masters')
       .then((res: any) => {
-        const raw = res?.data?.data || res?.data || [];
-        setOrgLocations(
-          (Array.isArray(raw) ? raw : []).map((l: any) => ({
-            id: Number(l.id),
-            name: l.name || l.code || String(l.id),
-          })).filter((l: { id: number; name: string }) => l.id)
-        );
+        const d = res?.data?.data || {};
+        const locs = Array.isArray(d.locations) ? d.locations : [];
+        const desigs = Array.isArray(d.designations) ? d.designations : [];
+        const grds = Array.isArray(d.grades) ? d.grades : [];
+        setOrgLocations(locs);
+        setOrgDesignations(desigs);
+        setOrgGrades(grds);
       })
-      .catch(() => setOrgLocations([]));
+      .catch(() => {
+        Promise.all([
+          apiClient.get('/settings/locations', { params: { pageSize: 200 } }).catch(() => ({ data: [] })),
+          apiClient.get('/settings/designations', { params: { pageSize: 200 } }).catch(() => ({ data: [] })),
+          apiClient.get('/settings/grades', { params: { pageSize: 200 } }).catch(() => ({ data: [] }))
+        ]).then(([locRes, desRes, grdRes]) => {
+          const lRaw = locRes?.data?.data || locRes?.data || [];
+          const dRaw = desRes?.data?.data || desRes?.data || [];
+          const gRaw = grdRes?.data?.data || grdRes?.data || [];
+          setOrgLocations((Array.isArray(lRaw) ? lRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.location_name || String(x.id) })));
+          setOrgDesignations((Array.isArray(dRaw) ? dRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.designation_name || String(x.id) })));
+          setOrgGrades((Array.isArray(gRaw) ? gRaw : []).map((x: any) => ({ id: x.id, name: x.name || x.grade_name || String(x.id) })));
+        });
+      });
   }, []);
 
   const openModal = (pol?: ExpensePolicy) => {
@@ -77,8 +90,6 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade(pol.grade || 'All');
       setDesignation(pol.designation || 'All');
       setLocation(pol.location || 'All');
-      setLocationSearch('');
-      setLocationOpen(false);
       setMaxLimitPerClaim(pol.maxLimitPerClaim);
       setMaxLimitPerMonth(pol.maxLimitPerMonth);
       setRequireReceiptAbove(pol.requireReceiptAbove);
@@ -91,10 +102,8 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade('All');
       setDesignation('All');
       setLocation('All');
-      setLocationSearch('');
-      setLocationOpen(false);
-      setMaxLimitPerClaim(25000);
-      setMaxLimitPerMonth(75000);
+      setMaxLimitPerClaim(1000);
+      setMaxLimitPerMonth(5000);
       setRequireReceiptAbove(500);
       setAllowException(true);
       setIsActive(true);
@@ -290,78 +299,52 @@ export const ExpensePoliciesPage: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Employee Grade</label>
-                  <input
-                    type="text"
-                    placeholder="All / L1 / L2 / Executive"
+                  <select
                     value={grade}
                     onChange={(e) => setGrade(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                  >
+                    <option value="All">All Grades</option>
+                    {orgGrades.map((g) => (
+                      <option key={g.id || g.name} value={g.name}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Designation</label>
-                  <input
-                    type="text"
-                    placeholder="All / Manager / VP"
+                  <select
                     value={designation}
                     onChange={(e) => setDesignation(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                  >
+                    <option value="All">All Designations</option>
+                    {orgDesignations.map((d) => (
+                      <option key={d.id || d.name} value={d.name}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="relative">
+                <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Location</label>
-                  <input
-                    type="text"
-                    placeholder="Search location..."
-                    value={locationOpen ? locationSearch : location}
-                    onFocus={() => {
-                      setLocationOpen(true);
-                      setLocationSearch(location === 'All' ? '' : location);
-                    }}
-                    onChange={(e) => {
-                      setLocationSearch(e.target.value);
-                      setLocationOpen(true);
-                    }}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
-                  {locationOpen && (
-                    <div className="absolute z-20 mt-1 w-full max-h-44 overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg">
-                      <button
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
-                        onClick={() => {
-                          setLocation('All');
-                          setLocationSearch('');
-                          setLocationOpen(false);
-                        }}
-                      >
-                        All locations
-                      </button>
-                      {orgLocations
-                        .filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase()))
-                        .map((l) => (
-                          <button
-                            type="button"
-                            key={l.id}
-                            className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
-                            onClick={() => {
-                              setLocation(l.name);
-                              setLocationSearch(l.name);
-                              setLocationOpen(false);
-                            }}
-                          >
-                            {l.name}
-                          </button>
-                        ))}
-                      {orgLocations.filter((l) => l.name.toLowerCase().includes(locationSearch.toLowerCase())).length === 0 && (
-                        <div className="px-3 py-2 text-[11px] text-slate-400">No matching location</div>
-                      )}
-                    </div>
-                  )}
+                  <select
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
+                  >
+                    <option value="All">All Locations</option>
+                    {orgLocations.map((l) => (
+                      <option key={l.id || l.name} value={l.name}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -377,7 +360,7 @@ export const ExpensePoliciesPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Month (₹)</label>
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Month</label>
                   <input
                     type="number"
                     value={maxLimitPerMonth}

@@ -141,6 +141,29 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     }
   };
 
+  const userProfile = getUserRoleAndDept(user);
+  const userRoleCode = (userProfile?.roleCode || '').toLowerCase();
+  const userRoleTitle = (userProfile?.roleTitle || '').toLowerCase();
+  const isHrUser =
+    userRoleCode.startsWith('hr') ||
+    userRoleTitle === 'hr' ||
+    (user as any)?.role === 'hr' ||
+    (Array.isArray((user as any)?.roles) && (user as any).roles.some((r: string) => String(r).toLowerCase().startsWith('hr')));
+
+  const portalLabel = isHrUser
+    ? 'HR Portal'
+    : ['organization_admin', 'ceo', 'super_admin'].includes(userRoleCode)
+    ? 'Admin Portal'
+    : userRoleCode === 'support'
+    ? 'Support Portal'
+    : userRoleCode === 'finance'
+    ? 'Finance Portal'
+    : userRoleCode === 'department_head'
+    ? 'Manager Portal'
+    : userRoleCode === 'team_lead'
+    ? 'Team Lead Portal'
+    : 'Admin Portal';
+
   return (
     <>
       <div
@@ -168,7 +191,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <span className="text-[15px] font-extrabold tracking-tight text-foreground">Apponext</span>
                     <span className="rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-primary">HRMS</span>
                   </div>
-                  <span className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Admin Portal</span>
+                  <span className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{portalLabel}</span>
                 </motion.div>
               )}
             </AnimatePresence>

@@ -14,7 +14,10 @@ import {
   ChevronRight,
   Building2,
   User,
-  ShieldCheck
+  ShieldCheck,
+  AlertTriangle,
+  ShieldAlert,
+  Info
 } from 'lucide-react';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -79,6 +82,10 @@ export const TravelRequestsPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
+  // Policy Limit State
+  const [maxBudgetLimit, setMaxBudgetLimit] = useState<number | null>(null);
+  const [policyLimitModal, setPolicyLimitModal] = useState<{ isOpen: boolean; limit: number; attempted: number } | null>(null);
+
   // Filters
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -123,6 +130,36 @@ export const TravelRequestsPage: React.FC = () => {
     } catch { /* ignore */ }
   };
 
+  const fetchTravelPolicies = async () => {
+    try {
+      const [policiesRes, categoriesRes] = await Promise.all([
+        expenseApi.getPolicies().catch(() => []),
+        expenseApi.getCategories().catch(() => [])
+      ]);
+      const travelCat = (categoriesRes || []).find((c: any) =>
+        String(c.name || '').toLowerCase().includes('travel') || String(c.code || '').toLowerCase() === 'travel'
+      );
+      const travelCatId = travelCat?.id || 1;
+      const travelPols = (policiesRes || []).filter((p: any) =>
+        p.isActive !== false && (!p.categoryId || Number(p.categoryId) === Number(travelCatId))
+      );
+
+      const limits = travelPols
+        .map((p: any) => Number(p.maxLimitPerClaim || p.max_limit_per_claim || 0))
+        .filter((l: number) => l > 0);
+
+      if (limits.length > 0) {
+        setMaxBudgetLimit(Math.min(...limits));
+      } else if (travelCat && Number(travelCat.spendingLimit || travelCat.spending_limit || 0) > 0) {
+        setMaxBudgetLimit(Number(travelCat.spendingLimit || travelCat.spending_limit));
+      } else {
+        setMaxBudgetLimit(null);
+      }
+    } catch (err) {
+      console.error('Failed to load travel policies:', err);
+    }
+  };
+
   const fetchTravelRequests = useCallback(async () => {
     try {
       setLoading(true);
@@ -141,7 +178,11 @@ export const TravelRequestsPage: React.FC = () => {
     }
   }, [isManagement, user, statusFilter, departmentFilter, search]);
 
-  useEffect(() => { fetchDepartments(); }, []);
+  useEffect(() => {
+    fetchDepartments();
+    fetchTravelPolicies();
+  }, []);
+
   useEffect(() => { fetchTravelRequests(); }, [fetchTravelRequests]);
 
   const handleCreateRequest = async () => {
@@ -149,6 +190,17 @@ export const TravelRequestsPage: React.FC = () => {
       setToast({ type: 'error', message: 'Please fill in all required fields (From, To, Purpose).' });
       return;
     }
+
+    // Policy Limit Check: Prevent submission if limit is exceeded
+    if (maxBudgetLimit !== null && estimatedBudget > maxBudgetLimit) {
+      setPolicyLimitModal({
+        isOpen: true,
+        limit: maxBudgetLimit,
+        attempted: estimatedBudget
+      });
+      return;
+    }
+
     try {
       setSubmitting(true);
       await expenseApi.createTravelRequest({ fromLocation, toLocation, purpose, startDate, endDate, estimatedBudget });
@@ -441,9 +493,39 @@ export const TravelRequestsPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div className="sm:col-span-2">
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Estimated Budget (₹)</label>
-                <input type="number" min={0} placeholder="e.g. 25000" value={estimatedBudget || ''} onChange={e => setEstimatedBudget(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300">Estimated Budget (₹) *</label>
+                  {maxBudgetLimit !== null && (
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Policy Max Limit: {money(maxBudgetLimit)}
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 1000"
+                  value={estimatedBudget || ''}
+                  onChange={e => setEstimatedBudget(Number(e.target.value))}
+                  className={`w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs focus:outline-none focus:ring-2 ${
+                    maxBudgetLimit !== null && estimatedBudget > maxBudgetLimit
+                      ? 'border-rose-400 dark:border-rose-700 text-rose-700 dark:text-rose-300 focus:ring-rose-500 bg-rose-50/50 dark:bg-rose-950/30'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-blue-500'
+                  }`}
+                />
+
+                {/* Live Policy Limit Warning */}
+                {maxBudgetLimit !== null && estimatedBudget > maxBudgetLimit && (
+                  <div className="mt-2 p-2.5 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 rounded-lg flex items-start gap-2 text-rose-700 dark:text-rose-300 text-xs">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Cannot claim above set limit!</span>
+                      <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5">
+                        Your entered budget of <strong>{money(estimatedBudget)}</strong> exceeds the maximum policy limit of <strong>{money(maxBudgetLimit)}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="sm:col-span-2">
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Purpose of Travel *</label>
@@ -457,6 +539,46 @@ export const TravelRequestsPage: React.FC = () => {
               <button disabled={submitting} onClick={handleCreateRequest}
                 className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm">
                 {submitting ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POLICY LIMIT EXCEEDED POPUP MODAL */}
+      {policyLimitModal && policyLimitModal.isOpen && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-rose-200 dark:border-rose-900 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Cannot Claim Above Set Limit</h2>
+                <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">Policy Violation Warning</p>
+              </div>
+            </div>
+
+            <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl p-4 space-y-2 text-xs">
+              <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                <span>Maximum Allowed Limit:</span>
+                <span className="font-bold text-slate-900 dark:text-white text-sm">{money(policyLimitModal.limit)}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600 dark:text-slate-400">
+                <span>Your Claimed Budget:</span>
+                <span className="font-bold text-rose-600 dark:text-rose-400 text-sm">{money(policyLimitModal.attempted)}</span>
+              </div>
+              <p className="pt-2 border-t border-rose-200 dark:border-rose-800 text-[11px] text-slate-600 dark:text-slate-400">
+                You cannot submit a travel request exceeding the organization's set travel policy limit of <strong>{money(policyLimitModal.limit)}</strong>. Please adjust your budget to continue with the workflow.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setPolicyLimitModal(null)}
+                className="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all"
+              >
+                Adjust Budget
               </button>
             </div>
           </div>
