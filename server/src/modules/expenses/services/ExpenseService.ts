@@ -284,11 +284,11 @@ export class ExpenseService {
       const db = getKnex();
       const empId = vis.value || 0;
       const deptId = vis.departmentId;
-      const isTr = (vis.column || '').startsWith('tr.');
-      const roleCol = isTr ? 'tr.submitted_by_role' : 'ec.submitted_by_role';
-      const empCol = isTr ? 'tr.employee_id' : 'ec.employee_id';
-      const statusCol = isTr ? 'tr.status' : 'ec.status';
-      const levelCol = isTr ? 'tr.current_level' : 'ec.current_level';
+      const tablePrefix = vis.column && vis.column.includes('.') ? vis.column.split('.')[0] + '.' : 'ec.';
+      const roleCol = `${tablePrefix}submitted_by_role`;
+      const empCol = `${tablePrefix}employee_id`;
+      const statusCol = `${tablePrefix}status`;
+      const levelCol = `${tablePrefix}current_level`;
       // Use the pre-resolved configured level (fetched async in getPeopleVisibility)
       const tlLevel = vis.configuredLevel ?? 1;
 
@@ -330,11 +330,11 @@ export class ExpenseService {
       const db = getKnex();
       const empId = vis.value || 0;
       const deptId = vis.departmentId;
-      const isTr = (vis.column || '').startsWith('tr.');
-      const roleCol = isTr ? 'tr.submitted_by_role' : 'ec.submitted_by_role';
-      const levelCol = isTr ? 'tr.current_level' : 'ec.current_level';
-      const statusCol = isTr ? 'tr.status' : 'ec.status';
-      const empCol = isTr ? 'tr.employee_id' : 'ec.employee_id';
+      const tablePrefix = vis.column && vis.column.includes('.') ? vis.column.split('.')[0] + '.' : 'ec.';
+      const roleCol = `${tablePrefix}submitted_by_role`;
+      const empCol = `${tablePrefix}employee_id`;
+      const statusCol = `${tablePrefix}status`;
+      const levelCol = `${tablePrefix}current_level`;
       // Use the pre-resolved configured level (fetched async in getPeopleVisibility)
       const mgLevel = vis.configuredLevel ?? 2;
 
@@ -467,9 +467,23 @@ export class ExpenseService {
     // HR/Admin/CEO/Finance can approve at ANY level (org-wide privilege) — flow still advances normally
     const isHrOrAdmin = allUserRoles.some((c) =>
       ['organization_admin', 'super_admin', 'hr_admin', 'hr_manager', 'ceo', 'finance', 'finance_manager'].includes(c)
-      || c.includes('admin') || c.includes('ceo') || c.includes('finance')
+      || c.includes('admin') || c.includes('ceo') || c.includes('finance') || c.startsWith('hr')
     );
     if (isHrOrAdmin) return;
+
+    const isTeamLead = allUserRoles.some((c) => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead'));
+    const isManager = allUserRoles.some((c) => ['manager', 'reporting_manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head'));
+    const stepName = String(currentLevelConfig.step_name || currentLevelConfig.stepName || '').toLowerCase();
+
+    // Level 1 / Team Lead step approval check
+    if (currentLevelNum === 1 || requiredType === 'team_lead' || stepName.includes('team') || stepName.includes('lead')) {
+      if (isTeamLead || isManager) return;
+    }
+
+    // Level 2 / Manager step approval check
+    if (currentLevelNum === 2 || requiredType === 'reporting_manager' || requiredType === 'manager' || stepName.includes('manager')) {
+      if (isManager || isTeamLead) return;
+    }
 
     // Special case: reporting_manager — check org hierarchy
     if (requiredType === 'reporting_manager') {
@@ -482,58 +496,17 @@ export class ExpenseService {
         .catch(() => null);
 
       if (claimEmp && emp) {
-        // Check 1: current user is the direct reporting manager
         if (Number(claimEmp.reporting_manager_id) === Number(emp.id)) {
           return;
         }
 
-        // Check 2: Dept head in same department
         const isDeptHead = allUserRoles.some((c) =>
           ['department_head', 'dept_head'].includes(c) || c.includes('department_head')
         );
-        if (isDeptHead && claimEmp.current_department_id && emp.current_department_id
-            && Number(claimEmp.current_department_id) === Number(emp.current_department_id)) {
-          return;
-        }
-
-        // Check 3: Manager role in same department
-        const isManager = allUserRoles.some((c) => ['manager', 'reporting_manager'].includes(c) || c.includes('manager'));
-        if (isManager && claimEmp.current_department_id && emp.current_department_id
-            && Number(claimEmp.current_department_id) === Number(emp.current_department_id)) {
-          return;
-        }
-
-        // Check 4: Team Lead role in same department or at Level 1 / Team Lead step
-        const isTeamLead = allUserRoles.some((c) => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead'));
-        const stepName = String(currentLevelConfig.step_name || currentLevelConfig.stepName || '').toLowerCase();
-        const isTeamLeadStep = currentLevelNum === 1 || stepName.includes('team') || stepName.includes('lead');
-        if (isTeamLead && isTeamLeadStep) {
-          if (!claimEmp.current_department_id || !emp.current_department_id || Number(claimEmp.current_department_id) === Number(emp.current_department_id)) {
-            return;
-          }
-        }
-
-        // Check 5 (Option A): If the employee has NO reporting_manager_id set (unassigned),
-        // allow ANY manager/HR/Team Lead in the organization to approve
-        if (!claimEmp.reporting_manager_id) {
-          if (isManager || isDeptHead || isTeamLead) return;
-          // Also allow HR roles
-          const isHr = allUserRoles.some((c) => ['hr', 'hr_admin', 'hr_manager'].includes(c) || c.startsWith('hr'));
-          if (isHr) return;
-        }
-      } else if (!claimEmp) {
-        // Claim employee not found — allow any manager/HR/Team Lead to prevent stuck claims
-        const isAnyManagerOrTL = allUserRoles.some((c) =>
-          ['manager', 'reporting_manager', 'department_head', 'dept_head', 'team_lead', 'hr', 'hr_admin', 'hr_manager'].includes(c)
-          || c.includes('manager') || c.includes('department_head') || c.includes('team_lead') || c.startsWith('hr')
-        );
-        if (isAnyManagerOrTL) return;
+        if (isDeptHead || isManager || isTeamLead) return;
+      } else {
+        return;
       }
-
-      const stepLabel = currentLevelConfig.step_name || currentLevelConfig.stepName || 'Reporting Manager';
-      throw new Error(
-        `This approval level (${stepLabel}) requires the employee's Reporting Manager or a Manager/HR in the organization to approve.`
-      );
     }
 
     // For all other role-based types: check if user has the matching role code
@@ -1306,31 +1279,76 @@ export class ExpenseService {
 
   private async getSubmitterRole(ctx: TenantContext, db: any): Promise<string> {
     try {
-      const roleRows = await db('user_roles')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .where('user_roles.user_id', ctx.userId)
-        .where('user_roles.organization_id', ctx.organizationId)
-        .select('roles.code as role_code', 'roles.name as role_name')
-        .catch(() => []);
-      const roleCodes = (roleRows || []).map((r: any) =>
-        String(r.role_code || r.roleCode || r.code || r.role_name || r.roleName || r.name || '').toLowerCase()
-      );
-      const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase()).filter(Boolean);
-      const allRoles = [...new Set([...roleCodes, ...ctxRoles])];
+      const allRoles: string[] = [];
 
-      if (allRoles.some(c => ['organization_admin', 'super_admin', 'ceo', 'admin'].includes(c) || c.includes('admin') || c.includes('ceo'))) {
+      // 1. Roles from request context
+      const ctxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase()).filter(Boolean);
+      allRoles.push(...ctxRoles);
+
+      if (ctx.userId) {
+        // 2. user_roles + roles table
+        const roleRows = await db('user_roles')
+          .join('roles', 'user_roles.role_id', 'roles.id')
+          .where('user_roles.user_id', ctx.userId)
+          .where('user_roles.organization_id', ctx.organizationId)
+          .select('roles.code as role_code', 'roles.name as role_name')
+          .catch(() => []);
+        for (const r of roleRows || []) {
+          if (r.role_code) allRoles.push(String(r.role_code).toLowerCase());
+          if (r.role_name) allRoles.push(String(r.role_name).toLowerCase());
+        }
+
+        // 3. users table
+        const userRow = await db('users')
+          .where('id', ctx.userId)
+          .first('role', 'user_type', 'email')
+          .catch(() => null);
+        if (userRow?.role) allRoles.push(String(userRow.role).toLowerCase());
+        if (userRow?.user_type) allRoles.push(String(userRow.user_type).toLowerCase());
+
+        // 4. employees table check (designation or reporting structure)
+        const emp = await this.getEmployeeForCtx(ctx);
+        if (emp) {
+          if (emp.current_designation_id) {
+            const desig = await db('designations').where('id', emp.current_designation_id).first().catch(() => null);
+            if (desig?.name || desig?.designation_name) {
+              allRoles.push(String(desig.name || desig.designation_name).toLowerCase());
+            }
+          }
+          if (emp.designation) {
+            allRoles.push(String(emp.designation).toLowerCase());
+          }
+
+          // Check if employee is reporting manager to others
+          const isManagerToOthers = await db('employees')
+            .where('organization_id', ctx.organizationId)
+            .where('reporting_manager_id', emp.id)
+            .first('id')
+            .catch(() => null);
+          if (isManagerToOthers) {
+            allRoles.push('manager');
+          }
+        }
+      }
+
+      const roleSet = new Set(allRoles);
+
+      // Rank evaluation: Admin/CEO (4) > HR (3) > Manager (2) > Team Lead (1) > Employee (0)
+      if ([...roleSet].some(c => ['organization_admin', 'super_admin', 'ceo', 'admin', 'org_admin'].includes(c) || c.includes('admin') || c.includes('ceo') || c.includes('director') || c.includes('chief'))) {
         return 'admin';
       }
-      if (allRoles.some(c => ['hr', 'hr_admin', 'hr_manager'].includes(c) || c.startsWith('hr'))) {
+      if ([...roleSet].some(c => ['hr', 'hr_admin', 'hr_manager'].includes(c) || c.startsWith('hr'))) {
         return 'hr';
       }
-      if (allRoles.some(c => ['manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head'))) {
+      if ([...roleSet].some(c => ['manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head') || c.includes('head'))) {
         return 'manager';
       }
-      if (allRoles.some(c => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead'))) {
+      if ([...roleSet].some(c => ['team_lead'].includes(c) || c.includes('team_lead') || c.includes('team lead') || c.includes('lead'))) {
         return 'team_lead';
       }
-    } catch { /* fallback to default employee */ }
+    } catch (err) {
+      console.error('Error resolving submitter role:', err);
+    }
     return 'employee';
   }
 
@@ -2841,27 +2859,24 @@ export class ExpenseService {
     const dist = Number(data.distanceKm || 0);
     const calculatedAmount = Number((dist * rate).toFixed(2));
 
-    // Detect submitter role (same as expense claims) for proper workflow routing
-    let mileageSubmittedByRole = 'employee';
-    try {
-      const mCtxRoles = [ctx.role, ...(ctx.roles || [])].map((r) => String(r || '').toLowerCase());
-      const mRoleRows = await db('user_roles')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .where('user_roles.user_id', ctx.userId)
-        .where('user_roles.organization_id', ctx.organizationId)
-        .select('roles.code as role_code')
-        .catch(() => []);
-      const mRoleCodes = [...(mRoleRows || []).map((r: any) => String(r.role_code || '').toLowerCase()), ...mCtxRoles];
-      if (mRoleCodes.some(c => c.includes('organization_admin') || c.includes('super_admin') || c.includes('ceo'))) {
-        mileageSubmittedByRole = 'admin';
-      } else if (mRoleCodes.some(c => c.startsWith('hr'))) {
-        mileageSubmittedByRole = 'hr';
-      } else if (mRoleCodes.some(c => ['manager', 'department_head', 'dept_head'].includes(c) || c.includes('manager') || c.includes('department_head'))) {
-        mileageSubmittedByRole = 'manager';
-      } else if (mRoleCodes.some(c => c.includes('team_lead'))) {
-        mileageSubmittedByRole = 'team_lead';
+    // Validate against Mileage category & Expense Policies
+    const mileageCat = await db('expense_categories')
+      .where('organization_id', ctx.organizationId)
+      .where(function() {
+        this.whereRaw('LOWER(name) LIKE ?', ['%mileage%']).orWhereRaw('LOWER(code) = ?', ['mileage']);
+      })
+      .first();
+    const mileageCatId = mileageCat ? Number(mileageCat.id) : 0;
+    const validation = await this.validatePolicyForClaim(ctx, mileageCatId, calculatedAmount, false);
+    if (!validation.isValid && validation.violations && validation.violations.length > 0) {
+      const limitViolation = validation.violations.find((v: string) => v.toLowerCase().includes('limit') || v.toLowerCase().includes('exceeds'));
+      if (limitViolation) {
+        throw new Error(`Policy limit exceeded: ${limitViolation}`);
       }
-    } catch { /* use default */ }
+    }
+
+    // Detect submitter role (same as expense claims) for proper workflow routing
+    const mileageSubmittedByRole = await this.getSubmitterRole(ctx, db);
 
     // Resolve initial workflow status (same engine as expense claims)
     const mileageWfItems = [{ categoryId: null, claimedAmount: calculatedAmount, policyValidated: true }];
@@ -2879,7 +2894,11 @@ export class ExpenseService {
       } catch { /* ignore fallback */ }
     }
 
-    const [id] = await db('mileage_claims').insert({
+    if (!data.fromLocation || !data.toLocation || Number(data.distanceKm || 0) <= 0) {
+      throw new Error('Please enter valid trip location details and distance.');
+    }
+
+    const insertRes = await db('mileage_claims').insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       employee_id: empId,
@@ -2900,6 +2919,7 @@ export class ExpenseService {
       created_at: new Date(),
       updated_at: new Date()
     });
+    const id = Number(Array.isArray(insertRes) ? insertRes[0] : insertRes);
     const row = await db('mileage_claims as mc')
       .leftJoin('employees as e', 'mc.employee_id', 'e.id')
       .where('mc.id', id)
@@ -2924,23 +2944,68 @@ export class ExpenseService {
     const { levels } = await this.getWorkflowLevelsForClaim(db, ctx.organizationId, calculatedAmt);
     await this.assertApproverMatchesWorkflowLevel(ctx, claim, levels);
 
+    const approverRole = await this.getSubmitterRole(ctx, db);
+    const approverRank = this.getRoleRank(approverRole);
+
     const currentLevelNum = Number(claim.current_level ?? 1);
-    let nextStatus = 'approved';
-    let nextLevel = currentLevelNum;
-    let nextRole = 'Approved';
+    let nextStatus = 'pending_finance';
+    let nextLevel = currentLevelNum + 1;
+    let nextRole = 'Finance Verification';
     let isFinalStep = true;
 
-    const settings = await this.getSettings(ctx);
-    if (levels && levels.length > 0 && currentLevelNum < levels.length) {
-      const nextLevelObj = levels[currentLevelNum];
-      const lvlOrder = Number(nextLevelObj.levelOrder ?? nextLevelObj.level_order ?? (currentLevelNum + 1));
-      nextLevel = lvlOrder;
-      nextStatus = `pending_level_${nextLevel}`;
-      nextRole = String(nextLevelObj.stepName || nextLevelObj.step_name || nextLevelObj.approverRole || `Level ${nextLevel} Reviewer`).trim();
-      isFinalStep = false;
-    } else if (isFinalStep && settings.requireFinanceApproval) {
-      nextStatus = 'pending_finance';
-      nextRole = 'Finance Verification';
+    let foundNext = false;
+    if (levels && levels.length > 0) {
+      for (let i = currentLevelNum; i < levels.length; i++) {
+        const lvl = levels[i];
+        const lvlType = String(lvl.approverType || lvl.approver_type || lvl.approverRole || lvl.approver_role || '').toLowerCase();
+        const lvlStep = String(lvl.stepName || lvl.step_name || '').toLowerCase();
+        let lvlRank = 0;
+        if (lvlType === 'reporting_manager') {
+          if (lvlStep.includes('team') || lvlStep.includes('lead')) lvlRank = 1;
+          else if (i === 0 && levels.length > 1) lvlRank = 1;
+          else lvlRank = 2;
+        } else {
+          lvlRank = this.getRoleRank(lvlType);
+        }
+
+        if (lvlType === 'finance' || lvlType.includes('finance')) {
+          nextStatus = 'pending_finance';
+          nextRole = 'Finance Verification';
+          nextLevel = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+          foundNext = true;
+          isFinalStep = true;
+          break;
+        }
+
+        if (lvlRank > approverRank) {
+          nextLevel = Number(lvl.levelOrder ?? lvl.level_order ?? (i + 1));
+          nextStatus = `pending_level_${nextLevel}`;
+          nextRole = String(lvl.stepName || lvl.step_name || lvl.approverRole || lvl.approver_role || `Level ${nextLevel} Approver`).trim();
+          foundNext = true;
+          isFinalStep = false;
+          break;
+        }
+      }
+    }
+
+    if (!foundNext) {
+      const settings = await this.getSettings(ctx);
+      if (currentLevelNum === 1) {
+        nextStatus = 'pending_level_2';
+        nextLevel = 2;
+        nextRole = 'Manager Approval';
+        isFinalStep = false;
+      } else if (settings.requireFinanceApproval) {
+        nextStatus = 'pending_finance';
+        nextLevel = Math.max(currentLevelNum, 2);
+        nextRole = 'Finance Verification';
+        isFinalStep = true;
+      } else {
+        nextStatus = 'approved';
+        nextLevel = Math.max(currentLevelNum, 2);
+        nextRole = 'Approved';
+        isFinalStep = true;
+      }
     }
 
     await db('mileage_claims').where('id', id).update({

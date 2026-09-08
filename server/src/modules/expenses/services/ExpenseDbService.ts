@@ -457,12 +457,54 @@ export class ExpenseDbService {
           table.string('submitted_by_role', 50).nullable();
         }).catch(() => null);
       }
+      // Ensure workflow columns exist on workflow tables (expense_claims, travel_requests, mileage_claims)
+      if (['expense_claims', 'travel_requests', 'mileage_claims'].includes(tableName)) {
+        const hasCurrentLevel = await db.schema.hasColumn(tableName, 'current_level').catch(() => false);
+        if (!hasCurrentLevel) {
+          await db.schema.alterTable(tableName, (table: any) => {
+            table.integer('current_level').defaultTo(1).nullable();
+            table.string('current_approver_role', 100).nullable();
+            table.bigInteger('workflow_id').unsigned().nullable();
+          }).catch(() => null);
+        }
+      }
       try {
         await db.raw(`ALTER TABLE \`${tableName}\` MODIFY COLUMN employee_id BIGINT UNSIGNED NULL`);
       } catch {
         // ignore if already nullable or engine mismatch
       }
     }
+
+    // Auto-fix legacy claims submitted by Admin / CEO / HR stuck in pending_level_1
+    try {
+      const adminUsers = await db('users')
+        .where('organization_id', organizationId)
+        .where(function (this: any) {
+          this.whereRaw("LOWER(role) LIKE '%admin%'")
+            .orWhereRaw("LOWER(role) LIKE '%ceo%'")
+            .orWhereRaw("LOWER(role) LIKE '%super%'");
+        })
+        .select('id')
+        .catch(() => []);
+      const adminUserIds = (adminUsers || []).map((u: any) => Number(u.id)).filter(Boolean);
+
+      const tablesToMigrate = ['mileage_claims', 'expense_claims', 'travel_requests'];
+      for (const t of tablesToMigrate) {
+        await db(t)
+          .where('organization_id', organizationId)
+          .where(function (this: any) {
+            this.whereIn('submitted_by_role', ['admin', 'ceo', 'organization_admin', 'super_admin', 'hr'])
+              .orWhereIn('submitted_by_user_id', adminUserIds.length ? adminUserIds : [0]);
+          })
+          .whereIn('status', ['pending_level_1', 'pending', 'submitted'])
+          .update({
+            submitted_by_role: 'admin',
+            status: 'pending_finance',
+            current_level: 3,
+            current_approver_role: 'Finance Verification'
+          }).catch(() => null);
+      }
+    } catch { /* ignore */ }
   }
 
 

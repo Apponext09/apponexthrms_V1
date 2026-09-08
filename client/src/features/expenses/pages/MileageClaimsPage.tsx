@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { expenseApi, MileageClaim, ExpenseSettings } from '../api/expenseApi';
+import { expenseApi, MileageClaim, ExpenseSettings, ExpensePolicy, ExpenseCategory } from '../api/expenseApi';
 import { useAuthStore } from '../../auth/store/authStore';
 import {
   Car,
@@ -10,7 +10,8 @@ import {
   Calendar,
   MapPin,
   CheckCircle,
-  XCircle
+  XCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 import { useExpenseMoney } from '../utils/useExpenseMoney';
@@ -20,7 +21,19 @@ export const MileageClaimsPage: React.FC = () => {
   const money = useExpenseMoney();
   const [claims, setClaims] = useState<MileageClaim[]>([]);
   const [settings, setSettings] = useState<ExpenseSettings | null>(null);
+  const [policies, setPolicies] = useState<ExpensePolicy[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [approveConfirmId, setApproveConfirmId] = useState<number | null>(null);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Form State
   const [tripDate, setTripDate] = useState(new Date().toISOString().slice(0, 10));
@@ -56,12 +69,16 @@ export const MileageClaimsPage: React.FC = () => {
         ['manager', 'team_lead', 'hr', 'hr_manager', 'hr_admin', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(singleRole);
 
       const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
-      const [mRes, sRes] = await Promise.all([
+      const [mRes, sRes, pRes, cRes] = await Promise.all([
         expenseApi.getMileageClaims(empId),
-        expenseApi.getSettings()
+        expenseApi.getSettings(),
+        expenseApi.getPolicies().catch(() => []),
+        expenseApi.getCategories().catch(() => [])
       ]);
       setClaims(mRes || []);
       setSettings(sRes || null);
+      setPolicies(pRes || []);
+      setCategories(cRes || []);
       // Store isApproverRole in ref for use in handlers
       (window as any).__mileageIsApprover = isApproverRole;
     } catch (err) {
@@ -81,9 +98,52 @@ export const MileageClaimsPage: React.FC = () => {
   const calculatedAmount = (Number(distanceKm) || 0) * currentRate;
   const designationLabel = settings?.myDesignationName || user?.designation || null;
 
+  // Helper to compute active policy limit for mileage from Expense Policies
+  const getPolicyLimitInfo = () => {
+    const mileageCat = categories.find((c) =>
+      c.name.toLowerCase().includes('mileage') ||
+      c.code.toLowerCase().includes('mileage') ||
+      c.name.toLowerCase().includes('travel')
+    );
+    const mileageCatId = mileageCat?.id;
+
+    const applicablePols = policies.filter((p) => {
+      if (p.isActive === false) return false;
+      const pCatId = p.categoryId !== undefined && p.categoryId !== null ? Number(p.categoryId) : 0;
+      return pCatId === 0 || (mileageCatId && pCatId === Number(mileageCatId));
+    });
+
+    const validPols = applicablePols.filter((p) => {
+      const maxClaim = Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0);
+      return maxClaim > 0;
+    });
+
+    if (validPols.length === 0) return null;
+
+    const catSpecificPols = validPols.filter((p) => {
+      const pCatId = p.categoryId !== undefined && p.categoryId !== null ? Number(p.categoryId) : 0;
+      return mileageCatId && pCatId === Number(mileageCatId);
+    });
+    const targetPols = catSpecificPols.length > 0 ? catSpecificPols : validPols;
+
+    const minLimit = Math.min(...targetPols.map((p) => Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0)));
+    const pol = targetPols.find((p) => Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0) === minLimit);
+    const policyName = pol?.policyName || (pol as any)?.policy_name || 'Policy Limit';
+
+    return {
+      limit: minLimit,
+      policyName
+    };
+  };
+
   const handleCreateMileage = async () => {
     if (!fromLocation.trim() || !toLocation.trim() || distanceKm <= 0) {
-      alert('Please enter valid trip location details and distance.');
+      setToast({ type: 'error', message: 'Please enter valid trip location details and distance.' });
+      return;
+    }
+    const limitInfo = getPolicyLimitInfo();
+    if (limitInfo && calculatedAmount > limitInfo.limit) {
+      setToast({ type: 'error', message: `⚠️ Policy Limit Exceeded: Calculated claim (${money(calculatedAmount)}) exceeds policy limit of ${money(limitInfo.limit)}.` });
       return;
     }
     try {
@@ -98,26 +158,28 @@ export const MileageClaimsPage: React.FC = () => {
         purpose
       });
       setIsModalOpen(false);
+      setToast({ type: 'success', message: 'Mileage claim submitted successfully!' });
       fetchMileage();
       setFromLocation('');
       setToLocation('');
       setDistanceKm(0);
       setPurpose('');
     } catch (err: any) {
-      alert(err.message || 'Failed to submit mileage claim');
+      setToast({ type: 'error', message: err.message || 'Failed to submit mileage claim' });
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleApprove = async (id: number) => {
-    if (!window.confirm('Approve this mileage claim?')) return;
     try {
       setApprovingId(id);
-      await expenseApi.approveMileageClaim(id, 'Approved by manager');
+      const res = await expenseApi.approveMileageClaim(id, 'Approved by reviewer');
+      setApproveConfirmId(null);
+      setToast({ type: 'success', message: res?.message || 'Mileage claim approved successfully!' });
       fetchMileage();
     } catch (err: any) {
-      alert(err.message || 'Failed to approve mileage claim');
+      setToast({ type: 'error', message: err.message || 'Failed to approve mileage claim' });
     } finally {
       setApprovingId(null);
     }
@@ -125,7 +187,7 @@ export const MileageClaimsPage: React.FC = () => {
 
   const handleReject = async () => {
     if (!rejectTargetId || !rejectReason.trim()) {
-      alert('Please provide a rejection reason.');
+      setToast({ type: 'error', message: 'Please provide a rejection reason.' });
       return;
     }
     try {
@@ -133,9 +195,10 @@ export const MileageClaimsPage: React.FC = () => {
       await expenseApi.rejectMileageClaim(rejectTargetId, rejectReason);
       setRejectTargetId(null);
       setRejectReason('');
+      setToast({ type: 'success', message: 'Mileage claim rejected.' });
       fetchMileage();
     } catch (err: any) {
-      alert(err.message || 'Failed to reject mileage claim');
+      setToast({ type: 'error', message: err.message || 'Failed to reject mileage claim' });
     } finally {
       setApprovingId(null);
     }
@@ -143,6 +206,20 @@ export const MileageClaimsPage: React.FC = () => {
 
   const isApprover = !!(window as any).__mileageIsApprover ||
     (user?.role && ['manager', 'team_lead', 'hr', 'hr_manager', 'hr_admin', 'ceo', 'admin', 'super_admin', 'organization_admin', 'department_head'].includes(String(user.role).toLowerCase()));
+
+  const formatStatusText = (status?: string) => {
+    const s = String(status || '').toLowerCase().trim();
+    if (s === 'pending_level_1' || s === 'pending' || s === 'submitted') return 'Pending Level 1 (Team Lead)';
+    if (s === 'pending_level_2' || s === 'pending_manager') return 'Pending Level 2 (Manager)';
+    if (s === 'pending_level_3') return 'Pending Level 3 (HR)';
+    if (s === 'pending_finance') return 'Pending Finance Verification';
+    if (s === 'approved') return 'Approved';
+    if (s === 'payment_pending') return 'Payment Pending';
+    if (s === 'paid' || s === 'reimbursed') return 'Paid';
+    if (s === 'rejected') return 'Rejected';
+    if (s === 'returned') return 'Returned';
+    return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   const statusBadge = (status: string) => {
     const s = String(status || 'pending').toLowerCase();
@@ -154,7 +231,24 @@ export const MileageClaimsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-2 ${
+          toast.type === 'success'
+            ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
+            : toast.type === 'error'
+            ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200'
+            : 'bg-blue-50 dark:bg-blue-950/90 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
+        }`}>
+          {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+          {toast.type === 'error' && <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />}
+          {toast.type === 'info' && <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />}
+          <span className="text-xs font-semibold">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold">✕</button>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -277,35 +371,49 @@ export const MileageClaimsPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusBadge(mc.status)}`}>
-                          {String(mc.status || 'Pending').replace(/_/g, ' ')}
+                          {formatStatusText(mc.status)}
                         </span>
                       </td>
                       {isApprover && (
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          {['pending', 'pending_level_1', 'pending_level_2', 'pending_level_3', 'pending_manager', 'submitted'].some(
-                            (s) => (mc.status || '').toLowerCase() === s
-                          ) || (mc.status || '').toLowerCase().startsWith('pending_level_') ? (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                disabled={approvingId === mc.id}
-                                onClick={() => handleApprove(Number(mc.id))}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors disabled:opacity-50"
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                {approvingId === mc.id ? '...' : 'Approve'}
-                              </button>
-                              <button
-                                disabled={approvingId === mc.id}
-                                onClick={() => { setRejectTargetId(Number(mc.id)); setRejectReason(''); }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors disabled:opacity-50"
-                              >
-                                <XCircle className="w-3 h-3" />
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
+                          {(() => {
+                            const curUserId = user?.id || (user as any)?.userId || (user as any)?.employeeId;
+                            const isSelfClaim = Boolean(
+                              (mc.employeeId && user?.employeeId && Number(mc.employeeId) === Number(user.employeeId)) ||
+                              (mc.submittedByUserId && curUserId && Number(mc.submittedByUserId) === Number(curUserId))
+                            );
+                            if (isSelfClaim) {
+                              return <span className="text-xs text-slate-400 italic">Self Claim</span>;
+                            }
+                            const isPending = ['pending', 'pending_level_1', 'pending_level_2', 'pending_level_3', 'pending_manager', 'submitted', 'pending_finance'].some(
+                              (s) => (mc.status || '').toLowerCase() === s
+                            ) || (mc.status || '').toLowerCase().startsWith('pending_level_');
+
+                            if (!isPending) {
+                              return <span className="text-xs text-slate-400">—</span>;
+                            }
+
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  disabled={approvingId === mc.id}
+                                  onClick={() => setApproveConfirmId(Number(mc.id))}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors disabled:opacity-50"
+                                >
+                                  <CheckCircle className="w-3 h-3" />
+                                  {approvingId === mc.id ? '...' : 'Approve'}
+                                </button>
+                                <button
+                                  disabled={approvingId === mc.id}
+                                  onClick={() => { setRejectTargetId(Number(mc.id)); setRejectReason(''); }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white shadow-sm transition-colors disabled:opacity-50"
+                                >
+                                  <XCircle className="w-3 h-3" />
+                                  Reject
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </td>
                       )}
                     </tr>
@@ -375,23 +483,64 @@ export const MileageClaimsPage: React.FC = () => {
 
                 <div>
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Distance (km) *</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 45"
-                    value={distanceKm || ''}
-                    onChange={(e) => setDistanceKm(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                  />
+                  {(() => {
+                    const limitInfo = getPolicyLimitInfo();
+                    const isExceeded = Boolean(limitInfo && calculatedAmount > limitInfo.limit);
+                    return (
+                      <input
+                        type="number"
+                        placeholder="e.g. 45"
+                        value={distanceKm || ''}
+                        onChange={(e) => setDistanceKm(Number(e.target.value))}
+                        className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                          isExceeded
+                            ? 'bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-500 text-rose-700 dark:text-rose-300 focus:ring-2 focus:ring-rose-500 focus:outline-none'
+                            : 'bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
+                        }`}
+                      />
+                    );
+                  })()}
                 </div>
               </div>
 
               {/* Calculated total box */}
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between">
-                <span className="text-amber-800 dark:text-amber-300 font-semibold">Calculated Mileage Claim:</span>
-                <span className="text-lg font-bold text-amber-900 dark:text-amber-100">
-                  {money(calculatedAmount)}
-                </span>
-              </div>
+              {(() => {
+                const limitInfo = getPolicyLimitInfo();
+                const isExceeded = Boolean(limitInfo && calculatedAmount > limitInfo.limit);
+
+                return (
+                  <div
+                    className={`p-3 rounded-xl flex flex-col gap-1 transition-all ${
+                      isExceeded
+                        ? 'bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-800 dark:text-rose-300'
+                        : 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`font-semibold ${
+                          isExceeded ? 'text-rose-800 dark:text-rose-300' : 'text-amber-800 dark:text-amber-300'
+                        }`}
+                      >
+                        Calculated Mileage Claim:
+                      </span>
+                      <span
+                        className={`text-lg font-bold ${
+                          isExceeded ? 'text-rose-700 dark:text-rose-200' : 'text-amber-900 dark:text-amber-100'
+                        }`}
+                      >
+                        {money(calculatedAmount)}
+                      </span>
+                    </div>
+                    {isExceeded && limitInfo && (
+                      <p className="mt-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        Amount exceeds set policy limit of {money(limitInfo.limit)}! Cannot claim above set limit.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Trip Purpose</label>
@@ -418,6 +567,36 @@ export const MileageClaimsPage: React.FC = () => {
                 className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm"
               >
                 {submitting ? 'Submitting...' : 'Submit Mileage Claim'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPROVE CONFIRMATION MODAL */}
+      {approveConfirmId && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              Confirm Approval
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Are you sure you want to approve this mileage claim? It will be forwarded to the next workflow approval tier.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setApproveConfirmId(null)}
+                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={approvingId !== null}
+                onClick={() => handleApprove(approveConfirmId)}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm disabled:opacity-50"
+              >
+                {approvingId ? 'Approving...' : 'Confirm Approve'}
               </button>
             </div>
           </div>
