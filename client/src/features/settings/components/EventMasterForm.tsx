@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, MapPin, Clock, Search, Trash2, Edit3, CheckCircle2, XCircle, Loader2,
   Building2, Users, Layers, Tag, UserCheck, Shield, Award, Sparkles, Filter, RotateCcw,
@@ -485,13 +485,7 @@ export function EventMasterForm({
                   onChange={(selected) => setFormEmploymentTypes(selected as string[])}
                 />
 
-                <EventAudienceAccordion
-                  title="Employment Statuses"
-                  icon={<Globe className="h-4 w-4" />}
-                  options={audienceOpts?.employeeStatuses || []}
-                  selectedIds={formEmployeeStatusIds}
-                  onChange={setFormEmployeeStatusIds}
-                />
+               
               </div>
             </div>
 

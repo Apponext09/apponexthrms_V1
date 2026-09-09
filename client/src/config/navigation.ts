@@ -199,9 +199,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     label: 'PAYROLL',
     items: [
       { name: 'Dashboard', href: '/payroll', icon: 'IndianRupee' },
-      { name: 'Admin Payroll Portal', href: '/payroll/admin-portal', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Payroll Master Settings', href: '/payroll/settings', icon: 'Sliders', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
-      { name: 'Salary Structures', href: '/payroll/salary-structure', icon: 'Layers', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Mass Salary Upload', href: '/payroll/mass-salary-upload', icon: 'UploadCloud', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Payroll Processing', href: '/payroll/processing', icon: 'Activity', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
