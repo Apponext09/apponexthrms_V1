@@ -275,7 +275,6 @@ export const CandidateManagement: React.FC = () => {
     try {
       await apiClient.patch(`/recruitment/candidates/${candidateId}`, { status });
       await queryClient.invalidateQueries({ queryKey: ['candidates'] });
-      setActiveTab(tabForStatus(status));
       setCurrentPage(1);
       toast.success(`Candidate moved to ${status}`);
     } catch (err: any) {

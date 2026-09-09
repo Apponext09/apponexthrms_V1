@@ -112,8 +112,14 @@ apiClient.interceptors.response.use(
         console.error('[API] Token refresh failed, clearing auth and redirecting to login');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
+        localStorage.removeItem('auth-storage');
+        try {
+          const { useAuthStore } = await import('@/features/auth/store/authStore');
+          useAuthStore.getState().logout();
+        } catch (e) {
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
         }
         return Promise.reject(refreshError);
       } finally {

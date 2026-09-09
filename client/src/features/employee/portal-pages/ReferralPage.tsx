@@ -355,12 +355,12 @@ export default function ReferralPage() {
           </p>
         </div>
 
-        {totalReferrals > 0 && (
+        {referrals.length > 0 && (
           <div className="flex items-center gap-3">
             <div className="text-right">
               <div className="text-[10px] uppercase font-bold text-muted-foreground">Total Earned</div>
               <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                ₹{totalEarnedReward.toLocaleString()}
+                ₹{referrals.reduce((sum, item) => sum + (Number(item.reward_amount || item.rewardAmount || 0)), 0).toLocaleString()}
               </div>
             </div>
           </div>
