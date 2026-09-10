@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { InternLayout } from '../layouts/InternLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const InternLayout = lazy(() => import('../layouts/InternLayout').then(m => ({ default: m.InternLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const InternDashboardPage = lazy(() => import('../features/intern/pages/InternDashboardPage').then(m => ({ default: m.InternDashboardPage })));

@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { FinanceLayout } from '../layouts/FinanceLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const FinanceLayout = lazy(() => import('../layouts/FinanceLayout').then(m => ({ default: m.FinanceLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const FinanceDashboardPage = lazy(() => import('../features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));

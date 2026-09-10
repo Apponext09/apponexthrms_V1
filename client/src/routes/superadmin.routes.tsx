@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { SuperAdminLayout } from '../features/superadmin/sidebar/SuperAdminLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const SuperAdminLayout = lazy(() => import('../features/superadmin/sidebar/SuperAdminLayout').then(m => ({ default: m.SuperAdminLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const SuperAdminDashboardPage = lazy(() => import('../features/superadmin/Dashboard/SuperAdminDashboardPage').then(m => ({ default: m.SuperAdminDashboardPage })));

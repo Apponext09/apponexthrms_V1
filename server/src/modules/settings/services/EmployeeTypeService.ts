@@ -3,6 +3,7 @@ import { AuditService } from '../../audit/audit.service';
 import { EmployeeTypeRepository } from '../repositories/EmployeeTypeRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export interface EmployeeTypeCreate {
   name: string;
@@ -87,6 +88,9 @@ export class EmployeeTypeService {
 
   async deleteEmployeeType(ctx: TenantContext, id: number | string) {
     const employeeType = await this.getEmployeeType(ctx, id);
+    await assertMasterNotInUse(ctx.organizationId, id, 'employment type', [
+      { table: 'employees', column: 'employment_type', label: 'employee(s)', matchValue: String(employeeType.name) },
+    ]);
     await this.employeeTypeRepo.hardDelete(ctx, id);
     await this.auditService.log(ctx, {
       action: 'DELETE',

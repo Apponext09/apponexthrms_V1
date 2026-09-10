@@ -4,6 +4,7 @@ import { BranchRepository } from '../repositories/BranchRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { BranchCreate, BranchUpdate } from '@apponexthrms/shared/validation/settings.schemas';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export class BranchService {
   private branchRepo: BranchRepository;
@@ -124,6 +125,10 @@ export class BranchService {
    */
   async deleteBranch(ctx: TenantContext, id: number | string) {
     const branch = await this.getBranch(ctx, id);
+
+    await assertMasterNotInUse(ctx.organizationId, id, 'branch', [
+      { table: 'employees', column: 'current_branch_id', label: 'employee(s)' },
+    ]);
 
     await this.branchRepo.delete(ctx, id);
 

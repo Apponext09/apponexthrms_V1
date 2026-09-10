@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { TeamLeadLayout } from '../layouts/TeamLeadLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const TeamLeadLayout = lazy(() => import('../layouts/TeamLeadLayout').then(m => ({ default: m.TeamLeadLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const TeamLeadDashboardPage = lazy(() => import('../features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));

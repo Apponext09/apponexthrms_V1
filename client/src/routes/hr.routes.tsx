@@ -1,8 +1,10 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { HRLayout } from '../layouts/HRLayout';
-import { SettingsLayout } from '../features/settings/pages/SettingsLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const HRLayout = lazy(() => import('../layouts/HRLayout').then(m => ({ default: m.HRLayout })));
+const SettingsLayout = lazy(() => import('../features/settings/pages/SettingsLayout').then(m => ({ default: m.SettingsLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const EmployeeListPage = lazy(() => import('../features/employee/pages/EmployeeListPage').then(m => ({ default: m.EmployeeListPage })));

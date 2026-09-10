@@ -231,8 +231,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   // Dynamic Component Definitions & Modal Items
   const [allComponentDefs, setAllComponentDefs] = useState<any[]>([]);
-  const [modalEarnings, setModalEarnings] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number }>>([]);
-  const [modalDeductions, setModalDeductions] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number }>>([]);
+  const [modalEarnings, setModalEarnings] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number; basedOnAttendance?: boolean }>>([]);
+  const [modalDeductions, setModalDeductions] = useState<Array<{ id: string | number; name: string; category: string; type: string; formula: string; amount: number; basedOnAttendance?: boolean }>>([]);
   const [showExtraEarnings, setShowExtraEarnings] = useState(false);
   const [showExtraDeductions, setShowExtraDeductions] = useState(false);
 
@@ -755,11 +755,30 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       }
     }
 
-    // If Special Allowance exists, resolve residual
+    // If Special Allowance exists, resolve residual. If not, assign residual CTC to other non-Basic slab components before creating Special Allowance
     if (specialIdx >= 0) {
       const specialAllowanceAmt = Math.max(0, monthlyGross - allocatedEarningsTotal);
       newEarnings[specialIdx].amount = specialAllowanceAmt;
       formulaCtx['special_allowance'] = specialAllowanceAmt;
+    } else if (monthlyGross > allocatedEarningsTotal) {
+      const residualAmt = Math.max(0, monthlyGross - allocatedEarningsTotal);
+      const otherEarningIdx = newEarnings.findIndex(c => !(c.name || '').toLowerCase().includes('basic'));
+      if (otherEarningIdx >= 0) {
+        newEarnings[otherEarningIdx].amount += residualAmt;
+        const normKey = (newEarnings[otherEarningIdx].name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        formulaCtx[normKey] = newEarnings[otherEarningIdx].amount;
+      } else {
+        newEarnings.push({
+          id: 'special_residual_auto',
+          name: 'Special Allowance',
+          category: 'Earning',
+          type: 'Derived',
+          formula: 'Residual Balance',
+          amount: residualAmt,
+          basedOnAttendance: false
+        });
+        formulaCtx['special_allowance'] = residualAmt;
+      }
     }
 
     // Pass 4: Evaluate Deductions (Multi-pass for cross-component formula references)
@@ -1003,7 +1022,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   const grossCalculated = modalEarnings.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
   const totalDeductionCalculated = modalDeductions.reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
   const netSalaryCalculated = Math.max(0, grossCalculated - totalDeductionCalculated);
-  const annualCtcCalculated = grossCalculated * 12;
+  const targetAnnualCtc = inputFrequency === 'monthly' ? (Number(salaryInput) || 0) * 12 : (Number(salaryInput) || 0);
+  const annualCtcCalculated = targetAnnualCtc > 0 ? targetAnnualCtc : (grossCalculated * 12);
 
   return (
     <div className="space-y-4">
@@ -1328,253 +1348,139 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
             </div>
 
             {/* Earnings vs Deductions 2-Column Grid */}
-            {(() => {
-              const isCoreEarning = (name: string, amt: number) => {
-                if (amt > 0) return true;
-                const n = name.toLowerCase();
-                return n.includes('basic') || n.includes('hra') || n.includes('conveyance') || n.includes('medical') || n.includes('special') || n.includes('lta');
-              };
-
-              const isCoreDeduction = (name: string, amt: number) => {
-                if (amt > 0) return true;
-                const n = name.toLowerCase();
-                return n.includes('pf') || n.includes('pt') || n.includes('tax') || n.includes('mediclaim') || n.includes('tds') || n.includes('esic');
-              };
-
-              const coreEarnings = modalEarnings.filter(c => isCoreEarning(c.name, Number(c.amount) || 0));
-              const extraEarnings = modalEarnings.filter(c => !isCoreEarning(c.name, Number(c.amount) || 0));
-
-              const coreDeductions = modalDeductions.filter(c => isCoreDeduction(c.name, Number(c.amount) || 0));
-              const extraDeductions = modalDeductions.filter(c => !isCoreDeduction(c.name, Number(c.amount) || 0));
-
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* Earnings Column */}
-                  <div className="border border-emerald-500/20 rounded-xl overflow-hidden bg-card shadow-xs flex flex-col">
-                    <div className="px-4 py-3 bg-emerald-500/5 border-b border-emerald-500/15 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                        <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-                          Earnings (Monthly)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-semibold text-muted-foreground">
-                          ₹{(grossCalculated * 12).toLocaleString('en-IN')}/yr
-                        </span>
-                        <Badge variant="outline" className="text-xs font-extrabold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 px-2.5 py-0.5">
-                          ₹{grossCalculated.toLocaleString('en-IN')}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="p-3 space-y-1 flex-1 divide-y divide-border/40">
-                      {coreEarnings.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic py-4 text-center">No active earnings in this slab.</p>
-                      ) : (
-                        coreEarnings.map((item) => {
-                          const idx = modalEarnings.findIndex(it => it.id === item.id);
-                          const amt = Number(item.amount) || 0;
-                          return (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group"
-                            >
-                              <div className="min-w-0 pr-3">
-                                <span className="text-xs font-semibold text-foreground truncate block">{item.name}</span>
-                              </div>
-
-                              <div className="flex items-center gap-2.5 shrink-0">
-                                <div className="relative w-28 sm:w-32">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
-                                  <Input
-                                    type="number"
-                                    value={item.amount}
-                                    onChange={(e) => {
-                                      const val = Number(e.target.value) || 0;
-                                      setModalEarnings(prev => {
-                                        const updated = prev.map((it, i) => i === idx ? { ...it, amount: val } : it);
-                                        const saIdx = updated.findIndex(it => it.name.toLowerCase().includes('special'));
-                                        if (saIdx >= 0 && saIdx !== idx) {
-                                          const mGross = Math.round((Number(salaryInput) || 0) / 12);
-                                          if (mGross > 0) {
-                                            const otherSum = updated
-                                              .filter((_, i) => i !== saIdx)
-                                              .reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
-                                            updated[saIdx] = {
-                                              ...updated[saIdx],
-                                              amount: Math.max(0, mGross - otherSum)
-                                            };
-                                          }
-                                        }
-                                        return updated;
-                                      });
-                                    }}
-                                    className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background border-border/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                  />
-                                </div>
-                                <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
-                                  ₹{(amt * 12).toLocaleString('en-IN')}/yr
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-
-                      {/* Collapsible Additional Allowances */}
-                      {extraEarnings.length > 0 && (
-                        <div className="pt-2.5">
-                          <button
-                            type="button"
-                            onClick={() => setShowExtraEarnings(prev => !prev)}
-                            className="w-full py-1.5 px-2 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/40 flex items-center justify-between cursor-pointer transition-colors"
-                          >
-                            <span>Additional Allowances ({extraEarnings.length})</span>
-                            {showExtraEarnings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
-
-                          {showExtraEarnings && (
-                            <div className="mt-2 space-y-1 divide-y divide-border/30">
-                              {extraEarnings.map((item) => {
-                                const idx = modalEarnings.findIndex(it => it.id === item.id);
-                                const amt = Number(item.amount) || 0;
-                                return (
-                                  <div key={item.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-muted/30">
-                                    <span className="text-xs font-medium text-foreground truncate">{item.name}</span>
-                                    <div className="flex items-center gap-2.5 shrink-0">
-                                      <div className="relative w-28 sm:w-32">
-                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
-                                        <Input
-                                          type="number"
-                                          value={item.amount}
-                                          onChange={(e) => {
-                                            const val = Number(e.target.value) || 0;
-                                            setModalEarnings(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
-                                          }}
-                                          className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
-                                        />
-                                      </div>
-                                      <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
-                                        ₹{(amt * 12).toLocaleString('en-IN')}/yr
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Earnings Column */}
+              <div className="border border-emerald-500/20 rounded-xl overflow-hidden bg-card shadow-xs flex flex-col">
+                <div className="px-4 py-3 bg-emerald-500/5 border-b border-emerald-500/15 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                      Earnings (Monthly)
+                    </span>
                   </div>
-
-                  {/* Deductions Column */}
-                  <div className="border border-rose-500/20 rounded-xl overflow-hidden bg-card shadow-xs flex flex-col">
-                    <div className="px-4 py-3 bg-rose-500/5 border-b border-rose-500/15 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-                        <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">
-                          Deductions (Monthly)
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-semibold text-muted-foreground">
-                          ₹{(totalDeductionCalculated * 12).toLocaleString('en-IN')}/yr
-                        </span>
-                        <Badge variant="outline" className="text-xs font-extrabold bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 px-2.5 py-0.5">
-                          ₹{totalDeductionCalculated.toLocaleString('en-IN')}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="p-3 space-y-1 flex-1 divide-y divide-border/40">
-                      {coreDeductions.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic py-4 text-center">No active deductions in this slab.</p>
-                      ) : (
-                        coreDeductions.map((item) => {
-                          const idx = modalDeductions.findIndex(it => it.id === item.id);
-                          const amt = Number(item.amount) || 0;
-                          return (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group"
-                            >
-                              <div className="min-w-0 pr-3">
-                                <span className="text-xs font-semibold text-foreground truncate block">{item.name}</span>
-                              </div>
-
-                              <div className="flex items-center gap-2.5 shrink-0">
-                                <div className="relative w-28 sm:w-32">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
-                                  <Input
-                                    type="number"
-                                    value={item.amount}
-                                    onChange={(e) => {
-                                      const val = Number(e.target.value) || 0;
-                                      setModalDeductions(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
-                                    }}
-                                    className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background border-border/80 focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-                                  />
-                                </div>
-                                <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
-                                  ₹{(amt * 12).toLocaleString('en-IN')}/yr
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-
-                      {/* Collapsible Variable Deductions */}
-                      {extraDeductions.length > 0 && (
-                        <div className="pt-2.5">
-                          <button
-                            type="button"
-                            onClick={() => setShowExtraDeductions(prev => !prev)}
-                            className="w-full py-1.5 px-2 rounded-lg text-[11px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/40 flex items-center justify-between cursor-pointer transition-colors"
-                          >
-                            <span>Additional Deductions ({extraDeductions.length})</span>
-                            {showExtraDeductions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </button>
-
-                          {showExtraDeductions && (
-                            <div className="mt-2 space-y-1 divide-y divide-border/30">
-                              {extraDeductions.map((item) => {
-                                const idx = modalDeductions.findIndex(it => it.id === item.id);
-                                const amt = Number(item.amount) || 0;
-                                return (
-                                  <div key={item.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-muted/30">
-                                    <span className="text-xs font-medium text-foreground truncate">{item.name}</span>
-                                    <div className="flex items-center gap-2.5 shrink-0">
-                                      <div className="relative w-28 sm:w-32">
-                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
-                                        <Input
-                                          type="number"
-                                          value={item.amount}
-                                          onChange={(e) => {
-                                            const val = Number(e.target.value) || 0;
-                                            setModalDeductions(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
-                                          }}
-                                          className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background"
-                                        />
-                                      </div>
-                                      <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
-                                        ₹{(amt * 12).toLocaleString('en-IN')}/yr
-                                      </span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      ₹{(grossCalculated * 12).toLocaleString('en-IN')}/yr
+                    </span>
+                    <Badge variant="outline" className="text-xs font-extrabold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 px-2.5 py-0.5">
+                      ₹{grossCalculated.toLocaleString('en-IN')}
+                    </Badge>
                   </div>
                 </div>
-              );
-            })()}
+
+                <div className="p-3 space-y-1 flex-1 divide-y divide-border/40">
+                  {modalEarnings.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-4 text-center">No active earnings in this slab.</p>
+                  ) : (
+                    modalEarnings.map((item, idx) => {
+                      const amt = Number(item.amount) || 0;
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <span className="text-xs font-semibold text-foreground truncate block">{item.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="relative w-28 sm:w-32">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                              <Input
+                                type="number"
+                                value={item.amount}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value) || 0;
+                                  setModalEarnings(prev => {
+                                    const updated = prev.map((it, i) => i === idx ? { ...it, amount: val } : it);
+                                    let saIdx = updated.findIndex(it => it.name.toLowerCase().includes('special'));
+                                    const mGross = inputFrequency === 'monthly' ? (Number(salaryInput) || 0) : Math.round((Number(salaryInput) || 0) / 12);
+                                    if (mGross > 0) {
+                                      const otherSum = updated
+                                        .filter((_, i) => i !== saIdx)
+                                        .reduce((acc, c) => acc + (Number(c.amount) || 0), 0);
+                                      if (saIdx >= 0 && saIdx !== idx) {
+                                        updated[saIdx] = {
+                                          ...updated[saIdx],
+                                          amount: Math.max(0, mGross - otherSum)
+                                        };
+                                      }
+                                    }
+                                    return updated;
+                                  });
+                                }}
+                                className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background border-border/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                            <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
+                              ₹{(amt * 12).toLocaleString('en-IN')}/yr
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Deductions Column */}
+              <div className="border border-rose-500/20 rounded-xl overflow-hidden bg-card shadow-xs flex flex-col">
+                <div className="px-4 py-3 bg-rose-500/5 border-b border-rose-500/15 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">
+                      Deductions (Monthly)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold text-muted-foreground">
+                      ₹{(totalDeductionCalculated * 12).toLocaleString('en-IN')}/yr
+                    </span>
+                    <Badge variant="outline" className="text-xs font-extrabold bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30 px-2.5 py-0.5">
+                      ₹{totalDeductionCalculated.toLocaleString('en-IN')}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="p-3 space-y-1 flex-1 divide-y divide-border/40">
+                  {modalDeductions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic py-4 text-center">No active deductions in this slab.</p>
+                  ) : (
+                    modalDeductions.map((item, idx) => {
+                      const amt = Number(item.amount) || 0;
+                      return (
+                        <div
+                          key={item.id || idx}
+                          className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/30 transition-colors group"
+                        >
+                          <div className="min-w-0 pr-3">
+                            <span className="text-xs font-semibold text-foreground truncate block">{item.name}</span>
+                          </div>
+
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <div className="relative w-28 sm:w-32">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">₹</span>
+                              <Input
+                                type="number"
+                                value={item.amount}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value) || 0;
+                                  setModalDeductions(prev => prev.map((it, i) => i === idx ? { ...it, amount: val } : it));
+                                }}
+                                className="h-8 pl-6 pr-2 text-xs font-bold text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-background border-border/80 focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                              />
+                            </div>
+                            <span className="text-[11px] font-medium text-muted-foreground w-22 text-right tabular-nums">
+                              ₹{(amt * 12).toLocaleString('en-IN')}/yr
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* Compensation Summary Card */}
             <div className="p-4 rounded-xl bg-gradient-to-r from-primary/10 via-emerald-500/10 to-primary/5 border border-primary/20 flex items-center justify-between flex-wrap gap-4 shadow-sm">

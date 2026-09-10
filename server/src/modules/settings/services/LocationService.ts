@@ -4,6 +4,7 @@ import { LocationRepository } from '../repositories/LocationRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
 import { getKnex } from '../../../db/knex';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 /**
  * Auto-generate a location code from the location name.
@@ -69,7 +70,7 @@ export class LocationService {
   }
 
   async createLocation(ctx: TenantContext, data: Record<string, any>) {
-    const locationName = data.locationName || data.location_name || 'New Location';
+    const locationName = data.locationName || data.location_name || data.name || 'New Location';
     const autoCode = generateCodeFromName(locationName);
 
     // Ensure code uniqueness — append a short suffix if conflict
@@ -195,6 +196,9 @@ export class LocationService {
 
   async deleteLocation(ctx: TenantContext, id: number | string) {
     const location = await this.getLocation(ctx, id);
+    await assertMasterNotInUse(ctx.organizationId, id, 'location', [
+      { table: 'employees', column: 'current_location_id', label: 'employee(s)' },
+    ]);
     await this.locationRepo.delete(ctx, id);
     await this.auditService.log(ctx, {
       action: 'DELETE',

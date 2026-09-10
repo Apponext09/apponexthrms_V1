@@ -75,6 +75,11 @@ export class EmployeeController {
       success: true,
       status: emp.status || 'active',
       data: {
+        // Identity of the new record — callers need this to navigate to the profile
+        // or to chain follow-up calls (salary structure, documents, id-card…).
+        id: (emp as any).id,
+        uuid: (emp as any).uuid,
+        employeeCode: (emp as any).employee_code ?? (emp as any).employeeCode,
         employeeName: fullName,
         employeeEmail: emp.email,
         organizationName: org?.name || '',

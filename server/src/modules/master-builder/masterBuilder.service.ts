@@ -542,9 +542,22 @@ export class MasterBuilderService {
    * Create custom master
    */
   async createMaster(orgId: number, companyId: number | undefined, userId: number, payload: CustomMasterPayload) {
-    const code = payload.code
-      ? payload.code.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_')
-      : payload.name.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (!payload?.name || !String(payload.name).trim()) {
+      throw new Error('Master name is required');
+    }
+    const code = (payload.code ? String(payload.code) : String(payload.name))
+      .trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    if (!code) {
+      throw new Error('Master code is required');
+    }
+
+    const existing = await this.db('custom_masters')
+      .where({ organization_id: orgId, code })
+      .whereNull('deleted_at')
+      .first();
+    if (existing) {
+      throw new Error(`A master with code "${code}" already exists`);
+    }
 
     const [newId] = await this.db('custom_masters').insert({
       uuid: uuidv4(),
@@ -588,9 +601,22 @@ export class MasterBuilderService {
       updated_by: userId,
       updated_at: new Date(),
     };
-    if (payload.name !== undefined) updateData.name = payload.name;
+    if (payload.name !== undefined) {
+      if (!String(payload.name).trim()) throw new Error('Master name cannot be empty');
+      updateData.name = String(payload.name).trim();
+    }
     if (payload.pluralName !== undefined) updateData.plural_name = payload.pluralName;
-    if (payload.code !== undefined) updateData.code = payload.code;
+    if (payload.code !== undefined) {
+      const code = String(payload.code).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+      if (!code) throw new Error('Master code cannot be empty');
+      const clash = await this.db('custom_masters')
+        .where({ organization_id: orgId, code })
+        .whereNull('deleted_at')
+        .whereNot('id', masterId)
+        .first();
+      if (clash) throw new Error(`A master with code "${code}" already exists`);
+      updateData.code = code;
+    }
     if (payload.description !== undefined) updateData.description = payload.description;
     if (payload.icon !== undefined) updateData.icon = payload.icon;
     if (payload.employeeLinkage !== undefined) updateData.employee_linkage = payload.employeeLinkage;
@@ -905,52 +931,97 @@ export class MasterBuilderService {
 
   // ─── Dynamic Master Records ─────────────────────────────────────────────
 
+  /**
+   * getKnex().postProcessResponse recursively camelCases every key — including the keys
+   * INSIDE the `data` JSON blob, which corrupts snake_case field keys (status_name ->
+   * statusName) on read. Always pull the raw JSON text and parse it ourselves.
+   */
+  private parseRecordData(raw: any): Record<string, any> {
+    if (raw === null || raw === undefined) return {};
+    if (typeof raw === 'string') {
+      try { return JSON.parse(raw); } catch { return {}; }
+    }
+    return raw;
+  }
+
+  private async getRecordById(recordId: number) {
+    const row: any = await this.db('custom_master_records')
+      .where('id', recordId)
+      .select('*', this.db.raw('CAST(`data` AS CHAR) AS data_text'))
+      .first();
+    if (!row) return null;
+    return {
+      id: row.id,
+      uuid: row.uuid,
+      recordCode: row.recordCode,
+      status: row.status,
+      data: this.parseRecordData(row.dataText),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   async listRecords(orgId: number, masterId: number, options: { search?: string; status?: string; page?: number; limit?: number }) {
     const page = options.page || 1;
     const limit = options.limit || 50;
     const offset = (page - 1) * limit;
 
-    let query = this.db('custom_master_records')
-      .where('organization_id', orgId)
-      .where('master_id', masterId)
-      .whereNull('deleted_at');
+    const baseQuery = () => {
+      let q = this.db('custom_master_records')
+        .where('organization_id', orgId)
+        .where('master_id', masterId)
+        .whereNull('deleted_at');
+      if (options.status && options.status !== 'all') {
+        q = q.where('status', options.status);
+      }
+      return q;
+    };
+    const withData = (q: any) => q.select('*', this.db.raw('CAST(`data` AS CHAR) AS data_text'));
 
-    if (options.status && options.status !== 'all') {
-      query = query.where('status', options.status);
+    const mapRow = (r: any) => ({
+      id: r.id,
+      uuid: r.uuid,
+      recordCode: r.recordCode,
+      status: r.status,
+      data: this.parseRecordData(r.dataText),
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    });
+
+    const hasSearch = Boolean(options.search && options.search.trim());
+
+    // The record payload lives in a JSON column, so free-text search is applied in-memory.
+    // When searching we must filter BEFORE paginating (and recompute the total) so page
+    // counts and navigation stay correct.
+    if (hasSearch) {
+      const q = options.search!.toLowerCase().trim();
+      const allRows = await withData(baseQuery()).orderBy('id', 'desc');
+      const matched = allRows.map(mapRow).filter((item) => {
+        if (item.recordCode?.toLowerCase().includes(q)) return true;
+        const vals = Object.values(item.data).map((v) => String(v ?? '').toLowerCase());
+        return vals.some((v) => v.includes(q));
+      });
+      const total = matched.length;
+      return {
+        records: matched.slice(offset, offset + limit),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 1,
+        },
+      };
     }
 
-    const totalCountRow = await query.clone().count('id as cnt').first();
-    const total = Number(totalCountRow?.cnt || 0);
+    const totalCountRow = await baseQuery().count('id as cnt').first();
+    const total = Number((totalCountRow as any)?.cnt || 0);
 
-    const rows = await query
+    const rows = await withData(baseQuery())
       .orderBy('id', 'desc')
       .limit(limit)
       .offset(offset);
 
-    let parsed = rows.map((r) => {
-      let data = {};
-      try {
-        data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data || {};
-      } catch (e) {}
-      return {
-        id: r.id,
-        uuid: r.uuid,
-        recordCode: r.record_code,
-        status: r.status,
-        data,
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      };
-    });
-
-    if (options.search && options.search.trim()) {
-      const q = options.search.toLowerCase().trim();
-      parsed = parsed.filter((item) => {
-        if (item.recordCode?.toLowerCase().includes(q)) return true;
-        const vals = Object.values(item.data).map((v) => String(v || '').toLowerCase());
-        return vals.some((v) => v.includes(q));
-      });
-    }
+    const parsed = rows.map(mapRow);
 
     return {
       records: parsed,
@@ -966,7 +1037,14 @@ export class MasterBuilderService {
   /**
    * Validate record data against master fields and custom validation rules
    */
-  async validateRecordData(masterId: number, data: Record<string, any>) {
+  async validateRecordData(
+    orgId: number,
+    masterId: number,
+    data: Record<string, any>,
+    excludeRecordId?: number
+  ) {
+    // NOTE: getKnex() postProcessResponse converts every column to camelCase, so rows read
+    // back here expose fieldKey / isRequired / fieldType (NOT field_key / is_required / field_type).
     const fields = await this.db('custom_master_fields')
       .where('master_id', masterId)
       .where('is_active', 1);
@@ -979,35 +1057,58 @@ export class MasterBuilderService {
 
     // 1. Validate field required & format
     for (const f of fields) {
-      const val = data[f.field_key];
-      if (f.is_required && (val === undefined || val === null || val === '')) {
-        errors.push(`${f.field_name} is required.`);
-      }
+      const key = f.fieldKey;
+      const label = f.fieldName || key;
+      const val = data[key];
+      const isEmpty = val === undefined || val === null || String(val).trim() === '';
 
-      if (val !== undefined && val !== null && val !== '') {
-        if (f.field_type === 'email') {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(String(val))) {
-            errors.push(`${f.field_name} must be a valid email address.`);
-          }
-        } else if (f.field_type === 'number') {
-          if (isNaN(Number(val))) {
-            errors.push(`${f.field_name} must be a valid number.`);
-          }
+      if (f.isRequired && isEmpty) {
+        errors.push(`${label} is required.`);
+        continue;
+      }
+      if (isEmpty) continue;
+
+      if (f.fieldType === 'email') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(String(val))) {
+          errors.push(`${label} must be a valid email address.`);
+        }
+      } else if (f.fieldType === 'number') {
+        if (isNaN(Number(val))) {
+          errors.push(`${label} must be a valid number.`);
         }
       }
     }
 
-    // 2. Validate custom rules
+    // 2. Enforce uniqueness for fields flagged is_unique
+    for (const f of fields) {
+      if (!f.isUnique) continue;
+      const key = f.fieldKey;
+      const val = data[key];
+      if (val === undefined || val === null || String(val).trim() === '') continue;
+
+      let q = this.db('custom_master_records')
+        .where('organization_id', orgId)
+        .where('master_id', masterId)
+        .whereNull('deleted_at')
+        .whereRaw('JSON_UNQUOTE(JSON_EXTRACT(data, ?)) = ?', [`$.${key}`, String(val)]);
+      if (excludeRecordId) q = q.whereNot('id', excludeRecordId);
+      const clash = await q.first();
+      if (clash) {
+        errors.push(`${f.fieldName || key} "${val}" already exists.`);
+      }
+    }
+
+    // 3. Validate custom rules
     for (const r of rules) {
-      const valA = data[r.field_a];
-      const valB = r.field_b ? data[r.field_b] : r.custom_value;
+      const valA = data[r.fieldA];
+      const valB = r.fieldB ? data[r.fieldB] : r.customValue;
 
       if (valA !== undefined && valB !== undefined) {
         if (r.operator === '==' && String(valA) !== String(valB)) {
-          errors.push(r.error_message || `${r.field_a} must equal ${r.field_b || r.custom_value}`);
+          errors.push(r.errorMessage || `${r.fieldA} must equal ${r.fieldB || r.customValue}`);
         } else if (r.operator === '!=' && String(valA) === String(valB)) {
-          errors.push(r.error_message || `${r.field_a} cannot equal ${r.field_b || r.custom_value}`);
+          errors.push(r.errorMessage || `${r.fieldA} cannot equal ${r.fieldB || r.customValue}`);
         }
       }
     }
@@ -1024,7 +1125,7 @@ export class MasterBuilderService {
 
     if (!master) throw new Error('Master not found');
 
-    const errors = await this.validateRecordData(masterId, payload.data || {});
+    const errors = await this.validateRecordData(orgId, masterId, payload.data || {});
     if (errors.length > 0) {
       throw new Error(errors.join(', '));
     }
@@ -1043,15 +1144,7 @@ export class MasterBuilderService {
       updated_by: userId,
     });
 
-    const row = await this.db('custom_master_records').where('id', recordId).first();
-    return {
-      id: row.id,
-      uuid: row.uuid,
-      recordCode: row.record_code,
-      status: row.status,
-      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
-      createdAt: row.created_at,
-    };
+    return this.getRecordById(recordId);
   }
 
   async updateRecord(orgId: number, masterId: number, recordId: number, userId: number, payload: Partial<DynamicRecordPayload>) {
@@ -1059,7 +1152,7 @@ export class MasterBuilderService {
     if (payload.recordCode !== undefined) updateData.record_code = payload.recordCode;
     if (payload.status !== undefined) updateData.status = payload.status;
     if (payload.data !== undefined) {
-      const errors = await this.validateRecordData(masterId, payload.data);
+      const errors = await this.validateRecordData(orgId, masterId, payload.data, recordId);
       if (errors.length > 0) {
         throw new Error(errors.join(', '));
       }
@@ -1072,15 +1165,7 @@ export class MasterBuilderService {
       .where('organization_id', orgId)
       .update(updateData);
 
-    const row = await this.db('custom_master_records').where('id', recordId).first();
-    return {
-      id: row.id,
-      uuid: row.uuid,
-      recordCode: row.record_code,
-      status: row.status,
-      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
-      updatedAt: row.updated_at,
-    };
+    return this.getRecordById(recordId);
   }
 
   async deleteRecord(orgId: number, masterId: number, recordId: number) {

@@ -62,7 +62,8 @@ export class DepartmentRepository extends BaseRepository<Department> {
    * Check if code exists within organization
    */
   async isCodeUnique(ctx: TenantContext, code: string, excludeId?: number): Promise<boolean> {
-    let query = this.query(ctx).where('code', code);
+    // Only live rows count — a soft-deleted master frees its code for reuse.
+    let query = this.query(ctx).where('code', code).whereNull('deleted_at');
     if (excludeId) {
       query = query.whereNot('id', excludeId);
     }

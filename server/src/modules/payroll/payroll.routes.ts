@@ -142,6 +142,10 @@ router.get('/loans/:id/next-emi', asyncHandler((req, res) => controller.getNextE
 router.post('/tax-declarations', asyncHandler((req, res) => controller.createTaxDeclaration(req, res)));
 router.get('/tax-declarations', asyncHandler((req, res) => controller.getTaxDeclarations(req, res)));
 router.post('/tax/calculate-tds', asyncHandler((req, res) => controller.calculateTDS(req, res)));
+router.get('/tax-declarations/:id', asyncHandler((req, res) => controller.getTaxDeclaration(req, res)));
+router.post('/tax-declarations/:id/finalize', asyncHandler((req, res) => controller.finalizeTaxDeclaration(req, res)));
+router.get('/tax-declarations/:id/investments', asyncHandler((req, res) => controller.getTaxInvestments(req, res)));
+router.post('/tax-declarations/:id/investments', asyncHandler((req, res) => controller.addTaxInvestment(req, res)));
 
 // Settlements
 router.get('/settlements/my-settlement', asyncHandler((req, res) => controller.getMySettlement(req, res)));
