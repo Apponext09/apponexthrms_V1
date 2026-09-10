@@ -160,7 +160,7 @@ export function HRConfigurationPage() {
   const [creditEncashable, setCreditEncashable] = useState(true);
 
   // Tab 3: Roles and Permission
-  const [selectedRole, setSelectedRole] = useState('hr_admin');
+  const [selectedRole, setSelectedRole] = useState('hr');
   const [permissions, setPermissions] = useState<Record<string, boolean>>({
     'employee.view': true,
     'employee.edit': true,
@@ -495,7 +495,7 @@ export function HRConfigurationPage() {
                       className="h-9 border rounded-xl px-3 text-xs font-bold bg-background"
                     >
                       <option value="organization_admin">Admin (Organization Admin)</option>
-                      <option value="hr_admin">HR Admin / HR Manager</option>
+                      <option value="hr">HR</option>
                       <option value="department_head">Department Manager</option>
                       <option value="team_lead">Team Lead</option>
                       <option value="employee">Self-Service Employee</option>

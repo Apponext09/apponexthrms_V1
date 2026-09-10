@@ -173,13 +173,8 @@ export class SuperAdminService {
           start_date: 1,
           cutoff_day: 25,
           disbursement_date_str: '28',
-          month_offset: 'Current',
           total_days_calc: '30',
-          cap_amount: 1000000.00,
-          tolerance_enabled: 1,
-          tolerance_minutes: 15,
           is_active: 1,
-          status: 'open',
           created_by: 10,
           updated_by: 10,
         });

@@ -73,7 +73,7 @@ const AVAILABLE_ROLES = [
   { code: 'employee', label: 'Employee' },
   { code: 'team_lead', label: 'Team Lead' },
   { code: 'department_head', label: 'Department Manager' },
-  { code: 'hr_manager', label: 'HR / Support Manager' },
+  { code: 'hr', label: 'HR' },
   { code: 'intern', label: 'Intern' },
   { code: 'consultant', label: 'Consultant' },
   { code: 'ceo', label: 'CEO / Executive' },
@@ -163,7 +163,7 @@ export function PolicyManagementPage() {
       fileSize: 0,
       fileType: '',
       isMandatory: true,
-      selectedRoles: ['employee', 'team_lead', 'department_head', 'hr_manager', 'intern', 'consultant'],
+      selectedRoles: ['employee', 'team_lead', 'department_head', 'hr', 'intern', 'consultant'],
     });
     setCreateModalOpen(true);
   };

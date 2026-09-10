@@ -203,7 +203,7 @@ export const PAYROLL_ROLES = {
     'advance:view',
     'advance:approve'
   ],
-  hr_manager: [
+  hr: [
     'payroll:view',
     'structure:view',
     'revision:view',

@@ -201,12 +201,30 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     const user = await this.db('users')
-      .where('organization_id', ctx.organizationId)
       .where('employee_id', employee.id)
+      .where(function(this: any) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
       .first();
     if (user) {
-      let highestRole = user.role || 'employee';
-      let highestPriority = 0;
+      const rolePriority: Record<string, number> = {
+        ceo: 8,
+        organization_admin: 8,
+        super_admin: 8,
+        cto: 6,
+        cfo: 6,
+        coo: 6,
+        cxo: 6,
+        hr_manager: 5,
+        department_head: 4,
+        team_lead: 3,
+        finance: 3,
+        intern: 2,
+        consultant: 2,
+        employee: 1,
+      };
+      let highestRole = (user.role || 'employee').toLowerCase();
+      let highestPriority = rolePriority[highestRole] || 0;
 
       const userRoles = await this.db('user_roles')
         .join('roles', 'user_roles.role_id', 'roles.id')
@@ -225,6 +243,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           cfo: 6,
           coo: 6,
           cxo: 6,
+          hr: 5,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,
@@ -482,16 +501,13 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
         })
         .whereIn('employee_id', employeeIds)
-        .select('id', 'employee_id', 'role');
+        .select('id', 'employee_id');
 
       if (users.length > 0) {
         for (const u of users) {
           const empId = Number((u as any).employeeId || u.employee_id);
           const uId = Number(u.id);
           userMap.set(empId, uId);
-          if ((u as any).role) {
-            roleMap.set(uId, String((u as any).role).toLowerCase());
-          }
         }
 
         const userIds = users.map((u) => u.id);
@@ -501,7 +517,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
           })
           .whereIn('user_roles.user_id', userIds)
-          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
+          .whereIn('roles.code', ['employee', 'team_lead', 'hr', 'hr_manager', 'department_head', 'cto', 'cfo', 'coo', 'cxo', 'intern', 'consultant', 'finance'])
           .select('user_roles.user_id', 'roles.code');
 
         const rolePriority: Record<string, number> = {
@@ -512,6 +528,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           cfo: 6,
           coo: 6,
           cxo: 6,
+          hr: 5,
           hr_manager: 5,
           department_head: 4,
           team_lead: 3,

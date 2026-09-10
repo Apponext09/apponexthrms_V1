@@ -11,8 +11,9 @@ export interface TargetAssignment {
 
 export interface RolePolicyRecord {
   id: number;
-  roleCode: string;
-  assignedRoles: string[];
+  roleCode?: string;
+  assignedRoles?: string[];
+  targetRoles?: string[];
   applicableGender?: string;
   assignments?: TargetAssignment[];
   documentRef?: string;
@@ -29,13 +30,17 @@ export interface RolePolicyRecord {
   requireAcknowledgement?: boolean;
   allowDownload?: boolean;
   organizationId?: number | null;
-  createdBy?: number | null;
-  updatedBy?: number | null;
+  createdBy?: any;
+  updatedBy?: any;
   policyAccepted?: boolean;
   policyAcceptedAt?: string | null;
   acknowledgementPercentage?: number;
   acknowledgedCount?: number;
   pendingCount?: number;
+  totalTargetEmployees?: number;
+  isAcknowledged?: boolean;
+  targetDepartments?: any[];
+  targetEmployees?: any[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -52,12 +57,15 @@ export interface PolicyDashboardStats {
 export interface PolicyVersionRecord {
   id: number;
   policyId: number;
-  versionNumber: string;
-  title: string;
+  versionNumber?: string;
+  version?: string;
+  title?: string;
   description?: string;
   changeDescription?: string;
-  status: string;
-  updatedBy: string;
+  status?: string;
+  isActive?: boolean;
+  createdBy?: any;
+  updatedBy?: string;
   createdAt?: string;
 }
 
@@ -106,7 +114,7 @@ export const POLICY_CATEGORIES = [
 export const AVAILABLE_ROLES = [
   { code: 'super_admin', label: 'Super Admin' },
   { code: 'organization_admin', label: 'Organization Admin' },
-  { code: 'hr_manager', label: 'HR Manager' },
+  { code: 'hr', label: 'HR' },
   { code: 'department_head', label: 'Department Head' },
   { code: 'team_lead', label: 'Team Lead' },
   { code: 'employee', label: 'Employee' },

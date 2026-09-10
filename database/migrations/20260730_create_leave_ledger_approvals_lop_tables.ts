@@ -6,7 +6,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasLedger) {
     await knex.schema.createTable('leave_ledger_entries', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('employee_id').unsigned().notNullable();
       table.bigInteger('leave_type_id').unsigned().notNullable();
@@ -28,7 +28,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasApprovals) {
     await knex.schema.createTable('leave_approvals', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('application_id').unsigned().notNullable();
       table.bigInteger('approver_id').unsigned().notNullable();
@@ -48,7 +48,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasLop) {
     await knex.schema.createTable('leave_lop_records', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('employee_id').unsigned().notNullable();
       table.bigInteger('application_id').unsigned().notNullable();

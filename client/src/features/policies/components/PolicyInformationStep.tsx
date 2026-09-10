@@ -13,6 +13,8 @@ interface PolicyInfoData {
   reviewDate: string;
   expiryDate: string;
   status: 'draft' | 'published' | string;
+  applicableTo?: string;
+  selectedGenders?: string[];
 }
 
 interface PolicyInformationStepProps {

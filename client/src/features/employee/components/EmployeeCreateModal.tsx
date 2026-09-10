@@ -266,9 +266,7 @@ export function EmployeeCreateModal({
       apiClient.get('/payroll/slabs').then((res: any) => {
         const list = res.data?.data || res.data || [];
         setSlabs(list);
-      }).catch(() => {});
-    } else {
-      setActiveInfoId(null);
+      }).catch(() => { });
     }
   }, [open]);
 
@@ -284,22 +282,14 @@ export function EmployeeCreateModal({
     )
     : [];
 
-  const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || []))
-    .filter((e: any) => {
-      const role = (e.accessRole || e.access_role || e.role || '').toLowerCase();
-      const code = (e.employeeCode || e.employee_code || '');
-      return (
-        ['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo'].includes(role) ||
-        code.startsWith('CEO-') ||
-        e.isCeo ||
-        e.is_ceo
-      );
-    })
-    .map((e: any) => ({
-      id: e.id,
-      name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
-      designation: e.jobTitle || e.designation || e.designation_name || e.accessRole || 'Manager'
-    }));
+  const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || [])).map((e: any) => ({
+    id: e.id,
+    name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
+    designation: e.designation || e.designation_name || e.jobTitle || e.role || 'Employee',
+    department: e.department || e.departmentName || e.department_name || 'General',
+    accessRole: ((e.accessRole || e.role || '') as string).toLowerCase(),
+    employeeCode: e.employeeCode || e.employee_code || '',
+  }));
 
   const handleOpenChange = (openVal: boolean) => {
     if (!openVal) {
@@ -496,17 +486,16 @@ export function EmployeeCreateModal({
       if (newEmpId && formData.salarySlabId) {
         try {
           const chosenSlab = slabs.find(s => String(s.id) === String(formData.salarySlabId));
-          const defaultMinCtc = Number(chosenSlab?.min_ctc || chosenSlab?.minCtc || 0);
           await apiClient.post('/payroll/structures/assign', {
             employeeId: newEmpId,
             slabId: formData.salarySlabId,
             structureName: chosenSlab?.name || chosenSlab?.slab_name || 'Assigned Salary Slab',
             effectiveFrom: formData.dateOfJoining || new Date().toISOString().slice(0, 10),
-            annualCtc: defaultMinCtc,
-            grossSalary: Math.round(defaultMinCtc / 12),
-            grossMonthly: Math.round(defaultMinCtc / 12),
-            baseSalary: Math.round((defaultMinCtc / 12) * 0.5),
-            netSalary: Math.round((defaultMinCtc / 12) * 0.9)
+            annualCtc: 0,
+            grossSalary: 0,
+            grossMonthly: 0,
+            baseSalary: 0,
+            netSalary: 0
           });
         } catch (e) {
           console.error('Failed to link initial slab:', e);
@@ -1167,22 +1156,19 @@ export function EmployeeCreateModal({
                         <option value="team_lead">Team Lead (Team Portal View)</option>
                         <option value="department_head">Department Head / Manager</option>
                         <option value="hr_manager">HR Manager (HR Portal View)</option>
+                        <option value="cto">CTO (Chief Technology Officer)</option>
+                        <option value="cfo">CFO (Chief Financial Officer)</option>
+                        <option value="coo">COO (Chief Operating Officer)</option>
+                        <option value="ceo">CEO (Chief Executive Officer)</option>
                         <option value="intern">Intern (Intern Portal View)</option>
                         <option value="consultant">Consultant (Consultant Portal View)</option>
                         <option value="finance">Finance (Finance Portal View)</option>
                        
                       </select>
-                      {fieldErrors.accessRole ? (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.accessRole}</span>
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Controls which portal they log into.{' '}
-                          <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Controls which portal they log into.{' '}
+                        <span className="font-medium text-foreground">Executives (CFO, COO, CTO, CEO) & Managers are assigned to their respective departments in the chart.</span>
+                      </p>
 
                       {/* Mapped Policy Preview */}
                       {(() => {
@@ -1264,28 +1250,76 @@ export function EmployeeCreateModal({
 
                     {/* Reporting Manager - NOT MANDATORY */}
                     <div className="col-span-2">
-                      <Label htmlFor="reportingManager" className="flex items-center text-xs font-bold text-foreground">
-                        Reports To <span className="text-xs text-muted-foreground font-normal ml-1.5">(Optional)</span>
-                      </Label>
-                      {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
-                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 dark:text-amber-200 text-sm font-medium mt-1">
-                          🛡️ <strong>Organization Admin</strong> (Manager & HR roles directly report to the Organization Admin)
+                      <Label htmlFor="reportingManager">Reports To</Label>
+                      {formData.accessRole === 'ceo' ? (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium flex items-center gap-2">
+                          👑 <strong>Chief Executive Officer (CEO)</strong> — Organization Root Leader
                         </div>
                       ) : (
                         <>
                           <select
                             id="reportingManager"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
                             value={formData.reportingManagerId}
-                            onChange={(e) => handleFieldChange('reportingManagerId', e.target.value)}
-                            disabled={!formData.departmentId}
+                            onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                           >
-                            <option value="">-- Select Reporting Manager (Optional) --</option>
-                            {departmentManagers.map((mgr: any) => (
-                              <option key={mgr.id} value={String(mgr.id)}>
-                                {mgr.name} ({mgr.designation || 'Manager'})
-                              </option>
-                            ))}
+                            <option value="">-- Select Reporting Manager (Defaults to CEO / Dept Head) --</option>
+                            {(() => {
+                              const getCat = (m: any) => {
+                                const r = (m.accessRole || '').toLowerCase();
+                                const d = (m.designation || '').toLowerCase();
+                                if (['cfo', 'coo', 'cto'].includes(r) || d.includes('chief')) return 'cxo';
+                                if (['department_head', 'hr_manager', 'manager'].includes(r) || d.includes('manager') || d.includes('head')) return 'manager';
+                                if (r === 'team_lead' || d.includes('lead')) return 'lead';
+                                return 'other';
+                              };
+
+                              const cxos = departmentManagers.filter((m: any) => getCat(m) === 'cxo');
+                              const mgrs = departmentManagers.filter((m: any) => getCat(m) === 'manager');
+                              const leads = departmentManagers.filter((m: any) => getCat(m) === 'lead');
+                              const others = departmentManagers.filter((m: any) => getCat(m) === 'other');
+
+                              return (
+                                <>
+                                  {cxos.length > 0 && (
+                                    <optgroup label="⚡ C-Suite Executives (CTO, COO, CFO)">
+                                      {cxos.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  {mgrs.length > 0 && (
+                                    <optgroup label="👔 Department Heads & Managers">
+                                      {mgrs.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  {leads.length > 0 && (
+                                    <optgroup label="🎖️ Team Leads">
+                                      {leads.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                  {others.length > 0 && (
+                                    <optgroup label="👥 Other Department Members">
+                                      {others.map((mgr: any) => (
+                                        <option key={mgr.id} value={String(mgr.id)}>
+                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </select>
                           <p className="text-xs text-muted-foreground mt-1">
                             {!formData.departmentId ? 'Select department first to see reporting managers.' : 'Optional field: Can be assigned later.'}

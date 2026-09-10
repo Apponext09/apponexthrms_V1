@@ -101,16 +101,8 @@ export async function up(knex: Knex): Promise<void> {
     });
   }
 
-  // 5. payroll_slab_components
-  const hasSlabComponents = await knex.schema.hasTable('payroll_slab_components');
-  if (!hasSlabComponents) {
-    await knex.schema.createTable('payroll_slab_components', (table) => {
-      table.bigIncrements('id').primary();
-      table.bigInteger('slab_id').unsigned().notNullable();
-      table.bigInteger('component_id').unsigned().notNullable();
-      table.timestamp('created_at').defaultTo(knex.fn.now());
-    });
-  }
+  // 5. payroll_slab_components (deprecated; components stored in payroll_slabs.selected_component_ids)
+  await knex.schema.dropTableIfExists('payroll_slab_components');
 
   // 6. Alter payroll_cycles
   const hasCycles = await knex.schema.hasTable('payroll_cycles');

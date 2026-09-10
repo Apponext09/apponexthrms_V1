@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
 
 export class SalaryRevisionController {
   /** Helper: resolve current user's employee id (used internally) */
@@ -104,31 +105,8 @@ export class SalaryRevisionController {
       })
       .catch(() => 0);
 
-    const essRows = await db('employee_salary_structures')
-      .where('employee_id', employeeId)
-      .whereNull('deleted_at')
-      .catch(() => []);
-
-    if (essRows && essRows.length > 0) {
-      const structIds = essRows.map((r: any) => r.salary_structure_id).filter(Boolean);
-      if (structIds.length > 0) {
-        await db('salary_structures')
-          .whereIn('id', structIds)
-          .update({
-            ...(matchedSlabId ? { slab_id: matchedSlabId } : {}),
-            annual_ctc: newCtc,
-            gross_monthly: newGross,
-            basic_monthly: newBasic,
-            hra_monthly: newHra,
-            special_allowance_monthly: newSpecial,
-            net_take_home: newTakeHome,
-            updated_at: new Date(),
-          })
-          .catch(() => {});
-      }
-    }
-
-    if (!updatedCount && (!essRows || essRows.length === 0)) {
+    // Update all salary_structures rows for this employee directly
+    if (!updatedCount) {
       const [newStructId] = await db('salary_structures')
         .insert({
           uuid: uuidv4(),
@@ -147,21 +125,6 @@ export class SalaryRevisionController {
           updated_at: new Date(),
         })
         .catch(() => [null]);
-
-      if (newStructId) {
-        await db('employee_salary_structures')
-          .insert({
-            uuid: uuidv4(),
-            organization_id: orgId,
-            employee_id: employeeId,
-            salary_structure_id: newStructId,
-            is_current: true,
-            effective_from: new Date().toISOString().slice(0, 10),
-            created_at: new Date(),
-            updated_at: new Date(),
-          })
-          .catch(() => {});
-      }
     }
   }
 
@@ -179,9 +142,7 @@ export class SalaryRevisionController {
     const isAdminOrHR =
       userRole.includes('admin') ||
       userRole.includes('hr') ||
-      userRole.includes('owner') ||
-      userRole.includes('manager') ||
-      userRole.includes('lead');
+      userRole.includes('owner');
     const isEmpOnly = !isAdminOrHR;
 
     let empId: number | null = null;
@@ -265,7 +226,7 @@ export class SalaryRevisionController {
 
   async createSalaryRevision(req: Request, res: Response) {
     const db = getKnex();
-    const orgId = req.ctx?.organizationId || (req.user as any)?.organizationId || 1;
+    const orgId = requireOrgId(req.ctx);
 
     const body = req.body || {};
     const empIdVal = body.employeeId || body.employee_id || body.empId;
@@ -305,6 +266,15 @@ export class SalaryRevisionController {
       userRole.includes('admin') ||
       userRole.includes('owner') ||
       (req.user as any)?.email === 'kot@gmail.com';
+    const isHR = userRole.includes('hr') || userRole.includes('support');
+
+    if (!isAdmin && !isHR) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only HR and Organization Admin can create or propose salary revisions.'
+      });
+    }
+
     const isInstant = Boolean(body.instantApprove || body.status === 'approved') && isAdmin;
     const initialStatus = isInstant ? 'approved' : 'submitted';
     const currentUserId = req.ctx?.userId || (req.user as any)?.sub || (req.user as any)?.id || 1;
@@ -346,12 +316,7 @@ export class SalaryRevisionController {
             .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
             .leftJoin('roles as r', 'ur.role_id', 'r.id')
             .where('u.organization_id', orgId)
-            .where(function (this: any) {
-              this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager']).orWhere(
-                'u.email',
-                'ajay@gmail.com'
-              );
-            })
+            .whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
             .whereNull('u.deleted_at')
             .select('u.id', 'u.email')
             .distinct();
@@ -412,9 +377,14 @@ export class SalaryRevisionController {
       userRole.includes('admin') ||
       userRole.includes('owner') ||
       userRole.includes('ceo') ||
-      userRole.includes('hr') ||
-      userRole === '' ||
-      !userRole;
+      (req.user as any)?.email === 'kot@gmail.com';
+
+    if (!isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden: Only Organization Admin can approve salary revisions.'
+      });
+    }
 
     const currentUserId = req.ctx?.userId || (req.user as any)?.sub || (req.user as any)?.id || 10;
 
@@ -453,7 +423,7 @@ export class SalaryRevisionController {
             await db('notifications')
               .insert({
                 uuid: uuidv4(),
-                organization_id: revision.organization_id || 68,
+                organization_id: revision.organization_id || req.ctx?.organizationId,
                 event_code: 'SALARY_REVISION_APPROVED',
                 recipient_id: recipientId,
                 channels: JSON.stringify(['inapp', 'email']),
@@ -572,35 +542,23 @@ export class SalaryRevisionController {
         return res.json({ success: true, version: 'V999', data: null });
       }
 
-      let mapping: any = await db('employee_salary_structures as ess')
-        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .where('ess.employee_id', empId)
-        .where('ess.is_current', true)
-        .whereNull('ess.deleted_at')
-        .whereNotNull('ess.salary_structure_id')
-        .orderBy('ess.id', 'desc')
+      let mapping: any = await db('salary_structures')
+        .where('employee_id', empId)
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
         .select(
-          'ss.structure_name as structureName',
-          'ss.annual_ctc as annualCtc',
-          'ss.gross_monthly as grossMonthly',
-          'ss.basic_monthly as basicMonthly',
-          'ss.hra_monthly as hraMonthly',
-          'ss.special_allowance_monthly as specialAllowanceMonthly',
-          'ss.pf_deduction as pfDeduction',
-          'ss.esi_deduction as ptDeduction',
-          'ss.net_take_home as netTakeHome'
+          'structure_name as structureName',
+          'annual_ctc as annualCtc',
+          'gross_monthly as grossMonthly',
+          'basic_monthly as basicMonthly',
+          'hra_monthly as hraMonthly',
+          'special_allowance_monthly as specialAllowanceMonthly',
+          'pf_deduction as pfDeduction',
+          'esi_deduction as ptDeduction',
+          'net_take_home as netTakeHome'
         )
         .first()
         .catch(() => null);
-
-      if (!mapping) {
-        mapping = await db('salary_structures')
-          .where('employee_id', empId)
-          .whereNull('deleted_at')
-          .orderBy('id', 'desc')
-          .first()
-          .catch(() => null);
-      }
 
       if (!mapping) {
         const emp = await db('employees').where('id', empId).first().catch(() => null);

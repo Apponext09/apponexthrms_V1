@@ -18,8 +18,6 @@ export interface PayrollCycleItem {
   companyName?: string;
   company_name?: string;
   isDailyWages?: boolean;
-  dailyWagesIncludePaidHolidays?: boolean;
-  dailyWagesIncludeWeekOff?: boolean;
   frequency: 'Monthly' | 'Bi-monthly' | 'Semi-Monthly' | 'Weekly' | 'Bi-Weekly';
   startDate: number | string;
   startDate2?: number | string;
@@ -27,11 +25,7 @@ export interface PayrollCycleItem {
   cutoffDay: number | string;
   cutoffDayName?: string;
   totalDaysCalc?: string;
-  monthOffset: 'Choose' | 'First' | 'Last' | 'Current' | 'Previous' | 'Next';
   disbursementDate: number | string;
-  capAmount?: number | string;
-  toleranceEnabled?: boolean;
-  toleranceMinutes?: number;
   isActive: boolean;
 }
 
@@ -58,27 +52,31 @@ export const MasterPayrollCycle: React.FC = () => {
     frequency: 'Monthly',
     startDate: 1,
     cutoffDay: 25,
-    monthOffset: 'Current',
     disbursementDate: 28,
     totalDaysCalc: '30',
-    capAmount: 1000000,
     isActive: true
   });
 
   // ── Dynamic cycle validation helpers ─────────────────────────────────────
   const isMonthlyLike = !['Weekly', 'Bi-Weekly'].includes(cycleForm.frequency || 'Monthly');
-  const cutoffNum = Number(cycleForm.cutoffDay) || 25;
+  const cutoffNum = Number(cycleForm.cutoffDay) || 0;
   const disbNum = Number(cycleForm.disbursementDate) || 28;
   const startNum = Number(cycleForm.startDate) || 1;
-  const cycleConflict = isMonthlyLike && disbNum <= cutoffNum;
-  const auditWindowDays = cycleConflict ? 0 : disbNum - cutoffNum;
+  // cutoff=0 means full-month (no early cutoff), so never conflict
+  // disbursement < cutoff within same month is a conflict, but
+  // small disbursement (1-7) with large cutoff (25+) means next-month payout — NOT a conflict
+  const isNextMonthDisbursement = isMonthlyLike && cutoffNum > 0 && disbNum < cutoffNum && disbNum <= 7;
+  const cycleConflict = isMonthlyLike && cutoffNum > 0 && disbNum <= cutoffNum && !isNextMonthDisbursement;
+  const auditWindowDays = cycleConflict ? 0 : (isNextMonthDisbursement ? (31 - cutoffNum + disbNum) : (cutoffNum > 0 ? disbNum - cutoffNum : 0));
 
-  // When cutoff changes, auto-adjust disbursement to cutoff + 3 (if current disbursement is invalid)
+  // When cutoff changes, auto-adjust disbursement to cutoff + 3 (if current disbursement would be a real conflict)
   const handleCutoffChange = (val: string) => {
     const newCutoff = Number(val);
     const currentDisb = Number(cycleForm.disbursementDate) || 28;
     let newDisb = currentDisb;
-    if (isMonthlyLike && currentDisb <= newCutoff) {
+    // Only auto-adjust if same-month disbursement is ≤ cutoff and it's NOT a valid next-month payout
+    const wouldBeNextMonth = newCutoff > 0 && currentDisb < newCutoff && currentDisb <= 7;
+    if (isMonthlyLike && newCutoff > 0 && currentDisb <= newCutoff && !wouldBeNextMonth) {
       newDisb = Math.min(31, newCutoff + 3);
     }
     setCycleForm({ ...cycleForm, cutoffDay: val as any, disbursementDate: newDisb });
@@ -142,21 +140,15 @@ export const MasterPayrollCycle: React.FC = () => {
             company_id: rawCompanyId,
             companyName: compName,
             isDailyWages: Boolean(c.isDailyWages ?? c.is_daily_wages),
-            dailyWagesIncludePaidHolidays: Boolean(c.dailyWagesIncludePaidHolidays ?? c.daily_wages_include_paid_holidays),
-            dailyWagesIncludeWeekOff: Boolean(c.dailyWagesIncludeWeekOff ?? c.daily_wages_include_week_off),
             frequency: c.frequency || 'Monthly',
             startDate: c.startDate ?? c.start_date ?? 1,
             startDate2: c.startDate2 ?? c.start_date_2 ?? 16,
             startDay: c.startDay || c.start_day || 'Monday',
             cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 25,
             cutoffDayName: c.cutoffDayName || c.cutoff_day_name || 'Friday',
-            monthOffset: c.monthOffset || c.month_offset || 'Current',
             disbursementDate: c.disbursementDate ?? c.disbursement_date_str ?? c.disbursement_date ?? 28,
             totalDaysCalc: c.totalDaysCalc || c.total_days_calc || '30',
-            capAmount: c.capAmount ?? c.cap_amount ?? 1000000,
-            toleranceEnabled: Boolean(c.toleranceEnabled ?? c.tolerance_enabled),
-            toleranceMinutes: c.toleranceMinutes ?? c.tolerance_minutes ?? 15,
-            isActive: c.isActive ?? (c.status !== 'closed' && (c.is_active ?? true))
+            isActive: c.isActive ?? ((c.is_active ?? true) !== 0 && (c.is_active ?? true) !== false)
           };
         });
 
@@ -184,10 +176,8 @@ export const MasterPayrollCycle: React.FC = () => {
             frequency: 'Monthly',
             startDate: 1,
             cutoffDay: 25,
-            monthOffset: 'Current',
             disbursementDate: 28,
             totalDaysCalc: '30',
-            capAmount: 1000000,
             isActive: true
           });
         }
@@ -244,23 +234,16 @@ export const MasterPayrollCycle: React.FC = () => {
       frequency: cycleForm.frequency || 'Monthly',
       cycle_type: (cycleForm.frequency || 'Monthly').toLowerCase(),
       is_daily_wages: Boolean(cycleForm.isDailyWages),
-      daily_wages_include_paid_holidays: Boolean(cycleForm.dailyWagesIncludePaidHolidays),
-      daily_wages_include_week_off: Boolean(cycleForm.dailyWagesIncludeWeekOff),
       start_date: Number(cycleForm.startDate) || 1,
       start_date_2: cycleForm.startDate2 ? Number(cycleForm.startDate2) : null,
       start_day: cycleForm.startDay || null,
       cutoff_day: Number(cycleForm.cutoffDay) || 0,
       cutoff_day_name: cycleForm.cutoffDayName || null,
-      month_offset: cycleForm.monthOffset || 'Current',
       disbursement_date: Number(cycleForm.disbursementDate || 28),
       disbursementDate: Number(cycleForm.disbursementDate || 28),
       disbursement_date_str: String(cycleForm.disbursementDate || 28),
       total_days_calc: cycleForm.totalDaysCalc || '30',
-      cap_amount: cycleForm.capAmount !== undefined && cycleForm.capAmount !== '' ? Number(cycleForm.capAmount) : 1000000,
-      tolerance_enabled: Boolean(cycleForm.toleranceEnabled),
-      tolerance_minutes: Number(cycleForm.toleranceMinutes) || 15,
       is_active: Boolean(cycleForm.isActive),
-      status: cycleForm.isActive ? 'open' : 'closed'
     };
 
     try {
@@ -328,10 +311,8 @@ export const MasterPayrollCycle: React.FC = () => {
             frequency: 'Monthly',
             startDate: 1,
             cutoffDay: 25,
-            monthOffset: 'Current',
             disbursementDate: 28,
             totalDaysCalc: '30',
-            capAmount: 1000000,
             isActive: true
           });
         }
@@ -359,10 +340,8 @@ export const MasterPayrollCycle: React.FC = () => {
       frequency: 'Monthly',
       startDate: 1,
       cutoffDay: 25,
-      monthOffset: 'Current',
       disbursementDate: 28,
       totalDaysCalc: '30',
-      capAmount: 1000000,
       isActive: true
     });
   };
@@ -595,7 +574,7 @@ export const MasterPayrollCycle: React.FC = () => {
                 </div>
               </div>
 
-              {/* Field 2: Daily Wages & Sub-options */}
+              {/* Field 2: Daily Wages */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                 <label className="md:col-span-4 text-xs font-medium text-foreground">
                   Daily wages
@@ -604,52 +583,11 @@ export const MasterPayrollCycle: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={cycleForm.isDailyWages || false}
-                    onChange={e => {
-                      const isChecked = e.target.checked;
-                      setCycleForm({
-                        ...cycleForm,
-                        isDailyWages: isChecked,
-                        dailyWagesIncludePaidHolidays: isChecked ? cycleForm.dailyWagesIncludePaidHolidays : false,
-                        dailyWagesIncludeWeekOff: isChecked ? cycleForm.dailyWagesIncludeWeekOff : false
-                      });
-                    }}
+                    onChange={e => setCycleForm({ ...cycleForm, isDailyWages: e.target.checked })}
                     className="w-4 h-4 rounded border-input text-primary focus:ring-primary cursor-pointer accent-primary"
                   />
                 </div>
               </div>
-
-              {/* Sub-checkboxes appear ONLY when Daily wages is checked */}
-              {cycleForm.isDailyWages && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                    <label className="md:col-span-4 text-xs font-medium text-muted-foreground">
-                      Daily wages include paid holidays
-                    </label>
-                    <div className="md:col-span-8 flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={cycleForm.dailyWagesIncludePaidHolidays || false}
-                        onChange={e => setCycleForm({ ...cycleForm, dailyWagesIncludePaidHolidays: e.target.checked })}
-                        className="w-4 h-4 rounded border-input text-primary focus:ring-primary cursor-pointer accent-primary"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                    <label className="md:col-span-4 text-xs font-medium text-muted-foreground">
-                      Daily wages include week off
-                    </label>
-                    <div className="md:col-span-8 flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={cycleForm.dailyWagesIncludeWeekOff || false}
-                        onChange={e => setCycleForm({ ...cycleForm, dailyWagesIncludeWeekOff: e.target.checked })}
-                        className="w-4 h-4 rounded border-input text-primary focus:ring-primary cursor-pointer accent-primary"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
 
               {/* Field 3: Payslip Frequency */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
@@ -797,59 +735,7 @@ export const MasterPayrollCycle: React.FC = () => {
                 </div>
               </div>
 
-              {/* Field 6: Month */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <label className="md:col-span-4 text-xs font-medium text-foreground">
-                  Month
-                </label>
-                <div className="md:col-span-8">
-                  <select
-                    value={cycleForm.monthOffset || 'Choose'}
-                    onChange={e => setCycleForm({ ...cycleForm, monthOffset: e.target.value as any })}
-                    className="w-48 h-9 border border-input bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
-                  >
-                    <option value="Choose">Choose</option>
-                    <option value="First">First</option>
-                    <option value="Last">Last</option>
-                    <option value="Current">Current Month</option>
-                    <option value="Previous">Previous Month</option>
-                    <option value="Next">Next Month</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Field: [+] Tolerance Accordion */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <div className="md:col-span-12">
-                  <details className="border border-border rounded-lg p-3 bg-muted/30">
-                    <summary className="font-medium text-xs text-foreground cursor-pointer select-none">
-                      [+] Tolerance
-                    </summary>
-                    <div className="pt-3 space-y-3 text-xs">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={cycleForm.toleranceEnabled || false}
-                          onChange={e => setCycleForm({ ...cycleForm, toleranceEnabled: e.target.checked })}
-                          className="w-4 h-4 rounded border-input text-primary focus:ring-primary cursor-pointer accent-primary"
-                        />
-                        <span className="font-medium text-foreground">Enable Attendance Tolerance Minutes</span>
-                      </div>
-                      {cycleForm.toleranceEnabled && (
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-muted-foreground">Tolerance (Minutes):</label>
-                          <Input
-                            type="number"
-                            value={cycleForm.toleranceMinutes || 15}
-                            onChange={e => setCycleForm({ ...cycleForm, toleranceMinutes: parseInt(e.target.value) || 0 })}
-                            className="h-8 w-28 text-xs font-medium border-input bg-background"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </details>
-                </div>
-              </div>
 
               {/* Field 7: Payroll Disbursement Date */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
@@ -868,9 +754,9 @@ export const MasterPayrollCycle: React.FC = () => {
                       placeholder="28"
                     />
                     <span className="text-xs text-muted-foreground">of the month</span>
-                    {!cycleConflict && isMonthlyLike && disbNum > 0 && (
+                    {!cycleConflict && isMonthlyLike && disbNum > 0 && cutoffNum > 0 && (
                       <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
-                        ✓ {auditWindowDays} day{auditWindowDays !== 1 ? 's' : ''} audit window
+                        ✓ {auditWindowDays} day{auditWindowDays !== 1 ? 's' : ''} audit window{isNextMonthDisbursement ? ' (next month payout)' : ''}
                       </span>
                     )}
                   </div>
@@ -882,7 +768,9 @@ export const MasterPayrollCycle: React.FC = () => {
                       <p className="text-[11px] text-destructive font-medium">
                         Disbursement date ({disbNum}) must be <strong>after</strong> the Cutoff day ({cutoffNum}).
                         Salary cannot be paid before attendance is finalized.
-                        {disbNum <= cutoffNum && ` Auto-suggested: ${Math.min(31, cutoffNum + 3)}`}
+                        {` Auto-suggested: ${Math.min(31, cutoffNum + 3)}`}
+                        <br />
+                        <span className="text-muted-foreground font-normal">Tip: Set disbursement to 1–7 for next-month payout (e.g. cutoff 25th → payout 1st of next month).</span>
                       </p>
                     </div>
                   )}
@@ -932,22 +820,7 @@ export const MasterPayrollCycle: React.FC = () => {
                 </div>
               </div>
 
-              {/* Field 9: Payroll Calculation Cap */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <label className="md:col-span-4 text-xs font-medium text-foreground">
-                  Payroll Calculation Cap
-                </label>
-                <div className="md:col-span-8">
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={cycleForm.capAmount !== undefined && cycleForm.capAmount !== null ? String(cycleForm.capAmount) : ''}
-                    onChange={e => setCycleForm({ ...cycleForm, capAmount: e.target.value as any })}
-                    className="h-9 w-44 text-xs font-medium border-input bg-background"
-                    placeholder="1000000.00"
-                  />
-                </div>
-              </div>
+
 
               {/* Field 10: Active Toggle */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
@@ -998,10 +871,8 @@ export const MasterPayrollCycle: React.FC = () => {
                     frequency: 'Monthly',
                     startDate: 1,
                     cutoffDay: 25,
-                    monthOffset: 'Current',
                     disbursementDate: 28,
                     totalDaysCalc: '30',
-                    capAmount: 1000000,
                     isActive: true
                   });
                 }}

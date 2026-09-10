@@ -2024,10 +2024,13 @@ export class LeaveService {
       }
 
       // 5. Calculate base rate
-      const compensation = await trx('employee_compensation')
+      const struct = await trx('salary_structures')
         .where({ employee_id: employeeId })
-        .first();
-      const baseSalary = compensation ? parseFloat(compensation.baseSalary || compensation.base_salary || 0) : 0;
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc')
+        .first()
+        .catch(() => null);
+      const baseSalary = struct ? parseFloat(struct.gross_monthly || struct.grossMonthly || (struct.annual_ctc ? struct.annual_ctc / 12 : 0) || 0) : 0;
       const dailyRate = baseSalary > 0 ? parseFloat((baseSalary / 30).toFixed(2)) : 1000.0;
       const totalAmount = parseFloat((dailyRate * encashmentDays).toFixed(2));
 

@@ -59,11 +59,10 @@ export function PolicyAcceptancePage() {
       case 'team_lead':
         return 'TEAM LEAD';
       case 'hr_admin':
-      case 'hr':
-        return 'HR ADMIN';
       case 'hr_manager':
+      case 'hr':
       case 'support':
-        return 'HR MANAGER';
+        return 'HR';
       case 'intern':
         return 'INTERN';
       case 'consultant':
@@ -81,12 +80,12 @@ export function PolicyAcceptancePage() {
     } else if (
       roles.includes('organization_admin') ||
       roles.includes('ceo') ||
+      roles.includes('hr') ||
       roles.includes('hr_admin') ||
-      roles.includes('hr')
+      roles.includes('hr_manager') ||
+      roles.includes('support')
     ) {
       return '/dashboard';
-    } else if (roles.includes('support') || roles.includes('hr_manager')) {
-      return '/hr/dashboard';
     } else if (roles.includes('department_head') || roles.includes('manager')) {
       return '/manager/dashboard';
     } else if (roles.includes('team_lead')) {

@@ -7,6 +7,7 @@ import { ShiftService } from '../services/ShiftService';
 import { GeoFenceService } from '../services/GeoFenceService';
 import { RegularizationService } from '../services/RegularizationService';
 import { OvertimeService } from '../services/OvertimeService';
+import { OTRuleService } from '../services/OTRuleService';
 import { TimesheetService } from '../services/TimesheetService';
 import { AttendancePolicyService } from '../services/AttendancePolicyService';
 import { UserRepository } from '../../auth/repositories/user.repository';
@@ -21,6 +22,7 @@ export class AttendanceController {
   private timesheetService: TimesheetService;
   private policyService: AttendancePolicyService;
   private userRepo: UserRepository;
+  private otRuleService: OTRuleService;
 
   constructor() {
     this.attendanceService = new AttendanceService();
@@ -31,6 +33,7 @@ export class AttendanceController {
     this.timesheetService = new TimesheetService();
     this.policyService = new AttendancePolicyService();
     this.userRepo = new UserRepository();
+    this.otRuleService = new OTRuleService();
   }
   /**
    * Helper to resolve the true employeeId linked to the logged-in user
@@ -890,6 +893,60 @@ export class AttendanceController {
     const ctx = req.ctx!;
     const data = await this.attendanceService.getCeoPunches(ctx);
     res.json({ success: true, data });
+  });
+
+  // ═══ OT RULES (Masters Hub) ════════════════════════════════════════════════
+
+  listOTRules = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const result = await this.otRuleService.listRules(ctx, {
+      page:     Number(req.query.page)  || 1,
+      limit:    Number(req.query.limit) || 20,
+      search:   req.query.search as string | undefined,
+      isActive: req.query.isActive !== undefined
+        ? req.query.isActive === 'true'
+        : undefined,
+    });
+    res.json({ success: true, ...result });
+  });
+
+  createOTRule = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const rule = await this.otRuleService.createRule(ctx, req.body);
+    // If eligibility provided in body, save it
+    if (Array.isArray(req.body.eligibility) && req.body.eligibility.length > 0) {
+      await this.otRuleService.setEligibility(ctx, rule.id, req.body.eligibility);
+    }
+    res.status(201).json({ success: true, data: rule });
+  });
+
+  getOTRule = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const rule = await this.otRuleService.getRule(ctx, Number(req.params.id));
+    res.json({ success: true, data: rule });
+  });
+
+  updateOTRule = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const rule = await this.otRuleService.updateRule(ctx, Number(req.params.id), req.body);
+    res.json({ success: true, data: rule });
+  });
+
+  deleteOTRule = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    await this.otRuleService.deleteRule(ctx, Number(req.params.id));
+    res.json({ success: true, message: 'OT Rule deleted successfully' });
+  });
+
+  setOTRuleEligibility = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { eligibility } = req.body;
+    if (!Array.isArray(eligibility)) {
+      res.status(400).json({ success: false, message: 'eligibility must be an array' });
+      return;
+    }
+    await this.otRuleService.setEligibility(ctx, Number(req.params.id), eligibility);
+    res.json({ success: true, message: 'Eligibility updated successfully' });
   });
 }
 

@@ -17,7 +17,7 @@ export function EmploymentTypeMasterCustomUI() {
   const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | number | null>(null);
-  
+
   const { employeeTypes, isLoading, createEmployeeType, updateEmployeeType, deleteEmployeeType } = useEmployeeTypes();
 
   const [formData, setFormData] = useState({ name: '', status: 'active' as 'active' | 'inactive' });
@@ -35,7 +35,7 @@ export function EmploymentTypeMasterCustomUI() {
       toast.error('Employment Type name is required');
       return;
     }
-    
+
     setIsSubmitting(true);
     try {
       if (editingId) {
@@ -56,7 +56,7 @@ export function EmploymentTypeMasterCustomUI() {
   const handleDelete = async () => {
     if (!editingId) return;
     if (!window.confirm('Are you sure you want to delete this Employment Type?')) return;
-    
+
     setIsSubmitting(true);
     try {
       await deleteEmployeeType(editingId);
@@ -81,10 +81,10 @@ export function EmploymentTypeMasterCustomUI() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      
+
       {/* Left Column - Form */}
       <div className="lg:col-span-7 bg-background dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-4 md:p-5 flex flex-col">
-        
+
         <div className="flex items-center gap-2 mb-4">
           <Plus className="w-4 h-4 text-foreground dark:text-foreground stroke-[2.5]" />
           <h3 className="text-base font-bold text-foreground dark:text-foreground">
@@ -92,10 +92,10 @@ export function EmploymentTypeMasterCustomUI() {
           </h3>
         </div>
 
-        <div className="border-b border-border mb-4"></div>
+        <div className="border-b border-border my-3"></div>
 
         <form onSubmit={handleAddOrUpdate} className="space-y-4">
-          
+
           <div className="space-y-2">
             <label className="text-sm font-bold text-foreground dark:text-foreground flex">
               Employment Type <span className="text-rose-500 ml-1">*</span>
@@ -118,9 +118,9 @@ export function EmploymentTypeMasterCustomUI() {
                 disabled={isSubmitting}
                 onClick={() => setFormData({ ...formData, status: 'active' })}
                 className={cn(
-                  "px-6 h-full text-sm font-semibold transition-colors",
-                  formData.status === 'active' 
-                    ? "bg-[#337ab7] text-white" 
+                  "px-5 h-full text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  formData.status === 'active'
+                    ? "bg-[#337ab7] text-white"
                     : "text-muted-foreground hover:bg-muted/50"
                 )}
               >
@@ -131,9 +131,9 @@ export function EmploymentTypeMasterCustomUI() {
                 disabled={isSubmitting}
                 onClick={() => setFormData({ ...formData, status: 'inactive' })}
                 className={cn(
-                  "px-6 h-full text-sm font-semibold border-l border-border transition-colors",
-                  formData.status === 'inactive' 
-                    ? "bg-rose-500 text-white" 
+                  "px-5 h-full text-xs font-bold rounded-lg transition-all cursor-pointer",
+                  formData.status === 'inactive'
+                    ? "bg-rose-500 text-white"
                     : "text-muted-foreground hover:bg-muted/50"
                 )}
               >
@@ -142,11 +142,11 @@ export function EmploymentTypeMasterCustomUI() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-4">
+          <div className="flex items-center gap-3 pt-3 border-t border-border">
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="bg-[#00a65a] hover:bg-[#008d4c] text-white rounded-md text-sm font-bold h-9 px-4 shadow-sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold h-9 px-5 shadow-xs cursor-pointer"
             >
               {isSubmitting ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1.5 stroke-[2.5]" />}
               {editingId ? 'Update' : 'Add'}
@@ -157,7 +157,7 @@ export function EmploymentTypeMasterCustomUI() {
                 type="button"
                 onClick={handleDelete}
                 disabled={isSubmitting}
-                className="bg-rose-500 hover:bg-rose-600 text-white rounded-md text-sm font-bold h-9 px-4 shadow-sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold h-9 px-5 shadow-xs cursor-pointer"
               >
                 Delete
               </Button>
@@ -168,7 +168,7 @@ export function EmploymentTypeMasterCustomUI() {
               onClick={handleCancel}
               variant="outline"
               disabled={isSubmitting}
-              className="bg-[#dd4b39] hover:bg-[#d73925] border-0 text-white rounded-md text-sm font-bold h-9 px-4 shadow-sm"
+              className="bg-muted hover:bg-muted/80 text-foreground border-input rounded-xl text-xs font-bold h-9 px-5 shadow-xs cursor-pointer"
             >
               <X className="w-3.5 h-3.5 mr-1.5 stroke-[2.5]" />
               Cancel
@@ -179,15 +179,15 @@ export function EmploymentTypeMasterCustomUI() {
 
       {/* Right Column - List */}
       <div className="lg:col-span-5 bg-background dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-4 md:p-5 flex flex-col">
-        
+
         {/* List Header & Add Button */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-foreground dark:text-foreground">
             Employment Types List
           </h3>
-          <Button 
+          <Button
             onClick={handleCancel}
-            className="bg-[#00a65a] hover:bg-[#008d4c] text-white rounded-md text-xs font-bold h-7 px-3 shadow-sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold h-8 px-3 shadow-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 mr-1 stroke-[3]" />
             Add New
@@ -208,12 +208,12 @@ export function EmploymentTypeMasterCustomUI() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="relative flex-1">
+          <div className="sm:col-span-8 relative">
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search term..."
-              className="h-9 rounded-none border-x-0 text-sm shadow-none focus-visible:ring-0 px-3 pr-8"
+              placeholder="Search employment types..."
+              className="h-8 pl-2.5 pr-8 border border-input rounded-xl bg-background text-foreground text-xs placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-primary/20"
             />
             <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
           </div>
@@ -244,37 +244,55 @@ export function EmploymentTypeMasterCustomUI() {
         </div>
 
         {/* Cards List */}
-        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1 custom-scrollbar">
           {isLoading ? (
             <div className="flex justify-center items-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground/70" />
             </div>
           ) : filteredTypes.length > 0 ? (
-            filteredTypes.map((type) => (
-              <div 
-                key={type.id}
-                onClick={() => handleEdit(type)}
-                className={cn(
-                  "rounded-lg p-3 text-white shadow-sm transition-all hover:scale-[1.01] cursor-pointer",
-                  editingId === type.id && "ring-2 ring-offset-2 ring-[#20b2aa] scale-[1.01]"
-                )}
-                style={{ backgroundColor: type.status === 'active' ? '#3bc4c4' : '#88a8a8' }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4" />
-                  <span className="font-bold text-sm">{type.name}</span>
+            filteredTypes.map((type) => {
+              const isSelected = editingId === type.id;
+              return (
+                <div
+                  key={type.id}
+                  onClick={() => handleEdit(type)}
+                  className={cn(
+                    "p-3.5 rounded-xl border transition-all cursor-pointer relative group flex flex-col gap-2",
+                    isSelected
+                      ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                      : "border-border/80 bg-card hover:border-primary/50 hover:bg-accent/40"
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <Users className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-xs text-foreground truncate">{type.name}</span>
+                    </div>
+
+                    <div>
+                      {type.status === 'active' ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md uppercase">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md uppercase">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/50 pt-2 flex items-center justify-between text-[11px] text-muted-foreground font-medium">
+                    <span>Click to edit or manage</span>
+                    <span className="font-mono text-[10px] font-semibold text-muted-foreground/70">
+                      ID: #{type.id}
+                    </span>
+                  </div>
                 </div>
-                
-                <div className="border-t border-white/20 pt-2 flex items-center justify-between">
-                  <span className="text-xs text-white/90">
-                    --
-                  </span>
-                  <span className="text-[10px] font-bold bg-black/20 px-1.5 py-0.5 rounded uppercase">
-                    {type.status}
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="text-center py-8 text-sm text-muted-foreground bg-muted/30 dark:bg-card rounded-lg border border-border border-dashed">
               No employment types found matching your criteria.

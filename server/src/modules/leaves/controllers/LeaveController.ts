@@ -2250,7 +2250,7 @@ export class LeaveController {
       .join('roles as r', 'ur.role_id', 'r.id')
       .where('ur.user_id', ctx.userId)
       .where('ur.organization_id', ctx.organizationId)
-      .whereIn('r.code', ['admin', 'hr_manager', 'super_admin'])
+      .whereIn('r.code', ['admin', 'hr', 'hr_manager', 'super_admin'])
       .first();
     return !!isAdmin;
   }
@@ -2283,16 +2283,16 @@ export class LeaveController {
     }
 
     // 3. Fetch employee's current active salary structure
-    const struct = await db('employee_salary_structures as ess')
-      .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-      .where({ 'ess.employee_id': employeeId, 'ess.is_current': true, 'ess.organization_id': ctx.organizationId })
-      .whereNull('ess.deleted_at')
-      .select('ss.*')
+    const struct = await db('salary_structures')
+      .where({ employee_id: employeeId, organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .orderBy('id', 'desc')
       .first();
 
     if (!struct) {
       throw new ValidationError('Active salary structure not found for this employee.');
     }
+
 
     // 4. Determine days limit & capped days
     let cappedDays = requestedDays;

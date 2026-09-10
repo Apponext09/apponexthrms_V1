@@ -18,7 +18,6 @@
 
 import type { Request, Response } from 'express';
 import { PayrollService, withSnakeAliases, positiveNum } from '../services/PayrollService';
-import { SalaryStructureService } from '../services/SalaryStructureService';
 import { SalaryRevisionService } from '../services/SalaryRevisionService';
 import { PayslipService } from '../services/PayslipService';
 import { LoanService } from '../services/LoanService';
@@ -47,7 +46,6 @@ export { withSnakeAliases, positiveNum };
 export class PayrollController {
   // Services
   private payrollService: PayrollService;
-  private structureService: SalaryStructureService;
   private revisionService: SalaryRevisionService;
   private payslipService: PayslipService;
   private loanService: LoanService;
@@ -73,7 +71,6 @@ export class PayrollController {
 
   constructor() {
     this.payrollService = new PayrollService();
-    this.structureService = new SalaryStructureService();
     this.revisionService = new SalaryRevisionService();
     this.payslipService = new PayslipService();
     this.loanService = new LoanService();
@@ -218,8 +215,6 @@ export class PayrollController {
   createTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.createTaxDeclaration(req, res);
   getTaxDeclarations = (req: Request, res: Response) => this.loanTaxController.getTaxDeclarations(req, res);
   getTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.getTaxDeclaration(req, res);
-  addTaxInvestment = (req: Request, res: Response) => this.loanTaxController.addTaxInvestment(req, res);
-  getTaxInvestments = (req: Request, res: Response) => this.loanTaxController.getTaxInvestments(req, res);
   finalizeTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.finalizeTaxDeclaration(req, res);
   calculateTDS = (req: Request, res: Response) => this.loanTaxController.calculateTDS(req, res);
 

@@ -9,6 +9,7 @@
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
 import { withSnakeAliases } from '../utils/payroll.utils';
 import { PayrollService } from '../services/PayrollService';
 import { SalaryCalculationService } from '../services/SalaryCalculationService';
@@ -18,9 +19,7 @@ export class SalaryStructureController {
 
   async listStructures(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const employeeId = req.query.employee_id || req.query.employeeId;
 
       let query = db('salary_structures')
@@ -34,18 +33,7 @@ export class SalaryStructureController {
         .orderBy('salary_structures.id', 'desc');
 
       if (employeeId) {
-        const assignedStructIds = await db('employee_salary_structures')
-          .where('employee_id', employeeId)
-          .where('is_current', true)
-          .pluck('salary_structure_id')
-          .catch(() => []);
-
-        query = query.where(function (this: any) {
-          this.where('salary_structures.employee_id', employeeId);
-          if (assignedStructIds.length > 0) {
-            this.orWhereIn('salary_structures.id', assignedStructIds);
-          }
-        });
+        query = query.where('salary_structures.employee_id', employeeId);
       } else if (orgId) {
         query = query.where(function (this: any) {
           this.where('salary_structures.organization_id', orgId).orWhereNull('salary_structures.organization_id');
@@ -131,9 +119,7 @@ export class SalaryStructureController {
 
   async getStructure(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const { id } = req.params;
 
       // 1. Try finding by salary_structures.id
@@ -245,9 +231,7 @@ export class SalaryStructureController {
 
   async deleteStructure(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const { id } = req.params;
 
       await db('salary_structures')
@@ -255,12 +239,6 @@ export class SalaryStructureController {
           this.where('id', id).orWhere('employee_id', id);
         })
         .update({ deleted_at: new Date(), status: 'inactive' });
-
-      await db('employee_salary_structures')
-        .where('salary_structure_id', id)
-        .orWhere('employee_id', id)
-        .update({ is_current: false, effective_to: new Date() })
-        .catch(() => { });
 
       res.json({ success: true, message: 'Salary structure deleted successfully' });
     } catch (e: any) {
@@ -303,10 +281,7 @@ export class SalaryStructureController {
       ? (typeof deductionsBreakup === 'string' ? deductionsBreakup : JSON.stringify(deductionsBreakup))
       : null;
 
-    const effectiveFromDate = req.body.effectiveFrom || req.body.effective_from || new Date().toISOString().slice(0, 10);
-
-    const firstOrg = await db('organizations').first().catch(() => null);
-    const orgId = req.ctx.organizationId || firstOrg?.id || null;
+    const effectiveFromDate = req.body.effectiveFrom || req.body.effective_from || new Date().toISOString().slice(0, 10);    const orgId = requireOrgId(req.ctx);
     const sName = structureName || 'Standard Salary Structure';
     const sCode = req.body.structureCode || `STR-${sName.slice(0, 3).toUpperCase()}-${Date.now()}`;
 
@@ -336,7 +311,7 @@ export class SalaryStructureController {
           if (orgId) this.where('organization_id', orgId);
         })
         .whereNull('deleted_at')
-        .orderBy('is_current_cycle', 'desc')
+        .orderBy('is_active', 'desc')
         .first()
         .catch(() => null);
       if (activeCycle) finalCycleId = activeCycle.id;
@@ -449,48 +424,12 @@ export class SalaryStructureController {
 
     const created = await db('salary_structures').where('id', insertedId).first();
 
-    if (insertedId) {
-      try {
-        const salComp = await db('salary_components').first().catch(() => null);
-        if (salComp?.id) {
-          await db('salary_structure_components').insert({
-            uuid: uuidv4(),
-            organization_id: orgId,
-            company_id: numericCompanyId,
-            structure_id: insertedId,
-            component_id: salComp.id,
-            sort_order: 1,
-            created_by: validUserId,
-            updated_by: validUserId
-          });
-        }
-      } catch (e) { }
-    }
-
-    if (employeeId && insertedId) {
-      try {
-        await db('employee_salary_structures').where({ employee_id: employeeId, is_current: true }).update({ is_current: false });
-        await db('employee_salary_structures').insert({
-          uuid: uuidv4(),
-          organization_id: orgId,
-          employee_id: employeeId,
-          salary_structure_id: insertedId,
-          effective_from: new Date().toISOString().slice(0, 10),
-          is_current: true,
-          created_by: validUserId,
-          updated_by: validUserId
-        });
-      } catch (e) { }
-    }
-
     return res.status(201).json({ success: true, data: created });
   }
 
   async calculateStructurePreview(req: Request, res: Response) {
     try {
-      const db = getKnex();
-      const firstOrg = await db('organizations').first().catch(() => null);
-      const orgId = Number(req.ctx?.organizationId || firstOrg?.id || 0);
+      const db = getKnex();      const orgId = requireOrgId(req.ctx);
       const { ctc, grossMonthly, slabId, cycleId, companyId, employeeId, effectiveFrom } = req.body;
 
       if (!this.payrollService) {
@@ -517,9 +456,7 @@ export class SalaryStructureController {
 
   async updateStructure(req: Request, res: Response) {
     const db = getKnex();
-    const { id } = req.params;
-    const firstOrg = await db('organizations').first().catch(() => null);
-    const orgId = req.ctx.organizationId || firstOrg?.id || null;
+    const { id } = req.params;    const orgId = requireOrgId(req.ctx);
 
     const employeeId = req.body.employeeId ?? req.body.employee_id;
     const structureName = req.body.structureName || req.body.slab || req.body.name || req.body.structure_name;
@@ -605,7 +542,7 @@ export class SalaryStructureController {
           if (orgId) this.where('organization_id', orgId);
         })
         .whereNull('deleted_at')
-        .orderBy('is_current_cycle', 'desc')
+        .orderBy('is_active', 'desc')
         .first()
         .catch(() => null);
       if (activeCycle) finalCycleId = activeCycle.id;
@@ -696,38 +633,6 @@ export class SalaryStructureController {
         res.status(400).json({ success: false, message: 'Failed to update salary structure: ' + err.message });
         return;
       }
-    }
-
-    if (actualStructId) {
-      try {
-        const existingComp = await db('salary_structure_components')
-          .where('structure_id', actualStructId)
-          .first()
-          .catch(() => null);
-
-        const targetOrgId = ts.organization_id || orgId;
-
-        if (existingComp) {
-          await db('salary_structure_components').where('id', existingComp.id).update({
-            updated_by: validUserId,
-            updated_at: new Date()
-          });
-        } else {
-          const salComp = await db('salary_components').first().catch(() => null);
-          if (salComp?.id) {
-            await db('salary_structure_components').insert({
-              uuid: uuidv4(),
-              organization_id: targetOrgId,
-              company_id: companyId ? Number(companyId) : null,
-              structure_id: actualStructId,
-              component_id: salComp.id,
-              sort_order: 1,
-              created_by: validUserId,
-              updated_by: validUserId
-            });
-          }
-        }
-      } catch (e) { }
     }
 
     const updated = await db('salary_structures')
@@ -838,11 +743,8 @@ export class SalaryStructureController {
   async assignStructureToEmployee(req: Request, res: Response) {
     const db = getKnex();
     const { employeeId, structureId, structureName } = req.body;
-    const slabIdFromBody = req.body.slabId || req.body.slab_id || null;
-
-    const firstOrg = await db('organizations').first().catch(() => null);
-    const empRow = employeeId ? await db('employees').where('id', employeeId).first().catch(() => null) : null;
-    const targetOrgId = empRow?.organization_id || req.ctx.organizationId || firstOrg?.id || null;
+    const slabIdFromBody = req.body.slabId || req.body.slab_id || null;    const empRow = employeeId ? await db('employees').where('id', employeeId).first().catch(() => null) : null;
+    const targetOrgId = empRow?.organization_id || requireOrgId(req.ctx);
 
     const firstUser = await db('users').orderBy('id', 'asc').first().catch(() => null);
     const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? null);
@@ -918,29 +820,6 @@ export class SalaryStructureController {
         .where('id', sId)
         .update(updatePayload)
         .catch(() => { });
-
-      await db('employee_salary_structures')
-        .where({ employee_id: employeeId })
-        .update({ is_current: false, effective_to: new Date() })
-        .catch(() => { });
-
-      try {
-        await db('employee_salary_structures').insert({
-          uuid: uuidv4(),
-          organization_id: targetOrgId,
-          employee_id: employeeId,
-          salary_structure_id: sId,
-          effective_from: effectiveFromVal,
-          is_current: true,
-          created_by: validUserId,
-          updated_by: validUserId
-        });
-      } catch (err) {
-        await db.raw(
-          `INSERT INTO employee_salary_structures (uuid, organization_id, employee_id, salary_structure_id, effective_from, is_current, created_by, updated_by) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
-          [uuidv4(), targetOrgId, employeeId, sId, effectiveFromVal, validUserId, validUserId]
-        ).catch(() => { });
-      }
     }
 
     if (!(employeeId && sId)) {
@@ -1105,21 +984,6 @@ export class SalaryStructureController {
           });
           structRow = { id: insertedId };
         }
-
-        await db('employee_salary_structures')
-          .where({ employee_id: employeeId, is_current: true })
-          .update({ is_current: false, effective_to: new Date() });
-
-        await db('employee_salary_structures').insert({
-          uuid: uuidv4(),
-          organization_id: orgId,
-          employee_id: employeeId,
-          salary_structure_id: structRow.id,
-          effective_from: effectiveFromVal,
-          is_current: true,
-          created_by: validUserId,
-          updated_by: validUserId
-        });
 
         successCount++;
       } catch (e: any) {

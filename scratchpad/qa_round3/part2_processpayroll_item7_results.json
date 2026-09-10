@@ -1,5 +1,0 @@
-{
-  "item7a_process_missing_generateOn_toast": null,
-  "item7b_process_missing_month_toast": null,
-  "item7c_note": "Payroll Cycle field cannot be forced empty via the UI - a useEffect auto-repopulates it with the org's only active cycle whenever empty, confirmed via a dedicated probe (verify_cycle_autofill.mjs). The validation code exists and is correct (handleProcessPayroll checks !cycleId identically to the Filter button) but is unreachable live in this environment."
-}

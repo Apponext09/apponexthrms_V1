@@ -231,48 +231,55 @@ export function EmployeeDataTable({
                 )}
 
                 {/* Access Role Badge */}
-                {cols.accessRole && (
-                  <TableCell className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
-                        isCeo
-                          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
-                          : employee.accessRole === 'hr_manager' || employee.accessRole === 'organization_admin'
-                          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
-                          : employee.accessRole === 'department_head' || employee.accessRole === 'manager'
-                          ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
-                          : employee.accessRole === 'team_lead'
-                          ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
-                          : employee.accessRole === 'intern'
-                          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
-                          : employee.accessRole === 'consultant'
-                          ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
-                          : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
-                      }`}
-                    >
-                      {isCeo ? (
-                        <>
-                          <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" /> CEO / Executive
-                        </>
-                      ) : employee.accessRole === 'organization_admin' ? (
-                        'Admin'
-                      ) : employee.accessRole === 'hr_manager' ? (
-                        'HR'
-                      ) : employee.accessRole === 'department_head' || employee.accessRole === 'manager' ? (
-                        'Manager'
-                      ) : employee.accessRole === 'team_lead' ? (
-                        'Team Lead'
-                      ) : employee.accessRole === 'intern' ? (
-                        'Intern'
-                      ) : employee.accessRole === 'consultant' ? (
-                        'Consultant'
-                      ) : (
-                        'Employee'
-                      )}
-                    </span>
-                  </TableCell>
-                )}
-
+{cols.accessRole && (
+  <TableCell className="py-3 px-4">
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${
+        isCeo
+          ? 'bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/40 font-black'
+          : employee.accessRole === 'hr_manager' ||
+            employee.accessRole === 'organization_admin'
+          ? 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+          : employee.accessRole === 'finance'
+          ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+          : employee.accessRole === 'department_head' ||
+            employee.accessRole === 'manager'
+          ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20'
+          : employee.accessRole === 'team_lead'
+          ? 'bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-500/20'
+          : employee.accessRole === 'intern'
+          ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+          : employee.accessRole === 'consultant'
+          ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
+          : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/20'
+      }`}
+    >
+      {isCeo ? (
+        <>
+          <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+          CEO / Executive
+        </>
+      ) : employee.accessRole === 'organization_admin' ? (
+        'Admin'
+      ) : employee.accessRole === 'hr_manager' ? (
+        'HR'
+      ) : employee.accessRole === 'finance' ? (
+        'Finance'
+      ) : employee.accessRole === 'department_head' ||
+        employee.accessRole === 'manager' ? (
+        'Manager'
+      ) : employee.accessRole === 'team_lead' ? (
+        'Team Lead'
+      ) : employee.accessRole === 'intern' ? (
+        'Intern'
+      ) : employee.accessRole === 'consultant' ? (
+        'Consultant'
+      ) : (
+        'Employee'
+      )}
+    </span>
+  </TableCell>
+)}
 
                 {/* Department */}
                 {cols.department && (

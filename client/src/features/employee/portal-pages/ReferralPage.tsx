@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,10 @@ export default function ReferralPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPositions, setIsLoadingPositions] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const totalEarnedReward = useMemo(() => {
+    return referrals.reduce((acc, curr) => acc + Number(curr.reward_amount || curr.rewardAmount || curr.paid_reward || curr.paidReward || 0), 0);
+  }, [referrals]);
 
   const [form, setForm] = useState({
     name: '',

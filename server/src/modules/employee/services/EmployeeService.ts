@@ -4,7 +4,6 @@ import { withTransaction, getKnex } from '../../../db/knex';
 import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
 import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
 import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
-import { EmployeeCompensationRepository } from '../repositories/EmployeeCompensationRepository';
 import { AuditService } from '../../audit/audit.service';
 import { BiometricService } from '../../attendance/services/BiometricService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
@@ -33,14 +32,12 @@ export class EmployeeService {
   private employeeRepo: EmployeeRepository;
   private personalInfoRepo: EmployeePersonalInfoRepository;
   private professionalInfoRepo: EmployeeProfessionalInfoRepository;
-  private compensationRepo: EmployeeCompensationRepository;
   private auditService: AuditService;
 
   constructor() {
     this.employeeRepo = new EmployeeRepository();
     this.personalInfoRepo = new EmployeePersonalInfoRepository();
     this.professionalInfoRepo = new EmployeeProfessionalInfoRepository();
-    this.compensationRepo = new EmployeeCompensationRepository();
     this.auditService = new AuditService();
   }
 
@@ -186,7 +183,7 @@ export class EmployeeService {
 
     // Helper to get Org Admin's employee ID if no reporting manager is specified
     let finalReportingManagerId = input.reportingManagerId || null;
-    if (!finalReportingManagerId && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
+    if (!finalReportingManagerId && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(input.accessRole || 'employee')) {
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId) {
         finalReportingManagerId = adminEmpId;
@@ -510,12 +507,6 @@ export class EmployeeService {
   ) {
     const targetRole = accessRole || 'employee';
 
-    // Sync role column on users table directly
-    await db('users')
-      .where('id', userId)
-      .update({ role: targetRole, updated_at: new Date() })
-      .catch(() => {});
-
     // Clear existing role assignments for this user in user_roles
     await db('user_roles')
       .where('user_id', userId)
@@ -571,13 +562,21 @@ export class EmployeeService {
       }
 
       if (roleRecord) {
+        let validAssignedBy = userId;
+        if (ctx.userId) {
+          const userExists = await db('users').where('id', ctx.userId).first().catch(() => null);
+          if (userExists) validAssignedBy = ctx.userId;
+        }
+
         await db('user_roles').insert({
           organization_id: ctx.organizationId,
           user_id: userId,
           role_id: roleRecord.id,
-          assigned_by: ctx.userId || userId,
+          assigned_by: validAssignedBy,
           assigned_at: new Date(),
-        }).catch(() => {});
+        }).catch((err: any) => {
+          console.warn('[EmployeeService] user_roles insert warning:', err?.message || err);
+        });
       }
     }
 
@@ -738,8 +737,8 @@ export class EmployeeService {
 
     const targetAccessRole = input.accessRole || input.access_role || input.role || '';
 
-    // Default Manager ('department_head', 'cto', etc.) and HR ('hr_manager') to Admin only if no reporting manager was provided
-    if (targetAccessRole && ['department_head', 'hr_manager', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
+    // Default Manager ('department_head', 'cto', etc.) and HR ('hr') to Admin only if no reporting manager was provided
+    if (targetAccessRole && ['department_head', 'hr', 'cto', 'cfo', 'coo', 'cxo'].includes(targetAccessRole) && !input.reportingManagerId && !input.reporting_manager_id) {
       const db = getKnex();
       const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
       if (adminEmpId && adminEmpId !== employeeId) {
@@ -808,7 +807,7 @@ export class EmployeeService {
             .join('roles', 'user_roles.role_id', 'roles.id')
             .where('user_roles.user_id', mgrUser.id)
             .select('roles.code');
-          const validCodes = new Set(['team_lead', 'department_head', 'hr_manager', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr', 'executive']);
+          const validCodes = new Set(['team_lead', 'department_head', 'hr', 'organization_admin', 'super_admin', 'cto', 'cfo', 'coo', 'cxo', 'manager', 'admin', 'hr_admin', 'hr_manager', 'executive']);
           isManagerRole = mgrRoles.some((r: any) => validCodes.has(r.code)) || validCodes.has(mgrUser.role);
         }
       }
@@ -972,13 +971,13 @@ export class EmployeeService {
       }
 
       let userIdToSync: number | null = null;
-      const targetAccessRole = input.accessRole || input.access_role || input.role || 'employee';
+      const rawRole = input.accessRole || input.access_role || input.role;
+      const targetAccessRole = rawRole ? String(rawRole).toLowerCase() : undefined;
 
       if (existingUser) {
         userIdToSync = existingUser.id;
         const userUpdateData: Record<string, any> = {
           updated_at: new Date(),
-          role: targetAccessRole,
           employee_id: employeeId,
         };
         if (targetEmail) userUpdateData.email = targetEmail;
@@ -997,7 +996,6 @@ export class EmployeeService {
           employee_id: employeeId,
           email: targetEmail,
           password_hash: defaultHash,
-          role: targetAccessRole,
           status: 'active',
           created_at: new Date(),
           updated_at: new Date(),
@@ -1005,9 +1003,14 @@ export class EmployeeService {
         userIdToSync = newUserId;
       }
 
-      if (userIdToSync) {
+      if (userIdToSync && targetAccessRole) {
         const targetDeptId = input.departmentId ?? updated.current_department_id ?? employee.current_department_id;
-        const rolesList = Array.isArray(input.roles) ? input.roles : (Array.isArray(input.assignedRoles) ? input.assignedRoles : [targetAccessRole]);
+        let rolesList: string[];
+        if (Array.isArray(input.roles) && input.roles.length > 0) {
+          rolesList = [...new Set([...input.roles, targetAccessRole])];
+        } else {
+          rolesList = [targetAccessRole];
+        }
         await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId, rolesList);
       }
     } catch (userSyncErr) {

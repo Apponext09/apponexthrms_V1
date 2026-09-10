@@ -18,7 +18,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasGroups) {
     await knex.schema.createTable('payroll_component_groups', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.string('group_name', 100).notNullable();
       table.string('group_type', 50).defaultTo('earning'); // earning | deduction
@@ -49,7 +49,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasComponents) {
     await knex.schema.createTable('payroll_components', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('group_id').unsigned().nullable();
       table.string('name', 100).notNullable();
@@ -77,7 +77,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasConditions) {
     await knex.schema.createTable('payroll_component_conditions', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('component_id').unsigned().notNullable();
       table.string('condition_on', 100).notNullable(); // e.g. Basic, Attendance
@@ -98,7 +98,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasSlabs) {
     await knex.schema.createTable('payroll_slabs', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.string('name', 150).notNullable();
       table.text('departments').nullable(); // JSON array
@@ -135,7 +135,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasLedgerEntries) {
     await knex.schema.createTable('payroll_ledger_entries', (table) => {
       table.bigIncrements('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.bigInteger('organization_id').unsigned().notNullable();
       table.bigInteger('payroll_run_id').unsigned().nullable();
       table.bigInteger('employee_id').unsigned().notNullable();

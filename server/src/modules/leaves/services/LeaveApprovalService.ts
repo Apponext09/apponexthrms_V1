@@ -723,7 +723,7 @@ export class LeaveApprovalService {
             .first();
 
           let nextApproverUserId = null;
-          let roleName = 'hr_manager';
+          let roleName = 'hr';
 
           if (employee && employee.reporting_manager_id) {
             const manager = await trx('employees')
@@ -747,14 +747,14 @@ export class LeaveApprovalService {
               .join('user_roles as ur', 'u.id', 'ur.user_id')
               .join('roles as r', 'ur.role_id', 'r.id')
               .where('u.organization_id', app.organization_id)
-              .whereIn('r.code', ['hr_manager', 'tenant_admin', 'system_admin', 'organization_admin'])
+              .whereIn('r.code', ['hr', 'hr_manager', 'tenant_admin', 'system_admin', 'organization_admin'])
               .whereNull('u.deleted_at')
               .select('u.id')
               .first();
 
             if (hrUser) {
               nextApproverUserId = hrUser.id;
-              roleName = 'hr_manager';
+              roleName = 'hr';
             }
           }
 

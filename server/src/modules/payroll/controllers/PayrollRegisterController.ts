@@ -198,13 +198,18 @@ export class PayrollRegisterController {
 
       if (cycleRow) {
         const sCyc = withSnakeAliases(cycleRow) || cycleRow;
-        if (sCyc.start_date || sCyc.calculation_start_day) {
-          cycleStartDay = Math.max(1, Math.min(calendarDays, Number(sCyc.start_date || sCyc.calculation_start_day)));
+        if (sCyc.start_date) {
+          cycleStartDay = Math.max(1, Math.min(calendarDays, Number(sCyc.start_date)));
         }
-        if (sCyc.cutoff_day) {
-          cycleCutoffDay = Math.max(1, Math.min(calendarDays, Number(sCyc.cutoff_day)));
+        const rawRegCutoff = Number(sCyc.cutoff_day);
+        if (sCyc.cutoff_day != null && rawRegCutoff > 0) {
+          cycleCutoffDay = Math.max(1, Math.min(calendarDays, rawRegCutoff));
+        } else {
+          cycleCutoffDay = calendarDays;
         }
-        if (sCyc.frequency === 'Weekly') totalDays = 7;
+        if (sCyc.total_days_calc && !isNaN(Number(sCyc.total_days_calc)) && Number(sCyc.total_days_calc) > 0) {
+          totalDays = Number(sCyc.total_days_calc);
+        } else if (sCyc.frequency === 'Weekly') totalDays = 7;
         else if (sCyc.frequency === 'Bi-Weekly' || sCyc.frequency === 'Fortnightly') totalDays = 14;
         else if (sCyc.frequency === 'Semi-Monthly') totalDays = 15;
         else {
@@ -233,26 +238,8 @@ export class PayrollRegisterController {
         const ifscCode = emp.ifsc_code || emp.ifscCode || null;
         const reportingManager = (emp.reporting_manager || emp.reportingManager || '').trim() || 'Organization Admin';
 
-        // 2. Resolve Salary Structure (or auto-resolve/assign from Pay Slab dynamically)
+        // 2. Resolve Salary Structure
         let struct: any = null;
-        try {
-          struct = await db('employee_salary_structures as ess')
-            .join('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-            .where('ess.employee_id', emp.id)
-            .where('ess.is_current', 1)
-            .where('ss.effective_from', '<=', monthEnd)
-            .where(function (this: any) {
-              this.whereNull('ss.effective_to').orWhere('ss.effective_to', '>=', monthStart);
-            })
-            .whereNull('ess.deleted_at')
-            .whereNull('ss.deleted_at')
-            .orderBy('ss.effective_from', 'desc')
-            .orderBy('ss.id', 'desc')
-            .select('ss.*')
-            .first();
-        } catch {
-          struct = null;
-        }
 
         if (!struct) {
           try {
@@ -318,7 +305,7 @@ export class PayrollRegisterController {
           matchedSlab = allSlabs.find((s: any) => Number(s.id) === Number(slabIdToTry));
         }
 
-        // If no slab linked on structure, find best matching slab by CTC or fallback to default slab
+        // If no slab linked on structure, find best matching slab by CTC
         if (!matchedSlab) {
           if (structCtc > 0) {
             matchedSlab = allSlabs.find((s: any) => {
@@ -328,17 +315,18 @@ export class PayrollRegisterController {
               return structCtc >= minCtc && structCtc <= maxCtc;
             });
           }
-          // Final fallback: use first active slab
-          if (!matchedSlab && allSlabs.length > 0) {
-            matchedSlab = allSlabs[0];
-          }
         }
 
-        // Check if employee has a valid assigned salary structure or dynamic fallback
-        const hasAssignedStructure = Boolean(struct && (sStruct.gross_monthly || sStruct.annual_ctc || sStruct.salary_slab_id || sStruct.slab_id)) || (structCtc > 0) || (allSlabs.length > 0);
+        // Check if employee has a valid assigned salary structure or explicit CTC
+        const hasAssignedStructure = Boolean(
+          (struct && (Number(sStruct.gross_monthly || 0) > 0 || Number(sStruct.annual_ctc || 0) > 0 || sStruct.salary_slab_id || sStruct.slab_id)) ||
+          (empCtcFromRecord > 0)
+        );
 
         const slabRow = matchedSlab ? (withSnakeAliases(matchedSlab) || {}) : {};
-        const slabName = slabRow.name || sStruct.structure_name || (allSlabs[0]?.name || 'Standard Pay Slab');
+        const slabName = hasAssignedStructure
+          ? (slabRow.name || sStruct.structure_name || 'Standard Pay Slab')
+          : 'No Pay Slab Assigned';
 
         let selectedCompIds: number[] = [];
         try {
@@ -351,11 +339,15 @@ export class PayrollRegisterController {
         }
 
         // 4. Resolve Gross & CTC
-        const grossMonthly = positiveNum(
-          sStruct.gross_monthly,
-          structCtc > 0 ? Math.round(structCtc / 12) : (slabRow.min_ctc ? Math.round(Number(slabRow.min_ctc) / 12) : (emp.gross_salary ? Number(emp.gross_salary) : 0))
-        );
-        const annualCTC = positiveNum(sStruct.annual_ctc, structCtc > 0 ? structCtc : grossMonthly * 12);
+        const grossMonthly = hasAssignedStructure
+          ? positiveNum(
+              sStruct.gross_monthly,
+              structCtc > 0 ? Math.round(structCtc / 12) : (emp.gross_salary ? Number(emp.gross_salary) : 0)
+            )
+          : 0;
+        const annualCTC = hasAssignedStructure
+          ? positiveNum(sStruct.annual_ctc, structCtc > 0 ? structCtc : grossMonthly * 12)
+          : 0;
 
         // 5. Parse Custom Components JSON
         let customComps: Record<string, number> = {};
@@ -380,7 +372,7 @@ export class PayrollRegisterController {
             .select('status');
           for (const rec of attRecs) {
             const s = (rec.status || '').toLowerCase();
-            if (s === 'present' || s === 'work_from_home' || s === 'sick') presentDays++;
+            if (s === 'present' || s === 'work_from_home') presentDays++;
             else if (s === 'half_day') halfDayCount++;
             else if (s === 'absent') absentDays++;
             else if (s === 'weekly_off') weeklyOffDays++;
@@ -808,6 +800,23 @@ export class PayrollRegisterController {
           override = null;
         }
 
+        if (override?.component_values) {
+          try {
+            const parsed = typeof override.component_values === 'string'
+              ? JSON.parse(override.component_values)
+              : override.component_values;
+            if (parsed && typeof parsed === 'object') {
+              for (const [k, v] of Object.entries<any>(parsed)) {
+                if (componentValues[k]) {
+                  componentValues[k] = { ...componentValues[k], ...v };
+                } else {
+                  componentValues[k] = v;
+                }
+              }
+            }
+          } catch { /* ignore JSON parse */ }
+        }
+
         resultRows.push({
           id: emp.id,
           employee_id: emp.id,
@@ -1024,6 +1033,11 @@ export class PayrollRegisterController {
       notes: notes || '',
       updated_at: new Date(),
     };
+
+    const compVals = req.body.component_values || req.body.componentValues;
+    if (compVals) {
+      payload.component_values = typeof compVals === 'string' ? compVals : JSON.stringify(compVals);
+    }
 
     const existing = await db('payroll_register_overrides')
       .where({ organization_id: orgId, employee_id: Number(employee_id), month: targetMonth })

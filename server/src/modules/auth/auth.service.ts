@@ -335,6 +335,14 @@ export class AuthService {
           user = await this.userRepo.getByEmail(cleanEmail);
         } catch (e) {}
 
+        if (user && superAdminRow.user_id !== user.id) {
+          try {
+            await this.db('super_admins').where('id', superAdminRow.id).update({
+              user_id: user.id,
+            });
+          } catch (e) {}
+        }
+
         let firstOrg: any = null;
         try {
           firstOrg = await this.db('organizations').orderBy('id', 'asc').first();

@@ -26,10 +26,17 @@ export function CompanySelector() {
     user?.companyId && user?.roles?.includes('company_admin') && !user?.roles?.includes('super_admin')
   );
 
-  const organizationName =
-    user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Kosqu';
+  // Derive org name from the actual parent company record in DB; fall back to /me user data
+  const parentCompany = useMemo(() => companies.find((c) => c.isParent), [companies]);
 
-  // Identify sub-companies (non-parent entries or entries other than parent org)
+  const organizationName =
+    parentCompany?.name ||
+    user?.organizationName ||
+    user?.organizationCode ||
+    (user as any)?.organization?.name ||
+    '';
+
+  // Identify sub-companies (non-parent entries)
   const subCompanies = useMemo(() => {
     return companies.filter((c) => !c.isParent);
   }, [companies]);

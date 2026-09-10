@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Plus, Edit2, Trash2, RotateCcw, Search, Check, Layers,
-  Database, History, ChevronDown, ChevronRight, X, User, Download
+  Database, History, ChevronDown, ChevronRight, X, User, Download,
+  Calculator, Sliders
 } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 
 interface ComponentGroup {
   id: string | number;
@@ -256,7 +258,7 @@ export const MasterPayrollComponents: React.FC = () => {
       return [
         `"${(log.description || '').replace(/"/g, '""')}"`,
         `"${log.action || 'UPDATE'}"`,
-        `"${log.updatedByName || log.updated_by_name || 'Harsh Gawali'}"`,
+        `"${log.updatedByName || log.updated_by_name || 'Unknown'}"`,
         `"${dateStr}"`
       ];
     });
@@ -273,8 +275,13 @@ export const MasterPayrollComponents: React.FC = () => {
 
   // All known component names derived from groups state (for formula validation & token buttons)
   const allKnownComponentNames = React.useMemo(() => {
-    const names = new Set<string>(['CTC', 'Gross']);
-    groups.forEach(g => (g.components || []).forEach(c => { if (c.name) names.add(c.name); }));
+    const names = new Set<string>(['ctc', 'gross', 'basic', 'salary']);
+    groups.forEach(g => (g.components || []).forEach(c => {
+      if (c.name) {
+        names.add(c.name.trim().toLowerCase());
+        names.add(c.name.trim().replace(/\s+/g, '_').toLowerCase());
+      }
+    }));
     return names;
   }, [groups]);
 
@@ -305,18 +312,33 @@ export const MasterPayrollComponents: React.FC = () => {
 
     // 2. Empty bracket check []
     if (/\[\s*\]/.test(str)) {
-      return { isValid: false, error: 'Empty brackets [] found. Please specify a component name inside [ ].' };
+      return { isValid: false, error: 'Empty brackets [] found. Please specify a component name or formula inside [ ].' };
     }
 
-    // 3. Validate that every [Name] refers to a known component, CTC, or Gross
+    // 3. Validate that every [ ... ] or identifier refers to valid components or math expressions
     const bracketMatches = str.match(/\[([^\]]+)\]/g) || [];
     for (const match of bracketMatches) {
       const inner = match.slice(1, -1).trim();
-      if (!allKnownComponentNames.has(inner)) {
-        return {
-          isValid: false,
-          error: `Unknown component "${inner}" in formula. Use only existing component names or [CTC] / [Gross].`
-        };
+      if (/[\+\-\*\/%^]/.test(inner)) {
+        const tokens = inner.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+        for (const token of tokens) {
+          const tLower = token.toLowerCase();
+          if (!allKnownComponentNames.has(tLower) && !['min', 'max', 'round', 'ceil', 'floor', 'abs', 'if'].includes(tLower)) {
+            return {
+              isValid: false,
+              error: `Unknown variable "${token}" inside [${inner}]. Use only existing component names or CTC / Gross.`
+            };
+          }
+        }
+      } else {
+        const tLower = inner.toLowerCase();
+        const tNorm = inner.trim().replace(/\s+/g, '_').toLowerCase();
+        if (!allKnownComponentNames.has(tLower) && !allKnownComponentNames.has(tNorm)) {
+          return {
+            isValid: false,
+            error: `Unknown component "${inner}" in formula. Use only existing component names or [CTC] / [Gross].`
+          };
+        }
       }
     }
 
@@ -333,8 +355,8 @@ export const MasterPayrollComponents: React.FC = () => {
     }
 
     // 6. Trailing operator at the end e.g. [CTC] +
-    if (/[\+\-\*\/\,\(]$/.test(str)) {
-      return { isValid: false, error: 'Formula cannot end with an open operator or parenthesis.' };
+    if (/[\+\-\*\/\,\(\[]$/.test(str)) {
+      return { isValid: false, error: 'Formula cannot end with an open operator or bracket.' };
     }
 
     return { isValid: true };
@@ -506,7 +528,7 @@ export const MasterPayrollComponents: React.FC = () => {
         if (firstGroup.components && firstGroup.components.length > 0) {
           populateComponentForm(firstGroup.components[0], firstGroup.id);
         } else {
-          resetComponentForm(firstGroup.id, firstGroup.name);
+          resetComponentForm(firstGroup.id);
         }
       }
     } catch (err: any) {
@@ -533,12 +555,12 @@ export const MasterPayrollComponents: React.FC = () => {
       if (firstGroup.components && firstGroup.components.length > 0) {
         populateComponentForm(firstGroup.components[0], firstGroup.id);
       } else {
-        resetComponentForm(firstGroup.id, firstGroup.name);
+        resetComponentForm(firstGroup.id);
       }
     } else {
       setSelectedGroupId(null);
       handleNewGroupClick();
-      resetComponentForm(null, '');
+      resetComponentForm(null);
     }
     setIsGroupFormOpen(false);
   }, [activeCategory]);
@@ -677,11 +699,11 @@ export const MasterPayrollComponents: React.FC = () => {
     });
   };
 
-  const resetComponentForm = (groupId?: string | number | null, defaultName?: string) => {
+  const resetComponentForm = (groupId?: string | number | null) => {
     setSelectedComponentId(null);
     if (groupId !== undefined) setSelectedGroupId(groupId);
     setCompForm({
-      name: defaultName || '',
+      name: '',
       isNonCashable: false,
       basedOnAttendance: false,
       isActive: true,
@@ -708,7 +730,7 @@ export const MasterPayrollComponents: React.FC = () => {
   };
 
   const handleCancelComponentForm = () => {
-    resetComponentForm(selectedGroupId, groupForm.name);
+    resetComponentForm(selectedGroupId);
     setIsFormulaOpen(false);
     setIsConditionOpen(false);
     setIsEmploymentOpen(false);
@@ -800,7 +822,23 @@ export const MasterPayrollComponents: React.FC = () => {
     try {
       await apiClient.delete(`/payroll/components/${id}`);
       showToast.success('Component Deleted', `"${name}" removed.`);
-      resetComponentForm(selectedGroupId, groupForm.name);
+      resetComponentForm(selectedGroupId);
+      await fetchData();
+    } catch (err: any) {
+      showToast.error('Delete Failed', err.response?.data?.message || err.message);
+    }
+  };
+
+  const handleDeleteGroup = async (id: string | number, name: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!window.confirm(`Delete group "${name}"? This may affect components assigned to this group.`)) return;
+    try {
+      await apiClient.delete(`/payroll/component-groups/${id}`);
+      showToast.success('Group Deleted', `Group "${name}" removed.`);
+      if (String(selectedGroupId) === String(id)) {
+        setSelectedGroupId(null);
+        resetComponentForm();
+      }
       await fetchData();
     } catch (err: any) {
       showToast.error('Delete Failed', err.response?.data?.message || err.message);
@@ -832,40 +870,42 @@ export const MasterPayrollComponents: React.FC = () => {
 
   // Group Form In-Place Renderer
   const renderGroupFormContent = (isNew: boolean) => (
-    <div className="bg-card border-2 border-primary/50 rounded-xl shadow-md p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
+    <div className="bg-card border-2 border-primary/50 rounded-xl shadow-md p-4 space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-150">
       {/* Form Title & Close X */}
-      <div className="flex items-center justify-between pb-1.5 border-b border-border/80">
-        <span className="font-bold text-xs text-foreground flex items-center gap-1.5">
-          <Layers className="w-3.5 h-3.5 text-primary" />
-          {isNew ? `Create ${activeCategory} Group` : `Edit Group: ${groupForm.name}`}
-        </span>
+      <div className="flex items-center justify-between pb-2 border-b border-border/80">
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-primary" />
+          <span className="font-bold text-xs text-foreground">
+            {isNew ? `Create ${activeCategory} Group` : `Edit Group: ${groupForm.name || 'Group'}`}
+          </span>
+        </div>
         <button
           type="button"
           onClick={handleCancelGroupForm}
-          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           title="Close Form"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Group Name * */}
+      {/* Group Name */}
       <div>
-        <label className="text-[11px] font-bold text-foreground block mb-1">
+        <label className="text-xs font-semibold text-foreground block mb-1">
           Group Name <span className="text-rose-500">*</span>
         </label>
         <Input
           value={groupForm.name}
           onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
-          placeholder="e.g. Adjustment"
+          placeholder="e.g. Basic Salary, Allowances, Deductions"
           className="h-8 text-xs font-semibold bg-background"
         />
       </div>
 
-      {/* Round Format * | Group Function * */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Round Format & Group Function */}
+      <div className="grid grid-cols-2 gap-2.5">
         <div>
-          <label className="text-[11px] font-bold text-foreground block mb-1">
+          <label className="text-[11px] font-semibold text-foreground block mb-1">
             Round Format <span className="text-rose-500">*</span>
           </label>
           <select
@@ -882,7 +922,7 @@ export const MasterPayrollComponents: React.FC = () => {
         </div>
 
         <div>
-          <label className="text-[11px] font-bold text-foreground block mb-1">
+          <label className="text-[11px] font-semibold text-foreground block mb-1">
             Group Function <span className="text-rose-500">*</span>
           </label>
           <select
@@ -898,144 +938,16 @@ export const MasterPayrollComponents: React.FC = () => {
         </div>
       </div>
 
-      {/* Configure On Profile | Display On Profile | Is Editable */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Group For Payslip & Display Order */}
+      <div className="grid grid-cols-2 gap-2.5">
         <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Configure On Profile</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, configureOnProfile: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.configureOnProfile ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, configureOnProfile: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.configureOnProfile ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Display On Profile</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, displayOnProfile: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.displayOnProfile ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, displayOnProfile: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.displayOnProfile ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Is Editable</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, isEditable: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.isEditable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, isEditable: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.isEditable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Contributed By * | Active */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Contributed By <span className="text-rose-500">*</span></label>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, contributedBy: 'Employee' })}
-              className={`flex-1 h-7 rounded-lg text-xs font-bold border transition-colors ${groupForm.contributedBy === 'Employee' ? 'bg-primary text-primary-foreground border-primary shadow-2xs' : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'}`}
-            >
-              {groupForm.contributedBy === 'Employee' && <Check className="w-3 h-3 inline mr-1" />}
-              Employee
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, contributedBy: 'Employer' })}
-              className={`flex-1 h-7 rounded-lg text-xs font-bold border transition-colors ${groupForm.contributedBy === 'Employer' ? 'bg-primary text-primary-foreground border-primary shadow-2xs' : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted'}`}
-            >
-              {groupForm.contributedBy === 'Employer' && <Check className="w-3 h-3 inline mr-1" />}
-              Employer
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Active</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7 w-28">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, isActive: false })}
-              className={`flex-1 text-xs font-bold ${!groupForm.isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, isActive: true })}
-              className={`flex-1 text-xs font-bold ${groupForm.isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Recalculate Payroll On Change | Group For Payslip | Display Order */}
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1 leading-tight">Recalculate On Change</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, recalculateOnChange: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.recalculateOnChange ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, recalculateOnChange: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.recalculateOnChange ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Group For Payslip</label>
+          <label className="text-[11px] font-semibold text-foreground block mb-1">Group For Payslip</label>
           <select
             value={groupForm.groupForPayslip || 'Choose'}
             onChange={e => setGroupForm({ ...groupForm, groupForPayslip: e.target.value })}
-            className="w-full h-7 border border-input bg-background text-foreground rounded-lg px-1.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
           >
-            <option value="Choose">Choose</option>
+            <option value="Choose">Choose payslip bucket</option>
             <option value="Car Allowance">Car Allowance</option>
             <option value="Basic">Basic</option>
             <option value="HRA">HRA</option>
@@ -1047,116 +959,108 @@ export const MasterPayrollComponents: React.FC = () => {
         </div>
 
         <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Display Order</label>
+          <label className="text-[11px] font-semibold text-foreground block mb-1">Display Order</label>
           <Input
             type="number"
             value={groupForm.displayOrder}
             onChange={e => setGroupForm({ ...groupForm, displayOrder: Number(e.target.value) })}
-            className="h-7 text-xs font-semibold bg-background"
+            className="h-8 text-xs font-semibold bg-background"
           />
         </div>
       </div>
 
-      {/* Disable Arrear | Display Total On Process Payroll | TDS deducted on same month */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Contributed By & Active Status */}
+      <div className="grid grid-cols-2 gap-2.5 items-center">
         <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1">Disable Arrear</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, disableArrear: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.disableArrear ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, disableArrear: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.disableArrear ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
+          <label className="text-[11px] font-semibold text-foreground block mb-1">
+            Contributed By <span className="text-rose-500">*</span>
+          </label>
+          <div className="flex gap-1 bg-muted/60 p-0.5 rounded-lg border border-border">
+            {(['Employee', 'Employer'] as const).map(role => {
+              const isSelected = groupForm.contributedBy === role;
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setGroupForm({ ...groupForm, contributedBy: role })}
+                  className={`flex-1 h-7 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    isSelected
+                      ? 'bg-background text-foreground shadow-2xs border border-border'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-primary" />}
+                  <span>{role}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1 leading-tight">Display Total On Process</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, displayTotalOnProcess: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.displayTotalOnProcess ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, displayTotalOnProcess: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.displayTotalOnProcess ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
+        <div className="flex items-center justify-between p-2 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors h-[42px] mt-3">
+          <div className="space-y-0.5">
+            <label htmlFor="group-active-toggle" className="text-[11px] font-semibold text-foreground cursor-pointer block leading-none">
+              Active Status
+            </label>
+            <span className="text-[10px] text-muted-foreground block leading-none">{groupForm.isActive ? 'Active' : 'Disabled'}</span>
           </div>
-        </div>
-
-        <div>
-          <label className="text-[10px] font-bold text-foreground block mb-1 leading-tight">TDS in same month</label>
-          <div className="flex border border-border rounded-lg overflow-hidden h-7">
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, tdsSameMonth: false })}
-              className={`flex-1 text-[10px] font-bold ${!groupForm.tdsSameMonth ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              No
-            </button>
-            <button
-              type="button"
-              onClick={() => setGroupForm({ ...groupForm, tdsSameMonth: true })}
-              className={`flex-1 text-[10px] font-bold ${groupForm.tdsSameMonth ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-            >
-              Yes
-            </button>
-          </div>
+          <Switch
+            id="group-active-toggle"
+            checked={Boolean(groupForm.isActive)}
+            onCheckedChange={(checked) => setGroupForm({ ...groupForm, isActive: checked })}
+          />
         </div>
       </div>
 
-      {/* Taxable Toggle */}
+      {/* Advanced Rules & Flags (Clean modern switch cards) */}
       <div>
-        <label className="text-[10px] font-bold text-foreground block mb-1">Taxable</label>
-        <div className="flex border border-border rounded-lg overflow-hidden h-7 w-28">
-          <button
-            type="button"
-            onClick={() => setGroupForm({ ...groupForm, isTaxable: false })}
-            className={`flex-1 text-xs font-bold ${!groupForm.isTaxable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-          >
-            No
-          </button>
-          <button
-            type="button"
-            onClick={() => setGroupForm({ ...groupForm, isTaxable: true })}
-            className={`flex-1 text-xs font-bold ${groupForm.isTaxable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-          >
-            Yes
-          </button>
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+          Group Rules &amp; Visibility
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { key: 'displayOnProfile', label: 'Display On Profile', desc: 'Visible on employee profile' },
+            { key: 'configureOnProfile', label: 'Configure On Profile', desc: 'Editable during employee setup' },
+            { key: 'isEditable', label: 'Is Editable', desc: 'Allow structure modifications' },
+            { key: 'isTaxable', label: 'Taxable Group', desc: 'Subject to income tax' },
+            { key: 'recalculateOnChange', label: 'Recalculate On Change', desc: 'Auto recalculate on edit' },
+            { key: 'displayTotalOnProcess', label: 'Show Total On Process', desc: 'Display subtotal in run' },
+            { key: 'disableArrear', label: 'Disable Arrears', desc: 'Exclude from arrear adjustments' },
+            { key: 'tdsSameMonth', label: 'TDS In Same Month', desc: 'Deduct TDS in current cycle' },
+          ].map(item => (
+            <div key={item.key} className="flex items-center justify-between p-2 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors">
+              <div className="space-y-0.5 pr-2">
+                <label htmlFor={`group-flag-${item.key}`} className="text-[11px] font-semibold text-foreground cursor-pointer block leading-tight">
+                  {item.label}
+                </label>
+                <span className="text-[10px] text-muted-foreground block truncate">{item.desc}</span>
+              </div>
+              <Switch
+                id={`group-flag-${item.key}`}
+                checked={Boolean((groupForm as any)[item.key])}
+                onCheckedChange={(checked) => setGroupForm({ ...groupForm, [item.key]: checked })}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Group Save Buttons */}
-      <div className="flex items-center justify-between pt-2 border-t border-border">
+      <div className="flex items-center justify-between pt-2.5 border-t border-border">
         <Button
           type="button"
           onClick={handleSaveGroup}
           disabled={savingGroup}
-          className="h-8 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer"
+          className="h-8 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
         >
-          <Plus className="w-3.5 h-3.5" />
-          {isNew ? 'Save' : 'Update'}
+          {isNew ? <Plus className="w-3.5 h-3.5" /> : <Check className="w-3.5 h-3.5" />}
+          {isNew ? 'Save Group' : 'Update Group'}
         </Button>
         <Button
           type="button"
-          variant="destructive"
+          variant="outline"
           onClick={handleCancelGroupForm}
-          className="h-8 px-4 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg flex items-center gap-1 shadow-2xs cursor-pointer"
+          className="h-8 px-3.5 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-lg flex items-center gap-1 cursor-pointer"
         >
           <X className="w-3.5 h-3.5" /> Cancel
         </Button>
@@ -1301,7 +1205,7 @@ export const MasterPayrollComponents: React.FC = () => {
                       if (comps.length > 0) {
                         populateComponentForm(comps[0], group.id);
                       } else {
-                        resetComponentForm(group.id, group.name);
+                        resetComponentForm(group.id);
                       }
                     }}
                     className="p-3 bg-gradient-to-r from-teal-500/15 via-cyan-500/10 to-transparent dark:from-teal-500/25 border-b border-border/80 cursor-pointer flex items-center justify-between gap-2"
@@ -1334,6 +1238,14 @@ export const MasterPayrollComponents: React.FC = () => {
                         title="View Group Audit Log"
                       >
                         <History className="w-3 h-3" /> Audit Log
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteGroup(group.id, group.name, e)}
+                        className="p-1 rounded hover:bg-rose-500/10 text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer"
+                        title="Delete Group"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
@@ -1392,6 +1304,17 @@ export const MasterPayrollComponents: React.FC = () => {
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
                               </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteComponent(comp.id, comp.name);
+                                }}
+                                className="p-1 rounded hover:bg-rose-500/10 text-muted-foreground hover:text-rose-600 transition-colors cursor-pointer"
+                                title="Delete Component"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </div>
                         );
@@ -1410,63 +1333,72 @@ export const MasterPayrollComponents: React.FC = () => {
           ═══════════════════════════════════════════════════════════════════════ */}
       <div className="lg:col-span-7 space-y-4">
         <div className="bg-card border border-border rounded-xl shadow-xs p-5 space-y-4">
-          {/* Header Row: Selected Group Name (Left), + Add Component & Refresh (Right) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-border/80">
-            <h2 className="text-sm font-bold text-foreground">
-              {groupForm.name || compForm.name || 'Adjustment'}
-            </h2>
+          {/* Header Row: Component Title, Context & Top Actions */}
+          {(() => {
+            const activeGroup = groups.find(g => String(g.id) === String(selectedGroupId)) || { name: groupForm.name || 'Selected Group', category: activeCategory };
+            return (
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-border/80">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-foreground">
+                      {selectedComponentId ? `Edit Component: ${compForm.name || 'Component'}` : 'New Component'}
+                    </span>
+                    <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 bg-primary/10 text-primary border-primary/20">
+                      {activeGroup.name} • {activeGroup.category || activeCategory}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {selectedComponentId
+                      ? 'Configure component calculation rules, boundaries, and eligibility filters'
+                      : `Create a new salary component under the "${activeGroup.name}" group`}
+                  </p>
+                </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => {
-                  resetComponentForm(selectedGroupId, groupForm.name);
-                  setIsFormulaOpen(true);
-                }}
-                className="h-7 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md flex items-center gap-1 shadow-2xs cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add Component
-              </Button>
+                <div className="flex items-center gap-2">
+                  {selectedComponentId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        resetComponentForm(selectedGroupId);
+                        setIsFormulaOpen(true);
+                      }}
+                      className="h-8 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> New Component
+                    </Button>
+                  )}
 
-              <button
-                type="button"
-                onClick={fetchData}
-                className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors cursor-pointer"
-                title="Refresh components"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    type="button"
+                    onClick={() => {
+                      if (selectedComponentId) {
+                        const activeComp = { id: selectedComponentId, name: compForm.name || 'Component' };
+                        handleOpenComponentAuditLog(activeComp);
+                      } else {
+                        showToast.info('Audit Log', 'Please select a component from the left to view its audit history');
+                      }
+                    }}
+                    className="h-8 text-xs font-semibold rounded-lg flex items-center gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                    title="View Component Audit Log"
+                  >
+                    <History className="w-3.5 h-3.5" /> Audit Log
+                  </Button>
 
-          {/* Sub-header Row: Checkbox (Left), Audit Log (Right) */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-              <input
-                type="checkbox"
-                checked={true}
-                readOnly
-                className="w-4 h-4 rounded border-input text-primary focus:ring-primary accent-primary"
-              />
-              <span>{selectedComponentId ? 'Update Component Information' : 'Add Component Information'}</span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (selectedComponentId) {
-                  const activeComp = { id: selectedComponentId, name: compForm.name || 'Component' };
-                  handleOpenComponentAuditLog(activeComp);
-                } else {
-                  showToast.info('Audit Log', 'Please select a component from the left to view its audit history');
-                }
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold rounded-md border border-border transition-colors cursor-pointer"
-              title="View Component Audit Log"
-            >
-              <History className="w-3.5 h-3.5" /> Audit Log
-            </button>
-          </div>
+                  <button
+                    type="button"
+                    onClick={fetchData}
+                    className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors cursor-pointer"
+                    title="Refresh components"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 1. Formula Setting Accordion (Collapsible bar) */}
           <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-2xs">
@@ -1475,168 +1407,156 @@ export const MasterPayrollComponents: React.FC = () => {
               onClick={() => setIsFormulaOpen(!isFormulaOpen)}
               className="w-full p-3 text-left font-bold text-xs text-foreground bg-muted/30 hover:bg-muted/50 flex items-center justify-between cursor-pointer transition-colors"
             >
-              <div className="flex items-center gap-1.5 text-primary">
-                <span className="font-mono font-bold text-sm">£</span>
-                <span className="font-semibold text-xs">Formula Setting</span>
+              <div className="flex items-center gap-2 text-primary">
+                <Calculator className="w-4 h-4 text-primary" />
+                <span className="font-semibold text-xs">Formula & Configuration</span>
               </div>
               {isFormulaOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
             </button>
 
             {isFormulaOpen && (
               <div className="p-4 space-y-4 border-t border-border/60 bg-muted/5 text-xs animate-in fade-in duration-150">
-                {/* Component Name * */}
+                {/* Component Name */}
                 <div>
-                  <label className="text-[11px] font-bold text-foreground block mb-1">
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">
                     Component Name <span className="text-rose-500">*</span>
                   </label>
                   <Input
                     value={compForm.name}
                     onChange={e => setCompForm({ ...compForm, name: e.target.value })}
-                    placeholder="e.g. Adjustment, Conveyance, Basic"
-                    className="h-8 text-xs font-semibold bg-background"
+                    placeholder="e.g. Basic, House Rent Allowance, Conveyance"
+                    className="h-9 text-xs font-semibold bg-background"
                   />
                 </div>
 
-                {/* 3 Toggle Boxes: Non-Cashable Item | Based On Attendance | Active */}
+                {/* 3 Modern Switch Cards: Attendance Based | Non-Cashable | Active Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Non-Cashable Item */}
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Non-Cashable Item
-                    </label>
-                    <div className="flex border border-border rounded-lg overflow-hidden h-7">
-                      <button
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, isNonCashable: false })}
-                        className={`flex-1 text-[11px] font-bold ${!compForm.isNonCashable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        No
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, isNonCashable: true })}
-                        className={`flex-1 text-[11px] font-bold ${compForm.isNonCashable ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        Yes
-                      </button>
+                  {/* Attendance Based */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors">
+                    <div className="space-y-0.5">
+                      <label htmlFor="comp-attendance" className="text-xs font-semibold text-foreground cursor-pointer block">
+                        Attendance Based
+                      </label>
+                      <span className="text-[10px] text-muted-foreground block">Prorate by work days</span>
                     </div>
+                    <Switch
+                      id="comp-attendance"
+                      checked={compForm.basedOnAttendance}
+                      onCheckedChange={(checked) => setCompForm({ ...compForm, basedOnAttendance: checked })}
+                    />
                   </div>
 
-                  {/* Based On Attendance */}
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Based On Attendance
-                    </label>
-                    <div className="flex border border-border rounded-lg overflow-hidden h-7">
-                      <button
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, basedOnAttendance: false })}
-                        className={`flex-1 text-[11px] font-bold ${!compForm.basedOnAttendance ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        No
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, basedOnAttendance: true })}
-                        className={`flex-1 text-[11px] font-bold ${compForm.basedOnAttendance ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        Yes
-                      </button>
+                  {/* Non-Cashable */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors">
+                    <div className="space-y-0.5">
+                      <label htmlFor="comp-noncashable" className="text-xs font-semibold text-foreground cursor-pointer block">
+                        Non-Cashable
+                      </label>
+                      <span className="text-[10px] text-muted-foreground block">Perquisite / benefit</span>
                     </div>
+                    <Switch
+                      id="comp-noncashable"
+                      checked={compForm.isNonCashable}
+                      onCheckedChange={(checked) => setCompForm({ ...compForm, isNonCashable: checked })}
+                    />
                   </div>
 
-                  {/* Active Toggle */}
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Active
-                    </label>
-                    <div className="flex border border-border rounded-lg overflow-hidden h-7">
-                      <button
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, isActive: false })}
-                        className={`flex-1 text-[11px] font-bold ${!compForm.isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        No
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, isActive: true })}
-                        className={`flex-1 text-[11px] font-bold ${compForm.isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                      >
-                        Yes
-                      </button>
+                  {/* Active Status */}
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background hover:bg-muted/20 transition-colors">
+                    <div className="space-y-0.5">
+                      <label htmlFor="comp-active" className="text-xs font-semibold text-foreground cursor-pointer block">
+                        Active Status
+                      </label>
+                      <span className="text-[10px] text-muted-foreground block">{compForm.isActive ? 'Component active' : 'Disabled'}</span>
                     </div>
+                    <Switch
+                      id="comp-active"
+                      checked={compForm.isActive}
+                      onCheckedChange={(checked) => setCompForm({ ...compForm, isActive: checked })}
+                    />
                   </div>
                 </div>
 
-                {/* Component Type * (3 Buttons: Value | Derived | Module) */}
+                {/* Calculation Type Selector */}
                 <div>
-                  <label className="text-[11px] font-bold text-foreground block mb-1">
-                    Component Type <span className="text-rose-500">*</span>
+                  <label className="text-xs font-semibold text-foreground block mb-1.5">
+                    Calculation Type <span className="text-rose-500">*</span>
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['Value', 'Derived', 'Module'] as const).map(t => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, type: t })}
-                        className={`h-8 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          compForm.type === t
-                            ? 'bg-[#2b7bb9] text-white border-[#2b7bb9] shadow-2xs'
-                            : 'bg-background text-foreground border-border hover:bg-muted/40'
-                        }`}
-                      >
-                        {compForm.type === t && <Check className="w-3.5 h-3.5" />}
-                        {t}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-3 gap-2 bg-muted/60 p-1 rounded-lg border border-border">
+                    {[
+                      { type: 'Value', label: 'Fixed Value', desc: 'Direct currency amount' },
+                      { type: 'Derived', label: 'Formula / Derived', desc: 'Calculated expression' },
+                      { type: 'Module', label: 'HR Module', desc: 'Linked system module' },
+                    ].map(item => {
+                      const isSelected = compForm.type === item.type;
+                      return (
+                        <button
+                          key={item.type}
+                          type="button"
+                          onClick={() => setCompForm({ ...compForm, type: item.type as any })}
+                          className={`py-2 px-3 rounded-md text-left transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-background text-foreground shadow-xs font-bold border border-border'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-background/40 font-medium'
+                          }`}
+                        >
+                          <div className="text-xs flex items-center gap-1.5">
+                            {isSelected && <Check className="w-3.5 h-3.5 text-primary shrink-0" />}
+                            <span>{item.label}</span>
+                          </div>
+                          <div className="text-[10px] text-muted-foreground font-normal mt-0.5 truncate">{item.desc}</div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* If Value: Amount */}
                 {compForm.type === 'Value' && (
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Amount
+                    <label className="text-xs font-semibold text-foreground block mb-1.5">
+                      Amount (₹) <span className="text-rose-500">*</span>
                     </label>
                     <Input
                       type="number"
                       value={compForm.amount}
                       onChange={e => setCompForm({ ...compForm, amount: Number(e.target.value) })}
-                      placeholder="100.00"
-                      className="h-8 text-xs font-semibold bg-background"
+                      placeholder="0.00"
+                      className="h-9 text-xs font-semibold bg-background"
                     />
                   </div>
                 )}
 
                 {/* If Derived: Formula Expression */}
                 {compForm.type === 'Derived' && (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-foreground">
-                        Formula Expression <span className="text-rose-500">*</span>
-                      </label>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        Use [Component Name] &amp; [CTC] with math operators
-                      </span>
-                    </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-semibold text-foreground">
+                          Formula Expression <span className="text-rose-500">*</span>
+                        </label>
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          e.g. [CTC * 0.50 / 12]
+                        </span>
+                      </div>
 
-                    <textarea
-                      rows={2}
-                      value={compForm.formula}
-                      onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
-                      placeholder="e.g. [CTC] * 0.50, [Basic Salary] * 0.40, [CTC] - ([Basic Salary] + [House Rent Allowance (HRA)])"
-                      spellCheck={false}
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      className="w-full border border-input rounded-lg p-2.5 text-xs font-mono bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-                    />
+                      <textarea
+                        rows={2}
+                        value={compForm.formula}
+                        onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
+                        placeholder="e.g. [CTC * 0.50 / 12], [Gross] * 0.0075, min(1800, [Basic] * 0.12)"
+                        spellCheck={false}
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        className="w-full border border-input rounded-lg p-3 text-xs font-mono bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs leading-relaxed"
+                      />
+                    </div>
 
                     {/* Live Validation Indicator */}
                     {compForm.formula.trim() && (() => {
                       const validation = validateFormulaSyntax(compForm.formula);
                       return (
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border ${
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
                           validation.isValid 
                             ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60' 
                             : 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60'
@@ -1647,81 +1567,100 @@ export const MasterPayrollComponents: React.FC = () => {
                       );
                     })()}
 
-                    {/* Interactive Component & CTC Tokens — dynamically from actual DB components */}
-                    <div className="space-y-1 bg-muted/30 p-2 rounded-lg border border-border/50">
-                      <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        Insert Tokens &amp; Operators (with auto single-space):
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {dynamicFormulaTokens.map(token => (
-                          <button
-                            key={token}
-                            type="button"
-                            onClick={() => insertFormulaToken(token)}
-                            title={token}
-                            className="px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 rounded border border-indigo-200 dark:border-indigo-800 transition-colors cursor-pointer max-w-[160px] truncate"
-                          >
-                            +{token}
-                          </button>
-                        ))}
-                        {['+', '-', '*', '/', '(', ')', 'min(', 'max('].map(op => (
-                          <button
-                            key={op}
-                            type="button"
-                            onClick={() => insertFormulaToken(op)}
-                            className="px-2 py-0.5 text-[10px] font-mono font-bold bg-muted hover:bg-muted/80 text-foreground rounded border border-border transition-colors cursor-pointer"
-                          >
-                            {op}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Standard Bracket Templates — shown only if referenced components exist */}
-                    {(() => {
-                      const templates = [
-                        '[CTC] * 0.50',
-                        '[CTC] * 0.40',
-                        '[Gross] * (0.75 / 100)',
-                        // Dynamic: first available non-CTC/Gross component at 12%
-                        ...(dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 1).map(t => `min(1800, ${t} * 0.12)`)),
-                        // Dynamic: CTC minus first two real components
-                        ...(dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 2).length === 2
-                          ? [`[CTC] - (${dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 2).join(' + ')})`]
-                          : []),
-                      ];
-                      return (
-                        <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                          <span className="text-[10px] text-muted-foreground font-semibold">Templates:</span>
-                          {templates.map(template => (
+                    {/* Formula Assistant: Salary Tokens, Operators & Presets */}
+                    <div className="rounded-lg border border-border bg-background p-3 space-y-3">
+                      {/* Row 1: Salary Variables */}
+                      <div>
+                        <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 flex items-center justify-between">
+                          <span>Salary Variables (click to insert)</span>
+                          <span className="text-[10px] text-muted-foreground/70 font-mono">Auto spaced</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {dynamicFormulaTokens.map(token => (
                             <button
-                              key={template}
+                              key={token}
                               type="button"
-                              onClick={() => setCompForm(prev => ({ ...prev, formula: template }))}
-                              title={template}
-                              className="px-2 py-0.5 text-[10px] font-mono bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground rounded border border-border/80 transition-colors cursor-pointer max-w-[220px] truncate"
+                              onClick={() => insertFormulaToken(token)}
+                              title={`Insert ${token}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono font-semibold rounded-md bg-muted/50 hover:bg-primary/10 text-foreground hover:text-primary border border-border hover:border-primary/40 transition-all cursor-pointer shadow-2xs max-w-[180px] truncate"
                             >
-                              {template}
+                              <Plus className="w-2.5 h-2.5 opacity-50 shrink-0" />
+                              <span className="truncate">{token}</span>
                             </button>
                           ))}
                         </div>
-                      );
-                    })()}
+                      </div>
+
+                      {/* Row 2: Operators & Functions */}
+                      <div className="pt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-[11px] font-semibold text-muted-foreground mr-1">Math:</span>
+                          {[
+                            { label: '+', val: '+' },
+                            { label: '−', val: '-' },
+                            { label: '×', val: '*' },
+                            { label: '÷', val: '/' },
+                            { label: '(', val: '(' },
+                            { label: ')', val: ')' },
+                            { label: 'min( )', val: 'min(' },
+                            { label: 'max( )', val: 'max(' },
+                          ].map(op => (
+                            <button
+                              key={op.val}
+                              type="button"
+                              onClick={() => insertFormulaToken(op.val)}
+                              className="h-7 min-w-[28px] px-2 text-xs font-mono font-bold rounded-md bg-muted/60 hover:bg-muted text-foreground border border-border transition-colors cursor-pointer flex items-center justify-center shadow-2xs"
+                            >
+                              {op.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Presets */}
+                        {(() => {
+                          const templates = [
+                            '[CTC] * 0.50',
+                            '[CTC] * 0.40',
+                            '[Gross] * (0.75 / 100)',
+                            ...(dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 1).map(t => `min(1800, ${t} * 0.12)`)),
+                            ...(dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 2).length === 2
+                              ? [`[CTC] - (${dynamicFormulaTokens.filter(t => t !== '[CTC]' && t !== '[Gross]').slice(0, 2).join(' + ')})`]
+                              : []),
+                          ];
+                          return (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-semibold text-muted-foreground">Presets:</span>
+                              {templates.slice(0, 3).map(template => (
+                                <button
+                                  key={template}
+                                  type="button"
+                                  onClick={() => setCompForm(prev => ({ ...prev, formula: template }))}
+                                  title={template}
+                                  className="text-[10px] font-mono px-2 py-0.5 rounded border border-border bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer max-w-[150px] truncate"
+                                >
+                                  {template}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* If Module: Payroll Module Selector */}
                 {compForm.type === 'Module' && (
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Payroll Module
+                    <label className="text-xs font-semibold text-foreground block mb-1.5">
+                      Payroll Module Source <span className="text-rose-500">*</span>
                     </label>
                     <select
                       value={compForm.moduleSource}
                       onChange={e => setCompForm({ ...compForm, moduleSource: e.target.value })}
-                      className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full h-9 border border-input bg-background text-foreground rounded-lg px-3 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
                     >
-                      <option value="Choose">Choose</option>
+                      <option value="Choose">Choose module</option>
                       <option value="Weekoff-Holiday Double Pay">Weekoff-Holiday Double Pay</option>
                       <option value="Loan EMI">Loan EMI Deduction</option>
                       <option value="Overtime">Overtime Calculation</option>
@@ -1731,74 +1670,78 @@ export const MasterPayrollComponents: React.FC = () => {
                   </div>
                 )}
 
-                {/* Boundary Type (Min/Max) */}
-                <div>
-                  <label className="text-[11px] font-bold text-foreground block mb-1">
-                    Boundary Type (Min/ Max)
-                  </label>
-                  <select
-                    value={compForm.boundaryType}
-                    onChange={e => setCompForm({ ...compForm, boundaryType: e.target.value })}
-                    className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="Choose">Choose</option>
-                    <option value="Min">Min</option>
-                    <option value="Max">Max</option>
-                    <option value="Both">Both (Min & Max)</option>
-                  </select>
+                {/* Boundary Type & Amounts */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-foreground block mb-1.5">
+                      Boundary Type
+                    </label>
+                    <select
+                      value={compForm.boundaryType}
+                      onChange={e => setCompForm({ ...compForm, boundaryType: e.target.value })}
+                      className="w-full h-9 border border-input bg-background text-foreground rounded-lg px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="Choose">None / Choose</option>
+                      <option value="Min">Min Only</option>
+                      <option value="Max">Max Only</option>
+                      <option value="Both">Both (Min & Max)</option>
+                    </select>
+                  </div>
+
+                  {(compForm.boundaryType === 'Min' || compForm.boundaryType === 'Both') && (
+                    <div>
+                      <label className="text-xs font-semibold text-foreground block mb-1.5">
+                        Minimum Amount (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        value={compForm.minAmount}
+                        onChange={e => setCompForm({ ...compForm, minAmount: Number(e.target.value) })}
+                        className="h-9 text-xs font-semibold bg-background"
+                      />
+                    </div>
+                  )}
+
+                  {(compForm.boundaryType === 'Max' || compForm.boundaryType === 'Both') && (
+                    <div>
+                      <label className="text-xs font-semibold text-foreground block mb-1.5">
+                        Maximum Amount (₹)
+                      </label>
+                      <Input
+                        type="number"
+                        value={compForm.maxAmount}
+                        onChange={e => setCompForm({ ...compForm, maxAmount: Number(e.target.value) })}
+                        className="h-9 text-xs font-semibold bg-background"
+                      />
+                    </div>
+                  )}
                 </div>
-
-                {(compForm.boundaryType === 'Min' || compForm.boundaryType === 'Both') && (
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Minimum Amount (₹)
-                    </label>
-                    <Input
-                      type="number"
-                      value={compForm.minAmount}
-                      onChange={e => setCompForm({ ...compForm, minAmount: Number(e.target.value) })}
-                      className="h-8 text-xs font-semibold bg-background"
-                    />
-                  </div>
-                )}
-
-                {(compForm.boundaryType === 'Max' || compForm.boundaryType === 'Both') && (
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Maximum Amount (₹)
-                    </label>
-                    <Input
-                      type="number"
-                      value={compForm.maxAmount}
-                      onChange={e => setCompForm({ ...compForm, maxAmount: Number(e.target.value) })}
-                      className="h-8 text-xs font-semibold bg-background"
-                    />
-                  </div>
-                )}
 
                 {/* Date Pickers Row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Effective From Date
                     </label>
+                    <p className="text-[10px] text-muted-foreground mb-1">Leave blank = active from the beginning</p>
                     <Input
                       type="date"
                       value={compForm.effectiveFromDate}
                       onChange={e => setCompForm({ ...compForm, effectiveFromDate: e.target.value })}
-                      className="h-8 text-xs font-semibold bg-background"
+                      className="h-9 text-xs font-semibold bg-background"
                     />
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Effective To Date
                     </label>
+                    <p className="text-[10px] text-muted-foreground mb-1">Leave blank = no expiry, runs indefinitely</p>
                     <Input
                       type="date"
                       value={compForm.effectiveToDate}
                       onChange={e => setCompForm({ ...compForm, effectiveToDate: e.target.value })}
-                      className="h-8 text-xs font-semibold bg-background"
+                      className="h-9 text-xs font-semibold bg-background"
                     />
                   </div>
                 </div>
@@ -1813,8 +1756,8 @@ export const MasterPayrollComponents: React.FC = () => {
               onClick={() => setIsConditionOpen(!isConditionOpen)}
               className="w-full p-3 text-left font-bold text-xs text-foreground bg-muted/30 hover:bg-muted/50 flex items-center justify-between cursor-pointer transition-colors"
             >
-              <div className="flex items-center gap-1.5 text-primary">
-                <span className="font-mono font-bold text-sm">&gt;</span>
+              <div className="flex items-center gap-2 text-primary">
+                <Sliders className="w-4 h-4 text-primary" />
                 <span className="font-semibold text-xs">Condition Setting</span>
               </div>
               {isConditionOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
@@ -1822,153 +1765,147 @@ export const MasterPayrollComponents: React.FC = () => {
 
             {isConditionOpen && (
               <div className="p-4 space-y-3 border-t border-border/60 bg-muted/5 text-xs animate-in fade-in duration-150">
+
+                {/* Condition On + Operator row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Condition On
-                    </label>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Condition On</label>
                     <select
                       value={compForm.conditionOn}
-                      onChange={e => setCompForm({ ...compForm, conditionOn: e.target.value })}
+                      onChange={e => setCompForm({ ...compForm, conditionOn: e.target.value, conditionValue1: '', conditionValue2: '' })}
                       className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2 text-xs font-semibold"
                     >
-                      <option value="Choose">Choose</option>
-                      <option value="Gross">Gross Salary</option>
-                      <option value="Basic">Basic Salary</option>
-                      <option value="CTC">Annual CTC</option>
-                      <option value="Attend.">Attendance Days</option>
-                      {allComponentNames.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
+                      <option value="Choose">— No Condition (Always applies) —</option>
+                      <optgroup label="Base Salary">
+                        <option value="Gross">Gross Salary</option>
+                        <option value="Basic">Basic Salary</option>
+                        <option value="CTC">Annual CTC</option>
+                        <option value="Attend.">Attendance Days</option>
+                      </optgroup>
+                      {allComponentNames.length > 0 && (
+                        <optgroup label="Other Components">
+                          {allComponentNames.map(name => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Operator
-                    </label>
+                    <label className="text-[11px] font-bold text-foreground block mb-1">Operator</label>
                     <select
                       value={compForm.conditionOperator}
-                      onChange={e => setCompForm({ ...compForm, conditionOperator: e.target.value })}
+                      onChange={e => setCompForm({ ...compForm, conditionOperator: e.target.value, conditionValue1: '', conditionValue2: '' })}
                       className="w-full h-8 border border-input bg-background text-foreground rounded-lg px-2 text-xs font-semibold"
+                      disabled={!compForm.conditionOn || compForm.conditionOn === 'Choose'}
                     >
-                      <option value="Choose">Choose</option>
+                      <option value="Choose">Choose Operator</option>
                       <option value="Equals">Equals (=)</option>
                       <option value="Greater">Greater Than (&gt;)</option>
-                      <option value="GreaterThanEqual">Greater Than Equal (&gt;=)</option>
+                      <option value="GreaterThanEqual">Greater Than or Equal (&gt;=)</option>
                       <option value="Less">Less Than (&lt;)</option>
-                      <option value="LessThanEqual">Less Than Equal (&lt;=)</option>
-                      <option value="Between">Between</option>
+                      <option value="LessThanEqual">Less Than or Equal (&lt;=)</option>
+                      <option value="Between">Between (Range)</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Value 1
-                    </label>
-                    <Input
-                      value={compForm.conditionValue1}
-                      onChange={e => setCompForm({ ...compForm, conditionValue1: e.target.value })}
-                      placeholder="e.g. 21000"
-                      className="h-8 text-xs font-semibold bg-background"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-foreground block mb-1">
-                      Value 2 {compForm.conditionOperator !== 'Between' && '(Optional)'}
-                    </label>
-                    <Input
-                      value={compForm.conditionValue2}
-                      onChange={e => setCompForm({ ...compForm, conditionValue2: e.target.value })}
-                      placeholder="e.g. 50000"
-                      className="h-8 text-xs font-semibold bg-background"
-                    />
-                  </div>
-                </div>
-
-                {/* [+] Months Filter Box (inside Condition Setting matching Hoshi 1:1) */}
-                <div className="border border-border/80 rounded-lg overflow-hidden bg-background">
-                  <div
-                    onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
-                    className="p-2.5 bg-muted/30 hover:bg-muted/50 text-foreground font-semibold flex items-center justify-between cursor-pointer transition-colors"
-                  >
-                    <span>{isMonthFilterOpen ? '[-] Months' : '[+] Months'}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      {compForm.months.length === 0 ? 'All Months' : `${compForm.months.length} selected`}
-                    </span>
-                  </div>
-
-                  {isMonthFilterOpen && (
-                    <div className="p-3 border-t border-border/60 space-y-2 max-h-48 overflow-y-auto">
-                      <label className="flex items-center gap-2 font-bold cursor-pointer pb-1.5 border-b border-border/40">
-                        <input
-                          type="checkbox"
-                          checked={compForm.months.length === monthOptions.length && monthOptions.length > 0}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setCompForm({ ...compForm, months: [...monthOptions] });
-                            } else {
-                              setCompForm({ ...compForm, months: [] });
-                            }
-                          }}
-                          className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
+                {/* Smart Value Inputs — only shown when operator is selected */}
+                {compForm.conditionOn !== 'Choose' && compForm.conditionOperator !== 'Choose' && (() => {
+                  const isAttend = (compForm.conditionOn || '').toLowerCase().includes('attend');
+                  const unit = isAttend ? ' days' : ' (₹)';
+                  const isBetween = compForm.conditionOperator === 'Between';
+                  const v1Label = (() => {
+                    switch (compForm.conditionOperator) {
+                      case 'Equals': return `Exact Value${unit}`;
+                      case 'Greater': return `Above${unit}`;
+                      case 'GreaterThanEqual': return `Minimum${unit}`;
+                      case 'Less': return `Below${unit}`;
+                      case 'LessThanEqual': return `Maximum${unit}`;
+                      case 'Between': return `From${unit}`;
+                      default: return `Value 1${unit}`;
+                    }
+                  })();
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-foreground block mb-1">{v1Label}</label>
+                        <Input
+                          type="number"
+                          value={compForm.conditionValue1}
+                          onChange={e => setCompForm({ ...compForm, conditionValue1: e.target.value })}
+                          placeholder={isAttend ? 'e.g. 26' : 'e.g. 21000'}
+                          className="h-8 text-xs font-semibold bg-background"
                         />
-                        <span>Select All</span>
-                      </label>
-
-                      {monthOptions.map(month => {
-                        const isChecked = compForm.months.includes(month);
-                        return (
-                          <label key={month} className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                if (isChecked) {
-                                  setCompForm({ ...compForm, months: compForm.months.filter(x => x !== month) });
-                                } else {
-                                  setCompForm({ ...compForm, months: [...compForm.months, month] });
-                                }
-                              }}
-                              className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
-                            />
-                            <span>{month}</span>
-                          </label>
-                        );
-                      })}
+                      </div>
+                      {isBetween && (
+                        <div>
+                          <label className="text-[11px] font-bold text-foreground block mb-1">To{unit}</label>
+                          <Input
+                            type="number"
+                            value={compForm.conditionValue2}
+                            onChange={e => setCompForm({ ...compForm, conditionValue2: e.target.value })}
+                            placeholder={isAttend ? 'e.g. 30' : 'e.g. 50000'}
+                            className="h-8 text-xs font-semibold bg-background"
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
 
-                {/* Gender Selector (matching Hoshi 1:1) */}
-                <div>
-                  <label className="text-[11px] font-bold text-foreground block mb-1.5">
-                    Gender
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {(['All', 'Male', 'Female'] as const).map(g => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => setCompForm({ ...compForm, genderFilter: g })}
-                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                          compForm.genderFilter.toLowerCase() === g.toLowerCase()
-                            ? 'bg-primary text-primary-foreground shadow-2xs'
-                            : 'bg-muted/50 hover:bg-muted text-muted-foreground border border-border/60'
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Live Condition Preview Sentence */}
+                {(() => {
+                  const on = compForm.conditionOn;
+                  const op = compForm.conditionOperator;
+                  const v1 = compForm.conditionValue1;
+                  const v2 = compForm.conditionValue2;
+                  if (!on || on === 'Choose' || !op || op === 'Choose' || !v1) return null;
+                  const isAttend = on.toLowerCase().includes('attend');
+                  const unit = isAttend ? ' days' : '';
+                  const fmt = (v: string) => isAttend ? `${v} days` : `₹${Number(v).toLocaleString('en-IN')}`;
+                  const labelMap: Record<string, string> = {
+                    Gross: 'Gross Salary', Basic: 'Basic Salary', CTC: 'Annual CTC', 'Attend.': 'Attendance Days'
+                  };
+                  const onLabel = labelMap[on] || on;
+                  const opLabel: Record<string, string> = {
+                    Equals: 'is exactly', Greater: 'is greater than', GreaterThanEqual: 'is at least',
+                    Less: 'is less than', LessThanEqual: 'is at most', Between: 'is between'
+                  };
+                  const sentence = op === 'Between' && v2
+                    ? `Component applies when ${onLabel} ${opLabel[op] || op} ${fmt(v1)} and ${fmt(v2)}`
+                    : `Component applies when ${onLabel} ${opLabel[op] || op} ${fmt(v1)}`;
+                  return (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-300 text-[11px] font-semibold">
+                      <span className="text-sm">→</span>
+                      <span>{sentence}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* Helper when no condition selected */}
+                {(!compForm.conditionOn || compForm.conditionOn === 'Choose') && (
+                  <p className="text-[10px] text-muted-foreground italic">
+                    No condition set — this component applies to all eligible employees. Use a condition to restrict it based on salary or attendance thresholds.
+                  </p>
+                )}
               </div>
             )}
           </div>
 
-          {/* 3. Employment Setting Accordion (Collapsible bar matching Hoshi HRMS 1:1) */}
+          {/* 3. Employment Setting Accordion */}
+          {(() => {
+            // Active filter summary for accordion header badge
+            const parts: string[] = [];
+            const gf = compForm.genderFilter;
+            if (gf && gf !== 'All') parts.push(gf);
+            if (compForm.grades.length > 0) parts.push(`${compForm.grades.length} Grade${compForm.grades.length > 1 ? 's' : ''}`);
+            if (compForm.departments.length > 0) parts.push(`${compForm.departments.length} Dept${compForm.departments.length > 1 ? 's' : ''}`);
+            if (compForm.locations.length > 0) parts.push(`${compForm.locations.length} Location${compForm.locations.length > 1 ? 's' : ''}`);
+            if (compForm.employees.length > 0) parts.push(`${compForm.employees.length} Emp${compForm.employees.length > 1 ? 's' : ''}`);
+            if (compForm.months.length > 0 && compForm.months.length < 12) parts.push(`${compForm.months.length} Month${compForm.months.length > 1 ? 's' : ''}`);
+            return (
           <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-2xs">
             <button
               type="button"
@@ -1978,12 +1915,40 @@ export const MasterPayrollComponents: React.FC = () => {
               <div className="flex items-center gap-1.5 text-primary">
                 <User className="w-3.5 h-3.5" />
                 <span className="font-semibold text-xs">Employment Setting</span>
+                {parts.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-primary/10 text-primary rounded-full border border-primary/20">
+                    {parts.join(' • ')}
+                  </span>
+                )}
               </div>
               {isEmploymentOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
             </button>
 
             {isEmploymentOpen && (
               <div className="p-4 space-y-3.5 border-t border-border/60 bg-muted/5 text-xs animate-in fade-in duration-150">
+
+                {/* Gender — moved here from Condition Setting */}
+                <div>
+                  <label className="text-[11px] font-bold text-foreground block mb-1.5">Gender Eligibility</label>
+                  <p className="text-[10px] text-muted-foreground mb-1.5">One component covers all genders — no duplicate needed.</p>
+                  <div className="flex items-center gap-2">
+                    {(['All', 'Male', 'Female'] as const).map(g => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setCompForm({ ...compForm, genderFilter: g })}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          compForm.genderFilter?.toLowerCase() === g.toLowerCase()
+                            ? 'bg-primary text-primary-foreground shadow-2xs'
+                            : 'bg-muted/50 hover:bg-muted text-muted-foreground border border-border/60'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* 1. [+] Grade Filter Box */}
                 <div className="border border-border/80 rounded-lg overflow-hidden bg-background">
                   <div
@@ -2199,27 +2164,93 @@ export const MasterPayrollComponents: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* 5. [+] Months Filter — moved from Condition Setting */}
+                <div className="border border-border/80 rounded-lg overflow-hidden bg-background">
+                  <div
+                    onClick={() => setIsMonthFilterOpen(!isMonthFilterOpen)}
+                    className="p-2.5 bg-muted/30 hover:bg-muted/50 text-foreground font-semibold flex items-center justify-between cursor-pointer transition-colors"
+                  >
+                    <span>{isMonthFilterOpen ? '[-] Applicable Months' : '[+] Applicable Months'}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {compForm.months.length === 0 ? 'All Months' : `${compForm.months.length} selected`}
+                    </span>
+                  </div>
+
+                  {isMonthFilterOpen && (
+                    <div className="p-3 border-t border-border/60 space-y-2 max-h-48 overflow-y-auto">
+                      <label className="flex items-center gap-2 font-bold cursor-pointer pb-1.5 border-b border-border/40">
+                        <input
+                          type="checkbox"
+                          checked={compForm.months.length === monthOptions.length && monthOptions.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) setCompForm({ ...compForm, months: [...monthOptions] });
+                            else setCompForm({ ...compForm, months: [] });
+                          }}
+                          className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
+                        />
+                        <span>Select All (component runs every month)</span>
+                      </label>
+
+                      <div className="grid grid-cols-3 gap-1">
+                        {monthOptions.map(month => {
+                          const isChecked = compForm.months.includes(month);
+                          return (
+                            <label key={month} className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) setCompForm({ ...compForm, months: compForm.months.filter(x => x !== month) });
+                                  else setCompForm({ ...compForm, months: [...compForm.months, month] });
+                                }}
+                                className="w-3.5 h-3.5 rounded border-input text-primary accent-primary"
+                              />
+                              <span>{month.slice(0, 3)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
           </div>
+          );
+          })()}
 
-          {/* Bottom Action Buttons: Update (Left) & Cancel (Right) */}
-          <div className="flex items-center justify-between pt-2">
+          {/* Bottom Action Buttons: Save/Update (Left), Delete (Middle if editing) & Cancel (Right) */}
+          <div className="flex items-center justify-between pt-3 border-t border-border/70">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={handleSaveComponent}
+                disabled={savingComp}
+                className="h-9 px-5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              >
+                {selectedComponentId ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                {selectedComponentId ? 'Update Component' : 'Save Component'}
+              </Button>
+
+              {selectedComponentId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleDeleteComponent(selectedComponentId, compForm.name || 'Component')}
+                  className="h-9 px-3.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </Button>
+              )}
+            </div>
+
             <Button
               type="button"
-              onClick={handleSaveComponent}
-              disabled={savingComp}
-              className="h-9 px-6 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              {selectedComponentId ? 'Update' : 'Save'}
-            </Button>
-
-            <Button
-              type="button"
-              variant="destructive"
+              variant="outline"
               onClick={handleCancelComponentForm}
-              className="h-9 px-6 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg flex items-center gap-1.5 shadow-2xs cursor-pointer"
+              className="h-9 px-4 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-lg flex items-center gap-1.5 cursor-pointer"
             >
               <X className="w-3.5 h-3.5" /> Cancel
             </Button>
@@ -2323,7 +2354,7 @@ export const MasterPayrollComponents: React.FC = () => {
                               </Badge>
                             </td>
                             <td className="py-3 px-4 font-medium text-foreground">
-                              {log.updatedByName || log.updated_by_name || 'Harsh Gawali'}
+                              {log.updatedByName || log.updated_by_name || '—'}
                             </td>
                             <td className="py-3 px-4 text-muted-foreground font-mono text-[11px]">
                               {(() => {

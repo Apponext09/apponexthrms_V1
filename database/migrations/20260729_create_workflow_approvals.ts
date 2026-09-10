@@ -5,7 +5,7 @@ export async function up(knex: Knex): Promise<void> {
   if (!hasTable) {
     await knex.schema.createTable('workflow_approvals', (table) => {
       table.increments('id').primary();
-      table.uuid('uuid').defaultTo(knex.raw('(UUID())')).unique().notNullable();
+      table.uuid('uuid').notNullable().unique();
       table.integer('organization_id').notNullable();
 
       table.string('module_type').notNullable(); // 'Leave', 'Asset', 'Shift Swap', 'Loan'

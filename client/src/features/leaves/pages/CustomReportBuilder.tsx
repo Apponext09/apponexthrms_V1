@@ -409,9 +409,13 @@ export function CustomReportBuilder() {
                   className="w-full h-9 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"
                 >
                   <option value="">All Categories</option>
-                  {leaveTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.leave_name} ({t.leave_code})</option>
-                  ))}
+                  {leaveTypes.map(t => {
+                    const name = t.leave_name || (t as any).leaveName || (t as any).name || 'Leave Category';
+                    const code = t.leave_code || (t as any).leaveCode || (t as any).code || '';
+                    return (
+                      <option key={t.id} value={t.id}>{name} {code ? `(${code})` : ''}</option>
+                    );
+                  })}
                 </select>
               </div>
 

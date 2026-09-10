@@ -53,8 +53,8 @@ export class NotificationRepository extends BaseRepository<Notification> {
     }
     const isSuperOrAdmin = userRoles.includes('organization_admin') || 
                            userRoles.includes('super_admin') || 
-                           userRoles.includes('hr_admin') ||
                            userRoles.includes('hr') ||
+                           userRoles.includes('hr_admin') ||
                            userRoles.includes('hr_manager');
 
     const page = Number(options?.page) || 1;
@@ -111,8 +111,8 @@ export class NotificationRepository extends BaseRepository<Notification> {
     }
     const isSuperOrAdmin = userRoles.includes('organization_admin') || 
                            userRoles.includes('super_admin') || 
-                           userRoles.includes('hr_admin') ||
                            userRoles.includes('hr') ||
+                           userRoles.includes('hr_admin') ||
                            userRoles.includes('hr_manager');
 
     const result = await this.query(ctx)

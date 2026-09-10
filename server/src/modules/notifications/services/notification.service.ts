@@ -169,7 +169,7 @@ export class NotificationService {
     if (!isRecipient) {
       // Allow if user is admin/hr manager
       const roles = user?.roles || [];
-      const isAdmin = roles.includes('organization_admin') || roles.includes('hr_manager') || user?.email === 'ajay@gmail.com';
+      const isAdmin = roles.includes('organization_admin') || roles.includes('hr') || roles.includes('hr_admin') || roles.includes('hr_manager');
       if (!isAdmin) {
         throw new ValidationError('Unauthorized');
       }
@@ -203,7 +203,7 @@ export class NotificationService {
 
     if (!isRecipient) {
       const roles = user?.roles || [];
-      const isAdmin = roles.includes('organization_admin') || roles.includes('hr_manager') || user?.email === 'ajay@gmail.com';
+      const isAdmin = roles.includes('organization_admin') || roles.includes('hr') || roles.includes('hr_admin') || roles.includes('hr_manager');
       if (!isAdmin) {
         throw new ValidationError('Unauthorized');
       }

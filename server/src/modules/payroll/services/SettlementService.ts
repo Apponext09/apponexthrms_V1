@@ -8,7 +8,7 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
-import { withSnakeAliases } from './PayrollService';
+import { withSnakeAliases } from '../utils/payroll.utils';
 
 interface CreateSettlementInput {
   employeeId: number;
@@ -88,23 +88,13 @@ export class SettlementService {
     const diffTime = Math.max(0, exitDate.getTime() - joiningDate.getTime());
     const tenureYears = Math.round((diffTime / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
 
-    // 2. Fetch Employee Basic Salary — must read the CURRENT active structure
-    //    mapping (employee_salary_structures.is_current), the same pattern
-    //    PayrollService and SalaryRevisionService use. This was instead
-    //    reading the legacy salary_structures table directly by employee_id
-    //    (a stale/duplicate path), and if nothing turned up there, it
-    //    fabricated a flat ₹35,000 and paid gratuity/encashment on it as if
-    //    it were real — a fake number silently becoming real money.
+    // 2. Fetch Employee Basic Salary — reads salary_structures directly by employee_id.
+
     const dataWarnings: string[] = [];
     let basicMonthly = 0;
-    const structMapping = await db('employee_salary_structures as ess')
-      .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-      .where({ 'ess.employee_id': empId, 'ess.is_current': true })
-      .whereNull('ess.deleted_at')
-      .select('ss.*')
-      .first()
-      .catch(() => null);
-    const struct = withSnakeAliases(structMapping || await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').orderBy('id', 'desc').first().catch(() => null));
+    const struct = withSnakeAliases(
+      await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').orderBy('id', 'desc').first().catch(() => null));
+
 
     if (struct && Number(struct.basic_monthly) > 0) {
       basicMonthly = Number(struct.basic_monthly);
@@ -150,6 +140,15 @@ export class SettlementService {
 
       if (encashmentPolicy && encashmentPolicy.formula) {
         const fStr = String(encashmentPolicy.formula).trim();
+        // grossMonthly derived from the resolved salary structure. If the structure
+        // has a gross_monthly field use it; otherwise reconstruct from basic + hra +
+        // special_allowance. Falls back to basicMonthly * 2 (50/50 split assumption)
+        // only if no structure data is available at all.
+        const grossMonthly = Number(struct?.gross_monthly) ||
+          (Number(struct?.basic_monthly || 0) +
+           Number(struct?.hra_monthly || 0) +
+           Number(struct?.special_allowance_monthly || 0)) ||
+          basicMonthly * 2;
         let evalStr = fStr
           .replace(/\bBasic\b|\bbasic_monthly\b/gi, String(basicMonthly))
           .replace(/\bDA\b|\bda_monthly\b/gi, String(struct?.da_monthly || 0))
@@ -391,7 +390,10 @@ export class SettlementService {
         }
       }
 
-      const activeOrgId = (ctx?.organizationId && Number(ctx.organizationId) > 0) ? Number(ctx.organizationId) : 68;
+      if (!ctx?.organizationId || Number(ctx.organizationId) <= 0) {
+        throw new Error('No tenant context — cannot list settlements');
+      }
+      const activeOrgId = Number(ctx.organizationId);
       let query = db(tableName)
         .leftJoin('employees', `${tableName}.employee_id`, 'employees.id')
         .where(`${tableName}.organization_id`, activeOrgId);

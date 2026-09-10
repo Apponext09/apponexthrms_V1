@@ -48,9 +48,9 @@ router.get('/structures/mass-upload-log', asyncHandler((req, res) => controller.
 router.post('/slabs', requirePermission('structure:create'), asyncHandler((req, res) => controller.createSlab(req, res)));
 router.put('/slabs/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateSlab(req, res)));
 router.delete('/slabs/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteSlab(req, res)));
-router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, res)));
+router.get('/stats', requirePermission('payroll:view'), asyncHandler((req, res) => controller.getPayrollStats(req, res)));
 router.get('/manager-stats', asyncHandler((req, res) => controller.getManagerDeptStats(req, res)));
-router.get('/process-register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
+router.get('/process-register', requirePermission('payroll:view'), asyncHandler((req, res) => controller.getProcessRegister(req, res)));
 router.post('/process-register/override', requirePermission('payroll:process'), asyncHandler((req, res) => controller.saveProcessRegisterOverride(req, res)));
 router.post('/process-register/reset-override', requirePermission('payroll:process'), asyncHandler((req, res) => (controller as any).resetProcessRegisterOverride ? (controller as any).resetProcessRegisterOverride(req, res) : controller.saveProcessRegisterOverride(req, res)));
 router.patch('/run-employees/:id', requirePermission('payroll:process'), asyncHandler(async (req, res) => {
@@ -65,20 +65,20 @@ router.patch('/run-employees/:id', requirePermission('payroll:process'), asyncHa
   const row = await db('payroll_run_employees').where('id', id).first();
   res.json({ success: true, data: row });
 }));
-router.get('/runs', asyncHandler((req, res) => controller.listPayrolls(req, res)));
-router.get('/runs/:id/register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
+router.get('/runs', requirePermission('payroll:view'), asyncHandler((req, res) => controller.listPayrolls(req, res)));
+router.get('/runs/:id/register', requirePermission('payroll:view'), asyncHandler((req, res) => controller.getProcessRegister(req, res)));
 router.post('/', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.generatePayroll(req, res)));
-router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
-router.get('/:id/status', asyncHandler((req, res) => controller.getPayrollStatus(req, res)));
+router.get('/', requirePermission('payroll:view'), asyncHandler((req, res) => controller.listPayrolls(req, res)));
+router.get('/:id/status', requirePermission('payroll:view'), asyncHandler((req, res) => controller.getPayrollStatus(req, res)));
 
 router.post('/:id/process', requirePermission('payroll:process'), asyncHandler((req, res) => controller.processPayroll(req, res)));
-router.get('/:id/reconciliation', asyncHandler((req, res) => controller.getReconciliation(req, res)));
+router.get('/:id/reconciliation', requirePermission('payroll:view'), asyncHandler((req, res) => controller.getReconciliation(req, res)));
 router.post('/:id/lock', requirePermission('payroll:lock'), asyncHandler((req, res) => controller.lockPayroll(req, res)));
 router.post('/:id/unlock', requirePermission('payroll:unlock'), asyncHandler((req, res) => controller.unlockPayroll(req, res)));
 router.post('/:id/approve', requirePermission('payroll:approve'), asyncHandler((req, res) => controller.approvePayroll(req, res)));
 router.post('/:id/publish', requirePermission('payroll:publish'), asyncHandler((req, res) => controller.publishPayroll(req, res)));
-router.get('/:id/bank-transfer', asyncHandler((req, res) => controller.exportBankTransfer(req, res)));
-router.get('/:id/compliance', asyncHandler((req, res) => controller.exportCompliance(req, res)));
+router.get('/:id/bank-transfer', requirePermission('payroll:view'), asyncHandler((req, res) => controller.exportBankTransfer(req, res)));
+router.get('/:id/compliance', requirePermission('payroll:view'), asyncHandler((req, res) => controller.exportCompliance(req, res)));
 
 // Payslips
 router.get('/payslips', asyncHandler((req, res) => controller.getPayslips(req, res)));
@@ -90,7 +90,7 @@ router.post('/payslips/:id/send', requirePermission('payslip:send'), asyncHandle
 router.post('/payslips/:id/lock', requirePermission('payslip:lock'), asyncHandler((req, res) => controller.lockPayslip(req, res)));
 
 // Approvals
-router.get('/approvals', asyncHandler((req, res) => controller.getPendingApprovals(req, res)));
+router.get('/approvals', requirePermission('payroll:approve'), asyncHandler((req, res) => controller.getPendingApprovals(req, res)));
 router.post('/approvals/:id/approve', requirePermission('payroll:approve'), asyncHandler((req, res) => controller.approvePayroll(req, res)));
 
 // Full & Final Settlements — static sub-routes MUST be before /:id parameterized routes
@@ -105,8 +105,8 @@ router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStr
 router.put('/salary-structure/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateStructure(req, res)));
 router.delete('/salary-structure/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteStructure(req, res)));
 
-router.get('/structures', asyncHandler((req, res) => controller.listStructures(req, res)));
-router.get('/structures/mappings', asyncHandler((req, res) => controller.listEmployeeMappings(req, res)));
+router.get('/structures', requirePermission('structure:view'), asyncHandler((req, res) => controller.listStructures(req, res)));
+router.get('/structures/mappings', requirePermission('structure:view'), asyncHandler((req, res) => controller.listEmployeeMappings(req, res)));
 router.post('/structures/assign', requirePermission('structure:assign'), asyncHandler((req, res) => controller.assignStructureToEmployee(req, res)));
 router.post('/structures', requirePermission('structure:create'), asyncHandler((req, res) => controller.createStructure(req, res) as any));
 router.get('/structures/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
@@ -114,12 +114,12 @@ router.put('/structures/:id', requirePermission('structure:edit'), asyncHandler(
 router.delete('/structures/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteStructure(req, res)));
 
 // Salary Revisions
-router.get('/salary-revisions', asyncHandler((req, res) => controller.listSalaryRevisions(req, res)));
+router.get('/salary-revisions', requirePermission('revision:view'), asyncHandler((req, res) => controller.listSalaryRevisions(req, res)));
 router.post('/salary-revisions', asyncHandler((req, res) => controller.createSalaryRevision(req, res)));
-router.put('/salary-revisions/:id/approve', asyncHandler((req, res) => controller.approveSalaryRevision(req, res)));
-router.put('/salary-revisions/:id/reject', asyncHandler((req, res) => controller.rejectRevision(req, res)));
+router.put('/salary-revisions/:id/approve', requirePermission('revision:approve'), asyncHandler((req, res) => controller.approveSalaryRevision(req, res)));
+router.put('/salary-revisions/:id/reject', requirePermission('revision:approve'), asyncHandler((req, res) => controller.rejectRevision(req, res)));
 router.post('/revisions', requirePermission('revision:request'), asyncHandler((req, res) => controller.requestRevision(req, res)));
-router.get('/revisions', asyncHandler((req, res) => controller.getRevisions(req, res)));
+router.get('/revisions', requirePermission('revision:view'), asyncHandler((req, res) => controller.getRevisions(req, res)));
 router.post('/revisions/:id/submit', requirePermission('revision:submit'), asyncHandler((req, res) => controller.submitRevisionForApproval(req, res)));
 router.post('/revisions/:id/approve', requirePermission('revision:approve'), asyncHandler((req, res) => controller.approveRevision(req, res)));
 router.post('/revisions/:id/reject', requirePermission('revision:approve'), asyncHandler((req, res) => controller.rejectRevision(req, res)));
@@ -149,7 +149,7 @@ router.get('/settlements/team', asyncHandler((req, res) => controller.getTeamSet
 router.get('/settlements/exit-requests', asyncHandler((req, res) => controller.getPendingExitRequests(req, res)));
 router.post('/settlements/exit-request', asyncHandler((req, res) => controller.submitExitRequest(req, res)));
 router.post('/settlements', requirePermission('settlement:create'), asyncHandler((req, res) => controller.createSettlement(req, res)));
-router.get('/settlements', asyncHandler((req, res) => controller.getSettlements(req, res)));
+router.get('/settlements', requirePermission('settlement:view'), asyncHandler((req, res) => controller.getSettlements(req, res)));
 router.get('/settlements/:id', asyncHandler((req, res) => controller.getSettlement(req, res)));
 router.post('/settlements/:id/calculate', requirePermission('settlement:calculate'), asyncHandler((req, res) => controller.calculateSettlement(req, res)));
 router.post('/settlements/:id/submit', requirePermission('settlement:submit'), asyncHandler((req, res) => controller.submitSettlementForApproval(req, res)));
@@ -188,7 +188,7 @@ router.post('/reimbursements/:id/reject', asyncHandler((req, res) => controller.
 router.put('/reimbursements/:id/reject', asyncHandler((req, res) => controller.rejectReimbursement(req, res)));
 
 // Financial Ledger
-router.get('/ledger', asyncHandler((req, res) => controller.getLedgerEntries(req, res)));
+router.get('/ledger', requirePermission('payroll:view'), asyncHandler((req, res) => controller.getLedgerEntries(req, res)));
 
 // Integrations (Leave Engine)
 router.get('/is-locked', asyncHandler((req, res) => controller.isLocked(req, res)));

@@ -36,10 +36,7 @@ export class ReimbursementService {
         .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
         .leftJoin('roles as r', 'ur.role_id', 'r.id')
         .where('u.organization_id', ctx.organizationId)
-        .where(function () {
-          this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
-            .orWhere('u.email', 'ajay@gmail.com');
-        })
+        .whereIn('r.code', ['organization_admin', 'super_admin', 'finance', 'finance_manager'])
         .whereNull('u.deleted_at')
         .select('u.id')
         .distinct();
@@ -86,7 +83,7 @@ export class ReimbursementService {
           .pluck('roles.code')
           .catch(() => []);
 
-        const isPrivileged = roles.some((r: string) => ['organization_admin', 'super_admin', 'admin', 'hr_manager', 'finance', 'finance_manager', 'department_head'].includes(r)) || user.email === 'ajay@gmail.com';
+        const isPrivileged = roles.some((r: string) => ['organization_admin', 'super_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'finance', 'finance_manager', 'department_head'].includes(r));
 
         if (!isPrivileged) {
           const emp = user.employee_id

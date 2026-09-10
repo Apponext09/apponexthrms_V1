@@ -26,66 +26,127 @@ export default function OrgChartPage() {
   const fetchOrgHierarchy = async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get('/employees', { params: { pageSize: 100, excludeCeo: true } });
-      const rawItems = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+      const res = await apiClient.get('/employees', { params: { pageSize: 500 } });
+      const rawItems: any[] = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
 
-      // Exclude CEO profile from chart nodes using database flags (isCeo, isCeoProfileHidden)
-      const items = rawItems.filter((e: any) => {
-        const isCeoFlag = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
-        const isHiddenFlag = Boolean(e.isCeoProfileHidden || e.is_ceo_profile_hidden || e.isCeoProfileHidden === 1 || e.is_ceo_profile_hidden === 1);
-        return !isCeoFlag && !isHiddenFlag;
-      });
+      if (rawItems.length > 0) {
+        // 1. Resolve CEO
+        const ceoEmp = rawItems.find((e: any) => {
+          const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+          const role = (e.accessRole || e.role || '').toLowerCase().trim();
+          const desig = (e.designation || e.jobTitle || '').toLowerCase().trim();
+          return isCeo || role === 'ceo' || desig === 'ceo' || desig.includes('chief executive');
+        });
 
-      if (items.length > 0) {
-        // Group employees by department
+        const activeList = rawItems.filter((e: any) => !ceoEmp || e.id !== ceoEmp.id);
+
+        const getCxoCat = (e: any): 'cfo' | 'coo' | 'cto' | 'cxo' | null => {
+          const role = (e.accessRole || e.role || '').toLowerCase().trim();
+          const desig = (e.designation || e.jobTitle || '').toLowerCase().trim();
+          if (role === 'cfo' || desig === 'cfo' || desig.includes('chief financial') || desig.includes('finance head')) return 'cfo';
+          if (role === 'coo' || desig === 'coo' || desig.includes('chief operating') || desig.includes('operations head')) return 'coo';
+          if (role === 'cto' || desig === 'cto' || desig.includes('chief technology') || desig.includes('tech head') || desig.includes('head of engineering')) return 'cto';
+          if (role === 'cxo' || desig.startsWith('chief ') || desig.includes('c-level')) return 'cxo';
+          return null;
+        };
+
+        const cxoList = activeList.filter((e) => getCxoCat(e) !== null);
+        const nonCxoList = activeList.filter((e) => getCxoCat(e) === null);
+
+        // Group non-CXO employees by department
         const deptMap = new Map<string, any[]>();
-        items.forEach((e: any) => {
+        nonCxoList.forEach((e: any) => {
           const deptName = e.department || e.department_name || e.departmentName || 'General Operations';
-          if (!deptMap.has(deptName)) {
-            deptMap.set(deptName, []);
-          }
+          if (!deptMap.has(deptName)) deptMap.set(deptName, []);
           deptMap.get(deptName)!.push(e);
         });
 
-        const deptNodes: EmployeeNode[] = [];
+        const buildDeptNode = (deptName: string, empList: any[]): EmployeeNode => {
+          const lead = empList.find((e: any) => ['department_head', 'hr_manager', 'manager'].includes((e.accessRole || '').toLowerCase())) || empList[0];
+          const members = empList.filter((e: any) => e.id !== lead.id);
 
-        deptMap.forEach((empList, deptName) => {
-          const lead = empList[0];
-          const members = empList.slice(1);
-
-          const leadNode: EmployeeNode = {
+          return {
             id: lead.id,
             name: `${lead.firstName || lead.first_name || 'Lead'} ${lead.lastName || lead.last_name || ''}`.trim(),
             role: lead.designation || lead.designation_name || lead.jobTitle || `${deptName} Head`,
             department: deptName,
             email: lead.email || '',
-            avatar: `${(lead.firstName || lead.first_name || 'D')[0]}${(lead.lastName || lead.last_name || 'L')[0]}`.toUpperCase(),
+            avatar: `${(lead.firstName || lead.first_name || 'D')[0] || ''}${(lead.lastName || lead.last_name || 'L')[0] || ''}`.toUpperCase(),
             children: members.map((m: any) => ({
               id: m.id,
               name: `${m.firstName || m.first_name || 'Member'} ${m.lastName || m.last_name || ''}`.trim(),
               role: m.designation || m.designation_name || m.jobTitle || 'Team Member',
               department: deptName,
               email: m.email || '',
-              avatar: `${(m.firstName || m.first_name || 'M')[0]}${(m.lastName || m.last_name || 'T')[0]}`.toUpperCase(),
+              avatar: `${(m.firstName || m.first_name || 'M')[0] || ''}${(m.lastName || m.last_name || 'T')[0] || ''}`.toUpperCase(),
             })),
           };
-
-          deptNodes.push(leadNode);
-        });
-
-        const root: EmployeeNode = {
-          id: 9999,
-          name: 'Departmental & Operational Hierarchy',
-          role: 'Organization Structure',
-          department: 'Active Departments',
-          email: '',
-          avatar: 'OH',
-          children: deptNodes,
         };
 
-        setTreeData(root);
-        const expanded: Record<string, boolean> = { 'Departmental & Operational Hierarchy': true };
-        deptNodes.forEach((n) => { expanded[n.name] = true; });
+        // Attach departments to their respective CXO by assigned department or direct reports
+        const claimedDepts = new Set<string>();
+        const cxoOrderMap: Record<string, number> = { cfo: 1, coo: 2, cto: 3, cxo: 4 };
+        const sortedCxos = [...cxoList].sort((a, b) => {
+          const ordA = cxoOrderMap[getCxoCat(a) || 'cxo'] || 99;
+          const ordB = cxoOrderMap[getCxoCat(b) || 'cxo'] || 99;
+          return ordA - ordB;
+        });
+
+        const cxoNodes: EmployeeNode[] = sortedCxos.map((cxo) => {
+          const cxoDept = cxo.department || cxo.departmentName || '';
+          const matchingDepts: string[] = [];
+
+          if (cxoDept && deptMap.has(cxoDept) && !claimedDepts.has(cxoDept)) {
+            matchingDepts.push(cxoDept);
+            claimedDepts.add(cxoDept);
+          }
+
+          // Find other departments whose lead reports to this CXO
+          deptMap.forEach((emps, dName) => {
+            if (!claimedDepts.has(dName)) {
+              const reportsToCxo = emps.some((e) => e.reportingManagerId === cxo.id);
+              if (reportsToCxo) {
+                matchingDepts.push(dName);
+                claimedDepts.add(dName);
+              }
+            }
+          });
+
+          const deptChildren = matchingDepts.map((dName) => buildDeptNode(dName, deptMap.get(dName)!));
+
+          return {
+            id: cxo.id,
+            name: `${cxo.firstName || ''} ${cxo.lastName || ''}`.trim() || 'Executive',
+            role: cxo.designation || cxo.jobTitle || (getCxoCat(cxo)?.toUpperCase() ?? 'CXO'),
+            department: cxoDept || 'C-Suite Executive',
+            email: cxo.email || '',
+            avatar: `${(cxo.firstName || 'C')[0] || ''}${(cxo.lastName || 'X')[0] || ''}`.toUpperCase(),
+            children: deptChildren,
+          };
+        });
+
+        // Remaining departments not assigned to CXO
+        const unassignedDeptNodes: EmployeeNode[] = [];
+        deptMap.forEach((emps, dName) => {
+          if (!claimedDepts.has(dName)) {
+            unassignedDeptNodes.push(buildDeptNode(dName, emps));
+          }
+        });
+
+        const rootCeoNode: EmployeeNode = {
+          id: ceoEmp?.id || 9999,
+          name: ceoEmp ? `${ceoEmp.firstName || ''} ${ceoEmp.lastName || ''}`.trim() : 'Chief Executive Officer',
+          role: 'CHIEF EXECUTIVE OFFICER (CEO)',
+          department: ceoEmp?.department || 'Executive Management',
+          email: ceoEmp?.email || '',
+          avatar: 'CEO',
+          children: [...cxoNodes, ...unassignedDeptNodes],
+        };
+
+        setTreeData(rootCeoNode);
+        const expanded: Record<string, boolean> = { [rootCeoNode.name]: true };
+        cxoNodes.forEach((n) => { expanded[n.name] = true; });
+        unassignedDeptNodes.forEach((n) => { expanded[n.name] = true; });
         setExpandedNodes(expanded);
       }
     } catch (err) {

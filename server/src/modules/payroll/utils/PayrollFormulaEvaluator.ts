@@ -123,8 +123,11 @@ export class PayrollFormulaEvaluator {
       }
     }
 
-    // 2. Pre-process bracket notation: e.g. [CTC], [Basic], [Basic Salary], [House Rent Allowance], [Conveyance Allowance]
+    // 2. Pre-process bracket notation: e.g. [CTC], [Basic], [CTC / 12], [ALLOWANCE * 100 / CTC]
     expr = expr.replace(/\[\s*([^\]]+?)\s*\]/g, (match, innerKey) => {
+      if (/[\+\-\*\/%^]/.test(innerKey)) {
+        return `(${innerKey})`;
+      }
       const normInner = this.normalizeKey(innerKey);
       if (lookup[normInner] !== undefined) {
         return String(lookup[normInner]);

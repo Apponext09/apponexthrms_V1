@@ -89,10 +89,6 @@ async function start() {
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
-
-      // Repair super_admin hash in background — does NOT block server startup
-      repairSuperAdminHashIfNeeded();
-
       // Start automatic Leave & Comp-off Expiry Scheduler (runs every 12 hours)
       const expiryJobService = new LeaveExpiryJobService();
       // Run once immediately on start after 5 seconds

@@ -277,7 +277,7 @@ export class LifecycleService {
       .leftJoin('roles as r', 'ur.role_id', 'r.id')
       .where('u.organization_id', ctx.organizationId)
       .where(function() {
-        this.whereIn('r.code', ['organization_admin', 'super_admin', 'admin', 'hr_admin'])
+        this.whereIn('r.code', ['organization_admin', 'super_admin', 'admin', 'hr', 'hr_admin'])
           .orWhere('u.email', 'like', '%admin%')
           .orWhere('u.email', 'harsh@gmail.com');
       })
@@ -555,7 +555,7 @@ export class LifecycleService {
       .leftJoin('roles as r', 'ur.role_id', 'r.id')
       .where('u.organization_id', ctx.organizationId || 1)
       .where(function() {
-        this.whereIn('r.code', ['organization_admin', 'super_admin', 'admin', 'hr_admin'])
+        this.whereIn('r.code', ['organization_admin', 'super_admin', 'admin', 'hr', 'hr_admin'])
           .orWhere('u.email', 'like', '%admin%')
           .orWhere('u.email', 'harsh@gmail.com');
       })

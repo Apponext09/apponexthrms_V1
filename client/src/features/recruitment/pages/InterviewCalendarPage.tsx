@@ -31,10 +31,11 @@ export const InterviewCalendarPage: React.FC = () => {
   const userRoles = Array.isArray(user?.roles) ? user.roles : [];
 
   const isAdminOrHr = userRole === 'organization_admin' ||
-    userRole === 'hr_manager' ||
-    userRole === 'admin' ||
     userRole === 'hr' ||
+    userRole === 'admin' ||
     userRoles.includes('organization_admin') ||
+    userRoles.includes('hr') ||
+    userRoles.includes('hr_admin') ||
     userRoles.includes('hr_manager');
 
   const isEmployeeView = !isAdminOrHr || location.pathname.startsWith('/employee');

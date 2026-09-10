@@ -494,7 +494,7 @@ export function AdminConfigurationPage() {
                       className="h-9 border rounded-xl px-3 text-xs font-bold bg-background font-sans"
                     >
                       <option value="organization_admin">Admin (Organization Admin)</option>
-                      <option value="hr_admin">HR Admin / HR Manager</option>
+                      <option value="hr">HR</option>
                       <option value="department_head">Department Manager</option>
                       <option value="team_lead">Team Lead</option>
                       <option value="employee">Self-Service Employee</option>

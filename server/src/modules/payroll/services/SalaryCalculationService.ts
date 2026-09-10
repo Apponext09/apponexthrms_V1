@@ -7,6 +7,7 @@
  */
 
 import { getKnex } from '../../../db/knex';
+import { requireOrgId } from '../utils/payroll.utils';
 import { withSnakeAliases, positiveNum } from '../utils/payroll.utils';
 import { PayrollFormulaEvaluator, FormulaContext } from '../utils/PayrollFormulaEvaluator';
 
@@ -92,8 +93,8 @@ export class SalaryCalculationService {
       }
     }
 
-    // 3. Attendance LOP Factor for attendance-linked value components
-    if (basedOnAttendance && type === 'Value' && lopFactor < 1) {
+    // 3. Attendance LOP Factor for attendance-linked components
+    if (basedOnAttendance && lopFactor < 1) {
       computedValue = Math.round(computedValue * lopFactor);
     }
 
@@ -123,8 +124,7 @@ export class SalaryCalculationService {
     }
   ) {
     const service = new SalaryCalculationService();
-    const firstOrg = await getKnex()('organizations').first().catch(() => null);
-    const orgId = Number(ctx?.organizationId || firstOrg?.id || 1);
+    const orgId = requireOrgId(ctx);
     return service.calculateDynamicSalaryStructure({
       orgId,
       companyId: ctx?.companyId,
@@ -145,6 +145,9 @@ export class SalaryCalculationService {
     slabId?: number | null;
     cycleId?: number | null;
     effectiveFrom?: string;
+    presentDays?: number;
+    totalDays?: number;
+    attendanceFactor?: number;
   }) {
     const db = getKnex();
     const annualCtc = Number(params.ctc || (params.grossMonthly ? params.grossMonthly * 12 : 0));
@@ -197,6 +200,33 @@ export class SalaryCalculationService {
       if (defaultCycle) cycleId = defaultCycle.id;
     }
 
+    // 2b. Resolve Payroll Policy & Cycle Working Days — used for working-day basis & LOP formula
+    const policy = await db('payroll_policies')
+      .where('organization_id', params.orgId)
+      .whereNull('deleted_at')
+      .first()
+      .catch(() => null);
+    // fixed_working_days from policy (e.g. 26), fallback to 30 (calendar month)
+    const policyWorkingDays = policy?.fixed_working_days ? Number(policy.fixed_working_days) : 30;
+    const lopFormula: string = policy?.lop_deduction_formula || 'gross_divided_by_days';
+
+    // Prefer cycle's total_days_calc / frequency over policy default so CTC preview matches actual batch run
+    let cycleWorkingDays = policyWorkingDays;
+    if (cycleId) {
+      const cycleRow = await db('payroll_cycles').where('id', cycleId).whereNull('deleted_at').first().catch(() => null);
+      if (cycleRow) {
+        if (cycleRow.total_days_calc && !isNaN(Number(cycleRow.total_days_calc)) && Number(cycleRow.total_days_calc) > 0) {
+          cycleWorkingDays = Number(cycleRow.total_days_calc);
+        } else if (cycleRow.frequency === 'Weekly') {
+          cycleWorkingDays = 7;
+        } else if (cycleRow.frequency === 'Bi-Weekly' || cycleRow.frequency === 'Fortnightly') {
+          cycleWorkingDays = 14;
+        } else if (cycleRow.frequency === 'Semi-Monthly') {
+          cycleWorkingDays = 15;
+        }
+      }
+    }
+
     // 3. Resolve Selected Components
     let selectedComponentIds: string[] = [];
     if (slab?.selected_component_ids) {
@@ -212,7 +242,9 @@ export class SalaryCalculationService {
     let componentsQuery = db('payroll_components as c')
       .leftJoin('payroll_component_groups as g', 'c.group_id', 'g.id')
       .select('c.*', 'g.category as group_category', 'g.name as group_name')
-      .where('c.organization_id', params.orgId);
+      .where('c.organization_id', params.orgId)
+      .where('c.is_active', 1)          // Skip inactive components
+      .whereNull('c.deleted_at');        // Skip soft-deleted components
 
     if (selectedComponentIds.length > 0) {
       componentsQuery = componentsQuery.whereIn('c.id', selectedComponentIds);
@@ -294,23 +326,44 @@ export class SalaryCalculationService {
     };
 
     // 4. Build Evaluation Context
+    const totalDays = Number(params.totalDays || cycleWorkingDays);
+    const presentDays = params.presentDays !== undefined ? Number(params.presentDays) : totalDays;
+    const attFactor = params.attendanceFactor !== undefined
+      ? Number(params.attendanceFactor)
+      : (totalDays > 0 ? presentDays / totalDays : 1);
+
     const evalContext: FormulaContext = {
       ctc: annualCtc,
       annual_ctc: annualCtc,
       monthly_ctc: grossMonthly,
       gross: grossMonthly,
       gross_salary: grossMonthly,
-      present_days: 30,
-      total_days: 30,
-      paid_days: 30,
-      attendance_factor: 1,
+      present_days: presentDays,
+      total_days: totalDays,
+      paid_days: presentDays,
+      attendance_factor: attFactor,
     };
 
     // Separate Earnings and Deductions
     const earningComponents: any[] = [];
     const deductionComponents: any[] = [];
 
+    // Effective date window check — both dates are optional.
+    // If set, the component is only included within its active date range.
+    const today = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const evalMonth = (params as any).month
+      ? String((params as any).month).slice(0, 10)
+      : today;
+
     for (const c of components) {
+      // Skip if effective_from_date is set and payroll month is before it
+      const effFrom = c.effective_from_date || c.effectiveFromDate;
+      if (effFrom && String(effFrom).slice(0, 10) > evalMonth) continue;
+
+      // Skip if effective_to_date is set and payroll month is after it
+      const effTo = c.effective_to_date || c.effectiveToDate;
+      if (effTo && String(effTo).slice(0, 10) < evalMonth) continue;
+
       if (!checkDemographicEligibility(c)) continue;
       const cat = (c.group_category || c.category || '').toLowerCase();
       if (cat.includes('deduct')) {
@@ -371,6 +424,11 @@ export class SalaryCalculationService {
       } else {
         basicAmount = Number(basicComp.amount || 0);
       }
+
+      const isBasicAttBased = Boolean(basicComp.based_on_attendance ?? basicComp.basedOnAttendance);
+      if (isBasicAttBased && attFactor < 1) {
+        basicAmount = Math.round(basicAmount * attFactor);
+      }
     }
 
     evalContext.basic = basicAmount;
@@ -389,60 +447,80 @@ export class SalaryCalculationService {
         type: basicComp.type || basicComp.component_type || 'Value',
         formula: getFormula(basicComp) || basicComp.formula || '',
         amount: basicAmount,
+        is_non_cashable: Boolean(basicComp.is_non_cashable ?? basicComp.non_cashable ?? basicComp.isNonCashable),
+        based_on_attendance: Boolean(basicComp.based_on_attendance ?? basicComp.basedOnAttendance),
       });
       allocatedEarnings += basicAmount;
     }
 
-    // 7. Evaluate Remaining Earning Components (Values & Multi-Tier Derived)
-    for (const c of earningComponents) {
+    // 7. Multi-pass evaluation for derived components to resolve cross-component dependencies
+    const otherEarningComps = earningComponents.filter((c: any) => {
       const nameLower = (c.name || '').toLowerCase();
-      if (nameLower.includes('basic') || nameLower.includes('special')) continue;
+      return !nameLower.includes('basic') && !nameLower.includes('special');
+    });
 
-      const compType = c.type || c.component_type || 'Value';
-      const formulaStr = getFormula(c);
-      let compAmount = 0;
+    const evaluatedEarningAmounts = new Map<string | number, number>();
 
-      if (formulaStr) {
-        compAmount = PayrollFormulaEvaluator.evaluate(formulaStr, evalContext);
-      } else if (compType === 'Value') {
-        compAmount = Number(c.amount || 0);
-      } else if (compType === 'Module') {
-        compAmount = Number(c.amount || 0);
-      }
+    // Up to 2 passes to resolve forward references (e.g. comp B referencing comp A)
+    for (let pass = 0; pass < 2; pass++) {
+      for (const c of otherEarningComps) {
+        const compType = c.type || c.component_type || 'Value';
+        const formulaStr = getFormula(c);
+        let compAmount = 0;
 
-      // Check condition & boundaries
-      const isEligible = PayrollFormulaEvaluator.checkCondition(
-        c.condition_on || c.conditionOn,
-        c.condition_operator || c.conditionOperator,
-        c.condition_value1 || c.conditionValue1,
-        c.condition_value2 || c.conditionValue2,
-        evalContext
-      );
+        if (formulaStr) {
+          compAmount = PayrollFormulaEvaluator.evaluate(formulaStr, evalContext);
+        } else if (compType === 'Value') {
+          compAmount = Number(c.amount || 0);
+        } else if (compType === 'Module') {
+          compAmount = Number(c.amount || 0);
+        }
 
-      if (!isEligible) {
-        compAmount = 0;
-      } else {
-        compAmount = PayrollFormulaEvaluator.applyBoundaries(
-          compAmount,
-          c.boundary_type || c.boundaryType,
-          Number(c.min_amount || c.minAmount || 0),
-          Number(c.max_amount || c.maxAmount || 0)
+        // Check condition & boundaries
+        const isEligible = PayrollFormulaEvaluator.checkCondition(
+          c.condition_on || c.conditionOn,
+          c.condition_operator || c.conditionOperator,
+          c.condition_value1 || c.conditionValue1,
+          c.condition_value2 || c.conditionValue2,
+          evalContext
         );
+
+        if (!isEligible) {
+          compAmount = 0;
+        } else {
+          compAmount = PayrollFormulaEvaluator.applyBoundaries(
+            compAmount,
+            c.boundary_type || c.boundaryType,
+            Number(c.min_amount || c.minAmount || 0),
+            Number(c.max_amount || c.maxAmount || 0)
+          );
+        }
+
+        const isAttBased = Boolean(c.based_on_attendance ?? c.basedOnAttendance);
+        if (isAttBased && attFactor < 1) {
+          compAmount = Math.round(compAmount * attFactor);
+        }
+
+        // Register into evaluation context so subsequent components can use it
+        const normKey = PayrollFormulaEvaluator.normalizeKey(c.name);
+        evalContext[normKey] = compAmount;
+        evalContext[c.name.toLowerCase()] = compAmount;
+        evaluatedEarningAmounts.set(c.id, compAmount);
       }
+    }
 
-      // Register into evaluation context so subsequent components can use it
-      const normKey = PayrollFormulaEvaluator.normalizeKey(c.name);
-      evalContext[normKey] = compAmount;
-      evalContext[c.name.toLowerCase()] = compAmount;
-
+    for (const c of otherEarningComps) {
+      const compAmount = evaluatedEarningAmounts.get(c.id) || 0;
       if (compAmount > 0) {
         earningsBreakup.push({
           component_id: c.id,
           code: c.name?.replace(/\s+/g, '_').toUpperCase() || `COMP_${c.id}`,
           name: c.name,
-          type: compType,
+          type: c.type || c.component_type || 'Value',
           formula: c.formula || '',
           amount: compAmount,
+          is_non_cashable: Boolean(c.is_non_cashable ?? c.non_cashable ?? c.isNonCashable),
+          based_on_attendance: Boolean(c.based_on_attendance ?? c.basedOnAttendance),
         });
         allocatedEarnings += compAmount;
       }
@@ -467,44 +545,60 @@ export class SalaryCalculationService {
       evalContext['special_allowance'] = specialAllowance;
     }
 
-    // 8. Evaluate Deductions
+    // 9. Evaluate Deductions (Multi-pass)
     const deductionsBreakup: any[] = [];
     let totalDeductions = 0;
     let pfAmount = 0;
     let esicAmount = 0;
     let ptAmount = 0;
 
-    for (const c of deductionComponents) {
-      const nameLower = (c.name || '').toLowerCase();
-      const compType = c.type || c.component_type || 'Value';
-      const formulaStr = getFormula(c);
-      let compAmount = 0;
+    const evaluatedDeductionAmounts = new Map<string | number, number>();
 
-      if (formulaStr) {
-        compAmount = PayrollFormulaEvaluator.evaluate(formulaStr, evalContext);
-      } else if (compType === 'Value') {
-        compAmount = Number(c.amount || 0);
-      } else if (compType === 'Derived' || compType === 'Formula') {
-        compAmount = Number(c.amount || 0);
-      }
+    for (let pass = 0; pass < 2; pass++) {
+      for (const c of deductionComponents) {
+        const compType = c.type || c.component_type || 'Value';
+        const formulaStr = getFormula(c);
+        let compAmount = 0;
 
-      // Check condition & boundaries
-      const isEligible = PayrollFormulaEvaluator.checkCondition(
-        c.condition_on || c.conditionOn,
-        c.condition_operator || c.conditionOperator,
-        c.condition_value1 || c.conditionValue1,
-        c.condition_value2 || c.conditionValue2,
-        evalContext
-      );
+        if (formulaStr) {
+          compAmount = PayrollFormulaEvaluator.evaluate(formulaStr, evalContext);
+        } else if (compType === 'Value') {
+          compAmount = Number(c.amount || 0);
+        } else if (compType === 'Derived' || compType === 'Formula') {
+          compAmount = Number(c.amount || 0);
+        }
 
-      if (isEligible && compAmount > 0) {
-        compAmount = PayrollFormulaEvaluator.applyBoundaries(
-          compAmount,
-          c.boundary_type || c.boundaryType,
-          Number(c.min_amount || c.minAmount || 0),
-          Number(c.max_amount || c.maxAmount || 0)
+        // Check condition & boundaries
+        const isEligible = PayrollFormulaEvaluator.checkCondition(
+          c.condition_on || c.conditionOn,
+          c.condition_operator || c.conditionOperator,
+          c.condition_value1 || c.conditionValue1,
+          c.condition_value2 || c.conditionValue2,
+          evalContext
         );
 
+        if (!isEligible) {
+          compAmount = 0;
+        } else {
+          compAmount = PayrollFormulaEvaluator.applyBoundaries(
+            compAmount,
+            c.boundary_type || c.boundaryType,
+            Number(c.min_amount || c.minAmount || 0),
+            Number(c.max_amount || c.maxAmount || 0)
+          );
+        }
+
+        const normKey = PayrollFormulaEvaluator.normalizeKey(c.name);
+        evalContext[normKey] = compAmount;
+        evalContext[c.name.toLowerCase()] = compAmount;
+        evaluatedDeductionAmounts.set(c.id, compAmount);
+      }
+    }
+
+    for (const c of deductionComponents) {
+      const nameLower = (c.name || '').toLowerCase();
+      const compAmount = evaluatedDeductionAmounts.get(c.id) || 0;
+      if (compAmount > 0) {
         if (nameLower.includes('pf') || nameLower.includes('provident')) pfAmount = compAmount;
         if (nameLower.includes('esic') || nameLower.includes('insurance')) esicAmount = compAmount;
         if (nameLower.includes('pt') || nameLower.includes('professional')) ptAmount = compAmount;
@@ -513,9 +607,11 @@ export class SalaryCalculationService {
           component_id: c.id,
           code: c.name?.replace(/\s+/g, '_').toUpperCase() || `DEDUCT_${c.id}`,
           name: c.name,
-          type: compType,
+          type: c.type || c.component_type || 'Value',
           formula: c.formula || '',
           amount: compAmount,
+          based_on_attendance: Boolean(c.based_on_attendance ?? c.basedOnAttendance),
+          is_non_cashable: Boolean(c.is_non_cashable ?? c.non_cashable ?? c.isNonCashable),
         });
         totalDeductions += compAmount;
       }
@@ -523,6 +619,7 @@ export class SalaryCalculationService {
 
     // No hardcoded fallback — if no deduction components are in the slab, deductions = 0.
     // HR must configure deduction components (PF, PT, ESIC, TDS) in Settings → Components.
+    // lopFormula is available here for future per-component LOP override if needed: lopFormula
 
     const netTakeHome = Math.max(0, grossMonthly - totalDeductions);
 

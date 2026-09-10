@@ -269,11 +269,10 @@ export const SalaryBreakdownSimulator: React.FC<SalaryBreakdownSimulatorProps> =
               <button
                 type="button"
                 onClick={() => setEmployeeType('regular')}
-                className={`py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 ${
-                  employeeType === 'regular'
+                className={`py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 ${employeeType === 'regular'
                     ? 'bg-indigo-600 text-white shadow-2xs'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                  }`}
               >
                 <Briefcase className="w-3 h-3" /> Regular
               </button>
@@ -281,11 +280,10 @@ export const SalaryBreakdownSimulator: React.FC<SalaryBreakdownSimulatorProps> =
               <button
                 type="button"
                 onClick={() => setEmployeeType('intern')}
-                className={`py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 ${
-                  employeeType === 'intern'
+                className={`py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 ${employeeType === 'intern'
                     ? 'bg-emerald-600 text-white shadow-2xs'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                  }`}
               >
                 <GraduationCap className="w-3 h-3" /> Intern
               </button>
@@ -293,11 +291,10 @@ export const SalaryBreakdownSimulator: React.FC<SalaryBreakdownSimulatorProps> =
               <button
                 type="button"
                 onClick={() => setEmployeeType('contractor')}
-                className={`py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 ${
-                  employeeType === 'contractor'
+                className={`py-1.5 px-2 rounded-md text-[11px] font-bold transition flex items-center justify-center gap-1 ${employeeType === 'contractor'
                     ? 'bg-amber-600 text-white shadow-2xs'
                     : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                  }`}
               >
                 <UserCheck className="w-3 h-3" /> Contract
               </button>

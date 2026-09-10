@@ -52,6 +52,8 @@ export class PayslipController {
     const roleCodes = userRoles.map((r: any) => r.code);
     const isAdminOrHR = roleCodes.includes('organization_admin') ||
       roleCodes.includes('super_admin') ||
+      roleCodes.includes('hr') ||
+      roleCodes.includes('hr_admin') ||
       roleCodes.includes('hr_manager') ||
       roleCodes.includes('finance') ||
       roleCodes.includes('finance_manager');

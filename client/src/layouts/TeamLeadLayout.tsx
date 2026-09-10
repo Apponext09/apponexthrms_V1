@@ -71,7 +71,6 @@ const TEAM_LEAD_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'My Payslips', href: '/team-lead/payslips', icon: FileCheck },
-          { name: 'Salary Revisions', href: '/team-lead/salary-revisions', icon: TrendingUp },
           { name: 'Team Exit Clearances', href: '/team-lead/settlements', icon: UserX },
         ],
       },

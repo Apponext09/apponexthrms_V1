@@ -288,16 +288,17 @@ export class EmployeeController {
     console.log('--- UPDATE EMPLOYEE REQUEST BODY ---', req.body);
     const validated = validate(req.body, employeeUpdateSchema);
     const payloadToUpdate = { ...req.body, ...(validated || {}) };
+    if (req.body && (req.body.accessRole || req.body.access_role || req.body.role)) {
+      payloadToUpdate.accessRole = String(req.body.accessRole || req.body.access_role || req.body.role).toLowerCase();
+    }
 
-    const employee = await this.service.updateEmployee(ctx, parseInt(id, 10), payloadToUpdate as any);
-    const db = getKnex();
-    const org = await db('organizations').where('id', ctx.organizationId).first().catch(() => null);
-    const fullName = `${employee.first_name || (employee as any).firstName || ''} ${employee.last_name || (employee as any).lastName || ''}`.trim();
+    await this.service.updateEmployee(ctx, parseInt(id, 10), payloadToUpdate as any);
+    const fullEmployee = await this.service.getEmployee(ctx, parseInt(id, 10)).catch(() => null);
 
     res.json({
       success: true,
-      status: employee.status || 'active',
-      data: employee,
+      status: fullEmployee?.status || 'active',
+      data: fullEmployee || {},
     });
   });
 

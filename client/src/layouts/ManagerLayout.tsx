@@ -72,7 +72,6 @@ const MANAGER_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
-          { name: 'Salary Revisions', href: '/manager/salary-revisions', icon: TrendingUp },
           { name: 'Team Exit Settlements', href: '/manager/settlements', icon: UserX },
         ],
       },

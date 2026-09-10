@@ -15,7 +15,7 @@ import {
   LayoutGrid, List, Grid, Table, Columns, Rows, Maximize, Minimize,
   Link, ExternalLink, Mail, Phone, Video, Image, File, Folder, Archive,
   Tag, Bookmark, Flag, Pin, Share, Copy, Printer, Send, Inbox, MessageCircle,
-  Headphones, Mic, Volume, Camera, Music, Play, Pause,  FastForward,
+  Headphones, Mic, Volume, Camera, Music, Play, Pause, FastForward,
   RotateCcw, RotateCw, Shuffle, Repeat, SkipForward, SkipBack,
   Battery, Bluetooth, Cast, Cpu, HardDrive, Lock as LockIcon, Unlock,
   Key, Fingerprint, LogIn, User, UserMinus, Users2, Group, PersonStanding,
@@ -66,6 +66,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
+import { masterBuilderApi } from '@/features/master-builder/api/masterBuilderApi';
 import hrmsLogo from '@/assests/hrms.png';
 
 interface SidebarProps {
@@ -127,8 +128,14 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     navigate(href);
   };
 
-  const isPathActive = (itemHref: string, currentPath: string): boolean => {
+  const isPathActive = (itemHref: string, currentPath: string, currentSearch: string = ''): boolean => {
     if (!itemHref || !currentPath) return false;
+    const currentFull = currentSearch ? `${currentPath}${currentSearch}` : currentPath;
+
+    if (itemHref.includes('?')) {
+      return currentFull === itemHref;
+    }
+
     if (itemHref === currentPath) return true;
 
     const exactMatchRoutes = [
@@ -150,6 +157,10 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       '/hr/assets',
       '/expenses',
       '/hr/expenses',
+      '/modules',
+      '/hr/modules',
+      '/masters',
+      '/hr/masters',
     ];
 
     if (exactMatchRoutes.includes(itemHref)) {
@@ -159,6 +170,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     if (currentPath.startsWith(itemHref + '/')) return true;
     return false;
   };
+
 
   const getFullName = () => {
     const fName = (user?.firstName || (user as any)?.first_name || '').trim();
@@ -190,6 +202,29 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     }
   };
 
+  const userProfile = getUserRoleAndDept(user);
+  const userRoleCode = (userProfile?.roleCode || '').toLowerCase();
+  const userRoleTitle = (userProfile?.roleTitle || '').toLowerCase();
+  const isHrUser =
+    userRoleCode.startsWith('hr') ||
+    userRoleTitle === 'hr' ||
+    (user as any)?.role === 'hr' ||
+    (Array.isArray((user as any)?.roles) && (user as any).roles.some((r: string) => String(r).toLowerCase().startsWith('hr')));
+
+  const portalLabel = isHrUser
+    ? 'HR Portal'
+    : ['organization_admin', 'ceo', 'super_admin'].includes(userRoleCode)
+    ? 'Admin Portal'
+    : userRoleCode === 'support'
+    ? 'Support Portal'
+    : userRoleCode === 'finance'
+    ? 'Finance Portal'
+    : userRoleCode === 'department_head'
+    ? 'Manager Portal'
+    : userRoleCode === 'team_lead'
+    ? 'Team Lead Portal'
+    : 'Admin Portal';
+
   return (
     <>
       <div
@@ -217,7 +252,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <span className="text-[15px] font-extrabold tracking-tight text-foreground">Apponext</span>
                     <span className="rounded-md border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-primary">HRMS</span>
                   </div>
-                  <span className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Admin Portal</span>
+                  <span className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">{portalLabel}</span>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -228,7 +263,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
         <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {visibleSections.map((section) => {
             const isActive = section.items.some((item) =>
-              isPathActive(item.href, location.pathname)
+              isPathActive(item.href, location.pathname, location.search)
             );
             const isExpanded = expandedSections[section.id] ?? true;
 
@@ -273,8 +308,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                     <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                       {section.items.map((item) => {
                         const hasChildren = item.children && item.children.length > 0;
-                        const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname));
-                        const itemActive = (isPathActive(item.href, location.pathname) && !hasChildren) || isChildActive;
+                        const isChildActive = hasChildren && item.children!.some((c) => isPathActive(c.href, location.pathname, location.search));
+                        const itemActive = (isPathActive(item.href, location.pathname, location.search) && !hasChildren) || isChildActive;
                         const isLocked = (item as any).isLocked;
 
                         if (hasChildren) {
@@ -308,7 +343,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
                               <CollapsibleContent className={cn('mt-1 space-y-1', open ? 'ml-3 border-l border-border pl-3' : '')}>
                                 {item.children!.map((child) => {
-                                  const childActive = isPathActive(child.href, location.pathname);
+                                  const childActive = isPathActive(child.href, location.pathname, location.search);
                                   return (
                                     <button
                                       key={child.name}

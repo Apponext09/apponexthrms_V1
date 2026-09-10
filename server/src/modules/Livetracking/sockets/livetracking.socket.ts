@@ -61,7 +61,7 @@ async function resolveSocketUser(
     .select('r.code', 'r.name')
     .catch(() => []);
 
-  const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
+  const adminPatterns = ['admin', 'hr', 'organization_admin', 'super_admin', 'ceo', 'owner', 'director', 'executive'];
   const isHROrAdmin = roleRows.some((row: any) => {
     const codeNorm = String(row?.code || '').toLowerCase().replace(/[\s-]+/g, '_');
     const nameNorm = String(row?.name || '').toLowerCase().replace(/[\s-]+/g, '_');

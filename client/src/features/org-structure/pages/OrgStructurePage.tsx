@@ -13,8 +13,8 @@ import {
   DragOverlay,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { useEmployees, useUpdateEmployee } from '@/features/employee/hooks/useEmployees';
-import { useDepartments } from '@/features/settings/hooks/useDepartments';
+import { useEmployees } from '@/features/employee/hooks/useEmployees';
+import { useDesignations } from '@/features/settings/hooks/useDesignations';
 import { EmployeeCreateModal } from '@/features/employee/components/EmployeeCreateModal';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/config/api';
@@ -61,11 +61,11 @@ import {
   ChevronRight,
   Eye,
   Settings,
-  ShieldAlert,
-  Layers,
+  Zap,
   GraduationCap,
+  ShieldAlert,
   Sparkles,
-  Inbox,
+  Layers,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
@@ -81,6 +81,41 @@ const ROLE_CONFIG: Record<
   string,
   { label: string; bg: string; border: string; text: string; Icon: React.ElementType }
 > = {
+  ceo: {
+    label: 'CEO',
+    bg: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/40',
+    text: 'text-amber-700 dark:text-amber-300',
+    Icon: Crown,
+  },
+  cfo: {
+    label: 'CFO',
+    bg: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+    border: 'border-emerald-500/40',
+    text: 'text-emerald-700 dark:text-emerald-300',
+    Icon: ShieldCheck,
+  },
+  coo: {
+    label: 'COO',
+    bg: 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
+    border: 'border-blue-500/40',
+    text: 'text-blue-700 dark:text-blue-300',
+    Icon: Briefcase,
+  },
+  cto: {
+    label: 'CTO',
+    bg: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+    border: 'border-indigo-500/40',
+    text: 'text-indigo-700 dark:text-indigo-300',
+    Icon: Zap,
+  },
+  cxo: {
+    label: 'Executive (CXO)',
+    bg: 'bg-purple-500/10 text-purple-700 dark:text-purple-300',
+    border: 'border-purple-500/40',
+    text: 'text-purple-700 dark:text-purple-300',
+    Icon: Crown,
+  },
   hr_manager: {
     label: 'HR Manager',
     bg: 'bg-primary/10 text-primary',
@@ -118,13 +153,78 @@ const ROLE_CONFIG: Record<
   },
 };
 
-function roleCfg(role?: string, desig?: string) {
-  const norm = normalizePositionKey(desig, role);
-  if (norm === 'Intern' || role === 'intern') return ROLE_CONFIG.intern;
-  if (role === 'hr_manager' || norm === 'HR Manager') return ROLE_CONFIG.hr_manager;
-  if (role === 'department_head' || norm.includes('Head') || norm.includes('Manager')) return ROLE_CONFIG.department_head;
-  if (role === 'team_lead' || norm === 'Team Leader') return ROLE_CONFIG.team_lead;
+function roleCfg(role?: string, designation?: string) {
+  const r = (role || '').toLowerCase().trim();
+  const d = (designation || '').toLowerCase().trim();
+
+  if (r === 'ceo' || d === 'ceo' || d.includes('chief executive')) return ROLE_CONFIG.ceo;
+  if (r === 'cfo' || d === 'cfo' || d.includes('chief financial') || d.includes('finance head') || d.includes('director of finance')) return ROLE_CONFIG.cfo;
+  if (r === 'coo' || d === 'coo' || d.includes('chief operating') || d.includes('chief operations') || d.includes('operations head')) return ROLE_CONFIG.coo;
+  if (r === 'cto' || d === 'cto' || d.includes('chief tech') || d.includes('chief technology') || d.includes('tech head') || d.includes('head of engineering')) return ROLE_CONFIG.cto;
+  if (r === 'cxo' || d.startsWith('chief ') || d.includes('c-level')) return ROLE_CONFIG.cxo;
+  if (r === 'hr_manager' || r === 'hr_admin' || r === 'support') return ROLE_CONFIG.hr_manager;
+  if (r === 'department_head' || r === 'manager') return ROLE_CONFIG.department_head;
+  if (r === 'team_lead') return ROLE_CONFIG.team_lead;
   return ROLE_CONFIG.employee;
+}
+
+function resolveDesignation(emp?: Employee | null, designationsList?: any[]): string {
+  if (!emp) return '—';
+  const e = emp as any;
+
+  // 1. Direct explicit strings
+  if (e.designation && typeof e.designation === 'string' && e.designation.trim() !== '' && e.designation.trim() !== '—') {
+    return e.designation.trim();
+  }
+  if (e.designationName && typeof e.designationName === 'string' && e.designationName.trim()) {
+    return e.designationName.trim();
+  }
+  if (e.designation_name && typeof e.designation_name === 'string' && e.designation_name.trim()) {
+    return e.designation_name.trim();
+  }
+  if (e.jobTitle && typeof e.jobTitle === 'string' && e.jobTitle.trim()) {
+    return e.jobTitle.trim();
+  }
+  if (e.job_title && typeof e.job_title === 'string' && e.job_title.trim()) {
+    return e.job_title.trim();
+  }
+
+  // 2. ID matching against master list
+  const desigId = e.currentDesignationId ?? e.designationId ?? e.designation_id ?? e.current_designation_id;
+  if (desigId && Array.isArray(designationsList) && designationsList.length > 0) {
+    const matched = designationsList.find((d: any) => String(d.id) === String(desigId));
+    if (matched?.name) return matched.name;
+  }
+
+  // 3. Fallback from role configuration
+  const role = (e.accessRole || e.role || '').toLowerCase().trim();
+  if (role) {
+    const roleLabels: Record<string, string> = {
+      organization_admin: 'Organization Administrator',
+      super_admin: 'Super Admin',
+      hr_admin: 'HR Administrator',
+      hr_manager: 'HR Manager',
+      hr: 'HR Executive',
+      department_head: 'Department Head',
+      manager: 'Manager',
+      team_lead: 'Team Lead',
+      employee: 'Employee',
+      intern: 'Intern',
+      consultant: 'Consultant',
+      ceo: 'Chief Executive Officer',
+      cto: 'Chief Technology Officer',
+      cfo: 'Chief Financial Officer',
+      coo: 'Chief Operating Officer',
+    };
+    if (roleLabels[role]) return roleLabels[role];
+  }
+
+  // 4. Fallback based on department
+  if (e.department) {
+    return `${e.department} Executive`;
+  }
+
+  return 'Employee';
 }
 
 const AVATAR_GRADIENTS = [
@@ -168,10 +268,11 @@ function ReferenceNode({
   hierarchyRules = DEFAULT_HIERARCHY_RULES,
   allEmployees = [],
 }: ReferenceNodeProps) {
-  const isDeptNode = Boolean(node.isDepartmentNode);
   const emp = node.emp || {};
-  const isAdmin = Boolean(node.isAdmin);
-  const nodeId = String(node.id || emp.id || `dept-${node.deptName}`);
+  const isDeptNode = Boolean(node.isDepartmentNode);
+  const isAdmin = Boolean(node.isAdmin || emp.accessRole === 'super_admin' || emp.accessRole === 'platform_admin' || emp.accessRole === 'hr_admin' || emp.isCeo || emp.is_ceo);
+  const isDeptHeadOrHR = ['department_head', 'hr', 'hr_manager'].includes(emp.accessRole);
+  const nodeId = isDeptNode ? `dept-${node.deptName}` : `emp-${emp.id || node.id}`;
 
   const name = isDeptNode
     ? node.deptName
@@ -236,7 +337,6 @@ function ReferenceNode({
   }, [isOver, activeDragEmp, isDragging, node, hierarchyRules, allEmployees]);
 
   const isTargetValid = validation ? validation.isValid : false;
-  const isTargetInvalid = validation ? !validation.isValid : false;
 
   return (
     <div className="relative flex flex-col items-center shrink-0">
@@ -260,107 +360,76 @@ function ReferenceNode({
         </div>
       )}
 
-      {/* Node Card Types */}
-      {isDeptNode ? (
-        // Department Heading (Requirement #3: Dark blue, bold, clearly visible, no card container box, no border, no shadow)
-        <div
-          id={`node-card-${nodeId}`}
-          ref={setCombinedRef}
-          onClick={onClick}
-          title={`${node.deptName} Department`}
-          className={`group relative flex flex-col items-center py-1 px-3 bg-transparent border-none shadow-none cursor-default select-none transition-all duration-200 ${isOver && isTargetInvalid
-            ? 'ring-2 ring-rose-500 rounded-lg bg-rose-50/50 dark:bg-rose-950/30'
-            : ''
-            }`}
-        >
-          <div className="flex items-center gap-1.5 font-black text-sm text-[#1e3a8a] dark:text-blue-400 tracking-wide text-center uppercase">
-            <Building2 className="w-4 h-4 shrink-0 text-[#1e3a8a] dark:text-blue-400" />
-            <span className="truncate max-w-[220px]">{node.deptName}</span>
-          </div>
-
-          {/* Toggle Button for Children */}
-          {hasChildren && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand();
-              }}
-              className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-card border border-border flex items-center justify-center text-foreground font-bold shadow-2xs hover:scale-110 transition-transform"
-              title={isCollapsed ? 'Expand Children' : 'Collapse Children'}
-            >
-              {isCollapsed ? <Plus className="w-2.5 h-2.5 text-primary" /> : <Minus className="w-2.5 h-2.5 text-muted-foreground" />}
-            </button>
-          )}
+      {/* Concise Minimalist Node Card */}
+      <div
+        id={`node-card-${emp.id || nodeId}`}
+        ref={setCombinedRef}
+        {...listeners}
+        {...attributes}
+        style={style}
+        onClick={onClick}
+        title={
+          isAdmin
+            ? 'Organization Admin'
+            : isDeptHeadOrHR
+              ? 'Department Heads and HR Managers report directly to Organization Admin.'
+              : 'Drag node onto a manager to reassign reporting manager'
+        }
+        className={`group relative flex flex-col items-center bg-card border shadow-xs rounded-xl p-2.5
+          w-[155px] min-h-[92px] transition-all duration-200 cursor-grab active:cursor-grabbing select-none
+          ${isPulsing
+            ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
+            : isDragging
+              ? 'opacity-35 ring-2 ring-primary/40 border-dashed border-primary bg-primary/5'
+              : isOver
+                ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
+                : highlight
+                  ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
+                  : isAdmin
+                    ? 'border-primary/60 bg-primary/5'
+                    : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
+          }`}
+      >
+        {/* Top Avatar Icon */}
+        <div className="relative mb-1">
+          <Avatar className={`h-8 w-8 rounded-full border border-border/60 shadow-xs bg-gradient-to-br ${grad}`}>
+            <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
+            <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-[9.5px] font-extrabold`}>
+              {initials || <User className="w-3.5 h-3.5 text-white" />}
+            </AvatarFallback>
+          </Avatar>
         </div>
-      ) : (
-        // Standard Employee / Position Node Card (Requirement #2 CEO label strictly 'CEO', Requirement #13 No serial/node numbers)
-        <div
-          id={`node-card-${emp.id}`}
-          ref={setCombinedRef}
-          {...listeners}
-          {...attributes}
-          style={style}
-          onClick={onClick}
-          title={isCeoNode ? 'CEO' : `${designation}`}
-          className={`group relative flex flex-col items-center bg-card border shadow-xs rounded-xl p-2.5
-            w-[165px] min-h-[98px] transition-all duration-200 cursor-grab active:cursor-grabbing select-none
-            ${isPulsing
-              ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
-              : isDragging
-                ? 'opacity-35 ring-2 ring-primary/40 border-dashed border-primary bg-primary/5'
-                : isOver && isTargetValid
-                  ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
-                  : isOver && isTargetInvalid
-                    ? 'ring-4 ring-rose-500/80 border-rose-500 bg-rose-500/10 scale-105 shadow-xl z-40 cursor-not-allowed'
-                    : highlight
-                      ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
-                      : isCeoNode
-                        ? 'border-primary/60 bg-primary/5'
-                        : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
-            }`}
-        >
-          {/* Top Avatar (No Node/Level Numbers) */}
-          <div className="relative mb-1">
-            <Avatar className={`h-8 w-8 rounded-full border border-border/60 shadow-xs bg-gradient-to-br ${grad}`}>
-              <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
-              <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-[9.5px] font-extrabold`}>
-                {initials || <User className="w-3.5 h-3.5 text-white" />}
-              </AvatarFallback>
-            </Avatar>
-          </div>
 
-          {/* Minimal Name Pill */}
-          <div className="w-full bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground text-primary text-[10.5px] font-extrabold px-2 py-0.5 rounded-full text-center truncate shadow-2xs transition-colors">
-            {name}
-          </div>
-
-          {/* Designation Subtitle (Requirement #2: CEO displayed strictly as CEO) */}
-          <div className="text-[8.5px] font-bold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
-            {isCeoNode ? 'CEO' : designation}
-          </div>
-
-          {/* Department / Manager Subtitle */}
-          <div className="text-[8px] font-semibold text-muted-foreground/80 truncate w-full text-center mt-0.5">
-            {emp.department ? `${emp.department}` : node.reportingManagerName ? `Mgr: ${node.reportingManagerName}` : ''}
-          </div>
-
-          {/* Circular Toggle Button (+ / -) */}
-          {hasChildren && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand();
-              }}
-              className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-card border border-border flex items-center justify-center text-foreground font-bold shadow-2xs hover:scale-110 transition-transform"
-              title={isCollapsed ? 'Expand Children' : 'Collapse Children'}
-            >
-              {isCollapsed ? <Plus className="w-2.5 h-2.5 text-primary" /> : <Minus className="w-2.5 h-2.5 text-muted-foreground" />}
-            </button>
-          )}
+        {/* Minimal Name Pill */}
+        <div className="w-full bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground text-primary text-[10.5px] font-extrabold px-2 py-0.5 rounded-full text-center truncate shadow-2xs transition-colors">
+          {name}
         </div>
-      )}
+
+        {/* Designation Subtitle (Requirement #2: CEO displayed strictly as CEO) */}
+        <div className="text-[8.5px] font-bold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
+          {isCeoNode ? 'CEO' : designation}
+        </div>
+
+        {/* Department / Manager Subtitle */}
+        <div className="text-[8px] font-semibold text-muted-foreground/80 truncate w-full text-center mt-0.5">
+          {emp.department ? `${emp.department}` : node.reportingManagerName ? `Mgr: ${node.reportingManagerName}` : ''}
+        </div>
+
+        {/* Circular Toggle Button (+ / -) */}
+        {hasChildren && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand();
+            }}
+            className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-card border border-border flex items-center justify-center text-foreground font-bold shadow-2xs hover:scale-110 transition-transform"
+            title={isCollapsed ? 'Expand Children' : 'Collapse Children'}
+          >
+            {isCollapsed ? <Plus className="w-2.5 h-2.5 text-primary" /> : <Minus className="w-2.5 h-2.5 text-muted-foreground" />}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -378,6 +447,7 @@ interface TreeBranchProps {
   activeDragEmp?: Employee | null;
   hierarchyRules?: HierarchyRule[];
   allEmployees?: Employee[];
+  isLevel1Manager?: boolean;
 }
 
 function TreeBranch({
@@ -390,11 +460,19 @@ function TreeBranch({
   activeDragEmp,
   hierarchyRules,
   allEmployees,
+  isLevel1Manager,
 }: TreeBranchProps) {
-  const nodeId = node.id || node.emp?.id || `dept-${node.deptName}`;
-  const isCollapsed = collapsedMap[nodeId] ?? false;
+  const nodeId = node.isDepartmentNode ? `dept-${node.deptName}` : `emp-${node.emp?.id || node.id}`;
+  const isCollapsed = collapsedMap[nodeId] ?? (node.emp?.id ? collapsedMap[node.emp.id] : false);
   const children = node.children || [];
   const hasChildren = children.length > 0;
+  const deptName = node.isAdmin
+    ? 'Executive Leadership'
+    : node.isCxo
+      ? `C-Suite · ${(node.cxoType || 'CXO').toUpperCase()}`
+      : isLevel1Manager
+        ? (node.emp?.department || 'Department')
+        : undefined;
 
   return (
     <div className="flex flex-col items-center shrink-0">
@@ -430,26 +508,21 @@ function TreeBranch({
           )}
 
           {/* Children Array Render */}
-          <div className="flex gap-6 items-start justify-center pt-0">
-            {children.map((childNode: any, idx: number) => {
-              const childKey = childNode.id || childNode.emp?.id || `child-${idx}`;
-              return (
-                <div key={childKey} className="flex flex-col items-center shrink-0">
-                  {children.length > 1 && <div className="w-px h-3.5 bg-border shrink-0" />}
-                  <TreeBranch
-                    node={childNode}
-                    highlight={highlight}
-                    pulsingEmpId={pulsingEmpId}
-                    collapsedMap={collapsedMap}
-                    onToggleCollapse={onToggleCollapse}
-                    onSelectEmp={onSelectEmp}
-                    activeDragEmp={activeDragEmp}
-                    hierarchyRules={hierarchyRules}
-                    allEmployees={allEmployees}
-                  />
-                </div>
-              );
-            })}
+          <div className="flex gap-5 items-start justify-center pt-0">
+            {children.map((childNode: any) => (
+              <div key={childNode.emp.id} className="flex flex-col items-center shrink-0">
+                {children.length > 1 && <div className="w-px h-3.5 bg-border shrink-0" />}
+                <TreeBranch
+                  node={childNode}
+                  highlight={highlight}
+                  pulsingEmpId={pulsingEmpId}
+                  collapsedMap={collapsedMap}
+                  onToggleCollapse={onToggleCollapse}
+                  onSelectEmp={onSelectEmp}
+                  isLevel1Manager={node.isAdmin || node.isCxo}
+                />
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -464,17 +537,22 @@ export function OrgStructurePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
-  const { data: deptData } = useDepartments(1, 500);
+  const { designations = [] } = useDesignations();
   const [searchTerm, setSearchTerm] = useState('');
   const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
-  const [managerEditId, setManagerEditId] = useState('');
+  const [isUpdatingManager, setIsUpdatingManager] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
   // Hierarchy rules state
   const [hierarchyRules, setHierarchyRules] = useState<HierarchyRule[]>(DEFAULT_HIERARCHY_RULES);
+
+  const handleSaveHierarchyRules = (updatedRules: HierarchyRule[]) => {
+    setHierarchyRules(updatedRules);
+    toast.success('Hierarchy rules updated successfully');
+  };
 
   // Invalid Drop Popup Modal State
   const [invalidDropModal, setInvalidDropModal] = useState<{
@@ -490,7 +568,7 @@ export function OrgStructurePage() {
   });
 
   const userRole = (user as any)?.accessRole || (user as any)?.role || '';
-  const isAdminOrManager = ['hr_admin', 'hr_manager', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
+  const isAdminOrManager = ['hr', 'hr_admin', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
   const canExport = isAdminOrManager || isExportEnabledForEmployees;
 
   // Local employees state for optimistic UI updates
@@ -500,19 +578,12 @@ export function OrgStructurePage() {
     setLocalEmps(employees || null);
   }, [employees]);
 
-  // Load custom hierarchy rules from backend
   useEffect(() => {
-    apiClient
-      .get('/employees/org-hierarchy/rules')
-      .then((res) => {
-        if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
-          setHierarchyRules(res.data.data);
-        }
-      })
-      .catch((err) => {
-        console.warn('Using default hierarchy rules:', err);
-      });
-  }, []);
+    if (selectedEmp) {
+      const mgrId = selectedEmp.reportingManagerId || (selectedEmp as any).reporting_manager_id || (selectedEmp as any).reportingManagerId || '';
+      // setManagerEditId(String(mgrId || ''));
+    }                                           
+  }, [selectedEmp]);
 
   // Collapse State for nodes
   const [collapsedMap, setCollapsedMap] = useState<Record<string | number, boolean>>({});
@@ -531,7 +602,6 @@ export function OrgStructurePage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const exportTreeRef = useRef<HTMLDivElement>(null);
 
-  const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedEmp?.id || 0);
 
   // Active Dragged Employee for smooth DragOverlay preview & live validation
   const [activeDragEmp, setActiveDragEmp] = useState<Employee | null>(null);
@@ -710,254 +780,155 @@ export function OrgStructurePage() {
     toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
   };
 
-  // Build Full Configurable Tree Hierarchy strictly driven by saved parent-child reporting relationships
+  // Build Dynamic Hierarchy Tree Structure from Database
   const treeData = useMemo(() => {
     const rawList = localEmps || (employees as Employee[]) || [];
-    const allDbDepts: any[] = deptData?.items || deptData?.data || [];
+    const allDbDepts: any[] = [];
 
-    const getPos = (e: Employee) => normalizePositionKey(e.designation || e.jobTitle, (e as any).accessRole);
-    const getDeptKey = (e: Employee) => e.department || (e as any).departmentName || (e as any).department_name || 'General';
-    const getDeptId = (e: Employee) => e.currentDepartmentId || (e as any).current_department_id || (e as any).departmentId || (e as any).department_id;
+    // Helper to get department name
+    const getDeptKey = (e: Employee): string =>
+      e.department || (e as any).departmentName || (e as any).department_name || 'General';
 
-    // Detect if real CEO employee exists in rawList
-    const ceoEmpFromDb = rawList.find((e: any) =>
-      Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1 || getPos(e) === 'CEO')
-    );
+    // Helper to get department ID
+    const getDeptId = (e: Employee): number | null =>
+      e.currentDepartmentId ?? (e as any).departmentId ?? (e as any).current_department_id ?? null;
 
-    const adminName = ceoEmpFromDb
-      ? [ceoEmpFromDb.firstName, ceoEmpFromDb.lastName].filter(Boolean).join(' ')
-      : user
-        ? `${user.firstName} ${user.lastName}`.trim() || user.email
-        : 'CEO';
+    // Helper to get reporting manager ID safely from database record
+    const getMgrId = (e: Employee): number | null => {
+      const val = e.reportingManagerId ?? (e as any).reporting_manager_id;
+      return val !== null && val !== undefined && val !== '' ? Number(val) : null;
+    };
 
-    const adminEmail = ceoEmpFromDb?.email || user?.email || 'ceo@kosqu.com';
+    // Helper to categorize CXO type
+    const getCxoCategory = (e: Employee): 'cfo' | 'coo' | 'cto' | 'cxo' | null => {
+      const role = ((e.accessRole || (e as any).role || '') as string).toLowerCase().trim();
+      const desig = (e.designation || e.jobTitle || (e as any).designationName || (e as any).designation_name || '').toLowerCase().trim();
 
-    // Root CEO Employee Node (Requirement #2: designation strictly CEO)
-    const rootAdminEmp: Employee = ceoEmpFromDb
-      ? { ...ceoEmpFromDb, designation: 'CEO' }
-      : {
-        id: 999999,
-        firstName: adminName,
-        lastName: '',
-        email: adminEmail,
-        employeeCode: 'CEO-01',
-        designation: 'CEO',
-        department: 'Executive Management',
-      };
+      if (role === 'cfo' || desig === 'cfo' || desig.includes('chief financial') || desig.includes('finance head') || desig.includes('director of finance')) {
+        return 'cfo';
+      }
+      if (role === 'coo' || desig === 'coo' || desig.includes('chief operating') || desig.includes('chief operations') || desig.includes('operations head') || desig.includes('director of operations')) {
+        return 'coo';
+      }
+      if (role === 'cto' || desig === 'cto' || desig.includes('chief tech') || desig.includes('chief technology') || desig.includes('tech head') || desig.includes('head of engineering') || desig.includes('director of engineering')) {
+        return 'cto';
+      }
+      if (role === 'cxo' || desig.startsWith('chief ') || desig.includes('c-level') || desig === 'cmo' || desig === 'cio' || desig === 'cpo' || desig === 'cro' || desig === 'cso') {
+        return 'cxo';
+      }
+      return null;
+    };
 
-    const rootAdminId = ceoEmpFromDb?.id || 999999;
+    // 1. Resolve Root CEO node
+    const ceoEmployee = rawList.find((e: any) => {
+      const isCeoFlag = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+      const role = ((e.accessRole || e.role || '') as string).toLowerCase().trim();
+      const desig = (e.designation || e.jobTitle || (e as any).designationName || '').toLowerCase().trim();
+      return isCeoFlag || role === 'ceo' || desig === 'ceo' || desig === 'chief executive officer';
+    });
 
+    const ceoId = ceoEmployee?.id || 999999;
+    const adminName = ceoEmployee
+      ? `${ceoEmployee.firstName || ''} ${ceoEmployee.lastName || ''}`.trim() || 'Chief Executive Officer'
+      : (user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Chief Executive Officer');
+
+    const adminEmail = ceoEmployee?.email || user?.email || 'ceo@apponext.com';
+
+    // Root CEO Node at Top of Tree
+    const rootCeoEmp: Employee = {
+      id: ceoId,
+      firstName: adminName,
+      lastName: '',
+      email: adminEmail,
+      employeeCode: ceoEmployee?.employeeCode || 'CEO-01',
+      designation: 'CHIEF EXECUTIVE OFFICER (CEO)',
+      department: ceoEmployee?.department || 'Executive Leadership',
+      avatarUrl: (ceoEmployee as any)?.avatarUrl,
+    };
+
+    // Filter out root CEO profile from lower employee list so they don't appear twice
     const activeList = rawList.filter((e: any) => {
-      if (ceoEmpFromDb && e.id === ceoEmpFromDb.id) return false;
-      return true;
+      if (ceoEmployee && e.id === ceoEmployee.id) return false;
+      const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+      return !isCeo;
     });
 
-    const getLevelOrder = (pos: string): number => {
-      if (pos === 'CEO') return 1;
-      if (pos === 'COO') return 2;
-      if (['CTO', 'CFO'].includes(pos)) return 3;
-      if (['IT Head', 'HR Manager', 'Finance Manager', 'Organization Manager', 'Department Manager'].includes(pos)) return 5;
-      if (['Project Manager', 'HR Executive', 'Accountant'].includes(pos)) return 6;
-      if (pos === 'Team Leader') return 7;
-      if (pos === 'Employee') return 8;
-      if (pos === 'Intern') return 9;
-      return 8;
-    };
+    // Track claimed employee IDs to guarantee ZERO duplicates across the entire tree
+    const claimedEmpIds = new Set<number>();
+    if (ceoEmployee?.id) claimedEmpIds.add(ceoEmployee.id);
 
-    // 1. Build map of all employee nodes
-    const nodeMap = new Map<number, any>();
-    activeList.forEach((e) => {
-      if (e.id) {
-        nodeMap.set(e.id, {
-          id: e.id,
-          emp: e,
-          hierarchyLevel: getLevelOrder(getPos(e)),
-          children: [],
-        });
-      }
-    });
+    // Recursive helper to find all direct reports of an employee from the database
+    const findDirectChildren = (parentId: number, parentDept?: string, parentDeptId?: number | null): Employee[] => {
+      const results: Employee[] = [];
 
-    // 2. Attach children strictly to their saved parent employee by reportingManagerId / reporting_manager_id
-    const rootAttachedIds = new Set<number>();
-    activeList.forEach((e) => {
-      if (!e.id) return;
-      const node = nodeMap.get(e.id);
-      const parentId = e.reportingManagerId || (e as any).reporting_manager_id;
-
-      if (parentId && parentId !== rootAdminId && parentId !== 999999 && nodeMap.has(parentId) && parentId !== e.id) {
-        const parentNode = nodeMap.get(parentId);
-        parentNode.children.push(node);
-      } else {
-        rootAttachedIds.add(e.id);
-      }
-    });
-
-    // Helper to sort children array recursively by hierarchy level
-    const sortChildren = (nodes: any[]) => {
-      nodes.sort((a, b) => (a.hierarchyLevel || 6) - (b.hierarchyLevel || 6));
-      nodes.forEach((n) => {
-        if (n.children && n.children.length > 0) {
-          sortChildren(n.children);
+      // 1. Priority 1: Direct reporting_manager_id match in database
+      activeList.forEach((emp) => {
+        if (emp.id && !claimedEmpIds.has(emp.id) && getMgrId(emp) === parentId) {
+          claimedEmpIds.add(emp.id);
+          results.push(emp);
         }
       });
-    };
 
-    // Sort all internal employee node children
-    nodeMap.forEach((node) => {
-      if (node.children.length > 0) {
-        sortChildren(node.children);
-      }
-    });
-
-    // Extract top-level employee nodes attached to root
-    const topLevelNodes = Array.from(rootAttachedIds).map((id) => nodeMap.get(id)).filter(Boolean);
-
-    // Identify CXO Executive Nodes (COO, CFO, CTO)
-    const cooNode = topLevelNodes.find((n) => getPos(n.emp) === 'COO');
-    const cfoNode = topLevelNodes.find((n) => getPos(n.emp) === 'CFO');
-    const ctoNode = topLevelNodes.find((n) => getPos(n.emp) === 'CTO');
-
-    // Root Executive Container object representation
-    const ceoRootNode: any = {
-      id: rootAdminId,
-      emp: rootAdminEmp,
-      isAdmin: true,
-      hierarchyLevel: 1,
-      children: [],
-    };
-
-    // Build Executive Hierarchy: CEO -> COO -> (CFO and CTO side-by-side)
-    if (cooNode) {
-      ceoRootNode.children.push(cooNode);
-      if (cfoNode && !cooNode.children.some((c: any) => c.id === cfoNode.id)) {
-        cooNode.children.push(cfoNode);
-      }
-      if (ctoNode && !cooNode.children.some((c: any) => c.id === ctoNode.id)) {
-        cooNode.children.push(ctoNode);
-      }
-    } else {
-      if (cfoNode) ceoRootNode.children.push(cfoNode);
-      if (ctoNode) ceoRootNode.children.push(ctoNode);
-    }
-
-    // Helper to normalize department names for robust deduplication & matching
-    const normalizeDeptKey = (name?: string) => {
-      if (!name) return '';
-      return name.toLowerCase().replace(/\s*\([^)]*\)/g, '').trim();
-    };
-
-    // Gather all Departments to render (DB Departments + Employee Departments)
-    const deptsToRender: { id?: number | string; name: string }[] = [];
-    const seenDeptKeys = new Set<string>();
-
-    allDbDepts.forEach((d: any) => {
-      const name = d.name || d.department_name;
-      const norm = normalizeDeptKey(name);
-      if (name && norm && !seenDeptKeys.has(norm)) {
-        seenDeptKeys.add(norm);
-        deptsToRender.push({ id: d.id, name });
-      }
-    });
-
-    activeList.forEach((e) => {
-      const name = getDeptKey(e);
-      const norm = normalizeDeptKey(name);
-      if (name && norm && norm !== 'general' && !seenDeptKeys.has(norm)) {
-        seenDeptKeys.add(norm);
-        deptsToRender.push({ id: getDeptId(e), name });
-      }
-    });
-
-    ['Information Technology', 'HR', 'Finance'].forEach((name) => {
-      const norm = normalizeDeptKey(name);
-      if (!seenDeptKeys.has(norm)) {
-        seenDeptKeys.add(norm);
-        deptsToRender.push({ name });
-      }
-    });
-
-    const nonCxoTopNodes = topLevelNodes.filter(
-      (n) => !['COO', 'CFO', 'CTO', 'CEO'].includes(getPos(n.emp))
-    );
-    const claimedTopNodeIds = new Set<number>();
-
-    // Map each Department Node under its appropriate Parent Executive (CFO, CTO, COO, or CEO)
-    deptsToRender.forEach((deptObj) => {
-      const deptName = deptObj.name;
-      const deptId = deptObj.id;
-      const deptNorm = normalizeDeptKey(deptName);
-
-      // Find top staff belonging to this department
-      const deptChildren = nonCxoTopNodes.filter((n) => {
-        if (claimedTopNodeIds.has(n.id)) return false;
-
-        const empDeptId = getDeptId(n.emp);
-        if (deptId && empDeptId && String(deptId) === String(empDeptId)) return true;
-
-        const empDeptName = getDeptKey(n.emp);
-        const empDeptNorm = normalizeDeptKey(empDeptName);
-        if (empDeptNorm && deptNorm && empDeptNorm === deptNorm) return true;
-
-        if ((deptNorm.includes('it') || deptNorm.includes('tech')) && (empDeptNorm.includes('it') || empDeptNorm.includes('tech') || getPos(n.emp) === 'IT Head')) return true;
-        if ((deptNorm.includes('hr') || deptNorm.includes('human')) && (empDeptNorm.includes('hr') || empDeptNorm.includes('human') || getPos(n.emp) === 'HR Manager')) return true;
-        if ((deptNorm.includes('fin') || deptNorm.includes('account')) && (empDeptNorm.includes('finance') || empDeptNorm.includes('account') || getPos(n.emp) === 'Finance Manager')) return true;
-
-        return false;
+      // 2. Priority 2: Department match ONLY if employee has NO reporting manager assigned in database
+      activeList.forEach((emp) => {
+        if (emp.id && !claimedEmpIds.has(emp.id) && !getMgrId(emp)) {
+          const empDeptId = getDeptId(emp);
+          const empDept = getDeptKey(emp);
+          const isDeptIdMatch = parentDeptId && empDeptId && parentDeptId === empDeptId;
+          const isDeptNameMatch = parentDept && parentDept !== 'General' && empDept === parentDept;
+          if (isDeptIdMatch || isDeptNameMatch) {
+            claimedEmpIds.add(emp.id);
+            results.push(emp);
+          }
+        }
       });
 
-      deptChildren.forEach((c) => claimedTopNodeIds.add(c.id));
-      sortChildren(deptChildren);
+      return results;
+    };
 
-      // Determine Parent Executive Node for this Department
-      let targetParentNode = ceoRootNode;
-
-      // 1. Check if top staff in department reports to CFO, CTO, or COO
-      if (deptChildren.length > 0) {
-        const topEmp = deptChildren[0].emp;
-        const mgrId = topEmp.reportingManagerId || (topEmp as any).reporting_manager_id;
-        if (mgrId) {
-          if (cfoNode && Number(mgrId) === Number(cfoNode.id)) targetParentNode = cfoNode;
-          else if (ctoNode && Number(mgrId) === Number(ctoNode.id)) targetParentNode = ctoNode;
-          else if (cooNode && Number(mgrId) === Number(cooNode.id)) targetParentNode = cooNode;
-        }
-      }
-
-      // 2. Fallback Department-to-Executive Name Mapping
-      if (targetParentNode === ceoRootNode) {
-        if ((deptNorm.includes('fin') || deptNorm.includes('account')) && cfoNode) {
-          targetParentNode = cfoNode;
-        } else if ((deptNorm.includes('it') || deptNorm.includes('tech') || deptNorm.includes('software')) && ctoNode) {
-          targetParentNode = ctoNode;
-        } else if (cooNode) {
-          targetParentNode = cooNode;
-        }
-      }
-
-      const deptNode = {
-        id: `dept-${deptId || deptName}`,
-        isDepartmentNode: true,
-        deptName,
-        hierarchyLevel: targetParentNode.hierarchyLevel + 0.5,
-        children: deptChildren,
+    // Helper to recursively nest subordinates
+    const buildSubTree = (emp: Employee): any => {
+      const cat = getCxoCategory(emp);
+      const isCxo = cat !== null;
+      const childEmps = emp.id ? findDirectChildren(emp.id, getDeptKey(emp), getDeptId(emp)) : [];
+      return {
+        emp,
+        isCxo,
+        cxoType: cat,
+        children: childEmps.map(buildSubTree),
       };
+    };
 
-      targetParentNode.children.push(deptNode);
+    // Find direct reports under CEO:
+    // Any employee whose reporting_manager_id is null, empty, 0, or equals CEO id, OR root-level managers
+    const rootDirectEmps = activeList.filter((emp) => {
+      const mgrId = getMgrId(emp);
+      if (!mgrId || mgrId === ceoId || mgrId === 999999) return true;
+      // If their manager is not in the active list, treat them as direct report under CEO
+      const managerExistsInList = activeList.some((other) => other.id === mgrId);
+      return !managerExistsInList;
     });
 
-    // Attach any remaining unassigned orphan top nodes under COO or CEO
-    const orphanTopNodes = nonCxoTopNodes.filter((n) => !claimedTopNodeIds.has(n.id));
-    if (orphanTopNodes.length > 0) {
-      const targetParent = cooNode || ceoRootNode;
-      orphanTopNodes.forEach((n) => targetParent.children.push(n));
-    }
+    // Mark root nodes as claimed
+    rootDirectEmps.forEach((emp) => {
+      if (emp.id) claimedEmpIds.add(emp.id);
+    });
 
-    sortChildren(ceoRootNode.children);
-    if (cooNode) sortChildren(cooNode.children);
-    if (cfoNode) sortChildren(cfoNode.children);
-    if (ctoNode) sortChildren(ctoNode.children);
+    // Build subtrees for each direct report under CEO
+    const rootChildren = rootDirectEmps.map(buildSubTree);
 
-    return ceoRootNode;
-  }, [localEmps, employees, deptData, user]);
+    // Any remaining unclaimed employees attach safely under CEO
+    const remainingUnclaimed = activeList.filter((emp) => emp.id && !claimedEmpIds.has(emp.id));
+    remainingUnclaimed.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
+    const fallbackChildren = remainingUnclaimed.map(buildSubTree);
+
+    return {
+      emp: rootCeoEmp,
+      isAdmin: true,
+      isCeo: true,
+      children: [...rootChildren, ...fallbackChildren],
+    };
+  }, [localEmps, employees, user]);
 
   // Search Highlight
   const highlightIds = useMemo(() => {
@@ -993,25 +964,38 @@ export function OrgStructurePage() {
 
   const handleManagerChange = async (newManagerId: string) => {
     if (!selectedEmp?.id) return;
+    setIsUpdatingManager(true);
+    const parsedId = newManagerId ? parseInt(newManagerId, 10) : null;
+    const previousEmps = localEmps;
+
+    // Optimistically update localEmps
+    if (localEmps) {
+      setLocalEmps(
+        localEmps.map((emp) =>
+          emp.id === selectedEmp.id ? { ...emp, reportingManagerId: parsedId } : emp
+        )
+      );
+    }
+
     try {
-      await updateEmployee({ reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null } as any);
+      await apiClient.patch(`/employees/${selectedEmp.id}`, {
+        reportingManagerId: parsedId,
+      });
+      const targetMgr = (employees as Employee[] || []).find((e) => e.id === parsedId);
+      toast.success(
+        targetMgr
+          ? `Assigned ${selectedEmp.firstName} to report under ${targetMgr.firstName} ${targetMgr.lastName}`
+          : `Assigned ${selectedEmp.firstName} as direct report to CEO`
+      );
       setSelectedEmp(null);
       refetch();
     } catch (err: any) {
+      // Revert on error
+      setLocalEmps(previousEmps);
       console.error(err);
-      const msg = err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || 'Failed to update manager assignment';
-      toast.error(msg);
-    }
-  };
-
-  const handleSaveHierarchyRules = async (updatedRules: HierarchyRule[]) => {
-    try {
-      setHierarchyRules(updatedRules);
-      await apiClient.put('/employees/org-hierarchy/rules', { rules: updatedRules });
-      toast.success('Organization hierarchy rules saved to server!');
-    } catch (err: any) {
-      console.error(err);
-      toast.error('Saved locally. Failed to sync with server.');
+      toast.error(err?.response?.data?.message || 'Failed to update reporting manager');
+    } finally {
+      setIsUpdatingManager(false);
     }
   };
 
@@ -1351,7 +1335,6 @@ export function OrgStructurePage() {
                   onSelectEmp={(e) => {
                     if (e.id === 999999) return;
                     setSelectedEmp(e);
-                    setManagerEditId(String(e.reportingManagerId || ''));
                   }}
                   activeDragEmp={activeDragEmp}
                   hierarchyRules={hierarchyRules}
@@ -1594,7 +1577,7 @@ export function OrgStructurePage() {
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     {(() => {
-                      const cfg = roleCfg((selectedEmp as any).accessRole, selectedEmp.designation);
+                      const cfg = roleCfg((selectedEmp as any).accessRole, resolveDesignation(selectedEmp, designations));
                       const Icon = cfg.Icon;
                       return (
                         <Badge variant="outline" className={`text-[10px] font-bold py-0 ${cfg.bg} ${cfg.border} ${cfg.text}`}>
@@ -1610,52 +1593,131 @@ export function OrgStructurePage() {
               <DialogDescription className="text-xs">Reporting hierarchy and manager assignment</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-2">
-              <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-3 rounded-lg border border-border/60">
-                {[
+            <div className="grid grid-cols-2 gap-2.5 text-xs bg-muted/40 p-3.5 rounded-xl border border-border/60 shadow-2xs">
+              {(() => {
+                const allEmpsList = (localEmps || (employees as Employee[]) || []);
+                const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
+                const currentMgr = mgrId
+                  ? allEmpsList.find((e) => Number(e.id) === Number(mgrId))
+                  : null;
+                const ceoEmp = allEmpsList.find((e: any) => {
+                  const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+                  const desig = (e.designation || e.jobTitle || '').toLowerCase();
+                  return isCeo || desig.includes('ceo') || desig.includes('chief executive');
+                });
+                const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
+                const displayMgrName = isSelectedEmpCeo
+                  ? 'Board of Directors'
+                  : currentMgr
+                    ? `${currentMgr.firstName} ${currentMgr.lastName}`
+                    : (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name || (ceoEmp ? `${ceoEmp.firstName} ${ceoEmp.lastName} (CEO)` : 'Direct Report to CEO');
+
+                return [
+                  ['Reporting Manager', displayMgrName],
                   ['Department', selectedEmp.department || '—'],
-                  ['Designation', selectedEmp.designation || selectedEmp.jobTitle || '—'],
-                  ['Role', (selectedEmp as any).accessRole || 'Employee'],
+                  ['Designation', resolveDesignation(selectedEmp, designations)],
                   ['Email', selectedEmp.email],
                   ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
                   ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
                 ].map(([label, value]) => (
-                  <div key={label}>
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{label}</span>
-                    <span className="font-semibold text-foreground truncate block capitalize text-xs">{value}</span>
+                  <div key={label} className={label === 'Reporting Manager' ? 'col-span-2 bg-primary/5 p-2 rounded-lg border border-primary/20' : ''}>
+                    <span className={`text-[10px] font-bold uppercase ${label === 'Reporting Manager' ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {label}
+                    </span>
+                    <span className={`font-bold block truncate capitalize text-xs ${label === 'Reporting Manager' ? 'text-foreground' : 'text-foreground'}`}>
+                      {value}
+                    </span>
                   </div>
-                ))}
-              </div>
-
-              {/* Reporting Manager Assignment */}
-              <div className="space-y-2 pt-2 border-t border-border/60">
-                <label className="text-xs font-bold text-foreground block">Assign Reporting Manager</label>
-                <div className="flex gap-2">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
-                    value={managerEditId}
-                    onChange={(e) => setManagerEditId(e.target.value)}
-                  >
-                    <option value="">— Reports to Organization Admin / CEO —</option>
-                    {(employees as Employee[])
-                      .filter((e: any) => e.id !== selectedEmp.id && !e.isCeo && !e.is_ceo && !e.isCeoProfileHidden && !e.is_ceo_profile_hidden && e.accessRole !== 'organization_admin')
-                      .map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.firstName} {e.lastName} ({e.designation || e.jobTitle || 'Staff'})
-                        </option>
-                      ))}
-                  </select>
-                  <Button
-                    size="sm"
-                    className="h-9 text-xs font-semibold px-3 bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
-                    onClick={() => handleManagerChange(managerEditId)}
-                    disabled={isUpdatingManager}
-                  >
-                    {isUpdatingManager ? 'Saving...' : 'Update'}
-                  </Button>
-                </div>
-              </div>
+                ));
+              })()}
             </div>
+
+            {/* Dedicated Live Database Reporting Manager Banner */}
+            {(() => {
+              const allEmpsList = (localEmps || (employees as Employee[]) || []);
+              const mgrId = selectedEmp.reportingManagerId ?? (selectedEmp as any).reporting_manager_id;
+              const currentMgr = mgrId
+                ? allEmpsList.find((e) => Number(e.id) === Number(mgrId))
+                : null;
+              const ceoEmp = allEmpsList.find((e: any) => {
+                const isCeo = Boolean(e.isCeo || e.is_ceo || e.isCeo === 1 || e.is_ceo === 1);
+                const desig = (e.designation || e.jobTitle || '').toLowerCase();
+                return isCeo || desig.includes('ceo') || desig.includes('chief executive');
+              });
+              const isSelectedEmpCeo = selectedEmp.id === ceoEmp?.id || (selectedEmp as any).isCeo || (selectedEmp as any).is_ceo;
+              const fallbackManagerName = (selectedEmp as any).reportingManager || (selectedEmp as any).reporting_manager_name;
+
+              return (
+                <div className="p-3.5 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-muted/40 border border-primary/25 text-xs space-y-1.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] font-extrabold text-primary uppercase tracking-wider flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-primary" />
+                      Direct Reporting Manager
+                    </div>
+                    {currentMgr?.employeeCode && (
+                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-background/80 border border-border/60 text-muted-foreground">
+                        {currentMgr.employeeCode}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <Avatar className={`h-10 w-10 rounded-full border-2 border-primary/40 shadow-xs bg-gradient-to-br ${avatarGrad(currentMgr?.id || 1)}`}>
+                      <AvatarImage src={(currentMgr as any)?.avatarUrl || undefined} />
+                      <AvatarFallback className="text-xs font-black text-white">
+                        {currentMgr ? (
+                          `${currentMgr.firstName?.[0] || ''}${currentMgr.lastName?.[0] || ''}`
+                        ) : isSelectedEmpCeo ? (
+                          <ShieldCheck className="w-4 h-4 text-white" />
+                        ) : ceoEmp ? (
+                          `${ceoEmp.firstName?.[0] || ''}${ceoEmp.lastName?.[0] || ''}`
+                        ) : (
+                          <Crown className="w-4 h-4 text-white" />
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="font-extrabold text-foreground text-sm truncate flex items-center gap-1.5">
+                        {isSelectedEmpCeo ? (
+                          <span>Board of Directors / Shareholders</span>
+                        ) : currentMgr ? (
+                          <span>{currentMgr.firstName} {currentMgr.lastName}</span>
+                        ) : fallbackManagerName ? (
+                          <span>{fallbackManagerName}</span>
+                        ) : ceoEmp ? (
+                          <span className="flex items-center gap-1.5 text-foreground">
+                            {ceoEmp.firstName} {ceoEmp.lastName}
+                            <Badge variant="outline" className="text-[9px] font-extrabold py-0 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/40">
+                              CEO
+                            </Badge>
+                          </span>
+                        ) : (
+                          <span className="text-primary font-bold flex items-center gap-1">
+                            <Crown className="w-3.5 h-3.5 text-amber-500 inline" /> Direct Report to CEO
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5 font-medium">
+                        {isSelectedEmpCeo ? (
+                          <span>Corporate Executive Governance</span>
+                        ) : currentMgr ? (
+                          <span>
+                            {resolveDesignation(currentMgr, designations)}
+                            {currentMgr.department ? ` · ${currentMgr.department}` : ''}
+                          </span>
+                        ) : ceoEmp ? (
+                          <span>Chief Executive Officer · Executive Leadership</span>
+                        ) : (
+                          <span>Top-level Executive Organization</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="flex items-center justify-between pt-3 border-t border-border/60">
               <Button

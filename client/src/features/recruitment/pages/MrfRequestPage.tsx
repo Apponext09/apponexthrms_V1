@@ -448,7 +448,7 @@ export const MrfRequestPage: React.FC = () => {
             const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
             const role = (item.accessRole || item.role || '').toLowerCase();
 
-            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrRole = ['manager', 'department_head', 'hr', 'hr_admin', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
             const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
             const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
 
@@ -1511,7 +1511,7 @@ export const MrfRequestPage: React.FC = () => {
             const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
             const role = (item.accessRole || item.role || '').toLowerCase();
 
-            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrRole = ['manager', 'department_head', 'hr', 'hr_admin', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
             const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
             const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
 

@@ -16,6 +16,7 @@ import {
   History,
   Search,
   Calendar,
+  IndianRupee,
   Filter,
   Mail,
   UserCheck,
