@@ -10,6 +10,11 @@ import { getKnex } from '../../../db/knex';
 import { requireOrgId } from '../utils/payroll.utils';
 import { withSnakeAliases, positiveNum } from '../utils/payroll.utils';
 import { PayrollFormulaEvaluator, FormulaContext } from '../utils/PayrollFormulaEvaluator';
+import { classifyComponent } from '../utils/payroll.classify';
+import {
+  prorate, sumMoney, subtractMoney, resolveRoundingConfig,
+  DEFAULT_ROUNDING, type RoundingConfig,
+} from '../utils/payroll.money';
 
 export class SalaryCalculationService {
   /**
@@ -209,6 +214,17 @@ export class SalaryCalculationService {
     // fixed_working_days from policy (e.g. 26), fallback to 30 (calendar month)
     const policyWorkingDays = policy?.fixed_working_days ? Number(policy.fixed_working_days) : 30;
     const lopFormula: string = policy?.lop_deduction_formula || 'gross_divided_by_days';
+
+    // Organization money-rounding policy — kept identical to PayrollService so a
+    // structure preview matches what the payroll run will actually pay.
+    let rounding: RoundingConfig = DEFAULT_ROUNDING;
+    try {
+      const settingsRow = await db('payroll_settings')
+        .where('organization_id', params.orgId)
+        .whereNull('deleted_at')
+        .first();
+      if (settingsRow) rounding = resolveRoundingConfig(settingsRow);
+    } catch { /* default */ }
 
     // Prefer cycle's total_days_calc / frequency over policy default so CTC preview matches actual batch run
     let cycleWorkingDays = policyWorkingDays;
@@ -410,9 +426,8 @@ export class SalaryCalculationService {
 
     // 6. Evaluate Basic Component (Primary Anchor) — fully DB-driven, no hardcoded %
     let basicAmount = 0;
-    const basicComp = earningComponents.find((c: any) =>
-      (c.name || '').toLowerCase().includes('basic')
-    );
+    const basicComp = earningComponents.find((c: any) => classifyComponent(c).isBasic)
+      || earningComponents.find((c: any) => (c.name || '').toLowerCase().includes('basic'));
 
     if (basicComp) {
       const compType = basicComp.type || basicComp.component_type || 'Value';
@@ -427,7 +442,7 @@ export class SalaryCalculationService {
 
       const isBasicAttBased = Boolean(basicComp.based_on_attendance ?? basicComp.basedOnAttendance);
       if (isBasicAttBased && attFactor < 1) {
-        basicAmount = Math.round(basicAmount * attFactor);
+        basicAmount = prorate(basicAmount, attFactor, rounding);
       }
     }
 
@@ -455,8 +470,8 @@ export class SalaryCalculationService {
 
     // 7. Multi-pass evaluation for derived components to resolve cross-component dependencies
     const otherEarningComps = earningComponents.filter((c: any) => {
-      const nameLower = (c.name || '').toLowerCase();
-      return !nameLower.includes('basic') && !nameLower.includes('special');
+      const cc = classifyComponent(c);
+      return !cc.isBasic && !cc.isSpecialAllowanceResidual;
     });
 
     const evaluatedEarningAmounts = new Map<string | number, number>();
@@ -498,7 +513,7 @@ export class SalaryCalculationService {
 
         const isAttBased = Boolean(c.based_on_attendance ?? c.basedOnAttendance);
         if (isAttBased && attFactor < 1) {
-          compAmount = Math.round(compAmount * attFactor);
+          compAmount = prorate(compAmount, attFactor, rounding);
         }
 
         // Register into evaluation context so subsequent components can use it
@@ -527,20 +542,20 @@ export class SalaryCalculationService {
     }
 
     // 8. Special Allowance — dynamic residual balancing component (Gross minus all other earnings)
-    const specialComp = earningComponents.find((c: any) =>
-      (c.name || '').toLowerCase().includes('special')
-    );
+    const specialComp = earningComponents.find((c: any) => classifyComponent(c).isSpecialAllowanceResidual)
+      || earningComponents.find((c: any) => (c.name || '').toLowerCase().includes('special'));
     let specialAllowance = 0;
     if (specialComp) {
-      // Residual: gross minus everything allocated so far
-      specialAllowance = Math.max(0, grossMonthly - allocatedEarnings);
+      // Residual so Σ(earnings) == earned gross (prorated by attendance factor).
+      const earnedGross = prorate(grossMonthly, attFactor, rounding);
+      specialAllowance = Math.max(0, subtractMoney(earnedGross, allocatedEarnings));
       earningsBreakup.push({
         component_id: specialComp.id,
         code: (specialComp.name || 'SPECIAL_ALLOWANCE').replace(/\s+/g, '_').toUpperCase(),
         name: specialComp.name,
         type: specialComp.type || specialComp.component_type || 'Derived',
         formula: specialComp.formula || '',
-        amount: Math.round(specialAllowance * 100) / 100,
+        amount: specialAllowance,
       });
       evalContext['special_allowance'] = specialAllowance;
     }
@@ -596,12 +611,12 @@ export class SalaryCalculationService {
     }
 
     for (const c of deductionComponents) {
-      const nameLower = (c.name || '').toLowerCase();
       const compAmount = evaluatedDeductionAmounts.get(c.id) || 0;
       if (compAmount > 0) {
-        if (nameLower.includes('pf') || nameLower.includes('provident')) pfAmount = compAmount;
-        if (nameLower.includes('esic') || nameLower.includes('insurance')) esicAmount = compAmount;
-        if (nameLower.includes('pt') || nameLower.includes('professional')) ptAmount = compAmount;
+        const dcls = classifyComponent(c);
+        if (dcls.statutoryCode === 'epf' || dcls.statutoryCode === 'eps' || dcls.statutoryCode === 'vpf') pfAmount = compAmount;
+        if (dcls.statutoryCode === 'esi') esicAmount = compAmount;
+        if (dcls.statutoryCode === 'pt') ptAmount = compAmount;
 
         deductionsBreakup.push({
           component_id: c.id,
@@ -613,7 +628,6 @@ export class SalaryCalculationService {
           based_on_attendance: Boolean(c.based_on_attendance ?? c.basedOnAttendance),
           is_non_cashable: Boolean(c.is_non_cashable ?? c.non_cashable ?? c.isNonCashable),
         });
-        totalDeductions += compAmount;
       }
     }
 
@@ -621,7 +635,8 @@ export class SalaryCalculationService {
     // HR must configure deduction components (PF, PT, ESIC, TDS) in Settings → Components.
     // lopFormula is available here for future per-component LOP override if needed: lopFormula
 
-    const netTakeHome = Math.max(0, grossMonthly - totalDeductions);
+    totalDeductions = sumMoney(deductionsBreakup.map((d) => d.amount));
+    const netTakeHome = Math.max(0, subtractMoney(grossMonthly, totalDeductions));
 
     return {
       slabId: slab ? Number(slab.id) : null,

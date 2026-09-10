@@ -32,9 +32,13 @@ export class ShiftService {
    * `effective*` values are the fully-resolved fields (input merged over any
    * existing record, for updates) so partial updates are validated correctly.
    */
+  /** shift_templates.shift_type is an ENUM — an out-of-list value is a raw DB "Data truncated" 500. */
+  private static readonly SHIFT_TYPES = ['fixed', 'flexible', 'night', 'roster'];
+
   private validateShiftFields(effective: {
     isFlexible?: boolean;
     isNightShift?: boolean;
+    shiftType?: string;
     startTime?: string | null;
     endTime?: string | null;
     durationHours?: number;
@@ -42,6 +46,12 @@ export class ShiftService {
     breakDurationMinutes?: number;
   }): void {
     const { isFlexible, isNightShift } = effective;
+
+    if (effective.shiftType !== undefined && !ShiftService.SHIFT_TYPES.includes(effective.shiftType)) {
+      throw new ValidationError(
+        `Invalid shift type '${effective.shiftType}'. Must be one of: ${ShiftService.SHIFT_TYPES.join(', ')}.`
+      );
+    }
     // Times may arrive as "HH:MM" (client input) or "HH:MM:SS" (an existing
     // DB record's value used as a fallback for a partial update) — normalize
     // both to "HH:MM" before comparing, or "10:00" vs "10:00:00" never match.
@@ -106,7 +116,7 @@ export class ShiftService {
 
     if (duplicate) {
       const name = duplicate.shiftName || duplicate.shift_name;
-      throw new ValidationError(
+      throw new ConflictError(
         `A shift named "${name}" already uses ${startTime}–${endTime}. Choose a different time range or edit the existing shift instead.`
       );
     }
@@ -147,12 +157,13 @@ export class ShiftService {
   }): Promise<ShiftTemplate> {
     const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, input.shiftType);
     if (!isUnique) {
-      throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
+      throw new ConflictError(`Shift code '${input.shiftCode}' already exists`);
     }
 
     this.validateShiftFields({
       isFlexible: input.isFlexible,
       isNightShift: input.isNightShift,
+      shiftType: input.shiftType,
       startTime: input.startTime,
       endTime: input.endTime,
       durationHours: input.durationHours,
@@ -257,7 +268,7 @@ export class ShiftService {
       const targetType = input.shiftType || existing.shift_type;
       const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, targetType, shiftId);
       if (!isUnique) {
-        throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
+        throw new ConflictError(`Shift code '${input.shiftCode}' already exists`);
       }
     }
 
@@ -269,6 +280,7 @@ export class ShiftService {
     this.validateShiftFields({
       isFlexible: input.isFlexible !== undefined ? input.isFlexible : (existingAny.isFlexible ?? existingAny.is_flexible),
       isNightShift: input.isNightShift !== undefined ? input.isNightShift : (existingAny.isNightShift ?? existingAny.is_night_shift),
+      shiftType: input.shiftType,
       startTime: effectiveStartTime,
       endTime: effectiveEndTime,
       durationHours: input.durationHours,
@@ -357,8 +369,9 @@ export class ShiftService {
     // Check no active assignments
     const activeAssignments = await this.assignmentRepo.getByShift(ctx, shiftId);
     if (activeAssignments.items.length > 0) {
-      throw new ValidationError(
-        `Cannot delete shift: ${activeAssignments.items.length} employee(s) are currently assigned to it`
+      throw new ConflictError(
+        `Cannot delete shift: ${activeAssignments.items.length} employee(s) are currently assigned to it. ` +
+        `Reassign them or mark the shift Inactive instead.`
       );
     }
 

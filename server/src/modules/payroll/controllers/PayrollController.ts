@@ -172,6 +172,7 @@ export class PayrollController {
   getRevision = async (req: Request, res: Response) => {
     const { id } = req.params;
     const revision = await this.revisionService.getRevision(req.ctx, parseInt(id));
+    if (!revision) { res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Salary revision not found' } }); return; }
     res.json({ success: true, data: revision });
   };
   getRevisionComponents = async (req: Request, res: Response) => {
@@ -216,6 +217,8 @@ export class PayrollController {
   getTaxDeclarations = (req: Request, res: Response) => this.loanTaxController.getTaxDeclarations(req, res);
   getTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.getTaxDeclaration(req, res);
   finalizeTaxDeclaration = (req: Request, res: Response) => this.loanTaxController.finalizeTaxDeclaration(req, res);
+  addTaxInvestment = (req: Request, res: Response) => this.loanTaxController.addTaxInvestment(req, res);
+  getTaxInvestments = (req: Request, res: Response) => this.loanTaxController.getTaxInvestments(req, res);
   calculateTDS = (req: Request, res: Response) => this.loanTaxController.calculateTDS(req, res);
 
   getGratuityRules = (req: Request, res: Response) => this.loanTaxController.getGratuityRules(req, res);

@@ -4,17 +4,23 @@ import type { ApiResponse } from '@apponexthrms/shared';
 
 export class MasterBuilderController {
   private getOrgId(req: Request): number {
-    const orgId = (req as any).user?.organizationId || (req as any).organizationId || 8;
+    // resolveTenant middleware populates req.ctx from verified JWT claims (oid) — this is the
+    // authoritative tenant. Never fall back to a hard-coded org id: that silently cross-tenants data.
+    const orgId = (req as any).ctx?.organizationId;
+    if (!orgId || Number.isNaN(Number(orgId))) {
+      throw new Error('Unable to resolve organization context');
+    }
     return Number(orgId);
   }
 
   private getCompanyId(req: Request): number | undefined {
-    const cid = req.headers['x-company-id'] || (req as any).user?.companyId;
+    const cid = (req as any).ctx?.companyId ?? req.headers['x-company-id'];
     return cid ? Number(cid) : undefined;
   }
 
   private getUserId(req: Request): number {
-    return Number((req as any).user?.userId || (req as any).user?.id || 1);
+    const uid = (req as any).ctx?.userId;
+    return uid ? Number(uid) : 0;
   }
 
   // ─── Masters ─────────────────────────────────────────────────────────────
@@ -47,16 +53,24 @@ export class MasterBuilderController {
     const orgId = this.getOrgId(req);
     const companyId = this.getCompanyId(req);
     const userId = this.getUserId(req);
-    const created = await masterBuilderService.createMaster(orgId, companyId, userId, req.body);
-    return res.status(201).json({ success: true, data: created });
+    try {
+      const created = await masterBuilderService.createMaster(orgId, companyId, userId, req.body);
+      return res.status(201).json({ success: true, data: created });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, message: e.message || 'Validation error' });
+    }
   }
 
   async updateMaster(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
     const masterId = Number(req.params.id);
     const userId = this.getUserId(req);
-    const updated = await masterBuilderService.updateMaster(orgId, masterId, userId, req.body);
-    return res.json({ success: true, data: updated });
+    try {
+      const updated = await masterBuilderService.updateMaster(orgId, masterId, userId, req.body);
+      return res.json({ success: true, data: updated });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, message: e.message || 'Validation error' });
+    }
   }
 
   async deleteMaster(req: Request, res: Response) {

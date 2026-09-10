@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { EmployeeLayout } from '../features/employee/layout/EmployeeLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const EmployeeLayout = lazy(() => import('../features/employee/layout/EmployeeLayout').then(m => ({ default: m.EmployeeLayout })));
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const EmployeeDashboardPage = lazy(() => import('../features/employee/Dashboard/EmployeeDashboardPage').then(m => ({ default: m.EmployeeDashboardPage })));

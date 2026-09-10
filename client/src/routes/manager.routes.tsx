@@ -1,7 +1,9 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { ManagerLayout } from '../layouts/ManagerLayout';
+
+// Portal shell is lazy-loaded so it is not part of the pre-login bundle
+const ManagerLayout = lazy(() => import('../layouts/ManagerLayout').then(m => ({ default: m.ManagerLayout })));
 import type { Role } from '@/config/roles';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────

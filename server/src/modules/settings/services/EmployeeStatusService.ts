@@ -2,6 +2,7 @@ import { EmployeeStatusRepository, type EmployeeStatusCreate, type EmployeeStatu
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import { NotFoundError, ConflictError } from '../../../common/errors';
 import crypto from 'crypto';
+import { assertMasterNotInUse } from '../utils/masterUsage';
 
 export class EmployeeStatusService {
   private repo: EmployeeStatusRepository;
@@ -105,9 +106,13 @@ export class EmployeeStatusService {
   }
 
   async deleteEmployeeStatus(ctx: TenantContext, id: number | string) {
-    await this.getEmployeeStatus(ctx, id);
-    
-    // We are performing a HARD DELETE from the database directly as requested by the user.
+    const status = await this.getEmployeeStatus(ctx, id);
+
+    await assertMasterNotInUse(ctx.organizationId, id, 'employee status', [
+      { table: 'employees', column: 'employee_status', label: 'employee(s)', matchValue: String((status as any)?.name ?? (status as any)?.statusName ?? '') },
+    ]);
+
+    // Hard delete retained (explicit product decision) — only reached when nothing references it.
     await this.repo.hardDelete(ctx, id);
 
     return { success: true };
