@@ -1,0 +1,65 @@
+{
+  "name": "apponexthrms",
+  "version": "0.1.0",
+  "description": "Enterprise Multi-Tenant HRMS Platform",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:biometric": "docker compose up biometric",
+    "dev:biometric:native": "biometric\\.venv\\Scripts\\python.exe biometric\\run.py",
+    "dev:all": "concurrently \"npm run dev:biometric\" \"npm run dev\"",
+    "build": "npm run build -ws",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
+    "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",
+    "format": "prettier --write .",
+    "test": "npm run test -ws",
+    "test:watch": "npm run test:watch -ws",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
+    "db:migrate": "npm run migrate -w database",
+    "db:migrate:create": "npm run migrate:create -w database",
+    "db:seed": "npm run seed -w database",
+    "db:seed:payroll": "node database/allseedpay.js",
+    "db:rollback": "npm run rollback -w database",
+    "type-check": "npm run type-check -ws",
+    "prepare": "node -e \"try { require('husky').install() } catch(e) {}\""
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.5",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.1.0",
+    "tsx": "4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "esbuild": "^0.21.5",
+    "nanoid": "^3.3.7"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "argon2": "^0.44.0",
+    "maplibre-gl": "^6.6.0",
+    "zod": "^3.22.4"
+  }
+}

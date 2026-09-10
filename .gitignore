@@ -1,0 +1,109 @@
+# Dependencies
+myenv/
+venv/
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Runtime
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Runtime
+.turbo/
+__pycache__/
+*.py[cod]
+# Virtual Environments
+venv/
+.venv/
+**/venv/
+**/.venv/
+**/venv_app/
+**/myenv/
+biometric/venv/
+
+# Server Uploads & Candidate Resumes
+server/public/uploads/*
+!server/public/uploads/.gitkeep
+
+# Diagnostics & Scratch Scripts
+server/test_*.ts
+server/test_*.js
+
+# Media & Temp
+*.mp4
+*.webm
+
+# Vite transient config-load artifacts
+*.timestamp-*.mjs
+*.zip

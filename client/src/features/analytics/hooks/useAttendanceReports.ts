@@ -1,0 +1,308 @@
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/config/api';
+
+export interface AttendanceReportFilterParams {
+  companies: string[];
+  locations: string[];
+  departments: string[];
+  reportingOfficers: string[];
+  employees: string[];
+  status: 'active' | 'inactive' | 'both';
+  fromDate: string;
+  toDate: string;
+  isTabularView: boolean;
+  workType?: 'choose' | 'full_day' | 'half_day' | 'both';
+  statusFilters?: {
+    present: boolean;
+    leave: boolean;
+    absent: boolean;
+    expected: boolean;
+    lateMark: boolean;
+    shortWorkingHour: boolean;
+    breakLog: boolean;
+    halfDay: boolean;
+  };
+}
+
+export interface AttendanceReportRow {
+  id: string;
+  date: string;
+  employeeName: string;
+  payrollCycle: string;
+  shift: string;
+  expTiming: string;
+  actualTiming: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  expHours: string;
+  actualHours: string;
+  shortHours: string;
+  bufferMins: string;
+  lateMins: string;
+  totalBreakHours: string;
+  actualWorkingHours: string;
+  isLate: 'Yes' | 'No';
+  dayStatus: 'Full Day' | 'Half Day' | 'Absent' | 'Leave' | 'Week Off' | 'Holiday';
+  day: string;
+  checkInLocation: string;
+  checkOutLocation: string;
+  departmentName?: string;
+  employeeCode?: string;
+}
+
+export interface TimelogReportRow {
+  id: string;
+  date: string;
+  employeeName: string;
+  projectName: string;
+  taskName: string;
+  loggedHours: string;
+  billableHours: string;
+  description: string;
+  status: 'Approved' | 'Pending' | 'Rejected';
+}
+
+export interface TimelogMatrixRow {
+  id: string;
+  location: string;
+  employeeName: string;
+  employeeCode: string;
+  dailyStatus: { [dateStr: string]: 'P' | 'NP' | 'W/O' | 'PL' | 'PLV' | 'HD' | 'LWP' | 'Holiday' };
+  /** Actual timing string per date e.g. '09:30-18:30' or 'Week-Off' */
+  dailyTimings: { [dateStr: string]: string };
+  /** Weekly total working hours per ISO week number (1-based within date range) */
+  weeklyTotalHours: { [weekNum: number]: string };
+  /** Weekly average working hours per ISO week number (1-based within date range) */
+  weeklyAvgHours: { [weekNum: number]: string };
+  /** Grand total working hours across all dates */
+  grandTotal: string;
+  /** Grand average working hours per working day */
+  grandAverage: string;
+  /** Total break hours */
+  totalBreakHours: string;
+  /** Actual net working hours (after deducting breaks) */
+  actualWorkHours: string;
+  presentDays: number;
+  lwp: number;
+  pl: number;
+  plv: number;
+  wo: number;
+  totalHoliday: number;
+  payableDays: number;
+}
+
+export interface MobileTrackingRecord {
+  id: string;
+  employeeName: string;
+  employeeCode: string;
+  dateTime: string;
+  type: 'Check-In' | 'Check-Out';
+  locationName: string;
+  latitude: number;
+  longitude: number;
+  geofenceStatus: 'Valid' | 'Out of Range';
+  deviceInfo: string;
+  batteryLevel: string;
+}
+
+// Hook to get metadata options for filters from backend DB.
+// Accepts an optional companyId — when provided, the backend cascades
+// departments / employees / reporting officers to that company scope.
+// React Query re-fetches automatically whenever companyId changes.
+export function useReportFilterOptions(companyId?: string | null, departmentIds?: string[]) {
+  const deptKey = departmentIds && departmentIds.length > 0 ? [...departmentIds].sort().join(',') : null;
+  return useQuery({
+    queryKey: ['reportFilterOptions', companyId ?? null, deptKey],
+    queryFn: async () => {
+      const params: Record<string, any> = {};
+      if (companyId) params.companyId = companyId;
+      if (deptKey) params.departmentIds = deptKey;
+      const res = await apiClient.get('/attendance/reports/options', { params });
+      if (res.data?.success && res.data?.data) {
+        return res.data.data;
+      }
+      throw new Error('Failed to load report filter options');
+    },
+    staleTime: 2 * 60 * 1000, // 2 min — shorter because results are company-scoped
+  });
+}
+
+// Hook to query Tabular Attendance Report from backend DB
+export function useAttendanceReportQuery(filters: AttendanceReportFilterParams | null) {
+  return useQuery({
+    queryKey: ['attendanceReportData', filters],
+    queryFn: async () => {
+      if (!filters) return [];
+      const qp = new URLSearchParams();
+      if (filters.fromDate) qp.append('fromDate', filters.fromDate);
+      if (filters.toDate) qp.append('toDate', filters.toDate);
+      if (filters.status) qp.append('status', filters.status);
+      if (filters.workType) qp.append('workType', filters.workType);
+      if (filters.isTabularView !== undefined) qp.append('isTabularView', String(filters.isTabularView));
+
+      (filters.companies || []).forEach((v) => v && v !== 'all' && qp.append('companies', v));
+      (filters.locations || []).forEach((v) => v && qp.append('locations', v));
+      (filters.departments || []).forEach((v) => v && qp.append('departments', v));
+      (filters.reportingOfficers || []).forEach((v) => v && qp.append('reportingOfficers', v));
+      (filters.employees || []).forEach((v) => v && qp.append('employees', v));
+
+      if (filters.statusFilters) {
+        qp.append('statusFilters', JSON.stringify(filters.statusFilters));
+      }
+
+      const res = await apiClient.get(`/attendance/reports/tabular?${qp.toString()}`);
+      if (res.data?.success && Array.isArray(res.data?.data)) {
+        return res.data.data as AttendanceReportRow[];
+      }
+      throw new Error('Failed to load attendance report data');
+    },
+    enabled: !!filters,
+    staleTime: 0,
+    refetchInterval: 5000,
+  });
+}
+
+// Hook to query Monthly Timelog Matrix Report from backend DB
+export function useTimelogMatrixQuery(params: {
+  fromDate: string;
+  toDate: string;
+  companies?: string[];
+  employees?: string[];
+  locations?: string[];
+  departments?: string[];
+  reportingOfficers?: string[];
+  status?: string;
+  saturdayRule?: string;
+} | null) {
+  return useQuery({
+    queryKey: ['timelogMatrixData', params],
+    queryFn: async () => {
+      if (!params) return [];
+      try {
+        // Build URLSearchParams manually so arrays become repeated keys
+        const qp = new URLSearchParams();
+        if (params.fromDate) qp.append('fromDate', params.fromDate);
+        if (params.toDate) qp.append('toDate', params.toDate);
+        if (params.status && params.status !== 'choose') qp.append('status', params.status);
+        if (params.saturdayRule) qp.append('saturdayRule', params.saturdayRule);
+        (params.companies || []).forEach((v) => v && qp.append('companies[]', v));
+        (params.employees || []).forEach((v) => v && qp.append('employees[]', v));
+        (params.locations || []).forEach((v) => v && qp.append('locations[]', v));
+        (params.departments || []).forEach((v) => v && qp.append('departments[]', v));
+        (params.reportingOfficers || []).forEach((v) => v && qp.append('reportingOfficers[]', v));
+
+        const res = await apiClient.get(`/attendance/reports/timelog-matrix?${qp.toString()}`);
+        if (res.data?.success && Array.isArray(res.data?.data)) {
+          return res.data.data as TimelogMatrixRow[];
+        }
+      } catch (err) {
+        console.warn('[useTimelogMatrixQuery] API error:', err);
+      }
+      return [];
+    },
+    enabled: !!params,
+  });
+}
+
+export function generateMobileTrackingRecords(): MobileTrackingRecord[] {
+  return [
+    {
+      id: 'mt-1',
+      employeeName: 'Nirmal Navghane',
+      employeeCode: 'EMP-2026-001',
+      dateTime: '2026-07-23 09:32:14',
+      type: 'Check-In',
+      locationName: 'Mumbai HQ Office (Geofenced Area)',
+      latitude: 19.0760,
+      longitude: 72.8777,
+      geofenceStatus: 'Valid',
+      deviceInfo: 'Samsung Galaxy S23 (Android 14)',
+      batteryLevel: '85%',
+    },
+    {
+      id: 'mt-2',
+      employeeName: 'Ankita Rane',
+      employeeCode: 'EMP-2026-002',
+      dateTime: '2026-07-23 09:35:50',
+      type: 'Check-In',
+      locationName: 'Pune Branch Office',
+      latitude: 18.5204,
+      longitude: 73.8567,
+      geofenceStatus: 'Valid',
+      deviceInfo: 'iPhone 15 Pro (iOS 17.5)',
+      batteryLevel: '92%',
+    },
+    {
+      id: 'mt-3',
+      employeeName: 'Devendra Mane',
+      employeeCode: 'EMP-2026-003',
+      dateTime: '2026-07-23 09:48:02',
+      type: 'Check-In',
+      locationName: 'Client Site - Offshore Unit',
+      latitude: 19.1197,
+      longitude: 72.9050,
+      geofenceStatus: 'Valid',
+      deviceInfo: 'OnePlus 12 (Android 14)',
+      batteryLevel: '64%',
+    },
+    {
+      id: 'mt-4',
+      employeeName: 'Snehal Patil',
+      employeeCode: 'EMP-2026-004',
+      dateTime: '2026-07-23 09:30:00',
+      type: 'Check-In',
+      locationName: 'Bangalore Tech Park',
+      latitude: 12.9716,
+      longitude: 77.5946,
+      geofenceStatus: 'Valid',
+      deviceInfo: 'Google Pixel 8 (Android 14)',
+      batteryLevel: '78%',
+    },
+  ];
+}
+
+export function generateTimelogReportData(): TimelogReportRow[] {
+  return [
+    {
+      id: 'tl-1',
+      date: '2026-07-23',
+      employeeName: 'Nirmal Navghane',
+      projectName: 'Apponext HRMS Core',
+      taskName: 'Reports & Analytics UI Implementation',
+      loggedHours: '08:00',
+      billableHours: '08:00',
+      description: 'Implemented Attendance Report filters, Tabular view, and Mobile Tracking Modal',
+      status: 'Approved',
+    },
+    {
+      id: 'tl-2',
+      date: '2026-07-23',
+      employeeName: 'Ankita Rane',
+      projectName: 'Payroll Integration',
+      taskName: 'Salary Slip Generator API',
+      loggedHours: '07:30',
+      billableHours: '07:30',
+      description: 'Connected tax deductions and allowance calculations with monthly payroll runner',
+      status: 'Approved',
+    },
+    {
+      id: 'tl-3',
+      date: '2026-07-22',
+      employeeName: 'Devendra Mane',
+      projectName: 'Biometric Face Sync',
+      taskName: 'Face Recognition Model Tuning',
+      loggedHours: '06:45',
+      billableHours: '06:45',
+      description: 'Optimized check-in face verification latency to under 300ms',
+      status: 'Pending',
+    },
+  ];
+}
+
+/** Helper: convert total minutes to HH:MM string */
+function minsToHHMM(totalMins: number): string {
+  if (totalMins <= 0) return '00:00';
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}

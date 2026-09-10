@@ -1,0 +1,1547 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 222 84% 5%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 84% 5%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 84% 5%;
+    --primary: 226 52% 50%;
+    --primary-foreground: 210 40% 96%;
+    --accent: 162 72% 51%;
+    --accent-foreground: 210 40% 96%;
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 96%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 84% 5%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 210 40% 96%;
+    --muted: 220 13% 91%;
+    --muted-foreground: 217 33% 46%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 226 52% 50%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 222 84% 6%;
+    --foreground: 210 40% 96%;
+    --card: 222 84% 10%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 84% 10%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 226 72% 56%;
+    --primary-foreground: 222 84% 6%;
+    --accent: 162 72% 51%;
+    --accent-foreground: 222 84% 6%;
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 96%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 84% 6%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 210 40% 96%;
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 13% 66%;
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --ring: 226 72% 56%;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    color-scheme: light dark;
+    @apply bg-background text-foreground;
+  }
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-white/20 dark:border-white/10;
+  }
+}
+
+/* Date & Time inputs calendar picker icon styling */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: light;
+}
+
+.dark input[type="date"],
+.dark input[type="time"],
+.dark input[type="datetime-local"],
+.dark input[type="month"],
+.dark input[type="week"] {
+  color-scheme: dark;
+}
+
+/* ============================================================
+   GLOBAL DARK MODE — Native form elements (select, textarea, input)
+   Covers ALL masters pages as a safety net for any missed inline classes
+   ============================================================ */
+
+/* Native select */
+.dark select {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+  color-scheme: dark;
+}
+.dark select option {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+/* Native textarea */
+.dark textarea {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+.dark textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Native text/number/email inputs that may have missed inline styling */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
+}
+.dark input::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Tables inside masters */
+.dark table thead tr {
+  background-color: hsl(var(--muted) / 0.5);
+}
+.dark table tbody tr:hover {
+  background-color: hsl(var(--muted) / 0.3);
+}
+.dark table td,
+.dark table th {
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+/* ProseMirror / TipTap editor dark mode */
+.dark .ProseMirror {
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+}
+.dark .ProseMirror th {
+  background-color: hsl(var(--muted)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+.dark .ProseMirror td,
+.dark .ProseMirror th {
+  border-color: hsl(var(--border)) !important;
+}
+
+/* Scrollbar styling for dark mode */
+.dark ::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* APPONEXT HRMS dashboard reference skin */
+.app-shell-reference {
+  --background: 216 33% 97%;
+  --foreground: 219 69% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 219 69% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 219 69% 14%;
+  --primary: 216 77% 47%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 213 87% 63%;
+  --accent-foreground: 219 69% 14%;
+  --success: 125 47% 46%;
+  --success-foreground: 0 0% 100%;
+  --warning: 29 87% 53%;
+  --warning-foreground: 219 69% 14%;
+  --muted: 216 42% 95%;
+  --muted-foreground: 219 31% 62%;
+  --border: 217 41% 91%;
+  --input: 217 41% 91%;
+  --ring: 216 77% 47%;
+  color-scheme: light;
+  font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.dark .app-shell-reference {
+  --background: 223 44% 7%;
+  --foreground: 220 60% 97%;
+  --card: 225 41% 11%;
+  --card-foreground: 220 60% 97%;
+  --popover: 224 40% 13%;
+  --popover-foreground: 220 60% 97%;
+  --primary: 213 87% 63%;
+  --primary-foreground: 223 44% 7%;
+  --accent: 213 87% 63%;
+  --accent-foreground: 223 44% 7%;
+  --success: 125 47% 55%;
+  --success-foreground: 223 44% 7%;
+  --warning: 29 87% 58%;
+  --warning-foreground: 223 44% 7%;
+  --muted: 224 37% 15%;
+  --muted-foreground: 218 28% 68%;
+  --border: 223 34% 23%;
+  --input: 223 34% 23%;
+  --ring: 213 87% 63%;
+  color-scheme: dark;
+}
+
+.app-shell-reference .app-shell-scroll {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(circle at 18% 8%, hsl(var(--primary) / 0.055), transparent 26rem),
+    radial-gradient(circle at 92% 0%, hsl(var(--accent) / 0.045), transparent 24rem);
+}
+
+.dark .app-shell-reference .app-shell-scroll {
+  background-image:
+    radial-gradient(circle at 18% 8%, hsl(var(--primary) / 0.07), transparent 28rem),
+    radial-gradient(circle at 92% 0%, hsl(var(--accent) / 0.04), transparent 24rem);
+}
+
+.app-shell-reference .app-dashboard-sidebar nav button.bg-primary {
+  background-image: linear-gradient(115deg, #12305e 0%, #1c63d5 100%);
+  color: #fff;
+}
+
+.dark .app-shell-reference .app-dashboard-sidebar nav button.bg-primary {
+  background-image: linear-gradient(115deg, #1c63d5 0%, #4e9bf2 100%);
+  color: #08152c;
+}
+
+.app-shell-reference .portal-sidebar-active {
+  background-color: #1c63d5;
+  background-image: linear-gradient(115deg, #12305e 0%, #1c63d5 100%);
+}
+
+.dark .app-shell-reference .portal-sidebar-active {
+  background-color: #4e9bf2;
+  background-image: linear-gradient(115deg, #1c63d5 0%, #4e9bf2 100%);
+}
+
+/* Clean & Minimal Invisible Scrollbar across all elements while preserving full scroll functionality */
+*,
+*::before,
+*::after {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}
+
+/* Visible Custom Scrollbars */
+.visible-scrollbar,
+.custom-scrollbar {
+  -ms-overflow-style: auto !important;
+  scrollbar-width: thin !important;
+}
+
+.visible-scrollbar::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  height: 6px !important;
+}
+
+.visible-scrollbar::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.visible-scrollbar::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.4);
+  border-radius: 8px;
+}
+
+.visible-scrollbar::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+/* APPONEXT HRMS login */
+.hrms-login-page {
+  --brand-navy: #082d68;
+  --brand-blue: #075cc9;
+  --brand-cyan: #0d9bd7;
+  --brand-green: #62b52c;
+  --brand-orange: #ff8a00;
+  --brand-ink: #0a1733;
+  --brand-copy: #40577c;
+  min-height: 100dvh;
+  padding: clamp(14px, 1.2vw, 22px);
+  color: var(--brand-ink);
+  color-scheme: light;
+  background:
+    radial-gradient(circle at 69% 43%, rgba(13, 155, 215, 0.1), transparent 27%),
+    linear-gradient(135deg, #f8fbff 0%, #edf5ff 48%, #f6faff 100%);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+}
+
+.hrms-login-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.98fr) minmax(510px, 1.02fr);
+  gap: 24px;
+  width: min(100%, 1152px);
+  height: calc(100dvh - clamp(28px, 2.4vw, 44px));
+  min-height: 690px;
+  max-height: 818px;
+  margin: 0 auto;
+  padding: 40px 42px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 44% 46%, rgba(98, 181, 44, 0.06), transparent 2px),
+    radial-gradient(circle at 38% 20%, rgba(7, 92, 201, 0.22), transparent 7px),
+    linear-gradient(110deg, rgba(255, 255, 255, 0.93), rgba(235, 245, 255, 0.76));
+  box-shadow: 0 24px 70px rgba(24, 78, 145, 0.12);
+  overflow: hidden;
+}
+
+.hrms-login-overview {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  padding-top: 3px;
+  z-index: 0;
+}
+
+.hrms-login-overview::before,
+.hrms-login-overview::after {
+  position: absolute;
+  content: '';
+  pointer-events: none;
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.hrms-login-overview::before {
+  width: min(50vw, 500px);
+  aspect-ratio: 1;
+  top: 11%;
+  left: 58%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+}
+
+.hrms-login-overview::after {
+  width: 360px;
+  aspect-ratio: 1;
+  right: -175px;
+  bottom: 24%;
+  background: linear-gradient(145deg, rgba(7, 92, 201, 0.06), rgba(13, 155, 215, 0.11));
+}
+
+.hrms-trust-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 999px;
+  color: #0957b7;
+  background: linear-gradient(90deg, rgba(7, 92, 201, 0.09), rgba(13, 155, 215, 0.06));
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.hrms-trust-pill svg {
+  width: 15px;
+  height: 15px;
+  fill: var(--brand-blue);
+  color: white;
+  stroke-width: 2.6;
+}
+
+.hrms-hero-copy {
+  margin-top: 35px;
+}
+
+.hrms-kicker {
+  margin: 0 0 5px;
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.hrms-hero-copy h1 {
+  margin: 0;
+  color: var(--brand-blue);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 34px;
+  line-height: 1.28;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.hrms-hero-copy h1 span {
+  display: block;
+  width: fit-content;
+  color: transparent;
+  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-cyan) 38%, var(--brand-green) 70%, var(--brand-orange) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+
+.hrms-hero-description {
+  margin: 14px 0 0;
+  color: var(--brand-copy);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.hrms-feature-list {
+  position: relative;
+  display: grid;
+  gap: 18px;
+  width: 265px;
+  margin-top: 22px;
+  z-index: 3;
+}
+
+.hrms-feature {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.hrms-feature-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(8, 45, 104, 0.08);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 6px 16px rgba(8, 45, 104, 0.09);
+}
+
+.hrms-feature-icon svg {
+  width: 24px;
+  height: 24px;
+  color: var(--brand-blue);
+  stroke-width: 2.4;
+}
+
+.hrms-feature-icon-1 svg {
+  color: var(--brand-cyan);
+  fill: rgba(98, 181, 44, 0.24);
+}
+
+.hrms-feature-icon-2 svg {
+  color: #0875bd;
+}
+
+.hrms-feature-icon-4 svg {
+  color: #0875bd;
+  fill: rgba(7, 92, 201, 0.15);
+}
+
+.hrms-feature-icon-5 svg {
+  fill: var(--brand-blue);
+}
+
+.hrms-feature strong,
+.hrms-feature small {
+  display: block;
+}
+
+.hrms-feature strong {
+  margin-bottom: 4px;
+  color: var(--brand-ink);
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.hrms-feature small {
+  color: var(--brand-copy);
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 180px;
+}
+
+.hrms-art-halo {
+  position: absolute;
+  right: -9%;
+  bottom: 4%;
+  width: 58%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(13, 155, 215, 0.14) 0%, rgba(7, 92, 201, 0.05) 50%, transparent 72%);
+  filter: blur(8px);
+}
+
+.hrms-workspace-art {
+  position: absolute;
+  right: 0.5%;
+  bottom: 7.5%;
+  width: min(55%, 410px);
+  z-index: 2;
+}
+
+.hrms-workspace-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+  mix-blend-mode: multiply;
+  filter: saturate(0.96) contrast(1.02) drop-shadow(0 18px 18px rgba(8, 45, 104, 0.1));
+  -webkit-mask-image: radial-gradient(ellipse 75% 72% at 50% 55%, black 56%, transparent 79%);
+  mask-image: radial-gradient(ellipse 75% 72% at 50% 55%, black 56%, transparent 79%);
+}
+
+.hrms-security-note {
+  position: absolute;
+  left: 0;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: min(330px, 68%);
+  min-height: 54px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  z-index: 3;
+}
+
+.hrms-security-note>span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: white;
+  background: linear-gradient(150deg, var(--brand-cyan), var(--brand-blue));
+  box-shadow: 0 6px 14px rgba(7, 92, 201, 0.2);
+}
+
+.hrms-security-note svg {
+  width: 17px;
+  height: 17px;
+}
+
+.hrms-security-note strong,
+.hrms-security-note small {
+  display: block;
+}
+
+.hrms-security-note strong {
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.hrms-security-note small {
+  color: var(--brand-copy);
+  font-size: 10px;
+}
+
+.hrms-login-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-width: 0;
+  height: 100%;
+  padding: 38px 38px 43px;
+  border: 1px solid rgba(255, 255, 255, 0.96);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.92));
+  box-shadow: 0 24px 60px rgba(26, 71, 131, 0.1);
+  overflow: hidden;
+  z-index: 2;
+}
+
+.hrms-login-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 334px;
+  height: 118px;
+  margin: 8px auto 28px;
+  flex: 0 0 auto;
+}
+
+.hrms-logo-mark,
+.hrms-logo-wordmark {
+  position: relative;
+  display: block;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.hrms-logo-mark {
+  width: 104px;
+  height: 118px;
+}
+
+.hrms-logo-mark img {
+  position: absolute;
+  top: -16px;
+  left: -59px;
+  width: 212px;
+  max-width: none;
+}
+
+.hrms-logo-wordmark {
+  width: 220px;
+  height: 74px;
+}
+
+.hrms-logo-wordmark img {
+  position: absolute;
+  top: -171px;
+  left: -23px;
+  width: 265px;
+  max-width: none;
+}
+
+.hrms-form-heading {
+  text-align: center;
+}
+
+.hrms-form-heading h2 {
+  margin: 0;
+  color: var(--brand-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.hrms-form-heading h2 span {
+  display: inline-block;
+  margin-left: 4px;
+  font-family: sans-serif;
+  font-size: 0.82em;
+  transform: rotate(-8deg);
+}
+
+.hrms-form-heading p {
+  margin: 10px 0 0;
+  color: var(--brand-copy);
+  font-size: 16px;
+}
+
+.hrms-login-form {
+  display: grid;
+  gap: 26px;
+  margin-top: 31px;
+}
+
+.hrms-field-group {
+  display: grid;
+  gap: 10px;
+}
+
+.hrms-field-group label {
+  color: var(--brand-ink);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.hrms-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.hrms-input-wrap>svg {
+  position: absolute;
+  left: 19px;
+  width: 21px;
+  height: 21px;
+  color: #5d7192;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.hrms-input-wrap input {
+  width: 100%;
+  height: 54px;
+  padding: 0 54px;
+  border: 1px solid #bdc9da;
+  border-radius: 10px;
+  outline: none;
+  color: var(--brand-ink);
+  background: rgba(255, 255, 255, 0.82);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.hrms-input-wrap input::placeholder {
+  color: #607392;
+  opacity: 1;
+}
+
+.hrms-input-wrap input:hover {
+  border-color: rgba(7, 92, 201, 0.55);
+}
+
+.hrms-input-wrap input:focus {
+  border-color: var(--brand-blue);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(7, 92, 201, 0.11), 0 7px 20px rgba(8, 45, 104, 0.07);
+}
+
+.hrms-password-toggle {
+  position: absolute;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 9px;
+  color: #4f6689;
+  background: transparent;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.hrms-password-toggle:hover {
+  color: var(--brand-blue);
+  background: rgba(7, 92, 201, 0.07);
+}
+
+.hrms-password-toggle:focus-visible {
+  outline: 3px solid rgba(13, 155, 215, 0.26);
+}
+
+.hrms-password-toggle svg {
+  width: 21px;
+  height: 21px;
+}
+
+.hrms-login-error {
+  margin: -7px 0 -8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 9px;
+  color: #b91c1c;
+  background: #fff4f4;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hrms-submit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  width: 100%;
+  height: 52px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 10px;
+  color: white;
+  background: linear-gradient(180deg, #0873e3 0%, #075cc9 55%, #054bb5 100%);
+  box-shadow: 0 10px 22px rgba(7, 92, 201, 0.23), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.hrms-submit-button:hover:not(:disabled) {
+  filter: saturate(1.1) brightness(1.035);
+  transform: translateY(-1px);
+  box-shadow: 0 13px 25px rgba(7, 92, 201, 0.3), 0 0 0 3px rgba(98, 181, 44, 0.09);
+}
+
+.hrms-submit-button:focus-visible {
+  outline: 4px solid rgba(13, 155, 215, 0.28);
+  outline-offset: 3px;
+}
+
+.hrms-submit-button:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+.hrms-submit-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.hrms-spinner {
+  animation: hrms-spin 0.8s linear infinite;
+}
+
+@keyframes hrms-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hrms-admin-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 70px;
+  margin-top: 31px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  color: var(--brand-blue);
+  background: linear-gradient(110deg, rgba(234, 244, 255, 0.94), rgba(223, 237, 255, 0.78));
+}
+
+.hrms-admin-notice>svg {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  stroke-width: 2.2;
+}
+
+.hrms-admin-notice p {
+  margin: 0;
+}
+
+.hrms-admin-notice strong,
+.hrms-admin-notice span {
+  display: block;
+}
+
+.hrms-admin-notice strong {
+  color: var(--brand-ink);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.hrms-admin-notice span {
+  color: var(--brand-copy);
+  font-size: 12px;
+}
+
+.hrms-login-footer {
+  margin: auto 0 0;
+  padding-top: 20px;
+  color: var(--brand-copy);
+  text-align: center;
+  font-size: 12px;
+}
+
+.hrms-login-footer a {
+  color: #0063de;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.hrms-login-footer a:hover {
+  color: var(--brand-green);
+  text-decoration: underline;
+}
+
+.hrms-login-footer a:focus-visible {
+  outline: 3px solid rgba(255, 138, 0, 0.25);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* Login dark theme — follows the persisted/system theme on the root html element. */
+.dark .hrms-login-page {
+  --brand-blue: #4aa8ff;
+  --brand-cyan: #35c7f4;
+  --brand-green: #8bd34d;
+  --brand-orange: #ffac43;
+  --brand-ink: #eef6ff;
+  --brand-copy: #9db1cc;
+  color-scheme: dark;
+  background:
+    radial-gradient(circle at 68% 42%, rgba(13, 155, 215, 0.14), transparent 29%),
+    radial-gradient(circle at 16% 84%, rgba(98, 181, 44, 0.06), transparent 25%),
+    linear-gradient(135deg, #040b14 0%, #071321 46%, #08192c 100%);
+}
+
+.dark .hrms-login-shell {
+  border-color: rgba(94, 157, 224, 0.16);
+  background:
+    radial-gradient(circle at 44% 46%, rgba(139, 211, 77, 0.07), transparent 2px),
+    radial-gradient(circle at 38% 20%, rgba(74, 168, 255, 0.34), transparent 7px),
+    linear-gradient(112deg, rgba(8, 20, 35, 0.98), rgba(10, 30, 51, 0.94));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark .hrms-login-overview::before {
+  border-color: rgba(107, 171, 238, 0.13);
+}
+
+.dark .hrms-login-overview::after {
+  background: linear-gradient(145deg, rgba(18, 76, 127, 0.18), rgba(13, 155, 215, 0.12));
+}
+
+.dark .hrms-trust-pill {
+  color: #9bd0ff;
+  border: 1px solid rgba(74, 168, 255, 0.15);
+  background: linear-gradient(90deg, rgba(21, 74, 122, 0.36), rgba(13, 155, 215, 0.11));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.dark .hrms-trust-pill svg {
+  fill: #238cf0;
+  color: #f4faff;
+}
+
+.dark .hrms-kicker {
+  color: #f3f8ff;
+  text-shadow: 0 8px 26px rgba(0, 0, 0, 0.28);
+}
+
+.dark .hrms-feature-icon {
+  border-color: rgba(93, 154, 219, 0.22);
+  background: linear-gradient(145deg, rgba(15, 39, 65, 0.96), rgba(10, 28, 48, 0.94));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.dark .hrms-feature-icon svg {
+  color: #49a9ff;
+}
+
+.dark .hrms-feature-icon-1 svg {
+  color: #38c9f3;
+  fill: rgba(139, 211, 77, 0.22);
+}
+
+.dark .hrms-feature-icon-2 svg,
+.dark .hrms-feature-icon-4 svg {
+  color: #42a8ed;
+}
+
+.dark .hrms-feature-icon-5 svg {
+  color: #55adff;
+  fill: #257fd7;
+}
+
+.dark .hrms-art-halo {
+  background: radial-gradient(circle, rgba(43, 142, 229, 0.2) 0%, rgba(13, 97, 171, 0.09) 50%, transparent 72%);
+}
+
+.dark .hrms-workspace-art img {
+  mix-blend-mode: normal;
+  filter: brightness(0.64) saturate(1.45) contrast(1.1) drop-shadow(0 20px 22px rgba(0, 0, 0, 0.42));
+}
+
+.dark .hrms-security-note {
+  border-color: rgba(78, 144, 212, 0.2);
+  background: rgba(10, 30, 51, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+
+.dark .hrms-security-note>span {
+  background: linear-gradient(150deg, #16aee1, #086bce);
+  box-shadow: 0 7px 16px rgba(0, 93, 197, 0.3);
+}
+
+.dark .hrms-login-card {
+  border-color: rgba(89, 151, 218, 0.17);
+  background:
+    radial-gradient(circle at 50% -8%, rgba(21, 105, 180, 0.13), transparent 35%),
+    linear-gradient(145deg, rgba(9, 24, 41, 0.99), rgba(7, 19, 33, 0.97));
+  box-shadow: 0 28px 65px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.dark .hrms-login-logo img {
+  filter: brightness(2.05) saturate(1.08) drop-shadow(0 8px 18px rgba(0, 110, 225, 0.16));
+}
+
+.dark .hrms-input-wrap>svg {
+  color: #8fa7c5;
+}
+
+.dark .hrms-input-wrap input {
+  border-color: #294765;
+  color: #edf6ff;
+  background: rgba(9, 28, 48, 0.92);
+  caret-color: #55b9ff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark .hrms-input-wrap input::placeholder {
+  color: #7f96b3;
+}
+
+.dark .hrms-input-wrap input:hover {
+  border-color: rgba(74, 168, 255, 0.64);
+  background: rgba(11, 34, 58, 0.96);
+}
+
+.dark .hrms-input-wrap input:focus {
+  border-color: #3ba7ff;
+  background: #0b223a;
+  box-shadow: 0 0 0 4px rgba(53, 199, 244, 0.12), 0 9px 24px rgba(0, 0, 0, 0.2);
+}
+
+.dark .hrms-input-wrap input:-webkit-autofill,
+.dark .hrms-input-wrap input:-webkit-autofill:hover,
+.dark .hrms-input-wrap input:-webkit-autofill:focus {
+  border-color: #315777;
+  -webkit-text-fill-color: #edf6ff;
+  caret-color: #55b9ff;
+  -webkit-box-shadow: 0 0 0 1000px #0b223a inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+.dark .hrms-password-toggle {
+  color: #8fa8c6;
+}
+
+.dark .hrms-password-toggle:hover {
+  color: #5fbdff;
+  background: rgba(74, 168, 255, 0.1);
+}
+
+.dark .hrms-login-error {
+  border-color: rgba(248, 113, 113, 0.28);
+  color: #ffb4b4;
+  background: rgba(104, 26, 34, 0.28);
+}
+
+.dark .hrms-submit-button {
+  background: linear-gradient(180deg, #118cf2 0%, #0872d8 54%, #0759bd 100%);
+  box-shadow: 0 12px 28px rgba(0, 91, 196, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.dark .hrms-submit-button:hover:not(:disabled) {
+  box-shadow: 0 15px 30px rgba(0, 105, 220, 0.42), 0 0 0 3px rgba(139, 211, 77, 0.1);
+}
+
+.dark .hrms-admin-notice {
+  color: #62bcff;
+  border: 1px solid rgba(75, 148, 219, 0.15);
+  background: linear-gradient(110deg, rgba(10, 42, 72, 0.92), rgba(11, 51, 85, 0.76));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+.dark .hrms-login-footer a {
+  color: #55b7ff;
+}
+
+.dark .hrms-login-footer a:hover {
+  color: #9bdd63;
+}
+
+@media (max-width: 1120px) {
+  .hrms-login-shell {
+    grid-template-columns: minmax(0, 0.88fr) minmax(480px, 1.12fr);
+    gap: 24px;
+    padding: 30px;
+  }
+
+  .hrms-hero-copy {
+    margin-top: 35px;
+  }
+
+  .hrms-feature-list {
+    width: 325px;
+  }
+
+  .hrms-feature {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .hrms-feature-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .hrms-feature-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .hrms-workspace-art {
+    width: 52%;
+    right: -3%;
+    bottom: 10%;
+  }
+
+  .hrms-security-note {
+    width: 72%;
+  }
+}
+
+@media (max-width: 900px) {
+  .hrms-login-page {
+    padding: 12px;
+    overflow: auto;
+  }
+
+  .hrms-login-shell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: calc(100dvh - 24px);
+    min-height: 620px;
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .hrms-login-overview {
+    display: none;
+  }
+
+  .hrms-login-card {
+    width: min(100%, 610px);
+    height: 100%;
+    padding: clamp(24px, 5vw, 42px);
+  }
+
+  .hrms-login-logo {
+    margin: 0 auto 20px;
+  }
+}
+
+@media (max-width: 520px) {
+  .hrms-login-page {
+    padding: 0;
+    background: white;
+  }
+
+  .hrms-login-shell {
+    min-height: 100dvh;
+    height: 100dvh;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .hrms-login-card {
+    min-height: 100dvh;
+    padding: 22px 21px 20px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow-y: auto;
+  }
+
+  .hrms-login-logo {
+    margin: -5px auto 0;
+    transform: scale(0.82);
+  }
+
+  .hrms-form-heading h2 {
+    font-size: 28px;
+  }
+
+  .hrms-form-heading p {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  .hrms-login-form {
+    margin-top: 28px;
+    gap: 20px;
+  }
+
+  .hrms-input-wrap input {
+    height: 56px;
+    font-size: 14px;
+  }
+
+  .hrms-submit-button {
+    height: 56px;
+    font-size: 16px;
+  }
+
+  .hrms-admin-notice {
+    min-height: 76px;
+    margin-top: 25px;
+    padding: 13px 15px;
+    gap: 12px;
+  }
+
+  .hrms-admin-notice>svg {
+    width: 27px;
+    height: 27px;
+  }
+
+  .hrms-admin-notice strong {
+    font-size: 12px;
+  }
+
+  .hrms-admin-notice span {
+    font-size: 11px;
+  }
+
+  .hrms-login-footer {
+    padding-top: 20px;
+    font-size: 12px;
+  }
+}
+
+@media (max-height: 780px) and (min-width: 901px) {
+  .hrms-login-shell {
+    min-height: 640px;
+    padding-block: 25px;
+  }
+
+  .hrms-trust-pill {
+    height: 34px;
+    font-size: 13px;
+  }
+
+  .hrms-hero-copy {
+    margin-top: 24px;
+  }
+
+  .hrms-kicker {
+    font-size: 36px;
+  }
+
+  .hrms-hero-copy h1 {
+    font-size: 30px;
+  }
+
+  .hrms-hero-description {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .hrms-feature-list {
+    margin-top: 14px;
+    gap: 6px;
+    width: 230px;
+  }
+
+  .hrms-feature {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .hrms-feature-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hrms-feature-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .hrms-feature strong {
+    font-size: 12px;
+  }
+
+  .hrms-feature small {
+    max-width: 170px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .hrms-security-note {
+    min-height: 56px;
+  }
+
+  .hrms-login-card {
+    padding-top: 22px;
+    padding-bottom: 22px;
+  }
+
+  .hrms-login-logo {
+    margin: -16px auto -9px;
+    transform: scale(0.82);
+  }
+
+  .hrms-form-heading p {
+    margin-top: 6px;
+  }
+
+  .hrms-login-form {
+    margin-top: 22px;
+    gap: 16px;
+  }
+
+  .hrms-field-group {
+    gap: 7px;
+  }
+
+  .hrms-input-wrap input {
+    height: 52px;
+  }
+
+  .hrms-submit-button {
+    height: 52px;
+  }
+
+  .hrms-admin-notice {
+    min-height: 70px;
+    margin-top: 22px;
+  }
+
+  .hrms-login-footer {
+    padding-top: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .hrms-login-page *,
+  .hrms-login-page *::before,
+  .hrms-login-page *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── TipTap Rich Text Preview (read-only card display) ───────────────────────
+   Applied via .tiptap-preview on dangerouslySetInnerHTML containers so that
+   TipTap-generated HTML (bold, italic, lists, headings, etc.) renders
+   correctly in card snippets without polluting global styles.
+────────────────────────────────────────────────────────────────────────────── */
+.tiptap-preview p {
+  margin: 0 0 0.3em;
+}
+.tiptap-preview p:last-child {
+  margin-bottom: 0;
+}
+.tiptap-preview strong {
+  font-weight: 700;
+}
+.tiptap-preview em {
+  font-style: italic;
+}
+.tiptap-preview s {
+  text-decoration: line-through;
+}
+.tiptap-preview u {
+  text-decoration: underline;
+}
+.tiptap-preview code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+  font-size: 0.9em;
+}
+.dark .tiptap-preview code {
+  background: rgba(255, 255, 255, 0.08);
+}
+.tiptap-preview ul {
+  list-style: disc;
+  margin: 0.25em 0;
+  padding-left: 1.3em;
+}
+.tiptap-preview ol {
+  list-style: decimal;
+  margin: 0.25em 0;
+  padding-left: 1.3em;
+}
+.tiptap-preview li {
+  margin: 0.1em 0;
+}
+.tiptap-preview h1,
+.tiptap-preview h2,
+.tiptap-preview h3 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0.2em 0;
+}
+.tiptap-preview h1 { font-size: 1.15em; }
+.tiptap-preview h2 { font-size: 1.05em; }
+.tiptap-preview h3 { font-size: 0.97em; }
+.tiptap-preview blockquote {
+  border-left: 2px solid currentColor;
+  opacity: 0.75;
+  margin: 0.2em 0;
+  padding-left: 0.6em;
+  font-style: italic;
+}
+.tiptap-preview [style*="text-align: center"] { text-align: center; }
+.tiptap-preview [style*="text-align: right"]  { text-align: right; }
+.tiptap-preview [style*="text-align: justify"] { text-align: justify; }
+
+/* Prose & TipTap ProseMirror Elements Formatting Styles */
+.prose, .ProseMirror {
+  font-family: inherit;
+}
+.prose h1, .ProseMirror h1 {
+  font-size: 2.25em !important;
+  font-weight: 800 !important;
+  margin-top: 0.8em !important;
+  margin-bottom: 0.4em !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+.prose h2, .ProseMirror h2 {
+  font-size: 1.75em !important;
+  font-weight: 700 !important;
+  margin-top: 0.8em !important;
+  margin-bottom: 0.4em !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+.prose h3, .ProseMirror h3 {
+  font-size: 1.4em !important;
+  font-weight: 600 !important;
+  margin-top: 0.8em !important;
+  margin-bottom: 0.4em !important;
+  line-height: 1.25 !important;
+  display: block !important;
+}
+.prose p, .ProseMirror p {
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+}
+.prose ul, .ProseMirror ul {
+  list-style-type: disc !important;
+  padding-left: 1.5em !important;
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+}
+.prose ol, .ProseMirror ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5em !important;
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+}
+.prose li, .ProseMirror li {
+  margin-top: 0.25em !important;
+  margin-bottom: 0.25em !important;
+  display: list-item !important;
+}
+.prose blockquote, .ProseMirror blockquote {
+  border-left: 4px solid #cbd5e1 !important;
+  padding-left: 1em !important;
+  margin-left: 0 !important;
+  font-style: italic !important;
+  color: #64748b !important;
+}
+.prose pre, .ProseMirror pre {
+  background-color: #f1f5f9 !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 0.375rem !important;
+  font-family: monospace !important;
+  font-size: 0.875em !important;
+  overflow-x: auto !important;
+}
+.prose code, .ProseMirror code {
+  background-color: #f1f5f9 !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 0.25rem !important;
+  font-family: monospace !important;
+  font-size: 0.875em !important;
+}
+
+/* Custom styled drag resizer handles inside the TipTap editor */
+.ProseMirror [style*="resize: both"]::-webkit-resizer {
+  background-color: #3b82f6;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  width: 10px;
+  height: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  cursor: nwse-resize;
+}
+/* Solid Toast Notification styling */
+[data-sonner-toast] {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border: 1px solid #334155 !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+  background-color: #064e3b !important;
+  border-color: #059669 !important;
+  color: #ffffff !important;
+}
+
+[data-sonner-toast][data-type="error"] {
+  background-color: #881337 !important;
+  border-color: #e11d48 !important;
+  color: #ffffff !important;
+}
+
+[data-sonner-toast][data-type="warning"] {
+  background-color: #78350f !important;
+  border-color: #d97706 !important;
+  color: #ffffff !important;
+}
+
+[data-sonner-toast][data-type="info"] {
+  background-color: #1e3a8a !important;
+  border-color: #2563eb !important;
+  color: #ffffff !important;
+}
