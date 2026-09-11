@@ -72,7 +72,7 @@ export const managerRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_2"
-          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected', 'all']}
+          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve your team's expense claims — Level 2 (Manager) queue"
         />
       }
@@ -82,7 +82,7 @@ export const managerRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_2"
-          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected', 'all']}
+          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve your team's expense claims — Level 2 (Manager) queue"
         />
       }

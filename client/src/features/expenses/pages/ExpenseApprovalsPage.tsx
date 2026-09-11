@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { expenseApi, ExpenseClaim } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   CheckCircle,
   XCircle,
@@ -56,6 +57,10 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
   allowedStatuses,
   portalLabel,
 }) => {
+  const { user } = useAuthStore();
+  const currentUserRoleCode = String((user as any)?.role?.code || (user as any)?.role || '').toLowerCase();
+  const isManagerOrAdminUser = ['manager', 'department_head', 'hr', 'hr_admin', 'hr_manager', 'organization_admin', 'super_admin', 'admin'].some(r => currentUserRoleCode.includes(r));
+
   const [loading, setLoading] = useState(true);
   const [claims, setClaims] = useState<ExpenseClaim[]>([]);
   const [selectedClaim, setSelectedClaim] = useState<ExpenseClaim | null>(null);
@@ -77,6 +82,11 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
   const [reasonText, setReasonText] = useState('');
   const [processingId, setProcessingId] = useState<number | string | null>(null);
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Approve Modal State (Supports Absentee Team Lead Override)
+  const [approveModalClaim, setApproveModalClaim] = useState<any | null>(null);
+  const [approvalComments, setApprovalComments] = useState('');
+  const [isAbsenteeOverride, setIsAbsenteeOverride] = useState(false);
 
   // In-page toast state (replaces browser alert)
   const [toast, setToast] = useState<ApprovalToast | null>(null);
@@ -158,22 +168,49 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
     setSelectedIds(allSelected ? [] : visibleIds);
   };
 
-  const handleApprove = async (claim: ExpenseClaim) => {
+  const openApproveModal = (claim: any) => {
+    setApproveModalClaim(claim);
+    setApprovalComments('');
+    setIsAbsenteeOverride(false);
+  };
+
+  const handleConfirmApprove = async () => {
+    if (!approveModalClaim) return;
+
+    if (isAbsenteeOverride && !approvalComments.trim()) {
+      showToast({
+        type: 'error',
+        title: 'Remark Required',
+        subtitle: 'Mandatory remark is required when approving on behalf of an absent Team Lead.',
+      });
+      return;
+    }
+
     try {
-      setProcessingId(claim.id);
+      setProcessingId(approveModalClaim.id);
       let nextStepName = 'next approver';
 
-      if (claim.status === 'pending_finance') {
-        await expenseApi.financeVerifyClaim(claim.id, { comments: 'Verified and approved by Finance' });
-        setClaims((prev) => prev.filter((c) => String(c.id) !== String(claim.id)));
+      if (approveModalClaim.status === 'pending_finance') {
+        await expenseApi.financeVerifyClaim(approveModalClaim.id, {
+          comments: approvalComments.trim() || 'Verified and approved by Finance',
+        });
+        setClaims((prev) => prev.filter((c) => String(c.id) !== String(approveModalClaim.id)));
         nextStepName = 'Payout Processing / Approved';
       } else {
-        const res = await expenseApi.managerApproveClaim(claim.id, 'Approved');
+        const res = await expenseApi.managerApproveClaim(
+          approveModalClaim.id,
+          approvalComments.trim() || (isAbsenteeOverride ? 'Approved on behalf of absent Team Lead' : 'Approved'),
+          {
+            isAbsenteeOverride,
+            delegatedForId: approveModalClaim.reportingManagerId || approveModalClaim.reporting_manager_id,
+          }
+        );
         nextStepName = res?.nextStepName || res?.currentApproverRole || 'Finance Verification';
-        setClaims((prev) => prev.filter((c) => String(c.id) !== String(claim.id)));
+        setClaims((prev) => prev.filter((c) => String(c.id) !== String(approveModalClaim.id)));
       }
 
-      setSelectedIds((prev) => prev.filter((id) => String(id) !== String(claim.id)));
+      setSelectedIds((prev) => prev.filter((id) => String(id) !== String(approveModalClaim.id)));
+      setApproveModalClaim(null);
 
       showToast({
         type: 'success',
@@ -261,10 +298,11 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
     { value: 'pending_approvals', label: 'All Pending' },
     { value: 'pending_level_1', label: 'Team Lead Queue' },
     { value: 'pending_level_2', label: 'Manager Queue' },
-    { value: 'pending_level_3', label: 'HR Queue' },
+    { value: 'pending_level_3', label: 'HR / Admin Queue' },
     { value: 'pending_manager', label: 'Manager Pending (Legacy)' },
     { value: 'pending_finance', label: 'Finance Pending' },
     { value: 'approved', label: 'Approved Claims' },
+    { value: 'returned', label: 'Returned Claims' },
     { value: 'rejected', label: 'Rejected Claims' },
     { value: 'all', label: 'All Claims' },
   ].filter((o) => !allowedStatuses || allowedStatuses.includes(o.value));
@@ -527,6 +565,31 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                     return 'Approve';
                   };
 
+                  const currentUserRoleCode = String((user as any)?.role?.code || (user as any)?.role || (user as any)?.accessRole || '').toLowerCase();
+                  const userRoles = (Array.isArray((user as any)?.roles) ? (user as any).roles : [(user as any)?.role])
+                    .map((r: any) => String(r?.code || r?.name || r || '').toLowerCase());
+                  const allRoles = [currentUserRoleCode, ...userRoles];
+
+                  const isHrAdminRow = allRoles.some(r => ['hr_admin', 'hr_manager', 'hr', 'organization_admin', 'super_admin', 'admin', 'ceo'].some(x => r.includes(x)));
+                  const isManagerOnlyRow = allRoles.some(r => ['manager', 'department_head'].some(x => r.includes(x))) && !isHrAdminRow;
+                  const isTeamLeadOnlyRow = allRoles.some(r => r.includes('team_lead')) && !isHrAdminRow && !isManagerOnlyRow;
+
+                  const cStatus = String(claim.status || '').toLowerCase();
+                  const isL1 = ['pending_level_1', 'pending', 'submitted'].includes(cStatus);
+                  const isL2 = ['pending_level_2', 'pending_manager'].includes(cStatus);
+                  const isL3 = ['pending_level_3', 'pending_finance'].includes(cStatus);
+
+                  let canActOnClaim = false;
+                  if (isHrAdminRow) {
+                    canActOnClaim = isL3;
+                  } else if (isManagerOnlyRow) {
+                    canActOnClaim = isL2;
+                  } else if (isTeamLeadOnlyRow) {
+                    canActOnClaim = isL1;
+                  } else {
+                    canActOnClaim = true;
+                  }
+
                   return (
                     <tr key={claim.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="py-3.5 px-4">
@@ -534,7 +597,7 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                           type="checkbox"
                           checked={selectedIds.includes(claim.id)}
                           onChange={() => toggleSelect(claim.id)}
-                          disabled={isApprovedOrPaid}
+                          disabled={isApprovedOrPaid || !canActOnClaim}
                         />
                       </td>
                       <td className="py-3.5 px-4">
@@ -587,23 +650,29 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                             <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
                               <Check className="w-3.5 h-3.5" /> Approved
                             </span>
+                          ) : !canActOnClaim ? (
+                            <span className="text-[11px] text-slate-400 font-medium italic whitespace-nowrap">
+                              Pending {isL1 ? 'Team Lead' : (isL2 ? 'Manager' : 'Approver')}
+                            </span>
                           ) : (
                             <>
                               <button
                                 disabled={Boolean(isProcessing)}
-                                onClick={() => handleApprove(claim)}
+                                onClick={() => openApproveModal(claim)}
                                 className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1 cursor-pointer transition-colors"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
                                 {isProcessing ? 'Processing...' : getApproveBtnText()}
                               </button>
-                              <button
-                                disabled={Boolean(isProcessing)}
-                                onClick={() => { setTargetClaimId(claim.id); setActionType('return'); setReasonText(''); }}
-                                className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" /> Return
-                              </button>
+                              {((claim.status === 'pending_level_1' || claim.status === 'pending' || claim.status === 'pending_manager') && (!claim.currentLevel || Number(claim.currentLevel) <= 1)) && (
+                                <button
+                                  disabled={Boolean(isProcessing)}
+                                  onClick={() => { setTargetClaimId(claim.id); setActionType('return'); setReasonText(''); }}
+                                  className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" /> Return
+                                </button>
+                              )}
                               <button
                                 disabled={Boolean(isProcessing)}
                                 onClick={() => { setTargetClaimId(claim.id); setActionType('reject'); setReasonText(''); }}
@@ -696,14 +765,21 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Approval History & Logs</h4>
                   <div className="space-y-2">
-                    {selectedClaim.timeline.map((log) => (
+                    {selectedClaim.timeline.map((log: any) => (
                       <div key={log.id} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl text-xs flex items-start gap-3">
                         <div className="p-1.5 bg-blue-100 dark:bg-blue-950/60 text-blue-600 rounded-full mt-0.5">
                           <User className="w-3.5 h-3.5" />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-slate-900 dark:text-white">{log.approverName} ({log.approverRole})</span>
+                            <span className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                              <span>{log.approverName} ({log.approverRole})</span>
+                              {(log.is_absentee_override || log.isAbsenteeOverride) && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border border-amber-300">
+                                  ⚡ Absentee TL Override
+                                </span>
+                              )}
+                            </span>
                             <span className="text-[10px] text-slate-400">{new Date(log.createdAt).toLocaleString()}</span>
                           </div>
                           <p className="text-slate-700 dark:text-slate-300 font-medium mt-0.5">{log.action}</p>
@@ -722,12 +798,121 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
               {!['approved', 'payment_pending', 'paid'].includes(selectedClaim.status) && (
                 <button
                   disabled={processingId === selectedClaim.id}
-                  onClick={() => handleApprove(selectedClaim)}
+                  onClick={() => {
+                    const c = selectedClaim;
+                    setSelectedClaim(null);
+                    openApproveModal(c);
+                  }}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                 >
                   <CheckCircle className="w-4 h-4" /> Approve Claim
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* APPROVE CLAIM MODAL (WITH ABSENTEE TL OVERRIDE TOGGLE) */}
+      {approveModalClaim && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                Approve Claim #{approveModalClaim.claimNumber || approveModalClaim.id}
+              </h3>
+              <button
+                onClick={() => setApproveModalClaim(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs space-y-1">
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Employee:</span>
+                <span className="font-bold text-slate-800 dark:text-white">
+                  {approveModalClaim.firstName} {approveModalClaim.lastName}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Total Amount:</span>
+                <span className="font-bold text-emerald-600">
+                  {money(approveModalClaim.totalClaimedAmount)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 font-medium">Current Queue:</span>
+                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  {QUEUE_LABEL[approveModalClaim.status] || approveModalClaim.currentApproverRole || approveModalClaim.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Absentee Team Lead Toggle (Visible ONLY to Managers / Admin when stepping in to approve a Level 1 / Team Lead Queue claim) */}
+            {isManagerOrAdminUser && approveModalClaim.status === 'pending_level_1' && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isAbsenteeOverride}
+                    onChange={(e) => setIsAbsenteeOverride(e.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-bold text-amber-900 dark:text-amber-200 block">
+                      Approve on behalf of Absent Team Lead
+                    </span>
+                    <span className="text-amber-700 dark:text-amber-400 text-[11px]">
+                      Enable if the assigned Team Lead is absent. This action will be recorded in audit logs.
+                    </span>
+                  </div>
+                </label>
+
+                {isAbsenteeOverride && (
+                  <div className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5 pt-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Mandatory remark explaining Team Lead absence is required below.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Comments Field */}
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {isAbsenteeOverride ? 'Absence Reason & Approval Remark *' : 'Approval Comments (Optional)'}
+              </label>
+              <textarea
+                rows={3}
+                placeholder={
+                  isAbsenteeOverride
+                    ? 'Explain why Team Lead is absent and reason for override approval...'
+                    : 'Add optional approval comments or instructions...'
+                }
+                value={approvalComments}
+                onChange={(e) => setApprovalComments(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setApproveModalClaim(null)}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={Boolean(processingId)}
+                onClick={handleConfirmApprove}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {processingId ? 'Approving...' : isAbsenteeOverride ? 'Approve (Absentee Override)' : 'Confirm Approval'}
+              </button>
             </div>
           </div>
         </div>
@@ -774,3 +959,5 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
     </div>
   );
 };
+
+export default ExpenseApprovalsPage;

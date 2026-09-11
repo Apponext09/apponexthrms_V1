@@ -25,6 +25,7 @@ router.post('/policies/validate', asyncHandler((req, res) => controller.validate
 // Travel Requests & Advances
 router.get('/travel-requests', asyncHandler((req, res) => controller.getTravelRequests(req, res)));
 router.post('/travel-requests', asyncHandler((req, res) => controller.createTravelRequest(req, res)));
+router.put('/travel-requests/:id', asyncHandler((req, res) => controller.updateTravelRequest(req, res)));
 router.put('/travel-requests/:id/status', asyncHandler((req, res) => controller.updateTravelRequestStatus(req, res)));
 
 router.get('/travel-advances', asyncHandler((req, res) => controller.getTravelAdvances(req, res)));

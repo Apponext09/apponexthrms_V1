@@ -49,10 +49,12 @@ export const ExpenseSettingsPage: React.FC = () => {
 
   // Workflows state
   const [workflows, setWorkflows] = useState<ExpenseWorkflow[]>([]);
+  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [isWfModalOpen, setIsWfModalOpen] = useState(false);
   const [editingWfId, setEditingWfId] = useState<number | null>(null);
   const [wfName, setWfName] = useState('');
   const [wfDescription, setWfDescription] = useState('');
+  const [wfDepartmentId, setWfDepartmentId] = useState<number | ''>('');
   const [wfMinAmount, setWfMinAmount] = useState<number>(0);
   const [wfMaxAmount, setWfMaxAmount] = useState<number>(100000);
   const [wfLevels, setWfLevels] = useState<ExpenseWorkflowLevel[]>([
@@ -68,12 +70,19 @@ export const ExpenseSettingsPage: React.FC = () => {
   const fetchSettingsAndWorkflows = async () => {
     try {
       setLoading(true);
-      const [settingsRes, wfRes, catRes, rolesRes] = await Promise.all([
+      const [settingsRes, wfRes, catRes, rolesRes, deptRes] = await Promise.all([
         expenseApi.getSettings(),
         expenseApi.getWorkflows(),
         expenseApi.getCategories(),
-        apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } }))
+        apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } })),
+        apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: [] }))
       ]);
+
+      // Parse departments
+      const rawDepts = deptRes?.data?.data || deptRes?.data || [];
+      if (Array.isArray(rawDepts)) {
+        setDepartments(rawDepts.map((d: any) => ({ id: Number(d.id), name: d.name || String(d.id) })).filter((d) => d.id));
+      }
 
       // Parse roles from RBAC API
       const rolesData = rolesRes?.data?.data;
@@ -199,6 +208,7 @@ export const ExpenseSettingsPage: React.FC = () => {
       setEditingWfId(wf.id);
       setWfName(wf.name);
       setWfDescription(wf.description || '');
+      setWfDepartmentId(wf.departmentId || wf.department_id || '');
       setWfMinAmount(wf.minAmount || 0);
       setWfMaxAmount(wf.maxAmount || 100000);
       setWfLevels(
@@ -213,6 +223,7 @@ export const ExpenseSettingsPage: React.FC = () => {
       setEditingWfId(null);
       setWfName('');
       setWfDescription('');
+      setWfDepartmentId('');
       setWfMinAmount(0);
       setWfMaxAmount(100000);
       setWfLevels([
@@ -253,6 +264,7 @@ export const ExpenseSettingsPage: React.FC = () => {
       const payload = {
         name: wfName,
         description: wfDescription,
+        departmentId: wfDepartmentId ? Number(wfDepartmentId) : null,
         minAmount: wfMinAmount,
         maxAmount: wfMaxAmount,
         isActive: true,
@@ -697,6 +709,9 @@ export const ExpenseSettingsPage: React.FC = () => {
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
                         Active
                       </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300/40">
+                        {wf.departmentName || wf.department_name || 'All Departments'}
+                      </span>
                     </div>
                     {wf.description && <p className="text-xs text-slate-500 mt-1">{wf.description}</p>}
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -744,7 +759,7 @@ export const ExpenseSettingsPage: React.FC = () => {
                         </React.Fragment>
                       ))
                     ) : (
-                      <span className="text-xs text-slate-400">Default Manager → Finance flow</span>
+                      <span className="text-xs text-slate-400">No approval levels configured</span>
                     )}
                   </div>
                 </div>
@@ -785,6 +800,27 @@ export const ExpenseSettingsPage: React.FC = () => {
                   onChange={(e) => setWfDescription(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                 />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Assigned Department (Optional)
+                </label>
+                <select
+                  value={wfDepartmentId}
+                  onChange={(e) => setWfDepartmentId(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                >
+                  <option value="">All Departments (Organization-Wide)</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Assign this workflow to a specific department or select "All Departments" for organization-wide rules.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

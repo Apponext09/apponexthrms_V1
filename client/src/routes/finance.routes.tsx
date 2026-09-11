@@ -3,7 +3,7 @@ import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { FinanceLayout } from '../layouts/FinanceLayout';
 
-// ── Lazy Imports ──────────────────────────────────────────────────────────────
+// ── Lazy Imports: Finance Core Pages ──────────────────────────────────────────
 const FinanceDashboardPage = lazy(() => import('../features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));
 const FinanceReportsPage = lazy(() => import('../features/finance/pages/FinanceReportsPage').then(m => ({ default: m.FinanceReportsPage })));
 const FinanceApprovalsPage = lazy(() => import('../features/finance/pages/FinanceApprovalsPage').then(m => ({ default: m.FinanceApprovalsPage })));
@@ -17,21 +17,60 @@ const HolidayCalendarPage = lazy(() => import('../features/employee/portal-pages
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
 const OrgChartPage = lazy(() => import('../features/employee/portal-pages/OrgChartPage'));
 
+// ── Lazy Imports: Expense & Disbursal Module Pages ──────────────────────────────
+const FinanceVerificationPage = lazy(() => import('../features/expenses/pages/FinanceVerificationPage').then(m => ({ default: m.FinanceVerificationPage })));
+const ReimbursementsPage = lazy(() => import('../features/expenses/pages/ReimbursementsPage').then(m => ({ default: m.ReimbursementsPage })));
+const TravelAdvancesPage = lazy(() => import('../features/expenses/pages/TravelAdvancesPage').then(m => ({ default: m.TravelAdvancesPage })));
+const ExpenseApprovalsPage = lazy(() => import('../features/expenses/pages/ExpenseApprovalsPage'));
+const ExpenseReportsPage = lazy(() => import('../features/expenses/pages/ExpenseReportsPage').then(m => ({ default: m.ExpenseReportsPage })));
+const ExpenseDashboardPage = lazy(() => import('../features/expenses/pages/ExpenseDashboardPage').then(m => ({ default: m.ExpenseDashboardPage })));
+const MyExpensesPage = lazy(() => import('../features/expenses/pages/MyExpensesPage'));
+const TravelRequestsPage = lazy(() => import('../features/expenses/pages/TravelRequestsPage').then(m => ({ default: m.TravelRequestsPage })));
+const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageClaimsPage').then(m => ({ default: m.MileageClaimsPage })));
+const ExpenseCategoriesPage = lazy(() => import('../features/expenses/pages/ExpenseCategoriesPage').then(m => ({ default: m.ExpenseCategoriesPage })));
+const ExpensePoliciesPage = lazy(() => import('../features/expenses/pages/ExpensePoliciesPage').then(m => ({ default: m.ExpensePoliciesPage })));
+const ExpenseSettingsPage = lazy(() => import('../features/expenses/pages/ExpenseSettingsPage').then(m => ({ default: m.ExpenseSettingsPage })));
+
 // ── Finance Portal Routes (/finance/*) ───────────────────────────────────────
-// STRICT ISOLATION: Only finance / finance_manager roles may access these routes.
-// Finance users cannot navigate to any other portal.
+// Allowed for Finance, Finance Manager, Admin, HR, and Executive roles
 export const financeRoutes = (
   <Route
     element={
-      <ProtectedRoute allowedRoles={['finance']}>
+      <ProtectedRoute allowedRoles={['finance', 'organization_admin', 'super_admin', 'hr_admin', 'hr', 'hr_manager', 'ceo']}>
         <FinanceLayout />
       </ProtectedRoute>
     }
   >
-    <Route path="/finance" element={<Navigate to="/finance/reports" replace />} />
+    <Route path="/finance" element={<Navigate to="/finance/dashboard" replace />} />
     <Route path="/finance/dashboard" element={<FinanceDashboardPage />} />
     <Route path="/finance/reports" element={<FinanceReportsPage />} />
     <Route path="/finance/approvals" element={<FinanceApprovalsPage />} />
+    
+    {/* Expense & Disbursal Module Routes */}
+    <Route path="/finance/expenses/verification" element={<FinanceVerificationPage />} />
+    <Route path="/finance/expenses/finance-verification" element={<FinanceVerificationPage />} />
+    <Route path="/finance/expenses/reimbursements" element={<ReimbursementsPage />} />
+    <Route path="/finance/expenses/travel-advances" element={<TravelAdvancesPage />} />
+    <Route
+      path="/finance/expenses/approvals"
+      element={
+        <ExpenseApprovalsPage
+          defaultStatusFilter="pending_finance"
+          allowedStatuses={['pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          portalLabel="Finance Payout & Verification Queue"
+        />
+      }
+    />
+    <Route path="/finance/expenses/reports" element={<ExpenseReportsPage />} />
+    <Route path="/finance/expenses/dashboard" element={<ExpenseDashboardPage />} />
+    <Route path="/finance/expenses/my-expenses" element={<MyExpensesPage />} />
+    <Route path="/finance/expenses/travel-requests" element={<TravelRequestsPage />} />
+    <Route path="/finance/expenses/mileage-claims" element={<MileageClaimsPage />} />
+    <Route path="/finance/expenses/categories" element={<ExpenseCategoriesPage />} />
+    <Route path="/finance/expenses/policies" element={<ExpensePoliciesPage />} />
+    <Route path="/finance/expenses/settings" element={<ExpenseSettingsPage />} />
+
+    {/* Self-Service & Employee Portal Pages */}
     <Route path="/finance/profile" element={<ProfilePage />} />
     <Route path="/finance/attendance" element={<AttendancePage />} />
     <Route path="/finance/face-punch" element={<FaceAttendancePage />} />

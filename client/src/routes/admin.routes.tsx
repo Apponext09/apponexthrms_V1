@@ -203,7 +203,16 @@ export const adminRoutes = (
     <Route path="/expenses" element={<Navigate to="/expenses/dashboard" replace />} />
     <Route path="/expenses/dashboard" element={<ExpenseDashboardPage />} />
     <Route path="/expenses/my-expenses" element={<MyExpensesPage />} />
-    <Route path="/expenses/approvals" element={<ExpenseApprovalsPage />} />
+    <Route
+      path="/expenses/approvals"
+      element={
+        <ExpenseApprovalsPage
+          defaultStatusFilter="pending_level_3"
+          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
+        />
+      }
+    />
     <Route path="/expenses/finance-verification" element={<FinanceVerificationPage />} />
     <Route path="/expenses/reimbursements" element={<ReimbursementsPage />} />
     <Route path="/expenses/travel-requests" element={<TravelRequestsPage />} />
@@ -215,10 +224,28 @@ export const adminRoutes = (
     <Route path="/expenses/settings" element={<ExpenseSettingsPage />} />
 
     {/* Expense Aliases */}
-    <Route path="/payroll/expense-claims" element={<ExpenseApprovalsPage />} />
+    <Route
+      path="/payroll/expense-claims"
+      element={
+        <ExpenseApprovalsPage
+          defaultStatusFilter="pending_level_3"
+          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
+        />
+      }
+    />
     <Route path="/payroll/travel-requests" element={<TravelRequestsPage />} />
     <Route path="/payroll/reimbursements" element={<ReimbursementsPage />} />
-    <Route path="/expense-claims" element={<ExpenseApprovalsPage />} />
+    <Route
+      path="/expense-claims"
+      element={
+        <ExpenseApprovalsPage
+          defaultStatusFilter="pending_level_3"
+          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
+        />
+      }
+    />
     <Route path="/travel-requests" element={<TravelRequestsPage />} />
     <Route path="/reimbursements" element={<ReimbursementsPage />} />
 

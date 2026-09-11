@@ -194,7 +194,16 @@ export const hrRoutes = (
     {/* Expense Management */}
     <Route path="/hr/expenses/dashboard" element={<ExpenseDashboardPage />} />
     <Route path="/hr/expenses/my-expenses" element={<MyExpensesPage />} />
-    <Route path="/hr/expenses/approvals" element={<ExpenseApprovalsPage />} />
+    <Route
+      path="/hr/expenses/approvals"
+      element={
+        <ExpenseApprovalsPage
+          defaultStatusFilter="pending_level_3"
+          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          portalLabel="Approve expense claims — Level 3 (HR Admin) queue"
+        />
+      }
+    />
     <Route path="/hr/expenses/finance-verification" element={<FinanceVerificationPage />} />
     <Route path="/hr/expenses/reimbursements" element={<ReimbursementsPage />} />
     <Route path="/hr/expenses/travel-requests" element={<TravelRequestsPage />} />

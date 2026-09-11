@@ -4215,10 +4215,10 @@ router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
 // ==========================================
 const eventCtrl = new EventController();
 
-router.get('/events',        asyncHandler((req, res) => eventCtrl.list(req, res)));
-router.get('/events/:id',    asyncHandler((req, res) => eventCtrl.getById(req, res)));
-router.post('/events',       asyncHandler((req, res) => eventCtrl.create(req, res)));
-router.put('/events/:id',    asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.get('/events', asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id', asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events', asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id', asyncHandler((req, res) => eventCtrl.update(req, res)));
 router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
 
 // ==========================================

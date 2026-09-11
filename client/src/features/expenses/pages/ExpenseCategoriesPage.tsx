@@ -75,7 +75,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
   };
 
   const handleDeleteCategory = async (cat: ExpenseCategory) => {
-    if (!window.confirm(`Are you sure you want to delete "${cat.name}"? If it is referenced in existing claims, it will be safely deactivated.`)) {
+    if (!window.confirm(`Are you sure you want to delete "${cat.name}"? This category will be permanently deleted.`)) {
       return;
     }
     try {
