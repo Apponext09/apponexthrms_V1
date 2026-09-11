@@ -490,6 +490,15 @@ export const ExpenseApprovalsPage: React.FC<Props> = ({
                   const getWorkflowQueueBadge = () => {
                     const st = String(claim.status || '').toLowerCase();
                     const role = claim.currentApproverRole || claim.current_approver_role;
+                    const submitterRole = String((claim as any).submittedByRole || (claim as any).submitted_by_role || '').toLowerCase();
+
+                    if (submitterRole === 'ceo') {
+                      return (
+                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300/50 whitespace-nowrap">
+                          {role && !role.toLowerCase().includes('manager') ? role : 'CEO Direct / Finance Queue'}
+                        </span>
+                      );
+                    }
 
                     if (st === 'pending_level_1') {
                       return (

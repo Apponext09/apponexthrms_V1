@@ -42,7 +42,16 @@ const PIPELINE_STAGES: { status: string; label: string; color: string; bgColor: 
   { status: 'rejected', label: 'Rejected', color: 'text-rose-700 dark:text-rose-300', bgColor: 'bg-rose-100 dark:bg-rose-950/60', borderColor: 'border-rose-300 dark:border-rose-700' },
 ];
 
-function getStageConfig(status: string) {
+function getStageConfig(status: string, submittedByRole?: string) {
+  const roleKey = String(submittedByRole || '').toLowerCase();
+  if (roleKey === 'ceo') {
+    return {
+      label: 'CEO Direct / Finance Queue',
+      color: 'text-purple-700 dark:text-purple-300',
+      bgColor: 'bg-purple-100 dark:bg-purple-950/60',
+      borderColor: 'border-purple-300 dark:border-purple-700'
+    };
+  }
   return PIPELINE_STAGES.find(s => s.status === (status || '').toLowerCase()) || {
     label: status || 'Pending',
     color: 'text-slate-700 dark:text-slate-300',
@@ -707,7 +716,7 @@ export const FinanceVerificationPage: React.FC = () => {
                           const totClaimed = Number(claim.totalClaimedAmount ?? claim.total_claimed_amount ?? 0);
                           const formattedDate = cDate ? new Date(cDate).toLocaleDateString() : 'N/A';
                           const isActionable = !['paid', 'payment_pending', 'rejected', 'returned'].includes(claim.status);
-                          const stageConf = getStageConfig(claim.status || '');
+                          const stageConf = getStageConfig(claim.status || '', claim.submittedByRole || claim.submitted_by_role);
 
                           return (
                             <tr key={claim.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
@@ -1007,7 +1016,7 @@ export const FinanceVerificationPage: React.FC = () => {
                       const cNum = claim.claimNumber || claim.claim_number || `EXP-${claim.id}`;
                       const cDate = claim.submittedAt || claim.submitted_at || claim.claimDate || claim.claim_date;
                       const totClaimed = Number(claim.totalClaimedAmount ?? claim.total_claimed_amount ?? 0);
-                      const stageConf = getStageConfig(claim.status || '');
+                      const stageConf = getStageConfig(claim.status || '', claim.submittedByRole || claim.submitted_by_role);
                       const isForceApproving = forceApproving === claim.id;
                       const canForceApprove = !['approved', 'payment_pending', 'paid', 'rejected', 'returned'].includes(claim.status);
 

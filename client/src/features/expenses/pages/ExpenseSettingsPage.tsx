@@ -53,6 +53,7 @@ export const ExpenseSettingsPage: React.FC = () => {
   const [isWfModalOpen, setIsWfModalOpen] = useState(false);
   const [editingWfId, setEditingWfId] = useState<number | null>(null);
   const [wfName, setWfName] = useState('');
+  const [wfTargetRole, setWfTargetRole] = useState<string>('all');
   const [wfDescription, setWfDescription] = useState('');
   const [wfDepartmentId, setWfDepartmentId] = useState<number | ''>('');
   const [wfMinAmount, setWfMinAmount] = useState<number>(0);
@@ -64,7 +65,10 @@ export const ExpenseSettingsPage: React.FC = () => {
 
   // Dynamic roles fetched from DB
   const [orgRoles, setOrgRoles] = useState<Array<{ id: number; name: string; code: string }>>([
-    { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' }
+    { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' },
+    { id: -1, name: 'CEO / Executive Admin', code: 'ceo' },
+    { id: -2, name: 'HR Admin / HR Manager', code: 'hr_admin' },
+    { id: -3, name: 'Finance Verification / Payout', code: 'finance' }
   ]);
 
   const fetchSettingsAndWorkflows = async () => {
@@ -91,12 +95,23 @@ export const ExpenseSettingsPage: React.FC = () => {
         : Array.isArray(rolesData?.items)
           ? rolesData.items
           : [];
-      // Build approver role options: special "Reporting Manager" entry + all DB roles (excluding employee/intern/client etc.)
-      const specialEntry = { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' };
+      // Build approver role options: special entries + all DB roles (excluding employee/intern/client etc.)
+      const specialEntries = [
+        { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' },
+        { id: -1, name: 'CEO / Executive Admin', code: 'ceo' },
+        { id: -2, name: 'HR Admin / HR Manager', code: 'hr_admin' },
+        { id: -3, name: 'Finance Verification / Payout', code: 'finance' }
+      ];
       const filteredRoles = rawRoles
         .filter((r) => !['super_admin', 'employee', 'intern', 'client', 'consultant'].includes(r.code))
         .map((r) => ({ id: r.id, name: r.name, code: r.code }));
-      setOrgRoles([specialEntry, ...filteredRoles]);
+      const mergedRoles = [...specialEntries];
+      for (const fr of filteredRoles) {
+        if (!mergedRoles.some(m => m.code === fr.code)) {
+          mergedRoles.push(fr);
+        }
+      }
+      setOrgRoles(mergedRoles);
       if (settingsRes) {
         setAutoApprovalThreshold(settingsRes.autoApprovalThreshold || 500);
         setMileageRateCar(settingsRes.mileageRateCar || 12.00);
@@ -207,6 +222,7 @@ export const ExpenseSettingsPage: React.FC = () => {
     if (wf) {
       setEditingWfId(wf.id);
       setWfName(wf.name);
+      setWfTargetRole(wf.targetRole || (wf as any).target_role || 'all');
       setWfDescription(wf.description || '');
       setWfDepartmentId(wf.departmentId || wf.department_id || '');
       setWfMinAmount(wf.minAmount || 0);
@@ -222,6 +238,7 @@ export const ExpenseSettingsPage: React.FC = () => {
     } else {
       setEditingWfId(null);
       setWfName('');
+      setWfTargetRole('all');
       setWfDescription('');
       setWfDepartmentId('');
       setWfMinAmount(0);
@@ -263,6 +280,7 @@ export const ExpenseSettingsPage: React.FC = () => {
     try {
       const payload = {
         name: wfName,
+        targetRole: wfTargetRole,
         description: wfDescription,
         departmentId: wfDepartmentId ? Number(wfDepartmentId) : null,
         minAmount: wfMinAmount,
@@ -712,6 +730,11 @@ export const ExpenseSettingsPage: React.FC = () => {
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300/40">
                         {wf.departmentName || wf.department_name || 'All Departments'}
                       </span>
+                      {wf.targetRole && wf.targetRole !== 'all' && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border border-purple-300/40 uppercase">
+                          Applies To: {wf.targetRole}
+                        </span>
+                      )}
                     </div>
                     {wf.description && <p className="text-xs text-slate-500 mt-1">{wf.description}</p>}
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -820,6 +843,26 @@ export const ExpenseSettingsPage: React.FC = () => {
                 </select>
                 <p className="text-[11px] text-slate-400 mt-1">
                   Assign this workflow to a specific department or select "All Departments" for organization-wide rules.
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Applies To Submitter Role *
+                </label>
+                <select
+                  value={wfTargetRole}
+                  onChange={(e) => setWfTargetRole(e.target.value as any)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                >
+                  <option value="all">All Employees / Standard Default</option>
+                  <option value="ceo">CEO / Executive Admin (Direct Finance/CEO Workflow)</option>
+                  <option value="hr">HR Admin / Support Staff</option>
+                  <option value="manager">Department Managers</option>
+                  <option value="employee">Standard Employees</option>
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Select "CEO / Executive Admin" so claims submitted by CEO bypass manager checks and follow this custom approval flow directly.
                 </p>
               </div>
 
