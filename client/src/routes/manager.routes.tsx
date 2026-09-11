@@ -35,6 +35,7 @@ const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
 const PoliciesPage = lazy(() => import('../features/employee/portal-pages/PoliciesPage'));
 const ManagerIjpApprovalsPage = lazy(() => import('../features/manager/pages/ManagerIjpApprovalsPage'));
+const ManagerLmsPage = lazy(() => import('../features/lms/pages/ManagerLmsPage').then(m => ({ default: m.ManagerLmsPage })));
 
 const MANAGER_ALLOWED_ROLES: Role[] = [
   'department_head',
@@ -106,6 +107,8 @@ export const managerRoutes = (
     <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
     <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
     <Route path="/manager/policies" element={<PoliciesPage />} />
+    <Route path="/manager/lms" element={<ManagerLmsPage />} />
+    <Route path="/manager/learning" element={<ManagerLmsPage />} />
     <Route path="/manager/live-tracking/history" element={<TrackingHistoryPage />} />
   </Route>
 );

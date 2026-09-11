@@ -314,6 +314,25 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
+  // ── 13. LMS (Learning Management System) ───────────────────────────────────
+  {
+    id: 'lms',
+    label: 'LMS',
+    icon: 'GraduationCap',
+    items: [
+      { name: 'Dashboard', href: '/lms/dashboard', icon: 'LayoutDashboard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Course Management', href: '/lms/courses', icon: 'BookOpen', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Categories', href: '/lms/categories', icon: 'Layers', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Batches & Live Classes', href: '/lms/batches', icon: 'Calendar', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Learner Enrollments', href: '/lms/enrollments', icon: 'Users', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Compliance Training', href: '/lms/compliance', icon: 'ShieldCheck', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Training Reports', href: '/lms/reports', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
+      { name: 'Course Catalog', href: '/lms/catalog', icon: 'BookOpen' },
+      { name: 'My Learning Hub', href: '/lms/my-learning', icon: 'PlayCircle' },
+      { name: 'My Certificates', href: '/lms/certificates', icon: 'Award' },
+    ],
+  },
+
   // ── 13. Reports & Analytics ───────────────────────────────────────────────
   {
     id: 'analytics',

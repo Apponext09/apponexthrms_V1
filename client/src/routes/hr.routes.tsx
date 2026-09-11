@@ -89,6 +89,14 @@ const TimelogReportPage = lazy(() => import('../features/analytics/pages/Timelog
 
 const ReportEnginePage = lazy(() => import('../features/analytics/pages/ReportEnginePage').then(m => ({ default: m.ReportEnginePage })));
 const BurnoutRiskDashboard = lazy(() => import('../features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
+const HrLmsBatchPage = lazy(() => import('../features/lms/pages/HrLmsBatchPage').then(m => ({ default: m.HrLmsBatchPage })));
+const HrLmsEnrollmentPage = lazy(() => import('../features/lms/pages/HrLmsEnrollmentPage').then(m => ({ default: m.HrLmsEnrollmentPage })));
+const HrLmsReportsPage = lazy(() => import('../features/lms/pages/HrLmsReportsPage').then(m => ({ default: m.HrLmsReportsPage })));
+const CourseCatalogPage = lazy(() => import('../features/lms/pages/CourseCatalogPage').then(m => ({ default: m.CourseCatalogPage })));
+const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
+const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
+const AssessmentPlayerPage = lazy(() => import('../features/lms/pages/AssessmentPlayerPage').then(m => ({ default: m.AssessmentPlayerPage })));
+const MyCertificatesPage = lazy(() => import('../features/lms/pages/MyCertificatesPage').then(m => ({ default: m.MyCertificatesPage })));
 
 // Settings & Masters
 const GeneralSettingsPage = lazy(() => import('../features/settings/pages/GeneralSettingsPage').then(m => ({ default: m.GeneralSettingsPage })));
@@ -292,6 +300,18 @@ export const hrRoutes = (
 
     {/* Module Management */}
     <Route path="/hr/modules" element={<ModuleManagementPage />} />
+
+    {/* LMS (Learning Management System) */}
+    <Route path="/hr/lms" element={<Navigate to="/hr/lms/batches" replace />} />
+    <Route path="/hr/lms/batches" element={<HrLmsBatchPage />} />
+    <Route path="/hr/lms/enrollments" element={<HrLmsEnrollmentPage />} />
+    <Route path="/hr/lms/reports" element={<HrLmsReportsPage />} />
+    <Route path="/hr/lms/catalog" element={<CourseCatalogPage />} />
+    <Route path="/hr/lms/catalog/:id" element={<CourseDetailPage />} />
+    <Route path="/hr/lms/course/:id" element={<CourseDetailPage />} />
+    <Route path="/hr/lms/my-learning" element={<MyEnrollmentsPage />} />
+    <Route path="/hr/lms/assessment/:id" element={<AssessmentPlayerPage />} />
+    <Route path="/hr/lms/certificates" element={<MyCertificatesPage />} />
 
     {/* Operations */}
     <Route path="/hr/masters/builder" element={<MasterBuilderPage />} />

@@ -31,6 +31,7 @@ import {
   Camera,
   Percent,
   UserX,
+  GraduationCap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -220,6 +221,29 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
+      label: 'LEARNING & ACADEMY (LMS)',
+      items: [
+        {
+          name: 'My Learning Hub',
+          href: '/employee/lms/my-learning',
+          icon: GraduationCap,
+          color: 'text-indigo-500',
+        },
+        {
+          name: 'Course Catalog',
+          href: '/employee/lms/catalog',
+          icon: BookOpen,
+          color: 'text-sky-500',
+        },
+        {
+          name: 'My Certificates',
+          href: '/employee/lms/certificates',
+          icon: Award,
+          color: 'text-amber-500',
+        },
+      ],
+    },
+    {
       label: 'DEVELOPMENT & ENGAGEMENT',
       items: [
         {
@@ -239,12 +263,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           href: '/employee/feedback',
           icon: MessageSquare,
           color: 'text-emerald-500',
-        },
-        {
-          name: 'Learning (LMS)',
-          href: '/employee/learning',
-          icon: BookOpen,
-          color: 'text-violet-500',
         },
         {
           name: 'Training workshops',

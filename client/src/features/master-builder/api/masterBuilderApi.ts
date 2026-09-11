@@ -48,6 +48,8 @@ export interface CustomMasterField {
     colSpan?: 1 | 2;
     /** For section type */
     sectionTitle?: string;
+    sectionNumber?: string | number;
+    sectionIcon?: string;
     sectionDescription?: string;
     sectionColor?: string;
     /** For image/file upload */

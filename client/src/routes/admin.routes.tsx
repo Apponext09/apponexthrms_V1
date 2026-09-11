@@ -105,6 +105,18 @@ const AttendanceReportsPage = lazy(() => import('../features/analytics/pages/Att
 const TimelogReportPage = lazy(() => import('../features/analytics/pages/TimelogReportPage').then(m => ({ default: m.TimelogReportPage })));
 const CeoAttendanceReportPage = lazy(() => import('../features/analytics/pages/CeoAttendanceReportPage').then(m => ({ default: m.CeoAttendanceReportPage })));
 const ReportEnginePage = lazy(() => import('../features/analytics/pages/ReportEnginePage').then(m => ({ default: m.ReportEnginePage })));
+const LmsDashboardPage = lazy(() => import('../features/lms/pages/LmsDashboardPage').then(m => ({ default: m.LmsDashboardPage })));
+const CourseManagementPage = lazy(() => import('../features/lms/pages/CourseManagementPage').then(m => ({ default: m.CourseManagementPage })));
+const CategoryManagerPage = lazy(() => import('../features/lms/pages/CategoryManagerPage').then(m => ({ default: m.CategoryManagerPage })));
+const BatchManagementPage = lazy(() => import('../features/lms/pages/BatchManagementPage').then(m => ({ default: m.BatchManagementPage })));
+const EnrollmentManagerPage = lazy(() => import('../features/lms/pages/EnrollmentManagerPage').then(m => ({ default: m.EnrollmentManagerPage })));
+const ComplianceTrainingPage = lazy(() => import('../features/lms/pages/ComplianceTrainingPage').then(m => ({ default: m.ComplianceTrainingPage })));
+const LmsReportsPage = lazy(() => import('../features/lms/pages/LmsReportsPage').then(m => ({ default: m.LmsReportsPage })));
+const CourseCatalogPage = lazy(() => import('../features/lms/pages/CourseCatalogPage').then(m => ({ default: m.CourseCatalogPage })));
+const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
+const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
+const AssessmentPlayerPage = lazy(() => import('../features/lms/pages/AssessmentPlayerPage').then(m => ({ default: m.AssessmentPlayerPage })));
+const MyCertificatesPage = lazy(() => import('../features/lms/pages/MyCertificatesPage').then(m => ({ default: m.MyCertificatesPage })));
 const GeneralSettingsPage = lazy(() => import('../features/settings/pages/GeneralSettingsPage').then(m => ({ default: m.GeneralSettingsPage })));
 const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
@@ -340,6 +352,24 @@ export const adminRoutes = (
     <Route path="/analytics/timelog" element={<TimelogReportPage />} />
     <Route path="/analytics/ceo-attendance" element={<CeoAttendanceReportPage />} />
     <Route path="/analytics/report-engine" element={<ReportEnginePage />} />
+
+    {/* LMS (Learning Management System) */}
+    <Route path="/lms" element={<Navigate to="/lms/dashboard" replace />} />
+    <Route path="/lms/dashboard" element={<LmsDashboardPage />} />
+    <Route path="/lms/courses" element={<CourseManagementPage />} />
+    <Route path="/lms/categories" element={<CategoryManagerPage />} />
+    <Route path="/lms/batches" element={<BatchManagementPage />} />
+    <Route path="/lms/enrollments" element={<EnrollmentManagerPage />} />
+    <Route path="/lms/compliance" element={<ComplianceTrainingPage />} />
+    <Route path="/lms/reports" element={<LmsReportsPage />} />
+    <Route path="/lms/catalog" element={<CourseCatalogPage />} />
+    <Route path="/lms/catalog/:id" element={<CourseDetailPage />} />
+    <Route path="/lms/courses/:id" element={<CourseDetailPage />} />
+    <Route path="/lms/course/:id" element={<CourseDetailPage />} />
+    <Route path="/lms/my-learning" element={<MyEnrollmentsPage />} />
+    <Route path="/lms/my-courses" element={<MyEnrollmentsPage />} />
+    <Route path="/lms/assessment/:id" element={<AssessmentPlayerPage />} />
+    <Route path="/lms/certificates" element={<MyCertificatesPage />} />
 
     {/* Employee Lifecycle */}
     <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />

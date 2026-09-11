@@ -54,7 +54,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
 import { useNavStore } from '@/features/navigation/store/navStore';
-import { getVisibleSections } from '@/config/navigation';
+import { getVisibleSections, type NavItem } from '@/config/navigation';
 import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 import { useRbac } from '@/lib/rbac';
 import { getUserRoleAndDept } from '@/lib/userProfile';
@@ -94,7 +94,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const [lockedItemName, setLockedItemName] = useState('');
 
   // ── Dynamic custom masters for sidebar injection ────────────────────────────
-  const [customMasterNavItems, setCustomMasterNavItems] = useState<Array<{ name: string; href: string; icon: string }>>([]);
+  const [customMasterNavItems, setCustomMasterNavItems] = useState<NavItem[]>([]);
 
   useEffect(() => {
     // Hardcoded master codes already present in static navigation — skip these
