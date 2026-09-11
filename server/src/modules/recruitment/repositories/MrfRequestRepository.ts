@@ -228,7 +228,13 @@ export class MrfRequestRepository extends BaseRepository<MrfRequest> {
         'grades.name as grade',
         this.db.raw("TRIM(CONCAT(employees.first_name, ' ', COALESCE(employees.last_name, ''))) as interviewer"),
         this.db.raw("TRIM(CONCAT(COALESCE(requester.first_name, requester_user.first_name), ' ', COALESCE(requester.last_name, requester_user.last_name, ''))) as requested_by"),
-        this.db.raw("(SELECT COUNT(*) FROM resume_bank WHERE resume_bank.mrf_request_id = mrf_requests.id) as applicants")
+        this.db.raw(`(
+          SELECT COUNT(DISTINCT rb.id) FROM resume_bank rb WHERE rb.mrf_request_id = mrf_requests.id
+        ) + (
+          SELECT COUNT(DISTINCT a.id) FROM applications a
+          INNER JOIN jobs j ON a.job_id = j.id
+          WHERE j.mrf_request_id = mrf_requests.id
+        ) as applicants`)
       ])
       .orderBy(sortByCol, validatedSortOrder)
       .offset((validatedPage - 1) * validatedPageSize)

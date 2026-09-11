@@ -46,6 +46,12 @@ export interface IjpApplication {
   department_name?: string;
   designation_name?: string;
   location_name?: string;
+  manager_approval_status?: 'Pending' | 'Approved' | 'Rejected';
+  managerApprovalStatus?: 'Pending' | 'Approved' | 'Rejected';
+  manager_comments?: string | null;
+  managerComments?: string | null;
+  resume_url?: string | null;
+  resumeUrl?: string | null;
 }
 
 export const useInternalJobs = (filters?: {
@@ -105,6 +111,8 @@ export interface ApplyInternalJobInput {
   relevantExperienceYears?: number | string;
   currentProjects?: string;
   managerInformed?: boolean;
+  resumeFile?: string;
+  resumeName?: string;
 }
 
 export const useApplyToInternalJob = () => {
@@ -118,6 +126,82 @@ export const useApplyToInternalJob = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-ijp-applications'] });
       queryClient.invalidateQueries({ queryKey: ['ijp-jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['manager-ijp-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['resume-bank'] });
+    },
+  });
+};
+
+export interface ManagerIjpApprovalItem {
+  id: number;
+  uuid: string;
+  applicationId: number;
+  applicantId: number;
+  approverId: number | null;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  createdAt: string;
+  updatedAt: string;
+  details: {
+    applicationId: number;
+    jobId: number;
+    jobTitle: string;
+    jobCode: string;
+    employeeId: number;
+    employeeName: string;
+    employeeEmail: string;
+    employeeCode?: string;
+    reasonForMove?: string;
+    availability?: string;
+    relevantExperienceYears?: number | string;
+    currentProjects?: string;
+    statementOfInterest?: string;
+    resumeUrl?: string | null;
+    managerInformed?: boolean;
+    appliedAt: string;
+    managerComments?: string | null;
+    approvedAt?: string | null;
+    rejectedAt?: string | null;
+  };
+}
+
+export const useManagerIjpApprovals = () => {
+  return useQuery<ManagerIjpApprovalItem[]>({
+    queryKey: ['manager-ijp-approvals'],
+    queryFn: async () => {
+      const response = await api.get('/recruitment/ijp/manager/approvals');
+      return response.data.data || [];
+    },
+  });
+};
+
+export const useApproveIjpApplication = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, comments }: { id: number; comments?: string }) => {
+      const response = await api.post(`/recruitment/ijp/manager/approvals/${id}/approve`, { comments });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-ijp-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['my-ijp-applications'] });
+      queryClient.invalidateQueries({ queryKey: ['resume-bank'] });
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+    },
+  });
+};
+
+export const useRejectIjpApplication = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, comments }: { id: number; comments?: string }) => {
+      const response = await api.post(`/recruitment/ijp/manager/approvals/${id}/reject`, { comments });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-ijp-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['my-ijp-applications'] });
     },
   });
 };

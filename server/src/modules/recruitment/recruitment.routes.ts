@@ -37,10 +37,13 @@ router.get('/mrf/settings/:configType', requirePermission('recruitment.mrf.read'
 router.put('/mrf/settings/:configType', requirePermission('recruitment.mrf.write'), mrfController.saveSettings);
 
 // ==================== IJP (Internal Job Posting) Routes ====================
-// Accessible to any authenticated organization member (employees)
+// Accessible to any authenticated organization member (employees & managers)
 router.get('/ijp/jobs', recruitmentController.listInternalJobs);
 router.post('/ijp/apply', recruitmentController.applyToInternalJob);
 router.get('/ijp/my-applications', recruitmentController.getMyIjpApplications);
+router.get('/ijp/manager/approvals', recruitmentController.getManagerIjpApprovals);
+router.post('/ijp/manager/approvals/:id/approve', recruitmentController.approveManagerIjp);
+router.post('/ijp/manager/approvals/:id/reject', recruitmentController.rejectManagerIjp);
 
 // ==================== Job Routes ====================
 router.post('/jobs', requirePermission('recruitment.job.write'), recruitmentController.createJob);

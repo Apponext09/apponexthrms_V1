@@ -117,7 +117,7 @@ export class RecruitmentController {
 
   applyToInternalJob = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { jobId, coverLetter, reasonForMove, availability, relevantExperienceYears, currentProjects, managerInformed } = req.body;
+    const { jobId, coverLetter, reasonForMove, availability, relevantExperienceYears, currentProjects, managerInformed, resumeFile, resumeName } = req.body;
 
     if (!jobId) {
       throw new ValidationError('Job ID is required');
@@ -131,6 +131,8 @@ export class RecruitmentController {
       relevantExperienceYears,
       currentProjects,
       managerInformed,
+      resumeFile,
+      resumeName,
     });
 
     res.status(201).json({ success: true, data: application });
@@ -140,6 +142,28 @@ export class RecruitmentController {
     const ctx = req.ctx!;
     const applications = await this.ijpService.getMyApplications(ctx);
     res.json({ success: true, data: applications });
+  });
+
+  getManagerIjpApprovals = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const approvals = await this.ijpService.getManagerPendingIjpApprovals(ctx);
+    res.json({ success: true, data: approvals });
+  });
+
+  approveManagerIjp = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const result = await this.ijpService.approveIjpApplication(ctx, parseInt(id, 10), { comments });
+    res.json({ success: true, data: result });
+  });
+
+  rejectManagerIjp = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const result = await this.ijpService.rejectIjpApplication(ctx, parseInt(id, 10), { comments });
+    res.json({ success: true, data: result });
   });
 
 
@@ -306,7 +330,9 @@ export class RecruitmentController {
       gradeId,
       typeId,
       designationId,
-      stage
+      stage,
+      mrfRequestId,
+      mrf_request_id,
     } = req.query;
 
     const filters: any = {};
@@ -317,6 +343,9 @@ export class RecruitmentController {
     if (typeId && typeId !== 'all') filters.type_id = typeId as string;
     if (designationId && designationId !== 'all') filters.designation_id = parseInt(designationId as string, 10);
     if (stage && stage !== 'all') filters.application_status = stage as string;
+    // MRF-scoped application listing
+    const rawMrfId = mrfRequestId || mrf_request_id;
+    if (rawMrfId && rawMrfId !== 'all') filters.mrfRequestId = parseInt(rawMrfId as string, 10);
 
     const result = await this.recruitmentService.getApplications(ctx, {
       page: parseInt(page as string, 10),

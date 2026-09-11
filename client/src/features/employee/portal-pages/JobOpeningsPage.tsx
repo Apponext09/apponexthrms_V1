@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { 
   Briefcase, MapPin, Building2, Clock, Calendar, CheckCircle2, 
   Search, ArrowRight, Sparkles, FileText, Send, UserCheck, AlertCircle, 
-  ExternalLink, Layers, Check
+  ExternalLink, Layers, Check, Upload, Paperclip, X, ShieldCheck, FileCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useInternalJobs, useMyIjpApplications, useApplyToInternalJob, type InternalJob } from '@/features/recruitment/hooks/useIjp';
@@ -31,6 +31,11 @@ export default function JobOpeningsPage() {
   const [relevantExp, setRelevantExp] = useState('');
   const [currentProjects, setCurrentProjects] = useState('');
   const [managerInformed, setManagerInformed] = useState(true);
+  
+  // Resume upload state
+  const [resumeBase64, setResumeBase64] = useState<string | null>(null);
+  const [resumeFileName, setResumeFileName] = useState<string>('');
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
 
   // Queries & Mutations
   const { data: jobsData, isLoading: isLoadingJobs } = useInternalJobs({
@@ -81,6 +86,32 @@ export default function JobOpeningsPage() {
     setRelevantExp('');
     setCurrentProjects('');
     setManagerInformed(true);
+    setResumeBase64(null);
+    setResumeFileName('');
+  };
+
+  const handleResumeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File is too large. Maximum resume size is 10 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    setIsUploadingResume(true);
+    reader.onload = () => {
+      setResumeBase64(reader.result as string);
+      setResumeFileName(file.name);
+      setIsUploadingResume(false);
+      toast.success(`Resume "${file.name}" attached successfully`);
+    };
+    reader.onerror = () => {
+      setIsUploadingResume(false);
+      toast.error('Failed to read resume file.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleApplySubmit = async (e: React.FormEvent) => {
@@ -88,7 +119,7 @@ export default function JobOpeningsPage() {
     if (!selectedJob) return;
 
     try {
-      await applyMutation.mutateAsync({
+      const res = await applyMutation.mutateAsync({
         jobId: selectedJob.id,
         coverLetter: coverLetter.trim() || undefined,
         reasonForMove,
@@ -96,12 +127,16 @@ export default function JobOpeningsPage() {
         relevantExperienceYears: relevantExp.trim() || undefined,
         currentProjects: currentProjects.trim() || undefined,
         managerInformed,
+        resumeFile: resumeBase64 || undefined,
+        resumeName: resumeFileName || undefined,
       });
 
       const title = selectedJob.jobTitle || selectedJob.job_title || 'Position';
-      toast.success(`Application submitted for "${title}"!`);
+      toast.success(res?.message || `Application submitted for "${title}"!`);
       setSelectedJob(null);
       setCoverLetter('');
+      setResumeBase64(null);
+      setResumeFileName('');
       setActiveTab('applications');
     } catch (err: any) {
       toast.error(formatApiError(err, 'Failed to submit internal application'));
@@ -427,43 +462,73 @@ export default function JobOpeningsPage() {
                 const appliedDate = app.appliedAt || app.applied_at;
                 const dept = app.departmentName || app.department_name;
                 const note = app.coverLetter || app.cover_letter;
+                const resumeUrl = app.resumeUrl || app.resume_url;
+                const managerStatus = app.managerApprovalStatus || app.manager_approval_status;
+                const managerComments = app.managerComments || app.manager_comments;
 
                 return (
                   <div 
                     key={appId}
-                    className="bg-card border border-border/80 rounded-2xl p-5 shadow-2xs hover:border-border transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    className="bg-card border border-border/80 rounded-2xl p-5 shadow-2xs hover:border-border transition-colors flex flex-col items-start gap-4"
                   >
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-[11px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
-                          {code}
-                        </span>
-                        <h4 className="text-sm font-bold text-foreground">{title}</h4>
-                        
-                        {/* Application Status Badge */}
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full border ${
-                          status === 'applied' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30' :
-                          status === 'screening' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30' :
-                          status === 'interview' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30' :
-                          status === 'offer' || status === 'hired' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' :
-                          'bg-slate-500/10 text-slate-500 border-slate-500/30'
-                        }`}>
-                          <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                          {status}
-                        </span>
+                    <div className="space-y-2 w-full">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-[11px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
+                            {code}
+                          </span>
+                          <h4 className="text-sm font-bold text-foreground">{title}</h4>
+                        </div>
+
+                        {/* Application / Manager Approval Status Badge */}
+                        <div className="flex items-center gap-2">
+                          {(status === 'pending_manager' || managerStatus === 'Pending' || managerStatus === 'pending' || (!managerStatus && status === 'applied')) ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
+                              <Clock className="w-3.5 h-3.5" /> Pending Manager Clearance (NOC)
+                            </span>
+                          ) : (status === 'rejected' || managerStatus === 'Rejected' || managerStatus === 'rejected') ? (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-3 py-1 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                              <AlertCircle className="w-3.5 h-3.5" /> Manager Declined
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Manager Approved & Active in Resume Bank
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground pt-1">
                         {dept && (
-                          <span>Dept: <strong className="text-foreground">{dept}</strong></span>
+                          <span>Department: <strong className="text-foreground">{dept}</strong></span>
                         )}
                         {appliedDate && (
                           <span>Applied on: <strong className="text-foreground">{new Date(appliedDate).toLocaleDateString()}</strong></span>
                         )}
+                        {resumeUrl && (
+                          <a 
+                            href={resumeUrl} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline font-bold"
+                          >
+                            <FileCheck className="w-3.5 h-3.5" /> View Attached Resume <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
                       </div>
 
+                      {/* Manager Review Notes if any */}
+                      {managerComments && (
+                        <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs space-y-1">
+                          <span className="font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" /> Reporting Manager Endorsement / Remarks:
+                          </span>
+                          <p className="text-muted-foreground">{managerComments}</p>
+                        </div>
+                      )}
+
                       {note && (
-                        <div className="text-xs bg-muted/40 p-3 rounded-xl border border-border/50 text-muted-foreground mt-2 whitespace-pre-line leading-relaxed">
+                        <div className="text-xs bg-muted/40 p-3.5 rounded-xl border border-border/50 text-muted-foreground whitespace-pre-line leading-relaxed">
                           <span className="font-bold text-foreground block text-[11px] mb-1">Application Dossier & Details:</span>
                           {note}
                         </div>
@@ -574,11 +639,11 @@ export default function JobOpeningsPage() {
                           <UserCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                           <div>
                             <span className="font-bold text-foreground block">Applying as: {user?.firstName ? `${user.firstName} ${user.lastName || ''}` : user?.email}</span>
-                            <span className="text-[11px] text-muted-foreground">Your verified employee records & tenure will be automatically linked.</span>
+                            <span className="text-[11px] text-muted-foreground">First step: Clearance endorsement by your reporting manager, then forwarded to ATS & Resume Screen Bank.</span>
                           </div>
                         </div>
                         <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-500/15 text-blue-700 dark:text-blue-300">
-                          Internal Dossier
+                          Manager NOC & IJP
                         </span>
                       </div>
 
@@ -643,6 +708,50 @@ export default function JobOpeningsPage() {
                         </div>
                       </div>
 
+                      {/* Resume / CV Upload Field */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <Upload className="w-3.5 h-3.5 text-primary" /> Upload Updated Resume / CV (PDF, DOCX)
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-normal">Max 10 MB</span>
+                        </label>
+                        
+                        {resumeFileName ? (
+                          <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs">
+                            <div className="flex items-center gap-2 truncate">
+                              <Paperclip className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                              <span className="font-bold text-foreground truncate">{resumeFileName}</span>
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase bg-emerald-500/20 px-1.5 py-0.5 rounded">Ready</span>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setResumeBase64(null);
+                                setResumeFileName('');
+                              }}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-rose-600 rounded-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label className="border-2 border-dashed border-border/80 hover:border-primary/60 rounded-xl p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer bg-muted/20 hover:bg-muted/40 transition-colors">
+                            <Upload className="w-5 h-5 text-muted-foreground" />
+                            <span className="text-xs font-semibold text-foreground">Click to upload your resume</span>
+                            <span className="text-[10px] text-muted-foreground">Supported formats: PDF, DOC, DOCX</span>
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                              onChange={handleResumeFileChange}
+                              className="hidden"
+                            />
+                          </label>
+                        )}
+                      </div>
+
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-foreground flex items-center justify-between">
                           <span>Statement of Interest / Why are you the right fit?</span>
@@ -688,7 +797,7 @@ export default function JobOpeningsPage() {
                     <Button
                       type="submit"
                       form="ijp-apply-form"
-                      disabled={applyMutation.isPending}
+                      disabled={applyMutation.isPending || isUploadingResume}
                       className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-xl text-xs h-9 gap-1.5 shadow-xs"
                     >
                       {applyMutation.isPending ? (

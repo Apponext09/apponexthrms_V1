@@ -24,7 +24,7 @@ const INITIAL_FILTERS = {
   search: '',
   source: 'all',
   position: 'all',
-  status: 'all'
+  status: 'Applied'
 };
 
 const getResumeViewUrl = (url: string | null | undefined): string => {
@@ -101,7 +101,7 @@ export const ResumeBankPage: React.FC = () => {
     resumesData.forEach(r => {
       if (r.source && r.source !== '-' && r.source.trim().length > 0) set.add(r.source);
     });
-    ['Referral', 'direct_apply', 'job_board', 'bulk_import', 'Consultant', 'Career Portal', 'Candidate', 'Guest User'].forEach(s => set.add(s));
+    ['Internal Job Posting (IJP)', 'Referral', 'direct_apply', 'job_board', 'bulk_import', 'Consultant', 'Career Portal', 'Candidate', 'Guest User'].forEach(s => set.add(s));
     return Array.from(set);
   }, [resumesData]);
 
@@ -894,8 +894,21 @@ export const ResumeBankPage: React.FC = () => {
                               </div>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-4 whitespace-nowrap">
-                              <Badge variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border rounded-lg capitalize px-2 py-0.5 font-bold">
-                                {item.source === 'bulk_import' ? 'Bulk Import' : item.source}
+                              <Badge 
+                                variant="outline" 
+                                className={`text-[10px] rounded-lg capitalize px-2.5 py-0.5 font-bold border ${
+                                  (item.source || '').toLowerCase().includes('internal') || (item.source || '').toLowerCase().includes('ijp')
+                                    ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
+                                    : (item.source || '').toLowerCase().includes('referral')
+                                    ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'
+                                    : (item.source || '').toLowerCase().includes('bulk')
+                                    ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+                                    : (item.source || '').toLowerCase().includes('career')
+                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                    : 'bg-muted text-muted-foreground border-border'
+                                }`}
+                              >
+                                {item.source === 'bulk_import' ? 'Bulk Import' : (item.source === 'internal_opening' ? 'Internal Job Posting (IJP)' : (item.source || '-'))}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-xs py-3 px-4 font-semibold text-foreground whitespace-nowrap">{item.position}</TableCell>

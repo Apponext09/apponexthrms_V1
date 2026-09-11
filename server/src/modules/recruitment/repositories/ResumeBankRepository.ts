@@ -105,17 +105,21 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
 
   override async list(ctx: TenantContext, options?: ListQueryOptions): Promise<any> {
     await this.ensureColumns();
-    const hasJobId = await this.db.schema.hasColumn(this.tableName, 'job_id').catch(() => false);
-    const hasDob = await this.db.schema.hasColumn('candidates', 'dob').catch(() => false);
-    const hasGender = await this.db.schema.hasColumn('candidates', 'gender').catch(() => false);
-    const hasMarital = await this.db.schema.hasColumn('candidates', 'marital_status').catch(() => false);
-    const hasCompany = await this.db.schema.hasColumn('candidates', 'current_company').catch(() => false);
-    const hasQual = await this.db.schema.hasColumn('candidates', 'qualification').catch(() => false);
-    const hasUniv = await this.db.schema.hasColumn('candidates', 'university').catch(() => false);
-    const hasExp = await this.db.schema.hasColumn('candidates', 'years_of_experience').catch(() => false);
-    const hasSkills = await this.db.schema.hasColumn('candidates', 'skills').catch(() => false);
+    const hasJobId     = await this.db.schema.hasColumn(this.tableName, 'job_id').catch(() => false);
+    const hasDob       = await this.db.schema.hasColumn('candidates', 'dob').catch(() => false);
+    const hasGender    = await this.db.schema.hasColumn('candidates', 'gender').catch(() => false);
+    const hasMarital   = await this.db.schema.hasColumn('candidates', 'marital_status').catch(() => false);
+    const hasCompany   = await this.db.schema.hasColumn('candidates', 'current_company').catch(() => false);
+    const hasQual      = await this.db.schema.hasColumn('candidates', 'qualification').catch(() => false);
+    const hasUniv      = await this.db.schema.hasColumn('candidates', 'university').catch(() => false);
+    const hasExp       = await this.db.schema.hasColumn('candidates', 'years_of_experience').catch(() => false);
+    const hasSkills    = await this.db.schema.hasColumn('candidates', 'skills').catch(() => false);
+    // resume_bank own name columns (may not exist in older schemas)
+    const hasRbFirstName    = await this.db.schema.hasColumn(this.tableName, 'first_name').catch(() => false);
+    const hasRbLastName     = await this.db.schema.hasColumn(this.tableName, 'last_name').catch(() => false);
+    const hasRbCandName     = await this.db.schema.hasColumn(this.tableName, 'candidate_name').catch(() => false);
 
-    const hasAtsTable = await this.db.schema.hasTable('resume_ats_scores').catch(() => false);
+    const hasAtsTable     = await this.db.schema.hasTable('resume_ats_scores').catch(() => false);
     const hasJdMatchTable = await this.db.schema.hasTable('candidate_job_matches').catch(() => false);
 
     const query = this.db(this.tableName)
@@ -136,7 +140,19 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
 
     const selectFields: any[] = [
       'resume_bank.*',
-      this.db.raw("COALESCE(NULLIF(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))), ''), resume_bank.tracker_id) as candidate_name"),
+      // Build candidate_name COALESCE based on which columns actually exist in the DB
+      (() => {
+        const parts: string[] = [];
+        if (hasRbFirstName && hasRbLastName) {
+          parts.push(`NULLIF(TRIM(CONCAT(COALESCE(resume_bank.first_name, ''), ' ', COALESCE(resume_bank.last_name, ''))), '')`);
+        } else if (hasRbFirstName) {
+          parts.push(`NULLIF(TRIM(COALESCE(resume_bank.first_name, '')), '')`);
+        }
+        if (hasRbCandName) parts.push('resume_bank.candidate_name');
+        parts.push(`NULLIF(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))), '')`);
+        parts.push('resume_bank.tracker_id');
+        return this.db.raw(`COALESCE(${parts.join(', ')}) as candidate_name`);
+      })(),
       'candidates.email as candidate_email',
       'candidates.phone as candidate_phone',
       hasDob ? 'candidates.dob as candidate_dob' : this.db.raw('NULL as candidate_dob'),
@@ -156,6 +172,60 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
       query.leftJoin('jobs', 'resume_bank.job_id', 'jobs.id');
       selectFields.push(this.db.raw("MAX(CAST(CASE WHEN jobs.job_title IS NOT NULL AND jobs.job_title != '' AND jobs.job_title != 'Job Position' THEN jobs.job_title WHEN resume_bank.position IS NOT NULL AND resume_bank.position != '' THEN resume_bank.position ELSE 'SOFTWARE DEVELOPER' END AS CHAR)) as job_title"));
       selectFields.push(this.db.raw("MAX(CAST(jobs.job_code AS CHAR)) as job_code"));
+    }
+
+    const hasEmployeesTable = await this.db.schema.hasTable('employees').catch(() => false);
+    if (hasEmployeesTable) {
+      // Exclude active on-role working employees from Resume Bank UNLESS they applied for an Internal Job Posting (IJP)
+      const knexDb = this.db;
+      query.andWhere(function() {
+        this.where(function() {
+          // Check that candidate does not match any active employee by email
+          this.whereNotIn(knexDb.raw('LOWER(TRIM(COALESCE(candidates.email, "")))'), function() {
+            this.select(knexDb.raw('LOWER(TRIM(email))')).from('employees')
+              .whereNull('deleted_at')
+              .whereNotNull('email')
+              .whereRaw('TRIM(email) != ""');
+          })
+          // Also candidate phone does not match employee phone/mobile
+          .andWhere(function() {
+            this.whereNull('candidates.phone')
+              .orWhere('candidates.phone', '=', '')
+              .orWhereNotIn(knexDb.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(candidates.phone, ''), '+', ''), '-', ''), ' ', ''), 10)"), function() {
+                this.select(knexDb.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(phone, mobile, ''), '+', ''), '-', ''), ' ', ''), 10)")).from('employees')
+                  .whereNull('deleted_at')
+                  .whereRaw("COALESCE(phone, mobile, '') != ''");
+              });
+          })
+          // Also full name does not match employee full name
+          .andWhere(function() {
+            this.whereNotIn(knexDb.raw("LOWER(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))))"), function() {
+              this.select(knexDb.raw("LOWER(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))))")).from('employees')
+                .whereNull('deleted_at')
+                .whereRaw("CONCAT(COALESCE(first_name, ''), COALESCE(last_name, '')) != ''");
+            });
+          });
+        })
+        // OR: Candidate is an employee whose IJP application has been APPROVED / ENDORSED by their Manager
+        .orWhereIn('candidates.id', function() {
+          this.select('applications.candidate_id').from('applications')
+            .leftJoin('workflow_approvals', function() {
+              this.on('workflow_approvals.reference_id', '=', 'applications.id')
+                .andOn('workflow_approvals.module_type', '=', knexDb.raw("'IJP'"));
+            })
+            .where(function() {
+              this.where('workflow_approvals.status', '=', 'Approved')
+                .orWhere(function() {
+                  this.whereNull('workflow_approvals.id')
+                    .andWhere('applications.application_status', 'in', ['screening', 'interview', 'approved']);
+                });
+            })
+            .where(function() {
+              this.where('applications.applied_from_source', 'like', '%internal%')
+                .orWhere('applications.applied_from_source', 'like', '%ijp%');
+            });
+        });
+      });
     }
 
     query.select(selectFields).groupBy('resume_bank.id');
