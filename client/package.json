@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@apponexthrms/shared": "^0.1.0",
+    "@apponexthrms/shared": "*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.14.0",

@@ -181,7 +181,7 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
       query.andWhere(function() {
         this.where(function() {
           // Check that candidate does not match any active employee by email
-          this.whereNotIn(knexDb.raw('LOWER(TRIM(COALESCE(candidates.email, "")))'), function() {
+          this.whereNotIn(knexDb.raw('LOWER(TRIM(COALESCE(candidates.email, "")))') as any, function() {
             this.select(knexDb.raw('LOWER(TRIM(email))')).from('employees')
               .whereNull('deleted_at')
               .whereNotNull('email')
@@ -191,7 +191,7 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
           .andWhere(function() {
             this.whereNull('candidates.phone')
               .orWhere('candidates.phone', '=', '')
-              .orWhereNotIn(knexDb.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(candidates.phone, ''), '+', ''), '-', ''), ' ', ''), 10)"), function() {
+              .orWhereNotIn(knexDb.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(candidates.phone, ''), '+', ''), '-', ''), ' ', ''), 10)") as any, function() {
                 this.select(knexDb.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(phone, mobile, ''), '+', ''), '-', ''), ' ', ''), 10)")).from('employees')
                   .whereNull('deleted_at')
                   .whereRaw("COALESCE(phone, mobile, '') != ''");
@@ -199,7 +199,7 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
           })
           // Also full name does not match employee full name
           .andWhere(function() {
-            this.whereNotIn(knexDb.raw("LOWER(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))))"), function() {
+            this.whereNotIn(knexDb.raw("LOWER(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))))") as any, function() {
               this.select(knexDb.raw("LOWER(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))))")).from('employees')
                 .whereNull('deleted_at')
                 .whereRaw("CONCAT(COALESCE(first_name, ''), COALESCE(last_name, '')) != ''");
@@ -231,8 +231,9 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
     query.select(selectFields).groupBy('resume_bank.id');
 
     if (options?.filters) {
-      if (options.filters.mrf_request_id || options.filters.mrfRequestId) {
-        const mrfId = options.filters.mrf_request_id || options.filters.mrfRequestId;
+      const filters = options.filters as Record<string, any>;
+      if (filters.mrf_request_id || filters.mrfRequestId) {
+        const mrfId = filters.mrf_request_id || filters.mrfRequestId;
         const mrfRow = await this.db('mrf_requests').where('id', mrfId).first();
         const posTitle = mrfRow?.position_title || (mrfRow as any)?.positionTitle;
 
@@ -248,18 +249,18 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
           }
         });
       }
-      if (hasJobId && options.filters.job_id) {
-        query.where('resume_bank.job_id', options.filters.job_id);
+      if (hasJobId && filters.job_id) {
+        query.where('resume_bank.job_id', filters.job_id);
       }
-      if (options.filters.source) {
-        const s = options.filters.source;
+      if (filters.source) {
+        const s = filters.source;
         query.andWhere((q) => {
           q.where('resume_bank.source', 'like', `%${s}%`)
             .orWhere('candidates.source', 'like', `%${s}%`);
         });
       }
-      if (options.filters.position) {
-        const p = options.filters.position;
+      if (filters.position) {
+        const p = filters.position;
         query.andWhere((q) => {
           q.where('resume_bank.position', 'like', `%${p}%`);
           if (hasJobId) {
@@ -267,14 +268,14 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
           }
         });
       }
-      if (options.filters.status) {
-        query.andWhere('resume_bank.status', 'like', `%${options.filters.status}%`);
+      if (filters.status) {
+        query.andWhere('resume_bank.status', 'like', `%${filters.status}%`);
       }
-      if (options.filters.qualification) {
-        query.where('candidates.qualification', 'like', `%${options.filters.qualification}%`);
+      if (filters.qualification) {
+        query.where('candidates.qualification', 'like', `%${filters.qualification}%`);
       }
-      if (options.filters.skills) {
-        query.where('candidates.skills', 'like', `%${options.filters.skills}%`);
+      if (filters.skills) {
+        query.where('candidates.skills', 'like', `%${filters.skills}%`);
       }
     }
 

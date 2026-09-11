@@ -6,7 +6,8 @@
   "workspaces": [
     "client",
     "server",
-    "shared"
+    "shared",
+    "database"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
@@ -60,6 +61,11 @@
   "dependencies": {
     "argon2": "^0.44.0",
     "maplibre-gl": "^6.6.0",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "git": "^0.1.5"
+  },
+  "allowScripts": {
+    "argon2@0.44.0": true,
+    "argon2@0.31.2": true
   }
 }

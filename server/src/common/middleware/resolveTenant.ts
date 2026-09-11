@@ -66,6 +66,7 @@ export function resolveTenant(req: Request, res: Response, next: NextFunction): 
     companyId,
     role: (req.user as any).role || (req.user as any).accessRole,
     roles: (req.user as any).roles || (req.user as any).roleCodes || [],
+    employeeId: (req.user as any).employeeId || (req.user as any).employee_id || (req.user as any).eid,
   };
 
   next();

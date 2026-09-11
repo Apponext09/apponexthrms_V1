@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   AlertTriangle,
   ShieldAlert,
-  Info
+  Info,
+  RotateCcw,
+  Edit2
 } from 'lucide-react';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -39,6 +41,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string; icon: React.Rea
   pending: { label: 'Pending Approval', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300', icon: <Clock className="w-3 h-3" /> },
   approved: { label: 'Approved', cls: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300', icon: <CheckCircle className="w-3 h-3" /> },
   rejected: { label: 'Rejected', cls: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300', icon: <XCircle className="w-3 h-3" /> },
+  returned: { label: 'Returned to Employee', cls: 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300', icon: <RotateCcw className="w-3 h-3" /> },
 };
 
 function getStatusBadge(status: string, approverRole?: string) {
@@ -99,6 +102,26 @@ export const TravelRequestsPage: React.FC = () => {
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [estimatedBudget, setEstimatedBudget] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const openEditModal = (tr: any) => {
+    setEditingId(tr.id);
+    setFromLocation(tr.fromLocation || tr.from_location || '');
+    setToLocation(tr.toLocation || tr.to_location || '');
+    setPurpose(tr.purpose || '');
+    setStartDate(tr.startDate ? new Date(tr.startDate).toISOString().slice(0, 10) : (tr.start_date ? new Date(tr.start_date).toISOString().slice(0, 10) : ''));
+    setEndDate(tr.endDate ? new Date(tr.endDate).toISOString().slice(0, 10) : (tr.end_date ? new Date(tr.end_date).toISOString().slice(0, 10) : ''));
+    setEstimatedBudget(Number(tr.estimatedBudget || tr.estimated_budget || 0));
+    setIsModalOpen(true);
+  };
+
+  const openNewModal = () => {
+    setEditingId(null);
+    setFromLocation(''); setToLocation(''); setPurpose(''); setEstimatedBudget(0);
+    setStartDate(new Date().toISOString().slice(0, 10));
+    setEndDate(new Date().toISOString().slice(0, 10));
+    setIsModalOpen(true);
+  };
 
   const { user } = useAuthStore();
 
@@ -139,21 +162,35 @@ export const TravelRequestsPage: React.FC = () => {
       const travelCat = (categoriesRes || []).find((c: any) =>
         String(c.name || '').toLowerCase().includes('travel') || String(c.code || '').toLowerCase() === 'travel'
       );
-      const travelCatId = travelCat?.id || 1;
-      const travelPols = (policiesRes || []).filter((p: any) =>
-        p.isActive !== false && (!p.categoryId || Number(p.categoryId) === Number(travelCatId))
-      );
+      const travelCatId = travelCat?.id;
 
-      const limits = travelPols
-        .map((p: any) => Number(p.maxLimitPerClaim || p.max_limit_per_claim || 0))
-        .filter((l: number) => l > 0);
+      const activePols = (policiesRes || []).filter((p: any) => p.isActive !== false);
 
-      if (limits.length > 0) {
-        setMaxBudgetLimit(Math.min(...limits));
-      } else if (travelCat && Number(travelCat.spendingLimit || travelCat.spending_limit || 0) > 0) {
-        setMaxBudgetLimit(Number(travelCat.spendingLimit || travelCat.spending_limit));
-      } else {
+      // Prioritize Travel category-specific policies
+      const catSpecificPols = travelCatId
+        ? activePols.filter((p: any) => p.categoryId !== undefined && p.categoryId !== null && Number(p.categoryId) === Number(travelCatId))
+        : [];
+
+      const targetPols = catSpecificPols.length > 0
+        ? catSpecificPols
+        : activePols.filter((p: any) => !p.categoryId || Number(p.categoryId) === 0);
+
+      const hasUnlimited = targetPols.some((p: any) => Number(p.maxLimitPerClaim ?? p.max_limit_per_claim ?? 0) === 0);
+
+      if (hasUnlimited) {
         setMaxBudgetLimit(null);
+      } else {
+        const limits = targetPols
+          .map((p: any) => Number(p.maxLimitPerClaim ?? p.max_limit_per_claim ?? 0))
+          .filter((l: number) => l > 0);
+
+        if (limits.length > 0) {
+          setMaxBudgetLimit(Math.min(...limits));
+        } else if (travelCat && Number(travelCat.spendingLimit || travelCat.spending_limit || 0) > 0) {
+          setMaxBudgetLimit(Number(travelCat.spendingLimit || travelCat.spending_limit));
+        } else {
+          setMaxBudgetLimit(null);
+        }
       }
     } catch (err) {
       console.error('Failed to load travel policies:', err);
@@ -203,10 +240,16 @@ export const TravelRequestsPage: React.FC = () => {
 
     try {
       setSubmitting(true);
-      await expenseApi.createTravelRequest({ fromLocation, toLocation, purpose, startDate, endDate, estimatedBudget });
+      if (editingId) {
+        await expenseApi.updateTravelRequest(editingId, { fromLocation, toLocation, purpose, startDate, endDate, estimatedBudget });
+        setToast({ type: 'success', message: 'Travel request updated and resubmitted for approval.' });
+      } else {
+        await expenseApi.createTravelRequest({ fromLocation, toLocation, purpose, startDate, endDate, estimatedBudget });
+        setToast({ type: 'success', message: 'Travel request submitted and sent for approval.' });
+      }
       setIsModalOpen(false);
+      setEditingId(null);
       setFromLocation(''); setToLocation(''); setPurpose(''); setEstimatedBudget(0);
-      setToast({ type: 'success', message: 'Travel request submitted and sent for approval.' });
       fetchTravelRequests();
     } catch (err: any) {
       setToast({ type: 'error', message: err.message || 'Failed to submit travel request.' });
@@ -346,7 +389,7 @@ export const TravelRequestsPage: React.FC = () => {
                   <th className="py-3.5 px-4">Dates</th>
                   <th className="py-3.5 px-4">Budget</th>
                   <th className="py-3.5 px-4">Current Stage</th>
-                  {isManagement && <th className="py-3.5 px-4 text-right">Actions</th>}
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -374,7 +417,38 @@ export const TravelRequestsPage: React.FC = () => {
                     (currentUserId > 0 && reqUserId > 0 && currentUserId === reqUserId) ||
                     (currentUserId > 0 && reqEmpId > 0 && currentUserId === reqEmpId);
 
-                  const canAct = isManagement && !isOwnRequest && isPendingApproval(status);
+                  const stLower = status.toLowerCase();
+                  const isLevel1Stage = stLower === 'pending_level_1' || stLower === 'pending' || stLower === 'submitted';
+                  const isLevel2Stage = stLower === 'pending_level_2' || stLower === 'pending_manager';
+                  const isLevel3Stage = stLower === 'pending_level_3';
+                  const isFinanceStage = stLower === 'pending_finance';
+
+                  const isHrOrAdminPortal = path.startsWith('/hr') || path.startsWith('/admin') || path.startsWith('/expenses');
+                  const isManagerPortal = path.startsWith('/manager');
+                  const isTeamLeadPortal = path.startsWith('/team-lead');
+
+                  let canAct = false;
+                  if (!isOwnRequest && isPendingApproval(status)) {
+                    if (isHrOrAdminPortal) {
+                      // HR / Admin portal: can only act if current stage is Level 3 (HR stage) or Finance stage
+                      canAct = isLevel3Stage || isFinanceStage;
+                    } else if (isManagerPortal) {
+                      // Manager portal: can act if current stage is Level 2 or Level 1
+                      canAct = isLevel2Stage || isLevel1Stage;
+                    } else if (isTeamLeadPortal) {
+                      // Team Lead portal: can act if current stage is Level 1
+                      canAct = isLevel1Stage;
+                    } else {
+                      const rCode = singleRole;
+                      const isHrAdminRole = ['hr', 'hr_admin', 'hr_manager', 'organization_admin', 'super_admin', 'admin', 'ceo'].some(r => rCode.includes(r));
+                      const isMgrRole = ['manager', 'department_head'].some((r: string) => rCode.includes(r));
+                      const isTlRole = rCode.includes('team_lead');
+
+                      if (isLevel3Stage) canAct = isHrAdminRole;
+                      else if (isLevel2Stage) canAct = isMgrRole && !isHrAdminRole;
+                      else if (isLevel1Stage) canAct = isTlRole || isMgrRole;
+                    }
+                  }
 
                   return (
                     <tr key={tr.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
@@ -402,26 +476,36 @@ export const TravelRequestsPage: React.FC = () => {
                         {status === 'rejected' && rejReason && (
                           <div className="text-[10px] text-rose-500 mt-1 max-w-[140px] line-clamp-1" title={rejReason}>↳ {rejReason}</div>
                         )}
-                        {approverRole && !['approved', 'rejected'].includes(status) && (
+                        {approverRole && !['approved', 'rejected', 'returned'].includes(status) && (
                           <div className="text-[10px] text-slate-400 mt-0.5">
                             Next: {status === 'pending_level_2' && approverRole === 'Team Lead' ? 'Reporting Manager' : (approverRole === 'Manager Approval' ? 'Reporting Manager' : approverRole)}
                           </div>
                         )}
                       </td>
-                      {isManagement && (
-                        <td className="py-3.5 px-4 text-right">
-                          {canAct ? (
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {(status === 'returned' || status === 'draft') && (isOwnRequest || !isManagement) && (
+                            <button
+                              onClick={() => openEditModal(tr)}
+                              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800 rounded text-[11px] font-semibold transition-all inline-flex items-center gap-1 cursor-pointer"
+                              title="Edit & Resubmit Travel Request"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" /> Edit & Resubmit
+                            </button>
+                          )}
+                          {canAct && (
                             <a
                               href={path.startsWith('/manager') ? '/manager/expenses/approvals' : (path.startsWith('/team-lead') ? '/team-lead/expenses/approvals' : '/dashboard/expenses/approvals')}
                               className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded text-[11px] font-semibold transition-all inline-flex items-center gap-1"
                             >
                               Approve in Expense Approvals →
                             </a>
-                          ) : (
+                          )}
+                          {!canAct && !(status === 'returned' || status === 'draft') && (
                             <span className="text-[11px] text-slate-400">—</span>
                           )}
-                        </td>
-                      )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -495,9 +579,13 @@ export const TravelRequestsPage: React.FC = () => {
               <div className="sm:col-span-2">
                 <div className="flex items-center justify-between mb-1">
                   <label className="block font-semibold text-slate-700 dark:text-slate-300">Estimated Budget (₹) *</label>
-                  {maxBudgetLimit !== null && (
+                  {maxBudgetLimit !== null ? (
                     <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-800 flex items-center gap-1">
                       <ShieldCheck className="w-3 h-3" /> Policy Max Limit: {money(maxBudgetLimit)}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" /> Policy: Unlimited / No Cap
                     </span>
                   )}
                 </div>
@@ -507,10 +595,12 @@ export const TravelRequestsPage: React.FC = () => {
                   placeholder="e.g. 1000"
                   value={estimatedBudget || ''}
                   onChange={e => setEstimatedBudget(Number(e.target.value))}
-                  className={`w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs focus:outline-none focus:ring-2 ${
+                  className={`w-full px-3 py-2 border rounded-lg text-xs focus:outline-none focus:ring-2 ${
                     maxBudgetLimit !== null && estimatedBudget > maxBudgetLimit
                       ? 'border-rose-400 dark:border-rose-700 text-rose-700 dark:text-rose-300 focus:ring-rose-500 bg-rose-50/50 dark:bg-rose-950/30'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-blue-500'
+                      : maxBudgetLimit === null
+                      ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 focus:ring-emerald-500'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-blue-500'
                   }`}
                 />
 

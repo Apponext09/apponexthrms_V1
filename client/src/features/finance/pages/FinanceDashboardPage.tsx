@@ -424,7 +424,7 @@ export function FinanceDashboardPage() {
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm space-y-4">
             {summary?.categoryBreakdown && summary.categoryBreakdown.length > 0 ? (
               summary.categoryBreakdown.slice(0, 5).map((cat: any, idx: number) => {
-                const total = summary.totalApprovedAmount + summary.totalReimbursedAmount || 1;
+                const total = (summary?.totalApprovedAmount || 0) + (summary?.totalReimbursedAmount || 0) || 1;
                 const pct = Math.min(100, Math.round((cat.amount / total) * 100)) || 10;
                 return (
                   <div key={cat.category || idx} className="space-y-1.5">

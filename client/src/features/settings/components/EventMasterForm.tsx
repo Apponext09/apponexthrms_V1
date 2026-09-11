@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, MapPin, Clock, Search, Trash2, Edit3, CheckCircle2, XCircle, Loader2,
   Building2, Users, Layers, Tag, UserCheck, Shield, Award, Sparkles, Filter, RotateCcw,

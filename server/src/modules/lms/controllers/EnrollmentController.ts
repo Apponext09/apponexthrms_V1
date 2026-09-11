@@ -17,7 +17,7 @@ export class EnrollmentController {
   }
 
   async getMyEnrollments(req: Request, res: Response) {
-    const employeeId = Number(req.query.employeeId || req.ctx?.userId);
+    const employeeId = Number(req.ctx!.userId);
     const enrollments = await enrollmentService.getEnrollments(req.ctx!, { employeeId });
     res.json({ success: true, data: enrollments });
   }

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { ExpenseService } from '../services/ExpenseService';
+import { validateExpenseClaimPayload, EXPENSE_VALIDATION_MESSAGES } from '../expense.global.validation';
 
 export class ExpenseController {
   private expenseService: ExpenseService;
@@ -10,74 +11,112 @@ export class ExpenseController {
 
   // --- CATEGORIES ---
   async getCategories(req: Request, res: Response) {
-    const includeInactive = req.query.includeInactive === 'true';
-    const categories = await this.expenseService.getCategories(req.ctx!, includeInactive);
-    res.json({ success: true, data: categories });
+    try {
+      const includeInactive = req.query.includeInactive === 'true';
+      const categories = await this.expenseService.getCategories(req.ctx!, includeInactive);
+      res.json({ success: true, data: categories });
+    } catch (err: any) {
+      console.error('[ExpenseController] getCategories error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Failed to fetch categories' });
+    }
   }
 
   async createCategory(req: Request, res: Response) {
-    const category = await this.expenseService.createCategory(req.ctx!, req.body);
-    res.status(201).json({ success: true, data: category });
+    try {
+      const category = await this.expenseService.createCategory(req.ctx!, req.body);
+      res.status(201).json({ success: true, data: category });
+    } catch (err: any) {
+      console.error('[ExpenseController] createCategory error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Failed to create category' });
+    }
   }
 
   async updateCategory(req: Request, res: Response) {
-    const category = await this.expenseService.updateCategory(req.ctx!, Number(req.params.id), req.body);
-    res.json({ success: true, data: category });
+    try {
+      const category = await this.expenseService.updateCategory(req.ctx!, Number(req.params.id), req.body);
+      res.json({ success: true, data: category });
+    } catch (err: any) {
+      console.error('[ExpenseController] updateCategory error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Failed to update category' });
+    }
   }
 
   async deleteCategory(req: Request, res: Response) {
-    const result = await this.expenseService.deleteCategory(req.ctx!, Number(req.params.id));
-    res.json(result);
+    try {
+      const result = await this.expenseService.deleteCategory(req.ctx!, Number(req.params.id));
+      res.json(result);
+    } catch (err: any) {
+      console.error('[ExpenseController] deleteCategory error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Failed to delete category' });
+    }
   }
 
   // --- POLICIES ---
   async getPolicies(req: Request, res: Response) {
-    const policies = await this.expenseService.getPolicies(req.ctx!);
-    res.json({ success: true, data: policies });
+    try {
+      const policies = await this.expenseService.getPolicies(req.ctx!);
+      res.json({ success: true, data: policies });
+    } catch (err: any) {
+      console.error('[ExpenseController] getPolicies error:', err);
+      res.status(500).json({ success: false, message: err.message || 'Failed to fetch policies' });
+    }
   }
 
   async createPolicy(req: Request, res: Response) {
-    const policy = await this.expenseService.createPolicy(req.ctx!, req.body);
-    res.status(201).json({ success: true, data: policy });
+    try {
+      const policy = await this.expenseService.createPolicy(req.ctx!, req.body);
+      res.status(201).json({ success: true, data: policy });
+    } catch (err: any) {
+      console.error('[ExpenseController] createPolicy error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Failed to create policy' });
+    }
   }
 
   async updatePolicy(req: Request, res: Response) {
-    const policy = await this.expenseService.updatePolicy(req.ctx!, Number(req.params.id), req.body);
-    res.json({ success: true, data: policy });
+    try {
+      const policy = await this.expenseService.updatePolicy(req.ctx!, Number(req.params.id), req.body);
+      res.json({ success: true, data: policy });
+    } catch (err: any) {
+      console.error('[ExpenseController] updatePolicy error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Failed to update policy' });
+    }
   }
 
   async deletePolicy(req: Request, res: Response) {
-    const result = await this.expenseService.deletePolicy(req.ctx!, Number(req.params.id));
-    res.json(result);
+    try {
+      const result = await this.expenseService.deletePolicy(req.ctx!, Number(req.params.id));
+      res.json(result);
+    } catch (err: any) {
+      console.error('[ExpenseController] deletePolicy error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Failed to delete policy' });
+    }
   }
 
   async validatePolicy(req: Request, res: Response) {
-    const { categoryId, amount, receiptProvided } = req.body;
-    const validation = await this.expenseService.validatePolicyForClaim(req.ctx!, Number(categoryId), Number(amount), Boolean(receiptProvided));
-    res.json({ success: true, data: validation });
+    try {
+      const { categoryId, amount, receiptProvided } = req.body;
+      const validation = await this.expenseService.validatePolicyForClaim(req.ctx!, Number(categoryId), Number(amount), Boolean(receiptProvided));
+      res.json({ success: true, data: validation });
+    } catch (err: any) {
+      console.error('[ExpenseController] validatePolicy error:', err);
+      res.status(400).json({ success: false, message: err.message || 'Policy validation failed' });
+    }
   }
 
   // --- CLAIMS ---
   async getClaims(req: Request, res: Response) {
-    try {
-      const { employeeId, status, departmentId, designationId, locationId, categoryId, search, mode } = req.query;
-      console.log('[DEBUG getClaims] req.query:', req.query, 'ctx:', { userId: req.ctx?.userId, orgId: req.ctx?.organizationId, role: req.ctx?.role, roles: req.ctx?.roles });
-      const claims = await this.expenseService.getClaims(req.ctx!, {
-        employeeId: employeeId ? Number(employeeId) : undefined,
-        status: status as string,
-        departmentId: departmentId ? Number(departmentId) : undefined,
-        designationId: designationId ? Number(designationId) : undefined,
-        locationId: locationId ? Number(locationId) : undefined,
-        categoryId: categoryId ? Number(categoryId) : undefined,
-        search: search as string,
-        mode: mode as string
-      });
-      console.log('[DEBUG getClaims] claims returned count:', claims?.length);
-      res.json({ success: true, data: claims });
-    } catch (err: any) {
-      console.error('[ExpenseController] getClaims error:', err);
-      res.status(500).json({ success: false, message: err.message || 'Internal server error while fetching claims', stack: err.stack });
-    }
+    const { employeeId, status, departmentId, designationId, locationId, categoryId, search, mode } = req.query;
+    const claims = await this.expenseService.getClaims(req.ctx!, {
+      employeeId: employeeId ? Number(employeeId) : undefined,
+      status: status as string,
+      departmentId: departmentId ? Number(departmentId) : undefined,
+      designationId: designationId ? Number(designationId) : undefined,
+      locationId: locationId ? Number(locationId) : undefined,
+      categoryId: categoryId ? Number(categoryId) : undefined,
+      search: search as string,
+      mode: mode as string
+    });
+    res.json({ success: true, data: claims });
   }
 
   private parseClaimId(val: any): number | string {
@@ -96,6 +135,16 @@ export class ExpenseController {
 
   async submitClaim(req: Request, res: Response) {
     try {
+      const validation = validateExpenseClaimPayload(req.body);
+      if (!validation.isValid) {
+        return res.status(400).json({
+          success: false,
+          code: 'EXP_VALIDATION_FAILED',
+          message: validation.errors[0]?.message || 'Validation failed for expense claim payload.',
+          errors: validation.errors
+        });
+      }
+
       const claim = await this.expenseService.createClaim(req.ctx!, req.body);
       res.status(201).json({ success: true, data: claim });
     } catch (err: any) {
@@ -118,7 +167,12 @@ export class ExpenseController {
   async approveClaimByManager(req: Request, res: Response) {
     try {
       const claimId = this.parseClaimId(req.params.id);
-      const claim = await this.expenseService.approveClaimByManager(req.ctx!, claimId, req.body?.comments || req.body?.notes);
+      const { comments, notes, isAbsenteeOverride, delegatedForId } = req.body || {};
+      const claim = await this.expenseService.approveClaimByManager(req.ctx!, claimId, comments || notes, 
+      {
+        isAbsenteeOverride: Boolean(isAbsenteeOverride),
+        delegatedForId: delegatedForId ? Number(delegatedForId) : undefined
+      });
       res.json({ success: true, data: claim });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message || 'Failed to approve claim' });
@@ -200,6 +254,15 @@ export class ExpenseController {
       res.status(201).json({ success: true, data: request });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message || 'Failed to create travel request' });
+    }
+  }
+
+  async updateTravelRequest(req: Request, res: Response) {
+    try {
+      const request = await this.expenseService.updateTravelRequest(req.ctx!, Number(req.params.id), req.body);
+      res.json({ success: true, data: request });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message || 'Failed to update travel request' });
     }
   }
 

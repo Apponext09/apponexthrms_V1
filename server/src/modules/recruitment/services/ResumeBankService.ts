@@ -472,6 +472,7 @@ export class ResumeBankService {
       }
 
       // 2. Clean up non-IJP on-role working employees from resume_bank & normalize IJP applicant source
+      let validIjpCandidateIds: any[] = [];
       if (hasEmployeesTable) {
         // Find all candidate IDs of employees who have an APPROVED IJP application (Manager Endorsed)
         const approvedIjpAppRows = await db('applications')
@@ -493,7 +494,7 @@ export class ResumeBankService {
           .select('applications.candidate_id')
           .catch(() => []);
         
-        const validIjpCandidateIds = Array.from(new Set(approvedIjpAppRows.map((r: any) => r.candidateId || r.candidate_id).filter(Boolean)));
+        validIjpCandidateIds = Array.from(new Set(approvedIjpAppRows.map((r: any) => r.candidateId || r.candidate_id).filter(Boolean)));
 
         // Normalize source for IJP applicants in resume_bank
         if (validIjpCandidateIds.length > 0) {
@@ -556,7 +557,7 @@ export class ResumeBankService {
       if (hasEmployeesTable) {
         unindexedQuery = unindexedQuery.where(function() {
           this.where(function() {
-            this.whereNotIn(db.raw('LOWER(TRIM(COALESCE(candidates.email, "")))'), function() {
+            this.whereNotIn(db.raw('LOWER(TRIM(COALESCE(candidates.email, "")))') as any, function() {
               this.select(db.raw('LOWER(TRIM(email))')).from('employees')
                 .whereNull('deleted_at')
                 .whereNotNull('email')
@@ -565,14 +566,14 @@ export class ResumeBankService {
             .andWhere(function() {
               this.whereNull('candidates.phone')
                 .orWhere('candidates.phone', '=', '')
-                .orWhereNotIn(db.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(candidates.phone, ''), '+', ''), '-', ''), ' ', ''), 10)"), function() {
+                .orWhereNotIn(db.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(candidates.phone, ''), '+', ''), '-', ''), ' ', ''), 10)") as any, function() {
                   this.select(db.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(phone, mobile, ''), '+', ''), '-', ''), ' ', ''), 10)")).from('employees')
                     .whereNull('deleted_at')
                     .whereRaw("COALESCE(phone, mobile, '') != ''");
                 });
             })
             .andWhere(function() {
-              this.whereNotIn(db.raw("LOWER(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))))"), function() {
+              this.whereNotIn(db.raw("LOWER(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))))") as any, function() {
                 this.select(db.raw("LOWER(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))))")).from('employees')
                   .whereNull('deleted_at')
                   .whereRaw("CONCAT(COALESCE(first_name, ''), COALESCE(last_name, '')) != ''");

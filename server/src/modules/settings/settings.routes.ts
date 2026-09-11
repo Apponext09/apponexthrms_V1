@@ -1285,6 +1285,28 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
   });
 }));
 
+function parseDeptCompanyIds(rawIds: any, singleId: any): number[] {
+  if (Array.isArray(rawIds)) {
+    return rawIds.map((id: any) => Number(id)).filter((id: number) => !isNaN(id) && id > 0);
+  }
+  if (typeof rawIds === 'string') {
+    try {
+      const parsed = JSON.parse(rawIds);
+      if (Array.isArray(parsed)) {
+        return parsed.map((id: any) => Number(id)).filter((id: number) => !isNaN(id) && id > 0);
+      }
+    } catch {
+      const parts = rawIds.split(',').map((s: string) => Number(s.trim())).filter((id: number) => !isNaN(id) && id > 0);
+      if (parts.length > 0) return parts;
+    }
+  }
+  if (singleId !== undefined && singleId !== null && singleId !== '') {
+    const num = Number(singleId);
+    if (!isNaN(num) && num > 0) return [num];
+  }
+  return [];
+}
+
 // Update department by ID (supports PUT and PATCH)
 const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
@@ -1313,7 +1335,6 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     if ('color' in cols) updatePayload.color = colour;
   }
   if (description !== undefined && 'description' in cols) updatePayload.description = description;
-  if (companyId !== undefined && 'company_id' in cols) updatePayload.company_id = companyId ? Number(companyId) : null;
   if (isActive !== undefined) {
     if ('is_active' in cols) updatePayload.is_active = isActive;
     if ('status' in cols) updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
@@ -1324,8 +1345,12 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   if (rawCompanyIds !== undefined || rawCompanyId !== undefined) {
     const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, rawCompanyId);
-    updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
-    updatePayload.company_id = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
+    if ('company_ids' in cols) {
+      updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
+    }
+    if ('company_id' in cols) {
+      updatePayload.company_id = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
+    }
   }
 
   const rawCompanyEmails = req.body.companyEmails !== undefined ? req.body.companyEmails : (req.body.company_emails !== undefined ? req.body.company_emails : req.body.defaultEmails);

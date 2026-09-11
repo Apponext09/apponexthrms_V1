@@ -91,8 +91,8 @@ export function ProtectedRoute({
 
         // If current page requires specific roles, verify user still has them
         if (allowedRoles && allowedRoles.length > 0) {
-          const effectiveRoles = getEffectiveRoles(currentUser);
-          if (!hasAnyRole(effectiveRoles, allowedRoles)) {
+          const userRoles = currentUser.roles || [];
+          if (!hasAnyRole(userRoles, allowedRoles)) {
             window.location.href = '/unauthorized?' + new Date().getTime();
           }
         }
@@ -118,8 +118,8 @@ export function ProtectedRoute({
       }
 
       if (allowedRoles && allowedRoles.length > 0) {
-        const effectiveRoles = getEffectiveRoles(currentUser);
-        if (!hasAnyRole(effectiveRoles, allowedRoles)) {
+        const userRoles = currentUser.roles || [];
+        if (!hasAnyRole(userRoles, allowedRoles)) {
           window.location.href = '/unauthorized?' + new Date().getTime();
         }
       }
@@ -154,7 +154,9 @@ export function ProtectedRoute({
 
   // 2. Check role-based access
   if (allowedRoles && allowedRoles.length > 0) {
-    const effectiveRoles = getEffectiveRoles(user);
+    const userRoles = user.roles || [];
+    const accessRole = (user.accessRole || (user as any).role || '').toLowerCase();
+    const effectiveRoles = Array.from(new Set([...userRoles.map((r) => String(r).toLowerCase()), accessRole].filter(Boolean)));
 
     // User must have at least one of the allowed roles
     if (!hasAnyRole(effectiveRoles, allowedRoles)) {

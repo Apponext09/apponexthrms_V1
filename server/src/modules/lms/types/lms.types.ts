@@ -220,6 +220,8 @@ export const bulkEnrollSchema = z.object({
   enrolledBy: z.enum(['self', 'manager', 'admin']).default('admin'),
 });
 
+export type BulkEnrollInput = z.infer<typeof bulkEnrollSchema>;
+
 export const updateProgressSchema = z.object({
   progressPct: z.number().min(0).max(100).optional(),
   completedModuleId: z.number().optional(),

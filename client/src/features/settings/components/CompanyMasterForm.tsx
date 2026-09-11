@@ -1369,7 +1369,6 @@ export function CompanyMasterForm({
     <div className="w-full space-y-6">
       {/* 2-Column Responsive Layout: Left Form Card (lg:col-span-7), Right Display List (lg:col-span-5) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
         {/* ========================================================================= */}
         {/* LEFT COLUMN: Company Information Form (lg:col-span-7)                     */}
         {/* ========================================================================= */}
@@ -1381,7 +1380,6 @@ export function CompanyMasterForm({
         {/* RIGHT COLUMN: Companies Directory List (lg:col-span-5)                    */}
         {/* ========================================================================= */}
         <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-6 shadow-xs text-foreground space-y-4">
-
           {/* Directory Header */}
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-2">

@@ -1,4 +1,5 @@
 import type { TenantContext } from '../../../db/types';
+import type { BulkEnrollInput } from '../types/lms.types';
 import { enrollmentRepository } from '../repositories/EnrollmentRepository';
 import { batchRepository } from '../repositories/BatchRepository';
 import { moduleRepository } from '../repositories/ModuleRepository';
@@ -47,7 +48,7 @@ export class EnrollmentService {
     return enrollment;
   }
 
-  async bulkEnroll(ctx: TenantContext, data: { courseId: number; batchId?: number | null; employeeIds: number[]; enrolledBy: 'admin' | 'manager' }) {
+  async bulkEnroll(ctx: TenantContext, data: BulkEnrollInput | { courseId: number; batchId?: number | null; employeeIds: number[]; enrolledBy?: 'admin' | 'manager' | 'self' }) {
     const results = [];
     for (const employeeId of data.employeeIds) {
       const res = await this.enroll(ctx, {

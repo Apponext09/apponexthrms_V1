@@ -26,7 +26,6 @@ const MrfRequestPage = lazy(() => import('../features/recruitment/pages/MrfReque
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
-const TeamLeadLmsPage = lazy(() => import('../features/lms/pages/TeamLeadLmsPage').then(m => ({ default: m.TeamLeadLmsPage })));
 
 // ── Team Lead Portal Routes (/team-lead/*) ────────────────────────────────────
 export const teamLeadRoutes = (
@@ -49,7 +48,7 @@ export const teamLeadRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_1"
-          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected', 'all']}
+          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve your team's expense claims — Level 1 (Team Lead) queue"
         />
       }
@@ -59,7 +58,7 @@ export const teamLeadRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_1"
-          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected', 'all']}
+          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve your team's expense claims — Level 1 (Team Lead) queue"
         />
       }
@@ -81,8 +80,6 @@ export const teamLeadRoutes = (
     <Route path="/team-lead/mrf" element={<MrfRequestPage />} />
     <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
     <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
-    <Route path="/team-lead/lms" element={<TeamLeadLmsPage />} />
-    <Route path="/team-lead/learning" element={<TeamLeadLmsPage />} />
     <Route path="/team-lead/live-tracking/history" element={<TrackingHistoryPage />} />
   </Route>
 );

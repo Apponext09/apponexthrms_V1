@@ -98,7 +98,7 @@ async function permissionCheckAsync(
       // If user has no explicit restricted role or has admin/hr role, grant access
       if (
         roleCodes.length === 0 ||
-        roleCodes.some(r => ['superadmin', 'super_admin', 'admin', 'org_admin', 'organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager', 'owner'].includes(r))
+        roleCodes.some(r => ['superadmin', 'admin', 'org_admin', 'organization_admin', 'hr_admin', 'hr_manager', 'owner'].includes(r))
       ) {
         next();
         return;

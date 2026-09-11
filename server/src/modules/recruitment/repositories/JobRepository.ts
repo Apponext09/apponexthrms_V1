@@ -105,7 +105,7 @@ export class JobRepository extends BaseRepository<Job> {
     if (options?.filters) {
       for (const [field, value] of Object.entries(options.filters)) {
         if (value !== undefined && value !== null) {
-          query.where(field, value);
+          (query as any).where(field, value as any);
         }
       }
     }
@@ -152,7 +152,7 @@ export class JobRepository extends BaseRepository<Job> {
     if (options?.filters) {
       for (const [field, value] of Object.entries(options.filters)) {
         if (value !== undefined && value !== null) {
-          query.where(field, value);
+          (query as any).where(field, value as any);
         }
       }
     }

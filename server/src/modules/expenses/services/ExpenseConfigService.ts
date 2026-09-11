@@ -79,7 +79,8 @@ export class ExpenseConfigService {
       const nextVal = await db.transaction(async (trx: any) => {
         const row = await trx('expense_number_sequences')
           .where({ organization_id: organizationId, seq_key: seqKey })
-          .first();
+          .first()
+          .forUpdate();
         let val: number;
         if (!row) {
           await trx('expense_number_sequences').insert({
@@ -92,8 +93,9 @@ export class ExpenseConfigService {
           });
           val = 1;
         } else {
-          const currentNum = Number(row?.current_value ?? row?.currentValue);
-          val = (Number.isFinite(currentNum) ? currentNum : 0) + 1;
+          const rawVal = row.current_value !== undefined ? row.current_value : row.currentValue;
+          const rawNum = Number(rawVal);
+          val = Number.isFinite(rawNum) && rawNum >= 0 ? rawNum + 1 : 1;
           await trx('expense_number_sequences')
             .where({ organization_id: organizationId, seq_key: seqKey })
             .update({ current_value: val, prefix, updated_at: new Date() });

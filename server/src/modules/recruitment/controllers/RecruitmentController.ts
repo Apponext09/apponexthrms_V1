@@ -17,7 +17,6 @@ import {
   updateCandidateSchema,
   createApplicationSchema,
   scheduleInterviewSchema,
-  submitFeedbackSchema,
   createAssessmentSchema,
   assignAssessmentSchema,
   generateOfferSchema,
@@ -571,7 +570,7 @@ export class RecruitmentController {
 
     const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
-    const items = await db('interviews')
+    const items: any[] = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
       .where(function () {
@@ -644,7 +643,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    items.forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -718,10 +717,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items;
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = items.filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -780,7 +779,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    resultItems.forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -866,7 +865,7 @@ export class RecruitmentController {
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    let items = await db('interviews')
+    let items: any[] = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
       .where(function () {
@@ -940,7 +939,7 @@ export class RecruitmentController {
       }
     });
 
-    items.forEach(item => {
+    items.forEach((item: any) => {
       const interviewerIds: (number | string)[] = [];
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
@@ -1014,10 +1013,10 @@ export class RecruitmentController {
         : (userFullName || 'Assigned Interviewer');
     });
 
-    let resultItems = items;
+    let resultItems: any[] = items;
 
     if (assignedOnly === 'true') {
-      resultItems = items.filter(item => {
+      resultItems = items.filter((item: any) => {
         const panelEmpIds = panelMap[item.id] || [];
         for (const pId of panelEmpIds) {
           if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
@@ -1076,7 +1075,7 @@ export class RecruitmentController {
 
     // Strict deduplication by interview ID
     const uniqueMap = new Map();
-    resultItems.forEach(item => {
+    resultItems.forEach((item: any) => {
       if (!uniqueMap.has(item.id)) {
         uniqueMap.set(item.id, item);
       }
@@ -1158,29 +1157,18 @@ export class RecruitmentController {
     const db = (await import('../../../db/knex')).getKnex();
 
     const attempts = await db('assessment_attempts')
-      .where({ assessment_id: assessmentId, organization_id: ctx.organizationId })
-      .orderBy('created_at', 'desc');
+      .leftJoin('applications', 'assessment_attempts.application_id', 'applications.id')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .select(
+        'assessment_attempts.*',
+        db.raw(`CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, '')) as candidate_name`),
+        'candidates.email as candidate_email'
+      )
+      .where('assessment_attempts.organization_id', ctx.organizationId)
+      .where('assessment_attempts.assessment_id', assessmentId)
+      .orderBy('assessment_attempts.created_at', 'desc');
 
-    // Enrich with candidate info
-    const enriched = await Promise.all(attempts.map(async (attempt: any) => {
-      const application = await db('applications').where('id', attempt.application_id).first();
-      let candidateName = `App #${attempt.application_id}`;
-      let candidateEmail = '';
-      if (application) {
-        const candidate = await db('candidates').where('id', application.candidate_id).first();
-        if (candidate) {
-          candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim();
-          candidateEmail = candidate.email || '';
-        }
-      }
-      return {
-        ...attempt,
-        candidate_name: candidateName,
-        candidate_email: candidateEmail,
-      };
-    }));
-
-    res.json({ success: true, data: enriched });
+    res.json({ success: true, data: attempts });
   });
 
   // ==================== Offer Endpoints ====================
@@ -1369,14 +1357,6 @@ export class RecruitmentController {
 
   // ==================== Additional Interview Endpoints ====================
 
-  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const validated = validate(req.body, submitFeedbackSchema);
-
-    const feedback = await this.interviewService.submitFeedback(ctx, validated.interviewId, validated);
-
-    res.status(201).json({ success: true, data: feedback });
-  });
 
   recordInterviewDecision = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
@@ -1558,21 +1538,6 @@ export class RecruitmentController {
     res.json({ success: true, data: items });
   });
 
-  listPipelineStages = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { getKnex } = await import('../../../db/knex');
-    const db = getKnex();
-
-    const hasStageOrder = await db.schema.hasColumn('pipeline_stages', 'stage_order');
-    const orderCol = hasStageOrder ? 'stage_order' : 'sequence_order';
-
-    const stages = await db('pipeline_stages')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .orderBy(orderCol, 'asc');
-
-    res.json({ success: true, data: stages });
-  });
 
   onboardCandidate = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
@@ -1877,26 +1842,6 @@ export class RecruitmentController {
     res.json({ success: true, data: attempts });
   });
 
-  getAttemptsByAssessment = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { assessmentId } = req.params;
-    const { getKnex } = await import('../../../db/knex');
-    const db = getKnex();
-
-    const attempts = await db('assessment_attempts')
-      .leftJoin('applications', 'assessment_attempts.application_id', 'applications.id')
-      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
-      .select(
-        'assessment_attempts.*',
-        db.raw(`CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, '')) as candidate_name`),
-        'candidates.email as candidate_email'
-      )
-      .where('assessment_attempts.organization_id', ctx.organizationId)
-      .where('assessment_attempts.assessment_id', parseInt(assessmentId, 10));
-
-    res.json({ success: true, data: attempts });
-  });
-
   // ==================== Additional Offer Endpoints ====================
 
   rejectOffer = asyncHandler(async (req: Request, res: Response) => {
@@ -1937,7 +1882,6 @@ export class RecruitmentController {
 
     const appId = offer.application_id || (offer as any).applicationId;
     const application = appId ? await db('applications').where('id', appId).first().catch(() => null) : null;
-
     let candidate: any = null;
     if (application?.candidate_id) {
       candidate = await db('candidates').where('id', application.candidate_id).first().catch(() => null);
@@ -1967,7 +1911,6 @@ export class RecruitmentController {
     const candidateName = candidate
       ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
       : (meta.candidateName || (offer as any).candidate_name || 'Candidate');
-
     const candidateEmail = candidate?.email || meta.candidateEmail || (offer as any).candidate_email || '';
 
     res.json({
@@ -2252,7 +2195,7 @@ export class RecruitmentController {
 
     // Step 4: Query referrals — match on referrer_employee_id OR created_by
     // This ensures we always find referrals submitted by this employee
-    const items = await db('referrals')
+    const items: any[] = await db('referrals')
       .leftJoin('candidates', 'referrals.candidate_id', 'candidates.id')
       .leftJoin('employees as ref_emp', 'referrals.referrer_employee_id', 'ref_emp.id')
       .select(
@@ -3122,12 +3065,6 @@ export class RecruitmentController {
 
     const skills = await skillMasterService.listSkills(ctx);
     res.json({ success: true, data: skills });
-  });
-
-  getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const funnel = await this.analyticsService.generateHiringFunnel(ctx);
-    res.json({ success: true, data: funnel });
   });
 }
 

@@ -84,8 +84,8 @@ export const MyExpensesPage: React.FC = () => {
     try {
       setLoading(true);
       const [claimsRes, catRes, deptRes, polRes] = await Promise.all([
-        expenseApi.getClaims({ mode: isManagement ? undefined : 'my_expenses' }),
-        expenseApi.getCategories(),
+        expenseApi.getClaims({ mode: isManagement ? undefined : 'my_expenses' }).catch(() => []),
+        expenseApi.getCategories().catch(() => []),
         apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: { data: [] } })),
         expenseApi.getPolicies().catch(() => [])
       ]);
@@ -111,7 +111,14 @@ export const MyExpensesPage: React.FC = () => {
       setDepartments(Array.from(deptMap.entries()).map(([id, name]) => ({ id, name })));
 
       if (catRes && catRes.length > 0) {
-        setFormCategoryId(catRes[0].id);
+        const defaultCatId = catRes[0].id;
+        setFormCategoryId(defaultCatId);
+        setItems((prevItems) =>
+          prevItems.map((item) => ({
+            ...item,
+            categoryId: item.categoryId || defaultCatId
+          }))
+        );
       }
     } catch (err) {
       console.error('Error fetching expenses:', err);
@@ -201,34 +208,46 @@ export const MyExpensesPage: React.FC = () => {
       return pCatId === 0 || pCatId === Number(targetId);
     });
 
-    const validPols = applicablePols.filter((p) => {
-      const maxClaim = Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0);
-      return maxClaim > 0;
-    });
+    if (applicablePols.length === 0) return null;
 
-    if (validPols.length === 0) return null;
-
-    const catSpecificPols = validPols.filter((p) => {
+    const catSpecificPols = applicablePols.filter((p) => {
       const pCatId = p.categoryId !== undefined && p.categoryId !== null ? Number(p.categoryId) : 0;
       return pCatId === Number(targetId);
     });
-    const targetPols = catSpecificPols.length > 0 ? catSpecificPols : validPols;
+    const targetPols = catSpecificPols.length > 0 ? catSpecificPols : applicablePols;
 
-    const minLimit = Math.min(...targetPols.map((p) => Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0)));
-    const pol = targetPols.find((p) => Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0) === minLimit);
+    const unlimitedPol = targetPols.find((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0) === 0);
+    if (unlimitedPol) {
+      return {
+        limit: 0,
+        isUnlimited: true,
+        policyName: unlimitedPol.policyName || (unlimitedPol as any).policy_name || 'Unlimited Policy'
+      };
+    }
+
+    const numericLimits = targetPols
+      .map((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0))
+      .filter((lim) => lim > 0);
+
+    if (numericLimits.length === 0) return null;
+
+    const minLimit = Math.min(...numericLimits);
+    const pol = targetPols.find((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0) === minLimit);
     const policyName = pol?.policyName || (pol as any)?.policy_name || 'Policy Limit';
 
     return {
       limit: minLimit,
+      isUnlimited: false,
       policyName
     };
   };
 
   const handleAddItem = () => {
+    const defaultCatId = formCategoryId || (categories.length > 0 ? categories[0].id : undefined);
     setItems([
       ...items,
       {
-        categoryId: formCategoryId,
+        categoryId: defaultCatId,
         expenseDate: formDate,
         claimedAmount: 0,
         merchantName: '',
@@ -403,7 +422,7 @@ export const MyExpensesPage: React.FC = () => {
         const limitInfo = getPolicyLimitInfo(itemCatId);
         const itemAmt = Number(normalizedItems[i].claimedAmount || 0);
 
-        if (limitInfo && itemAmt > limitInfo.limit) {
+        if (limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && itemAmt > limitInfo.limit) {
           const cat = categories.find((c) => c.id === itemCatId);
           const catName = cat?.name || `Item #${i + 1}`;
           setToast({
@@ -507,19 +526,17 @@ export const MyExpensesPage: React.FC = () => {
   });
 
   const getStatusLabel = (status: string, currentApproverRole?: string): string => {
-    if (currentApproverRole && currentApproverRole.trim() && status !== 'approved' && status !== 'rejected' && status !== 'draft' && status !== 'paid') {
-      const roleStr = currentApproverRole.trim();
-      if (roleStr.toLowerCase().startsWith('pending')) return roleStr;
-      return `Pending ${roleStr}`;
+    if (status.startsWith('pending_level_') && currentApproverRole && currentApproverRole.trim()) {
+      return `Pending ${currentApproverRole.trim()}`;
     }
     switch (status) {
       case 'draft': return 'Draft';
       case 'submitted':
       case 'pending': return 'Submitted – Pending Approval';
       case 'pending_manager': return 'Pending Manager Approval';
-      case 'pending_level_1': return 'Pending Level 1 Approval';
-      case 'pending_level_2': return 'Pending Level 2 Approval';
-      case 'pending_level_3': return 'Pending Level 3 Approval';
+      case 'pending_level_1': return 'Pending Team Lead Approval';
+      case 'pending_level_2': return 'Pending Manager Approval';
+      case 'pending_level_3': return 'Pending HR / Admin Approval';
       case 'pending_finance': return 'Pending Finance Verification';
       case 'payment_pending': return 'Finance Approved – Payment Pending';
       case 'approved': return 'Approved';
@@ -527,6 +544,7 @@ export const MyExpensesPage: React.FC = () => {
       case 'rejected': return 'Rejected';
       case 'paid': return 'Reimbursed / Paid';
       default: {
+        // Handle dynamic pending_level_N (e.g. pending_level_4, pending_level_5)
         const lvlMatch = /^pending_level_(\d+)$/.exec(status);
         if (lvlMatch) return `Pending Level ${lvlMatch[1]} Approval`;
         return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -942,13 +960,14 @@ export const MyExpensesPage: React.FC = () => {
                           Category
                         </label>
                         <select
-                          value={item.categoryId || formCategoryId || ''}
+                          value={item.categoryId || formCategoryId || (categories.length > 0 ? categories[0].id : '')}
                           onChange={(e) => handleItemChange(idx, 'categoryId', Number(e.target.value))}
-                          className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                          className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-800 dark:text-slate-200"
                         >
+                          <option value="">-- Select Category --</option>
                           {categories.map((c) => (
                             <option key={c.id} value={c.id}>
-                              {c.name}
+                              {c.name} {c.spendingLimit ? `(Limit: ₹${c.spendingLimit.toLocaleString()})` : ''}
                             </option>
                           ))}
                         </select>
@@ -960,7 +979,7 @@ export const MyExpensesPage: React.FC = () => {
                         </label>
                         {(() => {
                           const limitInfo = getPolicyLimitInfo(item.categoryId || formCategoryId);
-                          const isExceeded = Boolean(limitInfo && Number(item.claimedAmount || 0) > limitInfo.limit);
+                          const isExceeded = Boolean(limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && Number(item.claimedAmount || 0) > limitInfo.limit);
 
                           return (
                             <>
@@ -972,6 +991,8 @@ export const MyExpensesPage: React.FC = () => {
                                 className={`w-full px-2 py-1.5 rounded-lg text-xs font-bold transition-all ${
                                   isExceeded
                                     ? 'bg-rose-50 dark:bg-rose-950/50 border-2 border-rose-500 text-rose-700 dark:text-rose-300 focus:ring-2 focus:ring-rose-500 focus:outline-none'
+                                    : limitInfo?.isUnlimited
+                                    ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100'
                                     : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white'
                                 }`}
                               />
@@ -979,6 +1000,12 @@ export const MyExpensesPage: React.FC = () => {
                                 <p className="mt-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
                                   <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                                   Amount exceeds set policy limit of {money(limitInfo.limit)}! Cannot claim above set limit.
+                                </p>
+                              )}
+                              {limitInfo?.isUnlimited && (
+                                <p className="mt-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  Policy: Unlimited / No Cap Applies
                                 </p>
                               )}
                             </>
@@ -1267,3 +1294,6 @@ export const MyExpensesPage: React.FC = () => {
     </div>
   );
 };
+
+export default MyExpensesPage;
+
