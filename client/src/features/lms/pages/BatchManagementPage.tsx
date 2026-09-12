@@ -216,7 +216,7 @@ export function BatchManagementPage() {
                     </Badge>
                   </div>
                   <CardTitle className="text-sm font-bold text-foreground leading-snug">{batch.title}</CardTitle>
-                  <CardDescription className="text-xs font-medium text-primary">
+                  <CardDescription className="text-xs font-medium text-primary"></CardDescription>
                 </CardHeader>
 
                 <CardContent className="p-4 space-y-3">
@@ -289,7 +289,6 @@ export function BatchManagementPage() {
                         <MapPin className="w-3.5 h-3.5 text-primary" /> {batch.location}
                       </p>
                     )}
-                  </div>
 
                   {/* Seat Capacity Progress */}
                   <div className="space-y-1 pt-1 border-t border-border/60">

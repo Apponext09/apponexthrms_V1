@@ -28,9 +28,14 @@ import { EmployeeLmsHeader } from '../components/EmployeeLmsHeader';
 export function CourseCatalogPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const basePath = location.pathname.startsWith('/hr')
+    ? '/hr/lms'
+    : location.pathname.startsWith('/employee')
+    ? '/employee/lms'
+    : '/lms';
   const isLmsAdmin = location.pathname.startsWith('/lms');
   const user = useAuthStore((s) => s.user);
-  const employeeId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const employeeId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<number | undefined>(undefined);
@@ -86,7 +91,7 @@ export function CourseCatalogPage() {
 
           <Button
             variant="outline"
-            onClick={() => navigate('/lms/my-learning')}
+            onClick={() => navigate(`${basePath}/my-learning`)}
             className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm rounded-lg bg-card"
           >
             <PlayCircle className="w-4 h-4 text-primary" /> My Active Learning ({myEnrollments.length})
@@ -227,7 +232,7 @@ export function CourseCatalogPage() {
                   {isCompleted ? (
                     <Button
                       size="sm"
-                      onClick={() => navigate(isLmsAdmin ? '/lms/my-learning' : '/employee/lms/my-learning')}
+                      onClick={() => navigate(`${basePath}/my-learning`)}
                       className="w-full h-8 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Completed (Review Course)
@@ -235,7 +240,7 @@ export function CourseCatalogPage() {
                   ) : isEnrolled ? (
                     <Button
                       size="sm"
-                      onClick={() => navigate(isLmsAdmin ? '/lms/my-learning' : '/employee/lms/my-learning')}
+                      onClick={() => navigate(`${basePath}/my-learning`)}
                       className="w-full h-8 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
                     >
                       <PlayCircle className="w-3.5 h-3.5" /> Continue Learning

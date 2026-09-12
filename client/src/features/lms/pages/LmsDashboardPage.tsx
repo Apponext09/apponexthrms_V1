@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   GraduationCap,
   BookOpen,
@@ -23,6 +23,8 @@ import { useLmsAnalytics } from '../api/useLms';
 
 export function LmsDashboardPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/hr') ? '/hr/lms' : '/lms';
   const { data: analytics, isLoading } = useLmsAnalytics();
 
   if (isLoading) {
@@ -76,21 +78,21 @@ export function LmsDashboardPage() {
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">
           <Button
-            onClick={() => navigate('/lms/courses')}
+            onClick={() => navigate(`${basePath}/courses`)}
             className="h-9 px-3.5 text-xs font-bold gap-1.5 shadow-sm rounded-lg"
           >
             <Plus className="w-4 h-4" /> Create Course
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate('/lms/enrollments')}
+            onClick={() => navigate(`${basePath}/enrollments`)}
             className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-lg border-border/80"
           >
             <Users className="w-4 h-4" /> Assign Learners
           </Button>
           <Button
             variant="outline"
-            onClick={() => navigate('/lms/reports')}
+            onClick={() => navigate(`${basePath}/reports`)}
             className="h-9 px-3.5 text-xs font-bold gap-1.5 rounded-lg border-border/80"
           >
             <TrendingUp className="w-4 h-4" /> Reports
@@ -179,7 +181,7 @@ export function LmsDashboardPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate('/lms/courses')}
+              onClick={() => navigate(`${basePath}/courses`)}
               className="text-xs font-semibold gap-1 text-primary hover:text-primary"
             >
               View All <ArrowRight className="w-3.5 h-3.5" />
@@ -219,7 +221,7 @@ export function LmsDashboardPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigate(`/lms/courses`)}
+                          onClick={() => navigate(`${basePath}/courses`)}
                           className="h-7 text-[11px] font-semibold px-2.5"
                         >
                           Manage
@@ -248,7 +250,7 @@ export function LmsDashboardPage() {
           </CardHeader>
           <CardContent className="p-4 space-y-2">
             <button
-              onClick={() => navigate('/lms/courses')}
+              onClick={() => navigate(`${basePath}/courses`)}
               className="w-full p-3 rounded-lg border border-border/70 hover:border-primary/50 hover:bg-primary/5 flex items-center justify-between text-left transition-all"
             >
               <div className="flex items-center gap-2.5">
@@ -264,7 +266,7 @@ export function LmsDashboardPage() {
             </button>
 
             <button
-              onClick={() => navigate('/lms/categories')}
+              onClick={() => navigate(`${basePath}/categories`)}
               className="w-full p-3 rounded-lg border border-border/70 hover:border-primary/50 hover:bg-primary/5 flex items-center justify-between text-left transition-all"
             >
               <div className="flex items-center gap-2.5">
@@ -280,7 +282,7 @@ export function LmsDashboardPage() {
             </button>
 
             <button
-              onClick={() => navigate('/lms/batches')}
+              onClick={() => navigate(`${basePath}/batches`)}
               className="w-full p-3 rounded-lg border border-border/70 hover:border-primary/50 hover:bg-primary/5 flex items-center justify-between text-left transition-all"
             >
               <div className="flex items-center gap-2.5">
@@ -296,7 +298,7 @@ export function LmsDashboardPage() {
             </button>
 
             <button
-              onClick={() => navigate('/lms/compliance')}
+              onClick={() => navigate(`${basePath}/compliance`)}
               className="w-full p-3 rounded-lg border border-border/70 hover:border-primary/50 hover:bg-primary/5 flex items-center justify-between text-left transition-all"
             >
               <div className="flex items-center gap-2.5">

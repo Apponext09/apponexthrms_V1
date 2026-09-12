@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   CalendarClock,
   Plus,
@@ -35,7 +36,9 @@ import { WeeklyRosterGrid } from '../components/WeeklyRosterGrid';
 import type { ShiftTemplate } from '../types';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
-export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'general' | 'roster' }) {
+export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'general' | 'roster' }) {
+  const location = useLocation();
+  const pageType = propPageType ?? (location.pathname.toLowerCase().includes('roster') ? 'roster' : 'general');
   const { selectedCompanyId } = useCompanyStore();
   const {
     shifts,

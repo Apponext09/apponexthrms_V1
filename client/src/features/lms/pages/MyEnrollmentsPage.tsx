@@ -27,6 +27,7 @@ import {
   CheckCircle,
   Download,
   Users,
+  Plus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -146,22 +147,27 @@ function parseMediaEmbed(url?: string | null, contentType?: string | null) {
   // 8. General Web Link / iframe
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return {
-      type: (contentType === 'pdf' || contentType === 'ppt' ? 'document' : 'web') as const,
+      type: (contentType === 'pdf' || contentType === 'ppt' ? 'document' : 'web') as 'document' | 'web',
       embedUrl: trimmed,
       rawUrl: trimmed,
       isDoc: contentType === 'pdf' || contentType === 'ppt',
     };
   }
 
-  return { type: (contentType === 'text' ? 'text' : 'none') as const, embedUrl: '', rawUrl: trimmed, isDoc: contentType === 'text' };
+  return { type: (contentType === 'text' ? 'text' : 'none') as 'text' | 'none', embedUrl: '', rawUrl: trimmed, isDoc: contentType === 'text' };
 }
 
 export function MyEnrollmentsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const basePath = location.pathname.startsWith('/hr')
+    ? '/hr/lms'
+    : location.pathname.startsWith('/employee')
+    ? '/employee/lms'
+    : '/lms';
   const isLmsAdmin = location.pathname.startsWith('/lms');
   const user = useAuthStore((s) => s.user);
-  const employeeId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const employeeId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const [activeTab, setActiveTab] = useState<'in_progress' | 'completed' | 'all'>('in_progress');
 
@@ -180,11 +186,21 @@ export function MyEnrollmentsPage() {
 
   const updateProgressMutation = useUpdateLmsProgress();
 
-  const filteredEnrollments = enrollments.filter((e) => {
-    if (activeTab === 'in_progress') return e.status === 'in_progress' || e.status === 'enrolled';
-    if (activeTab === 'completed') return e.status === 'completed';
-    return true;
-  });
+  const inProgressList = useMemo(
+    () => enrollments.filter((e) => e.status === 'in_progress' || e.status === 'enrolled'),
+    [enrollments]
+  );
+  const completedList = useMemo(
+    () => enrollments.filter((e) => e.status === 'completed'),
+    [enrollments]
+  );
+
+  const filteredEnrollments =
+    activeTab === 'in_progress'
+      ? inProgressList
+      : activeTab === 'completed'
+      ? completedList
+      : enrollments;
 
   const handleOpenPlayer = (enrollment: LmsEnrollment) => {
     setActiveEnrollment(enrollment);
@@ -280,11 +296,7 @@ export function MyEnrollmentsPage() {
     }
     const cId = activeEnrollment?.courseId || (activeEnrollment as any)?.course_id;
     const eId = activeEnrollment?.id;
-    navigate(
-      isLmsAdmin
-        ? `/lms/assessment/${cId}?enrollmentId=${eId}`
-        : `/employee/lms/assessment/${cId}?enrollmentId=${eId}`
-    );
+    navigate(`${basePath}/assessment/${cId}?enrollmentId=${eId}`);
   };
 
   const mediaInfo = useMemo(() => {
@@ -333,14 +345,14 @@ export function MyEnrollmentsPage() {
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
-              onClick={() => navigate('/lms/catalog')}
+              onClick={() => navigate(`${basePath}/catalog`)}
               className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm rounded-lg"
             >
               <BookOpen className="w-4 h-4 text-primary" /> Browse Catalog
             </Button>
             <Button
               variant="outline"
-              onClick={() => navigate('/lms/certificates')}
+              onClick={() => navigate(`${basePath}/certificates`)}
               className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm rounded-lg"
             >
               <Award className="w-4 h-4 text-amber-500" /> My Certificates
@@ -349,44 +361,53 @@ export function MyEnrollmentsPage() {
         </div>
       )}
 
-      {/* ── Tabs Filter ───────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-border/80 pb-2">
+      {/* ── Filter / Navigation Pills ────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-2 rounded-xl border border-border/80 shadow-2xs">
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant={activeTab === 'in_progress' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('in_progress')}
+            className="text-xs font-bold gap-1.5 rounded-lg"
+          >
+            <Clock className="w-3.5 h-3.5" /> In Progress ({inProgressList.length})
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTab === 'completed' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('completed')}
+            className="text-xs font-bold gap-1.5 rounded-lg"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" /> Completed ({completedList.length})
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTab === 'all' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('all')}
+            className="text-xs font-bold gap-1.5 rounded-lg"
+          >
+            All ({enrollments.length})
+          </Button>
+        </div>
+
         <Button
           size="sm"
-          variant={activeTab === 'in_progress' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('in_progress')}
-          className="text-xs font-bold gap-1.5"
+          variant="outline"
+          onClick={() => navigate(`${basePath}/catalog`)}
+          className="text-xs font-bold gap-1.5 text-primary border-primary/30 hover:bg-primary/5 rounded-lg ml-auto"
         >
-          <PlayCircle className="w-3.5 h-3.5" /> In Progress (
-          {enrollments.filter((e) => e.status === 'in_progress' || e.status === 'enrolled').length})
-        </Button>
-        <Button
-          size="sm"
-          variant={activeTab === 'completed' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('completed')}
-          className="text-xs font-bold gap-1.5"
-        >
-          <CheckCircle2 className="w-3.5 h-3.5" /> Completed (
-          {enrollments.filter((e) => e.status === 'completed').length})
-        </Button>
-        <Button
-          size="sm"
-          variant={activeTab === 'all' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('all')}
-          className="text-xs font-bold gap-1.5"
-        >
-          All Transcripts ({enrollments.length})
+          <Plus className="w-3.5 h-3.5" /> Browse More Courses
         </Button>
       </div>
 
-      {/* ── Enrollments Grid ──────────────────────────────────── */}
+      {/* ── Course Grid / Empty States ───────────────────────── */}
       {isLoading ? (
         <div className="py-16 text-center text-xs text-muted-foreground">
           <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-primary" />
           Loading your learning courses...
         </div>
       ) : filteredEnrollments.length === 0 ? (
-        <div className="py-16 text-center bg-card border border-border/80 rounded-2xl shadow-2xs space-y-3">
+        <div className="text-center py-16 bg-card border border-border/80 rounded-2xl p-8 space-y-3 shadow-2xs">
           <BookOpen className="w-12 h-12 mx-auto text-muted-foreground/40" />
           <h3 className="text-sm font-bold text-foreground">No Courses In This Tab</h3>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto">
@@ -396,7 +417,7 @@ export function MyEnrollmentsPage() {
           </p>
           <Button
             size="sm"
-            onClick={() => navigate(isLmsAdmin ? '/lms/catalog' : '/employee/lms/catalog')}
+            onClick={() => navigate(`${basePath}/catalog`)}
             className="text-xs font-bold gap-1.5"
           >
             Explore Course Catalog <ArrowRight className="w-3.5 h-3.5" />

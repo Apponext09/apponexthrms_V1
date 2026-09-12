@@ -27,7 +27,7 @@ export function EmployeeLmsHeader({
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
-  const employeeId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const employeeId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const { data: enrollments = [] } = useMyLmsEnrollments(employeeId);
   const { data: certificates = [] } = useMyLmsCertificates(employeeId);
@@ -36,24 +36,30 @@ export function EmployeeLmsHeader({
   const activeEnrollments = enrollments.filter((e) => e.status !== 'completed');
   const completedEnrollments = enrollments.filter((e) => e.status === 'completed');
 
+  const basePath = location.pathname.startsWith('/hr')
+    ? '/hr/lms'
+    : location.pathname.startsWith('/employee')
+    ? '/employee/lms'
+    : '/lms';
+
   const navItems = [
     {
       label: 'My Learning & Live Classes',
-      path: '/employee/lms/my-learning',
+      path: `${basePath}/my-learning`,
       icon: GraduationCap,
       count: activeEnrollments.length,
       countLabel: 'Active',
     },
     {
       label: 'Course Catalog & Enroll',
-      path: '/employee/lms/catalog',
+      path: `${basePath}/catalog`,
       icon: BookOpen,
       count: courses.length,
       countLabel: 'Available',
     },
     {
       label: 'Verified Certificates',
-      path: '/employee/lms/certificates',
+      path: `${basePath}/certificates`,
       icon: Award,
       count: certificates.length,
       countLabel: 'Earned',

@@ -169,9 +169,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     icon: 'Calendar',
     items: [
       { name: 'My Leaves', href: '/leaves/my-leaves', icon: 'Calendar' },
-      { name: 'Apply Leave', href: '/leaves/apply', icon: 'FilePlus', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
-      { name: 'Leave Balance', href: '/leaves/balance', icon: 'Clock', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
-      { name: 'Leave Encashment', href: '/leaves/encashment', icon: 'DollarSign', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
       {
         name: 'Leave Approvals',
         href: '/leaves/approvals',
@@ -453,7 +450,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
-      { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes' },
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {

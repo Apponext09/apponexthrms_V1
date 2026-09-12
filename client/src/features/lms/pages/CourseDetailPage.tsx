@@ -23,9 +23,13 @@ export function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const isLmsAdmin = location.pathname.startsWith('/lms');
+  const basePath = location.pathname.startsWith('/hr')
+    ? '/hr/lms'
+    : location.pathname.startsWith('/employee')
+    ? '/employee/lms'
+    : '/lms';
   const user = useAuthStore((s) => s.user);
-  const employeeId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const employeeId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const courseId = Number(id);
   const { data: course, isLoading } = useLmsCourse(courseId);
@@ -49,7 +53,7 @@ export function CourseDetailPage() {
     return (
       <div className="p-12 text-center">
         <h3 className="text-lg font-bold">Course Not Found</h3>
-        <Button onClick={() => navigate(isLmsAdmin ? '/lms/catalog' : '/employee/lms/catalog')} className="mt-4">
+        <Button onClick={() => navigate(`${basePath}/catalog`)} className="mt-4">
           Return to Catalog
         </Button>
       </div>
@@ -109,7 +113,7 @@ export function CourseDetailPage() {
         <div className="shrink-0 w-full md:w-auto">
           {isEnrolled ? (
             <Button
-              onClick={() => navigate(isLmsAdmin ? '/lms/my-learning' : '/employee/lms/my-learning')}
+              onClick={() => navigate(`${basePath}/my-learning`)}
               className="w-full md:w-auto h-10 px-6 font-bold gap-2 text-xs shadow-sm"
             >
               <PlayCircle className="w-4 h-4" /> Go to Learning Player

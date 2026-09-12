@@ -326,7 +326,9 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
             const isActive = section.items.some((item) =>
               isPathActive(item.href, location.pathname, location.search)
             );
-            const isExpanded = expandedSections[section.id] ?? true;
+            const isExpanded = expandedSections[section.id] !== undefined
+              ? expandedSections[section.id]
+              : isActive;
 
             return (
               <Collapsible
@@ -385,7 +387,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                           return (
                             <Collapsible
                               key={item.name}
-                              defaultOpen={true}
+                              defaultOpen={isChildActive}
                               className="group/sub space-y-0.5"
                             >
                               <CollapsibleTrigger asChild>

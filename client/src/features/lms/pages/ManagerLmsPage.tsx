@@ -28,7 +28,7 @@ import { toast } from 'sonner';
 
 export function ManagerLmsPage() {
   const { user } = useAuthStore();
-  const managerId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const managerId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const [activeTab, setActiveTab] = useState<'team' | 'assign' | 'my'>('team');
   const [search, setSearch] = useState('');

@@ -31,9 +31,13 @@ export function AssessmentPlayerPage() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const isLmsAdmin = location.pathname.startsWith('/lms');
+  const basePath = location.pathname.startsWith('/hr')
+    ? '/hr/lms'
+    : location.pathname.startsWith('/employee')
+    ? '/employee/lms'
+    : '/lms';
   const user = useAuthStore((s) => s.user);
-  const employeeId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const employeeId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const cId = Number(courseId || id);
   const { data: assessment, isLoading } = useLmsAssessment(cId);
@@ -343,7 +347,7 @@ export function AssessmentPlayerPage() {
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:justify-center pt-2 w-full">
             {resultSummary?.passed ? (
               <Button
-                onClick={() => navigate(isLmsAdmin ? '/lms/certificates' : '/employee/lms/certificates')}
+                onClick={() => navigate(`${basePath}/certificates`)}
                 className="w-full text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-md"
               >
                 <Award className="w-4 h-4" /> View & Download Certificate
@@ -352,7 +356,7 @@ export function AssessmentPlayerPage() {
               <div className="flex flex-col sm:flex-row gap-2 w-full">
                 <Button
                   variant="outline"
-                  onClick={() => navigate(isLmsAdmin ? '/lms/my-learning' : '/employee/lms/my-learning')}
+                  onClick={() => navigate(`${basePath}/my-learning`)}
                   className="flex-1 text-xs font-bold gap-1.5"
                 >
                   <RotateCcw className="w-4 h-4" /> Return to Lessons

@@ -192,8 +192,8 @@ export function HRLayout() {
     });
   }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, customMasters]);
 
-  const toggleSection = (id: string) => {
-    setExpandedSections((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
+  const toggleSection = (id: string, currentlyExpanded: boolean) => {
+    setExpandedSections((prev) => ({ ...prev, [id]: !currentlyExpanded }));
   };
 
   const isPathActive = (itemHref: string, currentPath: string, currentSearch: string = ''): boolean => {
@@ -243,13 +243,15 @@ export function HRLayout() {
             isPathActive(item.href, location.pathname, location.search) ||
             (item.children && item.children.some((c) => isPathActive(c.href, location.pathname, location.search)))
           );
-          const isExpanded = expandedSections[section.id] ?? true;
+          const isExpanded = expandedSections[section.id] !== undefined
+            ? expandedSections[section.id]
+            : isActive;
 
           return (
             <Collapsible
               key={section.id}
               open={isExpanded}
-              onOpenChange={() => toggleSection(section.id)}
+              onOpenChange={() => toggleSection(section.id, isExpanded)}
               className="group"
             >
               {section.collapsible !== false ? (
@@ -297,7 +299,7 @@ export function HRLayout() {
 
                       if (hasChildren) {
                         return (
-                          <Collapsible key={item.name} defaultOpen={true} className="group/sub space-y-0.5">
+                          <Collapsible key={item.name} defaultOpen={isChildActive} className="group/sub space-y-0.5">
                             <CollapsibleTrigger asChild>
                               <button
                                 className={cn(

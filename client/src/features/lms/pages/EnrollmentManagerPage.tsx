@@ -201,7 +201,7 @@ export function EnrollmentManagerPage() {
                     return (
                       <tr key={enr.id} className="hover:bg-muted/20 transition-colors">
                         <td className="py-3 px-4">
-                          <p className="font-bold text-foreground">{enr.employeeName || enr.employee_name || 'Employee'}</p>
+                          <p className="font-bold text-foreground">{(enr.employeeName || enr.employee_name || '').trim() || 'Unknown Employee'}</p>
                           <p className="text-[10px] text-muted-foreground font-mono">{enr.employeeCode || enr.employee_code}</p>
                         </td>
                         <td className="py-3 px-4 text-muted-foreground">

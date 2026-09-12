@@ -21,13 +21,19 @@ export class EnrollmentRepository extends BaseRepository<LmsEnrollment> {
   ) {
     const query = this.query(ctx)
       .leftJoin('employees', 'employees.id', 'lms_enrollments.employee_id')
+      .leftJoin('users', 'users.id', 'lms_enrollments.employee_id')
       .leftJoin('departments', 'departments.id', 'employees.current_department_id')
       .leftJoin('lms_courses', 'lms_courses.id', 'lms_enrollments.course_id')
       .leftJoin('lms_batches', 'lms_batches.id', 'lms_enrollments.batch_id')
       .select(
         'lms_enrollments.*',
-        this.db.raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) as employee_name"),
-        'employees.employee_code',
+        this.db.raw(`
+          NULLIF(TRIM(COALESCE(
+            NULLIF(TRIM(CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, ''))), ''),
+            users.email
+          )), '') as employee_name
+        `),
+        this.db.raw(`COALESCE(employees.employee_code, '') as employee_code`),
         'departments.name as department_name',
         'lms_courses.title as course_title',
         'lms_courses.thumbnail_url as course_thumbnail',

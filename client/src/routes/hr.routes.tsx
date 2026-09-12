@@ -89,9 +89,13 @@ const TimelogReportPage = lazy(() => import('../features/analytics/pages/Timelog
 
 const ReportEnginePage = lazy(() => import('../features/analytics/pages/ReportEnginePage').then(m => ({ default: m.ReportEnginePage })));
 const BurnoutRiskDashboard = lazy(() => import('../features/HR/pages/BurnoutRiskDashboard').then(m => ({ default: m.BurnoutRiskDashboard })));
-const HrLmsBatchPage = lazy(() => import('../features/lms/pages/HrLmsBatchPage').then(m => ({ default: m.HrLmsBatchPage })));
-const HrLmsEnrollmentPage = lazy(() => import('../features/lms/pages/HrLmsEnrollmentPage').then(m => ({ default: m.HrLmsEnrollmentPage })));
-const HrLmsReportsPage = lazy(() => import('../features/lms/pages/HrLmsReportsPage').then(m => ({ default: m.HrLmsReportsPage })));
+const LmsDashboardPage = lazy(() => import('../features/lms/pages/LmsDashboardPage').then(m => ({ default: m.LmsDashboardPage })));
+const CourseManagementPage = lazy(() => import('../features/lms/pages/CourseManagementPage').then(m => ({ default: m.CourseManagementPage })));
+const CategoryManagerPage = lazy(() => import('../features/lms/pages/CategoryManagerPage').then(m => ({ default: m.CategoryManagerPage })));
+const BatchManagementPage = lazy(() => import('../features/lms/pages/BatchManagementPage').then(m => ({ default: m.BatchManagementPage })));
+const EnrollmentManagerPage = lazy(() => import('../features/lms/pages/EnrollmentManagerPage').then(m => ({ default: m.EnrollmentManagerPage })));
+const ComplianceTrainingPage = lazy(() => import('../features/lms/pages/ComplianceTrainingPage').then(m => ({ default: m.ComplianceTrainingPage })));
+const LmsReportsPage = lazy(() => import('../features/lms/pages/LmsReportsPage').then(m => ({ default: m.LmsReportsPage })));
 const CourseCatalogPage = lazy(() => import('../features/lms/pages/CourseCatalogPage').then(m => ({ default: m.CourseCatalogPage })));
 const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
 const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
@@ -232,8 +236,8 @@ export const hrRoutes = (
     {/* Leave & Time & Shifts */}
     <Route path="/hr/attendance" element={<AttendanceDashboard />} />
     <Route path="/HR/attendance" element={<AttendanceDashboard />} />
-    <Route path="/hr/attendance/shifts" element={<ShiftManagementPage />} />
-    <Route path="/hr/attendance/roster-shifts" element={<ShiftManagementPage />} />
+    <Route path="/hr/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
+    <Route path="/hr/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
     <Route path="/hr/attendance-policies" element={<AttendancePoliciesPage />} />
     <Route path="/hr/attendance/policies" element={<AttendancePoliciesPage />} />
     <Route path="/hr/face-attendance" element={<FaceAttendancePage />} />
@@ -310,14 +314,20 @@ export const hrRoutes = (
     <Route path="/hr/modules" element={<ModuleManagementPage />} />
 
     {/* LMS (Learning Management System) */}
-    <Route path="/hr/lms" element={<Navigate to="/hr/lms/batches" replace />} />
-    <Route path="/hr/lms/batches" element={<HrLmsBatchPage />} />
-    <Route path="/hr/lms/enrollments" element={<HrLmsEnrollmentPage />} />
-    <Route path="/hr/lms/reports" element={<HrLmsReportsPage />} />
+    <Route path="/hr/lms" element={<Navigate to="/hr/lms/dashboard" replace />} />
+    <Route path="/hr/lms/dashboard" element={<LmsDashboardPage />} />
+    <Route path="/hr/lms/courses" element={<CourseManagementPage />} />
+    <Route path="/hr/lms/categories" element={<CategoryManagerPage />} />
+    <Route path="/hr/lms/batches" element={<BatchManagementPage />} />
+    <Route path="/hr/lms/enrollments" element={<EnrollmentManagerPage />} />
+    <Route path="/hr/lms/compliance" element={<ComplianceTrainingPage />} />
+    <Route path="/hr/lms/reports" element={<LmsReportsPage />} />
     <Route path="/hr/lms/catalog" element={<CourseCatalogPage />} />
     <Route path="/hr/lms/catalog/:id" element={<CourseDetailPage />} />
+    <Route path="/hr/lms/courses/:id" element={<CourseDetailPage />} />
     <Route path="/hr/lms/course/:id" element={<CourseDetailPage />} />
     <Route path="/hr/lms/my-learning" element={<MyEnrollmentsPage />} />
+    <Route path="/hr/lms/my-courses" element={<MyEnrollmentsPage />} />
     <Route path="/hr/lms/assessment/:id" element={<AssessmentPlayerPage />} />
     <Route path="/hr/lms/certificates" element={<MyCertificatesPage />} />
 

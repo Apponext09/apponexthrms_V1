@@ -20,7 +20,7 @@ import type { LmsCertificate } from '../types/lms.types';
 
 export function MyCertificatesPage() {
   const user = useAuthStore((s) => s.user);
-  const employeeId = user?.employeeId ? Number(user.employeeId) : Number(user?.id);
+  const employeeId = user?.employeeId ? Number(user.employeeId) : 0;
 
   const { data: certificates = [], isLoading } = useMyLmsCertificates(employeeId);
   const [selectedCert, setSelectedCert] = useState<LmsCertificate | null>(null);
