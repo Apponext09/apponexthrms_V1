@@ -257,7 +257,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Mileage Claims', href: '/expenses/mileage-claims', icon: 'Car' },
       { name: 'Expense Categories', href: '/expenses/categories', icon: 'Tag', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
       { name: 'Expense Policies', href: '/expenses/policies', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr_manager', 'super_admin', 'hr_admin', 'hr', 'ceo'] },
-      { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
+      { name: 'Reports & Analytics', href: '/expenses/reports', icon: 'FileSpreadsheet', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'finance'] },
       { name: 'Settings', href: '/expenses/settings', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'] },
     ],
   },

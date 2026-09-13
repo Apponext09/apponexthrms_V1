@@ -42,7 +42,8 @@ const MiniBar: React.FC<{ value: number; max: number; color: string }> = ({ valu
 };
 
 // ─── Status badge (reused) ──────────────────────────────────────────────────
-const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+const StatusBadge: React.FC<{ status?: string | null }> = ({ status }) => {
+  if (!status) return <span className="text-xs text-gray-400 italic">—</span>;
   const map: Record<string, string> = {
     paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300',
     payment_pending: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300',

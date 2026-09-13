@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState, useCallback } from 'react';
 import { expenseApi, TravelRequest } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
@@ -296,6 +297,7 @@ export const TravelRequestsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
+      <LegacyWorkflowNotice rows={requests} prefix="tr_" onComplete={fetchTravelRequests} />
 
       {/* Toast */}
       {toast && (
@@ -427,28 +429,7 @@ export const TravelRequestsPage: React.FC = () => {
                   const isManagerPortal = path.startsWith('/manager');
                   const isTeamLeadPortal = path.startsWith('/team-lead');
 
-                  let canAct = false;
-                  if (!isOwnRequest && isPendingApproval(status)) {
-                    if (isHrOrAdminPortal) {
-                      // HR / Admin portal: can only act if current stage is Level 3 (HR stage) or Finance stage
-                      canAct = isLevel3Stage || isFinanceStage;
-                    } else if (isManagerPortal) {
-                      // Manager portal: can act if current stage is Level 2 or Level 1
-                      canAct = isLevel2Stage || isLevel1Stage;
-                    } else if (isTeamLeadPortal) {
-                      // Team Lead portal: can act if current stage is Level 1
-                      canAct = isLevel1Stage;
-                    } else {
-                      const rCode = singleRole;
-                      const isHrAdminRole = ['hr', 'hr_admin', 'hr_manager', 'organization_admin', 'super_admin', 'admin', 'ceo'].some(r => rCode.includes(r));
-                      const isMgrRole = ['manager', 'department_head'].some((r: string) => rCode.includes(r));
-                      const isTlRole = rCode.includes('team_lead');
-
-                      if (isLevel3Stage) canAct = isHrAdminRole;
-                      else if (isLevel2Stage) canAct = isMgrRole && !isHrAdminRole;
-                      else if (isLevel1Stage) canAct = isTlRole || isMgrRole;
-                    }
-                  }
+                  const canAct = Boolean(tr.canApprove);
 
                   return (
                     <tr key={tr.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">

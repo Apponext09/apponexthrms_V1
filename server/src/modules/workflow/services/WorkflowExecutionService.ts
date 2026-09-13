@@ -24,6 +24,9 @@ export class WorkflowExecutionService {
   }
 
   async startWorkflow(ctx: TenantContext, input: StartWorkflowInput) {
+    if (['expense_claim', 'travel_request', 'travel_advance', 'mileage_claim'].includes(input.entityType)) {
+      throw new ValidationError('Submit expense requests through the Expense module so assignment and claim status stay atomic');
+    }
     // Get workflow by code
     const workflow = await this.workflowRepo.getByCode(ctx, input.workflowCode);
     if (!workflow) {

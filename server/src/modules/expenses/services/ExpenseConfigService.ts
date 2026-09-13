@@ -35,23 +35,23 @@ export class ExpenseConfigService {
       .select('label_key', 'label_value')
       .catch(() => []);
     for (const r of labelRows || []) {
-      labels[r.label_key] = r.label_value;
+      labels[r.labelKey ?? r.label_key] = r.labelValue ?? r.label_value;
     }
 
-    const car = Number(settings?.mileage_rate_car ?? settings?.mileageRateCar);
-    const bike = Number(settings?.mileage_rate_bike ?? settings?.mileageRateBike);
+    const car = Number((settings?.mileageRateCar ?? settings?.mileage_rate_car) ?? settings?.mileageRateCar);
+    const bike = Number((settings?.mileageRateBike ?? settings?.mileage_rate_bike) ?? settings?.mileageRateBike);
 
     return {
-      currencySymbol: settings?.currency_symbol || '₹',
-      currencyCode: settings?.currency_code || 'INR',
-      currencyLocale: settings?.currency_locale || 'en-IN',
-      claimNumberPrefix: settings?.claim_number_prefix || 'EXP',
-      travelRequestNumberPrefix: settings?.travel_request_number_prefix || 'TRV',
-      travelAdvanceNumberPrefix: settings?.travel_advance_number_prefix || 'ADV',
-      defaultPaymentMethod: settings?.default_payment_method || 'bank_transfer',
-      defaultAdvanceStatus: settings?.default_advance_status || 'pending_finance',
-      workflowFallbackMaxAmount: Number(settings?.workflow_fallback_max_amount || 10000000),
-      numberSequenceDigits: Number(settings?.number_sequence_digits || 6),
+      currencySymbol: (settings?.currencySymbol ?? settings?.currency_symbol) || '₹',
+      currencyCode: (settings?.currencyCode ?? settings?.currency_code) || 'INR',
+      currencyLocale: (settings?.currencyLocale ?? settings?.currency_locale) || 'en-IN',
+      claimNumberPrefix: (settings?.claimNumberPrefix ?? settings?.claim_number_prefix) || 'EXP',
+      travelRequestNumberPrefix: (settings?.travelRequestNumberPrefix ?? settings?.travel_request_number_prefix) || 'TRV',
+      travelAdvanceNumberPrefix: (settings?.travelAdvanceNumberPrefix ?? settings?.travel_advance_number_prefix) || 'ADV',
+      defaultPaymentMethod: (settings?.defaultPaymentMethod ?? settings?.default_payment_method) || 'bank_transfer',
+      defaultAdvanceStatus: (settings?.defaultAdvanceStatus ?? settings?.default_advance_status) || 'pending_finance',
+      workflowFallbackMaxAmount: Number((settings?.workflowFallbackMaxAmount ?? settings?.workflow_fallback_max_amount) || 10000000),
+      numberSequenceDigits: Number((settings?.numberSequenceDigits ?? settings?.number_sequence_digits) || 6),
       mileageRateCar: Number.isFinite(car) ? car : 12,
       mileageRateBike: Number.isFinite(bike) ? bike : 6,
       labels,
