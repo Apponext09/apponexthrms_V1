@@ -12,11 +12,19 @@ export class AdminDashboardController {
       return;
     }
 
-    const stats = await this.service.getAdminStats(ctx);
-    res.status(200).json({
-      success: true,
-      data: stats,
-    });
+    try {
+      const stats = await this.service.getAdminStats(ctx);
+      res.status(200).json({
+        success: true,
+        data: stats,
+      });
+    } catch (err: any) {
+      console.error('[AdminDashboardController] Error fetching admin stats:', err);
+      res.status(500).json({
+        success: false,
+        message: err.message || 'Failed to fetch admin stats',
+      });
+    }
   });
 }
 

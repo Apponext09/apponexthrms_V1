@@ -148,69 +148,104 @@ export class AdminDashboardService {
       location = 'Not Specified';
     }
 
-    // Total Employees excludes the CEO / organization administrator account.  In
-    // legacy data the CEO is represented by organization_admin rather than ceo,
-    // so support both role codes and the users.role fallback.
-    let empQuery = db('employees')
-      .whereNull('employees.deleted_at')
-      .whereNotExists(function () {
-        this.select('*')
-          .from('users as ceo_user')
-          .leftJoin('user_roles as ceo_user_role', 'ceo_user_role.user_id', 'ceo_user.id')
-          .leftJoin('roles as ceo_role', 'ceo_role.id', 'ceo_user_role.role_id')
-          .whereRaw('ceo_user.employee_id = employees.id')
-          .where(function () {
-            this.whereIn('ceo_user.role', ['ceo', 'organization_admin'])
-              .orWhereIn('ceo_role.code', ['ceo', 'organization_admin']);
-          });
-      });
+    // Total Employees excludes the CEO / organization administrator account.
+    let totalHeadcount = 0;
+    try {
+      let empQuery = db('employees')
+        .whereNull('employees.deleted_at')
+        .whereNotExists(function () {
+          this.select('ceo_user.id')
+            .from('users as ceo_user')
+            .join('user_roles as ceo_user_role', 'ceo_user_role.user_id', 'ceo_user.id')
+            .join('roles as ceo_role', 'ceo_role.id', 'ceo_user_role.role_id')
+            .whereRaw('ceo_user.employee_id = employees.id')
+            .whereIn('ceo_role.code', ['ceo', 'organization_admin', 'super_admin']);
+        });
 
-    if (targetCompanyId) {
-      empQuery = empQuery.where('company_id', targetCompanyId);
-    } else {
-      empQuery = empQuery.where('organization_id', organizationId);
-    }
-    const [empCountRow] = await empQuery.count('* as count');
-    const totalHeadcount = Number(empCountRow?.count || 0);
-
-    // Active departments only.  The dashboard label must never include inactive masters.
-    let deptQuery = db('departments')
-      .whereNull('deleted_at')
-      .where('status', 'active');
-    if (targetCompanyId) {
-      deptQuery = deptQuery.where('company_id', targetCompanyId);
-    } else {
-      deptQuery = deptQuery.where('organization_id', organizationId);
-    }
-    const [deptCountRow] = await deptQuery.count('* as count');
-    const activeDepartments = Number(deptCountRow?.count || 0);
-
-    // Office locations.  Do not substitute branches or companies here: the KPI must
-    // represent one well-defined entity and its click-through must show the same entity.
-    let locCount = 0;
-    const hasLocationsTable = await db.schema.hasTable('locations');
-    if (hasLocationsTable) {
-      let locQuery = db('locations').whereNull('deleted_at');
       if (targetCompanyId) {
-        locQuery = locQuery.where('company_id', targetCompanyId);
+        empQuery = empQuery.where('employees.company_id', targetCompanyId);
       } else {
-        locQuery = locQuery.where('organization_id', organizationId);
+        empQuery = empQuery.where('employees.organization_id', organizationId);
       }
-      const [locRow] = await locQuery.count('* as count');
-      locCount = Number(locRow?.count || 0);
+      const [empCountRow] = await empQuery.count('* as count');
+      totalHeadcount = Number(empCountRow?.count || 0);
+    } catch (e) {
+      console.warn('[AdminDashboardService] empQuery error fallback:', e);
+      try {
+        let fallbackEmp = db('employees').whereNull('deleted_at');
+        if (targetCompanyId) {
+          fallbackEmp = fallbackEmp.where('company_id', targetCompanyId);
+        } else {
+          fallbackEmp = fallbackEmp.where('organization_id', organizationId);
+        }
+        const [empRow] = await fallbackEmp.count('* as count');
+        totalHeadcount = Number(empRow?.count || 0);
+      } catch {
+        totalHeadcount = 0;
+      }
+    }
+
+    // Active departments only.
+    let activeDepartments = 0;
+    try {
+      let deptQuery = db('departments')
+        .whereNull('deleted_at')
+        .where(function () {
+          this.where('status', 'active').orWhere('status', 'Active').orWhereNull('status');
+        });
+      if (targetCompanyId) {
+        const cIdNum = Number(targetCompanyId);
+        const cIdStr = String(targetCompanyId);
+        deptQuery = deptQuery.where((builder) => {
+          builder.where('departments.company_id', cIdNum)
+            .orWhereRaw("JSON_CONTAINS(departments.company_ids, ?)", [JSON.stringify(cIdNum)])
+            .orWhereRaw("JSON_CONTAINS(departments.company_ids, ?)", [JSON.stringify(cIdStr)])
+            .orWhereNull('departments.company_id');
+        });
+      } else {
+        deptQuery = deptQuery.where('organization_id', organizationId);
+      }
+      const [deptCountRow] = await deptQuery.count('* as count');
+      activeDepartments = Number(deptCountRow?.count || 0);
+    } catch (e) {
+      console.warn('[AdminDashboardService] deptQuery error:', e);
+      activeDepartments = 0;
+    }
+
+    // Office locations.
+    let locCount = 0;
+    try {
+      const hasLocationsTable = await db.schema.hasTable('locations');
+      if (hasLocationsTable) {
+        let locQuery = db('locations').whereNull('deleted_at');
+        if (targetCompanyId) {
+          locQuery = locQuery.where('company_id', targetCompanyId);
+        } else {
+          locQuery = locQuery.where('organization_id', organizationId);
+        }
+        const [locRow] = await locQuery.count('* as count');
+        locCount = Number(locRow?.count || 0);
+      }
+    } catch (e) {
+      locCount = 0;
     }
 
     // Reporting Officers (distinct managers)
-    let officerQuery = db('employees')
-      .whereNull('deleted_at')
-      .whereNotNull('reporting_manager_id');
-    if (targetCompanyId) {
-      officerQuery = officerQuery.where('company_id', targetCompanyId);
-    } else {
-      officerQuery = officerQuery.where('organization_id', organizationId);
+    let reportingOfficers = 0;
+    try {
+      let officerQuery = db('employees')
+        .whereNull('deleted_at')
+        .whereNotNull('reporting_manager_id');
+      if (targetCompanyId) {
+        officerQuery = officerQuery.where('company_id', targetCompanyId);
+      } else {
+        officerQuery = officerQuery.where('organization_id', organizationId);
+      }
+      const [officerRow] = await officerQuery.countDistinct('reporting_manager_id as count');
+      reportingOfficers = Number(officerRow?.count || 0);
+    } catch (e) {
+      reportingOfficers = 0;
     }
-    const [officerRow] = await officerQuery.countDistinct('reporting_manager_id as count');
-    const reportingOfficers = Number(officerRow?.count || 0);
 
     // ── Open Job Postings ─────────────────────────────────────────────────────
     // Matches the "Open Positions" KPI on /recruitment/jobs:
@@ -412,102 +447,128 @@ export class AdminDashboardService {
     const now = new Date();
     const growthTrend: Array<{ month: string; employees: number }> = [];
 
-    // Calculate dates for last 6 months
-    for (let i = 5; i >= 0; i--) {
-      const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0); // last day of month
-      const monthLabel = monthNames[targetMonthDate.getMonth()];
-      const cutoffIso = targetMonthDate.toISOString().slice(0, 10);
+    try {
+      for (let i = 5; i >= 0; i--) {
+        const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0); // last day of month
+        const monthLabel = monthNames[targetMonthDate.getMonth()];
+        const cutoffIso = targetMonthDate.toISOString().slice(0, 10);
 
-      // Keep an employee in historical months until their deletion date; otherwise
-      // deleting an employee today would rewrite every previous chart point.
-      let trendQuery = db('employees')
-        .where(function () {
-          this.whereNull('deleted_at').orWhere('deleted_at', '>', targetMonthDate);
-        })
-        .where(function () {
-          this.where('date_of_joining', '<=', cutoffIso)
-            .orWhere(function () {
-              this.whereNull('date_of_joining').andWhere('created_at', '<=', targetMonthDate);
-            });
+        let trendQuery = db('employees')
+          .where(function () {
+            this.whereNull('deleted_at').orWhere('deleted_at', '>', targetMonthDate);
+          })
+          .where(function () {
+            this.where('date_of_joining', '<=', cutoffIso)
+              .orWhere(function () {
+                this.whereNull('date_of_joining').andWhere('created_at', '<=', targetMonthDate);
+              });
+          });
+
+        if (targetCompanyId) {
+          trendQuery = trendQuery.where('company_id', targetCompanyId);
+        } else {
+          trendQuery = trendQuery.where('organization_id', organizationId);
+        }
+
+        const [trendRow] = await trendQuery.count('* as count');
+        growthTrend.push({
+          month: monthLabel,
+          employees: Number(trendRow?.count || 0),
         });
-
-      if (targetCompanyId) {
-        trendQuery = trendQuery.where('company_id', targetCompanyId);
-      } else {
-        trendQuery = trendQuery.where('organization_id', organizationId);
       }
-
-      const [trendRow] = await trendQuery.count('* as count');
-      growthTrend.push({
-        month: monthLabel,
-        employees: Number(trendRow?.count || 0),
-      });
+    } catch (e) {
+      console.warn('[AdminDashboardService] growthTrend error:', e);
+      for (let i = 5; i >= 0; i--) {
+        const targetMonthDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        growthTrend.push({
+          month: monthNames[targetMonthDate.getMonth()],
+          employees: 0,
+        });
+      }
     }
 
     // 4. Department Breakdown with Employee Counts
-    // No status filter — count all non-deleted employees per department
-    let deptBreakdownQuery = db('departments')
-      .leftJoin('employees', function () {
-        this.on('departments.id', '=', 'employees.current_department_id')
-          .andOnNull('employees.deleted_at');
-      })
-      .select('departments.id', 'departments.name')
-      .count('employees.id as emp_count')
-      .whereNull('departments.deleted_at')
-      .groupBy('departments.id', 'departments.name');
+    let departmentBreakdown: Array<{ id: number; name: string; count: number; percentage: number }> = [];
+    try {
+      let deptBreakdownQuery = db('departments')
+        .leftJoin('employees', function () {
+          this.on('departments.id', '=', 'employees.current_department_id')
+            .andOnNull('employees.deleted_at');
+        })
+        .select('departments.id', 'departments.name')
+        .count('employees.id as emp_count')
+        .whereNull('departments.deleted_at')
+        .groupBy('departments.id', 'departments.name');
 
-    if (targetCompanyId) {
-      deptBreakdownQuery = deptBreakdownQuery.where('departments.company_id', targetCompanyId);
-    } else {
-      deptBreakdownQuery = deptBreakdownQuery.where('departments.organization_id', organizationId);
+      if (targetCompanyId) {
+        const cIdNum = Number(targetCompanyId);
+        const cIdStr = String(targetCompanyId);
+        deptBreakdownQuery = deptBreakdownQuery.where((builder) => {
+          builder.where('departments.company_id', cIdNum)
+            .orWhereRaw("JSON_CONTAINS(departments.company_ids, ?)", [JSON.stringify(cIdNum)])
+            .orWhereRaw("JSON_CONTAINS(departments.company_ids, ?)", [JSON.stringify(cIdStr)])
+            .orWhereNull('departments.company_id');
+        });
+      } else {
+        deptBreakdownQuery = deptBreakdownQuery.where('departments.organization_id', organizationId);
+      }
+
+      const deptRows = await deptBreakdownQuery;
+
+      departmentBreakdown = (deptRows || [])
+        .map((row: any) => {
+          const count = Number(row.emp_count || 0);
+          const percentage = totalHeadcount > 0 ? Math.round((count / totalHeadcount) * 100) : 0;
+          return {
+            id: Number(row.id),
+            name: row.name || 'Unassigned',
+            count,
+            percentage,
+          };
+        })
+        .sort((a: any, b: any) => b.count - a.count);
+    } catch (e) {
+      console.warn('[AdminDashboardService] deptBreakdown error:', e);
+      departmentBreakdown = [];
     }
-
-    const deptRows = await deptBreakdownQuery;
-
-    const departmentBreakdown = deptRows
-      .map((row: any) => {
-        const count = Number(row.emp_count || 0);
-        const percentage = totalHeadcount > 0 ? Math.round((count / totalHeadcount) * 100) : 0;
-        return {
-          id: Number(row.id),
-          name: row.name || 'Unassigned',
-          count,
-          percentage,
-        };
-      })
-      .sort((a: any, b: any) => b.count - a.count);
 
     // 5. Recent Employees
-    let recentQuery = db('employees')
-      .leftJoin('departments', 'employees.current_department_id', 'departments.id')
-      .select(
-        'employees.id',
-        'employees.first_name as firstName',
-        'employees.last_name as lastName',
-        'employees.employee_code as employeeCode',
-        'employees.status',
-        'employees.avatar_url as avatarUrl',
-        'departments.name as departmentName'
-      )
-      .whereNull('employees.deleted_at')
-      .orderBy('employees.created_at', 'desc')
-      .limit(5);
+    let recentEmployees: Array<{ id: number; firstName: string; lastName: string; employeeCode: string; status: string; avatarUrl?: string; departmentName?: string }> = [];
+    try {
+      let recentQuery = db('employees')
+        .leftJoin('departments', 'employees.current_department_id', 'departments.id')
+        .select(
+          'employees.id',
+          'employees.first_name as firstName',
+          'employees.last_name as lastName',
+          'employees.employee_code as employeeCode',
+          'employees.status',
+          'employees.avatar_url as avatarUrl',
+          'departments.name as departmentName'
+        )
+        .whereNull('employees.deleted_at')
+        .orderBy('employees.created_at', 'desc')
+        .limit(5);
 
-    if (targetCompanyId) {
-      recentQuery = recentQuery.where('employees.company_id', targetCompanyId);
-    } else {
-      recentQuery = recentQuery.where('employees.organization_id', organizationId);
+      if (targetCompanyId) {
+        recentQuery = recentQuery.where('employees.company_id', targetCompanyId);
+      } else {
+        recentQuery = recentQuery.where('employees.organization_id', organizationId);
+      }
+
+      recentEmployees = (await recentQuery).map((emp: any) => ({
+        id: Number(emp.id),
+        firstName: emp.firstName || 'Employee',
+        lastName: emp.lastName || '',
+        employeeCode: emp.employeeCode || `EMP${emp.id}`,
+        status: emp.status || 'active',
+        avatarUrl: emp.avatarUrl || undefined,
+        departmentName: emp.departmentName || 'General',
+      }));
+    } catch (e) {
+      console.warn('[AdminDashboardService] recentEmployees error:', e);
+      recentEmployees = [];
     }
-
-    const recentEmployees = (await recentQuery).map((emp: any) => ({
-      id: Number(emp.id),
-      firstName: emp.firstName || 'Employee',
-      lastName: emp.lastName || '',
-      employeeCode: emp.employeeCode || `EMP${emp.id}`,
-      status: emp.status || 'active',
-      avatarUrl: emp.avatarUrl || undefined,
-      departmentName: emp.departmentName || 'General',
-    }));
 
     return {
       companyInfo: {

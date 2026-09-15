@@ -376,9 +376,21 @@ export function EmployeeCreateModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Real-time field change with automatic error clearing
+  // Real-time field change with automatic error clearing and input sanitization
   const handleFieldChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let sanitizedValue = value;
+    if (field === 'employeeCode') {
+      // Accept only alphanumeric characters (no special characters)
+      sanitizedValue = typeof value === 'string' ? value.replace(/[^a-zA-Z0-9]/g, '') : value;
+    } else if (field === 'firstName' || field === 'lastName') {
+      // Accept only characters and alphabets (and spaces)
+      sanitizedValue = typeof value === 'string' ? value.replace(/[^a-zA-Z\s]/g, '') : value;
+    } else if (field === 'mobile') {
+      // Accept only numeric values and max 10 digits
+      sanitizedValue = typeof value === 'string' ? value.replace(/\D/g, '').slice(0, 10) : value;
+    }
+
+    setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
     if (fieldErrors[field]) {
       setFieldErrors(prev => {
         const next = { ...prev };
@@ -400,6 +412,9 @@ export function EmployeeCreateModal({
     if (!formData.employeeCode?.trim()) {
       errors.employeeCode = 'Employee code is required';
       if (!firstTabWithError) firstTabWithError = 'basic';
+    } else if (!/^[a-zA-Z0-9]+$/.test(formData.employeeCode.trim())) {
+      errors.employeeCode = 'Employee code must contain only alphanumeric characters (no special characters)';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -414,10 +429,16 @@ export function EmployeeCreateModal({
     if (!formData.firstName?.trim()) {
       errors.firstName = 'First name is required';
       if (!firstTabWithError) firstTabWithError = 'basic';
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.firstName.trim())) {
+      errors.firstName = 'First name must contain only alphabets and letters';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
     if (!formData.lastName?.trim()) {
       errors.lastName = 'Last name is required';
+      if (!firstTabWithError) firstTabWithError = 'basic';
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.lastName.trim())) {
+      errors.lastName = 'Last name must contain only alphabets and letters';
       if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
@@ -426,7 +447,7 @@ export function EmployeeCreateModal({
       errors.mobile = 'Mobile number is required';
       if (!firstTabWithError) firstTabWithError = 'basic';
     } else if (!/^[0-9]{10}$/.test(cleanMobile)) {
-      errors.mobile = 'Mobile number must be exactly 10 digits';
+      errors.mobile = 'Mobile number must be a valid 10-digit numeric number';
       if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
@@ -438,6 +459,23 @@ export function EmployeeCreateModal({
 
     if (!formData.dateOfJoining) {
       errors.dateOfJoining = 'Date of joining is required';
+      if (!firstTabWithError) firstTabWithError = 'basic';
+    }
+
+    if (!formData.dateOfBirth) {
+      errors.dateOfBirth = 'Date of birth is required';
+      if (!firstTabWithError) firstTabWithError = 'basic';
+    } else {
+      const dobDate = new Date(formData.dateOfBirth);
+      const today = new Date();
+      if (isNaN(dobDate.getTime()) || dobDate >= today) {
+        errors.dateOfBirth = 'Please enter a valid past date of birth';
+        if (!firstTabWithError) firstTabWithError = 'basic';
+      }
+    }
+
+    if (!formData.maritalStatus) {
+      errors.maritalStatus = 'Marital status selection is required';
       if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
@@ -655,7 +693,7 @@ export function EmployeeCreateModal({
   };
 
   // Tab error counts for badges
-  const basicErrorCount = ['employeeCode', 'email', 'firstName', 'lastName', 'mobile', 'gender', 'dateOfJoining', 'password', 'confirmPassword'].filter(k => !!fieldErrors[k]).length;
+  const basicErrorCount = ['employeeCode', 'email', 'firstName', 'lastName', 'mobile', 'gender', 'dateOfBirth', 'maritalStatus', 'dateOfJoining', 'password', 'confirmPassword'].filter(k => !!fieldErrors[k]).length;
   const professionalErrorCount = ['employmentType', 'departmentId', 'gradeId', 'status', 'jobTitle', 'locationId', 'accessRole'].filter(k => !!fieldErrors[k]).length;
 
   return (
@@ -929,24 +967,34 @@ export function EmployeeCreateModal({
 
                       <div>
                         <Label htmlFor="dateOfBirth" className="flex items-center text-xs font-bold text-foreground">
-                          Date of Birth
+                          Date of Birth <span className="text-red-500 ml-0.5">*</span>
                         </Label>
                         <Input
                           id="dateOfBirth"
                           type="date"
+                          max={new Date().toISOString().split('T')[0]}
                           value={formData.dateOfBirth}
                           onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
-                          className="mt-1"
+                          className={cn("mt-1", fieldErrors.dateOfBirth && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
                         />
+                        {fieldErrors.dateOfBirth && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.dateOfBirth}</span>
+                          </p>
+                        )}
                       </div>
 
                       <div>
                         <Label htmlFor="maritalStatus" className="flex items-center text-xs font-bold text-foreground">
-                          Marital Status
+                          Marital Status <span className="text-red-500 ml-0.5">*</span>
                         </Label>
                         <select
                           id="maritalStatus"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.maritalStatus && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
                           value={formData.maritalStatus}
                           onChange={(e) => handleFieldChange('maritalStatus', e.target.value)}
                         >
@@ -956,6 +1004,12 @@ export function EmployeeCreateModal({
                           <option value="divorced">Divorced</option>
                           <option value="widowed">Widowed</option>
                         </select>
+                        {fieldErrors.maritalStatus && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.maritalStatus}</span>
+                          </p>
+                        )}
                       </div>
 
                       <div>

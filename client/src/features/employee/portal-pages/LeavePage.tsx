@@ -813,7 +813,8 @@ export default function LeavePage() {
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
     const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
-    const calculatedAvail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
+    // Balance is only deducted when approved (consumed). Pending, Rejected, and Cancelled requests do not deduct balance.
+    const calculatedAvail = isAllowNeg ? (total - consumed) : Math.max(0, total - consumed);
     return {
       ...b,
       allocated_balance: total,
@@ -1328,9 +1329,9 @@ export default function LeavePage() {
           const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
-          // Formula: Available = Total Allocated - Consumed - Pending Approval
+          // Formula: Available = Total Allocated - Consumed (only deducts when approved)
           const isAllowNeg = Boolean(bal.allow_negative_balance || bal.allowNegativeBalance);
-          const avail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
+          const avail = isAllowNeg ? (total - consumed) : Math.max(0, total - consumed);
 
           const percent = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0;
 

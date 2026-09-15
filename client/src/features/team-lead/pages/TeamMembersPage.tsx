@@ -139,9 +139,10 @@ export function TeamMembersPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((emp: any) => {
-            const firstName = emp.first_name || emp.firstName || '';
-            const lastName = emp.last_name || emp.lastName || '';
-            const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase();
+            const firstName = emp.firstName || emp.first_name || '';
+            const lastName = emp.lastName || emp.last_name || '';
+            const fullName = `${firstName} ${lastName}`.trim() || emp.name || emp.email || `Employee #${emp.id}`;
+            const initials = `${firstName[0] || fullName[0] || 'E'}${lastName[0] || ''}`.toUpperCase();
             const isActive = (emp.status || 'active').toLowerCase() === 'active';
 
             return (
@@ -157,7 +158,7 @@ export function TeamMembersPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1.5">
-                        <h3 className="font-black text-sm text-foreground truncate">{firstName} {lastName}</h3>
+                        <h3 className="font-black text-sm text-foreground truncate">{fullName}</h3>
                         <Badge
                           className="text-[9px] font-bold shrink-0 uppercase border px-2 py-0.5 rounded-full bg-primary/10 text-primary border-primary/20"
                         >

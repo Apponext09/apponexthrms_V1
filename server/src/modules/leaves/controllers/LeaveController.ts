@@ -660,7 +660,7 @@ export class LeaveController {
           const baseAllocated = currentQuota > 0 ? currentQuota : matchAllocated;
           // Effective allocated includes any carry-forward from previous years
           const effectiveAllocated = baseAllocated + carryForward;
-          const effectiveAvailable = Math.max(0, effectiveAllocated - consumed - pending);
+          const effectiveAvailable = Math.max(0, effectiveAllocated - consumed);
 
           return {
             id: match.id,

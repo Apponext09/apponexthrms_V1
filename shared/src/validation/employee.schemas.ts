@@ -25,9 +25,9 @@ const safeInt = z.preprocess((val) => {
 
 // ── Employee Schemas ──────────────────────────────────────────────────────────
 export const employeeCreateSchema = z.object({
-  employeeCode: z.string().min(1).max(50),
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
+  employeeCode: z.string().min(1, 'Employee code is required').max(50).regex(/^[a-zA-Z0-9]+$/, 'Employee code must contain only alphanumeric characters'),
+  firstName: z.string().min(1, 'First name is required').max(100).regex(/^[a-zA-Z\s]+$/, 'First name must contain only alphabets and letters'),
+  lastName: z.string().min(1, 'Last name is required').max(100).regex(/^[a-zA-Z\s]+$/, 'Last name must contain only alphabets and letters'),
   middleName: z.string().max(100).nullable().optional(),
   email: z.string().email(),
   phone: z.string().regex(/^\d{10}$/, 'Phone number must be exactly 10 digits').nullable().optional(),

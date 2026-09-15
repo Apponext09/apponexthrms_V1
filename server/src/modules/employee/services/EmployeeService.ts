@@ -133,6 +133,20 @@ export class EmployeeService {
   }): Promise<{ employee: Employee; generatedPassword?: string }> {
     await this.ensureEmployeeColumns();
 
+    // Validate formats
+    if (input.employeeCode && !/^[a-zA-Z0-9]+$/.test(input.employeeCode)) {
+      throw new ValidationError(`Employee code '${input.employeeCode}' must contain only alphanumeric characters without special characters`);
+    }
+    if (input.firstName && !/^[a-zA-Z\s]+$/.test(input.firstName)) {
+      throw new ValidationError('First name must contain only alphabetic characters');
+    }
+    if (input.lastName && !/^[a-zA-Z\s]+$/.test(input.lastName)) {
+      throw new ValidationError('Last name must contain only alphabetic characters');
+    }
+    if (input.mobile && !/^\d{10}$/.test(input.mobile)) {
+      throw new ValidationError('Mobile number must be a valid 10-digit number');
+    }
+
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
     if (!isUnique) {
