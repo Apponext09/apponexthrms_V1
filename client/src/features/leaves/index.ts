@@ -1,5 +1,6 @@
 // Pages
-export { MyLeavesPage } from './pages/MyLeavesPage';
+export { default as LeavePage } from '../employee/portal-pages/LeavePage';
+export { default as MyLeavesPage } from '../employee/portal-pages/LeavePage';
 export { ApplyLeavePage } from './pages/ApplyLeavePage';
 export { ApprovalInboxPage } from './pages/ApprovalInboxPage';
 export { LeaveBalancePage } from './pages/LeaveBalancePage';

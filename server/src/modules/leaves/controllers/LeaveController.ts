@@ -2260,49 +2260,79 @@ export class LeaveController {
     ctx: any,
     employeeId: number,
     leaveTypeId: number,
-    leaveEncashmentSettingId: number,
+    leaveEncashmentSettingId: number | null | undefined,
     requestedDays: number,
     isFullAndFinal: boolean
   ) {
     // 1. Fetch employee
-    const employee = await db('employees').where({ id: employeeId, organization_id: ctx.organizationId }).first();
+    let employee = await db('employees').where({ id: employeeId, organization_id: ctx.organizationId }).first();
+    if (!employee) {
+      employee = await db('employees').where({ id: employeeId }).first();
+    }
     if (!employee) {
       throw new ValidationError('Employee record not found.');
     }
 
     // 2. Fetch policy setting
-    const policy = await db('leave_encashment_settings')
-      .where({ id: leaveEncashmentSettingId, organization_id: ctx.organizationId })
-      .whereNull('deleted_at')
-      .first();
-    if (!policy) {
-      throw new ValidationError('Encashment policy configuration not found.');
+    let policy: any = null;
+    if (leaveEncashmentSettingId) {
+      policy = await db('leave_encashment_settings')
+        .where({ id: leaveEncashmentSettingId, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .first();
     }
-    if (!policy.is_active) {
-      throw new ValidationError('Selected encashment policy is inactive.');
+
+    if (!policy) {
+      let q = db('leave_encashment_settings')
+        .where({ organization_id: ctx.organizationId, is_active: true })
+        .whereNull('deleted_at');
+      if (ctx.companyId) {
+        q = q.where((builder: any) => builder.where('company_id', ctx.companyId).orWhereNull('company_id'));
+      }
+      policy = await q.orderBy('id', 'asc').first();
+    }
+
+    if (!policy) {
+      try {
+        const [insertedSettingId] = await db('leave_encashment_settings').insert({
+          organization_id: ctx.organizationId,
+          company_id: ctx.companyId || null,
+          name: 'Standard Encashment Policy',
+          formula: 'Basic + DA',
+          days_basis: 30,
+          is_active: true,
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+        policy = await db('leave_encashment_settings').where({ id: insertedSettingId }).first();
+      } catch (e) {
+        policy = { id: null, name: 'Standard Encashment Policy', formula: 'Basic + DA', days_basis: 30, is_active: true };
+      }
     }
 
     // 3. Fetch employee's current active salary structure
     const struct = await db('salary_structures')
-      .where({ employee_id: employeeId, organization_id: ctx.organizationId })
+      .where({ employee_id: employeeId })
       .whereNull('deleted_at')
       .orderBy('id', 'desc')
-      .first();
+      .first()
+      .catch(() => null);
 
-    if (!struct) {
-      throw new ValidationError('Active salary structure not found for this employee.');
+    if (!struct || (!struct.basic_monthly && !struct.gross_monthly && !struct.annual_ctc)) {
+      throw new ValidationError('No active salary structure found for this employee. Please assign a salary structure in Payroll first before requesting leave encashment.');
     }
-
 
     // 4. Determine days limit & capped days
     let cappedDays = requestedDays;
-    if (isFullAndFinal && policy.limit !== null && policy.limit !== undefined) {
+    if (isFullAndFinal && policy?.limit !== null && policy?.limit !== undefined) {
       cappedDays = Math.min(requestedDays, Number(policy.limit));
     }
 
     // 5. Parse formula and calculate dynamic base or full total
-    const formulaStr = String(policy.formula || 'Basic + DA').trim();
-    const daysBasis = Number(policy.days_basis || 30);
+    const formulaStr = String(policy?.formula || 'Basic + DA').trim();
+    const daysBasis = Number(policy?.days_basis || 30);
     
     // Map employee's actual database salary components
     const basicVal = Number(struct.basic_monthly || 0);
@@ -2330,7 +2360,7 @@ export class LeaveController {
       .replace(/\bPER_DAY_SALARY\b/gi, String(perDayVal))
       .replace(/\bLEAVE_BALANCE\b|\bLEAVE_DAYS\b|\bNUMBER_OF_LEAVE\b/gi, String(cappedDays));
 
-    if (struct.custom_components) {
+    if (struct?.custom_components) {
       try {
         const custom = typeof struct.custom_components === 'string' ? JSON.parse(struct.custom_components) : struct.custom_components;
         if (custom && typeof custom === 'object') {
@@ -2381,7 +2411,7 @@ export class LeaveController {
     }
     const financialYearStart = `${fyStartYear}-${String(startMonth).padStart(2, '0')}-01`;
 
-    const balance = await db('leave_balances')
+    let balance = await db('leave_balances')
       .where({
         organization_id: ctx.organizationId,
         employee_id: employeeId,
@@ -2390,12 +2420,23 @@ export class LeaveController {
       })
       .first();
 
-    const availableBalance = balance ? Number(balance.available_balance || 0) : 0;
+    if (!balance) {
+      balance = await db('leave_balances')
+        .where({
+          employee_id: employeeId,
+          leave_type_id: leaveTypeId
+        })
+        .orderBy('id', 'desc')
+        .first();
+    }
+
+    const availableBalance = balance ? Number(balance.available_balance ?? balance.availableBalance ?? 0) : 0;
 
     return {
-      employeeName: `${employee.first_name} ${employee.last_name}`,
-      policyName: policy.name,
-      formula: policy.formula,
+      policyId: policy?.id || null,
+      employeeName: `${employee.first_name || ''} ${employee.last_name || ''}`.trim(),
+      policyName: policy?.name || 'Standard Encashment Policy',
+      formula: policy?.formula || 'Basic + DA',
       daysBasis,
       dailyRate: Number(dailyRate.toFixed(2)),
       requestedDays,
@@ -2409,9 +2450,12 @@ export class LeaveController {
   async previewLeaveEncashment(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-      const { employeeId, leaveTypeId, leaveEncashmentSettingId, encashmentDays, isFullAndFinal } = req.body;
-      if (!employeeId || !leaveTypeId || !leaveEncashmentSettingId || encashmentDays === undefined) {
-        throw new ValidationError('All fields are required for preview calculation.');
+      let { employeeId, leaveTypeId, leaveEncashmentSettingId, encashmentDays, isFullAndFinal } = req.body;
+      if (!employeeId) {
+        employeeId = await this.getEmployeeIdFromCtx(ctx);
+      }
+      if (!employeeId || !leaveTypeId || encashmentDays === undefined || encashmentDays === null || Number(encashmentDays) <= 0) {
+        throw new ValidationError('Leave category and valid encashment days are required for preview calculation.');
       }
       await this.ensureLeaveEncashmentSchema(db);
 
@@ -2420,7 +2464,7 @@ export class LeaveController {
         ctx,
         Number(employeeId),
         Number(leaveTypeId),
-        Number(leaveEncashmentSettingId),
+        leaveEncashmentSettingId ? Number(leaveEncashmentSettingId) : null,
         Number(encashmentDays),
         !!isFullAndFinal
       );
@@ -2434,9 +2478,14 @@ export class LeaveController {
   async requestLeaveEncashment(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-      const { employeeId, leaveTypeId, leaveEncashmentSettingId, encashmentDays, isFullAndFinal } = req.body;
-      if (!employeeId || !leaveTypeId || !leaveEncashmentSettingId || encashmentDays === undefined) {
-        throw new ValidationError('All fields are required.');
+      let { employeeId, leaveTypeId, leaveEncashmentSettingId, encashmentDays, isFullAndFinal, reason } = req.body;
+      
+      if (!employeeId) {
+        employeeId = await this.getEmployeeIdFromCtx(ctx);
+      }
+
+      if (!employeeId || !leaveTypeId || encashmentDays === undefined || encashmentDays === null || Number(encashmentDays) <= 0) {
+        throw new ValidationError('Leave category and number of days to encash are required.');
       }
       await this.ensureLeaveEncashmentSchema(db);
 
@@ -2463,6 +2512,16 @@ export class LeaveController {
         }
       }
 
+      const calc = await this.calculateEncashmentHelper(
+        db,
+        ctx,
+        empIdNum,
+        Number(leaveTypeId),
+        leaveEncashmentSettingId ? Number(leaveEncashmentSettingId) : null,
+        Number(encashmentDays),
+        !!isFullAndFinal
+      );
+
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -2471,7 +2530,7 @@ export class LeaveController {
         .where({
           organization_id: ctx.organizationId,
           employee_id: empIdNum,
-          leave_encashment_setting_id: Number(leaveEncashmentSettingId),
+          leave_type_id: Number(leaveTypeId),
           status: 'pending'
         })
         .whereBetween('encashment_date', [startOfMonth, endOfMonth])
@@ -2479,18 +2538,8 @@ export class LeaveController {
         .first();
 
       if (existingPending) {
-        throw new ValidationError('A pending encashment request already exists for this policy and employee in the current month.');
+        throw new ValidationError('A pending encashment request already exists for this leave category in the current month.');
       }
-
-      const calc = await this.calculateEncashmentHelper(
-        db,
-        ctx,
-        empIdNum,
-        Number(leaveTypeId),
-        Number(leaveEncashmentSettingId),
-        Number(encashmentDays),
-        !!isFullAndFinal
-      );
 
       if (calc.cappedDays > calc.availableBalance) {
         throw new ValidationError(`Requested encashment days (${calc.cappedDays}) exceed the available balance (${calc.availableBalance} days).`);
@@ -2502,12 +2551,13 @@ export class LeaveController {
         employee_id: empIdNum,
         financial_year_start: calc.financialYearStart,
         leave_type_id: Number(leaveTypeId),
-        leave_encashment_setting_id: Number(leaveEncashmentSettingId),
+        leave_encashment_setting_id: calc.policyId || null,
         encashment_days: calc.cappedDays,
         daily_rate: calc.dailyRate,
         total_amount: calc.totalAmount,
         encashment_date: now,
         status: 'pending',
+        reason: reason || null,
         processed: false,
         created_by: ctx.userId,
         updated_by: ctx.userId,
@@ -2527,14 +2577,14 @@ export class LeaveController {
       await this.ensureLeaveEncashmentSchema(db);
 
       const loggedInEmpId = await this.getEmployeeIdFromCtx(ctx);
-      const isAdminOrHR = await this.checkIsAdminOrHR(ctx);
 
-      let query = db('leave_encashments as le')
+      const query = db('leave_encashments as le')
         .join('leave_types as lt', 'le.leave_type_id', 'lt.id')
         .join('employees as e', 'le.employee_id', 'e.id')
         .leftJoin('leave_encashment_settings as les', 'le.leave_encashment_setting_id', 'les.id')
         .where('le.organization_id', ctx.organizationId)
         .whereNull('le.deleted_at')
+        .where('le.employee_id', loggedInEmpId)
         .select(
           'le.*',
           'lt.leave_name',
@@ -2545,10 +2595,6 @@ export class LeaveController {
           'les.name as policy_name'
         )
         .orderBy('le.created_at', 'desc');
-
-      if (!isAdminOrHR) {
-        query = query.where('le.employee_id', loggedInEmpId);
-      }
 
       const list = await query;
       res.json({ success: true, data: list });

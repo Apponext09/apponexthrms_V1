@@ -1031,18 +1031,25 @@ export const JobReferencePage: React.FC = () => {
 
       {/* 1) Main Choice Modal */}
       {currentModal === 'main' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-6">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Apply for</p>
-                <h2 className="text-sm font-bold text-slate-800 mt-0.5">
+                <span className="inline-block px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider mb-1">
+                  Position Application
+                </span>
+                <h2 className="text-base font-bold text-slate-900 leading-tight">
                   {applyTargetMrf?.position_title || positionTitle || 'Job Position'}
                 </h2>
+                <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                  Choose application method to submit profile
+                </p>
               </div>
               <button
+                type="button"
                 onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 cursor-pointer rounded-xl hover:bg-slate-100"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1050,16 +1057,19 @@ export const JobReferencePage: React.FC = () => {
 
             <div className="flex justify-center">
               <button
+                type="button"
                 onClick={() => setCurrentModal('new_form')}
-                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/30 transition-all cursor-pointer w-full max-w-xs"
+                className="group flex flex-col items-center p-6 rounded-2xl border-2 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/30 transition-all cursor-pointer w-full text-center shadow-xs hover:shadow-md"
               >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <User className="w-5 h-5 text-white" />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-3.5 group-hover:scale-105 transition-transform shadow-md shadow-indigo-500/20">
+                  <User className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="text-xs font-bold text-slate-800 group-hover:text-purple-700 transition-colors">
-                  New Candidate
+                <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                  Candidate Application
                 </h3>
-                <p className="text-[10px] text-slate-400 mt-1">Register fresh profile</p>
+                <p className="text-[11px] text-slate-500 mt-1 font-medium">
+                  Register profile and upload resume
+                </p>
               </button>
             </div>
           </div>
@@ -1068,13 +1078,19 @@ export const JobReferencePage: React.FC = () => {
 
       {/* 2) Existing Candidate Refer Modal */}
       {currentModal === 'existing_refer' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-5">
-              <h2 className="text-sm font-bold text-slate-800">Refer Existing Candidate</h2>
+              <div>
+                <span className="inline-block px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider mb-1">
+                  Referral Program
+                </span>
+                <h2 className="text-base font-bold text-slate-900">Refer Existing Candidate</h2>
+              </div>
               <button
+                type="button"
                 onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 cursor-pointer rounded-xl hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1083,12 +1099,12 @@ export const JobReferencePage: React.FC = () => {
             <form onSubmit={handleReferExisting} className="space-y-5">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700">
-                  Select Candidate <span className="text-red-500">*</span>
+                  Select Candidate <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={selectedCandidate}
                   onChange={(e) => setSelectedCandidate(e.target.value)}
-                  className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 cursor-pointer text-slate-700 transition-all"
+                  className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50 cursor-pointer text-slate-800 transition-all"
                 >
                   <option value="">— Select a candidate with uploaded resume —</option>
                   {candidatesList.length === 0 ? (
@@ -1103,12 +1119,21 @@ export const JobReferencePage: React.FC = () => {
                 </select>
               </div>
 
-              <button
-                type="submit"
-                className="w-full h-10 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer"
-              >
-                Submit Referral
-              </button>
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-md transition-all cursor-pointer"
+                >
+                  Submit Referral
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1116,296 +1141,470 @@ export const JobReferencePage: React.FC = () => {
 
       {/* 3) New Candidate Registration Form Modal */}
       {currentModal === 'new_form' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-4 z-50">
-          <div className="w-full max-w-2xl my-6 bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Candidate Registration</p>
-                <h2 className="text-xs font-bold text-slate-800 mt-0.5">
-                  {applyTargetMrf?.position_title || positionTitle || 'Job Position'}
-                </h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-3xl max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden relative animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex-shrink-0 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-white">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                      Candidate Registration
+                    </span>
+                    {applyTargetMrf?.mr_number && (
+                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                        {applyTargetMrf.mr_number}
+                      </span>
+                    )}
+                  </div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                    {applyTargetMrf?.position_title || positionTitle || 'Job Application Form'}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-1.5 cursor-pointer rounded-xl hover:bg-slate-100 flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
 
-            <form onSubmit={handleSaveRegistration} className="space-y-4">
               {uploadedResumeName && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <FileUp className="w-4 h-4 text-emerald-600" />
-                    Attached Resume: <strong className="font-bold text-emerald-900">{uploadedResumeName}</strong>
+                <div className="mt-3 bg-emerald-50/90 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between">
+                  <span className="flex items-center gap-2 truncate">
+                    <FileUp className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Attached Resume: <strong className="font-bold text-emerald-900">{uploadedResumeName}</strong></span>
                   </span>
-                  <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full font-bold">Ready</span>
+                  <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-2.5 py-0.5 rounded-full font-bold shrink-0 ml-2">
+                    Ready
+                  </span>
                 </div>
               )}
-              <div className="max-h-[420px] overflow-y-auto pr-2 space-y-4 text-left text-xs font-semibold text-slate-700">
+            </div>
 
-                {/* Name */}
-                <div className="flex flex-col gap-1">
-                  <label>Name <span className="text-red-500">*</span></label>
-                  <input
-                    type="text" required
-                    value={candidateForm.name}
-                    onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 font-medium transition-all"
-                  />
-                </div>
+            {/* Form Container */}
+            <form onSubmit={handleSaveRegistration} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              
+              {/* Scrollable Form Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 text-xs">
+                
+                {/* ─── SECTION 1: Personal Information ─── */}
+                <div className="space-y-3.5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">1</div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Personal Details</h3>
+                  </div>
 
-                {/* DOB & Gender */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label>Date of Birth</label>
-                    <input
-                      type="date"
-                      value={candidateForm.dateOfBirth}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label>Gender <span className="text-red-500">*</span></label>
-                    <select
-                      value={candidateForm.gender}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, gender: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 cursor-pointer font-medium transition-all"
-                    >
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Email & Contact */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label>Email</label>
-                    <input
-                      type="email"
-                      value={candidateForm.emailId}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, emailId: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label>Contact Number</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={candidateForm.contactType}
-                        onChange={(e) => setCandidateForm(prev => ({ ...prev, contactType: e.target.value }))}
-                        className="w-24 h-9 border border-slate-200 rounded-xl px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 cursor-pointer font-medium transition-all"
-                      >
-                        <option value="Mobile">Mobile</option>
-                        <option value="Home">Home</option>
-                        <option value="Work">Work</option>
-                      </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                    {/* Full Name */}
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Full Name <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
-                        value={candidateForm.contactNumber}
-                        onChange={(e) => setCandidateForm(prev => ({ ...prev, contactNumber: e.target.value }))}
-                        className="flex-1 h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                        required
+                        value={candidateForm.name}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
+                        placeholder="e.g. John Doe"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    {/* Email ID */}
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Email Address {isFieldRequired('emailId', true) && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="email"
+                        required={isFieldRequired('emailId', true)}
+                        value={candidateForm.emailId}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, emailId: e.target.value }))}
+                        placeholder="candidate@example.com"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    {/* DOB */}
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Date of Birth {isFieldRequired('dateOfBirth') && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="date"
+                        required={isFieldRequired('dateOfBirth')}
+                        value={candidateForm.dateOfBirth}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Gender */}
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Gender <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={candidateForm.gender}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, gender: e.target.value }))}
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all cursor-pointer"
+                      >
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    {/* Marital Status */}
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Marital Status
+                      </label>
+                      <select
+                        value={candidateForm.maritalStatus}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, maritalStatus: e.target.value }))}
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all cursor-pointer"
+                      >
+                        <option value="Unmarried">Unmarried</option>
+                        <option value="Married">Married</option>
+                      </select>
+                    </div>
+
+                    {/* Contact Number with Type */}
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Contact Number
+                      </label>
+                      <div className="grid grid-cols-12 gap-2">
+                        <select
+                          value={candidateForm.contactType}
+                          onChange={(e) => setCandidateForm(prev => ({ ...prev, contactType: e.target.value }))}
+                          className="col-span-4 h-10 px-2.5 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium cursor-pointer transition-all"
+                        >
+                          <option value="Mobile">Mobile</option>
+                          <option value="Home">Home</option>
+                          <option value="Work">Work</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={candidateForm.contactNumber}
+                          onChange={(e) => setCandidateForm(prev => ({ ...prev, contactNumber: e.target.value }))}
+                          placeholder="e.g. +91 9876543210"
+                          className="col-span-8 h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Current Company */}
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Current Company / Organization
+                      </label>
+                      <input
+                        type="text"
+                        value={candidateForm.currentCompany}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, currentCompany: e.target.value }))}
+                        placeholder="Current Employer (if employed)"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Address */}
-                <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-3">
-                  <span className="font-bold text-slate-700 text-xs block pb-2 border-b border-slate-200/60">Address</span>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-slate-500">Address Line 1</label>
-                      <input type="text" value={candidateForm.addressLine1}
-                        onChange={(e) => setCandidateForm(prev => ({ ...prev, addressLine1: e.target.value }))}
-                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-slate-500">Address Line 2</label>
-                      <input type="text" value={candidateForm.addressLine2}
-                        onChange={(e) => setCandidateForm(prev => ({ ...prev, addressLine2: e.target.value }))}
-                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
-                      />
-                    </div>
+                {/* ─── SECTION 2: Address & Geographic Details ─── */}
+                <div className="space-y-3.5 bg-slate-50/60 p-4 rounded-2xl border border-slate-200/80">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">2</div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Address & Location</h3>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-slate-500">Country</label>
-                      <select value={candidateForm.country}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-600 font-semibold">Address Line 1</label>
+                      <input
+                        type="text"
+                        value={candidateForm.addressLine1}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, addressLine1: e.target.value }))}
+                        placeholder="House / Flat No, Street"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-600 font-semibold">Address Line 2</label>
+                      <input
+                        type="text"
+                        value={candidateForm.addressLine2}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, addressLine2: e.target.value }))}
+                        placeholder="Area, Landmark"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3 space-y-1.5">
+                      <label className="block text-slate-600 font-semibold">Country</label>
+                      <select
+                        value={candidateForm.country}
                         onChange={(e) => setCandidateForm(prev => ({ ...prev, country: e.target.value }))}
-                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white cursor-pointer font-medium transition-all"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all cursor-pointer"
                       >
-                        <option value="Choose">Choose</option>
+                        <option value="Choose">Choose Country</option>
                         <option value="India">India</option>
                         <option value="United States">United States</option>
                         <option value="United Kingdom">United Kingdom</option>
                         <option value="Canada">Canada</option>
                         <option value="Australia">Australia</option>
+                        <option value="United Arab Emirates">United Arab Emirates</option>
                       </select>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-slate-500">Zipcode</label>
-                      <input type="text" value={candidateForm.zipcode}
-                        onChange={(e) => setCandidateForm(prev => ({ ...prev, zipcode: e.target.value }))}
-                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-slate-500">State</label>
-                      <input type="text" value={candidateForm.state}
+
+                    <div className="sm:col-span-3 space-y-1.5">
+                      <label className="block text-slate-600 font-semibold">State / Province</label>
+                      <input
+                        type="text"
+                        value={candidateForm.state}
                         onChange={(e) => setCandidateForm(prev => ({ ...prev, state: e.target.value }))}
-                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                        placeholder="State"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
                       />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-slate-500">City</label>
-                      <input type="text" value={candidateForm.city}
+
+                    <div className="sm:col-span-3 space-y-1.5">
+                      <label className="block text-slate-600 font-semibold">City</label>
+                      <input
+                        type="text"
+                        value={candidateForm.city}
                         onChange={(e) => setCandidateForm(prev => ({ ...prev, city: e.target.value }))}
-                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                        placeholder="City"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-3 space-y-1.5">
+                      <label className="block text-slate-600 font-semibold">Zip / Postal Code</label>
+                      <input
+                        type="text"
+                        maxLength={10}
+                        value={candidateForm.zipcode}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, zipcode: e.target.value }))}
+                        placeholder="Pincode"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Marital Status & Company */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label>Marital Status</label>
-                    <select value={candidateForm.maritalStatus}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, maritalStatus: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 cursor-pointer font-medium transition-all"
-                    >
-                      <option value="Unmarried">Unmarried</option>
-                      <option value="Married">Married</option>
-                    </select>
+                {/* ─── SECTION 3: Academic & Professional Background ─── */}
+                <div className="space-y-3.5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">3</div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Experience & Education</h3>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label>Current Company</label>
-                    <input type="text" value={candidateForm.currentCompany}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, currentCompany: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                </div>
 
-                {/* Qualification & University */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label>Qualification</label>
-                    <input type="text" value={candidateForm.qualification}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, qualification: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label>University</label>
-                    <input type="text" value={candidateForm.university}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, university: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Experience */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1">
-                    <label>Relevant Experience</label>
-                    <input type="text" value={candidateForm.relevantExperience}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, relevantExperience: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label>Total Experience</label>
-                    <input type="text" value={candidateForm.totalExperience}
-                      onChange={(e) => setCandidateForm(prev => ({ ...prev, totalExperience: e.target.value }))}
-                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Mandatory File Uploads */}
-                <div className="grid grid-cols-2 gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50/50">
-                  {isFieldEnabled('signature') && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">
-                        Upload Signature {isFieldRequired('signature', true) && <span className="text-red-500">*</span>}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Highest Qualification {isFieldRequired('qualification') && <span className="text-rose-500">*</span>}
                       </label>
-                      <input type="file" ref={signatureInputRef} className="hidden" accept="image/*"
-                        onChange={handleSignatureChange}
+                      <input
+                        type="text"
+                        required={isFieldRequired('qualification')}
+                        value={candidateForm.qualification}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, qualification: e.target.value }))}
+                        placeholder="e.g. B.Tech in Computer Science / MBA"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
                       />
-                      <button type="button" onClick={() => signatureInputRef.current?.click()}
-                        className={`flex items-center gap-1.5 border text-xs font-bold px-3 py-2 rounded-lg transition-colors w-full justify-center cursor-pointer ${
-                          uploadedSignatureName ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                        }`}
-                      >
-                        <Image className="w-4 h-4 text-slate-500" />
-                        {uploadedSignatureName ? 'Signature Attached ✓' : 'Attach Signature'}
-                      </button>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {uploadedSignatureName ? `Selected: ${uploadedSignatureName}` : (isFieldRequired('signature', true) ? 'Required (Max 1 MB)' : 'Optional (Max 1 MB)')}
-                      </span>
                     </div>
-                  )}
 
-                  {isFieldEnabled('resume') && (
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-700">
-                        Upload Resume {isFieldRequired('resume', true) && <span className="text-red-500">*</span>}
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        University / College / Institute
                       </label>
-                      <input type="file" ref={resumeInputRef} className="hidden" accept=".pdf,.doc,.docx"
-                        onChange={handleResumeChange}
+                      <input
+                        type="text"
+                        value={candidateForm.university}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, university: e.target.value }))}
+                        placeholder="e.g. Mumbai University"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
                       />
-                      <button type="button" onClick={() => resumeInputRef.current?.click()}
-                        className={`flex items-center gap-1.5 border text-xs font-bold px-3 py-2 rounded-lg transition-colors w-full justify-center cursor-pointer ${
-                          uploadedResumeName ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
-                        }`}
-                      >
-                        <FileText className="w-4 h-4 text-slate-500" />
-                        {uploadedResumeName ? 'Resume Attached ✓' : 'Attach Resume'}
-                      </button>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {uploadedResumeName ? `Selected: ${uploadedResumeName}` : (isFieldRequired('resume', true) ? 'Required (Max 5 MB)' : 'Optional (Max 5 MB)')}
-                      </span>
                     </div>
-                  )}
+
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Relevant Experience
+                      </label>
+                      <input
+                        type="text"
+                        value={candidateForm.relevantExperience}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, relevantExperience: e.target.value }))}
+                        placeholder="e.g. 3.5 Years in React / Node"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-6 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Total Work Experience
+                      </label>
+                      <input
+                        type="text"
+                        value={candidateForm.totalExperience}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, totalExperience: e.target.value }))}
+                        placeholder="e.g. 5 Years"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-12 space-y-1.5">
+                      <label className="block text-slate-700 font-bold">
+                        Key Skills & Technologies {isFieldRequired('skills') && <span className="text-rose-500">*</span>}
+                      </label>
+                      <input
+                        type="text"
+                        required={isFieldRequired('skills')}
+                        value={candidateForm.skills}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, skills: e.target.value }))}
+                        placeholder="e.g. React.js, TypeScript, PostgreSQL, TailwindCSS (comma separated)"
+                        className="w-full h-10 px-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition-all placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Skills */}
-                <div className="flex flex-col gap-1">
-                  <label>Skills</label>
-                  <input type="text" value={candidateForm.skills}
-                    onChange={(e) => setCandidateForm(prev => ({ ...prev, skills: e.target.value }))}
-                    className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
-                  />
+                {/* ─── SECTION 4: Documents & Attachments ─── */}
+                <div className="space-y-3.5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">4</div>
+                    <h3 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">Required Documents</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Resume Upload Card */}
+                    {isFieldEnabled('resume') && (
+                      <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 flex flex-col justify-between space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-indigo-600" />
+                            <span className="font-bold text-slate-800 text-xs">
+                              Candidate Resume {isFieldRequired('resume', true) && <span className="text-rose-500">*</span>}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                            PDF, DOC, DOCX
+                          </span>
+                        </div>
+
+                        <input
+                          type="file"
+                          ref={resumeInputRef}
+                          className="hidden"
+                          accept=".pdf,.doc,.docx"
+                          onChange={handleResumeChange}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => resumeInputRef.current?.click()}
+                          className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
+                            uploadedResumeName
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          <FileUp className="w-4 h-4" />
+                          {uploadedResumeName ? 'Change Resume' : 'Upload Resume File'}
+                        </button>
+
+                        <p className="text-[11px] text-slate-400 truncate font-medium">
+                          {uploadedResumeName ? `✓ ${uploadedResumeName}` : 'Max file size 5 MB'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Signature Upload Card */}
+                    {isFieldEnabled('signature') && (
+                      <div className="p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 flex flex-col justify-between space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Image className="w-4 h-4 text-purple-600" />
+                            <span className="font-bold text-slate-800 text-xs">
+                              Candidate Signature {isFieldRequired('signature', true) && <span className="text-rose-500">*</span>}
+                            </span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-600">
+                            PNG, JPG
+                          </span>
+                        </div>
+
+                        <input
+                          type="file"
+                          ref={signatureInputRef}
+                          className="hidden"
+                          accept="image/*"
+                          onChange={handleSignatureChange}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => signatureInputRef.current?.click()}
+                          className={`w-full h-10 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer border shadow-2xs ${
+                            uploadedSignatureName
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                          }`}
+                        >
+                          <Image className="w-4 h-4" />
+                          {uploadedSignatureName ? 'Change Signature' : 'Upload Signature Image'}
+                        </button>
+
+                        <p className="text-[11px] text-slate-400 truncate font-medium">
+                          {uploadedSignatureName ? `✓ ${uploadedSignatureName}` : 'Max file size 1 MB'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Comments */}
-                <div className="flex flex-col gap-1">
-                  <label>Comments</label>
-                  <textarea rows={3} value={candidateForm.comments}
+                {/* ─── SECTION 5: Additional Comments ─── */}
+                <div className="space-y-1.5">
+                  <label className="block text-slate-700 font-bold">
+                    Additional Comments / Notes
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={candidateForm.comments}
                     onChange={(e) => setCandidateForm(prev => ({ ...prev, comments: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium resize-none transition-all"
+                    placeholder="Provide any additional relevant details, notice period, or notes..."
+                    className="w-full p-3 border border-slate-200 rounded-xl bg-slate-50/70 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium resize-none transition-all placeholder:text-slate-400"
                   />
                 </div>
+
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end">
+              {/* Sticky Footer Action Bar */}
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
                 <button
                   type="submit"
                   style={{ backgroundColor: portalSettings?.primaryColor || '#4f46e5' }}
-                  className="px-8 py-2.5 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer hover:opacity-90"
+                  className="inline-flex items-center gap-2 px-8 py-2.5 text-white text-xs font-bold rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer"
                 >
                   Submit Application
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+
             </form>
           </div>
         </div>

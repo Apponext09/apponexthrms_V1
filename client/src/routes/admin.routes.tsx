@@ -22,8 +22,7 @@ const AdminRegularizationLogsPage = lazy(() => import('../features/attendance/pa
 const CeoFacePunchPage = lazy(() => import('../features/attendance/pages/CeoFacePunchPage'));
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
-const MyLeavesPage = lazy(() => import('../features/leaves/pages/MyLeavesPage').then(m => ({ default: m.MyLeavesPage })));
-const ApplyLeavePage = lazy(() => import('../features/leaves/pages/ApplyLeavePage').then(m => ({ default: m.ApplyLeavePage })));
+const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const LeaveBalancePage = lazy(() => import('../features/leaves/pages/LeaveBalancePage').then(m => ({ default: m.LeaveBalancePage })));
 const LeaveEncashmentPage = lazy(() => import('../features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
@@ -199,10 +198,10 @@ export const adminRoutes = (
     <Route path="/attendance/face-punch" element={<CeoFacePunchPage />} />
 
     {/* Leaves */}
-    <Route path="/leaves" element={<MyLeavesPage />} />
-    <Route path="/leaves/my-leaves" element={<MyLeavesPage />} />
-    <Route path="/leaves/history" element={<MyLeavesPage />} />
-    <Route path="/leaves/apply" element={<ApplyLeavePage />} />
+    <Route path="/leaves" element={<LeavePage />} />
+    <Route path="/leaves/my-leaves" element={<LeavePage />} />
+    <Route path="/leaves/history" element={<LeavePage />} />
+    <Route path="/leaves/apply" element={<LeavePage />} />
     <Route path="/leaves/approvals" element={<ApprovalInboxPage />} />
     <Route path="/leaves/approval" element={<ApprovalInboxPage />} />
     <Route path="/leaves/balance" element={<LeaveBalancePage />} />

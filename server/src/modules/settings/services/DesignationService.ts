@@ -48,16 +48,24 @@ export class DesignationService {
   }
 
   async listDesignations(ctx: TenantContext, options?: any) {
-    return this.designationRepo.list(ctx, options);
+    await this.designationRepo.ensureTable();
+    try {
+      return await this.designationRepo.list(ctx, options);
+    } catch (err) {
+      console.error('[DesignationService.listDesignations] Error:', err);
+      return { data: [], items: [], meta: { total: 0, page: 1, limit: 50, totalPages: 0 } };
+    }
   }
 
   async getDesignation(ctx: TenantContext, id: number | string) {
+    await this.designationRepo.ensureTable();
     const designation = await this.designationRepo.getById(ctx, id);
     if (!designation) throw new NotFoundError('Designation not found');
     return designation;
   }
 
   async createDesignation(ctx: TenantContext, data: DesignationCreate) {
+    await this.designationRepo.ensureTable();
     let code = (data.code && data.code.trim()) ? data.code.trim().toUpperCase() : generateCodeFromName(data.name);
 
     let isUnique = await this.designationRepo.isCodeUnique(ctx, code);

@@ -193,6 +193,46 @@ export class RecruitmentController {
     res.json({ success: true, data: job });
   });
 
+  updateJob = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const body = req.body;
+
+    const payload: any = {};
+    if (body.jobTitle !== undefined || body.job_title !== undefined) payload.job_title = body.jobTitle ?? body.job_title;
+    if (body.jobCode !== undefined || body.job_code !== undefined) payload.job_code = body.jobCode ?? body.job_code;
+    if (body.jobDescription !== undefined || body.job_description !== undefined) payload.job_description = body.jobDescription ?? body.job_description;
+    if (body.departmentId !== undefined || body.department_id !== undefined) payload.department_id = body.departmentId ?? body.department_id;
+    if (body.designationId !== undefined || body.designation_id !== undefined) payload.designation_id = body.designationId ?? body.designation_id;
+    if (body.locationId !== undefined || body.location_id !== undefined) payload.location_id = body.locationId ?? body.location_id;
+    if (body.jobType !== undefined || body.job_type !== undefined) payload.job_type = body.jobType ?? body.job_type;
+    if (body.experienceLevel !== undefined || body.experience_level !== undefined) payload.experience_level = body.experienceLevel ?? body.experience_level;
+    if (body.minExperienceYears !== undefined || body.min_experience_years !== undefined) payload.min_experience_years = body.minExperienceYears ?? body.min_experience_years;
+    if (body.maxExperienceYears !== undefined || body.max_experience_years !== undefined) payload.max_experience_years = body.maxExperienceYears ?? body.max_experience_years;
+    if (body.minSalary !== undefined || body.min_salary !== undefined) payload.min_salary = body.minSalary ?? body.min_salary;
+    if (body.maxSalary !== undefined || body.max_salary !== undefined) payload.max_salary = body.maxSalary ?? body.max_salary;
+    if (body.currency !== undefined) payload.currency = body.currency;
+    if (body.employmentType !== undefined || body.employment_type !== undefined) payload.employment_type = body.employmentType ?? body.employment_type;
+    if (body.noOfPositions !== undefined || body.no_of_positions !== undefined) payload.no_of_positions = body.noOfPositions ?? body.no_of_positions;
+    if (body.expiryDate !== undefined || body.expiry_date !== undefined) payload.expiry_date = body.expiryDate ?? body.expiry_date;
+    if (body.isInternal !== undefined || body.is_internal !== undefined) payload.is_internal = Boolean(body.isInternal ?? body.is_internal);
+    if (body.isPublishedExternal !== undefined || body.is_published_external !== undefined) payload.is_published_external = Boolean(body.isPublishedExternal ?? body.is_published_external);
+    if (body.status !== undefined) payload.status = body.status;
+
+    const job = await this.jobService.updateJob(ctx, parseInt(id, 10), payload);
+
+    if (body.aiSettings) {
+      try {
+        const { jobAiService } = await import('../services/JobAiService');
+        await jobAiService.saveJobAiSettings(ctx, parseInt(id, 10), body.aiSettings);
+      } catch (aiErr) {
+        console.warn('Failed to save AI settings for job:', aiErr);
+      }
+    }
+
+    res.json({ success: true, data: job });
+  });
+
   publishJob = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
@@ -2323,39 +2363,7 @@ export class RecruitmentController {
       console.warn('Error fetching jobs in getReferralPositions:', err);
     }
 
-    // 2. Fetch from mrf_requests table
-    try {
-      const mrfQuery = db('mrf_requests as m')
-        .leftJoin('departments as d', 'm.department_id', 'd.id')
-        .leftJoin('designations as des', 'm.grade_id', 'des.id')
-        .whereNull('m.deleted_at')
-        .where((q) => {
-          q.whereNull('m.status')
-            .orWhereNotIn('m.status', ['Closed', 'closed', 'Rejected', 'rejected', 'Archived', 'archived']);
-        });
-
-      if (ctx?.organizationId) {
-        mrfQuery.andWhere((q) => {
-          q.where('m.organization_id', ctx.organizationId)
-            .orWhereNull('m.organization_id');
-        });
-      }
-
-      const mrfs = await mrfQuery.select(
-        'm.id', 'm.mr_number', 'm.position_title', 'd.name as dept_name', 'des.name as desig_name'
-      ).orderBy('m.created_at', 'desc');
-
-      for (const m of mrfs) {
-        const title = (m as any).positionTitle || (m as any).position_title || (m as any).desigName || (m as any).desig_name;
-        if (title) {
-          addPos(title, m.id, (m as any).mrNumber || (m as any).mr_number, (m as any).deptName || (m as any).dept_name, 'mrf');
-        }
-      }
-    } catch (err) {
-      console.warn('Error fetching MRFs in getReferralPositions:', err);
-    }
-
-    // 3. Fallback / supplementary: Fetch from designations table
+    // 2. Fetch active designations from designations table
     try {
       const desigQuery = db('designations as des')
         .leftJoin('departments as d', 'des.department_id', 'd.id')
@@ -2380,37 +2388,6 @@ export class RecruitmentController {
       }
     } catch (err) {
       console.warn('Error fetching designations in getReferralPositions:', err);
-    }
-
-    // 4. If still empty, query all designations unconditionally across DB
-    if (positions.length === 0) {
-      try {
-        const allDesigs = await db('designations')
-          .whereNull('deleted_at')
-          .select('id', 'name', 'code')
-          .limit(50);
-        for (const d of allDesigs) {
-          const title = (d as any).name || (d as any).title;
-          if (title) addPos(title, d.id, (d as any).code, undefined, 'designation');
-        }
-      } catch { /* ignore */ }
-    }
-
-    // 5. Ultimate fallback if DB has no designations configured yet
-    if (positions.length === 0) {
-      const defaultPositions = [
-        { title: 'Software Engineer', code: 'SE-01', department: 'IT & Software' },
-        { title: 'Full Stack Developer', code: 'DEV-01', department: 'IT & Software' },
-        { title: 'Frontend Developer (React)', code: 'FE-01', department: 'IT & Software' },
-        { title: 'Backend Developer (Node.js)', code: 'BE-01', department: 'IT & Software' },
-        { title: 'UI/UX Designer', code: 'DES-01', department: 'Design' },
-        { title: 'Sales Executive', code: 'SE-02', department: 'Sales & BD' },
-        { title: 'Business Development Manager', code: 'BDM-01', department: 'Sales & BD' },
-        { title: 'HR Executive', code: 'HR-01', department: 'Human Resources' },
-        { title: 'Accountant', code: 'ACC-01', department: 'Finance & Accounts' },
-        { title: 'Operations Associate', code: 'OPS-01', department: 'Operations' },
-      ];
-      defaultPositions.forEach(p => addPos(p.title, p.code, p.code, p.department, 'default'));
     }
 
     res.json({ success: true, data: positions });

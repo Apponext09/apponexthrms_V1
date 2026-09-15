@@ -16,7 +16,7 @@ export const createJobSchema = z.object({
   minSalary: z.number().optional(),
   maxSalary: z.number().optional(),
   currency: z.string().optional(),
-  employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
+  employmentType: z.string().default('onsite'),
   noOfPositions: z.number().min(1).default(1),
   expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
     const datePart = String(value).slice(0, 10);

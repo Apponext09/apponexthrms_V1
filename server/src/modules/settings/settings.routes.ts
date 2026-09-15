@@ -1056,13 +1056,47 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .limit(pageSize)
     .offset(offset);
 
-  const formatted = departments.map((d: any) => ({
-    ...d,
-    colour: d.colour || d.color || '#00b4d8',
-    color: d.color || d.colour || '#00b4d8',
-    is_active: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
-    isActive: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
-  }));
+  const formatted = departments.map((d: any) => {
+    // Parse company_ids: MySQL TEXT column stores JSON string
+    let companyIds: number[] = [];
+    const rawCompIds = d.company_ids;
+    if (Array.isArray(rawCompIds)) {
+      companyIds = rawCompIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } else if (typeof rawCompIds === 'string' && rawCompIds.trim()) {
+      try {
+        const parsed = JSON.parse(rawCompIds);
+        if (Array.isArray(parsed)) companyIds = parsed.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+      } catch { }
+    } else if (d.company_id) {
+      companyIds = [Number(d.company_id)];
+    }
+
+    // Parse company_emails: MySQL TEXT column stores JSON string
+    let companyEmails: Record<string, string> = {};
+    const rawCompEmails = d.company_emails;
+    if (rawCompEmails && typeof rawCompEmails === 'object' && !Array.isArray(rawCompEmails)) {
+      companyEmails = rawCompEmails;
+    } else if (typeof rawCompEmails === 'string' && rawCompEmails.trim()) {
+      try {
+        const parsed = JSON.parse(rawCompEmails);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) companyEmails = parsed;
+      } catch { }
+    }
+
+    return {
+      ...d,
+      colour: d.colour || d.color || '#00b4d8',
+      color: d.color || d.colour || '#00b4d8',
+      is_active: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
+      isActive: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
+      company_ids: companyIds,
+      companyIds: companyIds,
+      company_emails: companyEmails,
+      companyEmails: companyEmails,
+      email: d.email || d.department_email || '',
+      description: d.description || '',
+    };
+  });
 
   const response: ApiResponse = {
     success: true,
@@ -1195,46 +1229,54 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
   const status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
 
-  // Ensure missing columns on departments table are added if not present yet
-  try {
-    const hasColour = await db.schema.hasColumn('departments', 'colour');
-    const hasColor = await db.schema.hasColumn('departments', 'color');
-    const hasEmail = await db.schema.hasColumn('departments', 'email');
-    const hasIsActive = await db.schema.hasColumn('departments', 'is_active');
-    if (!hasColour || !hasColor || !hasEmail || !hasIsActive) {
-      await db.schema.alterTable('departments', (table) => {
-        if (!hasEmail) table.string('email', 255).nullable();
-        if (!hasColour) table.string('colour', 50).nullable().defaultTo('#00b4d8');
-        if (!hasColor) table.string('color', 50).nullable().defaultTo('#00b4d8');
-        if (!hasIsActive) table.string('is_active', 10).nullable().defaultTo('Yes');
-      });
-    }
-  } catch (e) {
-    // Ignore concurrency/already altered table errors
+  // Ensure each column exists — each in its own try/catch so one failure doesn't block others
+  const colDefs: Array<{ name: string; add: (t: any) => void }> = [
+    { name: 'email',          add: (t) => t.string('email', 255).nullable() },
+    { name: 'colour',         add: (t) => t.string('colour', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'color',          add: (t) => t.string('color', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'is_active',      add: (t) => t.string('is_active', 10).nullable().defaultTo('Yes') },
+    { name: 'company_ids',    add: (t) => t.text('company_ids').nullable() },
+    { name: 'company_emails', add: (t) => t.text('company_emails').nullable() },
+    { name: 'company_id',     add: (t) => t.integer('company_id').nullable() },
+    { name: 'description',    add: (t) => t.text('description').nullable() },
+  ];
+  for (const col of colDefs) {
+    try {
+      const exists = await db.schema.hasColumn('departments', col.name);
+      if (!exists) await db.schema.alterTable('departments', col.add);
+    } catch { /* already added by concurrent request */ }
   }
 
-  // Safe insertion matching existing table columns
-  const cols = await db('departments').columnInfo().catch(() => ({}));
+  // Build insert payload — always include all extended fields
+  const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
+  const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, companyId);
+
+  const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
+  const companyEmailsJson = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
+    ? JSON.stringify(rawCompanyEmails) : null;
+
   const insertPayload: Record<string, any> = {
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
+    email: email || null,
+    colour,
+    color: colour,
+    description: description || null,
+    is_active: isActive,
+    status,
+    company_id: companyIdsArray.length > 0 ? companyIdsArray[0] : (companyId ? Number(companyId) : null),
+    company_ids: companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null,
+    company_emails: companyEmailsJson,
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   };
 
-  if ('description' in cols) insertPayload.description = description;
-  if ('colour' in cols) insertPayload.colour = colour;
-  if ('color' in cols) insertPayload.color = colour;
-  if ('email' in cols) insertPayload.email = email;
-  if ('company_id' in cols) insertPayload.company_id = companyId ? Number(companyId) : null;
-  if ('is_active' in cols) insertPayload.is_active = isActive;
-  if ('status' in cols) insertPayload.status = status;
-
   const [id] = await db('departments').insert(insertPayload);
+
 
   const created = await db('departments').where('id', id).first();
 
@@ -1273,6 +1315,26 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
     return;
   }
 
+  // Parse company_ids
+  let deptCompanyIds: number[] = [];
+  const rawCIds = dept.company_ids;
+  if (Array.isArray(rawCIds)) {
+    deptCompanyIds = rawCIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+  } else if (typeof rawCIds === 'string' && rawCIds.trim()) {
+    try { const p = JSON.parse(rawCIds); if (Array.isArray(p)) deptCompanyIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0); } catch { }
+  } else if (dept.company_id) {
+    deptCompanyIds = [Number(dept.company_id)];
+  }
+
+  // Parse company_emails
+  let deptCompanyEmails: Record<string, string> = {};
+  const rawCEmails = dept.company_emails;
+  if (rawCEmails && typeof rawCEmails === 'object' && !Array.isArray(rawCEmails)) {
+    deptCompanyEmails = rawCEmails;
+  } else if (typeof rawCEmails === 'string' && rawCEmails.trim()) {
+    try { const p = JSON.parse(rawCEmails); if (p && typeof p === 'object' && !Array.isArray(p)) deptCompanyEmails = p; } catch { }
+  }
+
   res.json({
     success: true,
     data: {
@@ -1281,6 +1343,12 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
       color: dept.color || dept.colour || '#00b4d8',
       is_active: dept.is_active || (dept.status === 'inactive' ? 'No' : 'Yes'),
       isActive: dept.is_active || (dept.status === 'inactive' ? 'No' : 'Yes'),
+      company_ids: deptCompanyIds,
+      companyIds: deptCompanyIds,
+      company_emails: deptCompanyEmails,
+      companyEmails: deptCompanyEmails,
+      email: dept.email || '',
+      description: dept.description || '',
     },
   });
 }));
@@ -1315,52 +1383,68 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const name = req.body.name || req.body.departmentName;
   const code = req.body.code || req.body.departmentCode;
-  const email = req.body.email;
+  const email = req.body.email;         // undefined = not sent, null/'' = clear it
   const colour = req.body.colour || req.body.color;
   const description = req.body.description;
   const isActive = req.body.isActive || req.body.is_active;
 
+  // Ensure each column exists individually so one missing col doesn't block others
+  const colDefs: Array<{ name: string; add: (t: any) => void }> = [
+    { name: 'email',          add: (t) => t.string('email', 255).nullable() },
+    { name: 'colour',         add: (t) => t.string('colour', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'color',          add: (t) => t.string('color', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'is_active',      add: (t) => t.string('is_active', 10).nullable().defaultTo('Yes') },
+    { name: 'company_ids',    add: (t) => t.text('company_ids').nullable() },
+    { name: 'company_emails', add: (t) => t.text('company_emails').nullable() },
+    { name: 'company_id',     add: (t) => t.integer('company_id').nullable() },
+    { name: 'description',    add: (t) => t.text('description').nullable() },
+  ];
+  for (const col of colDefs) {
+    try {
+      const exists = await db.schema.hasColumn('departments', col.name);
+      if (!exists) await db.schema.alterTable('departments', col.add);
+    } catch { /* already added by concurrent request */ }
+  }
+
+  // Build update payload — always include all fields that were sent
   const updatePayload: Record<string, any> = {
     updated_at: new Date(),
     updated_by: ctx.userId,
   };
 
-  const cols = await db('departments').columnInfo().catch(() => ({}));
-
   if (name !== undefined) updatePayload.name = name;
   if (code !== undefined) updatePayload.code = code;
-  if (email !== undefined && 'email' in cols) updatePayload.email = email;
+  if (email !== undefined) updatePayload.email = email || null;
   if (colour !== undefined) {
-    if ('colour' in cols) updatePayload.colour = colour;
-    if ('color' in cols) updatePayload.color = colour;
+    updatePayload.colour = colour;
+    updatePayload.color = colour;
   }
-  if (description !== undefined && 'description' in cols) updatePayload.description = description;
+  if (description !== undefined) updatePayload.description = description || null;
   if (isActive !== undefined) {
-    if ('is_active' in cols) updatePayload.is_active = isActive;
-    if ('status' in cols) updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
+    updatePayload.is_active = isActive;
+    updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
   }
 
+  // Company IDs
   const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
-  const rawCompanyId = req.body.companyId !== undefined ? req.body.companyId : req.body.company_id;
-
+  const rawCompanyId  = req.body.companyId  !== undefined ? req.body.companyId  : req.body.company_id;
   if (rawCompanyIds !== undefined || rawCompanyId !== undefined) {
     const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, rawCompanyId);
-    if ('company_ids' in cols) {
-      updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
-    }
-    if ('company_id' in cols) {
-      updatePayload.company_id = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
-    }
+    updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
+    updatePayload.company_id  = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
   }
 
-  const rawCompanyEmails = req.body.companyEmails !== undefined ? req.body.companyEmails : (req.body.company_emails !== undefined ? req.body.company_emails : req.body.defaultEmails);
+  // Company emails
+  const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
   if (rawCompanyEmails !== undefined) {
-    updatePayload.company_emails = rawCompanyEmails && typeof rawCompanyEmails === 'object' ? JSON.stringify(rawCompanyEmails) : null;
+    updatePayload.company_emails = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
+      ? JSON.stringify(rawCompanyEmails) : null;
   }
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
     .update(updatePayload);
+
 
   if (!count) {
     res.status(404).json({ success: false, message: 'Department not found' });
@@ -1371,6 +1455,26 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     .where({ id, organization_id: ctx.organizationId })
     .first();
 
+  // Parse company_ids from updated row
+  let updCompIds: number[] = [];
+  const rawUpCIds = updated?.company_ids;
+  if (Array.isArray(rawUpCIds)) {
+    updCompIds = rawUpCIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+  } else if (typeof rawUpCIds === 'string' && rawUpCIds.trim()) {
+    try { const p = JSON.parse(rawUpCIds); if (Array.isArray(p)) updCompIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0); } catch { }
+  } else if (updated?.company_id) {
+    updCompIds = [Number(updated.company_id)];
+  }
+
+  // Parse company_emails from updated row
+  let updCompEmails: Record<string, string> = {};
+  const rawUpEmails = updated?.company_emails;
+  if (rawUpEmails && typeof rawUpEmails === 'object' && !Array.isArray(rawUpEmails)) {
+    updCompEmails = rawUpEmails;
+  } else if (typeof rawUpEmails === 'string' && rawUpEmails.trim()) {
+    try { const p = JSON.parse(rawUpEmails); if (p && typeof p === 'object' && !Array.isArray(p)) updCompEmails = p; } catch { }
+  }
+
   res.json({
     success: true,
     data: {
@@ -1379,6 +1483,12 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
       color: updated?.color || updated?.colour || colour || '#00b4d8',
       is_active: updated?.is_active || isActive || 'Yes',
       isActive: updated?.is_active || isActive || 'Yes',
+      company_ids: updCompIds,
+      companyIds: updCompIds,
+      company_emails: updCompEmails,
+      companyEmails: updCompEmails,
+      email: updated?.email || '',
+      description: updated?.description || '',
     },
     message: 'Department updated successfully',
   });

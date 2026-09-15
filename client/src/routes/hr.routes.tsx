@@ -33,8 +33,7 @@ const HRAttendanceLocationPage = lazy(() => import('../features/HR/Attendance').
 const ShiftManagementPage = lazy(() => import('../features/attendance/pages/ShiftManagementPage').then(m => ({ default: m.ShiftManagementPage })));
 const BreakLogsPage = lazy(() => import('../features/attendance/pages/BreakLogsPage').then(m => ({ default: m.BreakLogsPage })));
 const ManagerHRRegularizationApprovals = lazy(() => import('../features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
-const MyLeavesPage = lazy(() => import('../features/leaves/pages/MyLeavesPage').then(m => ({ default: m.MyLeavesPage })));
-const ApplyLeavePage = lazy(() => import('../features/leaves/pages/ApplyLeavePage').then(m => ({ default: m.ApplyLeavePage })));
+const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const LeaveBalancePage = lazy(() => import('../features/leaves/pages/LeaveBalancePage').then(m => ({ default: m.LeaveBalancePage })));
 const LeaveEncashmentPage = lazy(() => import('../features/leaves/pages/LeaveEncashmentPage').then(m => ({ default: m.LeaveEncashmentPage })));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
@@ -250,8 +249,9 @@ export const hrRoutes = (
     <Route path="/hr/attendance/break-logs" element={<BreakLogsPage />} />
     <Route path="/hr/attendance-regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
     <Route path="/hr/regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
-    <Route path="/hr/leaves/my-leaves" element={<MyLeavesPage />} />
-    <Route path="/hr/leaves/apply" element={<ApplyLeavePage />} />
+    <Route path="/hr/leaves" element={<LeavePage />} />
+    <Route path="/hr/leaves/my-leaves" element={<LeavePage />} />
+    <Route path="/hr/leaves/apply" element={<LeavePage />} />
     <Route path="/hr/leaves/balance" element={<LeaveBalancePage />} />
     <Route path="/hr/leaves/encashment" element={<LeaveEncashmentPage />} />
     <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />

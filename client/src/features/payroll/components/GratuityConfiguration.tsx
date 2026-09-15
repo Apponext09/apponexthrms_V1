@@ -94,10 +94,10 @@ export const GratuityConfiguration: React.FC = () => {
       const grades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name).filter(Boolean);
       const comps = (compRes.data?.data || compRes.data || []).map((c: any) => c.name || c.company_name).filter(Boolean);
 
-      setMasterDepartments(depts.length > 0 ? depts : ['Engineering', 'Sales', 'HR', 'Finance', 'Operations']);
-      setMasterLocations(locs.length > 0 ? locs : ['Mumbai HQ', 'Airoli', 'Bangalore', 'Delhi', 'Remote']);
-      setMasterGrades(grades.length > 0 ? grades : ['Executive', 'Manager', 'Senior', 'Associate', 'Junior']);
-      setMasterCompanies(comps.length > 0 ? comps : ['Apponext Main Org']);
+      setMasterDepartments(depts);
+      setMasterLocations(locs);
+      setMasterGrades(grades);
+      setMasterCompanies(comps);
     } catch {
       // Fallback
     }
