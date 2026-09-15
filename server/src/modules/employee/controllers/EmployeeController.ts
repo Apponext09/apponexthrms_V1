@@ -112,13 +112,18 @@ export class EmployeeController {
       .where('id', ctx.userId)
       .first();
 
-    if (user?.employee_id) {
+    // Knex response mapping exposes snake_case database fields as camelCase.
+    // Support both forms so a manager/team lead is linked to their own record,
+    // never an arbitrary employee record.
+    const linkedEmployeeId = user?.employeeId || user?.employee_id;
+    if (linkedEmployeeId) {
       const emp = await db('employees')
-        .where('id', user.employee_id)
+        .where('id', linkedEmployeeId)
+        .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
         .first();
       if (emp) {
-        employeeId = user.employee_id;
+        employeeId = Number(linkedEmployeeId);
       }
     }
 
@@ -134,24 +139,48 @@ export class EmployeeController {
     }
 
     if (!employeeId) {
-      const firstEmp = await db('employees')
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
-        .first();
-      if (firstEmp) {
-        employeeId = firstEmp.id;
-      }
-    }
-
-    if (!employeeId) {
       res.status(404).json({ success: false, message: 'Employee profile not linked' });
       return;
     }
 
     const employee = await this.service.getEmployee(ctx, employeeId);
+    const employeeRecord = employee as any;
+    const departmentId = employeeRecord.currentDepartmentId || employeeRecord.current_department_id;
+    const designationId = employeeRecord.currentDesignationId || employeeRecord.current_designation_id;
+    const [department, designation] = await Promise.all([
+      departmentId
+        ? db('departments').where('id', departmentId).where('organization_id', ctx.organizationId).first('name')
+        : null,
+      designationId
+        ? db('designations').where('id', designationId).where('organization_id', ctx.organizationId).first('name')
+        : null,
+    ]);
+    // Employee records do not own authorization roles. Return the authenticated
+    // user's assigned role as part of the self-profile response so a stale
+    // legacy users.role value cannot label a lead or manager as an employee.
+    const assignedRoles = await db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.user_id', ctx.userId)
+      .where(function (this: any) {
+        this.where('user_roles.organization_id', ctx.organizationId).orWhereNull('user_roles.organization_id');
+      })
+      .select('roles.code');
+    const rolePriority: Record<string, number> = {
+      super_admin: 100, organization_admin: 90, ceo: 90, hr_admin: 80, hr: 80,
+      hr_manager: 70, support: 70, finance: 70, finance_manager: 70,
+      department_head: 60, manager: 60, team_lead: 50, consultant: 20,
+      intern: 10, employee: 5,
+    };
+    const roles = Array.from(new Set(assignedRoles.map((row: any) => String(row.code).toLowerCase())));
+    const accessRole = [...roles].sort((a, b) => (rolePriority[b] ?? 0) - (rolePriority[a] ?? 0))[0];
     res.json({
       success: true,
-      data: employee,
+      data: {
+        ...employee,
+        ...(department?.name ? { department: department.name, departmentName: department.name, department_name: department.name } : {}),
+        ...(designation?.name ? { designation: designation.name, designationName: designation.name, designation_name: designation.name } : {}),
+        ...(accessRole ? { accessRole, access_role: accessRole, roles } : {}),
+      },
     });
   });
 
@@ -168,8 +197,9 @@ export class EmployeeController {
       .where('organization_id', ctx.organizationId)
       .first();
 
-    if (user?.employee_id) {
-      employeeId = user.employee_id;
+    const linkedEmployeeId = user?.employeeId || user?.employee_id;
+    if (linkedEmployeeId) {
+      employeeId = Number(linkedEmployeeId);
     } else if (user?.email) {
       const empByEmail = await db('employees')
         .where('email', user.email)

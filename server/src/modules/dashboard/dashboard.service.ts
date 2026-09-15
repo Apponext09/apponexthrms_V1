@@ -43,6 +43,33 @@ export interface AdminDashboardStats {
 }
 
 export class AdminDashboardService {
+  async getMyStats(ctx: TenantContext) {
+    const db = getKnex();
+    const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first();
+    let employeeId = Number(user?.employeeId || user?.employee_id || ctx.employeeId || 0);
+    if (!employeeId && user?.email) employeeId = Number((await db('employees').where({ organization_id: ctx.organizationId, email: user.email }).first())?.id || 0);
+    if (!employeeId) return { attendanceDays: 0, leaveDays: 0, payslipCount: 0, expenseAmount: 0, pendingExpenses: 0, activeTasks: 0, startDate: null, endDate: null };
+    const employee = await db('employees').where({ id: employeeId, organization_id: ctx.organizationId }).first();
+    const monthStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const count = async (table: string, apply: (q: any) => any) => {
+      if (!(await db.schema.hasTable(table))) return 0;
+      const row = await apply(db(table)).count('id as total').first(); return Number(row?.total || 0);
+    };
+    const sum = async (table: string, column: string, apply: (q: any) => any) => {
+      if (!(await db.schema.hasTable(table)) || !(await db.schema.hasColumn(table, column))) return 0;
+      const row = await apply(db(table)).sum(`${column} as total`).first(); return Number(row?.total || 0);
+    };
+    const [attendanceDays, leaveDays, payslipCount, expenseAmount, pendingExpenses, activeTasks] = await Promise.all([
+      count('attendance_records', q => q.where({ organization_id: ctx.organizationId, employee_id: employeeId }).where('check_in_date', '>=', monthStart).whereIn('status', ['present', 'work_from_home'])),
+      count('leave_applications', q => q.where({ organization_id: ctx.organizationId, employee_id: employeeId }).whereIn('status', ['approved', 'submitted', 'pending'])),
+      count('payslips', q => q.where({ organization_id: ctx.organizationId, employee_id: employeeId }).whereNull('deleted_at')),
+      sum('expense_claims', 'amount', q => q.where({ organization_id: ctx.organizationId, employee_id: employeeId }).whereNull('deleted_at')),
+      count('expense_claims', q => q.where({ organization_id: ctx.organizationId, employee_id: employeeId }).whereIn('status', ['submitted', 'pending', 'pending_manager', 'pending_finance']).whereNull('deleted_at')),
+      count('employee_tasks', q => q.where({ organization_id: ctx.organizationId, employee_id: employeeId }).whereIn('status', ['open', 'in_progress', 'active']).whereNull('deleted_at')),
+    ]);
+    return { attendanceDays, leaveDays, payslipCount, expenseAmount, pendingExpenses, activeTasks, startDate: employee?.dateOfJoining || employee?.date_of_joining || null, endDate: employee?.probationEndDate || employee?.probation_end_date || employee?.contract_end_date || null };
+  }
+
   async getAdminStats(ctx: TenantContext): Promise<AdminDashboardStats> {
     const db = getKnex();
     const { organizationId, companyId } = ctx;

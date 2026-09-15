@@ -17,9 +17,9 @@ export function useManager() {
         if (data && typeof data.headcount === 'number') {
           return data;
         }
-        return { headcount: 0, pendingHiringRequests: 0, activePIPs: 0, budgetUtilization: 0 };
+        return { headcount: 0, pendingLeaveRequests: 0, pendingHiringRequests: 0, activePIPs: 0, budgetUtilization: 0 };
       } catch {
-        return { headcount: 0, pendingHiringRequests: 0, activePIPs: 0, budgetUtilization: 0 };
+        return { headcount: 0, pendingLeaveRequests: 0, pendingHiringRequests: 0, activePIPs: 0, budgetUtilization: 0 };
       }
     },
   });
@@ -106,6 +106,7 @@ export function useManager() {
   const employeesData = employeesQuery.data || [];
   const dashboardData = {
     headcount: dashboardQuery.data?.headcount ?? employeesData.length,
+    pendingLeaveRequests: dashboardQuery.data?.pendingLeaveRequests ?? 0,
     pendingHiringRequests: dashboardQuery.data?.pendingHiringRequests ?? 0,
     activePIPs: dashboardQuery.data?.activePIPs ?? 0,
     budgetUtilization: dashboardQuery.data?.budgetUtilization ?? 0

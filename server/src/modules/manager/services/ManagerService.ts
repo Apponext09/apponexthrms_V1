@@ -137,12 +137,58 @@ export class ManagerService {
       headcount = Number((headcountResult as any)?.total || 0);
     }
 
+    const scopedEmployeeIds = await this.getScopedEmployeeIds(ctx, manager);
+    const employeeScope = (query: any, column = 'employee_id') => {
+      if (scopedEmployeeIds.length) query.whereIn(column, scopedEmployeeIds);
+      else query.whereRaw('1 = 0');
+      return query;
+    };
+    const pendingStatuses = ['submitted', 'pending', 'pending_manager', 'pending_hr', 'escalated'];
+    const [leaveRow, hiringRow, pipRow] = await Promise.all([
+      employeeScope(this.db('leave_applications').where('organization_id', ctx.organizationId).whereIn('status', pendingStatuses))
+        .count('id as total').first().catch(() => ({ total: 0 })),
+      this.countDepartmentHiringRequests(ctx, manager.departmentId),
+      this.countActivePips(ctx, scopedEmployeeIds),
+    ]);
+
     return {
       headcount,
-      pendingHiringRequests: 0,
-      activePIPs: 0,
+      pendingLeaveRequests: Number((leaveRow as any)?.total || 0),
+      pendingHiringRequests: Number(hiringRow || 0),
+      activePIPs: Number(pipRow || 0),
       budgetUtilization: 85,
     };
+  }
+
+  private async getScopedEmployeeIds(ctx: TenantContext, manager: any): Promise<number[]> {
+    const members = await this.getDepartmentEmployees(ctx);
+    return members.map((member: any) => Number(member.id)).filter(Boolean);
+  }
+
+  private async countDepartmentHiringRequests(ctx: TenantContext, departmentId: number | null): Promise<number> {
+    for (const table of ['manpower_requisitions', 'resource_requests', 'job_requisitions']) {
+      if (!(await this.db.schema.hasTable(table))) continue;
+      let query: any = this.db(table).where('organization_id', ctx.organizationId);
+      if (departmentId && await this.db.schema.hasColumn(table, 'department_id')) query = query.where('department_id', departmentId);
+      if (await this.db.schema.hasColumn(table, 'status')) query = query.whereNotIn('status', ['closed', 'cancelled', 'rejected']);
+      const row = await query.count('id as total').first();
+      return Number(row?.total || 0);
+    }
+    return 0;
+  }
+
+  private async countActivePips(ctx: TenantContext, employeeIds: number[]): Promise<number> {
+    if (!employeeIds.length) return 0;
+    for (const table of ['performance_improvement_plans', 'pip_records', 'performance_improvement_plan']) {
+      if (!(await this.db.schema.hasTable(table))) continue;
+      const employeeColumn = await this.db.schema.hasColumn(table, 'employee_id') ? 'employee_id' : null;
+      if (!employeeColumn) continue;
+      let query: any = this.db(table).where('organization_id', ctx.organizationId).whereIn(employeeColumn, employeeIds);
+      if (await this.db.schema.hasColumn(table, 'status')) query = query.whereIn('status', ['active', 'in_progress', 'open']);
+      const row = await query.count('id as total').first();
+      return Number(row?.total || 0);
+    }
+    return 0;
   }
 
   /**
@@ -265,24 +311,58 @@ export class ManagerService {
       .where('organization_id', ctx.organizationId)
       .first();
 
-    if (!employee || employee.current_department_id !== manager.departmentId) {
+    const scopedEmployeeIds = await this.getScopedEmployeeIds(ctx, manager);
+    if (!employee || !scopedEmployeeIds.includes(employeeId)) {
       throw new Error('Employee does not belong to your department');
     }
 
-    // Log recommendation in audit logs (and can also insert to specific db tables if present)
-    const logId = await this.db('audit_logs').insert({
-      organization_id: ctx.organizationId,
-      action: 'CREATE',
-      actor_user_id: ctx.userId,
-      entity_type: 'RECOMMENDATION',
-      entity_id: employeeId,
-      created_at: new Date(),
+    const result = await this.db.transaction(async (trx) => {
+      const [proposalId] = await trx('employee_change_proposals').insert({
+        uuid: uuidv4(), organization_id: ctx.organizationId, employee_id: employeeId,
+        proposed_by_user_id: ctx.userId, proposal_type: type, justification: details,
+        status: 'pending_hr_verification', created_at: new Date(), updated_at: new Date(),
+      });
+      const [approvalId] = await trx('workflow_approvals').insert({
+        uuid: uuidv4(), organization_id: ctx.organizationId, module_type: 'Employment Change',
+        reference_id: proposalId, applicant_id: employeeId, approver_role: 'HR',
+        status: 'Pending HR Verification', details: JSON.stringify({ proposalType: type, justification: details, proposedByUserId: ctx.userId }),
+        created_at: new Date(), updated_at: new Date(),
+      });
+      await trx('employee_change_proposals').where('id', proposalId).update({ workflow_approval_id: approvalId });
+      return { proposalId, approvalId };
     });
 
     return {
       success: true,
-      message: `Successfully submitted ${type} recommendation for employee.`,
+      data: result,
+      message: `Successfully submitted ${type} proposal to HR for verification.`,
     };
+  }
+
+  async getHrRecommendationQueue(ctx: TenantContext) {
+    await this.assertHrVerifier(ctx);
+    return this.db('employee_change_proposals as p')
+      .join('employees as e', 'p.employee_id', 'e.id')
+      .join('users as u', 'p.proposed_by_user_id', 'u.id')
+      .where('p.organization_id', ctx.organizationId).where('p.status', 'pending_hr_verification').whereNull('p.deleted_at')
+      .select('p.id', 'p.uuid', 'p.proposal_type as proposalType', 'p.justification', 'p.created_at as createdAt',
+        'e.first_name as employeeFirstName', 'e.last_name as employeeLastName', 'u.first_name as proposerFirstName', 'u.last_name as proposerLastName');
+  }
+
+  async decideHrRecommendation(ctx: TenantContext, proposalId: number, status: 'approved' | 'rejected', comment?: string) {
+    await this.assertHrVerifier(ctx);
+    await this.db.transaction(async (trx) => {
+      const proposal = await trx('employee_change_proposals').where({ id: proposalId, organization_id: ctx.organizationId }).where('status', 'pending_hr_verification').first();
+      if (!proposal) throw new Error('Pending proposal not found');
+      await trx('employee_change_proposals').where('id', proposalId).update({ status: status === 'approved' ? 'hr_verified' : 'hr_rejected', verified_by_user_id: ctx.userId, verification_comment: comment || null, verified_at: new Date(), updated_at: new Date() });
+      await trx('workflow_approvals').where('id', proposal.workflowApprovalId).update({ status: status === 'approved' ? 'Approved' : 'Rejected', updated_at: new Date() });
+    });
+    return { success: true, message: `Proposal ${status === 'approved' ? 'verified by HR' : 'rejected by HR'}.` };
+  }
+
+  private async assertHrVerifier(ctx: TenantContext) {
+    const roles = (ctx.roles || [ctx.role || '']).map(role => role.toLowerCase());
+    if (!roles.some(role => ['hr', 'hr_admin', 'hr_manager', 'organization_admin'].includes(role))) throw new Error('Only HR may verify employment-change proposals');
   }
 
   /**
