@@ -15,8 +15,10 @@ import {
   Plane,
   Activity,
   Shield,
+  ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Button } from '@/components/ui/button';
@@ -96,6 +98,7 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -111,65 +114,30 @@ export function ConsultantSidebar({ open, onOpenChange }: ConsultantSidebarProps
     <div
       className={cn(
         'flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out',
-        open ? 'w-60' : 'w-[60px]'
+        open ? 'w-64' : 'w-[72px]'
       )}
     >
       {/* ── Brand ── */}
       <PortalSidebarBrand open={open} portalLabel="Consultant Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-2 py-4">
+      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {CONSULTANT_NAV.map((section) => (
           <div key={section.label}>
-            <AnimatePresence>
-              {open && (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
-                >
-                  {section.label}
-                </motion.p>
-              )}
-            </AnimatePresence>
-
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.href);
-                return (
-                  <button
-                    key={item.href}
-                    onClick={() => navigate(item.href)}
-                    title={!open ? item.name : undefined}
-                    className={cn(
-                      'group flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all',
-                      active
-                        ? `${C.activeBg} ${C.activeText} shadow-sm`
-                        : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`
-                    )}
-                  >
-                    <Icon
-                      size={16}
-                      className={cn('flex-shrink-0', active ? 'text-white' : C.icon)}
-                    />
-                    <AnimatePresence>
-                      {open && (
-                        <motion.span
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: 'auto' }}
-                          exit={{ opacity: 0, width: 0 }}
-                          className="overflow-hidden whitespace-nowrap"
-                        >
-                          {item.name}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </button>
-                );
-              })}
-            </div>
+            {section.label === 'OVERVIEW' ? (
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.href);
+                  return <button key={item.href} onClick={() => navigate(item.href)} title={!open ? item.name : undefined} className={cn('group flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold transition-all', active ? `${C.activeBg} ${C.activeText} shadow-sm` : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`, !open && 'justify-center px-2')}><Icon size={16} className={cn('flex-shrink-0', active ? 'text-white' : C.icon)} />{open && <span className="truncate">{item.name}</span>}</button>;
+                })}
+              </div>
+            ) : (() => {
+              const SectionIcon = section.items[0].icon;
+              const hasActiveItem = section.items.some((item) => isActive(item.href));
+              const isOpen = openMenu === section.label || hasActiveItem;
+              return <div className="space-y-1"><button type="button" onClick={() => setOpenMenu(isOpen ? null : section.label)} title={!open ? section.label : undefined} className={cn('group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors', hasActiveItem ? 'bg-violet-600/10 text-violet-700 dark:text-violet-400' : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`, !open && 'justify-center px-2')}><span className="flex items-center gap-3"><SectionIcon size={16} className={C.icon} />{open && <span>{section.label}</span>}</span>{open && <ChevronDown size={16} className={cn('transition-transform', isOpen && 'rotate-180')} />}</button>{open && isOpen && <div className="ml-3 space-y-1 border-l border-border pl-3">{section.items.map((item) => { const Icon = item.icon; const active = isActive(item.href); return <button key={item.href} onClick={() => navigate(item.href)} className={cn('flex min-h-9 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors', active ? `${C.activeBg} ${C.activeText} font-bold` : `text-muted-foreground ${C.hoverBg} ${C.hoverText}`)}><Icon size={14} className={active ? 'text-white' : C.icon} /><span className="truncate">{item.name}</span></button>; })}</div>}</div>;
+            })()}
           </div>
         ))}
       </nav>

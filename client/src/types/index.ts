@@ -47,6 +47,7 @@ export interface EmployeePersonalInfo {
   fatherName?: string | null;
   motherName?: string | null;
   spouseName?: string | null;
+  maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | null;
   childrenCount?: number;
   permanentAddress?: string | null;
   currentAddress?: string | null;

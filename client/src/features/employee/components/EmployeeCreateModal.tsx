@@ -205,6 +205,64 @@ function MasterFieldInfo({
   );
 }
 
+/**
+ * Lightweight "I" button — same style as MasterFieldInfo but shows only
+ * a plain description text. No Master Hub link or path block.
+ */
+function SimpleFieldInfo({ id, fieldName, description }: { id: string; fieldName: string; description: string }) {
+  const { activeId, setActiveId } = React.useContext(ActiveInfoContext);
+  const isOpen = activeId === id;
+
+  return (
+    <Popover
+      open={isOpen}
+      onOpenChange={(nextOpen) => setActiveId(nextOpen ? id : null)}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setActiveId(isOpen ? null : id);
+          }}
+          className={cn(
+            "inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black cursor-pointer transition-all focus:outline-none focus:ring-1 focus:ring-primary ml-1 shrink-0",
+            isOpen
+              ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary"
+              : "bg-primary/10 hover:bg-primary/25 text-primary"
+          )}
+          aria-label={fieldName}
+        >
+          i
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        sideOffset={6}
+        className="z-[100] w-72 p-3.5 bg-popover/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl text-popover-foreground"
+      >
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+          <div className="flex items-center gap-1.5 font-extrabold text-xs text-foreground">
+            <span className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-black">
+              i
+            </span>
+            <span>{fieldName}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveId(null)}
+            className="text-muted-foreground hover:text-foreground text-xs p-0.5 rounded-sm cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+        <p className="text-muted-foreground text-[11px] leading-relaxed">{description}</p>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function EmployeeCreateModal({
   open,
   onOpenChange,
@@ -226,6 +284,8 @@ export function EmployeeCreateModal({
     email: '',
     mobile: '',
     gender: '',
+    dateOfBirth: '',
+    maritalStatus: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
     employmentType: '',
     status: 'active',
@@ -241,7 +301,7 @@ export function EmployeeCreateModal({
     salarySlabId: '',
   });
 
-  const [activeTab, setActiveTab] = useState<'basic' | 'personal' | 'professional'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'professional'>('basic');
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -332,11 +392,11 @@ export function EmployeeCreateModal({
   };
 
   // Comprehensive Form Validation: ONLY 'reportingManagerId' and 'salarySlabId' are NOT mandatory
-  const validateForm = (): { isValid: boolean; errors: Record<string, string>; firstTabWithError: 'basic' | 'personal' | 'professional' | null } => {
+  const validateForm = (): { isValid: boolean; errors: Record<string, string>; firstTabWithError: 'basic' | 'professional' | null } => {
     const errors: Record<string, string> = {};
-    let firstTabWithError: 'basic' | 'personal' | 'professional' | null = null;
+    let firstTabWithError: 'basic' | 'professional' | null = null;
 
-    // ── 1. Basic Info Validations (Mandatory) ──
+    // ── 1. Basic & Personal Info Validations (Mandatory) ──
     if (!formData.employeeCode?.trim()) {
       errors.employeeCode = 'Employee code is required';
       if (!firstTabWithError) firstTabWithError = 'basic';
@@ -373,12 +433,12 @@ export function EmployeeCreateModal({
     // ── 2. Personal Info Validations (Mandatory) ──
     if (!formData.gender) {
       errors.gender = 'Gender selection is required';
-      if (!firstTabWithError) firstTabWithError = 'personal';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
     if (!formData.dateOfJoining) {
       errors.dateOfJoining = 'Date of joining is required';
-      if (!firstTabWithError) firstTabWithError = 'personal';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
     const pwd = formData.password ? formData.password.trim() : '';
@@ -386,18 +446,18 @@ export function EmployeeCreateModal({
 
     if (!pwd) {
       errors.password = 'Password is required';
-      if (!firstTabWithError) firstTabWithError = 'personal';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     } else if (pwd.length < 6) {
       errors.password = 'Password must be at least 6 characters long';
-      if (!firstTabWithError) firstTabWithError = 'personal';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
     if (!confirmPwd) {
       errors.confirmPassword = 'Confirm password is required';
-      if (!firstTabWithError) firstTabWithError = 'personal';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     } else if (pwd && confirmPwd && pwd !== confirmPwd) {
       errors.confirmPassword = 'Passwords do not match';
-      if (!firstTabWithError) firstTabWithError = 'personal';
+      if (!firstTabWithError) firstTabWithError = 'basic';
     }
 
     // ── 3. Professional Info Validations (Mandatory except Reports To & Salary Slab) ──
@@ -470,6 +530,8 @@ export function EmployeeCreateModal({
       const response = await createEmployee({
         ...formData,
         gender: formData.gender || undefined,
+        dateOfBirth: formData.dateOfBirth || undefined,
+        maritalStatus: formData.maritalStatus || undefined,
         employmentType: formData.employmentType || undefined,
         mobile: formData.mobile || undefined,
         middleName: (formData as any).middleName || undefined,
@@ -545,6 +607,8 @@ export function EmployeeCreateModal({
         email: '',
         mobile: '',
         gender: '',
+        dateOfBirth: '',
+        maritalStatus: '',
         dateOfJoining: new Date().toISOString().split('T')[0],
         employmentType: '',
         status: '',
@@ -591,8 +655,7 @@ export function EmployeeCreateModal({
   };
 
   // Tab error counts for badges
-  const basicErrorCount = ['employeeCode', 'email', 'firstName', 'lastName', 'mobile'].filter(k => !!fieldErrors[k]).length;
-  const personalErrorCount = ['gender', 'dateOfJoining', 'password', 'confirmPassword'].filter(k => !!fieldErrors[k]).length;
+  const basicErrorCount = ['employeeCode', 'email', 'firstName', 'lastName', 'mobile', 'gender', 'dateOfJoining', 'password', 'confirmPassword'].filter(k => !!fieldErrors[k]).length;
   const professionalErrorCount = ['employmentType', 'departmentId', 'gradeId', 'status', 'jobTitle', 'locationId', 'accessRole'].filter(k => !!fieldErrors[k]).length;
 
   return (
@@ -668,7 +731,7 @@ export function EmployeeCreateModal({
                 </div>
               )}
 
-              {/* Sub Tabs Navigation with Error Badges */}
+              {/* Tab Navigation with Error Badges */}
               <div className="flex border-b border-border mt-2 gap-1 overflow-x-auto">
                 <button
                   type="button"
@@ -685,24 +748,6 @@ export function EmployeeCreateModal({
                   {basicErrorCount > 0 && (
                     <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-black shadow-xs">
                       {basicErrorCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('personal');
-                    setActiveInfoId(null);
-                  }}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${activeTab === 'personal'
-                      ? 'border-primary text-primary font-extrabold'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  <span>👤</span> Personal Info
-                  {personalErrorCount > 0 && (
-                    <span className="px-1.5 py-0.2 rounded-full bg-red-500 text-white text-[10px] font-black shadow-xs">
-                      {personalErrorCount}
                     </span>
                   )}
                 </button>
@@ -728,7 +773,7 @@ export function EmployeeCreateModal({
 
               <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4 pt-3" noValidate>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-4" style={{ maxHeight: 'calc(90vh - 220px)' }}>
-                  {/* 1. Basic Info Sub Tab */}
+                  {/* 1. Basic Info Sub Tab (includes Personal Info) */}
                   {activeTab === 'basic' && (
                     <div className="grid grid-cols-2 gap-4 pb-2">
                       <div>
@@ -835,12 +880,8 @@ export function EmployeeCreateModal({
                           </p>
                         )}
                       </div>
-                    </div>
-                  )}
+                      {/* ── Personal Info fields (merged from former Personal Info tab) ── */}
 
-                  {/* 2. Personal Info Sub Tab */}
-                  {activeTab === 'personal' && (
-                    <div className="grid grid-cols-2 gap-4 pb-2">
                       <div>
                         <Label htmlFor="gender" className="flex items-center text-xs font-bold text-foreground">
                           Gender <span className="text-red-500 ml-0.5">*</span>
@@ -884,6 +925,37 @@ export function EmployeeCreateModal({
                             <span>{fieldErrors.dateOfJoining}</span>
                           </p>
                         )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="dateOfBirth" className="flex items-center text-xs font-bold text-foreground">
+                          Date of Birth
+                        </Label>
+                        <Input
+                          id="dateOfBirth"
+                          type="date"
+                          value={formData.dateOfBirth}
+                          onChange={(e) => handleFieldChange('dateOfBirth', e.target.value)}
+                          className="mt-1"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="maritalStatus" className="flex items-center text-xs font-bold text-foreground">
+                          Marital Status
+                        </Label>
+                        <select
+                          id="maritalStatus"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer"
+                          value={formData.maritalStatus}
+                          onChange={(e) => handleFieldChange('maritalStatus', e.target.value)}
+                        >
+                          <option value="">-- Select Marital Status --</option>
+                          <option value="single">Single</option>
+                          <option value="married">Married</option>
+                          <option value="divorced">Divorced</option>
+                          <option value="widowed">Widowed</option>
+                        </select>
                       </div>
 
                       <div>
@@ -950,7 +1022,7 @@ export function EmployeeCreateModal({
                     </div>
                   )}
 
-                  {/* 3. Professional Info Sub Tab */}
+                  {/* 2. Professional Info Sub Tab */}
                   {activeTab === 'professional' && (
                     <div className="grid grid-cols-2 gap-4 pb-2">
                       <div>
@@ -1094,7 +1166,8 @@ export function EmployeeCreateModal({
                             category="designation"
                             masterName="Designation"
                             path="Settings → Masters Hub → Designation"
-                            description="Maintain the official designation master list. The employee job title is stored separately and can differ from the designation reference when needed."
+                            description="Maintain the official designation master list. The employee job title is stored separately and can differ from the designation reference when needed.                            
+                            Choose the employee’s job title. Designation is maintained separately in the master list."
                             onRefresh={() => queryClient.invalidateQueries({ queryKey: ['designations'] })}
                           />
                         </Label>
@@ -1120,7 +1193,7 @@ export function EmployeeCreateModal({
                             <span>{fieldErrors.jobTitle}</span>
                           </p>
                         ) : (
-                          <p className="text-xs text-muted-foreground mt-1">Choose the employee’s job title. Designation is maintained separately in the master list.</p>
+                          <p ></p>
                         )}
                       </div>
 
@@ -1175,23 +1248,16 @@ export function EmployeeCreateModal({
                           value={formData.accessRole}
                           onChange={(e) => handleFieldChange('accessRole', e.target.value)}
                         >
-                          <option value="employee">Employee (Standard View)</option>
-                          <option value="team_lead">Team Lead (Team Portal View)</option>
+                          <option value="employee">Employee </option>
+                          <option value="team_lead">Team Lead </option>
                           <option value="department_head">Department Head / Manager</option>
-                          <option value="hr_manager">HR Manager (HR Portal View)</option>
-                          <option value="cto">CTO (Chief Technology Officer)</option>
-                          <option value="cfo">CFO (Chief Financial Officer)</option>
-                          <option value="coo">COO (Chief Operating Officer)</option>
-                          <option value="ceo">CEO (Chief Executive Officer)</option>
-                          <option value="intern">Intern (Intern Portal View)</option>
-                          <option value="consultant">Consultant (Consultant Portal View)</option>
-                          <option value="finance">Finance (Finance Portal View)</option>
+                          <option value="hr_manager">HR Manager </option>
+                          <option value="intern">Intern </option>
+                          <option value="consultant">Consultant </option>
+                          <option value="finance">Finance </option>
 
                         </select>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Controls which portal they log into.{' '}
-                          <span className="font-medium text-foreground">Executives (CFO, COO, CTO, CEO) & Managers are assigned to their respective departments in the chart.</span>
-                        </p>
+                        
 
                         {/* Mapped Policy Preview */}
                         {(() => {
@@ -1273,7 +1339,14 @@ export function EmployeeCreateModal({
 
                       {/* Reporting Manager - NOT MANDATORY */}
                       <div className="col-span-2">
-                        <Label htmlFor="reportingManager">Reports To</Label>
+                        <Label htmlFor="reportingManager" className="flex items-center text-xs font-bold text-foreground">
+                          Reports To
+                          <SimpleFieldInfo
+                            id="reportingManager"
+                            fieldName="Reports To"
+                            description="Select department first to see reporting managers."
+                          />
+                        </Label>
                         {formData.accessRole === 'ceo' ? (
                           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium flex items-center gap-2">
                             👑 <strong>Chief Executive Officer (CEO)</strong> — Organization Root Leader
@@ -1344,9 +1417,7 @@ export function EmployeeCreateModal({
                                 );
                               })()}
                             </select>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {!formData.departmentId ? 'Select department first to see reporting managers.' : 'Optional field: Can be assigned later.'}
-                            </p>
+                            
                           </>
                         )}
                       </div>
@@ -1355,6 +1426,11 @@ export function EmployeeCreateModal({
                       <div className="col-span-2">
                         <Label htmlFor="salarySlabId" className="flex items-center text-xs font-bold text-foreground">
                           Assigned Salary Slab <span className="text-xs text-muted-foreground font-normal ml-1.5">(Optional)</span>
+                          <SimpleFieldInfo
+                            id="salarySlabId"
+                            fieldName="Assigned Salary Slab"
+                            description="Optional: Select the salary slab template. CTC amount and component breakdown can be configured in Employee Profile → Payroll Setting."
+                          />
                         </Label>
                         <select
                           id="salarySlabId"
@@ -1369,9 +1445,7 @@ export function EmployeeCreateModal({
                             </option>
                           ))}
                         </select>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Optional: Select the salary slab template. CTC amount and component breakdown can be configured in Employee Profile &rarr; Payroll Setting.
-                        </p>
+                       
                       </div>
 
   {/* Linked Custom Masters Section */ }

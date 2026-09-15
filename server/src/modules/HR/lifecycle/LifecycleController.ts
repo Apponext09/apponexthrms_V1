@@ -26,8 +26,6 @@ export class LifecycleController {
       if (!isNaN(parsed) && parsed > 0) {
         companyId = parsed;
       }
-    } else if (ctx.companyId) {
-      companyId = ctx.companyId;
     }
 
     const data = await this.lifecycleService.getAllEmployeeLifecycleSummaries(ctx, {
@@ -68,6 +66,13 @@ export class LifecycleController {
       notes,
     } = req.body;
 
+    if (!Number.isInteger(Number(employeeId)) || Number(employeeId) <= 0) {
+      return res.status(400).json({ success: false, message: 'A valid employee is required for transfer.' });
+    }
+    if (!effectiveDate || Number.isNaN(new Date(effectiveDate).getTime())) {
+      return res.status(400).json({ success: false, message: 'A valid transfer effective date is required.' });
+    }
+
     const result = await this.lifecycleService.transferEmployee(ctx, {
       employeeId: Number(employeeId),
       toDepartmentId: toDepartmentId ? Number(toDepartmentId) : undefined,
@@ -87,6 +92,10 @@ export class LifecycleController {
     const ctx = req.ctx!;
     const { employeeId } = req.params;
 
+    if (!Number.isInteger(Number(employeeId)) || Number(employeeId) <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+    }
+
     const result = await this.lifecycleService.saveOnboardingDetails(ctx, {
       employeeId: Number(employeeId),
       ...req.body,
@@ -98,6 +107,10 @@ export class LifecycleController {
   saveOffboardingDetails = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { employeeId } = req.params;
+
+    if (!Number.isInteger(Number(employeeId)) || Number(employeeId) <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid employee ID.' });
+    }
 
     const result = await this.lifecycleService.saveOffboardingDetails(ctx, {
       employeeId: Number(employeeId),

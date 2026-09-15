@@ -10,7 +10,6 @@ const EmployeeProfilePage = lazy(() => import('../features/employee/pages/Employ
 const EmployeeEditPage = lazy(() => import('../features/employee/pages/EmployeeEditPage').then(m => ({ default: m.EmployeeEditPage })));
 const EmployeeLifecyclePage = lazy(() => import('../features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
 const OrgStructurePage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
-const HRDashboardPage = lazy(() => import('../features/HR/Dashboard/HRDashboardPage').then(m => ({ default: m.HRDashboardPage })));
 const PayrollDashboard = lazy(() => import('../features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const PayrollSettingsPage = lazy(() => import('../features/payroll/pages/PayrollSettingsPage').then(m => ({ default: m.PayrollSettingsPage })));
 const PayrollProcessing = lazy(() => import('../features/payroll/pages/PayrollProcessing').then(m => ({ default: m.PayrollProcessing })));
@@ -153,7 +152,9 @@ export const hrRoutes = (
     }
   >
     <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
-    <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+    {/* HR and Admin share one dashboard. Keep this legacy HR URL as an alias
+        so existing bookmarks land on the same admin experience. */}
+    <Route path="/hr/dashboard" element={<Navigate to="/dashboard" replace />} />
     <Route path="/hr/profile" element={<EmployeeProfilePage />} />
     <Route path="/hr/my-profile" element={<EmployeeProfilePage />} />
 

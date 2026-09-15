@@ -27,6 +27,34 @@ export class EmployeeDocumentService {
     issueDate?: string;
     expiryDate?: string;
   }): Promise<EmployeeDocument> {
+    const existingDocument = await this.documentRepo.getByTypeAndEmployee(
+      ctx,
+      input.employeeId,
+      input.documentType,
+    );
+
+    if (existingDocument) {
+      const document = await this.documentRepo.update(ctx, existingDocument.id, {
+        file_url: input.fileUrl,
+        file_size: input.fileSize || null,
+        file_type: input.fileType || null,
+        document_number: input.documentNumber || null,
+        issue_date: input.issueDate || null,
+        expiry_date: input.expiryDate || null,
+        verification_status: 'pending',
+        updated_by: ctx.userId,
+      } as any);
+
+      await this.auditService.log(ctx, {
+        action: 'UPDATE',
+        entityType: 'DOCUMENT',
+        entityId: existingDocument.id,
+        afterState: { documentType: input.documentType, fileName: input.fileName },
+      });
+
+      return document;
+    }
+
     const document = await this.documentRepo.create(ctx, {
       uuid: uuidv4(),
       employee_id: input.employeeId,

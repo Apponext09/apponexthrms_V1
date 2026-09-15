@@ -40,34 +40,49 @@ const C = {
 
 const MANAGER_NAV = [
   {
-    label: 'OVERVIEW',
+    label: '',
     items: [
-      { name: 'My Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
-      { name: 'My Leaves', href: '/manager/leaves', icon: Palmtree },
+      { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
+      { name: 'My Department', href: '/manager/team', icon: Building2 },
     ],
   },
   {
-    label: 'MY DEPARTMENT',
+    label: 'LEAVES',
     items: [
-      { name: 'My Team', href: '/manager/team', icon: Users },
+      {
+        name: 'Leaves',
+        href: '/manager/leaves',
+        icon: Palmtree,
+        subItems: [
+          { name: 'My Leaves', href: '/manager/leaves', icon: Palmtree },
+          { name: 'Leave Approvals', href: '/manager/leaves/approvals', icon: CheckCircle2 },
+          { name: 'Approvals Dashboard', href: '/manager/leaves/approvals-dashboard', icon: LayoutDashboard },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'ATTENDANCE',
+    items: [
       {
         name: 'Attendance',
         href: '/manager/attendance',
         icon: Clock,
         subItems: [
-          { name: 'Attendance Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
-          { name: 'Live Employee Tracking', href: '/manager/live-tracking', icon: Navigation },
+          { name: 'Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
           { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
+          { name: 'My Attendance Log', href: '/manager/attendance-log', icon: Clock },
+          { name: 'My Shift', href: '/manager/my-shift', icon: Calendar },
+          { name: 'Attendance Correction', href: '/manager/attendance-correction', icon: CheckCircle2 },
         ],
       },
-      { name: 'Leave Approvals', href: '/manager/leaves/approvals', icon: CheckCircle2 },
     ],
   },
   {
-    label: 'MY PAYROLL',
+    label: 'PAYROLL',
     items: [
       {
-        name: 'My Payroll',
+        name: 'Payroll',
         href: '/manager/payroll',
         icon: CreditCard,
         subItems: [
@@ -78,42 +93,77 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'LOAN MANAGEMENT',
+    label: 'LOAN MGMT',
     items: [
-      { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
+      {
+        name: 'Loan Mgmt',
+        href: '/manager/loans',
+        icon: Percent,
+        subItems: [
+          { name: 'Loan Request', href: '/manager/loans', icon: Percent },
+        ],
+      },
     ],
   },
   {
-    label: 'EXPENSE MANAGEMENT',
+    label: 'EXPENSE',
     items: [
-      { name: 'Expense Approvals', href: '/manager/expenses/approvals', icon: CheckCircle2 },
-      { name: 'My Expenses', href: '/manager/expenses/my-expenses', icon: FileText },
-      { name: 'Travel Requests', href: '/manager/expenses/travel-requests', icon: Clock },
-      { name: 'Travel Advances', href: '/manager/expenses/travel-advances', icon: Percent },
-      { name: 'Mileage Claims', href: '/manager/expenses/mileage-claims', icon: Navigation },
+      {
+        name: 'Expense',
+        href: '/manager/expenses/approvals',
+        icon: FileText,
+        subItems: [
+          { name: 'Approvals', href: '/manager/expenses/approvals', icon: CheckCircle2 },
+          { name: 'My Expenses', href: '/manager/expenses/my-expenses', icon: FileText },
+          { name: 'Travel Requests', href: '/manager/expenses/travel-requests', icon: Clock },
+          { name: 'Travel Advances', href: '/manager/expenses/travel-advances', icon: Percent },
+          { name: 'Mileage Claims', href: '/manager/expenses/mileage-claims', icon: Navigation },
+        ],
+      },
     ],
   },
   {
     label: 'PERFORMANCE',
     items: [
-      { name: 'Performance', href: '/manager/performance', icon: BarChart3 },
-      { name: 'Reviews', href: '/manager/performance/reviews', icon: Award },
-      { name: 'Goals', href: '/manager/performance/goals', icon: CheckCircle2 },
+      {
+        name: 'Performance',
+        href: '/manager/performance',
+        icon: BarChart3,
+        subItems: [
+          { name: 'Dashboard', href: '/manager/performance', icon: BarChart3 },
+          { name: 'Reviews', href: '/manager/performance/reviews', icon: Award },
+          { name: 'Goals', href: '/manager/performance/goals', icon: CheckCircle2 },
+        ],
+      },
     ],
   },
   {
-    label: 'HIRING',
+    label: 'RECRUITMENT',
     items: [
-      { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
-      { name: 'IJP Approvals', href: '/manager/ijp-approvals', icon: UserCheck },
-      { name: 'Interview Schedule', href: '/manager/interview-schedule', icon: Calendar },
+      {
+        name: 'Recruitment',
+        href: '/manager/mrf-request',
+        icon: Users,
+        subItems: [
+          { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
+          { name: 'IJP Approvals', href: '/manager/ijp-approvals', icon: UserCheck },
+          { name: 'Interview Schedule', href: '/manager/interview-schedule', icon: Calendar },
+        ],
+      },
     ],
   },
   {
     label: 'APPROVALS & GOVERNANCE',
     items: [
-      { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
-      { name: 'Company Policies', href: '/manager/policies', icon: Shield },
+      {
+        name: 'Approvals & Governance',
+        href: '/manager/approvals',
+        icon: Shield,
+        subItems: [
+          { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
+          { name: 'Company Policies', href: '/manager/policies', icon: Shield },
+        ],
+      },
     ],
   },
 ];
@@ -141,8 +191,8 @@ function isItemActive(href: string, pathname: string, allHrefs: string[]): boole
 interface ManagerSidebarNavContentProps {
   sidebarOpen: boolean;
   setMobileOpen: (open: boolean) => void;
-  payrollOpen: boolean;
-  setPayrollOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  openMenu: string | null;
+  setOpenMenu: React.Dispatch<React.SetStateAction<string | null>>;
   pathname: string;
   user: any;
   roleInfo: any;
@@ -154,8 +204,8 @@ interface ManagerSidebarNavContentProps {
 function ManagerSidebarNavContent({
   sidebarOpen,
   setMobileOpen,
-  payrollOpen,
-  setPayrollOpen,
+  openMenu,
+  setOpenMenu,
   pathname,
   user,
   roleInfo,
@@ -169,11 +219,11 @@ function ManagerSidebarNavContent({
       <PortalSidebarBrand open={sidebarOpen} portalLabel="Manager Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
+      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {MANAGER_NAV.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
-              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
+              {sidebarOpen && section.label && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
@@ -192,13 +242,13 @@ function ManagerSidebarNavContent({
                   const isSubActive = item.subItems.some((sub: any) =>
                     isItemActive(sub.href, pathname, ALL_MANAGER_HREFS)
                   );
-                  const isOpen = payrollOpen || isSubActive;
+                  const isOpen = openMenu === item.href || isSubActive;
 
                   return (
                     <div key={item.href} className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => setPayrollOpen(!payrollOpen)}
+                        onClick={() => setOpenMenu(isOpen ? null : item.href)}
                         className={cn(
                           'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
                           isSubActive
@@ -355,7 +405,7 @@ export function ManagerLayout() {
   const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [payrollOpen, setPayrollOpen] = useState(true);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
@@ -376,8 +426,8 @@ export function ManagerLayout() {
     <ManagerSidebarNavContent
       sidebarOpen={sidebarOpen}
       setMobileOpen={setMobileOpen}
-      payrollOpen={payrollOpen}
-      setPayrollOpen={setPayrollOpen}
+      openMenu={openMenu}
+      setOpenMenu={setOpenMenu}
       pathname={location.pathname}
       user={user}
       roleInfo={roleInfo}

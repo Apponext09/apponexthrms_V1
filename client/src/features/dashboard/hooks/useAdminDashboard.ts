@@ -49,7 +49,11 @@ export function useAdminDashboard() {
   return useQuery<AdminDashboardData>({
     queryKey: ['admin-dashboard-stats', selectedCompanyId],
     queryFn: async () => {
-      const response = await apiClient.get('/dashboard/admin/stats');
+      // Send the current React state explicitly. This avoids relying solely on the
+      // persisted-store interceptor during an immediate company switch.
+      const response = await apiClient.get('/dashboard/admin/stats', {
+        headers: selectedCompanyId ? { 'X-Company-Id': String(selectedCompanyId) } : undefined,
+      });
       return response.data?.data;
     },
     staleTime: 1000 * 30, // 30 seconds

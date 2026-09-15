@@ -80,6 +80,7 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
     documentNumber: '',
     expiryDate: '',
   });
+  const selectedDocument = documents.find((doc) => doc.documentType === form.documentType);
 
   // Check if employee has accepted document policy in DB
   useEffect(() => {
@@ -150,7 +151,9 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
         expiryDate: form.expiryDate || undefined,
       });
 
-      showToast.success('Document uploaded successfully. Awaiting HR & Admin approval.');
+      showToast.success(selectedDocument
+        ? 'Document updated successfully. Awaiting HR & Admin approval.'
+        : 'Document uploaded successfully. Awaiting HR & Admin approval.');
       setOpen(false);
       setSelectedFile(null);
       setForm({ documentType: 'resume', documentNumber: '', expiryDate: '' });
@@ -191,9 +194,9 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
   };
 
   return (
-    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
-      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
-        <div>
+    <Card className="min-w-0 border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-col gap-3 pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <CardTitle className="text-sm font-bold flex items-center gap-2">
             <FileCheck2 className="w-4 h-4 text-primary" />
             Documents &amp; Certificates
@@ -207,7 +210,7 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
         {/* Upload button is available to BOTH employees and HR/Admin */}
         <Button
           size="sm"
-          className="h-8 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg cursor-pointer"
+          className="h-8 w-full shrink-0 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg cursor-pointer sm:w-auto"
           onClick={() => setOpen(true)}
         >
           <Upload className="w-3.5 h-3.5" />
@@ -231,15 +234,15 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
             No documents uploaded yet. Click <strong>Upload Document</strong> to submit files.
           </div>
         ) : (
-          <div className="space-y-2.5">
+            <div className="space-y-2.5">
             {documents.map((doc) => {
               const status = doc.verificationStatus || 'pending';
               return (
                 <div
                   key={doc.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 border border-border/70 rounded-xl bg-card text-xs hover:border-border transition-colors gap-3"
+                  className="flex flex-col justify-between gap-3 p-3.5 border border-border/70 rounded-xl bg-card text-xs hover:border-border transition-colors sm:flex-row sm:items-center"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
                       <FileText className="w-5 h-5" />
                     </div>
@@ -253,8 +256,8 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    <Badge variant="outline" className={`text-[10px] font-bold py-0.5 px-2.5 capitalize flex items-center gap-1 ${STATUS_STYLES[status]}`}>
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+                    <Badge variant="outline" className={`text-[10px] font-bold py-0.5 px-2.5 capitalize flex items-center gap-1 whitespace-nowrap ${STATUS_STYLES[status]}`}>
                       {status === 'pending' && <Clock className="w-3 h-3 text-amber-600" />}
                       {status === 'verified' && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
                       {status === 'rejected' && <XCircle className="w-3 h-3 text-rose-600" />}
@@ -265,7 +268,7 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-7 text-xs px-2.5 gap-1.5 rounded-lg cursor-pointer font-semibold"
+                        className="h-7 flex-1 text-xs px-2.5 gap-1.5 rounded-lg cursor-pointer font-semibold sm:flex-none"
                         onClick={() => setPreviewDoc(doc)}
                         title="View / Preview Document"
                       >
@@ -275,11 +278,11 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
 
                     {/* Verification / Approval — strictly HR & Admin ONLY (!readOnly) */}
                     {!readOnly && status === 'pending' && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-1 items-center gap-1 sm:flex-none">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 text-xs px-2.5 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 rounded-lg font-semibold cursor-pointer"
+                          className="h-7 flex-1 text-xs px-2.5 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 rounded-lg font-semibold cursor-pointer sm:flex-none"
                           onClick={() => handleVerify(doc.id as number, true)}
                           title="Approve document"
                         >
@@ -288,7 +291,7 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 text-xs px-2.5 text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 rounded-lg font-semibold cursor-pointer"
+                          className="h-7 flex-1 text-xs px-2.5 text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 rounded-lg font-semibold cursor-pointer sm:flex-none"
                           onClick={() => handleVerify(doc.id as number, false)}
                           title="Reject document"
                         >
@@ -319,13 +322,15 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
 
       {/* Upload Dialog — available for both employees & admin */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-lg max-h-[90vh] overflow-y-auto sm:w-full">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
-              <Upload className="w-5 h-5 text-primary" /> Upload Document
+              <Upload className="w-5 h-5 text-primary" /> {selectedDocument ? 'Update Document' : 'Upload Document'}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Select and upload a document file for HR &amp; Admin verification.
+              {selectedDocument
+                ? 'A document of this type already exists. Choose a replacement file to update it.'
+                : 'Select and upload a document file for HR & Admin verification.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -470,7 +475,7 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
 
       {/* Document Preview Modal */}
       <Dialog open={Boolean(previewDoc)} onOpenChange={() => setPreviewDoc(null)}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-4 sm:p-6">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-3xl max-h-[90vh] flex flex-col p-4 sm:w-full sm:p-6">
           <DialogHeader className="pb-3 border-b border-border/60">
             <DialogTitle className="flex items-center gap-2 text-base font-bold capitalize">
               <Eye className="w-5 h-5 text-primary" />
@@ -519,7 +524,7 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
             )}
           </div>
 
-          <DialogFooter className="flex flex-row justify-between items-center pt-3 border-t border-border/60">
+          <DialogFooter className="flex flex-col-reverse gap-2 pt-3 border-t border-border/60 sm:flex-row sm:justify-between sm:items-center">
             {previewDoc && (
               <Button
                 variant="outline"

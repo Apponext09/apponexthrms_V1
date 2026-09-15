@@ -31,7 +31,7 @@ export interface QuickActionOption {
 export const FIXED_KPIS = [
   { id: 'totalHeadcount', label: 'Total Employee Count', iconName: 'Users', path: '/employees' },
   { id: 'activeDepartments', label: 'Active Departments', iconName: 'Building2', path: '/masters?tab=department' },
-  { id: 'officeLocations', label: 'Office Branches', iconName: 'MapPin', path: '/masters?tab=company' },
+  { id: 'officeLocations', label: 'Office Locations', iconName: 'MapPin', path: '/masters?tab=location' },
   { id: 'monthlyPayrollCost', label: 'Est. Monthly Payroll', iconName: 'Wallet', path: '/payroll' },
 ] as const;
 
@@ -39,7 +39,7 @@ export const FIXED_KPIS = [
 export const ALL_AVAILABLE_KPIS: KPIOption[] = [
   { id: 'openJobs', label: 'Open Job Postings', category: 'Recruitment', iconName: 'Briefcase', defaultEnabled: false, color: 'text-indigo-500' },
   { id: 'pendingApprovals', label: 'Pending Approvals', category: 'Workflow', iconName: 'Clock', defaultEnabled: false, color: 'text-amber-500' },
-  { id: 'newHires', label: 'New Hires', category: 'Core HR', iconName: 'UserPlus', defaultEnabled: false, color: 'text-emerald-500' },
+  { id: 'newHires', label: 'New Hires This Month', category: 'Core HR', iconName: 'UserPlus', defaultEnabled: false, color: 'text-emerald-500' },
   { id: 'onLeaveToday', label: 'On Leave Today', category: 'Leaves', iconName: 'Palmtree', defaultEnabled: false, color: 'text-sky-500' },
   { id: 'reportingOfficers', label: 'Reporting Officer', category: 'Core HR', iconName: 'UserCheck', defaultEnabled: false, color: 'text-violet-500' },
 ];
@@ -56,14 +56,12 @@ export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
 
 export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
   { id: 'add_employee', label: 'Add Employee', path: '/employees', iconName: 'UserPlus', category: 'Core HR' },
-  { id: 'departments', label: 'Departments', path: '/settings/departments', iconName: 'Building2', category: 'Core HR' },
-  { id: 'designations', label: 'Designations', path: '/settings/designations', iconName: 'Briefcase', category: 'Core HR' },
   { id: 'departments', label: 'Departments', path: '/masters?tab=department', iconName: 'Building2', category: 'Core HR' },
-  { id: 'designations', label: 'Designations', path: '/masters?tab=designations', iconName: 'Briefcase', category: 'Core HR' },
+  { id: 'designations', label: 'Designations', path: '/masters?tab=designation', iconName: 'Briefcase', category: 'Core HR' },
   { id: 'payroll', label: 'Payroll Management', path: '/payroll', iconName: 'CreditCard', category: 'Finance' },
   { id: 'policy_governance', label: 'Policy Governance', path: '/policies/manage', iconName: 'ShieldCheck', category: 'Governance' },
   { id: 'mrf_request', label: 'Create MRF Request', path: '/recruitment/mrf-request', iconName: 'FilePlus', category: 'Recruitment' },
-  { id: 'leave_approvals', label: 'Approvals Inbox', path: '/leaves/approvals', iconName: 'CheckCircle', category: 'Leaves' },
+  { id: 'leave_approvals', label: 'Approvals Inbox', path: '/approvals', iconName: 'CheckCircle', category: 'Leaves' },
   { id: 'live_tracking', label: 'Live Tracking', path: '/live-tracking', iconName: 'Navigation', category: 'Attendance' },
   { id: 'branding', label: 'Settings & Branding', path: '/settings/branding', iconName: 'Settings', category: 'Settings' },
   { id: 'assets', label: 'Asset Fleet', path: '/assets/list', iconName: 'Package', category: 'Assets' },

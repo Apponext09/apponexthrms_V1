@@ -7,8 +7,6 @@ import type { Employee } from '@/types';
 
 interface EmployeeDetailsCombinedProps {
   employee: Employee;
-  isEditingBasicInfo: boolean;
-  onEditBasicInfoToggle: (editing: boolean) => void;
   /** Overall unlock status */
   editUnlocked?: boolean;
   /** Section-specific unlock flags */
@@ -22,8 +20,6 @@ interface EmployeeDetailsCombinedProps {
 
 export function EmployeeDetailsCombined({
   employee,
-  isEditingBasicInfo,
-  onEditBasicInfoToggle,
   editUnlocked = false,
   isBasicUnlocked = editUnlocked,
   isPersonalUnlocked = editUnlocked,
@@ -36,8 +32,6 @@ export function EmployeeDetailsCombined({
       {/* 1. Basic Employee Information */}
       <EmployeeBasicInfo
         employee={employee}
-        isEditing={isEditingBasicInfo}
-        onEditToggle={onEditBasicInfoToggle}
         editUnlocked={isBasicUnlocked}
         approvedRequestId={approvedRequestId}
       />

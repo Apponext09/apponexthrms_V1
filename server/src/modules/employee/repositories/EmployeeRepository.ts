@@ -35,6 +35,8 @@ export interface Employee {
   date_of_birth: string | null;
   dateOfBirth?: string | null;
   gender: 'male' | 'female' | 'other' | null;
+  marital_status?: 'single' | 'married' | 'divorced' | 'widowed' | null;
+  maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | null;
   blood_group: string | null;
   bloodGroup?: string | null;
   nationality: string | null;
