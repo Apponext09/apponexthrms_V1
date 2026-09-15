@@ -327,6 +327,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Course Catalog', href: '/lms/catalog', icon: 'BookOpen' },
       { name: 'My Learning Hub', href: '/lms/my-learning', icon: 'PlayCircle' },
       { name: 'My Certificates', href: '/lms/certificates', icon: 'Award' },
+      { name: 'Integration Settings', href: '/lms/settings/integrations', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
     ],
   },
 
@@ -469,6 +470,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/settings/career-customization',
         icon: 'Palette',
         minRoles: ['organization_admin', 'hr', 'hr_manager'],
+      },
+      {
+        name: 'LMS Platform Integrations',
+        href: '/settings/lms-integrations',
+        icon: 'GraduationCap',
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin', 'ceo', 'hr_admin'],
       },
     ],
   },

@@ -43,8 +43,10 @@ import {
   useAdminLmsAssessment,
   useSaveLmsAssessment,
 } from '../api/useLms';
+import { useLmsIntegrationSettings } from '../api/useLms';
 import type { LmsCourse, LmsQuestion, LmsModule } from '../types/lms.types';
 import { toast } from 'sonner';
+import { LmsIntegrationImportModal } from '../components/LmsIntegrationImportModal';
 
 export function CourseManagementPage() {
   const [search, setSearch] = useState('');
@@ -56,6 +58,13 @@ export function CourseManagementPage() {
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<LmsCourse | null>(null);
   const [activeCourseTab, setActiveCourseTab] = useState<'info' | 'curriculum' | 'assessment'>('info');
+
+  // Integration import modal state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // Integration settings — drives visibility of the 'Import from Platform' button
+  const { data: integrationSettings = [] } = useLmsIntegrationSettings();
+  const anyIntegrationEnabled = integrationSettings.some((s) => s.isEnabled);
 
   // Course Form state
   const [courseForm, setCourseForm] = useState({
@@ -405,12 +414,25 @@ export function CourseManagementPage() {
             Create, publish, and manage structured training courses, video lessons, and MCQ tests.
           </p>
         </div>
-        <Button
-          onClick={handleOpenCreateModal}
-          className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm rounded-lg"
-        >
-          <Plus className="w-4 h-4" /> Create New Course
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* 'Import from Udemy' button — only visible when Udemy integration is enabled */}
+          {anyIntegrationEnabled && (
+            <Button
+              variant="outline"
+              onClick={() => setIsImportModalOpen(true)}
+              className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm rounded-lg border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-400 dark:hover:bg-violet-950/40"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Import from Udemy
+            </Button>
+          )}
+          <Button
+            onClick={handleOpenCreateModal}
+            className="h-9 px-4 text-xs font-bold gap-1.5 shadow-sm rounded-lg"
+          >
+            <Plus className="w-4 h-4" /> Create New Course
+          </Button>
+        </div>
       </div>
 
       {/* ── Search & Filter Bar ───────────────────────────────── */}
@@ -1218,6 +1240,12 @@ export function CourseManagementPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Integration Import Modal — rendered outside main Dialog to avoid nesting issues */}
+      <LmsIntegrationImportModal
+        open={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+      />
     </div>
   );
 }

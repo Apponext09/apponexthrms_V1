@@ -101,6 +101,7 @@ const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPa
 const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
 const AssessmentPlayerPage = lazy(() => import('../features/lms/pages/AssessmentPlayerPage').then(m => ({ default: m.AssessmentPlayerPage })));
 const MyCertificatesPage = lazy(() => import('../features/lms/pages/MyCertificatesPage').then(m => ({ default: m.MyCertificatesPage })));
+const LmsIntegrationSettingsPage = lazy(() => import('../features/lms/pages/LmsIntegrationSettingsPage').then(m => ({ default: m.LmsIntegrationSettingsPage })));
 
 // Settings & Masters
 const GeneralSettingsPage = lazy(() => import('../features/settings/pages/GeneralSettingsPage').then(m => ({ default: m.GeneralSettingsPage })));
@@ -330,6 +331,7 @@ export const hrRoutes = (
     <Route path="/hr/lms/my-courses" element={<MyEnrollmentsPage />} />
     <Route path="/hr/lms/assessment/:id" element={<AssessmentPlayerPage />} />
     <Route path="/hr/lms/certificates" element={<MyCertificatesPage />} />
+    <Route path="/hr/lms/settings/integrations" element={<LmsIntegrationSettingsPage />} />
 
     {/* Operations */}
     <Route path="/hr/masters/builder" element={<MasterBuilderPage />} />
@@ -356,6 +358,7 @@ export const hrRoutes = (
     <Route path="/hr/workflow/new" element={<WorkflowBuilderPage />} />
     <Route path="/hr/workflow/:id/edit" element={<WorkflowBuilderPage />} />
     <Route path="/hr/settings/workflows" element={<WorkflowSettingsPage />} />
+    <Route path="/hr/settings/lms-integrations" element={<LmsIntegrationSettingsPage />} />
     <Route path="/hr/settings" element={<SettingsLayout />}>
       <Route index element={<Navigate to="company-profile" replace />} />
       <Route path="general" element={<GeneralSettingsPage />} />
@@ -370,6 +373,7 @@ export const hrRoutes = (
       <Route path="attendance-module" element={<AttendanceModulePage />} />
       <Route path="id-card-designer" element={<IdCardDesignerPage />} />
       <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
+      <Route path="lms-integrations" element={<LmsIntegrationSettingsPage />} />
       <Route path="workflows" element={<WorkflowSettingsPage />} />
       <Route path="modules" element={<ModuleManagementPage />} />
       <Route path="*" element={<Navigate to="company-profile" replace />} />

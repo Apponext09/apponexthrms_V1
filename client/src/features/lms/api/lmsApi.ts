@@ -10,7 +10,11 @@ import type {
   LmsCertificate,
   LmsCompliance,
   LmsAnalytics,
+  LmsIntegrationSetting,
+  LmsSyncResult,
+  LmsPlatform,
 } from '../types/lms.types';
+
 
 export const lmsApi = {
   // Analytics
@@ -211,4 +215,36 @@ export const lmsApi = {
   deleteComplianceRule: async (id: number): Promise<void> => {
     await apiClient.delete(`/lms/compliance/${id}`);
   },
+
+  // ── Integrations ─────────────────────────────────────────────────────────
+
+  /**
+   * Fetch enabled/disabled status for all supported platforms.
+   * Safe to call from any role — credentials are never returned.
+   */
+  getIntegrationSettings: async (): Promise<LmsIntegrationSetting[]> => {
+    const res = await apiClient.get('/lms/integrations/settings');
+    return res.data.data;
+  },
+
+  /**
+   * Admin: toggle a platform on/off and optionally save API credentials.
+   */
+  updateIntegrationSetting: async (
+    platform: LmsPlatform,
+    data: { isEnabled?: boolean; config?: Record<string, string> }
+  ): Promise<LmsIntegrationSetting> => {
+    const res = await apiClient.put(`/lms/integrations/settings/${platform}`, data);
+    return res.data.data;
+  },
+
+  /**
+   * Admin: trigger an on-demand course import from the given platform.
+   * Returns immediately with { imported: 0 } if the platform is disabled.
+   */
+  syncPlatform: async (platform: LmsPlatform): Promise<LmsSyncResult> => {
+    const res = await apiClient.post(`/lms/integrations/sync/${platform}`);
+    return res.data.data;
+  },
 };
+

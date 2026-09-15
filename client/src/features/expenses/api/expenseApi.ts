@@ -238,6 +238,8 @@ export interface ExpenseWorkflowLevel {
 export interface ExpenseWorkflow {
   id: number;
   name: string;
+  targetRole?: string; // 'all' | 'ceo' | 'hr' | 'manager'
+  target_role?: string;
   description?: string;
   minAmount: number;
   maxAmount: number;

@@ -117,6 +117,7 @@ const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPa
 const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
 const AssessmentPlayerPage = lazy(() => import('../features/lms/pages/AssessmentPlayerPage').then(m => ({ default: m.AssessmentPlayerPage })));
 const MyCertificatesPage = lazy(() => import('../features/lms/pages/MyCertificatesPage').then(m => ({ default: m.MyCertificatesPage })));
+const LmsIntegrationSettingsPage = lazy(() => import('../features/lms/pages/LmsIntegrationSettingsPage').then(m => ({ default: m.LmsIntegrationSettingsPage })));
 const GeneralSettingsPage = lazy(() => import('../features/settings/pages/GeneralSettingsPage').then(m => ({ default: m.GeneralSettingsPage })));
 const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
@@ -396,6 +397,7 @@ export const adminRoutes = (
     <Route path="/lms/my-courses" element={<MyEnrollmentsPage />} />
     <Route path="/lms/assessment/:id" element={<AssessmentPlayerPage />} />
     <Route path="/lms/certificates" element={<MyCertificatesPage />} />
+    <Route path="/lms/settings/integrations" element={<LmsIntegrationSettingsPage />} />
 
     {/* Employee Lifecycle */}
     <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
@@ -415,6 +417,7 @@ export const adminRoutes = (
     <Route path="/settings/id-card-designer" element={<IdCardDesignerPage />} />
     <Route path="/settings/id-card-templates" element={<IdCardDesignerPage />} />
     <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
+    <Route path="/settings/lms-integrations" element={<LmsIntegrationSettingsPage />} />
     <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
     <Route path="/settings/modules" element={<ModuleManagementPage />} />
     <Route path="/settings/master-builder" element={<MasterBuilderPage />} />
@@ -436,6 +439,8 @@ export const adminRoutes = (
       <Route path="leave-policies" element={<LeavePoliciesPage />} />
       <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
       <Route path="attendance-module" element={<AttendanceModulePage />} />
+      <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
+      <Route path="lms-integrations" element={<LmsIntegrationSettingsPage />} />
       <Route path="workflows" element={<WorkflowSettingsPage />} />
       <Route path="id-card-designer" element={<IdCardDesignerPage />} />
       <Route path="modules" element={<ModuleManagementPage />} />

@@ -46,6 +46,12 @@ export interface LmsCourse {
   attemptLimit: number;
   attempt_limit?: number;
   status: 'draft' | 'published' | 'archived';
+  // Integration source tracking (additive — default 'manual')
+  source?: 'manual' | 'udemy' | 'coursera' | 'linkedin';
+  externalId?: string | null;
+  external_id?: string | null;
+  externalUrl?: string | null;
+  external_url?: string | null;
   createdBy?: number | null;
   created_by?: number | null;
   updatedBy?: number | null;
@@ -347,4 +353,23 @@ export interface LmsAnalytics {
     employee_name: string;
     course_title: string;
   }>;
+}
+
+// ==========================================
+// LMS Integration Settings (client-safe DTOs)
+// ==========================================
+export type LmsPlatform = 'udemy' | 'coursera' | 'linkedin';
+
+export interface LmsIntegrationSetting {
+  platform: LmsPlatform;
+  isEnabled: boolean;
+  lastSyncedAt: string | null;
+  isConfigured: boolean;
+}
+
+export interface LmsSyncResult {
+  platform: LmsPlatform;
+  imported: number;
+  skipped: number;
+  message: string;
 }

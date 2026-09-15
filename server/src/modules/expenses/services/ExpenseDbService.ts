@@ -302,6 +302,7 @@ export class ExpenseDbService {
           table.bigIncrements('id').primary();
           table.bigInteger('organization_id').unsigned().notNullable();
           table.string('name', 150).notNullable();
+          table.string('target_role', 50).defaultTo('all');
           table.text('description').nullable();
           table.decimal('min_amount', 15, 2).defaultTo(0);
           table.decimal('max_amount', 15, 2).defaultTo(10000000);
@@ -310,6 +311,13 @@ export class ExpenseDbService {
           table.timestamps(true, true);
           table.index(['organization_id']);
         });
+      } else {
+        const hasTargetRole = await db.schema.hasColumn('expense_workflows', 'target_role').catch(() => false);
+        if (!hasTargetRole) {
+          await db.schema.alterTable('expense_workflows', (table: any) => {
+            table.string('target_role', 50).defaultTo('all');
+          }).catch(() => null);
+        }
       }
 
       // 11. Expense Workflow Approval Levels Table

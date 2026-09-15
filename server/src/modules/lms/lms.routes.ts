@@ -12,6 +12,7 @@ import { assessmentController } from './controllers/AssessmentController';
 import { certificateController } from './controllers/CertificateController';
 import { complianceController } from './controllers/ComplianceController';
 import { lmsReportController } from './controllers/LmsReportController';
+import { lmsIntegrationController } from './controllers/LmsIntegrationController';
 
 const router = Router();
 
@@ -74,5 +75,13 @@ router.get('/compliance', asyncHandler((req, res) => complianceController.getCom
 router.post('/compliance', asyncHandler((req, res) => complianceController.createComplianceRule(req, res)));
 router.put('/compliance/:id', asyncHandler((req, res) => complianceController.updateComplianceRule(req, res)));
 router.delete('/compliance/:id', asyncHandler((req, res) => complianceController.deleteComplianceRule(req, res)));
+
+// ── Integrations (Platform toggle + on-demand sync) ────────────────
+// GET  /lms/integrations/settings          → list all platforms + enabled flags (no credentials)
+// PUT  /lms/integrations/settings/:platform → admin: enable/disable + save credentials
+// POST /lms/integrations/sync/:platform     → admin: trigger on-demand import
+router.get('/integrations/settings', asyncHandler((req, res) => lmsIntegrationController.getSettings(req, res)));
+router.put('/integrations/settings/:platform', asyncHandler((req, res) => lmsIntegrationController.updateSetting(req, res)));
+router.post('/integrations/sync/:platform', asyncHandler((req, res) => lmsIntegrationController.syncPlatform(req, res)));
 
 export default router;

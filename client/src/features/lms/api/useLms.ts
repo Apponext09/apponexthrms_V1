@@ -441,3 +441,78 @@ export function useDeleteLmsCompliance() {
     },
   });
 }
+
+// ── Integration Hooks ─────────────────────────────────────────────────────
+
+/**
+ * Fetches the enabled/disabled status for all supported LMS platforms.
+ * Used by CourseManagementPage to conditionally show "Import from Platform" button,
+ * and by LmsIntegrationSettingsPage to render the toggle UI.
+ */
+export function useLmsIntegrationSettings() {
+  return useQuery({
+    queryKey: ['lms', 'integration-settings'],
+    queryFn: () => lmsApi.getIntegrationSettings(),
+    staleTime: 0, // always fetch fresh — toggles must reflect instantly
+  });
+}
+
+/**
+ * Admin mutation: toggle a platform on/off and save credentials.
+ */
+export function useUpdateLmsIntegrationSetting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      platform,
+      data,
+    }: {
+      platform: import('../types/lms.types').LmsPlatform;
+      data: { isEnabled?: boolean; config?: Record<string, string> };
+    }) => lmsApi.updateIntegrationSetting(platform, data),
+    onSuccess: (updatedSetting, variables) => {
+      // Immediately update the cache with the server-returned value
+      queryClient.setQueryData(
+        ['lms', 'integration-settings'],
+        (old: import('../types/lms.types').LmsIntegrationSetting[] | undefined) => {
+          if (!old) return [updatedSetting];
+          const exists = old.some((s) => s.platform === updatedSetting.platform);
+          if (exists) {
+            return old.map((s) =>
+              s.platform === updatedSetting.platform ? updatedSetting : s
+            );
+          }
+          return [...old, updatedSetting];
+        }
+      );
+      // Then kick off a background refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['lms', 'integration-settings'] });
+      const label = variables.platform.charAt(0).toUpperCase() + variables.platform.slice(1);
+      toast.success(`${label} integration settings saved`);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Failed to update integration settings');
+    },
+  });
+}
+
+/**
+ * Admin mutation: trigger an on-demand course import from a platform.
+ * Shows a descriptive toast with the sync result message.
+ */
+export function useSyncLmsPlatform() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (platform: import('../types/lms.types').LmsPlatform) =>
+      lmsApi.syncPlatform(platform),
+    onSuccess: (result) => {
+      // Invalidate courses so newly imported courses appear immediately
+      queryClient.invalidateQueries({ queryKey: ['lms', 'courses'] });
+      queryClient.invalidateQueries({ queryKey: ['lms', 'integration-settings'] });
+      toast.success(result.message);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Sync failed. Please try again.');
+    },
+  });
+}

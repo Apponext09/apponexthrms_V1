@@ -79,6 +79,12 @@ export interface LmsCourse {
   attempt_limit: number;
   attemptLimit?: number;
   status: 'draft' | 'published' | 'archived';
+  // Integration source tracking (additive — default 'manual')
+  source?: 'manual' | 'udemy' | 'coursera' | 'linkedin';
+  external_id?: string | null;
+  externalId?: string | null;
+  external_url?: string | null;
+  externalUrl?: string | null;
   created_by?: number | null;
   updated_by?: number | null;
   created_at: string;
@@ -407,4 +413,23 @@ export interface LmsCompliance {
   reminderSchedule?: number[] | any;
   created_at: string;
   updated_at: string;
+}
+
+// ==========================================
+// LMS Integration Settings
+// ==========================================
+export type LmsPlatform = 'udemy'; // extend: | 'coursera' | 'linkedin'
+
+export interface LmsIntegrationSetting {
+  id?: number;
+  organization_id?: number;
+  company_id?: number | null;
+  platform: LmsPlatform;
+  is_enabled: boolean;
+  isEnabled?: boolean;
+  // config_json intentionally NOT exposed in this type — never serialise credentials to client
+  last_synced_at?: string | null;
+  lastSyncedAt?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
