@@ -56,6 +56,8 @@ export const ALL_AVAILABLE_REPORTS: ReportOption[] = [
 
 export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
   { id: 'add_employee', label: 'Add Employee', path: '/employees', iconName: 'UserPlus', category: 'Core HR' },
+  { id: 'departments', label: 'Departments', path: '/settings/departments', iconName: 'Building2', category: 'Core HR' },
+  { id: 'designations', label: 'Designations', path: '/settings/designations', iconName: 'Briefcase', category: 'Core HR' },
   { id: 'departments', label: 'Departments', path: '/masters?tab=department', iconName: 'Building2', category: 'Core HR' },
   { id: 'designations', label: 'Designations', path: '/masters?tab=designations', iconName: 'Briefcase', category: 'Core HR' },
   { id: 'payroll', label: 'Payroll Management', path: '/payroll', iconName: 'CreditCard', category: 'Finance' },
@@ -63,8 +65,8 @@ export const ALL_AVAILABLE_QUICK_ACTIONS: QuickActionOption[] = [
   { id: 'mrf_request', label: 'Create MRF Request', path: '/recruitment/mrf-request', iconName: 'FilePlus', category: 'Recruitment' },
   { id: 'leave_approvals', label: 'Approvals Inbox', path: '/leaves/approvals', iconName: 'CheckCircle', category: 'Leaves' },
   { id: 'live_tracking', label: 'Live Tracking', path: '/live-tracking', iconName: 'Navigation', category: 'Attendance' },
-  //{ id: 'branding', label: 'Settings & Branding', path: '/settings/branding', iconName: 'Settings', category: 'Settings' },
-  //{ id: 'assets', label: 'Asset Fleet', path: '/assets/list', iconName: 'Package', category: 'Assets' },
+  { id: 'branding', label: 'Settings & Branding', path: '/settings/branding', iconName: 'Settings', category: 'Settings' },
+  { id: 'assets', label: 'Asset Fleet', path: '/assets/list', iconName: 'Package', category: 'Assets' },
 ];
 
 export interface DashboardSectionsConfig {

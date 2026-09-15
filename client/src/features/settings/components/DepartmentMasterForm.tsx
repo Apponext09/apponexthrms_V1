@@ -63,12 +63,12 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
 
   const handleSelectForEdit = (dept: any) => {
     setEditingId(dept.id);
-    setDepartmentName(dept.name || dept.departmentName || '');
-    setDepartmentCode(dept.code || dept.departmentCode || '');
-    setEmail(dept.email || '');
+    setDepartmentName(dept.name || dept.departmentName || dept.department_name || dept.title || '');
+    setDepartmentCode(dept.code || dept.departmentCode || dept.department_code || '');
+    setEmail(dept.email || dept.department_email || dept.departmentEmail || '');
     setColour(dept.colour || dept.color || '#00b4d8');
-    setDescription(dept.description || '');
-    const isInactive = dept.status === 'Inactive' || dept.is_active === 'No' || dept.isActive === 'No';
+    setDescription(dept.description || dept.desc || '');
+    const isInactive = dept.status === 'Inactive' || dept.status === 'inactive' || dept.is_active === 'No' || dept.isActive === 'No';
     setIsActive(isInactive ? 'No' : 'Yes');
 
     let compIds: number[] = [];

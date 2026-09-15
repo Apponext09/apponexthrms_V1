@@ -389,13 +389,16 @@ Hiring Panel & HR Team
     let stages: any[] = [];
     try {
       if (await db.schema.hasTable('pipeline_stages')) {
+        const hasStageOrder = await db.schema.hasColumn('pipeline_stages', 'stage_order');
+        const orderCol = hasStageOrder ? 'stage_order' : 'sequence_order';
+
         stages = await db('pipeline_stages')
           .where(function() {
             this.where('organization_id', ctx.organizationId)
               .orWhereNull('organization_id');
           })
           .whereNull('deleted_at')
-          .orderBy('stage_order', 'asc');
+          .orderBy(orderCol, 'asc');
       }
     } catch (e) {
       console.warn('Failed to query pipeline_stages table:', e);

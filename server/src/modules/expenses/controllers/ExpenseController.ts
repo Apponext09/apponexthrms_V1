@@ -169,7 +169,8 @@ export class ExpenseController {
     try {
       const claimId = this.parseClaimId(req.params.id);
       const { comments, notes, isAbsenteeOverride, delegatedForId } = req.body || {};
-      const claim = await this.expenseService.approveClaimByManager(req.ctx!, claimId, comments || notes, {
+      const claim = await this.expenseService.approveClaimByManager(req.ctx!, claimId, comments || notes, 
+      {
         isAbsenteeOverride: Boolean(isAbsenteeOverride),
         delegatedForId: delegatedForId ? Number(delegatedForId) : undefined
       });

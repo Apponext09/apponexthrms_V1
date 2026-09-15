@@ -105,6 +105,19 @@ const AttendanceReportsPage = lazy(() => import('../features/analytics/pages/Att
 const TimelogReportPage = lazy(() => import('../features/analytics/pages/TimelogReportPage').then(m => ({ default: m.TimelogReportPage })));
 const CeoAttendanceReportPage = lazy(() => import('../features/analytics/pages/CeoAttendanceReportPage').then(m => ({ default: m.CeoAttendanceReportPage })));
 const ReportEnginePage = lazy(() => import('../features/analytics/pages/ReportEnginePage').then(m => ({ default: m.ReportEnginePage })));
+const LmsDashboardPage = lazy(() => import('../features/lms/pages/LmsDashboardPage').then(m => ({ default: m.LmsDashboardPage })));
+const CourseManagementPage = lazy(() => import('../features/lms/pages/CourseManagementPage').then(m => ({ default: m.CourseManagementPage })));
+const CategoryManagerPage = lazy(() => import('../features/lms/pages/CategoryManagerPage').then(m => ({ default: m.CategoryManagerPage })));
+const BatchManagementPage = lazy(() => import('../features/lms/pages/BatchManagementPage').then(m => ({ default: m.BatchManagementPage })));
+const EnrollmentManagerPage = lazy(() => import('../features/lms/pages/EnrollmentManagerPage').then(m => ({ default: m.EnrollmentManagerPage })));
+const ComplianceTrainingPage = lazy(() => import('../features/lms/pages/ComplianceTrainingPage').then(m => ({ default: m.ComplianceTrainingPage })));
+const LmsReportsPage = lazy(() => import('../features/lms/pages/LmsReportsPage').then(m => ({ default: m.LmsReportsPage })));
+const CourseCatalogPage = lazy(() => import('../features/lms/pages/CourseCatalogPage').then(m => ({ default: m.CourseCatalogPage })));
+const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
+const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
+const AssessmentPlayerPage = lazy(() => import('../features/lms/pages/AssessmentPlayerPage').then(m => ({ default: m.AssessmentPlayerPage })));
+const MyCertificatesPage = lazy(() => import('../features/lms/pages/MyCertificatesPage').then(m => ({ default: m.MyCertificatesPage })));
+const LmsIntegrationSettingsPage = lazy(() => import('../features/lms/pages/LmsIntegrationSettingsPage').then(m => ({ default: m.LmsIntegrationSettingsPage })));
 const GeneralSettingsPage = lazy(() => import('../features/settings/pages/GeneralSettingsPage').then(m => ({ default: m.GeneralSettingsPage })));
 const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
@@ -115,11 +128,16 @@ const LeavePoliciesPage = lazy(() => import('../features/settings/pages/LeavePol
 const OrgLeaveSettings = lazy(() => import('../features/settings/pages/OrgLeaveSettings').then(m => ({ default: m.OrgLeaveSettings })));
 const AttendanceModulePage = lazy(() => import('../features/settings/pages/AttendanceModulePage').then(m => ({ default: m.AttendanceModulePage })));
 const MastersHubPage = lazy(() => import('../features/settings/pages/MastersHubPage').then(m => ({ default: m.MastersHubPage })));
+const OperationalMastersHubPage = lazy(() => import('../features/settings/pages/OperationalMastersHubPage').then(m => ({ default: m.OperationalMastersHubPage })));
 const MasterBuilderPage = lazy(() => import('../features/master-builder/pages/MasterBuilderPage').then(m => ({ default: m.MasterBuilderPage })));
 const MasterBuilderDetailPage = lazy(() => import('../features/master-builder/pages/MasterBuilderDetailPage').then(m => ({ default: m.MasterBuilderDetailPage })));
 const IdCardDesignerPage = lazy(() => import('../features/settings/pages/IdCardDesignerPage').then(m => ({ default: m.IdCardDesignerPage })));
 const ModuleManagementPage = lazy(() => import('../features/modules/modules').then(m => ({ default: m.ModuleManagementPage })));
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
+const AppraisalDashboardPage = lazy(() => import('../features/performance/pages/AppraisalDashboardPage').then(m => ({ default: m.AppraisalDashboardPage })));
+const MyAssetsPage = lazy(() => import('../features/asset/pages/MyAssetsPage').then(m => ({ default: m.MyAssetsPage })));
+const AnnouncementManagementPage = lazy(() => import('../features/notifications/pages/AnnouncementManagementPage').then(m => ({ default: m.AnnouncementManagementPage })));
+const AnnouncementFeedPage = lazy(() => import('../features/notifications/pages/AnnouncementFeedPage').then(m => ({ default: m.AnnouncementFeedPage })));
 
 // ── Admin / CEO / HR Shell Routes (/dashboard, /payroll, /recruitment …) ─────
 // Used by: organization_admin, ceo, hr, and shared roles
@@ -197,7 +215,9 @@ export const adminRoutes = (
     {/* Payroll Admin */}
     <Route path="/payroll" element={<PayrollDashboard />} />
     <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
+    <Route path="/payroll/admin-portal" element={<AdminPayrollPortal />} />
     <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
+    <Route path="/admin/payroll-portal" element={<AdminPayrollPortal />} />
 
     {/* Expense Management */}
     <Route path="/expenses" element={<Navigate to="/expenses/dashboard" replace />} />
@@ -315,6 +335,7 @@ export const adminRoutes = (
     <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
     <Route path="/performance/okrs" element={<OKRManagementPage />} />
     <Route path="/performance/review-form" element={<PerformanceReviewPage />} />
+    <Route path="/performance/appraisals" element={<AppraisalDashboardPage />} />
     <Route path="/performance/competencies" element={<CompetencyDashboardPage />} />
     <Route path="/performance/pips" element={<PIPDashboardPage />} />
     <Route path="/performance/succession" element={<SuccessionPlanningPage />} />
@@ -339,12 +360,16 @@ export const adminRoutes = (
     {/* Notifications */}
     <Route path="/notifications" element={<NotificationCenterPage />} />
     <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
+    <Route path="/announcements" element={<AnnouncementFeedPage />} />
+    <Route path="/announcements/manage" element={<AnnouncementManagementPage />} />
+    <Route path="/announcements/feed" element={<AnnouncementFeedPage />} />
 
     {/* HR Operations & Configuration */}
     <Route path="/hr-operations/requests" element={<EmployeeRequestsPage />} />
     <Route path="/requests" element={<EmployeeRequestsPage />} />
     <Route path="/configuration" element={<AdminConfigurationPage />} />
     <Route path="/hr-operations/configuration" element={<AdminConfigurationPage />} />
+    <Route path="/hr-operations/announcements" element={<AnnouncementManagementPage />} />
     <Route path="/settings/configuration" element={<AdminConfigurationPage />} />
     <Route path="/admin/configuration" element={<AdminConfigurationPage />} />
 
@@ -354,6 +379,25 @@ export const adminRoutes = (
     <Route path="/analytics/timelog" element={<TimelogReportPage />} />
     <Route path="/analytics/ceo-attendance" element={<CeoAttendanceReportPage />} />
     <Route path="/analytics/report-engine" element={<ReportEnginePage />} />
+
+    {/* LMS (Learning Management System) */}
+    <Route path="/lms" element={<Navigate to="/lms/dashboard" replace />} />
+    <Route path="/lms/dashboard" element={<LmsDashboardPage />} />
+    <Route path="/lms/courses" element={<CourseManagementPage />} />
+    <Route path="/lms/categories" element={<CategoryManagerPage />} />
+    <Route path="/lms/batches" element={<BatchManagementPage />} />
+    <Route path="/lms/enrollments" element={<EnrollmentManagerPage />} />
+    <Route path="/lms/compliance" element={<ComplianceTrainingPage />} />
+    <Route path="/lms/reports" element={<LmsReportsPage />} />
+    <Route path="/lms/catalog" element={<CourseCatalogPage />} />
+    <Route path="/lms/catalog/:id" element={<CourseDetailPage />} />
+    <Route path="/lms/courses/:id" element={<CourseDetailPage />} />
+    <Route path="/lms/course/:id" element={<CourseDetailPage />} />
+    <Route path="/lms/my-learning" element={<MyEnrollmentsPage />} />
+    <Route path="/lms/my-courses" element={<MyEnrollmentsPage />} />
+    <Route path="/lms/assessment/:id" element={<AssessmentPlayerPage />} />
+    <Route path="/lms/certificates" element={<MyCertificatesPage />} />
+    <Route path="/lms/settings/integrations" element={<LmsIntegrationSettingsPage />} />
 
     {/* Employee Lifecycle */}
     <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
@@ -373,6 +417,7 @@ export const adminRoutes = (
     <Route path="/settings/id-card-designer" element={<IdCardDesignerPage />} />
     <Route path="/settings/id-card-templates" element={<IdCardDesignerPage />} />
     <Route path="/settings/career-customization" element={<CareerPortalCustomizationPage />} />
+    <Route path="/settings/lms-integrations" element={<LmsIntegrationSettingsPage />} />
     <Route path="/settings/workflows" element={<WorkflowSettingsPage />} />
     <Route path="/settings/modules" element={<ModuleManagementPage />} />
     <Route path="/settings/master-builder" element={<MasterBuilderPage />} />
@@ -381,6 +426,8 @@ export const adminRoutes = (
     <Route path="/masters/builder/:id" element={<MasterBuilderDetailPage />} />
     <Route path="/masters" element={<MastersHubPage />} />
     <Route path="/masters/*" element={<MastersHubPage />} />
+    <Route path="/operational-masters" element={<OperationalMastersHubPage />} />
+    <Route path="/operational-masters/*" element={<OperationalMastersHubPage />} />
     <Route path="/modules" element={<ModuleManagementPage />} />
     <Route path="/settings-group" element={<SettingsLayout />}>
       <Route index element={<Navigate to="/settings/general" replace />} />
@@ -392,6 +439,8 @@ export const adminRoutes = (
       <Route path="leave-policies" element={<LeavePoliciesPage />} />
       <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
       <Route path="attendance-module" element={<AttendanceModulePage />} />
+      <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
+      <Route path="lms-integrations" element={<LmsIntegrationSettingsPage />} />
       <Route path="workflows" element={<WorkflowSettingsPage />} />
       <Route path="id-card-designer" element={<IdCardDesignerPage />} />
       <Route path="modules" element={<ModuleManagementPage />} />

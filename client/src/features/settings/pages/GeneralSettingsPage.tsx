@@ -21,6 +21,8 @@ import {
   Palette,
   Sparkles,
   GitBranch,
+  GraduationCap,
+  BookOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
@@ -475,6 +477,58 @@ export function GeneralSettingsPage() {
             </div>
           </Card>
         </div>
+      </div>
+
+      {/* ─── LMS PLATFORM INTEGRATIONS SUBMODULE ─── */}
+      <div className="space-y-3.5 pt-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-black uppercase tracking-wider text-muted-foreground">
+              LMS Platform Integrations &amp; Connectors
+            </h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Connect external learning platforms like Udemy for Business, Coursera, and LinkedIn Learning for automated course sync and completion tracking.
+            </p>
+          </div>
+
+          <Link to="/settings/lms-integrations">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs font-bold rounded-xl h-8 text-violet-600 border-violet-500/30 hover:bg-violet-50 dark:hover:bg-violet-950/20"
+            >
+              <GraduationCap className="w-3.5 h-3.5" /> Integration Hub <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
+          </Link>
+        </div>
+
+        <Card className="border border-violet-500/20 rounded-2xl shadow-xs bg-violet-50/20 dark:bg-violet-950/10 hover:border-violet-500/40 transition-colors">
+          <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+              <div className="p-2.5 rounded-xl bg-violet-500/10 text-violet-600 dark:text-violet-400 shrink-0">
+                <GraduationCap className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-foreground tracking-tight flex items-center gap-2">
+                  External LMS Platforms
+                  <span className="text-[10px] bg-violet-100 dark:bg-violet-900/60 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full font-bold">Udemy · Coursera · LinkedIn</span>
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Enable platform toggles, configure API credentials (Client ID, Client Secret, API Key), and sync courses directly into your LMS Course Management.
+                </p>
+              </div>
+            </div>
+
+            <Link to="/settings/lms-integrations" className="shrink-0">
+              <Button
+                size="sm"
+                className="gap-2 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white rounded-xl h-9 px-4 shadow-sm cursor-pointer"
+              >
+                <Sliders className="w-3.5 h-3.5" /> Configure Integrations
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

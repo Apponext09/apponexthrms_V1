@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield, UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -105,6 +105,7 @@ const MANAGER_NAV = [
     label: 'HIRING',
     items: [
       { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
+      { name: 'IJP Approvals', href: '/manager/ijp-approvals', icon: UserCheck },
       { name: 'Interview Schedule', href: '/manager/interview-schedule', icon: Calendar },
     ],
   },

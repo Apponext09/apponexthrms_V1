@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Users, Plus, X, Search, ChevronDown, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,7 +75,10 @@ export function EmploymentTypeMasterCustomUI() {
   };
 
   const handleEdit = (type: any) => {
-    setFormData({ name: type.name, status: type.status });
+    setFormData({
+      name: type.name || type.employment_type || type.employmentType || type.title || '',
+      status: (type.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active'
+    });
     setEditingId(type.id);
   };
 

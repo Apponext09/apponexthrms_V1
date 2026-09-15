@@ -2,6 +2,7 @@ import React from 'react';
 import { EmployeeBasicInfo } from './EmployeeBasicInfo';
 import { EmployeePersonalInfo } from './EmployeePersonalInfo';
 import { EmployeeProfessionalInfo } from './EmployeeProfessionalInfo';
+import { EmployeeCustomMastersInfo } from './EmployeeCustomMastersInfo';
 import type { Employee } from '@/types';
 
 interface EmployeeDetailsCombinedProps {
@@ -41,14 +42,20 @@ export function EmployeeDetailsCombined({
         approvedRequestId={approvedRequestId}
       />
 
-      {/* 2. Personal Information */}
+      {/* 2. Linked Custom Masters & Organizational Attributes */}
+      <EmployeeCustomMastersInfo
+        employeeId={employee.id as number}
+        editUnlocked={isProfessionalUnlocked}
+      />
+
+      {/* 3. Personal Information */}
       <EmployeePersonalInfo
         employeeId={employee.id as number}
         editUnlocked={isPersonalUnlocked}
         approvedRequestId={approvedRequestId}
       />
 
-      {/* 3. Professional & Education Information */}
+      {/* 4. Professional & Education Information */}
       <EmployeeProfessionalInfo
         employeeId={employee.id as number}
         editUnlocked={isProfessionalUnlocked}

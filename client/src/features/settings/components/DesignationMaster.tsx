@@ -75,7 +75,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     return Array.from(new Set(names)).sort();
   }, [designations]);
 
-  const handleSelect = (desig: Designation) => {
+  const handleSelect = (desig: any) => {
     setSelectedDesignationId(desig.id);
 
     const parseArr = (val: any) => {
@@ -92,12 +92,12 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     };
 
     setFormData({
-      name: desig.name,
-      code: desig.code || '',
+      name: desig.name || desig.designation_name || desig.designationName || desig.title || '',
+      code: desig.code || desig.designation_code || desig.designationCode || '',
       status: desig.status || 'active',
-      mapped_companies: parseArr(desig.mapped_companies ?? desig.mappedCompanies),
-      mapped_locations: parseArr(desig.mapped_locations ?? desig.mappedLocations),
-      mapped_departments: parseArr(desig.mapped_departments ?? desig.mappedDepartments),
+      mapped_companies: parseArr(desig.mapped_companies ?? desig.mappedCompanies ?? (desig.company_id ? [desig.company_id] : [])),
+      mapped_locations: parseArr(desig.mapped_locations ?? desig.mappedLocations ?? (desig.location_id ? [desig.location_id] : [])),
+      mapped_departments: parseArr(desig.mapped_departments ?? desig.mappedDepartments ?? (desig.department_id ? [desig.department_id] : [])),
       mapped_shifts: parseArr(desig.mapped_shifts ?? desig.mappedShifts),
       mapped_grades: parseArr(desig.mapped_grades ?? desig.mappedGrades),
     });

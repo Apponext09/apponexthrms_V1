@@ -3,7 +3,7 @@ import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { FinanceLayout } from '../layouts/FinanceLayout';
 
-// ── Lazy Imports: Finance Core Pages ──────────────────────────────────────────
+// ── Lazy Imports ──────────────────────────────────────────────────────────────
 const FinanceDashboardPage = lazy(() => import('../features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));
 const FinanceReportsPage = lazy(() => import('../features/finance/pages/FinanceReportsPage').then(m => ({ default: m.FinanceReportsPage })));
 const FinanceApprovalsPage = lazy(() => import('../features/finance/pages/FinanceApprovalsPage').then(m => ({ default: m.FinanceApprovalsPage })));

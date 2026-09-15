@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Save,
@@ -112,22 +112,30 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
   }, [statuses, searchTerm, activeFilter]);
 
   // Handle clicking a status card on the left panel
-  const handleSelectStatus = (st: EmployeeStatusRecord) => {
-    setSelectedRecordId(st.id);
-    setFormName(st.name);
-    setFormProbation(st.probationStatus);
-    setFormProbationPeriodUnit(st.probationPeriodUnit || 'Choose');
+  const handleSelectStatus = (st: any) => {
+    setSelectedRecordId(String(st.id));
+    setFormName(st.name || st.status_name || st.statusName || st.title || '');
+    setFormProbation(Boolean(st.probationStatus ?? st.is_probation_status ?? st.probation_status));
+    setFormProbationPeriodUnit(st.probationPeriodUnit || st.probation_period_unit || 'Choose');
     setFormProbationPeriodValue(
       st.probationPeriodValue !== undefined && st.probationPeriodValue !== null
         ? String(st.probationPeriodValue)
+        : st.probation_period_value !== undefined && st.probation_period_value !== null
+        ? String(st.probation_period_value)
         : ''
     );
-    setFormNotifyOnCompletion(Boolean(st.notifyOnCompletion));
-    setFormConfirmation(st.confirmationStatus);
-    setFormResignation(st.resignationStatus);
-    setFormInactiveOnChange(st.inactiveOnStatusChange);
-    setFormColor(st.statusColor || '#00b4d8');
-    setFormIsActive(st.isActive);
+    setFormNotifyOnCompletion(Boolean(st.notifyOnCompletion ?? st.notify_on_completion));
+    setFormConfirmation(Boolean(st.confirmationStatus ?? st.is_confirmation_status ?? st.confirmation_status));
+    setFormResignation(Boolean(st.resignationStatus ?? st.is_resignation_status ?? st.resignation_status));
+    setFormInactiveOnChange(Boolean(st.inactiveOnStatusChange ?? st.inactive_on_status_change));
+    setFormColor(st.statusColor || st.status_color || st.color || '#00b4d8');
+    setFormIsActive(
+      st.isActive !== undefined
+        ? Boolean(st.isActive)
+        : st.is_active !== undefined
+        ? Boolean(st.is_active)
+        : (st.status === 'active' || st.status === 'Active')
+    );
   };
 
   // Reset form back to "Add New" mode

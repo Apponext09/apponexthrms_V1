@@ -67,11 +67,11 @@ export function GradeMasterCustomUI() {
   useEffect(() => {
     if (editingGrade) {
       reset({
-        name: editingGrade.name,
-        code: editingGrade.code,
-        description: editingGrade.description || '',
-        color: editingGrade.color || '#00b4d8',
-        status: editingGrade.status || 'active',
+        name: editingGrade.name || editingGrade.grade_name || editingGrade.gradeName || editingGrade.title || '',
+        code: editingGrade.code || editingGrade.grade_code || editingGrade.gradeCode || '',
+        description: editingGrade.description || editingGrade.desc || '',
+        color: editingGrade.color || editingGrade.colour || editingGrade.status_color || '#00b4d8',
+        status: (editingGrade.status || 'active').toLowerCase() === 'inactive' ? 'inactive' : 'active',
       });
     } else {
       reset({

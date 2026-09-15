@@ -11,6 +11,13 @@ interface ProtectedRouteProps {
   requiredPermissions?: string[];
 }
 
+function getEffectiveRoles(user: any): string[] {
+  if (!user) return [];
+  const userRoles = user.roles || [];
+  const accessRole = (user.accessRole || user.role || '').toLowerCase();
+  return Array.from(new Set([...userRoles.map((r: any) => String(r).toLowerCase()), accessRole].filter(Boolean)));
+}
+
 export function ProtectedRoute({
   children,
   allowedRoles,

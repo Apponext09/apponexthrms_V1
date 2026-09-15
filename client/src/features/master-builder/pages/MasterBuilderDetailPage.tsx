@@ -76,6 +76,18 @@ export function MasterBuilderDetailPage() {
   const [fDefaultValue, setFDefaultValue] = useState('');
   const [fChoiceListId, setFChoiceListId] = useState<number | undefined>(undefined);
   const [fLookupMasterId, setFLookupMasterId] = useState<number | undefined>(undefined);
+  // New field type config state
+  const [fDbLookupEntity, setFDbLookupEntity] = useState('');
+  const [fColSpan, setFColSpan] = useState<1 | 2>(2);
+  const [fSectionTitle, setFSectionTitle] = useState('');
+  const [fSectionNumber, setFSectionNumber] = useState('');
+  const [fSectionIcon, setFSectionIcon] = useState('building');
+  const [fSectionDesc, setFSectionDesc] = useState('');
+  const [fSectionColor, setFSectionColor] = useState('#0284c7');
+  const [fSectionKey, setFSectionKey] = useState('');
+  const [fFileAccept, setFFileAccept] = useState('image/*');
+  const [fGenderOptions, setFGenderOptions] = useState<string[]>(['Male', 'Female', 'Other', 'Prefer not to say']);
+  const [fGenderInputValue, setFGenderInputValue] = useState('');
 
   // Validation Rules state
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
@@ -140,13 +152,18 @@ export function MasterBuilderDetailPage() {
     return (master?.fields || []).filter((f: any) => (f.fieldType || f.field_type) === 'lookup');
   }, [master?.fields]);
 
+  const existingSections = useMemo(() => {
+    return (master?.fields || []).filter((f: any) => (f.fieldType || f.field_type) === 'section');
+  }, [master?.fields]);
+
   // Field Handlers
   const handleOpenFieldModal = (field?: any) => {
     if (field) {
       setEditingField(field);
       setFName(field.fieldName || field.field_name || '');
       setFKey(field.fieldKey || field.field_key || '');
-      setFType(field.fieldType || field.field_type || 'text');
+      const ft = field.fieldType || field.field_type || 'text';
+      setFType(ft);
       setFRequired(Boolean(field.isRequired ?? field.is_required));
       setFUnique(Boolean(field.isUnique ?? field.is_unique));
       setFShowInTable(Boolean(field.showInTable ?? field.show_in_table ?? true));
@@ -155,6 +172,18 @@ export function MasterBuilderDetailPage() {
       setFDefaultValue(field.defaultValue || field.default_value || '');
       setFChoiceListId(field.choiceListId || field.choice_list_id);
       setFLookupMasterId(field.lookupMasterId || field.lookup_master_id);
+      const opts = field.optionsJson || (field as any).options_json || {};
+      setFDbLookupEntity(opts.dbLookupEntity || '');
+      setFColSpan(opts.colSpan || 2);
+      setFSectionTitle(opts.sectionTitle || field.fieldName || '');
+      setFSectionNumber(opts.sectionNumber || '');
+      setFSectionIcon(opts.sectionIcon || 'building');
+      setFSectionDesc(opts.sectionDescription || field.helpText || '');
+      setFSectionColor(opts.sectionColor || '#0284c7');
+      setFSectionKey(opts.sectionKey || '');
+      setFFileAccept(opts.fileAccept || (ft === 'file' ? '*/*' : 'image/*'));
+      setFGenderOptions(opts.genderOptions?.length ? opts.genderOptions : ['Male', 'Female', 'Other', 'Prefer not to say']);
+      setFGenderInputValue('');
     } else {
       setEditingField(null);
       setFName('');
@@ -168,8 +197,71 @@ export function MasterBuilderDetailPage() {
       setFDefaultValue('');
       setFChoiceListId(undefined);
       setFLookupMasterId(undefined);
+      setFDbLookupEntity('');
+      setFColSpan(2);
+      setFSectionTitle('');
+      setFSectionNumber('');
+      setFSectionIcon('building');
+      setFSectionDesc('');
+      setFSectionColor('#0284c7');
+      setFSectionKey('');
+      setFFileAccept('image/*');
+      setFGenderOptions(['Male', 'Female', 'Other', 'Prefer not to say']);
+      setFGenderInputValue('');
     }
     setIsFieldModalOpen(true);
+  };
+
+  const handleOpenAddSectionModal = () => {
+    handleOpenFieldModal();
+    const nextNum = existingSections.length + 1;
+    setFType('section');
+    setFName(`Section ${nextNum}`);
+    setFKey(`sec_${Date.now()}`);
+    setFSectionTitle(`Section ${nextNum}`);
+    setFSectionNumber(String(nextNum));
+    setFSectionIcon('building');
+    setFSectionColor('#0284c7');
+    setFRequired(false);
+    setFUnique(false);
+    setFShowInTable(false);
+  };
+
+  const handleAddCompanyPresetSections = async () => {
+    if (!window.confirm('Create the 6 Standard Company Section Headers in this master?\n\n1. Company Profile & Identification\n2. Registered Headquarters Address\n3. Statutory, Contact & Communication\n4. Branding Assets & Media\n5. Status & System Controls\n6. System Access Credentials')) return;
+    const standardSections = [
+      { name: '1. Company Profile & Identification', key: 'sec_company_profile', icon: 'building', desc: 'Company Name, Employer Name, Class Of Establishment, Code', color: '#0284c7', num: '1' },
+      { name: '2. Registered Headquarters Address', key: 'sec_headquarters_address', icon: 'map-pin', desc: 'Address Line 1, Address Line 2, Country, State, City, ZIP Code', color: '#10b981', num: '2' },
+      { name: '3. Statutory, Contact & Communication', key: 'sec_statutory_contact', icon: 'file-check', desc: 'PAN/TIN Number, Contact Number, Corporate Email', color: '#f59e0b', num: '3' },
+      { name: '4. Branding Assets & Media', key: 'sec_branding_media', icon: 'image', desc: 'Company Logo, Official Stamp, Signature', color: '#ec4899', num: '4' },
+      { name: '5. Status & System Controls', key: 'sec_status_controls', icon: 'shield', desc: 'Active Status, Active Users Access, Login Page Logo', color: '#8b5cf6', num: '5' },
+      { name: '6. System Access Credentials', key: 'sec_system_credentials', icon: 'key', desc: 'Full Name, Login Email, System Password', color: '#6366f1', num: '6' },
+    ];
+    try {
+      let order = (master?.fields?.length || 0) + 1;
+      for (const s of standardSections) {
+        await masterBuilderApi.addField(masterId, {
+          fieldName: s.name,
+          fieldKey: s.key,
+          fieldType: 'section',
+          isRequired: false,
+          isUnique: false,
+          showInTable: false,
+          helpText: s.desc,
+          displayOrder: order++,
+          optionsJson: {
+            sectionTitle: s.name,
+            sectionNumber: s.num,
+            sectionIcon: s.icon,
+            sectionDescription: s.desc,
+            sectionColor: s.color,
+          },
+        });
+      }
+      loadMaster();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to add preset sections');
+    }
   };
 
   const handleSaveField = async (e: React.FormEvent) => {
@@ -177,33 +269,46 @@ export function MasterBuilderDetailPage() {
     if (!fName.trim() || !fKey.trim()) return;
 
     try {
+      // Build optionsJson from all extended configs
+      const builtOptionsJson: Record<string, any> = {};
+      if (fDbLookupEntity) builtOptionsJson.dbLookupEntity = fDbLookupEntity;
+      if (fColSpan !== 2) builtOptionsJson.colSpan = fColSpan;
+      if (fType === 'section') {
+        builtOptionsJson.sectionTitle = fSectionTitle || fName.trim();
+        builtOptionsJson.sectionNumber = fSectionNumber || '';
+        builtOptionsJson.sectionIcon = fSectionIcon || 'building';
+        builtOptionsJson.sectionDescription = fSectionDesc || fHelpText.trim();
+        builtOptionsJson.sectionColor = fSectionColor || '#0284c7';
+      } else if (fSectionKey) {
+        builtOptionsJson.sectionKey = fSectionKey;
+      }
+      if (fType === 'image' || fType === 'file') {
+        builtOptionsJson.fileAccept = fFileAccept;
+      }
+      if (fType === 'gender') {
+        builtOptionsJson.genderOptions = fGenderOptions.filter(Boolean);
+      }
+
+      const fieldPayload = {
+        fieldName: fName.trim(),
+        fieldKey: fKey.trim(),
+        fieldType: fType,
+        isRequired: fType === 'section' ? false : fRequired,
+        isUnique: fType === 'section' ? false : fUnique,
+        showInTable: fType === 'section' ? false : fShowInTable,
+        helpText: fHelpText.trim(),
+        placeholder: fPlaceholder.trim(),
+        defaultValue: fDefaultValue.trim(),
+        choiceListId: fChoiceListId,
+        lookupMasterId: fLookupMasterId,
+        optionsJson: Object.keys(builtOptionsJson).length > 0 ? builtOptionsJson : undefined,
+      };
+
       if (editingField) {
-        await masterBuilderApi.updateField(masterId, editingField.id, {
-          fieldName: fName.trim(),
-          fieldKey: fKey.trim(),
-          fieldType: fType,
-          isRequired: fRequired,
-          isUnique: fUnique,
-          showInTable: fShowInTable,
-          helpText: fHelpText.trim(),
-          placeholder: fPlaceholder.trim(),
-          defaultValue: fDefaultValue.trim(),
-          choiceListId: fChoiceListId,
-          lookupMasterId: fLookupMasterId,
-        });
+        await masterBuilderApi.updateField(masterId, editingField.id, fieldPayload);
       } else {
         const created = await masterBuilderApi.addField(masterId, {
-          fieldName: fName.trim(),
-          fieldKey: fKey.trim(),
-          fieldType: fType,
-          isRequired: fRequired,
-          isUnique: fUnique,
-          showInTable: fShowInTable,
-          helpText: fHelpText.trim(),
-          placeholder: fPlaceholder.trim(),
-          defaultValue: fDefaultValue.trim(),
-          choiceListId: fChoiceListId,
-          lookupMasterId: fLookupMasterId,
+          ...fieldPayload,
           displayOrder: (master?.fields?.length || 0) + 1,
         });
         if (created?.id) {
@@ -218,7 +323,11 @@ export function MasterBuilderDetailPage() {
     }
   };
 
-  const handleDeleteField = async (fieldId: number, fieldName: string) => {
+  const handleDeleteField = async (fieldId: number, fieldName: string, isCore?: boolean) => {
+    if (isCore) {
+      alert(`"${fieldName}" is a core system field and cannot be deleted. You can still add new custom fields to this master.`);
+      return;
+    }
     if (window.confirm(`Delete field "${fieldName}"?`)) {
       try {
         await masterBuilderApi.deleteField(masterId, fieldId);
@@ -415,51 +524,46 @@ export function MasterBuilderDetailPage() {
       <div className="flex border-b border-border gap-8 text-sm font-semibold overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('fields')}
-          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${
-            activeTab === 'fields'
+          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${activeTab === 'fields'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Fields ({master.fields?.length || 0})
         </button>
         <button
           onClick={() => setActiveTab('autofill')}
-          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${
-            activeTab === 'autofill'
+          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${activeTab === 'autofill'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Autofill Mappings
         </button>
         <button
           onClick={() => setActiveTab('rules')}
-          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${
-            activeTab === 'rules'
+          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${activeTab === 'rules'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Validation Rules
         </button>
         <button
           onClick={() => setActiveTab('unique')}
-          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${
-            activeTab === 'unique'
+          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${activeTab === 'unique'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Unique Constraints
         </button>
         <button
           onClick={() => setActiveTab('filtering')}
-          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${
-            activeTab === 'filtering'
+          className={`pb-3 border-b-2 transition-colors uppercase tracking-wider text-xs font-bold whitespace-nowrap ${activeTab === 'filtering'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Filtering
         </button>
@@ -478,9 +582,32 @@ export function MasterBuilderDetailPage() {
                 className="pl-9 h-10"
               />
             </div>
-            <Button onClick={() => handleOpenFieldModal()} className="gap-2 h-10 bg-primary font-semibold">
-              <Plus className="h-4 w-4" /> Add field
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {existingSections.length === 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddCompanyPresetSections}
+                  className="gap-1.5 h-10 text-xs border-primary/30 text-primary hover:bg-primary/10 font-semibold"
+                  title="Create 6 standard numbered sections like Company Master Form"
+                >
+                  <Layers className="h-4 w-4" /> 6 Company Sections
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleOpenAddSectionModal}
+                className="gap-1.5 h-10 text-xs font-semibold"
+              >
+                <Plus className="h-4 w-4" /> Add Section
+              </Button>
+              <Button onClick={() => handleOpenFieldModal()} className="gap-2 h-10 bg-primary font-semibold">
+                <Plus className="h-4 w-4" /> Add field
+              </Button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -498,13 +625,13 @@ export function MasterBuilderDetailPage() {
                   const fieldType = field.fieldType || field.field_type || 'text';
                   const isRequired = Boolean(field.isRequired ?? field.is_required);
                   const isUnique = Boolean(field.isUnique ?? field.is_unique);
+                  const isCoreField = Boolean(field.isCore ?? field.is_core);
                   return (
                     <div
                       key={field.id}
                       onClick={() => setSelectedFieldId(field.id)}
-                      className={`p-4 flex items-center justify-between transition-colors cursor-pointer group ${
-                        isSelected ? 'bg-primary/5 border-l-4 border-l-primary' : 'hover:bg-muted/40'
-                      }`}
+                      className={`p-4 flex items-center justify-between transition-colors cursor-pointer group ${isSelected ? 'bg-primary/5 border-l-4 border-l-primary' : 'hover:bg-muted/40'
+                        }`}
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -514,14 +641,19 @@ export function MasterBuilderDetailPage() {
                           <span className="font-mono text-xs text-muted-foreground">
                             {fieldKey}
                           </span>
+                          {isCoreField && (
+                            <span title="Core system field — cannot be deleted" className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400">
+                              🔒 Core
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                           <Badge variant="outline" className="text-[11px] font-normal capitalize">
                             {fieldType === 'text'
                               ? 'Text Field'
                               : fieldType === 'choice'
-                              ? 'Choice / Dropdown'
-                              : fieldType}
+                                ? 'Choice / Dropdown'
+                                : fieldType}
                           </Badge>
                           {isRequired && (
                             <Badge variant="secondary" className="text-[11px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300">
@@ -548,10 +680,14 @@ export function MasterBuilderDetailPage() {
                               <Edit2 className="h-4 w-4 mr-2" /> Edit Field
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() => handleDeleteField(field.id, fieldName)}
-                              className="text-destructive"
+                              onClick={() => handleDeleteField(field.id, fieldName, isCoreField)}
+                              className={isCoreField ? 'text-muted-foreground cursor-not-allowed' : 'text-destructive'}
                             >
-                              <Trash2 className="h-4 w-4 mr-2" /> Delete Field
+                              {isCoreField ? (
+                                <span className="flex items-center gap-2"><span>🔒</span> Core Field</span>
+                              ) : (
+                                <><Trash2 className="h-4 w-4 mr-2" /> Delete Field</>
+                              )}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -861,7 +997,12 @@ export function MasterBuilderDetailPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Field Key *</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground">Field Key *</label>
+                  {!editingField && master?.fields?.some((f: any) => (f.fieldKey || f.field_key) === fKey) && fKey && (
+                    <span className="text-[10px] text-amber-500 font-medium">Already exists (auto-suffix will be applied)</span>
+                  )}
+                </div>
                 <Input
                   placeholder="e.g. email"
                   value={fKey}
@@ -876,18 +1017,43 @@ export function MasterBuilderDetailPage() {
               <label className="text-xs font-semibold text-foreground">Field Type</label>
               <select
                 value={fType}
-                onChange={(e) => setFType(e.target.value)}
+                onChange={(e) => {
+                  const t = e.target.value;
+                  setFType(t);
+                  // Auto-set showInTable false for section/image fields
+                  if (t === 'section') { setFShowInTable(false); setFRequired(false); setFUnique(false); }
+                  if (t === 'image') setFFileAccept('image/*');
+                  if (t === 'file') setFFileAccept('*/*');
+                  if (t === 'gender' && fGenderOptions.length === 0) {
+                    setFGenderOptions(['Male', 'Female', 'Other', 'Prefer not to say']);
+                  }
+                }}
                 className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="text">Text Field</option>
-                <option value="number">Number</option>
-                <option value="email">Email</option>
-                <option value="phone">Phone</option>
-                <option value="date">Date</option>
-                <option value="choice">Choice / Dropdown</option>
-                <option value="textarea">Textarea (Multi-line)</option>
-                <option value="lookup">Lookup (Reference another Master)</option>
-                <option value="boolean">Toggle / Switch</option>
+                <optgroup label="Basic">
+                  <option value="text">Text Field</option>
+                  <option value="number">Number</option>
+                  <option value="email">Email</option>
+                  <option value="phone">Phone</option>
+                  <option value="date">Date</option>
+                  <option value="textarea">Textarea (Multi-line)</option>
+                  <option value="boolean">Toggle / Switch</option>
+                </optgroup>
+                <optgroup label="Dropdowns">
+                  <option value="choice">Choice / Dropdown (Static List)</option>
+                  <option value="lookup">Lookup (Reference another Master)</option>
+                  <option value="db_lookup">🗄️ DB Lookup (Live Database)</option>
+                </optgroup>
+                <optgroup label="Predefined Dropdowns">
+                  <option value="gender">⚧ Gender / Sex (Custom Values)</option>
+                </optgroup>
+                <optgroup label="Media">
+                  <option value="image">🖼️ Image Upload</option>
+                  <option value="file">📎 File / Document Upload</option>
+                </optgroup>
+                <optgroup label="Layout">
+                  <option value="section">📂 Section Header / Divider</option>
+                </optgroup>
               </select>
             </div>
 
@@ -906,6 +1072,98 @@ export function MasterBuilderDetailPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {/* Gender Options Config */}
+            {fType === 'gender' && (
+              <div className="space-y-3 p-3 rounded-lg border border-pink-200 bg-pink-50 dark:bg-pink-950/20 dark:border-pink-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">⚧</span>
+                  <label className="text-xs font-bold text-pink-700 dark:text-pink-300">Gender / Sex Options</label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Add or remove values that will appear in the dropdown. Drag order is preserved.
+                </p>
+
+                {/* Existing options as tags */}
+                <div className="flex flex-wrap gap-1.5 min-h-[36px] p-2 rounded-md border border-input bg-background">
+                  {fGenderOptions.map((opt, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-200 border border-pink-200 dark:border-pink-800"
+                    >
+                      {opt}
+                      <button
+                        type="button"
+                        onClick={() => setFGenderOptions((prev) => prev.filter((_, i) => i !== idx))}
+                        className="ml-0.5 hover:text-pink-600 focus:outline-none font-bold leading-none"
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  {fGenderOptions.length === 0 && (
+                    <span className="text-[11px] text-muted-foreground italic px-1">No options yet — add below</span>
+                  )}
+                </div>
+
+                {/* Add new option input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={fGenderInputValue}
+                    onChange={(e) => setFGenderInputValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.key === 'Enter' || e.key === ',') && fGenderInputValue.trim()) {
+                        e.preventDefault();
+                        const newVal = fGenderInputValue.trim();
+                        if (!fGenderOptions.includes(newVal)) {
+                          setFGenderOptions((prev) => [...prev, newVal]);
+                        }
+                        setFGenderInputValue('');
+                      }
+                    }}
+                    placeholder="Type an option and press Enter"
+                    className="flex-1 h-9 px-3 rounded-md border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-pink-400/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newVal = fGenderInputValue.trim();
+                      if (newVal && !fGenderOptions.includes(newVal)) {
+                        setFGenderOptions((prev) => [...prev, newVal]);
+                      }
+                      setFGenderInputValue('');
+                    }}
+                    className="h-9 px-3 rounded-md bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold transition-colors"
+                  >
+                    + Add
+                  </button>
+                </div>
+
+                {/* Quick presets */}
+                <div className="space-y-1">
+                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Quick Presets</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: 'Standard (3)', vals: ['Male', 'Female', 'Other'] },
+                      { label: 'Inclusive (4)', vals: ['Male', 'Female', 'Non-binary', 'Prefer not to say'] },
+                      { label: 'HR Formal', vals: ['Male', 'Female', 'Transgender', 'Other', 'Prefer not to say'] },
+                      { label: 'Binary only', vals: ['Male', 'Female'] },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => { setFGenderOptions(preset.vals); setFGenderInputValue(''); }}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-pink-300 text-pink-700 bg-white hover:bg-pink-100 dark:bg-transparent dark:text-pink-300 dark:border-pink-700 dark:hover:bg-pink-900/30 transition-colors"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -929,6 +1187,198 @@ export function MasterBuilderDetailPage() {
               </div>
             )}
 
+            {/* DB Lookup Entity Selector */}
+            {fType === 'db_lookup' && (
+              <div className="space-y-1.5 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  🗄️ Database Entity *
+                </label>
+                <select
+                  value={fDbLookupEntity}
+                  onChange={(e) => setFDbLookupEntity(e.target.value)}
+                  required
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">-- Select Database Entity --</option>
+                  <optgroup label="Core HR Entities">
+                    <option value="companies">Companies</option>
+                    <option value="departments">Departments</option>
+                    <option value="designations">Designations</option>
+                    <option value="locations">Locations</option>
+                    <option value="employees">Employees</option>
+                  </optgroup>
+                  <optgroup label="Master Lists">
+                    <option value="grades">Grades</option>
+                    <option value="employee_status">Employee Status</option>
+                    <option value="employment_type">Employment Type</option>
+                  </optgroup>
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Dropdown will auto-populate from your live database when filling records.
+                </p>
+              </div>
+            )}
+
+            {/* Image / File Upload Config */}
+            {(fType === 'image' || fType === 'file') && (
+              <div className="space-y-1.5 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+                <label className="text-xs font-semibold text-foreground">Accepted File Types</label>
+                <select
+                  value={fFileAccept}
+                  onChange={(e) => setFFileAccept(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  {fType === 'image' ? (
+                    <>
+                      <option value="image/*">Any Image (PNG, JPG, GIF, WebP)</option>
+                      <option value="image/png">PNG Only</option>
+                      <option value="image/jpeg">JPEG / JPG Only</option>
+                      <option value="image/svg+xml">SVG Only</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="*/*">Any File</option>
+                      <option value="application/pdf">PDF Only</option>
+                      <option value=".doc,.docx">Word Document</option>
+                      <option value=".xls,.xlsx">Excel Spreadsheet</option>
+                      <option value="image/*">Images Only</option>
+                      <option value="image/*,application/pdf">Images + PDF</option>
+                    </>
+                  )}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  {fType === 'image' ? 'Image will be stored as base64 — keep files under 2MB for best performance.' : 'File stored as base64 — keep under 2MB.'}
+                </p>
+              </div>
+            )}
+
+            {/* Section Header Config */}
+            {fType === 'section' && (
+              <div className="space-y-3 p-3 rounded-lg border border-sky-200 bg-sky-50 dark:bg-sky-950/20 dark:border-sky-800">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+                  <label className="text-xs font-bold text-sky-700 dark:text-sky-300">
+                    Numbered Section Group Config (Company Master Style)
+                  </label>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Groups all fields following this section into a dedicated card with number, icon, and title (like Company Master Form).
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1 sm:col-span-1">
+                    <label className="text-xs font-semibold text-foreground">Section #</label>
+                    <input
+                      type="text"
+                      value={fSectionNumber}
+                      onChange={(e) => setFSectionNumber(e.target.value)}
+                      placeholder="e.g. 1"
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm font-bold text-center focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div className="space-y-1 sm:col-span-3">
+                    <label className="text-xs font-semibold text-foreground">Section Title *</label>
+                    <input
+                      type="text"
+                      value={fSectionTitle}
+                      onChange={(e) => setFSectionTitle(e.target.value)}
+                      placeholder="e.g. Company Profile & Identification"
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Section Icon</label>
+                  <select
+                    value={fSectionIcon}
+                    onChange={(e) => setFSectionIcon(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="building">🏢 Building / Company / Profile</option>
+                    <option value="map-pin">📍 Map Pin / Headquarters Address / Location</option>
+                    <option value="file-check">📄 File Check / Statutory & Contact / PAN</option>
+                    <option value="image">🖼️ Image / Branding Assets & Media / Logo</option>
+                    <option value="shield">🛡️ Shield / Status & System Controls / Access</option>
+                    <option value="key">🔑 Key / System Access Credentials / Auth</option>
+                    <option value="user">👤 User / Profile / Employee Master</option>
+                    <option value="phone">📞 Phone / Contact Communication</option>
+                    <option value="mail">✉️ Mail / Corporate Email</option>
+                    <option value="sliders">🎛️ Sliders / Preferences & Configurations</option>
+                    <option value="globe">🌐 Globe / International & Online</option>
+                    <option value="tag">🏷️ Tag / General Category</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Section Description (optional)</label>
+                  <input
+                    type="text"
+                    value={fSectionDesc}
+                    onChange={(e) => setFSectionDesc(e.target.value)}
+                    placeholder="e.g. Configure company profile, establishment address and details"
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label className="text-xs font-semibold text-foreground">Accent Color</label>
+                  <input
+                    type="color"
+                    value={fSectionColor}
+                    onChange={(e) => setFSectionColor(e.target.value)}
+                    className="h-8 w-14 rounded cursor-pointer border border-input"
+                  />
+                  <span className="text-xs font-mono text-muted-foreground">{fSectionColor}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Assign to Section Group (For non-section fields) */}
+            {fType !== 'section' && existingSections.length > 0 && (
+              <div className="space-y-1.5 p-3 rounded-lg border border-border/80 bg-muted/20">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>Assign to Section / Group (Optional)</span>
+                  <span className="text-[10px] text-muted-foreground">Company Form Style</span>
+                </label>
+                <select
+                  value={fSectionKey}
+                  onChange={(e) => setFSectionKey(e.target.value)}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">-- Auto (Follows section header order in list) --</option>
+                  {existingSections.map((sec: any) => {
+                    const sOpts = sec.optionsJson || sec.options_json || {};
+                    const sNum = sOpts.sectionNumber ? `${sOpts.sectionNumber}. ` : '';
+                    const sTitle = sOpts.sectionTitle || sec.fieldName || sec.field_name;
+                    return (
+                      <option key={sec.id} value={sec.fieldKey || sec.field_key}>
+                        {sNum}{sTitle}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Places this field inside the selected section card when viewed in grouped format.
+                </p>
+              </div>
+            )}
+
+            {/* Column Width */}
+            {fType !== 'section' && fType !== 'textarea' && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Column Width in Form</label>
+                <select
+                  value={fColSpan}
+                  onChange={(e) => setFColSpan(Number(e.target.value) as 1 | 2)}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value={2}>Half Width (2 columns per row)</option>
+                  <option value={1}>Full Width (1 column, entire row)</option>
+                </select>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground">Help Text (Shown on form)</label>
               <Input
@@ -947,41 +1397,43 @@ export function MasterBuilderDetailPage() {
               />
             </div>
 
-            {/* Behaviour check boxes */}
-            <div className="space-y-2 pt-2 border-t border-border">
-              <label className="text-xs font-semibold text-foreground block">Field Behaviour</label>
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={fRequired}
-                    onChange={(e) => setFRequired(e.target.checked)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                  />
-                  <span>Required field (Must be entered)</span>
-                </label>
+            {/* Behaviour check boxes — hidden for section fields */}
+            {fType !== 'section' && (
+              <div className="space-y-2 pt-2 border-t border-border">
+                <label className="text-xs font-semibold text-foreground block">Field Behaviour</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fRequired}
+                      onChange={(e) => setFRequired(e.target.checked)}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <span>Required field (Must be entered)</span>
+                  </label>
 
-                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={fUnique}
-                    onChange={(e) => setFUnique(e.target.checked)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                  />
-                  <span>Unique constraint (Values cannot repeat)</span>
-                </label>
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fUnique}
+                      onChange={(e) => setFUnique(e.target.checked)}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <span>Unique constraint (Values cannot repeat)</span>
+                  </label>
 
-                <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={fShowInTable}
-                    onChange={(e) => setFShowInTable(e.target.checked)}
-                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
-                  />
-                  <span>Show as column in records table</span>
-                </label>
+                  <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fShowInTable}
+                      onChange={(e) => setFShowInTable(e.target.checked)}
+                      className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <span>Show as column in records table</span>
+                  </label>
+                </div>
               </div>
-            </div>
+            )}
 
             <DialogFooter className="pt-3 border-t border-border">
               <Button type="button" variant="outline" onClick={() => setIsFieldModalOpen(false)}>

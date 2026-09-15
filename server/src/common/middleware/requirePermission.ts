@@ -42,6 +42,8 @@ async function permissionCheckAsync(
     roles.includes('organization_admin') ||
     roles.includes('super_admin') ||
     roles.includes('admin') ||
+    roles.includes('ceo') ||
+    roles.includes('hr') ||
     roles.includes('hr_admin') ||
     roles.includes('hr_manager')
   ) {

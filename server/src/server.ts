@@ -1,5 +1,5 @@
 import http from 'http';
-
+// reload trigger comment #38 - departments table schema repair (colour, color, email, is_active)
 import { Server } from 'socket.io';
 import fs from 'fs';
 import { createApp } from './app';
@@ -46,6 +46,34 @@ async function repairSuperAdminHashIfNeeded(): Promise<void> {
   }
 }
 
+async function repairLmsSchemaIfNeeded(): Promise<void> {
+  try {
+    const db = getKnex();
+    const hasModules = await db.schema.hasTable('lms_modules');
+    if (hasModules) {
+      await db.raw('ALTER TABLE `lms_modules` MODIFY COLUMN `content_url` LONGTEXT NULL');
+      await db.raw('ALTER TABLE `lms_modules` MODIFY COLUMN `body_text` LONGTEXT NULL');
+      logger.info(`[DB REPAIR] ✅ Verified lms_modules content_url and body_text are LONGTEXT`);
+    }
+
+    const hasBatches = await db.schema.hasTable('lms_batches');
+    if (hasBatches) {
+      const hasScheduleTime = await db.schema.hasColumn('lms_batches', 'schedule_time');
+      if (!hasScheduleTime) {
+        await db.schema.alterTable('lms_batches', (table) => {
+          table.string('schedule_time', 150).nullable();
+          table.string('schedule_days', 150).nullable();
+          table.string('today_session_time', 150).nullable();
+          table.string('session_notice', 255).nullable();
+        });
+        logger.info(`[DB REPAIR] ✅ Added schedule timing columns to lms_batches`);
+      }
+    }
+  } catch (e: any) {
+    logger.warn(`[DB REPAIR] Could not alter LMS tables: ${e?.message}`);
+  }
+}
+
 /**
  * Start the HTTP server
  */
@@ -81,6 +109,10 @@ async function start() {
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
       server.listen(env.PORT, '0.0.0.0', () => {
       logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0) [READY]`);
+      // Run background repairs
+      repairSuperAdminHashIfNeeded().catch(() => {});
+      repairLmsSchemaIfNeeded().catch(() => {});
+
       // Start automatic Leave & Comp-off Expiry Scheduler (runs every 12 hours)
       const expiryJobService = new LeaveExpiryJobService();
       // Run once immediately on start after 5 seconds

@@ -551,8 +551,19 @@ export const CandidateManagement: React.FC = () => {
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-muted-foreground border border-border">
-                                    {val || 'Direct Apply'}
+                                  <span className={cn(
+                                    "inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border capitalize",
+                                    val === 'internal_opening' ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30" :
+                                    val === 'other' ? "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30" :
+                                    "bg-muted text-muted-foreground border-border"
+                                  )}>
+                                    {val === 'internal_opening' ? 'Internal Opening' :
+                                     val === 'direct_apply' ? 'Direct Application' :
+                                     val === 'employee_referral' ? 'Employee Referral' :
+                                     val === 'recruitment_agency' ? 'Recruitment Agency' :
+                                     val === 'job_board' ? 'Job Board' :
+                                     val === 'other' ? 'Other' :
+                                     (val ? String(val).replace(/_/g, ' ') : 'Direct Apply')}
                                   </span>
                                 )}
                               </td>
@@ -1050,6 +1061,8 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <option value="recruitment_agency">Recruitment Agency</option>
                     <option value="bulk_import">Bulk Import</option>
                     <option value="resume_bank">Resume Bank</option>
+                    <option value="internal_opening">Internal Opening</option>
+                    <option value="other">Other</option>
                   </select>
                 </div>
                 <div className="space-y-1.5">

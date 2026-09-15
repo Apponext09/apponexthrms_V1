@@ -41,4 +41,13 @@ router.post('/masters/:id/records', asyncHandler((req, res) => masterBuilderCont
 router.put('/masters/:id/records/:recordId', asyncHandler((req, res) => masterBuilderController.updateRecord(req, res)));
 router.delete('/masters/:id/records/:recordId', asyncHandler((req, res) => masterBuilderController.deleteRecord(req, res)));
 
+// DB Lookup Options (for db_lookup field type — fetches real entities from DB)
+router.get('/db-lookup-options/:entity', asyncHandler((req, res) => masterBuilderController.getDbLookupOptions(req, res)));
+
+// Employee Profile Linkages
+router.get('/employee-linkages', asyncHandler((req, res) => masterBuilderController.getEmployeeLinkages(req, res)));
+router.get('/employee-values/:employeeId', asyncHandler((req, res) => masterBuilderController.getEmployeeValues(req, res)));
+router.post('/employee-values/:employeeId', asyncHandler((req, res) => masterBuilderController.saveEmployeeValues(req, res)));
+
 export default router;
+

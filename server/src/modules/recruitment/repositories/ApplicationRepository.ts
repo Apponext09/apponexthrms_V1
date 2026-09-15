@@ -118,6 +118,11 @@ export class ApplicationRepository extends BaseRepository<Application> {
       if (options.filters.type_id) {
         query.where('jobs.employment_type', options.filters.type_id);
       }
+      // Filter by MRF request ID (mrf_requests is already LEFT JOINed via jobs)
+      if (options.filters.mrf_request_id || options.filters.mrfRequestId) {
+        const mrfId = options.filters.mrf_request_id || options.filters.mrfRequestId;
+        query.where('mrf_requests.id', mrfId);
+      }
     }
 
     const page = options?.page || 1;

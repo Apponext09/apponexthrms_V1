@@ -35,6 +35,7 @@ export function EventDescriptionEditor({
   className,
 }: EventDescriptionEditorProps) {
   const [htmlContent, setHtmlContent] = useState(value || '');
+  const [editorReady, setEditorReady] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -67,7 +68,11 @@ export function EventDescriptionEditor({
       TableCell,
     ],
     content: value || '<p></p>',
+    onCreate: () => {
+      setEditorReady(true);
+    },
     onUpdate: ({ editor }) => {
+      if (editor.isDestroyed) return;
       const html = editor.getHTML();
       setHtmlContent(html);
       onChange(html);
@@ -76,13 +81,19 @@ export function EventDescriptionEditor({
 
   // Sync value when parent resets form
   useEffect(() => {
-    if (editor && value !== undefined && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '<p></p>');
-      setHtmlContent(value || '');
+    if (!editor || editor.isDestroyed || !editorReady) return;
+    try {
+      const current = editor.getHTML();
+      if (value !== undefined && value !== current) {
+        editor.commands.setContent(value || '<p></p>');
+        setHtmlContent(value || '');
+      }
+    } catch {
+      // editor schema not ready yet, skip
     }
-  }, [value, editor]);
+  }, [value, editor, editorReady]);
 
-  if (!editor) return null;
+  if (!editor || !editorReady) return null;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -444,45 +444,214 @@ export class ResumeBankService {
     let search = options.search;
     if (options.trackerId) search = options.trackerId;
 
-    // ──────── AUTO-BACKFILL / AUTO-SYNC UNLINKED CANDIDATES ────────
-    // Ensures any candidates created previously or via other routes automatically get
+    // ──────── AUTO-BACKFILL / AUTO-SYNC CANDIDATES TO RESUME BANK ────────
+    // Ensures any candidates created in Candidate Management or bulk import automatically get
     // indexed into resume_bank with a valid Tracker ID so they appear in Resume Source Screen Bank.
     try {
       const db = this.resumeRepo.db;
-      // Delete dummy rows (Applicant TRK-34 / candidate_trk%)
-      await db('candidates')
-        .where('organization_id', ctx.organizationId)
-        .where(function() {
-          this.where('first_name', 'Applicant')
-            .orWhere('first_name', 'Candidate')
-            .orWhere('email', 'like', 'candidate_trk%');
-        })
-        .delete()
-        .catch(() => {});
 
-      await db('resume_bank')
-        .where('organization_id', ctx.organizationId)
-        .where(function() {
-          this.whereNull('candidate_id')
-            .orWhereIn('candidate_id', function() {
-              this.select('id').from('candidates').where('first_name', 'Applicant').orWhere('first_name', 'Candidate');
-            });
-        })
-        .delete()
-        .catch(() => {});
-
-      // Auto-link resume_bank entries to candidates by resume_bank_id or email match
+      // 1. Auto-link any existing resume_bank entries where candidate_id is null by email match
       const hasResumeBankIdCol = await db.schema.hasColumn('candidates', 'resume_bank_id').catch(() => false);
+      const hasResumeFileUrlCol = await db.schema.hasColumn('resume_bank', 'resume_file_url').catch(() => false);
+      const hasEmployeesTable = await db.schema.hasTable('employees').catch(() => false);
+
+      await db.raw(`
+        UPDATE resume_bank rb
+        INNER JOIN candidates c ON (c.email = rb.candidate_email OR (c.email IS NOT NULL AND c.email != '' AND c.email = rb.tracker_id)) AND c.organization_id = rb.organization_id
+        SET rb.candidate_id = c.id
+        WHERE rb.candidate_id IS NULL;
+      `).catch(() => {});
+
       if (hasResumeBankIdCol) {
         await db.raw(`
           UPDATE resume_bank rb
-          INNER JOIN candidates c ON (c.resume_bank_id = rb.id OR c.email = rb.candidate_email) AND c.organization_id = rb.organization_id
+          INNER JOIN candidates c ON c.resume_bank_id = rb.id AND c.organization_id = rb.organization_id
           SET rb.candidate_id = c.id
           WHERE rb.candidate_id IS NULL;
         `).catch(() => {});
       }
+
+      // 2. Clean up non-IJP on-role working employees from resume_bank & normalize IJP applicant source
+      let validIjpCandidateIds: any[] = [];
+      if (hasEmployeesTable) {
+        // Find all candidate IDs of employees who have an APPROVED IJP application (Manager Endorsed)
+        const approvedIjpAppRows = await db('applications')
+          .leftJoin('workflow_approvals', function() {
+            this.on('workflow_approvals.reference_id', '=', 'applications.id')
+              .andOn('workflow_approvals.module_type', '=', db.raw("'IJP'"));
+          })
+          .where(function() {
+            this.where('workflow_approvals.status', '=', 'Approved')
+              .orWhere(function() {
+                this.whereNull('workflow_approvals.id')
+                  .andWhere('applications.application_status', 'in', ['screening', 'interview', 'approved']);
+              });
+          })
+          .where(function() {
+            this.where('applications.applied_from_source', 'like', '%internal%')
+              .orWhere('applications.applied_from_source', 'like', '%ijp%');
+          })
+          .select('applications.candidate_id')
+          .catch(() => []);
+        
+        validIjpCandidateIds = Array.from(new Set(approvedIjpAppRows.map((r: any) => r.candidateId || r.candidate_id).filter(Boolean)));
+
+        // Normalize source for IJP applicants in resume_bank
+        if (validIjpCandidateIds.length > 0) {
+          await db('resume_bank')
+            .whereIn('candidate_id', validIjpCandidateIds)
+            .update({ source: 'Internal Job Posting (IJP)' })
+            .catch(() => {});
+        }
+
+        // Direct SQL cleanup: remove any resume_bank entries belonging to on-role employees who do NOT have an approved IJP
+        await db.raw(`
+          DELETE rb FROM resume_bank rb
+          INNER JOIN candidates c ON rb.candidate_id = c.id
+          INNER JOIN employees e ON (
+            (c.email IS NOT NULL AND c.email != '' AND LOWER(TRIM(c.email)) = LOWER(TRIM(e.email)))
+            OR (
+              COALESCE(c.phone, '') != '' 
+              AND COALESCE(e.phone, e.mobile, '') != '' 
+              AND RIGHT(REPLACE(REPLACE(REPLACE(c.phone, '+', ''), '-', ''), ' ', ''), 10) = RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(e.phone, e.mobile, ''), '+', ''), '-', ''), ' ', ''), 10)
+            )
+            OR (
+              COALESCE(c.first_name, '') != '' AND COALESCE(c.last_name, '') != ''
+              AND LOWER(TRIM(c.first_name)) = LOWER(TRIM(e.first_name))
+              AND LOWER(TRIM(c.last_name)) = LOWER(TRIM(e.last_name))
+            )
+          )
+          WHERE e.deleted_at IS NULL
+          ${validIjpCandidateIds.length > 0 ? `AND rb.candidate_id NOT IN (${validIjpCandidateIds.join(',')})` : ''};
+        `).catch((e) => {
+          console.error('[ResumeBank AutoSync] Direct SQL employee cleanup error:', e?.message || e);
+        });
+
+        // Also clean up by direct email/phone on resume_bank table itself if candidate_id was not linked
+        await db.raw(`
+          DELETE rb FROM resume_bank rb
+          INNER JOIN employees e ON (
+            (rb.candidate_email IS NOT NULL AND rb.candidate_email != '' AND LOWER(TRIM(rb.candidate_email)) = LOWER(TRIM(e.email)))
+          )
+          WHERE e.deleted_at IS NULL
+          ${validIjpCandidateIds.length > 0 ? `AND (rb.candidate_id IS NULL OR rb.candidate_id NOT IN (${validIjpCandidateIds.join(',')}))` : ''};
+        `).catch(() => {});
+
+        // Deduplicate resume_bank records so no candidate appears multiple times
+        await db.raw(`
+          DELETE rb1 FROM resume_bank rb1
+          INNER JOIN resume_bank rb2 ON rb1.candidate_id = rb2.candidate_id AND rb1.id < rb2.id
+          WHERE rb1.candidate_id IS NOT NULL;
+        `).catch(() => {});
+      }
+
+      // 3. Fetch all valid candidates (external OR IJP applicants) that are NOT yet in resume_bank
+      const existingCandidateIds = await db('resume_bank')
+        .whereNotNull('candidate_id')
+        .pluck('candidate_id')
+        .catch(() => []);
+
+      let unindexedQuery = db('candidates')
+        .whereNull('deleted_at');
+
+      if (hasEmployeesTable) {
+        unindexedQuery = unindexedQuery.where(function() {
+          this.where(function() {
+            this.whereNotIn(db.raw('LOWER(TRIM(COALESCE(candidates.email, "")))') as any, function() {
+              this.select(db.raw('LOWER(TRIM(email))')).from('employees')
+                .whereNull('deleted_at')
+                .whereNotNull('email')
+                .whereRaw('TRIM(email) != ""');
+            })
+            .andWhere(function() {
+              this.whereNull('candidates.phone')
+                .orWhere('candidates.phone', '=', '')
+                .orWhereNotIn(db.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(candidates.phone, ''), '+', ''), '-', ''), ' ', ''), 10)") as any, function() {
+                  this.select(db.raw("RIGHT(REPLACE(REPLACE(REPLACE(COALESCE(phone, mobile, ''), '+', ''), '-', ''), ' ', ''), 10)")).from('employees')
+                    .whereNull('deleted_at')
+                    .whereRaw("COALESCE(phone, mobile, '') != ''");
+                });
+            })
+            .andWhere(function() {
+              this.whereNotIn(db.raw("LOWER(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))))") as any, function() {
+                this.select(db.raw("LOWER(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))))")).from('employees')
+                  .whereNull('deleted_at')
+                  .whereRaw("CONCAT(COALESCE(first_name, ''), COALESCE(last_name, '')) != ''");
+              });
+            });
+          })
+          if (validIjpCandidateIds.length > 0) {
+            this.orWhereIn('candidates.id', validIjpCandidateIds);
+          }
+        });
+      }
+
+      if (existingCandidateIds.length > 0) {
+        unindexedQuery = unindexedQuery.whereNotIn('id', existingCandidateIds);
+      }
+
+      const unindexedCandidates = await unindexedQuery.select('*').catch(() => []);
+
+      if (unindexedCandidates && unindexedCandidates.length > 0) {
+        const { v4: uuidv4 } = await import('uuid');
+        
+        // Find the current max Tracker ID number
+        const allRbRows = await db('resume_bank')
+          .where('organization_id', ctx.organizationId)
+          .select('tracker_id')
+          .catch(() => []);
+
+        let maxNum = 0;
+        for (const r of allRbRows) {
+          const tid = r.trackerId || r.tracker_id || '';
+          const num = parseInt(tid.replace(/[^0-9]/g, ''), 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+
+        for (const cand of unindexedCandidates) {
+          maxNum++;
+          const trackerId = `TRK-${String(maxNum).padStart(3, '0')}`;
+          const rawSource = cand.source || 'Direct Application';
+          const formattedSource =
+            rawSource === 'internal_opening' ? 'Internal Job Posting (IJP)' :
+            rawSource === 'direct_apply' ? 'Direct Application' :
+            rawSource === 'employee_referral' ? 'Employee Referral' :
+            rawSource === 'recruitment_agency' ? 'Recruitment Agency' :
+            rawSource === 'job_board' ? 'Job Board' :
+            rawSource === 'bulk_import' ? 'Bulk Import' :
+            rawSource === 'resume_bank' ? 'Resume Bank' :
+            rawSource === 'other' ? 'Other' :
+            rawSource;
+
+          const candPos = cand.current_company || cand.qualification || 'Candidate Applicant';
+
+          const rbData: any = {
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            tracker_id: trackerId,
+            candidate_id: cand.id,
+            source: formattedSource,
+            position: candPos,
+            status: cand.status ? (cand.status.charAt(0).toUpperCase() + cand.status.slice(1)) : 'Applied',
+            uploaded_by: cand.created_by || ctx.userId || 1,
+            created_at: cand.created_at || new Date(),
+            updated_at: cand.updated_at || new Date(),
+          };
+
+          if (hasResumeFileUrlCol && cand.resume_url) {
+            rbData.resume_file_url = cand.resume_url;
+          }
+
+          const [newRbId] = await db('resume_bank').insert(rbData).catch(() => []);
+          if (newRbId && hasResumeBankIdCol) {
+            await db('candidates').where('id', cand.id).update({ resume_bank_id: newRbId }).catch(() => {});
+          }
+        }
+      }
     } catch (autoSyncErr: any) {
-      console.error('[ResumeBank AutoSync] Linking check completed:', autoSyncErr.message);
+      console.error('[ResumeBank AutoSync] Candidate sync error:', autoSyncErr?.message || autoSyncErr);
     }
 
     const resumeResult = await this.resumeRepo.list(ctx, {

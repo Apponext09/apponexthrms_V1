@@ -25,6 +25,9 @@ import {
   LineChart, ScatterChart, GanttChart, Network, TreeDeciduous, GitMerge,
   GitBranch as BranchIcon, GitCommit, GitPullRequest, Code, Terminal,
   Globe2, Layers2, Layout, PanelLeft, PanelRight, SidebarIcon, Menu,
+  IndianRupee, ReceiptIndianRupee, CheckCircle, Code2, FileCheck, ListChecks,
+  CalendarClock, Sliders, UploadCloud, UserX, Percent, Sparkles, Megaphone,
+  CalendarDays, UserCog, GraduationCap, Palette, Boxes,
 } from 'lucide-react';
 
 // ── Static icon registry — only icons referenced in navigation config ────────
@@ -35,19 +38,23 @@ const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>>
   Briefcase, UserCheck, FileText, ClipboardList, Clock, MapPin, Wifi, Coffee,
   ScanFace, Palmtree, FileBarChart, CheckSquare, DollarSign, CreditCard,
   Receipt, TrendingUp, PieChart, Settings, Award, Target, Star, Activity,
-  Zap, Package, Monitor, HelpCircle, Bell, Cog, Building2, Globe, Shield,
+  Zap, Package, Monitor, HelpCircle, Bell, Cog, Building2, Globe, Shield: ShieldIcon,
   Navigation, UserPlus, BarChart2, Layers, Database, AlertCircle, BookOpen,
   Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
-  Lock, ChevronDown, LogOut, Home, Search, BarChart, LineChart, GanttChart,
-  Network, GitMerge, GitCommit, GitPullRequest, Building, Factory, Store,
-  Truck, Users2, Fingerprint, Key, Inbox, MessageCircle, Headphones,
-  Filter, Edit, Eye, Download, Upload, Plus, Share, Copy, Send, Tag, Bookmark,
+  Home, Search, Filter, Edit, Eye, Download, Upload, Plus, Share, Copy, Send, Tag, Bookmark,
+  BarChart, LineChart, GanttChart, Network, GitMerge, GitCommit, GitPullRequest,
+  Building, Factory, Store, Truck, Users2, Fingerprint, Key, Inbox, MessageCircle, Headphones,
+  IndianRupee, ReceiptIndianRupee, CheckCircle, Code2, FileCheck, ListChecks,
+  CalendarClock, Sliders, UploadCloud, UserX, Percent, Sparkles, Megaphone,
+  CalendarDays, UserCog, GraduationCap, Palette, Boxes, Grid, List, Table, Columns,
+  Rows, Link, Mail, Phone, Video, Image, File, Folder, Compass, Car, User, UserMinus,
+  Lock, ChevronDown, LogOut
 };
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
 import { useNavStore } from '@/features/navigation/store/navStore';
-import { getVisibleSections } from '@/config/navigation';
+import { getVisibleSections, type NavItem } from '@/config/navigation';
 import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 import { useRbac } from '@/lib/rbac';
 import { getUserRoleAndDept } from '@/lib/userProfile';
@@ -86,6 +93,44 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const [lockedItemDialogOpen, setLockedItemDialogOpen] = useState(false);
   const [lockedItemName, setLockedItemName] = useState('');
 
+  // ── Dynamic custom masters for sidebar injection ────────────────────────────
+  const [customMasterNavItems, setCustomMasterNavItems] = useState<NavItem[]>([]);
+
+  useEffect(() => {
+    // Hardcoded master codes already present in static navigation — skip these
+    const STATIC_MASTER_CODES = new Set([
+      'company', 'location', 'department', 'designation',
+      'ot-rule', 'ot_rule', 'grade', 'employee-status', 'employee_status',
+      'emp-type', 'emp_type', 'events', 'event',
+      'notification-templates', 'notification_templates',
+      'notification-merge-codes', 'notification_merge_codes',
+      'break', 'general-shift', 'general_shift', 'roster-shift', 'roster_shift',
+      'holiday', 'offer-templates', 'roles-responsibility',
+      'kra', 'resource-plan', 'employment_status', 'employment_type',
+      'custom_company', 'test1',
+    ]);
+
+    const loadCustomMasters = async () => {
+      try {
+        const list = await masterBuilderApi.getMasters();
+        const dynamicItems = list
+          .filter((cm) => !STATIC_MASTER_CODES.has(cm.code) && !STATIC_MASTER_CODES.has(cm.code.replace(/_/g, '-')))
+          .map((cm) => ({
+            name: cm.name,
+            href: `/masters/${cm.code}`,
+            icon: cm.icon || 'Boxes',
+          }));
+        setCustomMasterNavItems(dynamicItems);
+      } catch {
+        // silently fail — sidebar nav items are non-critical
+      }
+    };
+
+    loadCustomMasters();
+    window.addEventListener('custom_masters_updated', loadCustomMasters);
+    return () => window.removeEventListener('custom_masters_updated', loadCustomMasters);
+  }, []);
+
   // ── Memoized nav sections — only recomputes when roles/features/settings change ──
   // Removed location.pathname from deps: pathname changes no longer trigger
   // the heavy getVisibleSections() computation on every navigation.
@@ -94,10 +139,23 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     [roles, licensedFeatures, attendanceMode, liveTrackingEnabled]
   );
 
+  // ── Inject dynamic custom master items into the MASTERS section ──────────────
+  const finalSections = useMemo(() => {
+    if (customMasterNavItems.length === 0) return visibleSections;
+    return visibleSections.map((section) => {
+      if (section.id !== 'masters') return section;
+      // Avoid duplicates: only add items whose href isn't already in the section
+      const existingHrefs = new Set(section.items.map((i) => i.href));
+      const newItems = customMasterNavItems.filter((ci) => !existingHrefs.has(ci.href));
+      if (newItems.length === 0) return section;
+      return { ...section, items: [...section.items, ...newItems] };
+    });
+  }, [visibleSections, customMasterNavItems]);
+
   // ── Expand the active section when route changes (lightweight, no recompute) ──
   useEffect(() => {
-    expandSectionContainingRoute(location.pathname, visibleSections);
-  }, [location.pathname, visibleSections, expandSectionContainingRoute]);
+    expandSectionContainingRoute(location.pathname, finalSections);
+  }, [location.pathname, finalSections, expandSectionContainingRoute]);
 
   // ── Re-trigger nav when module toggles fire from storage/custom events ────
   useEffect(() => {
@@ -161,6 +219,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
       '/hr/modules',
       '/masters',
       '/hr/masters',
+      '/operational-masters',
+      '/hr/operational-masters',
     ];
 
     if (exactMatchRoutes.includes(itemHref)) {
@@ -188,10 +248,11 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
     return `${fName?.[0] || ''}${lName?.[0] || ''}`.toUpperCase() || 'US';
   };
 
-  // Get icon component by name — uses static registry, NOT wildcard import
-  const getIconComponent = (iconName: string) => {
-    const Icon = ICON_REGISTRY[iconName];
-    return Icon ? <Icon className="h-4 w-4" /> : <div className="h-4 w-4" />;
+  // Get icon component by name — uses static registry, with robust fallback
+  const getIconComponent = (iconName?: string) => {
+    if (!iconName) return <LayoutDashboard className="h-4 w-4 flex-shrink-0" />;
+    const Icon = ICON_REGISTRY[iconName] || ICON_REGISTRY.LayoutDashboard;
+    return Icon ? <Icon className="h-4 w-4 flex-shrink-0" /> : <LayoutDashboard className="h-4 w-4 flex-shrink-0" />;
   };
 
   const handleProfileClick = () => {
@@ -214,16 +275,16 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const portalLabel = isHrUser
     ? 'HR Portal'
     : ['organization_admin', 'ceo', 'super_admin'].includes(userRoleCode)
-    ? 'Admin Portal'
-    : userRoleCode === 'support'
-    ? 'Support Portal'
-    : userRoleCode === 'finance'
-    ? 'Finance Portal'
-    : userRoleCode === 'department_head'
-    ? 'Manager Portal'
-    : userRoleCode === 'team_lead'
-    ? 'Team Lead Portal'
-    : 'Admin Portal';
+      ? 'Admin Portal'
+      : userRoleCode === 'support'
+        ? 'Support Portal'
+        : userRoleCode === 'finance'
+          ? 'Finance Portal'
+          : userRoleCode === 'department_head'
+            ? 'Manager Portal'
+            : userRoleCode === 'team_lead'
+              ? 'Team Lead Portal'
+              : 'Admin Portal';
 
   return (
     <>
@@ -261,11 +322,13 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
         {/* Navigation List */}
         <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {visibleSections.map((section) => {
+          {finalSections.map((section) => {
             const isActive = section.items.some((item) =>
               isPathActive(item.href, location.pathname, location.search)
             );
-            const isExpanded = expandedSections[section.id] ?? true;
+            const isExpanded = expandedSections[section.id] !== undefined
+              ? expandedSections[section.id]
+              : isActive;
 
             return (
               <Collapsible
@@ -287,7 +350,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                         title={!open ? section.label : ''}
                       >
                         <span className="flex-shrink-0 text-muted-foreground transition-colors group-hover:text-foreground">
-                          {section.icon ? getIconComponent(section.icon) : ''}
+                          {getIconComponent(section.icon || section.items?.[0]?.icon)}
                         </span>
                         <AnimatePresence>
                           {open && (
@@ -324,7 +387,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                           return (
                             <Collapsible
                               key={item.name}
-                              defaultOpen={true}
+                              defaultOpen={isChildActive}
                               className="group/sub space-y-0.5"
                             >
                               <CollapsibleTrigger asChild>

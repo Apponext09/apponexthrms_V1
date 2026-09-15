@@ -32,7 +32,9 @@ import {
   Navigation, UserPlus, BarChart2, Layers, Database, AlertCircle, BookOpen,
   Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
   Inbox, Code2, ListChecks, UploadCloud, Palette, Boxes, UserX, Percent, UserMinus,
-  Compass, ArrowLeftRight, ReceiptIndianRupee, List, CalendarClock, Tag, Car
+  Compass, ArrowLeftRight, ReceiptIndianRupee, List, CalendarClock, Tag, Car,
+  IndianRupee, CheckCircle, FileCheck, Sliders, Sparkles, Megaphone,
+  CalendarDays, UserCog, User, GraduationCap, LineChart, Grid,
 } from 'lucide-react';
 
 // Static icon registry matching navigation.ts
@@ -46,10 +48,12 @@ const ICON_REGISTRY: Record<string, React.ComponentType<{ className?: string }>>
   Heart, MessageSquare, Clipboard, Wallet, ShieldCheck, ArrowUpDown, FileSpreadsheet,
   Lock, ChevronDown, LogOut, Inbox, Code2, ListChecks, UploadCloud, Palette, Boxes,
   UserX, Percent, UserMinus, Compass, ArrowLeftRight, ReceiptIndianRupee, List,
-  CalendarClock, Tag, Car
+  CalendarClock, Tag, Car, IndianRupee, CheckCircle, FileCheck, Sliders, Sparkles,
+  Megaphone, CalendarDays, UserCog, User, GraduationCap, LineChart, Grid,
 };
 
-function getIconComponent(iconName: string) {
+function getIconComponent(iconName?: string) {
+  if (!iconName) return <LayoutDashboard className="size-4 flex-shrink-0" />;
   const Icon = ICON_REGISTRY[iconName] || ICON_REGISTRY.LayoutDashboard;
   return <Icon className="size-4 flex-shrink-0" />;
 }
@@ -90,6 +94,13 @@ function mapToHRHref(href: string): string {
     if (href.includes('tab=')) {
       const tab = href.split('tab=')[1];
       return `/hr/masters/${tab}`;
+    }
+    return `/hr${href}`;
+  }
+  if (href.startsWith('/operational-masters')) {
+    if (href.includes('tab=')) {
+      const tab = href.split('tab=')[1];
+      return `/hr/operational-masters/${tab}`;
     }
     return `/hr${href}`;
   }
@@ -181,8 +192,8 @@ export function HRLayout() {
     });
   }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, customMasters]);
 
-  const toggleSection = (id: string) => {
-    setExpandedSections((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
+  const toggleSection = (id: string, currentlyExpanded: boolean) => {
+    setExpandedSections((prev) => ({ ...prev, [id]: !currentlyExpanded }));
   };
 
   const isPathActive = (itemHref: string, currentPath: string, currentSearch: string = ''): boolean => {
@@ -205,6 +216,7 @@ export function HRLayout() {
       '/expenses', '/hr/expenses',
       '/modules', '/hr/modules',
       '/masters', '/hr/masters',
+      '/operational-masters', '/hr/operational-masters',
     ];
     if (exactMatchRoutes.includes(itemHref)) return currentPath === itemHref;
     return currentPath.startsWith(itemHref + '/');
@@ -231,13 +243,15 @@ export function HRLayout() {
             isPathActive(item.href, location.pathname, location.search) ||
             (item.children && item.children.some((c) => isPathActive(c.href, location.pathname, location.search)))
           );
-          const isExpanded = expandedSections[section.id] ?? true;
+          const isExpanded = expandedSections[section.id] !== undefined
+            ? expandedSections[section.id]
+            : isActive;
 
           return (
             <Collapsible
               key={section.id}
               open={isExpanded}
-              onOpenChange={() => toggleSection(section.id)}
+              onOpenChange={() => toggleSection(section.id, isExpanded)}
               className="group"
             >
               {section.collapsible !== false ? (
@@ -285,7 +299,7 @@ export function HRLayout() {
 
                       if (hasChildren) {
                         return (
-                          <Collapsible key={item.name} defaultOpen={true} className="group/sub space-y-0.5">
+                          <Collapsible key={item.name} defaultOpen={isChildActive} className="group/sub space-y-0.5">
                             <CollapsibleTrigger asChild>
                               <button
                                 className={cn(

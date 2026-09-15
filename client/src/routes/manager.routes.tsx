@@ -34,6 +34,8 @@ const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
 const PoliciesPage = lazy(() => import('../features/employee/portal-pages/PoliciesPage'));
+const ManagerIjpApprovalsPage = lazy(() => import('../features/manager/pages/ManagerIjpApprovalsPage'));
+const ManagerLmsPage = lazy(() => import('../features/lms/pages/ManagerLmsPage').then(m => ({ default: m.ManagerLmsPage })));
 
 const MANAGER_ALLOWED_ROLES: Role[] = [
   'department_head',
@@ -63,6 +65,7 @@ export const managerRoutes = (
     <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
     <Route path="/manager/hiring" element={<DepartmentDashboard />} />
     <Route path="/manager/mrf-request" element={<MrfRequestPage />} />
+    <Route path="/manager/ijp-approvals" element={<ManagerIjpApprovalsPage />} />
     <Route path="/manager/interview-schedule" element={<InterviewCalendarPage />} />
     <Route path="/manager/interviewer-rating" element={<InterviewerRatingPage />} />
     <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
@@ -72,7 +75,7 @@ export const managerRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_2"
-          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected']}
+          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected', 'all']}
           portalLabel="Approve your team's expense claims — Level 2 (Manager) queue"
         />
       }
@@ -82,7 +85,7 @@ export const managerRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_2"
-          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected']}
+          allowedStatuses={['pending_level_2', 'pending_manager', 'pending_approvals', 'returned', 'rejected', 'all']}
           portalLabel="Approve your team's expense claims — Level 2 (Manager) queue"
         />
       }
@@ -104,6 +107,8 @@ export const managerRoutes = (
     <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
     <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
     <Route path="/manager/policies" element={<PoliciesPage />} />
+    <Route path="/manager/lms" element={<ManagerLmsPage />} />
+    <Route path="/manager/learning" element={<ManagerLmsPage />} />
     <Route path="/manager/live-tracking/history" element={<TrackingHistoryPage />} />
   </Route>
 );

@@ -1,8 +1,8 @@
-﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
   Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X,
-  Eye, EyeOff, KeyRound
+  Eye, EyeOff, KeyRound, Boxes
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,19 @@ import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { masterBuilderApi } from '@/features/master-builder/api/masterBuilderApi';
+
+const CORE_FIELD_KEYS = [
+  'name', 'employer_name', 'employerName', 'class_of_establishment', 'classOfEstablishment',
+  'code', 'address_line_1', 'addressLine1', 'address_line_2', 'addressLine2',
+  'country', 'state', 'city', 'zip_code', 'zipCode',
+  'pan_tin', 'panTin', 'contact_number', 'contactNumber', 'email',
+  'logo', 'company_stamp', 'companyStamp', 'signature',
+  'is_active_toggle', 'isActiveToggle', 'active_users_toggle', 'activeUsersToggle',
+  'login_page_logo_toggle', 'loginPageLogoToggle',
+  'has_credentials', 'hasCredentials', 'full_name', 'fullName', 'login_email', 'loginEmail',
+  'status', 'description'
+];
 
 export interface CompanyRecordItem {
   id: string;
@@ -154,13 +167,39 @@ export function CompanyMasterForm({
   const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>(isNew ? 'Active' : selectedCompany?.status || 'Active');
 
   // Credentials State
-  const [formHasCredentials, setFormHasCredentials]     = useState<boolean>(isNew ? false : selectedCompany?.hasCredentials ?? false);
-  const [formFullName, setFormFullName]                 = useState<string>(isNew ? '' : selectedCompany?.fullName || '');
-  const [formLoginEmail, setFormLoginEmail]             = useState<string>(isNew ? '' : selectedCompany?.loginEmail || '');
-  const [formPassword, setFormPassword]                 = useState<string>('');
-  const [formConfirmPassword, setFormConfirmPassword]   = useState<string>('');
-  const [showPassword, setShowPassword]                 = useState<boolean>(false);
-  const [showConfirmPassword, setShowConfirmPassword]   = useState<boolean>(false);
+  const [formHasCredentials, setFormHasCredentials] = useState<boolean>(isNew ? false : selectedCompany?.hasCredentials ?? false);
+  const [formFullName, setFormFullName] = useState<string>(isNew ? '' : selectedCompany?.fullName || '');
+  const [formLoginEmail, setFormLoginEmail] = useState<string>(isNew ? '' : selectedCompany?.loginEmail || '');
+  const [formPassword, setFormPassword] = useState<string>('');
+  const [formConfirmPassword, setFormConfirmPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+
+  // Master Builder dynamic custom fields state (for extra fields designed in Master Builder)
+  const [companyMasterId, setCompanyMasterId] = useState<number | null>(null);
+  const [customFields, setCustomFields] = useState<any[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+
+  // Fetch Master Builder custom fields configured for 'company'
+  useEffect(() => {
+    const fetchMasterSchema = async () => {
+      try {
+        const masters = await masterBuilderApi.getMasters();
+        const comp = masters.find((m) => m.code === 'company');
+        if (comp) {
+          setCompanyMasterId(comp.id);
+          const detail = await masterBuilderApi.getMasterById(comp.id);
+          const extra = (detail.fields || []).filter(
+            (f: any) => !f.isCore && !f.is_core && !CORE_FIELD_KEYS.includes(f.fieldKey || f.field_key)
+          );
+          setCustomFields(extra);
+        }
+      } catch (err) {
+        console.warn('Could not load custom fields for company from master builder:', err);
+      }
+    };
+    fetchMasterSchema();
+  }, []);
 
   // Derived: do passwords match? (only meaningful when both are non-empty)
   const passwordsMatch = formPassword === formConfirmPassword;
@@ -197,6 +236,7 @@ export function CompanyMasterForm({
     setFormConfirmPassword('');
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setCustomFieldValues({});
   };
 
   // Compute available states based on selected country
@@ -272,9 +312,7 @@ export function CompanyMasterForm({
       }
     };
     reader.readAsDataURL(file);
-  };
-
-  // Sync form when selectedCompany changes or when mode changes
+  };  // Sync form when selectedCompany changes or when mode changes
   useEffect(() => {
     if (!isNewMode && selectedCompany) {
       setFormName(selectedCompany.name || '');
@@ -284,9 +322,9 @@ export function CompanyMasterForm({
       setFormAddress1(selectedCompany.addressLine1 || '');
       setFormAddress2(selectedCompany.addressLine2 || '');
       setFormCountry(selectedCompany.country || 'India');
-      setFormState(selectedCompany.state || 'Maharashtra');
-      setFormCity(selectedCompany.city || 'Thane');
-      setFormZipCode(selectedCompany.zipCode || '400708');
+      setFormState(selectedCompany.state || '');
+      setFormCity(selectedCompany.city || '');
+      setFormZipCode(selectedCompany.zipCode || '');
       setFormPanTin(selectedCompany.panTin || '');
       setFormContactNumber(selectedCompany.contactNumber || '');
       setFormEmail(selectedCompany.email || '');
@@ -308,12 +346,35 @@ export function CompanyMasterForm({
     }
   }, [selectedId, isNewMode, selectedCompany]);
 
-  const handleSelectCompany = (comp: CompanyRecordItem) => {
+  const handleSelectCompany = async (comp: CompanyRecordItem) => {
     setIsNewMode(false);
     setSelectedId(comp.id);
+    if (companyMasterId && customFields.length > 0) {
+      try {
+        const recRes = await masterBuilderApi.getRecords(companyMasterId, { limit: 100 });
+        const match = recRes.records?.find((r) => String(r.id) === String(comp.id));
+        if (match?.data) {
+          const extraVals: Record<string, any> = {};
+          customFields.forEach((cf: any) => {
+            const k = cf.fieldKey || cf.field_key;
+            if (match.data[k] !== undefined) {
+              extraVals[k] = match.data[k];
+            }
+          });
+          setCustomFieldValues(extraVals);
+        } else {
+          setCustomFieldValues({});
+        }
+      } catch (e) {
+        setCustomFieldValues({});
+      }
+    } else {
+      setCustomFieldValues({});
+    }
   };
 
   const handleReset = () => {
+    setCustomFieldValues({});
     if (isNewMode) {
       handleAddNewCompanyClick();
     } else if (selectedCompany) {
@@ -324,9 +385,9 @@ export function CompanyMasterForm({
       setFormAddress1(selectedCompany.addressLine1 || '');
       setFormAddress2(selectedCompany.addressLine2 || '');
       setFormCountry(selectedCompany.country || 'India');
-      setFormState(selectedCompany.state || 'Maharashtra');
-      setFormCity(selectedCompany.city || 'Thane');
-      setFormZipCode(selectedCompany.zipCode || '400708');
+      setFormState(selectedCompany.state || '');
+      setFormCity(selectedCompany.city || '');
+      setFormZipCode(selectedCompany.zipCode || '');
       setFormPanTin(selectedCompany.panTin || '');
       setFormContactNumber(selectedCompany.contactNumber || '');
       setFormEmail(selectedCompany.email || '');
@@ -362,10 +423,10 @@ export function CompanyMasterForm({
             name: c.name || '',
             employerName: c.employerName || c.employer_name || '',
             classOfEstablishment: c.classOfEstablishment || c.class_of_establishment || '',
-            addressLine1: c.addressLine1 || c.addressLine_1 || c.address_line_1 || '',
-            addressLine2: c.addressLine2 || c.addressLine_2 || c.address_line_2 || '',
+            addressLine1: c.addressLine1 || c.address_line_1 || c.addressLine_1 || c.address_line1 || c.address || '',
+            addressLine2: c.addressLine2 || c.address_line_2 || c.addressLine_2 || c.address_line2 || '',
             country: c.country || 'India',
-            zipCode: c.zipCode || c.zip_code || '',
+            zipCode: c.zipCode || c.zip_code || c.postal_code || c.postalCode || '',
             state: c.state || '',
             city: c.city || '',
             panTin: c.panTin || c.pan_tin || '',
@@ -491,6 +552,18 @@ export function CompanyMasterForm({
         setSelectedId(savedCompany.id);
         if (onSave) onSave(savedCompany);
         queryClient.invalidateQueries({ queryKey: ['companies'] });
+
+        // Save extended custom field values if configured in Master Builder
+        if (companyMasterId && customFields.length > 0 && savedCompany.id) {
+          try {
+            await masterBuilderApi.updateRecord(companyMasterId, Number(savedCompany.id), {
+              data: customFieldValues,
+            });
+          } catch (extErr) {
+            console.warn('Extended data save notice:', extErr);
+          }
+        }
+
         showToast.success(
           isUpdating ? 'Company Updated' : 'Company Created',
           isUpdating ? `${savedCompany.name} updated successfully.` : `${savedCompany.name} created successfully.`
@@ -1174,7 +1247,84 @@ export function CompanyMasterForm({
         )}
       </div>
 
-      {/* SECTION 7: Form Actions */}
+      {/* SECTION 7: Dynamic Custom Fields from Master Builder */}
+      {customFields.length > 0 && (
+        <div className="space-y-4 pt-2 border-t border-border/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Boxes className="h-3.5 w-3.5 text-primary" />
+              <span>7. Custom Master Builder Fields</span>
+            </div>
+            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+              Dynamic Fields ({customFields.length})
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {customFields.map((field: any) => {
+              const fieldKey = field.fieldKey || field.field_key;
+              const fieldName = field.fieldName || field.field_name || fieldKey;
+              const isRequired = Boolean(field.isRequired ?? field.is_required);
+              const fieldType = field.fieldType || field.field_type || 'text';
+              const placeholder = field.placeholder || `Enter ${fieldName}`;
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    {fieldName} {isRequired && <span className="text-rose-500">*</span>}
+                  </label>
+                  {fieldType === 'textarea' ? (
+                    <textarea
+                      value={customFieldValues[fieldKey] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                      placeholder={placeholder}
+                      rows={3}
+                      className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  ) : fieldType === 'boolean' ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: true }))}
+                        className={cn(
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          customFieldValues[fieldKey]
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border'
+                        )}
+                      >
+                        <Check className="h-3.5 w-3.5" /> Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: false }))}
+                        className={cn(
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          !customFieldValues[fieldKey]
+                            ? 'bg-muted text-foreground border-border'
+                            : 'bg-background text-muted-foreground border-border'
+                        )}
+                      >
+                        <X className="h-3.5 w-3.5" /> No
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      type={fieldType === 'number' ? 'number' : fieldType === 'email' ? 'email' : 'text'}
+                      value={customFieldValues[fieldKey] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="text-xs h-10 bg-background rounded-xl"
+                      required={isRequired}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Form Actions */}
       <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
         {onCancel && (
           <Button
@@ -1219,7 +1369,6 @@ export function CompanyMasterForm({
     <div className="w-full space-y-6">
       {/* 2-Column Responsive Layout: Left Form Card (lg:col-span-7), Right Display List (lg:col-span-5) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
         {/* ========================================================================= */}
         {/* LEFT COLUMN: Company Information Form (lg:col-span-7)                     */}
         {/* ========================================================================= */}
@@ -1231,7 +1380,6 @@ export function CompanyMasterForm({
         {/* RIGHT COLUMN: Companies Directory List (lg:col-span-5)                    */}
         {/* ========================================================================= */}
         <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-6 shadow-xs text-foreground space-y-4">
-          
           {/* Directory Header */}
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-2">
@@ -1359,8 +1507,8 @@ export function CompanyMasterForm({
                           isSelected
                             ? 'bg-primary-foreground/20 text-primary-foreground'
                             : comp.status === 'Active'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
-                            : 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                              : 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400'
                         )}
                       >
                         {comp.status}

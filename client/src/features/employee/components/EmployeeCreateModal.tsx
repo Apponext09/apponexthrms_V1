@@ -32,13 +32,16 @@ import {
   ShieldCheck,
   ExternalLink,
   RotateCcw,
-} from 'lucide-react';
+  Layers,
+}
+  from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useEmployeeCustomizationStore } from '../store/employeeCustomizationStore';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { usePolicies } from '@/features/policy/api/usePolicies';
+import { useEmployeeLinkedMasters } from '@/features/master-builder/hooks/useEmployeeCustomMasters';
 
 export const createEmployeeCode = (nextNum: number = 1) =>
   `EMP${String(nextNum % 1000).padStart(3, '0')}`;
@@ -65,7 +68,7 @@ const ActiveInfoContext = React.createContext<{
   setActiveId: (id: string | null) => void;
 }>({
   activeId: null,
-  setActiveId: () => {},
+  setActiveId: () => { },
 });
 
 /**
@@ -275,6 +278,8 @@ export function EmployeeCreateModal({
   const { data: gradesData } = useGrades(1, 100);
   const { designations } = useDesignations();
   const { data: locationsData } = useLocations(1, 100);
+  const { data: linkedMasters = [] } = useEmployeeLinkedMasters();
+  const [masterAssignments, setMasterAssignments] = useState<Record<number, { recordId?: number | null; recordIds?: number[]; customValue?: string | null }>>({});
 
   const departmentEmployees = formData.departmentId
     ? (allEmployees || []).filter((employee: any) =>
@@ -298,6 +303,7 @@ export function EmployeeCreateModal({
       setValidationError(null);
       setFieldErrors({});
       setActiveInfoId(null);
+      setMasterAssignments({});
     }
     onOpenChange(openVal);
   };
@@ -502,6 +508,26 @@ export function EmployeeCreateModal({
         }
       }
 
+      // If linked custom masters are assigned, save their values
+      if (newEmpId && linkedMasters.length > 0) {
+        try {
+          const assignmentsPayload = linkedMasters.map((m) => {
+            const val = masterAssignments[m.id];
+            return {
+              masterId: m.id,
+              recordId: val?.recordId ?? null,
+              recordIds: val?.recordIds ?? [],
+              customValue: val?.customValue ?? null,
+            };
+          });
+          await apiClient.post(`/master-builder/employee-values/${newEmpId}`, {
+            assignments: assignmentsPayload,
+          });
+        } catch (mErr) {
+          console.warn('Failed to save initial custom master assignments:', mErr);
+        }
+      }
+
       setCreatedCredentials({
         email: formData.email,
         password: response.generatedPassword ?? pwd,
@@ -650,11 +676,10 @@ export function EmployeeCreateModal({
                     setActiveTab('basic');
                     setActiveInfoId(null);
                   }}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'basic'
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${activeTab === 'basic'
                       ? 'border-primary text-primary font-extrabold'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   <UserPlus className="w-3.5 h-3.5" /> Basic Info
                   {basicErrorCount > 0 && (
@@ -669,11 +694,10 @@ export function EmployeeCreateModal({
                     setActiveTab('personal');
                     setActiveInfoId(null);
                   }}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'personal'
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${activeTab === 'personal'
                       ? 'border-primary text-primary font-extrabold'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   <span>👤</span> Personal Info
                   {personalErrorCount > 0 && (
@@ -688,11 +712,10 @@ export function EmployeeCreateModal({
                     setActiveTab('professional');
                     setActiveInfoId(null);
                   }}
-                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                    activeTab === 'professional'
+                  className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${activeTab === 'professional'
                       ? 'border-primary text-primary font-extrabold'
                       : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   <span>💼</span> Professional Info
                   {professionalErrorCount > 0 && (
@@ -704,679 +727,772 @@ export function EmployeeCreateModal({
               </div>
 
               <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4 pt-3" noValidate>
-              <div className="flex-1 overflow-y-auto pr-2 space-y-4" style={{ maxHeight: 'calc(90vh - 220px)' }}>
-                {/* 1. Basic Info Sub Tab */}
-                {activeTab === 'basic' && (
-                  <div className="grid grid-cols-2 gap-4 pb-2">
-                    <div>
-                      <Label htmlFor="employeeCode" className="flex items-center text-xs font-bold text-foreground">
-                        Employee Code <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
-                          id="empCode"
-                          fieldName="Employee Code"
-                          category="company"
-                          masterName="Employee Code Prefix"
-                          path="Settings → Company Profile"
-                          description="Auto-generated using company sequence prefix. You can edit it manually or configure prefix in Company Profile."
-                        />
-                      </Label>
-                      <Input
-                        id="employeeCode"
-                        value={formData.employeeCode}
-                        onChange={(e) => handleFieldChange('employeeCode', e.target.value)}
-                        placeholder="e.g. EMP001"
-                        className={cn("mt-1", fieldErrors.employeeCode && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                      />
-                      {fieldErrors.employeeCode && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.employeeCode}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="email" className="flex items-center text-xs font-bold text-foreground">
-                        Email Address <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleFieldChange('email', e.target.value)}
-                        placeholder="employee@company.com"
-                        className={cn("mt-1", fieldErrors.email && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                      />
-                      {fieldErrors.email && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.email}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="firstName" className="flex items-center text-xs font-bold text-foreground">
-                        First Name <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <Input
-                        id="firstName"
-                        value={formData.firstName}
-                        onChange={(e) => handleFieldChange('firstName', e.target.value)}
-                        placeholder="e.g. John"
-                        className={cn("mt-1", fieldErrors.firstName && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                      />
-                      {fieldErrors.firstName && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.firstName}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="lastName" className="flex items-center text-xs font-bold text-foreground">
-                        Last Name <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <Input
-                        id="lastName"
-                        value={formData.lastName}
-                        onChange={(e) => handleFieldChange('lastName', e.target.value)}
-                        placeholder="e.g. Doe"
-                        className={cn("mt-1", fieldErrors.lastName && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                      />
-                      {fieldErrors.lastName && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.lastName}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="col-span-2">
-                      <Label htmlFor="mobile" className="flex items-center text-xs font-bold text-foreground">
-                        Mobile Number <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <Input
-                        id="mobile"
-                        value={formData.mobile}
-                        onChange={(e) => handleFieldChange('mobile', e.target.value)}
-                        placeholder="10-digit mobile number (e.g. 9876543210)"
-                        maxLength={10}
-                        className={cn("mt-1", fieldErrors.mobile && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                      />
-                      {fieldErrors.mobile && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.mobile}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Personal Info Sub Tab */}
-                {activeTab === 'personal' && (
-                  <div className="grid grid-cols-2 gap-4 pb-2">
-                    <div>
-                      <Label htmlFor="gender" className="flex items-center text-xs font-bold text-foreground">
-                        Gender <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <select
-                        id="gender"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.gender && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
-                        )}
-                        value={formData.gender}
-                        onChange={(e) => handleFieldChange('gender', e.target.value)}
-                      >
-                        <option value="">-- Select Gender --</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                        <option value="other">Other</option>
-                      </select>
-                      {fieldErrors.gender && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.gender}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="dateOfJoining" className="flex items-center text-xs font-bold text-foreground">
-                        Date of Joining <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <Input
-                        id="dateOfJoining"
-                        type="date"
-                        value={formData.dateOfJoining}
-                        onChange={(e) => handleFieldChange('dateOfJoining', e.target.value)}
-                        className={cn("mt-1", fieldErrors.dateOfJoining && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                      />
-                      {fieldErrors.dateOfJoining && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.dateOfJoining}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="password" className="flex items-center text-xs font-bold text-foreground">
-                        Password <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <div className="relative mt-1">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-4" style={{ maxHeight: 'calc(90vh - 220px)' }}>
+                  {/* 1. Basic Info Sub Tab */}
+                  {activeTab === 'basic' && (
+                    <div className="grid grid-cols-2 gap-4 pb-2">
+                      <div>
+                        <Label htmlFor="employeeCode" className="flex items-center text-xs font-bold text-foreground">
+                          Employee Code <span className="text-red-500 ml-0.5">*</span>
+                          <MasterFieldInfo
+                            id="empCode"
+                            fieldName="Employee Code"
+                            category="company"
+                            masterName="Employee Code Prefix"
+                            path="Settings → Company Profile"
+                            description="Auto-generated using company sequence prefix. You can edit it manually or configure prefix in Company Profile."
+                          />
+                        </Label>
                         <Input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Min 6 characters"
-                          value={formData.password}
-                          onChange={(e) => handleFieldChange('password', e.target.value)}
-                          className={cn("pr-10", fieldErrors.password && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                          id="employeeCode"
+                          value={formData.employeeCode}
+                          onChange={(e) => handleFieldChange('employeeCode', e.target.value)}
+                          placeholder="e.g. EMP001"
+                          className={cn("mt-1", fieldErrors.employeeCode && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                          tabIndex={-1}
-                          title={showPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {fieldErrors.password && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.password}</span>
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Label htmlFor="confirmPassword" className="flex items-center text-xs font-bold text-foreground">
-                        Confirm Password <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <div className="relative mt-1">
-                        <Input
-                          id="confirmPassword"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          placeholder="Confirm password"
-                          value={formData.confirmPassword}
-                          onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
-                          className={cn("pr-10", fieldErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                          tabIndex={-1}
-                          title={showConfirmPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                      {fieldErrors.confirmPassword && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.confirmPassword}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 3. Professional Info Sub Tab */}
-                {activeTab === 'professional' && (
-                  <div className="grid grid-cols-2 gap-4 pb-2">
-                    <div>
-                      <Label htmlFor="employmentType" className="flex items-center text-xs font-bold text-foreground">
-                        Employment Type <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
-                          id="empType"
-                          fieldName="Employment Type"
-                          category="emp-type"
-                          masterName="Employment Type"
-                          path="Settings → Masters Hub → Emp. Type"
-                          description="Add or configure employment types (e.g. Full-Time, Contract, Intern) in Masters Hub."
-                          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['employee_types'] })}
-                        />
-                      </Label>
-                      <select
-                        id="employmentType"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.employmentType && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                        {fieldErrors.employeeCode && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.employeeCode}</span>
+                          </p>
                         )}
-                        value={formData.employmentType}
-                        onChange={(e) => handleFieldChange('employmentType', e.target.value)}
-                      >
-                        <option value="">Select Type...</option>
-                        {employeeTypes.map((type) => (
-                          <option key={type.id} value={type.name}>{type.name}</option>
-                        ))}
-                      </select>
-                      {fieldErrors.employmentType && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.employmentType}</span>
-                        </p>
-                      )}
-                    </div>
+                      </div>
 
-                    <div>
-                      <Label htmlFor="department" className="flex items-center text-xs font-bold text-foreground">
-                        Department <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
+                      <div>
+                        <Label htmlFor="email" className="flex items-center text-xs font-bold text-foreground">
+                          Email Address <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => handleFieldChange('email', e.target.value)}
+                          placeholder="employee@company.com"
+                          className={cn("mt-1", fieldErrors.email && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                        />
+                        {fieldErrors.email && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.email}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="firstName" className="flex items-center text-xs font-bold text-foreground">
+                          First Name <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <Input
+                          id="firstName"
+                          value={formData.firstName}
+                          onChange={(e) => handleFieldChange('firstName', e.target.value)}
+                          placeholder="e.g. John"
+                          className={cn("mt-1", fieldErrors.firstName && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                        />
+                        {fieldErrors.firstName && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.firstName}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="lastName" className="flex items-center text-xs font-bold text-foreground">
+                          Last Name <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <Input
+                          id="lastName"
+                          value={formData.lastName}
+                          onChange={(e) => handleFieldChange('lastName', e.target.value)}
+                          placeholder="e.g. Doe"
+                          className={cn("mt-1", fieldErrors.lastName && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                        />
+                        {fieldErrors.lastName && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.lastName}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="col-span-2">
+                        <Label htmlFor="mobile" className="flex items-center text-xs font-bold text-foreground">
+                          Mobile Number <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <Input
+                          id="mobile"
+                          value={formData.mobile}
+                          onChange={(e) => handleFieldChange('mobile', e.target.value)}
+                          placeholder="10-digit mobile number (e.g. 9876543210)"
+                          maxLength={10}
+                          className={cn("mt-1", fieldErrors.mobile && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                        />
+                        {fieldErrors.mobile && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.mobile}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. Personal Info Sub Tab */}
+                  {activeTab === 'personal' && (
+                    <div className="grid grid-cols-2 gap-4 pb-2">
+                      <div>
+                        <Label htmlFor="gender" className="flex items-center text-xs font-bold text-foreground">
+                          Gender <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <select
+                          id="gender"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.gender && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.gender}
+                          onChange={(e) => handleFieldChange('gender', e.target.value)}
+                        >
+                          <option value="">-- Select Gender --</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
+                        {fieldErrors.gender && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.gender}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="dateOfJoining" className="flex items-center text-xs font-bold text-foreground">
+                          Date of Joining <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <Input
+                          id="dateOfJoining"
+                          type="date"
+                          value={formData.dateOfJoining}
+                          onChange={(e) => handleFieldChange('dateOfJoining', e.target.value)}
+                          className={cn("mt-1", fieldErrors.dateOfJoining && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                        />
+                        {fieldErrors.dateOfJoining && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.dateOfJoining}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="password" className="flex items-center text-xs font-bold text-foreground">
+                          Password <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <div className="relative mt-1">
+                          <Input
+                            id="password"
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder="Min 6 characters"
+                            value={formData.password}
+                            onChange={(e) => handleFieldChange('password', e.target.value)}
+                            className={cn("pr-10", fieldErrors.password && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                            tabIndex={-1}
+                            title={showPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        {fieldErrors.password && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.password}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="confirmPassword" className="flex items-center text-xs font-bold text-foreground">
+                          Confirm Password <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <div className="relative mt-1">
+                          <Input
+                            id="confirmPassword"
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            placeholder="Confirm password"
+                            value={formData.confirmPassword}
+                            onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
+                            className={cn("pr-10", fieldErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500 bg-red-50/15")}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                            tabIndex={-1}
+                            title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        {fieldErrors.confirmPassword && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.confirmPassword}</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. Professional Info Sub Tab */}
+                  {activeTab === 'professional' && (
+                    <div className="grid grid-cols-2 gap-4 pb-2">
+                      <div>
+                        <Label htmlFor="employmentType" className="flex items-center text-xs font-bold text-foreground">
+                          Employment Type <span className="text-red-500 ml-0.5">*</span>
+                          <MasterFieldInfo
+                            id="empType"
+                            fieldName="Employment Type"
+                            category="emp-type"
+                            masterName="Employment Type"
+                            path="Settings → Masters Hub → Emp. Type"
+                            description="Add or configure employment types (e.g. Full-Time, Contract, Intern) in Masters Hub."
+                            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['employee_types'] })}
+                          />
+                        </Label>
+                        <select
+                          id="employmentType"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.employmentType && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.employmentType}
+                          onChange={(e) => handleFieldChange('employmentType', e.target.value)}
+                        >
+                          <option value="">Select Type...</option>
+                          {employeeTypes.map((type) => (
+                            <option key={type.id} value={type.name}>{type.name}</option>
+                          ))}
+                        </select>
+                        {fieldErrors.employmentType && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.employmentType}</span>
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label htmlFor="department" className="flex items-center text-xs font-bold text-foreground">
+                          Department <span className="text-red-500 ml-0.5">*</span>
+                          <MasterFieldInfo
+                            id="department"
+                            fieldName="Department"
+                            category="department"
+                            masterName="Department"
+                            path="Settings → Masters Hub → Department"
+                            description="Add or manage organizational departments in Masters Hub (Settings → Masters Hub → Department)."
+                            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['departments'] })}
+                          />
+                        </Label>
+                        <select
                           id="department"
-                          fieldName="Department"
-                          category="department"
-                          masterName="Department"
-                          path="Settings → Masters Hub → Department"
-                          description="Add or manage organizational departments in Masters Hub (Settings → Masters Hub → Department)."
-                          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['departments'] })}
-                        />
-                      </Label>
-                      <select
-                        id="department"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.departmentId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.departmentId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.departmentId}
+                          onChange={(e) => {
+                            const deptId = e.target.value;
+                            const selectedDept = departmentsData?.data?.find((d: any) => String(d.id) === deptId);
+                            let nextAccessRole = formData.accessRole;
+                            if (selectedDept && (selectedDept.name.toLowerCase() === 'hr' || selectedDept.name.toLowerCase() === 'human resources')) {
+                              nextAccessRole = 'hr_manager';
+                            }
+                            setFormData(prev => ({
+                              ...prev,
+                              departmentId: deptId,
+                              accessRole: nextAccessRole,
+                              reportingManagerId: '',
+                            }));
+                            if (fieldErrors.departmentId) {
+                              setFieldErrors(prev => {
+                                const next = { ...prev };
+                                delete next.departmentId;
+                                return next;
+                              });
+                            }
+                          }}
+                        >
+                          <option value="">-- Select Department --</option>
+                          {departmentsData?.data?.map((dept: any) => (
+                            <option key={dept.id} value={dept.id}>
+                              {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.departmentId && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.departmentId}</span>
+                          </p>
                         )}
-                        value={formData.departmentId}
-                        onChange={(e) => {
-                          const deptId = e.target.value;
-                          const selectedDept = departmentsData?.data?.find((d: any) => String(d.id) === deptId);
-                          let nextAccessRole = formData.accessRole;
-                          if (selectedDept && (selectedDept.name.toLowerCase() === 'hr' || selectedDept.name.toLowerCase() === 'human resources')) {
-                            nextAccessRole = 'hr_manager';
-                          }
-                          setFormData(prev => ({
-                            ...prev,
-                            departmentId: deptId,
-                            accessRole: nextAccessRole,
-                            reportingManagerId: '',
-                          }));
-                          if (fieldErrors.departmentId) {
-                            setFieldErrors(prev => {
-                              const next = { ...prev };
-                              delete next.departmentId;
-                              return next;
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">-- Select Department --</option>
-                        {departmentsData?.data?.map((dept: any) => (
-                          <option key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </option>
-                        ))}
-                      </select>
-                      {fieldErrors.departmentId && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.departmentId}</span>
-                        </p>
-                      )}
-                    </div>
+                      </div>
 
-                    <div>
-                      <Label htmlFor="grade" className="flex items-center text-xs font-bold text-foreground">
-                        Grade / Level <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
+                      <div>
+                        <Label htmlFor="grade" className="flex items-center text-xs font-bold text-foreground">
+                          Grade / Level <span className="text-red-500 ml-0.5">*</span>
+                          <MasterFieldInfo
+                            id="grade"
+                            fieldName="Grade / Level"
+                            category="grade"
+                            masterName="Grade"
+                            path="Settings → Masters Hub → Grade"
+                            description="Add or configure employee pay grades, seniority levels, and compensation bands in Masters Hub."
+                            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['grades'] })}
+                          />
+                        </Label>
+                        <select
                           id="grade"
-                          fieldName="Grade / Level"
-                          category="grade"
-                          masterName="Grade"
-                          path="Settings → Masters Hub → Grade"
-                          description="Add or configure employee pay grades, seniority levels, and compensation bands in Masters Hub."
-                          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['grades'] })}
-                        />
-                      </Label>
-                      <select
-                        id="grade"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.gradeId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.gradeId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.gradeId}
+                          onChange={(e) => handleFieldChange('gradeId', e.target.value)}
+                        >
+                          <option value="">-- Select Grade --</option>
+                          {gradesData?.data?.filter((g: any) => g.status === 'active').map((grade: any) => (
+                            <option key={grade.id} value={grade.id}>
+                              {grade.name} ({grade.code})
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.gradeId && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.gradeId}</span>
+                          </p>
                         )}
-                        value={formData.gradeId}
-                        onChange={(e) => handleFieldChange('gradeId', e.target.value)}
-                      >
-                        <option value="">-- Select Grade --</option>
-                        {gradesData?.data?.filter((g: any) => g.status === 'active').map((grade: any) => (
-                          <option key={grade.id} value={grade.id}>
-                            {grade.name} ({grade.code})
-                          </option>
-                        ))}
-                      </select>
-                      {fieldErrors.gradeId && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.gradeId}</span>
-                        </p>
-                      )}
-                    </div>
+                      </div>
 
 
 
-                    {/* Job Title */}
-                    <div>
-                      <Label htmlFor="jobTitle" className="flex items-center text-xs font-bold text-foreground">
-                        Job Title <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
-                          id="designation"
-                          fieldName="Designation"
-                          category="designation"
-                          masterName="Designation"
-                          path="Settings → Masters Hub → Designation"
-                          description="Maintain the official designation master list. The employee job title is stored separately and can differ from the designation reference when needed."
-                          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['designations'] })}
-                        />
-                      </Label>
-                      <select
-                        id="jobTitle"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.jobTitle && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                      {/* Job Title */}
+                      <div>
+                        <Label htmlFor="jobTitle" className="flex items-center text-xs font-bold text-foreground">
+                          Job Title <span className="text-red-500 ml-0.5">*</span>
+                          <MasterFieldInfo
+                            id="designation"
+                            fieldName="Designation"
+                            category="designation"
+                            masterName="Designation"
+                            path="Settings → Masters Hub → Designation"
+                            description="Maintain the official designation master list. The employee job title is stored separately and can differ from the designation reference when needed."
+                            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['designations'] })}
+                          />
+                        </Label>
+                        <select
+                          id="jobTitle"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.jobTitle && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.jobTitle}
+                          onChange={(e) => handleFieldChange('jobTitle', e.target.value)}
+                        >
+                          <option value="">-- Select Job Title --</option>
+                          {designations.map((desig: any) => (
+                            <option key={desig.id} value={desig.name}>
+                              {desig.name}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.jobTitle ? (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.jobTitle}</span>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-1">Choose the employee’s job title. Designation is maintained separately in the master list.</p>
                         )}
-                        value={formData.jobTitle}
-                        onChange={(e) => handleFieldChange('jobTitle', e.target.value)}
-                      >
-                        <option value="">-- Select Job Title --</option>
-                        {designations.map((desig: any) => (
-                          <option key={desig.id} value={desig.name}>
-                            {desig.name}
-                          </option>
-                        ))}
-                      </select>
-                      {fieldErrors.jobTitle ? (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.jobTitle}</span>
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-1">Choose the employee’s job title. Designation is maintained separately in the master list.</p>
-                      )}
-                    </div>
+                      </div>
 
-                    <div>
-                      <Label htmlFor="location" className="flex items-center text-xs font-bold text-foreground">
-                        Branch / Work Location <span className="text-red-500 ml-0.5">*</span>
-                        <MasterFieldInfo
+                      <div>
+                        <Label htmlFor="location" className="flex items-center text-xs font-bold text-foreground">
+                          Branch / Work Location <span className="text-red-500 ml-0.5">*</span>
+                          <MasterFieldInfo
+                            id="location"
+                            fieldName="Branch / Work Location"
+                            category="location"
+                            masterName="Location"
+                            path="Settings → Masters Hub → Location"
+                            description="Add or configure office branches and physical work locations in Masters Hub."
+                            onRefresh={() => queryClient.invalidateQueries({ queryKey: ['locations'] })}
+                          />
+                        </Label>
+                        <select
                           id="location"
-                          fieldName="Branch / Work Location"
-                          category="location"
-                          masterName="Location"
-                          path="Settings → Masters Hub → Location"
-                          description="Add or configure office branches and physical work locations in Masters Hub."
-                          onRefresh={() => queryClient.invalidateQueries({ queryKey: ['locations'] })}
-                        />
-                      </Label>
-                      <select
-                        id="location"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
-                          fieldErrors.locationId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer",
+                            fieldErrors.locationId && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.locationId}
+                          onChange={(e) => handleFieldChange('locationId', e.target.value)}
+                        >
+                          <option value="">-- Select Branch / Location --</option>
+                          {locationsData?.data?.map((loc: any) => (
+                            <option key={loc.id} value={loc.id}>
+                              {loc.name || loc.location_name || loc.title} {loc.code ? `(${loc.code})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {fieldErrors.locationId && (
+                          <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 shrink-0" />
+                            <span>{fieldErrors.locationId}</span>
+                          </p>
                         )}
-                        value={formData.locationId}
-                        onChange={(e) => handleFieldChange('locationId', e.target.value)}
-                      >
-                        <option value="">-- Select Branch / Location --</option>
-                        {locationsData?.data?.map((loc: any) => (
-                          <option key={loc.id} value={loc.id}>
-                            {loc.name || loc.location_name || loc.title} {loc.code ? `(${loc.code})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      {fieldErrors.locationId && (
-                        <p className="text-[11px] text-red-500 font-medium mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3 shrink-0" />
-                          <span>{fieldErrors.locationId}</span>
+                      </div>
+
+                      {/* Access Role — controls portal access after login */}
+                      <div className="col-span-2">
+                        <Label htmlFor="accessRole" className="flex items-center text-xs font-bold text-foreground">
+                          System Access Role <span className="text-red-500 ml-0.5">*</span>
+                        </Label>
+                        <select
+                          id="accessRole"
+                          className={cn(
+                            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium mt-1 cursor-pointer",
+                            fieldErrors.accessRole && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
+                          )}
+                          value={formData.accessRole}
+                          onChange={(e) => handleFieldChange('accessRole', e.target.value)}
+                        >
+                          <option value="employee">Employee (Standard View)</option>
+                          <option value="team_lead">Team Lead (Team Portal View)</option>
+                          <option value="department_head">Department Head / Manager</option>
+                          <option value="hr_manager">HR Manager (HR Portal View)</option>
+                          <option value="cto">CTO (Chief Technology Officer)</option>
+                          <option value="cfo">CFO (Chief Financial Officer)</option>
+                          <option value="coo">COO (Chief Operating Officer)</option>
+                          <option value="ceo">CEO (Chief Executive Officer)</option>
+                          <option value="intern">Intern (Intern Portal View)</option>
+                          <option value="consultant">Consultant (Consultant Portal View)</option>
+                          <option value="finance">Finance (Finance Portal View)</option>
+
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Controls which portal they log into.{' '}
+                          <span className="font-medium text-foreground">Executives (CFO, COO, CTO, CEO) & Managers are assigned to their respective departments in the chart.</span>
                         </p>
-                      )}
-                    </div>
 
-                    {/* Access Role — controls portal access after login */}
-                    <div className="col-span-2">
-                      <Label htmlFor="accessRole" className="flex items-center text-xs font-bold text-foreground">
-                        System Access Role <span className="text-red-500 ml-0.5">*</span>
-                      </Label>
-                      <select
-                        id="accessRole"
-                        className={cn(
-                          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium mt-1 cursor-pointer",
-                          fieldErrors.accessRole && "border-red-500 focus-visible:ring-red-500 bg-red-50/15"
-                        )}
-                        value={formData.accessRole}
-                        onChange={(e) => handleFieldChange('accessRole', e.target.value)}
-                      >
-                        <option value="employee">Employee (Standard View)</option>
-                        <option value="team_lead">Team Lead (Team Portal View)</option>
-                        <option value="department_head">Department Head / Manager</option>
-                        <option value="hr_manager">HR Manager (HR Portal View)</option>
-                        <option value="cto">CTO (Chief Technology Officer)</option>
-                        <option value="cfo">CFO (Chief Financial Officer)</option>
-                        <option value="coo">COO (Chief Operating Officer)</option>
-                        <option value="ceo">CEO (Chief Executive Officer)</option>
-                        <option value="intern">Intern (Intern Portal View)</option>
-                        <option value="consultant">Consultant (Consultant Portal View)</option>
-                        <option value="finance">Finance (Finance Portal View)</option>
-                       
-                      </select>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Controls which portal they log into.{' '}
-                        <span className="font-medium text-foreground">Executives (CFO, COO, CTO, CEO) & Managers are assigned to their respective departments in the chart.</span>
-                      </p>
+                        {/* Mapped Policy Preview */}
+                        {(() => {
+                          const targetRole = (formData.accessRole || 'employee').toLowerCase().trim();
+                          const expandRoleCodes = (role: string): string[] => {
+                            const norm = role.toLowerCase().trim();
+                            const set = new Set<string>([norm]);
+                            if (['organization_admin', 'org_admin', 'ceo', 'admin'].includes(norm)) {
+                              set.add('organization_admin');
+                              set.add('org_admin');
+                              set.add('ceo');
+                              set.add('admin');
+                            }
+                            if (['hr_manager', 'hr', 'hr_admin', 'support'].includes(norm)) {
+                              set.add('hr_manager');
+                              set.add('hr');
+                              set.add('hr_admin');
+                              set.add('support');
+                            }
+                            if (['department_head', 'manager', 'dept_head', 'dept_manager'].includes(norm)) {
+                              set.add('department_head');
+                              set.add('manager');
+                              set.add('dept_head');
+                              set.add('dept_manager');
+                            }
+                            if (['team_lead', 'teamlead', 'lead'].includes(norm)) {
+                              set.add('team_lead');
+                              set.add('teamlead');
+                              set.add('lead');
+                            }
+                            set.add('all');
+                            return Array.from(set);
+                          };
 
-                      {/* Mapped Policy Preview */}
-                      {(() => {
-                        const targetRole = (formData.accessRole || 'employee').toLowerCase().trim();
-                        const expandRoleCodes = (role: string): string[] => {
-                          const norm = role.toLowerCase().trim();
-                          const set = new Set<string>([norm]);
-                          if (['organization_admin', 'org_admin', 'ceo', 'admin'].includes(norm)) {
-                            set.add('organization_admin');
-                            set.add('org_admin');
-                            set.add('ceo');
-                            set.add('admin');
-                          }
-                          if (['hr_manager', 'hr', 'hr_admin', 'support'].includes(norm)) {
-                            set.add('hr_manager');
-                            set.add('hr');
-                            set.add('hr_admin');
-                            set.add('support');
-                          }
-                          if (['department_head', 'manager', 'dept_head', 'dept_manager'].includes(norm)) {
-                            set.add('department_head');
-                            set.add('manager');
-                            set.add('dept_head');
-                            set.add('dept_manager');
-                          }
-                          if (['team_lead', 'teamlead', 'lead'].includes(norm)) {
-                            set.add('team_lead');
-                            set.add('teamlead');
-                            set.add('lead');
-                          }
-                          set.add('all');
-                          return Array.from(set);
-                        };
+                          const expandedTargetRoles = expandRoleCodes(targetRole);
+                          const mappedPolicies = allOrgPolicies.filter((p) => {
+                            if (!p.isActive) return false;
+                            const roleCodes = p.roleMappings?.map((rm) => rm.roleCode.toLowerCase()) || [];
+                            return roleCodes.some((r) => expandedTargetRoles.includes(r));
+                          });
 
-                        const expandedTargetRoles = expandRoleCodes(targetRole);
-                        const mappedPolicies = allOrgPolicies.filter((p) => {
-                          if (!p.isActive) return false;
-                          const roleCodes = p.roleMappings?.map((rm) => rm.roleCode.toLowerCase()) || [];
-                          return roleCodes.some((r) => expandedTargetRoles.includes(r));
-                        });
+                          if (mappedPolicies.length === 0) {
+                            return (
+                              <div className="mt-2.5 p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1">
+                                <div className="flex items-center gap-1.5 font-bold text-muted-foreground">
+                                  <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                                  <span>No mandatory policies currently assigned for this role.</span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Role-specific policies can be assigned in Policy & Governance Master settings.
+                                </p>
+                              </div>
+                            );
+                          }
 
-                        if (mappedPolicies.length === 0) {
                           return (
-                            <div className="mt-2.5 p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1">
-                              <div className="flex items-center gap-1.5 font-bold text-muted-foreground">
-                                <ShieldCheck className="w-4 h-4 text-muted-foreground" />
-                                <span>No mandatory policies currently assigned for this role.</span>
+                            <div className="mt-2.5 p-3 rounded-xl bg-primary/5 border border-primary/20 text-xs space-y-1.5">
+                              <div className="flex items-center gap-1.5 font-bold text-primary">
+                                <ShieldCheck className="w-4 h-4" />
+                                <span>Applicable Mandatory Policies ({mappedPolicies.length}):</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {mappedPolicies.map((p) => (
+                                  <span
+                                    key={p.id}
+                                    className="text-[10px] px-2 py-0.5 rounded-md bg-card border border-primary/25 text-foreground font-semibold flex items-center gap-1 shadow-2xs"
+                                  >
+                                    {p.title} <span className="text-muted-foreground font-normal">v{p.version}</span>
+                                  </span>
+                                ))}
                               </div>
                               <p className="text-[10px] text-muted-foreground">
-                                Role-specific policies can be assigned in Policy & Governance Master settings.
+                                * The new employee will be prompted to acknowledge these policies upon first login.
                               </p>
                             </div>
                           );
-                        }
+                        })()}
+                      </div>
 
-                        return (
-                          <div className="mt-2.5 p-3 rounded-xl bg-primary/5 border border-primary/20 text-xs space-y-1.5">
-                            <div className="flex items-center gap-1.5 font-bold text-primary">
-                              <ShieldCheck className="w-4 h-4" />
-                              <span>Applicable Mandatory Policies ({mappedPolicies.length}):</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                              {mappedPolicies.map((p) => (
-                                <span
-                                  key={p.id}
-                                  className="text-[10px] px-2 py-0.5 rounded-md bg-card border border-primary/25 text-foreground font-semibold flex items-center gap-1 shadow-2xs"
-                                >
-                                  {p.title} <span className="text-muted-foreground font-normal">v{p.version}</span>
-                                </span>
-                              ))}
-                            </div>
-                            <p className="text-[10px] text-muted-foreground">
-                              * The new employee will be prompted to acknowledge these policies upon first login.
-                            </p>
+                      {/* Reporting Manager - NOT MANDATORY */}
+                      <div className="col-span-2">
+                        <Label htmlFor="reportingManager">Reports To</Label>
+                        {formData.accessRole === 'ceo' ? (
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium flex items-center gap-2">
+                            👑 <strong>Chief Executive Officer (CEO)</strong> — Organization Root Leader
                           </div>
-                        );
-                      })()}
-                    </div>
+                        ) : (
+                          <>
+                            <select
+                              id="reportingManager"
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
+                              value={formData.reportingManagerId}
+                              onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+                            >
+                              <option value="">-- Select Reporting Manager (Defaults to CEO / Dept Head) --</option>
+                              {(() => {
+                                const getCat = (m: any) => {
+                                  const r = (m.accessRole || '').toLowerCase();
+                                  const d = (m.designation || '').toLowerCase();
+                                  if (['cfo', 'coo', 'cto'].includes(r) || d.includes('chief')) return 'cxo';
+                                  if (['department_head', 'hr_manager', 'manager'].includes(r) || d.includes('manager') || d.includes('head')) return 'manager';
+                                  if (r === 'team_lead' || d.includes('lead')) return 'lead';
+                                  return 'other';
+                                };
 
-                    {/* Reporting Manager - NOT MANDATORY */}
-                    <div className="col-span-2">
-                      <Label htmlFor="reportingManager">Reports To</Label>
-                      {formData.accessRole === 'ceo' ? (
-                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium flex items-center gap-2">
-                          👑 <strong>Chief Executive Officer (CEO)</strong> — Organization Root Leader
-                        </div>
-                      ) : (
-                        <>
-                          <select
-                            id="reportingManager"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
-                            value={formData.reportingManagerId}
-                            onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+                                const cxos = departmentManagers.filter((m: any) => getCat(m) === 'cxo');
+                                const mgrs = departmentManagers.filter((m: any) => getCat(m) === 'manager');
+                                const leads = departmentManagers.filter((m: any) => getCat(m) === 'lead');
+                                const others = departmentManagers.filter((m: any) => getCat(m) === 'other');
+
+                                return (
+                                  <>
+                                    {cxos.length > 0 && (
+                                      <optgroup label="⚡ C-Suite Executives (CTO, COO, CFO)">
+                                        {cxos.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {mgrs.length > 0 && (
+                                      <optgroup label="👔 Department Heads & Managers">
+                                        {mgrs.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {leads.length > 0 && (
+                                      <optgroup label="🎖️ Team Leads">
+                                        {leads.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                    {others.length > 0 && (
+                                      <optgroup label="👥 Other Department Members">
+                                        {others.map((mgr: any) => (
+                                          <option key={mgr.id} value={String(mgr.id)}>
+                                            {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </select>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {!formData.departmentId ? 'Select department first to see reporting managers.' : 'Optional field: Can be assigned later.'}
+                            </p>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Assigned Salary Slab - NOT MANDATORY */}
+                      <div className="col-span-2">
+                        <Label htmlFor="salarySlabId" className="flex items-center text-xs font-bold text-foreground">
+                          Assigned Salary Slab <span className="text-xs text-muted-foreground font-normal ml-1.5">(Optional)</span>
+                        </Label>
+                        <select
+                          id="salarySlabId"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer"
+                          value={formData.salarySlabId}
+                          onChange={(e) => handleFieldChange('salarySlabId', e.target.value)}
+                        >
+                          <option value="">-- Select Salary Slab (Optional) --</option>
+                          {slabs.map((s: any) => (
+                            <option key={s.id} value={String(s.id)}>
+                              🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Optional: Select the salary slab template. CTC amount and component breakdown can be configured in Employee Profile &rarr; Payroll Setting.
+                        </p>
+                      </div>
+
+  {/* Linked Custom Masters Section */ }
+  {
+    linkedMasters.length > 0 && (
+      <div className="col-span-2 pt-4 border-t border-border/80 space-y-3">
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-primary" />
+          <Label className="text-xs font-bold uppercase tracking-wider text-primary">
+            Custom Master Attributes & Linkages
+          </Label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          {linkedMasters.map((master) => {
+            const assignment = masterAssignments[master.id] || {};
+            const isPrimary = master.employeeLinkage === 'primary_assignment';
+
+            return (
+              <div key={master.id} className="space-y-1.5 p-3 rounded-xl border border-border/80 bg-muted/20">
+                <Label className="text-xs font-semibold flex items-center justify-between">
+                  <span>{master.name}</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    {isPrimary ? 'Primary (Single-select)' : 'Secondary (Multi-select)'}
+                  </span>
+                </Label>
+
+                {isPrimary ? (
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer"
+                    value={assignment.recordId ? String(assignment.recordId) : ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? Number(e.target.value) : null;
+                      setMasterAssignments((prev) => ({
+                        ...prev,
+                        [master.id]: {
+                          ...prev[master.id],
+                          recordId: val,
+                        },
+                      }));
+                    }}
+                  >
+                    <option value="">-- Select {master.name} (Optional) --</option>
+                    {master.records.map((rec) => (
+                      <option key={rec.id} value={rec.id}>
+                        {rec.label} {rec.recordCode ? `(${rec.recordCode})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="space-y-1 mt-1">
+                    <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-1.5 rounded-lg border border-input bg-background">
+                      {master.records.map((rec) => {
+                        const isSelected = (assignment.recordIds || []).includes(rec.id);
+                        return (
+                          <button
+                            type="button"
+                            key={rec.id}
+                            onClick={() => {
+                              const currentIds = assignment.recordIds || [];
+                              const nextIds = isSelected
+                                ? currentIds.filter((id: number) => id !== rec.id)
+                                : [...currentIds, rec.id];
+                              setMasterAssignments((prev) => ({
+                                ...prev,
+                                [master.id]: {
+                                  ...prev[master.id],
+                                  recordIds: nextIds,
+                                },
+                              }));
+                            }}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-colors cursor-pointer border ${isSelected
+                                ? 'bg-primary text-primary-foreground border-primary font-bold'
+                                : 'bg-muted/60 text-muted-foreground border-border hover:bg-muted'
+                              }`}
                           >
-                            <option value="">-- Select Reporting Manager (Defaults to CEO / Dept Head) --</option>
-                            {(() => {
-                              const getCat = (m: any) => {
-                                const r = (m.accessRole || '').toLowerCase();
-                                const d = (m.designation || '').toLowerCase();
-                                if (['cfo', 'coo', 'cto'].includes(r) || d.includes('chief')) return 'cxo';
-                                if (['department_head', 'hr_manager', 'manager'].includes(r) || d.includes('manager') || d.includes('head')) return 'manager';
-                                if (r === 'team_lead' || d.includes('lead')) return 'lead';
-                                return 'other';
-                              };
-
-                              const cxos = departmentManagers.filter((m: any) => getCat(m) === 'cxo');
-                              const mgrs = departmentManagers.filter((m: any) => getCat(m) === 'manager');
-                              const leads = departmentManagers.filter((m: any) => getCat(m) === 'lead');
-                              const others = departmentManagers.filter((m: any) => getCat(m) === 'other');
-
-                              return (
-                                <>
-                                  {cxos.length > 0 && (
-                                    <optgroup label="⚡ C-Suite Executives (CTO, COO, CFO)">
-                                      {cxos.map((mgr: any) => (
-                                        <option key={mgr.id} value={String(mgr.id)}>
-                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  )}
-                                  {mgrs.length > 0 && (
-                                    <optgroup label="👔 Department Heads & Managers">
-                                      {mgrs.map((mgr: any) => (
-                                        <option key={mgr.id} value={String(mgr.id)}>
-                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  )}
-                                  {leads.length > 0 && (
-                                    <optgroup label="🎖️ Team Leads">
-                                      {leads.map((mgr: any) => (
-                                        <option key={mgr.id} value={String(mgr.id)}>
-                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  )}
-                                  {others.length > 0 && (
-                                    <optgroup label="👥 Other Department Members">
-                                      {others.map((mgr: any) => (
-                                        <option key={mgr.id} value={String(mgr.id)}>
-                                          {mgr.name} {mgr.employeeCode ? `(${mgr.employeeCode})` : ''} · {mgr.designation} ({mgr.department})
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </select>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {!formData.departmentId ? 'Select department first to see reporting managers.' : 'Optional field: Can be assigned later.'}
-                          </p>
-                        </>
+                            {rec.label}
+                          </button>
+                        );
+                      })}
+                      {master.records.length === 0 && (
+                        <span className="text-[11px] text-muted-foreground italic p-1">No records in Master Builder</span>
                       )}
-                    </div>
-
-                    {/* Assigned Salary Slab - NOT MANDATORY */}
-                    <div className="col-span-2">
-                      <Label htmlFor="salarySlabId" className="flex items-center text-xs font-bold text-foreground">
-                        Assigned Salary Slab <span className="text-xs text-muted-foreground font-normal ml-1.5">(Optional)</span>
-                      </Label>
-                      <select
-                        id="salarySlabId"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 cursor-pointer"
-                        value={formData.salarySlabId}
-                        onChange={(e) => handleFieldChange('salarySlabId', e.target.value)}
-                      >
-                        <option value="">-- Select Salary Slab (Optional) --</option>
-                        {slabs.map((s: any) => (
-                          <option key={s.id} value={String(s.id)}>
-                            🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Optional: Select the salary slab template. CTC amount and component breakdown can be configured in Employee Profile &rarr; Payroll Setting.
-                      </p>
                     </div>
                   </div>
                 )}
               </div>
+            );
+          })}
+        </div>
+      </div>
+    )
+  }
+                  </div >
+                )
+}
+              </div >
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-border mt-auto">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={isLoading || isSubmitting}
-                  className="rounded-xl"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={isLoading || isSubmitting}
-                  className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
-                >
-                  {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
-                </Button>
-              </div>
-            </form>
+  <div className="flex justify-end gap-2 pt-4 border-t border-border mt-auto">
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => onOpenChange(false)}
+      disabled={isLoading || isSubmitting}
+      className="rounded-xl"
+    >
+      Cancel
+    </Button>
+    <Button
+      type="submit"
+      disabled={isLoading || isSubmitting}
+      className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+    >
+      {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
+    </Button>
+  </div>
+            </form >
           </>
         )}
-        </ActiveInfoContext.Provider>
-      </DialogContent>
-    </Dialog>
+        </ActiveInfoContext.Provider >
+      </DialogContent >
+    </Dialog >
   );
 }

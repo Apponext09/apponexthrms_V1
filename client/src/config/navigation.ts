@@ -35,6 +35,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'dashboard',
     label: 'Dashboard',
+    icon: 'LayoutDashboard',
     collapsible: false,
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: 'LayoutDashboard' },
@@ -45,6 +46,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'core_hr',
     label: 'CORE HR',
+    icon: 'Users',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     items: [
       { name: 'Employee', href: '/employees', icon: 'Users' },
@@ -62,6 +64,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'recruitment',
     label: 'RECRUITMENT',
+    icon: 'Briefcase',
     items: [
       { name: 'Dashboard', href: '/recruitment/dashboard', icon: 'BarChart3' },
       { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: 'Calendar' },
@@ -117,6 +120,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'attendance',
     label: 'ATTENDANCE',
+    icon: 'Clock',
     items: [
       {
         name: 'Dashboard',
@@ -150,6 +154,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'shift_management',
     label: 'SHIFT MANAGEMENT',
+    icon: 'CalendarClock',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     items: [
       { name: 'General Shift', href: '/attendance/shifts', icon: 'Clock' },
@@ -161,11 +166,9 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'leave',
     label: 'LEAVE MANAGEMENT',
+    icon: 'Calendar',
     items: [
       { name: 'My Leaves', href: '/leaves/my-leaves', icon: 'Calendar' },
-      { name: 'Apply Leave', href: '/leaves/apply', icon: 'FilePlus', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
-      { name: 'Leave Balance', href: '/leaves/balance', icon: 'Clock', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
-      { name: 'Leave Encashment', href: '/leaves/encashment', icon: 'DollarSign', excludeRoles: ['hr', 'hr_admin', 'hr_manager'] },
       {
         name: 'Leave Approvals',
         href: '/leaves/approvals',
@@ -197,9 +200,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'payroll',
     label: 'PAYROLL',
+    icon: 'IndianRupee',
     items: [
       { name: 'Dashboard', href: '/payroll', icon: 'IndianRupee' },
+      { name: 'Admin Payroll Portal', href: '/payroll/admin-portal', icon: 'ShieldCheck', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Payroll Master Settings', href: '/payroll/settings', icon: 'Sliders', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
+      { name: 'Salary Structures', href: '/payroll/salary-structure', icon: 'Layers', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Mass Salary Upload', href: '/payroll/mass-salary-upload', icon: 'UploadCloud', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Salary Revision', href: '/payroll/salary-revision', icon: 'TrendingUp', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
       { name: 'Payroll Processing', href: '/payroll/processing', icon: 'Activity', minRoles: ['organization_admin', 'hr', 'hr_manager'] },
@@ -213,6 +219,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'settlement_management',
     label: 'SETTLEMENT MANAGEMENT',
+    icon: 'UserX',
     items: [
       {
         name: 'Exit Settlements (FnF)',
@@ -231,6 +238,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'loan_management',
     label: 'LOAN MANAGEMENT',
+    icon: 'Percent',
     items: [
       {
         name: 'Loan Type Settings',
@@ -246,6 +254,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'expense_management',
     label: 'EXPENSE MANAGEMENT',
+    icon: 'ReceiptIndianRupee',
     items: [
       { name: 'Dashboard', href: '/expenses/dashboard', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
       { name: 'My Expenses', href: '/expenses/my-expenses', icon: 'ReceiptIndianRupee' },
@@ -266,6 +275,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'pms',
     label: 'PMS',
+    icon: 'Target',
     items: [
       {
         name: 'Dashboard',
@@ -283,6 +293,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'assets',
     label: 'ASSET MANAGEMENT',
+    icon: 'Package',
     items: [
       {
         name: 'Dashboard',
@@ -300,10 +311,31 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
+  // ── 13. LMS (Learning Management System) ───────────────────────────────────
+  {
+    id: 'lms',
+    label: 'LMS',
+    icon: 'GraduationCap',
+    items: [
+      { name: 'Dashboard', href: '/lms/dashboard', icon: 'LayoutDashboard', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Course Management', href: '/lms/courses', icon: 'BookOpen', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Categories', href: '/lms/categories', icon: 'Layers', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Batches & Live Classes', href: '/lms/batches', icon: 'Calendar', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Learner Enrollments', href: '/lms/enrollments', icon: 'Users', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Compliance Training', href: '/lms/compliance', icon: 'ShieldCheck', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+      { name: 'Training Reports', href: '/lms/reports', icon: 'TrendingUp', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'manager'] },
+      { name: 'Course Catalog', href: '/lms/catalog', icon: 'BookOpen' },
+      { name: 'My Learning Hub', href: '/lms/my-learning', icon: 'PlayCircle' },
+      { name: 'My Certificates', href: '/lms/certificates', icon: 'Award' },
+      { name: 'Integration Settings', href: '/lms/settings/integrations', icon: 'Sliders', minRoles: ['organization_admin', 'super_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'] },
+    ],
+  },
+
   // ── 13. Reports & Analytics ───────────────────────────────────────────────
   {
     id: 'analytics',
     label: 'REPORTS & ANALYTICS',
+    icon: 'BarChart3',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'department_head'],
     items: [
       { name: 'Attendance Report', href: '/analytics/attendance', icon: 'BarChart3' },
@@ -328,6 +360,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'hr_operations',
     label: 'HR OPERATIONS',
+    icon: 'ClipboardList',
     minRoles: ['organization_admin', 'hr', 'hr_manager'],
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
@@ -342,6 +375,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'policy_management',
     label: 'POLICY GOVERNANCE',
+    icon: 'ShieldCheck',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     items: [
       { name: 'Policy Dashboard', href: '/policies/manage', icon: 'ShieldCheck' },
@@ -354,6 +388,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'masters',
     label: 'MASTERS',
+    icon: 'Database',
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
@@ -362,21 +397,32 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Location', href: '/masters?tab=location', icon: 'MapPin' },
       { name: 'Department', href: '/masters?tab=department', icon: 'Layers' },
       { name: 'Designation', href: '/masters?tab=designation', icon: 'Briefcase' },
-      { name: 'General Shift', href: '/masters?tab=general-shift', icon: 'Clock' },
-      { name: 'Roster Shift', href: '/masters?tab=roster-shift', icon: 'Clock' },
-      { name: 'OT Rule', href: '/masters?tab=ot-rule', icon: 'Sliders' },
       { name: 'Grade', href: '/masters?tab=grade', icon: 'Award' },
-      { name: 'Holiday', href: '/masters?tab=holiday', icon: 'Calendar' },
       { name: 'Employee Status', href: '/masters?tab=employee-status', icon: 'Users' },
       { name: 'Emp. Type', href: '/masters?tab=emp-type', icon: 'Users' },
-      { name: 'Events', href: '/masters?tab=events', icon: 'CalendarDays' },
-      { name: 'Letter & Offer Master', href: '/masters?tab=offer-templates', icon: 'FileText', badge: 'MNC' },
-      { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
-      { name: 'Notification Merge Codes', href: '/masters?tab=notification-merge-codes', icon: 'Code2' },
-      { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },
-      { name: 'Roles & Responsibility', href: '/masters?tab=roles-responsibility', icon: 'ShieldCheck' },
-      { name: 'KRA Form', href: '/masters?tab=kra', icon: 'FileText' },
-      { name: 'Resource Plan', href: '/masters?tab=resource-plan', icon: 'Grid' },
+    ],
+  },
+
+  // ── 15b. Operational Masters ──────────────────────────────────────────────
+  {
+    id: 'operational_masters',
+    label: 'OPERATIONAL MASTERS',
+    icon: 'Layers',
+    minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
+    collapsible: true,
+    items: [
+      { name: 'General Shift', href: '/operational-masters?tab=general-shift', icon: 'Clock' },
+      { name: 'Roster Shift', href: '/operational-masters?tab=roster-shift', icon: 'Clock' },
+      { name: 'OT Rule', href: '/operational-masters?tab=ot-rule', icon: 'Sliders' },
+      { name: 'Break', href: '/operational-masters?tab=break', icon: 'Coffee' },
+      { name: 'Holiday', href: '/operational-masters?tab=holiday', icon: 'Calendar' },
+      { name: 'Events', href: '/operational-masters?tab=events', icon: 'CalendarDays' },
+      { name: 'Notification Templates', href: '/operational-masters?tab=notification-templates', icon: 'Bell' },
+      { name: 'Notification Merge Codes', href: '/operational-masters?tab=notification-merge-codes', icon: 'Code2' },
+      { name: 'Letter & Offer Master', href: '/operational-masters?tab=offer-templates', icon: 'FileText', badge: 'MNC' },
+      { name: 'Roles & Responsibility', href: '/operational-masters?tab=roles-responsibility', icon: 'ShieldCheck' },
+      { name: 'KRA Form', href: '/operational-masters?tab=kra', icon: 'FileText' },
+      { name: 'Resource Plan', href: '/operational-masters?tab=resource-plan', icon: 'Grid' },
     ],
   },
 
@@ -405,7 +451,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
-      { name: 'Master Builder', href: '/masters/builder', icon: 'Boxes' },
       { name: 'General Settings', href: '/settings/general', icon: 'Sliders' },
       { name: 'Attendance Module', href: '/settings/attendance-module', icon: 'Clock' },
       {
@@ -425,6 +470,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/settings/career-customization',
         icon: 'Palette',
         minRoles: ['organization_admin', 'hr', 'hr_manager'],
+      },
+      {
+        name: 'LMS Platform Integrations',
+        href: '/settings/lms-integrations',
+        icon: 'GraduationCap',
+        minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin', 'ceo', 'hr_admin'],
       },
     ],
   },

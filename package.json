@@ -31,7 +31,7 @@
     "db:seed:payroll": "node database/allseedpay.js",
     "db:rollback": "npm run rollback -w database",
     "type-check": "npm run type-check -ws",
-    "prepare": "husky install"
+    "prepare": "node -e \"try { require('husky').install() } catch(e) {}\""
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -47,7 +47,12 @@
     "husky": "^8.0.3",
     "lint-staged": "^15.2.0",
     "prettier": "^3.1.0",
+    "tsx": "4.7.0",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "esbuild": "^0.21.5",
+    "nanoid": "^3.3.7"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -55,8 +60,9 @@
   },
   "dependencies": {
     "argon2": "^0.44.0",
-    "git": "^0.1.5",
-    "maplibre-gl": "^6.6.0"
+    "maplibre-gl": "^6.6.0",
+    "zod": "^3.22.4",
+    "git": "^0.1.5"
   },
   "allowScripts": {
     "argon2@0.44.0": true,

@@ -408,7 +408,24 @@ export const JobManagement: React.FC = () => {
                         </td>
                         <td className="py-3.5 px-5 font-mono font-bold text-xs text-foreground">{item.jobCode || item.job_code}</td>
                         <td className="py-3.5 px-5">
-                          <div className="font-bold text-foreground text-xs">{item.jobTitle || item.job_title}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-foreground text-xs">{item.jobTitle || item.job_title}</span>
+                            {/* Visibility Badge */}
+                            {(() => {
+                              const isInt = Boolean(item.isInternal ?? item.is_internal);
+                              const isExt = Boolean(item.isPublishedExternal ?? item.is_published_external ?? true);
+                              if (isInt && isExt) {
+                                return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20" title="Internal IJP + External Career Portal">🏢+🌐 Both</span>;
+                              }
+                              if (isInt) {
+                                return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Internal Job Posting (Employee Portal Only)">🏢 IJP Only</span>;
+                              }
+                              if (isExt) {
+                                return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Public Career Portal">🌐 External</span>;
+                              }
+                              return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-500/10 text-slate-500 border border-slate-500/20">🔒 Unlisted</span>;
+                            })()}
+                          </div>
                           <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
                             {stripHtml(item.jobDescription || item.job_description).substring(0, 75)}... 
                             <button onClick={() => setViewingJob(item)} className="text-primary font-bold hover:underline ml-1 inline">
@@ -657,6 +674,8 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     noOfPositions: initialData?.noOfPositions || initialData?.no_of_positions || 1,
     expiryDate: String(initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '').slice(0, 10),
     departmentId: initialData?.departmentId || initialData?.department_id || undefined,
+    isInternal: initialData ? Boolean(initialData.isInternal ?? initialData.is_internal) : false,
+    isPublishedExternal: initialData ? Boolean(initialData.isPublishedExternal ?? initialData.is_published_external ?? true) : true,
   });
 
   // AI Screening Settings State
@@ -807,6 +826,68 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                   })}
               </select>
               <p className="text-[11px] text-muted-foreground">Selecting an MRF will auto-fill job details based on manager requests. Pending MRFs will be automatically approved upon job creation.</p>
+            </div>
+
+            {/* ── Visibility & Reach ── */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 border border-border/80 p-4 rounded-xl space-y-3">
+              <div>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider block">Job Visibility & Candidate Reach</label>
+                <p className="text-[11px] text-muted-foreground">Configure where this opening is visible and who is eligible to apply.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Internal Job Posting (IJP) Switch */}
+                <div 
+                  onClick={() => setFormData(prev => ({ ...prev, isInternal: !prev.isInternal }))}
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                    formData.isInternal 
+                      ? 'bg-blue-500/10 border-blue-500/40 text-blue-900 dark:text-blue-200' 
+                      : 'bg-card border-border/70 hover:bg-muted/50 text-foreground'
+                  }`}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={formData.isInternal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isInternal: e.target.checked }))}
+                    className="mt-0.5 rounded border-border text-blue-600 focus:ring-blue-500 h-4 w-4 shrink-0 pointer-events-none"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>🏢 Internal Opening (IJP)</span>
+                      {formData.isInternal && <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-blue-500 text-white rounded">Active</span>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Listed in Employee Portal for existing staff to explore and apply.
+                    </p>
+                  </div>
+                </div>
+
+                {/* External Career Portal Switch */}
+                <div 
+                  onClick={() => setFormData(prev => ({ ...prev, isPublishedExternal: !prev.isPublishedExternal }))}
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                    formData.isPublishedExternal 
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-900 dark:text-emerald-200' 
+                      : 'bg-card border-border/70 hover:bg-muted/50 text-foreground'
+                  }`}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={formData.isPublishedExternal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isPublishedExternal: e.target.checked }))}
+                    className="mt-0.5 rounded border-border text-emerald-600 focus:ring-emerald-500 h-4 w-4 shrink-0 pointer-events-none"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>🌐 Career Portal (External)</span>
+                      {formData.isPublishedExternal && <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-emerald-500 text-white rounded">Active</span>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Publicly visible for outside candidates via Career Portal link.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
