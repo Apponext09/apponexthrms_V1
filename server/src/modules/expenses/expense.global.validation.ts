@@ -97,6 +97,61 @@ export const EXPENSE_VALIDATION_MESSAGES = {
     statusCode: 400,
     message: 'No active approval workflow is configured for this claim amount.'
   },
+  WORKFLOW_UNPUBLISHED: {
+    code: 'EXP_ERR_WORKFLOW_UNPUBLISHED',
+    statusCode: 400,
+    message: 'A workflow exists for this request type, but it is not published and active.'
+  },
+  WORKFLOW_EMPLOYEE_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_EMPLOYEE_SCOPE',
+    statusCode: 400,
+    message: 'The workflow does not include your employee profile.'
+  },
+  WORKFLOW_DEPARTMENT_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_DEPARTMENT_SCOPE',
+    statusCode: 400,
+    message: 'The workflow does not include your current department.'
+  },
+  WORKFLOW_MANAGER_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_MANAGER_SCOPE',
+    statusCode: 400,
+    message: 'The workflow reporting-manager filter does not match your current reporting manager. Clear that filter or select your actual reporting manager.'
+  },
+  WORKFLOW_ROLE_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_ROLE_SCOPE',
+    statusCode: 400,
+    message: 'The workflow submitter role does not match your assigned role.'
+  },
+  WORKFLOW_COMPANY_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_COMPANY_SCOPE',
+    statusCode: 400,
+    message: 'The workflow does not include your current company.'
+  },
+  WORKFLOW_LOCATION_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_LOCATION_SCOPE',
+    statusCode: 400,
+    message: 'The workflow does not include your current location.'
+  },
+  WORKFLOW_GRADE_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_GRADE_SCOPE',
+    statusCode: 400,
+    message: 'The workflow does not include your current grade.'
+  },
+  WORKFLOW_EMPLOYEE_TYPE_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_EMPLOYEE_TYPE_SCOPE',
+    statusCode: 400,
+    message: 'The workflow does not include your employment type.'
+  },
+  WORKFLOW_AMOUNT_MISMATCH: {
+    code: 'EXP_ERR_WORKFLOW_AMOUNT_SCOPE',
+    statusCode: 400,
+    message: 'The request amount is outside the workflow minimum and maximum amount range.'
+  },
+  WORKFLOW_SCOPE_CONFLICT: {
+    code: 'EXP_ERR_WORKFLOW_SCOPE_CONFLICT',
+    statusCode: 400,
+    message: 'The selected employee, department, and reporting-manager filters do not match any one employee. Correct the workflow scope before publishing.'
+  },
   UNAUTHORIZED_APPROVER: {
     code: 'EXP_ERR_UNAUTHORIZED_APPROVER',
     statusCode: 403,
@@ -105,7 +160,7 @@ export const EXPENSE_VALIDATION_MESSAGES = {
   CANNOT_APPROVE_OWN_CLAIM: {
     code: 'EXP_ERR_SELF_APPROVAL',
     statusCode: 403,
-    message: 'Self-approval is prohibited. You cannot approve your own expense claim.'
+    message: 'Self-approval is allowed only for an explicitly named CEO, Organization Admin, or HR workflow step.'
   },
   REJECTION_REASON_REQUIRED: {
     code: 'EXP_ERR_REJECTION_REASON',
@@ -138,6 +193,39 @@ export const EXPENSE_VALIDATION_MESSAGES = {
     message: 'Expense category code already exists.'
   }
 };
+
+const parseWorkflowValue = (value: any) => {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  try { return JSON.parse(value); } catch { return {}; }
+};
+
+/** Returns an actionable, claimant-scoped reason when configured workflows do not match. */
+export function getExpenseWorkflowMismatchMessage(workflows: any[], applicant: any, requestType: string, amount: number): string {
+  const typed = workflows.filter(workflow => workflow.type === requestType);
+  if (!typed.length) return `No approval workflow has been created for ${requestType.replace(/_/g, ' ')}. Create and publish one before submitting.`;
+  const reasonsFor = (workflow: any): string[] => {
+    const filters = parseWorkflowValue(workflow.applicabilityFilters);
+    const config = parseWorkflowValue(workflow.expenseConfig);
+    const includes = (values: any[], actual: any) => !values?.length || values.map(String).includes(String(actual));
+    const reasons: string[] = [];
+    if (workflow.status !== 'published' || !workflow.isPublished || workflow.isActive === false || workflow.isActive === 0) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_UNPUBLISHED.message);
+    if (!includes(filters.employeeIds, applicant.employeeId)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_EMPLOYEE_MISMATCH.message);
+    if (!includes(filters.departmentIds, applicant.departmentId)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_DEPARTMENT_MISMATCH.message);
+    if (!includes(filters.companyIds, applicant.companyId) || (workflow.companyId && String(workflow.companyId) !== String(applicant.companyId))) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_COMPANY_MISMATCH.message);
+    if (!includes(filters.companyLocationIds, applicant.locationId)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_LOCATION_MISMATCH.message);
+    if (!includes(filters.gradeIds, applicant.gradeId)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_GRADE_MISMATCH.message);
+    if (!includes(filters.employeeTypes, applicant.employeeType)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_EMPLOYEE_TYPE_MISMATCH.message);
+    if (!includes(filters.reportingManagerIds, applicant.reportingManagerId)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_MANAGER_MISMATCH.message);
+    if (config.targetRole && config.targetRole !== 'all' && !applicant.roles.includes(config.targetRole)) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_ROLE_MISMATCH.message);
+    if (amount < Number(config.minAmount ?? 0) || (config.maxAmount != null && amount > Number(config.maxAmount))) reasons.push(EXPENSE_VALIDATION_MESSAGES.WORKFLOW_AMOUNT_MISMATCH.message);
+    return reasons;
+  };
+  const evaluated = typed.map(workflow => ({ workflow, reasons: reasonsFor(workflow) })).sort((a, b) => a.reasons.length - b.reasons.length);
+  const closest = evaluated[0];
+  if (!closest?.reasons.length) return EXPENSE_VALIDATION_MESSAGES.WORKFLOW_NOT_CONFIGURED.message;
+  return `Workflow “${closest.workflow.workflowName || closest.workflow.name}” cannot be used: ${closest.reasons.join(' ')}`;
+}
 
 /**
  * Global helper function to validate an Expense Claim submission

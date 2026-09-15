@@ -39,19 +39,20 @@ export function useEventAudienceOptions() {
         apiClient.get('/settings/employee-statuses'),
       ]);
 
-      const mapItems = (settled: PromiseSettledResult<any>, nameKey = 'name', codeKey = 'code'): AudienceOption[] => {
+      const mapItems = (settled: PromiseSettledResult<any>, nameKey = 'name', codeKey = 'code', altNameKeys: string[] = []): AudienceOption[] => {
         if (settled.status !== 'fulfilled' || !settled.value?.data) return [];
         const raw = settled.value.data?.data || settled.value.data || [];
         if (!Array.isArray(raw)) return [];
         return raw.map((item: any) => ({
           id: item.id ?? item.company_id ?? item.location_id ?? item.department_id ?? item.value ?? item.name,
-          label: item[nameKey] || item.title || item.name || String(item),
+          label: item[nameKey] || altNameKeys.reduce((acc, k) => acc || item[k], '') || item.title || item.name || String(item),
           code: item[codeKey],
         }));
       };
 
       const companies = mapItems(compRes, 'name', 'code');
-      const locations = mapItems(locRes, 'name', 'code');
+      // Locations use location_name in DB (with 'name' as fallback for backward compat)
+      const locations = mapItems(locRes, 'location_name', 'code', ['name']);
       const departments = mapItems(deptRes, 'name', 'code');
       const shifts = mapItems(shiftRes, 'name', 'code');
       const grades = mapItems(gradeRes, 'name', 'code');

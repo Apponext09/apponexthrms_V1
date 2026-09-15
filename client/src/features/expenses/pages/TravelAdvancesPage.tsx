@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState, useCallback } from 'react';
 import { expenseApi, TravelAdvance, TravelRequest } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
@@ -141,7 +142,7 @@ export const TravelAdvancesPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const userEmpId = user?.employeeId || (user as any)?.employee_id || (user as any)?.employeeId || (user as any)?.id;
+      const userEmpId = user?.employeeId || (user as any)?.employee_id || (user as any)?.employeeId ;
       const empId = isManagement ? undefined : userEmpId;
       const advParams: Record<string, any> = {};
       if (empId) advParams.employeeId = empId;
@@ -198,8 +199,8 @@ export const TravelAdvancesPage: React.FC = () => {
     const finalAmt = approvedAmt > 0 ? approvedAmt : reqAmt;
     try {
       setActionLoading(approveModal.id);
-      const res: any = await expenseApi.approveTravelAdvance(approveModal.id, { comments: approveComments, approvedAmount: finalAmt });
-      setToast({ type: 'success', message: res?.message || `Travel advance approved. ${money(finalAmt)} disbursed.` });
+      const res: any = await expenseApi.approveTravelAdvance(approveModal.id, { comments: approveComments, ...((approveModal as any).currentStepFinance ? { approvedAmount: finalAmt } : {}) });
+      setToast({ type: 'success', message: res?.message || 'Workflow approval recorded. Disbursement is a separate step.' });
       setApproveModal(null); setApproveComments(''); setApprovedAmt(0);
       fetchData();
     } catch (err: any) {
@@ -227,6 +228,7 @@ export const TravelAdvancesPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
+      <LegacyWorkflowNotice rows={advances} prefix="ta_" onComplete={fetchData} />
 
       {/* Toast */}
       {toast && (
@@ -257,12 +259,12 @@ export const TravelAdvancesPage: React.FC = () => {
       </div>
 
       {/* Finance notice */}
-      {isFinance && (
+      {(
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 text-xs text-blue-800 dark:text-blue-300">
           <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <span className="font-semibold">Finance Actions Available</span>
-            <span className="text-blue-600 dark:text-blue-400"> — You can approve or reject pending advances below. Filter by <em>Finance Review</em> to see your queue.</span>
+            <span className="font-semibold">Workflow-controlled approvals</span>
+            <span className="text-blue-600 dark:text-blue-400"> — Approval actions appear only when the workflow assigns the current step to you. Payment is recorded separately after final approval.</span>
           </div>
         </div>
       )}
@@ -332,7 +334,7 @@ export const TravelAdvancesPage: React.FC = () => {
                   <th className="py-3.5 px-4">Settled</th>
                   <th className="py-3.5 px-4">Balance</th>
                   <th className="py-3.5 px-4">Status</th>
-                  {isFinance && <th className="py-3.5 px-4 text-right">Finance Action</th>}
+                  {<th className="py-3.5 px-4 text-right">Finance Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -355,7 +357,7 @@ export const TravelAdvancesPage: React.FC = () => {
                   const finNotes = adv.financeNotes || adv.finance_notes;
 
                   const isApproved = status.toLowerCase() === 'approved' || status.toLowerCase() === 'disbursed';
-                  const isPendingFinance = ['pending_finance', 'pending', 'requested'].includes(status.toLowerCase());
+                  const isPendingFinance = Boolean(adv.canApprove);
 
                   return (
                     <tr key={adv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
@@ -395,7 +397,7 @@ export const TravelAdvancesPage: React.FC = () => {
                           <div className="text-[10px] text-slate-400 mt-0.5 max-w-[130px] line-clamp-1" title={finNotes}>Note: {finNotes}</div>
                         )}
                       </td>
-                      {isFinance && (
+                      {(
                         <td className="py-3.5 px-4 text-right">
                           {isPendingFinance ? (
                             <div className="flex items-center justify-end gap-1.5">

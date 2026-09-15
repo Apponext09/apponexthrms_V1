@@ -20,7 +20,8 @@ export class ExpenseDbService {
           });
         }
         await this.deactivateDuplicateCategories(db, organizationId);
-        await this.ensureDefaultCategories(db, organizationId);
+        // NOTE: No default categories are auto-seeded.
+        // Admins must create categories manually via the Expense Settings > Categories page.
       }
 
       if (this.isInitialized) {
@@ -541,9 +542,7 @@ export class ExpenseDbService {
           .update({ current_level: 3 }).catch(() => null);
       }
     } catch { /* ignore */ }
-  }
-
-
+}
   private static async deactivateDuplicateCategories(db: any, organizationId: number): Promise<void> {
     try {
       const rows = await db('expense_categories')
@@ -568,43 +567,4 @@ export class ExpenseDbService {
     }
   }
 
-  public static async ensureDefaultCategories(db: any, organizationId: number): Promise<void> {
-    try {
-      const defaultCats = [
-        { name: 'Travel & Conveyance', code: 'TRAVEL', description: 'Business travel, flights, taxis, and accommodation', spending_limit: 50000, is_receipt_mandatory: true, min_amount_for_receipt: 500 },
-        { name: 'Food & Meals', code: 'MEALS', description: 'Client & team business meals', spending_limit: 5000, is_receipt_mandatory: true, min_amount_for_receipt: 200 },
-        { name: 'Internet & Mobile Allowance', code: 'INTERNET', description: 'Home internet and phone bills', spending_limit: 3000, is_receipt_mandatory: true, min_amount_for_receipt: 0 },
-        { name: 'Hardware & Equipment', code: 'HARDWARE', description: 'Monitors, accessories, and computing equipment', spending_limit: 25000, is_receipt_mandatory: true, min_amount_for_receipt: 1000 },
-        { name: 'Client Entertainment', code: 'ENTERTAINMENT', description: 'Events and dinners with clients', spending_limit: 15000, is_receipt_mandatory: true, min_amount_for_receipt: 500 },
-        { name: 'Office Supplies & Utilities', code: 'SUPPLIES', description: 'Stationery, printing, and general supplies', spending_limit: 10000, is_receipt_mandatory: true, min_amount_for_receipt: 500 },
-        { name: 'Medical & Health', code: 'MEDICAL', description: 'Employee medical & emergency expenses', spending_limit: 20000, is_receipt_mandatory: true, min_amount_for_receipt: 500 },
-        { name: 'General Expenses', code: 'GENERAL', description: 'Miscellaneous official expenses', spending_limit: 10000, is_receipt_mandatory: true, min_amount_for_receipt: 500 },
-      ];
-
-      for (const cat of defaultCats) {
-        const existingRow = await db('expense_categories')
-          .where({ organization_id: organizationId, code: cat.code })
-          .first();
-
-        if (existingRow) {
-          if (!existingRow.is_active) {
-            await db('expense_categories')
-              .where('id', existingRow.id)
-              .update({ is_active: true, updated_at: new Date() });
-          }
-        } else {
-          await db('expense_categories').insert({
-            organization_id: organizationId,
-            ...cat,
-            auto_approval_threshold: 0,
-            is_active: true,
-            created_at: new Date(),
-            updated_at: new Date(),
-          }).catch(() => null);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to seed default expense categories:', err);
-    }
-  }
 }

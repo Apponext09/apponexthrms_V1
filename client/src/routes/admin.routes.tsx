@@ -228,7 +228,7 @@ export const adminRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_3"
-          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          allowedStatuses={['pending_level_3', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
         />
       }
@@ -249,7 +249,7 @@ export const adminRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_3"
-          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          allowedStatuses={['pending_level_3', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
         />
       }
@@ -261,7 +261,7 @@ export const adminRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_3"
-          allowedStatuses={['pending_level_3', 'pending_finance', 'pending_approvals', 'returned', 'rejected']}
+          allowedStatuses={['pending_level_3', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
         />
       }

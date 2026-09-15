@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState } from 'react';
 import { expenseApi, MileageClaim, ExpenseSettings, ExpensePolicy, ExpenseCategory } from '../api/expenseApi';
 import { useAuthStore } from '../../auth/store/authStore';
@@ -244,6 +245,7 @@ export const MileageClaimsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto relative">
+      <LegacyWorkflowNotice rows={claims} prefix="mc_" onComplete={fetchMileage} />
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-2 ${
@@ -339,7 +341,7 @@ export const MileageClaimsPage: React.FC = () => {
                   <th className="py-3.5 px-4">Rate / km</th>
                   <th className="py-3.5 px-4">Total Amount</th>
                   <th className="py-3.5 px-4">Status</th>
-                  {isApprover && <th className="py-3.5 px-4">Actions</th>}
+                  {<th className="py-3.5 px-4">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -386,7 +388,7 @@ export const MileageClaimsPage: React.FC = () => {
                           {formatStatusText(mc.status)}
                         </span>
                       </td>
-                      {isApprover && (
+                      {(
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           {(() => {
                             const curUserId = user?.id || (user as any)?.userId || (user as any)?.employeeId;
@@ -408,20 +410,7 @@ export const MileageClaimsPage: React.FC = () => {
                             const isManagerPortal = pathName.startsWith('/manager');
                             const isTeamLeadPortal = pathName.startsWith('/team-lead');
 
-                            let canActAtStage = false;
-                            if (isHrOrAdminPortal) {
-                              canActAtStage = isLevel3Stage || isFinanceStage;
-                            } else if (isManagerPortal) {
-                              canActAtStage = isLevel2Stage || isLevel1Stage;
-                            } else if (isTeamLeadPortal) {
-                              canActAtStage = isLevel1Stage;
-                            } else {
-                              const rCode = String(user?.role || '').toLowerCase();
-                              const isHrAdminRole = ['hr', 'hr_admin', 'hr_manager', 'organization_admin', 'super_admin', 'admin', 'ceo'].some(r => rCode.includes(r));
-                              if (isLevel3Stage) canActAtStage = isHrAdminRole;
-                              else if (isLevel2Stage) canActAtStage = !isHrAdminRole;
-                              else if (isLevel1Stage) canActAtStage = !isHrAdminRole;
-                            }
+                            const canActAtStage = Boolean(mc.canApprove);
 
                             if (!canActAtStage) {
                               return <span className="text-xs text-slate-400">—</span>;

@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState } from 'react';
 import { expenseApi, ExpenseClaim, ExpenseCategory, ExpenseItemInput } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
@@ -54,7 +55,7 @@ export const MyExpensesPage: React.FC = () => {
 
   // Form State
   const [formTitle, setFormTitle] = useState('');
-  const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
+  const [formDate, setFormDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); });
   const [formCategoryId, setFormCategoryId] = useState<number | undefined>(undefined);
   const [formPaymentMethod, setFormPaymentMethod] = useState('bank_transfer');
   const [formMerchant, setFormMerchant] = useState('');
@@ -63,7 +64,7 @@ export const MyExpensesPage: React.FC = () => {
   const [items, setItems] = useState<ExpenseItemInput[]>([
     {
       categoryId: undefined,
-      expenseDate: new Date().toISOString().slice(0, 10),
+      expenseDate: (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })(),
       claimedAmount: 0,
       merchantName: '',
       description: '',
@@ -84,7 +85,7 @@ export const MyExpensesPage: React.FC = () => {
     try {
       setLoading(true);
       const [claimsRes, catRes, deptRes, polRes] = await Promise.all([
-        expenseApi.getClaims({ mode: isManagement ? undefined : 'my_expenses' }).catch(() => []),
+        expenseApi.getClaims({ mode: 'my_expenses' }),
         expenseApi.getCategories().catch(() => []),
         apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: { data: [] } })),
         expenseApi.getPolicies().catch(() => [])
@@ -348,7 +349,8 @@ export const MyExpensesPage: React.FC = () => {
     } else {
       setEditingClaimId(null);
       setFormTitle('');
-      setFormDate(new Date().toISOString().slice(0, 10));
+      const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+      setFormDate(yesterdayStr);
       setFormCategoryId(categories[0]?.id);
       setFormPaymentMethod('bank_transfer');
       setFormMerchant('');
@@ -357,7 +359,7 @@ export const MyExpensesPage: React.FC = () => {
       setItems([
         {
           categoryId: categories[0]?.id,
-          expenseDate: new Date().toISOString().slice(0, 10),
+          expenseDate: yesterdayStr,
           claimedAmount: 0,
           merchantName: '',
           description: '',
@@ -371,6 +373,11 @@ export const MyExpensesPage: React.FC = () => {
   };
 
   const handleSaveClaim = async (isDraft: boolean) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (formDate >= todayStr) {
+      setToast({ type: 'warning', title: 'Invalid Claim Date', message: 'Claim date must be a previous date. Current date and future dates are not allowed.' });
+      return;
+    }
     if (!formTitle.trim()) {
       setToast({ type: 'warning', title: 'Title Required', message: 'Please enter a claim title.' });
       return;
@@ -394,6 +401,10 @@ export const MyExpensesPage: React.FC = () => {
       const cat = categories.find((c) => c.id === item.categoryId);
       if (!item.categoryId) {
         setToast({ type: 'warning', title: 'Category Required', message: `Item #${i + 1} needs a category.` });
+        return;
+      }
+      if (item.expenseDate && item.expenseDate >= todayStr) {
+        setToast({ type: 'warning', title: 'Invalid Item Date', message: `Item #${i + 1} date must be a previous date. Current date and future dates are not allowed.` });
         return;
       }
       if (Number(item.claimedAmount || 0) <= 0) {
@@ -588,6 +599,7 @@ export const MyExpensesPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <LegacyWorkflowNotice rows={claims} prefix="" onComplete={fetchClaimsAndCategories} />
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-5 right-5 z-[200] flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-medium transition-all max-w-md ${
@@ -857,9 +869,18 @@ export const MyExpensesPage: React.FC = () => {
                   <input
                     type="date"
                     value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
+                    max={(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })()}
+                    onChange={(e) => {
+                      const selected = e.target.value;
+                      const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+                      if (selected > yesterday) return;
+                      setFormDate(selected);
+                    }}
                     className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
+                  <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500">
+                    Select a past date — today's or future dates are not allowed
+                  </p>
                 </div>
 
                 {/* <div>
@@ -1015,14 +1036,23 @@ export const MyExpensesPage: React.FC = () => {
 
                       <div>
                         <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                          Date
+                          Date <span className="text-slate-400 font-normal">(past dates only)</span>
                         </label>
                         <input
                           type="date"
                           value={item.expenseDate || formDate}
-                          onChange={(e) => handleItemChange(idx, 'expenseDate', e.target.value)}
+                          max={(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })()}
+                          onChange={(e) => {
+                            const selected = e.target.value;
+                            const yesterday = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+                            if (selected > yesterday) return;
+                            handleItemChange(idx, 'expenseDate', selected);
+                          }}
                           className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
                         />
+                        <p className="mt-0.5 text-[10px] text-slate-400">
+                          Select a previous date only
+                        </p>
                       </div>
 
                       <div>
