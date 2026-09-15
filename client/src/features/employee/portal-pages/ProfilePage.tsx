@@ -320,7 +320,6 @@ export default function ProfilePage() {
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
-  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   // HR Profile Face Photo Update Request State
   const [hrRequestOpen, setHrRequestOpen] = useState(false);
@@ -726,8 +725,6 @@ export default function ProfilePage() {
           {activeTab === 'details' && (
             <EmployeeDetailsCombined
               employee={activeEmp}
-              isEditingBasicInfo={isEditingBasicInfo}
-              onEditBasicInfoToggle={setIsEditingBasicInfo}
               editUnlocked={isPersonalUnlocked}
               isBasicUnlocked={isBasicUnlocked}
               isPersonalUnlocked={isPersonalUnlocked}

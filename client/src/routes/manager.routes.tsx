@@ -11,7 +11,10 @@ const DepartmentDashboard = lazy(() => import('../features/manager/pages/Departm
 const AttendanceDashboard = lazy(() => import('../features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
 const ManagerHRRegularizationApprovals = lazy(() => import('../features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
 const FaceAttendancePage = lazy(() => import('../features/employee/portal-pages/FaceAttendancePage'));
+const AttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
+const ShiftRosterPage = lazy(() => import('../features/employee/portal-pages/ShiftRosterPage'));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
+const ApprovalsDashboardPage = lazy(() => import('../features/leaves/pages/ApprovalsDashboardPage').then(m => ({ default: m.ApprovalsDashboardPage })));
 const MrfRequestPage = lazy(() => import('../features/recruitment/pages/MrfRequestPage').then(m => ({ default: m.MrfRequestPage })));
 const InterviewCalendarPage = lazy(() => import('../features/recruitment/pages/InterviewCalendarPage').then(m => ({ default: m.InterviewCalendarPage })));
 const InterviewerRatingPage = lazy(() => import('../features/recruitment/pages/InterviewerRatingPage').then(m => ({ default: m.InterviewerRatingPage })));
@@ -60,9 +63,13 @@ export const managerRoutes = (
     <Route path="/manager/attendance" element={<AttendanceDashboard />} />
     <Route path="/manager/attendance-regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
     <Route path="/manager/regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
+    <Route path="/manager/attendance-correction" element={<ManagerHRRegularizationApprovals role="manager" />} />
     <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
+    <Route path="/manager/attendance-log" element={<AttendancePage />} />
+    <Route path="/manager/my-shift" element={<ShiftRosterPage />} />
     <Route path="/manager/leave-approvals" element={<ApprovalInboxPage />} />
     <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
+    <Route path="/manager/leaves/approvals-dashboard" element={<ApprovalsDashboardPage />} />
     <Route path="/manager/hiring" element={<DepartmentDashboard />} />
     <Route path="/manager/mrf-request" element={<MrfRequestPage />} />
     <Route path="/manager/ijp-approvals" element={<ManagerIjpApprovalsPage />} />

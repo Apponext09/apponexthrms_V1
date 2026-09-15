@@ -49,6 +49,7 @@ export class EmployeeController {
       mobile: validated.mobile,
       dateOfBirth: validated.dateOfBirth,
       gender: validated.gender,
+      maritalStatus: validated.maritalStatus,
       dateOfJoining: validated.dateOfJoining,
       employmentType: validated.employmentType,
       status: validated.status,

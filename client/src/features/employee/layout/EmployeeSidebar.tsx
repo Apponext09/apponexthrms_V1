@@ -430,7 +430,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       <PortalSidebarBrand open={open} portalLabel="Employee Self Service" />
 
       {/* Navigation List */}
-      <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-3 py-3">
+      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {/* SEPARATE STANDALONE DASHBOARD LINK */}
         <div className="pb-1">
           <button

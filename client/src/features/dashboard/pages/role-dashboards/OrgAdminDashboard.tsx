@@ -85,7 +85,7 @@ export function OrgAdminDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { selectedCompanyId, selectedCompanyName } = useCompanyStore();
-  const { data: dashboardData, isLoading } = useAdminDashboard();
+  const { data: dashboardData, isLoading, isError, refetch } = useAdminDashboard();
   const { config } = useDashboardCustomizationStore();
 
   const companyInfo = dashboardData?.companyInfo;
@@ -129,10 +129,10 @@ export function OrgAdminDashboard() {
   // ── Fixed KPI cards (always shown) ─────────────────────────────────────────
   const fixedKpiCards = useMemo(() => {
     const vals: Record<string, { value: string; icon: any }> = {
-      totalHeadcount: { value: isLoading ? '...' : String(totalEmployees), icon: Users },
-      activeDepartments: { value: isLoading ? '...' : String(totalDepartments), icon: Building2 },
-      officeLocations: { value: isLoading ? '...' : String(totalLocations), icon: MapPin },
-      monthlyPayrollCost: { value: formattedPayrollCost, icon: Wallet },
+      totalHeadcount: { value: isLoading ? '...' : isError ? '—' : String(totalEmployees), icon: Users },
+      activeDepartments: { value: isLoading ? '...' : isError ? '—' : String(totalDepartments), icon: Building2 },
+      officeLocations: { value: isLoading ? '...' : isError ? '—' : String(totalLocations), icon: MapPin },
+      monthlyPayrollCost: { value: isError ? '—' : formattedPayrollCost, icon: Wallet },
     };
 
     return FIXED_KPIS.map((kpi) => ({
@@ -141,15 +141,15 @@ export function OrgAdminDashboard() {
       path: kpi.path,
       ...vals[kpi.id],
     }));
-  }, [isLoading, totalEmployees, totalDepartments, totalLocations, formattedPayrollCost]);
+  }, [isLoading, isError, totalEmployees, totalDepartments, totalLocations, formattedPayrollCost]);
 
   // ── Optional KPI cards (enabled via customization) ──────────────────────────
   const optionalKpiValues: Record<string, { value: string; icon: any; label: string; path: string }> = {
-    openJobs: { label: 'Open Job Postings', value: isLoading ? '...' : String(openJobsCount), icon: Briefcase, path: OPTIONAL_KPI_PATHS.openJobs },
-    pendingApprovals: { label: 'Pending Approvals', value: isLoading ? '...' : String(pendingApprovals), icon: Clock, path: OPTIONAL_KPI_PATHS.pendingApprovals },
-    newHires: { label: 'New Hires', value: isLoading ? '...' : String(newHires), icon: UserPlus, path: OPTIONAL_KPI_PATHS.newHires },
-    onLeaveToday: { label: 'On Leave Today', value: isLoading ? '...' : String(onLeaveToday), icon: Palmtree, path: OPTIONAL_KPI_PATHS.onLeaveToday },
-    reportingOfficers: { label: 'Reporting Officer', value: isLoading ? '...' : String(reportingOfficers), icon: UserCheck, path: OPTIONAL_KPI_PATHS.reportingOfficers },
+    openJobs: { label: 'Open Job Postings', value: isLoading ? '...' : isError ? '—' : String(openJobsCount), icon: Briefcase, path: OPTIONAL_KPI_PATHS.openJobs },
+    pendingApprovals: { label: 'Pending Approvals', value: isLoading ? '...' : isError ? '—' : String(pendingApprovals), icon: Clock, path: OPTIONAL_KPI_PATHS.pendingApprovals },
+    newHires: { label: 'New Hires This Month', value: isLoading ? '...' : isError ? '—' : String(newHires), icon: UserPlus, path: OPTIONAL_KPI_PATHS.newHires },
+    onLeaveToday: { label: 'On Leave Today', value: isLoading ? '...' : isError ? '—' : String(onLeaveToday), icon: Palmtree, path: OPTIONAL_KPI_PATHS.onLeaveToday },
+    reportingOfficers: { label: 'Reporting Officers', value: isLoading ? '...' : isError ? '—' : String(reportingOfficers), icon: UserCheck, path: OPTIONAL_KPI_PATHS.reportingOfficers },
   };
 
   const activeOptionalKpis = useMemo(() => {
@@ -164,6 +164,7 @@ export function OrgAdminDashboard() {
     newHires,
     onLeaveToday,
     reportingOfficers,
+    isError,
   ]);
 
   // Filtered active Quick Actions
@@ -205,6 +206,13 @@ export function OrgAdminDashboard() {
           )}
         </div>
       </section>
+
+      {isError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-xs text-destructive">
+          <span>Dashboard metrics could not be loaded. Values are unavailable, not zero.</span>
+          <Button size="sm" variant="outline" onClick={() => refetch()} className="h-8 text-xs">Retry</Button>
+        </div>
+      )}
 
       {/* ── Fixed KPI Row (always pinned, not customizable) ─────────────────── */}
       {config.showKpiSection && (

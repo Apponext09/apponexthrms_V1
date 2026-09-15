@@ -33,6 +33,7 @@ export class LifecycleService {
           table.bigIncrements('id').primary();
           table.uuid('uuid').notNullable();
           table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
           table.bigInteger('employee_id').unsigned().notNullable();
           table.bigInteger('from_department_id').unsigned().nullable();
           table.bigInteger('to_department_id').unsigned().nullable();
@@ -57,6 +58,7 @@ export class LifecycleService {
           table.bigIncrements('id').primary();
           table.uuid('uuid').notNullable();
           table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
           table.bigInteger('employee_id').unsigned().notNullable();
           table.string('interviewer_name').nullable();
           table.bigInteger('interviewer_id').unsigned().nullable();
@@ -83,6 +85,7 @@ export class LifecycleService {
           table.bigIncrements('id').primary();
           table.uuid('uuid').notNullable();
           table.bigInteger('organization_id').unsigned().notNullable();
+          table.bigInteger('company_id').unsigned().nullable();
           table.bigInteger('employee_id').unsigned().notNullable();
           table.string('exit_type', 100).notNullable().defaultTo('resignation');
           table.date('resignation_date').nullable();
@@ -108,14 +111,19 @@ export class LifecycleService {
           table.uuid('uuid').notNullable();
           table.bigInteger('organization_id').unsigned().notNullable();
           table.bigInteger('employee_id').unsigned().notNullable();
-          table.string('event_type', 100).notNullable();
           table.string('from_status', 50).nullable();
           table.string('to_status', 50).notNullable();
-          table.date('effective_date').notNullable();
+          table.date('transition_date').notNullable();
           table.text('notes').nullable();
           table.bigInteger('created_by').unsigned().nullable();
           table.timestamp('created_at').defaultTo(db.fn.now());
         });
+      }
+
+      for (const tableName of ['employee_transfers', 'employee_onboarding_records', 'employee_offboarding_records']) {
+        if (!(await db.schema.hasColumn(tableName, 'company_id'))) {
+          await db.schema.alterTable(tableName, (table: any) => table.bigInteger('company_id').unsigned().nullable());
+        }
       }
     } catch (e) {
       console.warn('[LifecycleService] ensureTables non-fatal notice:', e);
@@ -407,6 +415,8 @@ export class LifecycleService {
       })
       .leftJoin('company', 'employees.company_id', 'company.company_id')
       .leftJoin('attendance_locations as loc', 'employees.current_location_id', 'loc.id')
+      .where('employees.organization_id', ctx.organizationId)
+      .whereNull('employees.deleted_at')
       .select(
         'employees.id',
         'employees.uuid',
@@ -487,7 +497,11 @@ export class LifecycleService {
       }
     }
 
-    const realEmpId = emp ? emp.id : employeeId;
+    if (!emp) {
+      throw new Error('Employee not found in this organization.');
+    }
+
+    const realEmpId = emp.id;
 
     // 2. Onboarding Record
     const onboarding = emp ? await db('employee_onboarding_records')
@@ -920,6 +934,7 @@ export class LifecycleService {
   }) {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+    await this.ensureTables(db);
 
     const emp = await db('employees')
       .where('organization_id', ctx.organizationId)
@@ -928,6 +943,9 @@ export class LifecycleService {
 
     if (!emp) {
       throw new Error(`Employee ${input.employeeId} not found.`);
+    }
+    if (!formatDateISO(input.effectiveDate)) {
+      throw new Error('A valid transfer effective date is required.');
     }
 
       const fromDepartmentId = emp.current_department_id || emp.department_id;
@@ -1055,6 +1073,13 @@ export class LifecycleService {
   }) {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+    await this.ensureTables(db);
+
+    const employee = await db('employees')
+      .where({ id: input.employeeId, organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .first();
+    if (!employee) throw new Error('Employee not found in this organization.');
 
     const existing = await db('employee_onboarding_records')
       .where('organization_id', ctx.organizationId)
@@ -1062,7 +1087,7 @@ export class LifecycleService {
       .first();
 
     const payload: any = {
-      company_id: ctx.companyId || null,
+      company_id: employee.company_id || ctx.companyId || null,
       interviewer_name: input.interviewerName || null,
       interviewer_id: input.interviewerId || null,
       onboarded_by_name: input.onboardedByName || null,
@@ -1097,12 +1122,24 @@ export class LifecycleService {
       await db('employee_onboarding_records').insert(payload);
     }
 
-    // Sync date_of_joining to employee master record if provided
-    if (input.joiningDate) {
-      await db('employees')
-        .where('id', input.employeeId)
-        .update({ date_of_joining: input.joiningDate, updated_at: new Date() });
-    }
+    const employeeUpdate: any = { updated_at: new Date() };
+    if (input.joiningDate) employeeUpdate.date_of_joining = input.joiningDate;
+    if (employee.status === 'candidate') employeeUpdate.status = 'onboarding';
+    await db('employees')
+      .where({ id: input.employeeId, organization_id: ctx.organizationId })
+      .update(employeeUpdate);
+
+    await db('employee_lifecycle').insert({
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      employee_id: input.employeeId,
+      from_status: employee.status,
+      to_status: employeeUpdate.status || employee.status,
+      transition_date: input.joiningDate || new Date().toISOString().slice(0, 10),
+      notes: 'Onboarding details updated',
+      created_by: ctx.userId,
+      created_at: new Date(),
+    });
 
     return { success: true, message: 'Onboarding details saved successfully.' };
   }
@@ -1127,6 +1164,13 @@ export class LifecycleService {
   }) {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+    await this.ensureTables(db);
+
+    const employee = await db('employees')
+      .where({ id: input.employeeId, organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .first();
+    if (!employee) throw new Error('Employee not found in this organization.');
 
     const existing = await db('employee_offboarding_records')
       .where('organization_id', ctx.organizationId)
@@ -1134,7 +1178,7 @@ export class LifecycleService {
       .first();
 
     const payload: any = {
-      company_id: ctx.companyId || null,
+      company_id: employee.company_id || ctx.companyId || null,
       exit_type: input.exitType || 'resignation',
       resignation_date: input.resignationDate || null,
       notice_period_days: input.noticePeriodDays || 30,
@@ -1175,6 +1219,20 @@ export class LifecycleService {
         .where('organization_id', ctx.organizationId)
         .where('id', input.employeeId)
         .update(employeeUpdatePayload);
+
+      if (input.updateEmployeeStatus && input.updateEmployeeStatus !== employee.status) {
+        await trx('employee_lifecycle').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: input.employeeId,
+          from_status: employee.status,
+          to_status: input.updateEmployeeStatus,
+          transition_date: input.lastWorkingDay || input.resignationDate || new Date().toISOString().slice(0, 10),
+          notes: `Offboarding updated: ${input.exitType || 'resignation'}`,
+          created_by: ctx.userId,
+          created_at: new Date(),
+        });
+      }
 
       // Handle future leave cancellation if resignation date is provided
       if (input.resignationDate) {
