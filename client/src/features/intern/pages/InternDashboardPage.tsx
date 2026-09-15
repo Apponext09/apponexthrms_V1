@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/config/api';
 
 // ── Amber accent palette ──────────────────────────────────────────────────────
 const amber = {
@@ -93,17 +94,20 @@ export function InternDashboardPage() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [greeting, setGreeting] = useState('');
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     const h = new Date().getHours();
     setGreeting(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening');
   }, []);
 
+  useEffect(() => { apiClient.get('/dashboard/me/stats').then((r) => setStats(r.data?.data)).catch(() => setStats({})); }, []);
+
   const firstName = user?.firstName || 'Intern';
 
   // Placeholder internship dates — in real use these would come from the employee profile API
-  const internStart = '2026-06-01';
-  const internEnd   = '2026-12-31';
+  const internStart = stats?.startDate || new Date().toISOString().slice(0, 10);
+  const internEnd = stats?.endDate || internStart;
 
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -140,10 +144,10 @@ export function InternDashboardPage() {
 
       {/* ── Stats Row ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Days Present"    value={18}   icon={CheckCircle2} sub="This month"     accent="text-emerald-600 dark:text-emerald-400" />
-        <StatCard label="Leaves Taken"    value={2}    icon={Palmtree}     sub="Remaining: 8"   accent="text-sky-600 dark:text-sky-400" />
-        <StatCard label="Stipend"         value="₹12K" icon={TrendingUp}   sub="Last disbursed" accent="text-amber-600 dark:text-amber-400" />
-        <StatCard label="Tasks Completed" value={7}    icon={Target}       sub="Out of 10 this week" accent="text-violet-600 dark:text-violet-400" />
+        <StatCard label="Days Present" value={stats?.attendanceDays ?? '—'} icon={CheckCircle2} sub="This month" accent="text-emerald-600 dark:text-emerald-400" />
+        <StatCard label="Leave Requests" value={stats?.leaveDays ?? '—'} icon={Palmtree} sub="Recorded requests" accent="text-sky-600 dark:text-sky-400" />
+        <StatCard label="Payslips" value={stats?.payslipCount ?? '—'} icon={TrendingUp} sub="Available records" accent="text-amber-600 dark:text-amber-400" />
+        <StatCard label="Active Tasks" value={stats?.activeTasks ?? '—'} icon={Target} sub="Current assignments" accent="text-violet-600 dark:text-violet-400" />
       </div>
 
       {/* ── Quick Actions ───────────────────────────────────────────────────── */}

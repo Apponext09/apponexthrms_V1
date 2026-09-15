@@ -39,6 +39,24 @@ export class ManagerController {
     res.json(result);
   });
 
+  /** HR verification inbox for manager-submitted employment changes. */
+  getHrRecommendationQueue = asyncHandler(async (req: Request, res: Response) => {
+    const data = await this.service.getHrRecommendationQueue(req.ctx!);
+    res.json({ success: true, data });
+  });
+
+  /** HR may approve (verify) or reject a proposal; employee master data is
+   * intentionally left untouched until the final employment-change process. */
+  decideHrRecommendation = asyncHandler(async (req: Request, res: Response) => {
+    const status = req.body?.status;
+    if (!['approved', 'rejected'].includes(status)) {
+      res.status(400).json({ success: false, message: 'status must be approved or rejected.' });
+      return;
+    }
+    const result = await this.service.decideHrRecommendation(req.ctx!, Number(req.params.id), status, req.body?.comment);
+    res.json(result);
+  });
+
   /**
    * Submit hiring request
    */

@@ -18,6 +18,12 @@ export class AdminDashboardController {
       data: stats,
     });
   });
+
+  getMyStats = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx;
+    if (!ctx) { res.status(401).json({ success: false, message: 'Tenant context required' }); return; }
+    res.status(200).json({ success: true, data: await this.service.getMyStats(ctx) });
+  });
 }
 
 export const adminDashboardController = new AdminDashboardController();

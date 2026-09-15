@@ -308,10 +308,27 @@ const ROLE_THEMES: Record<string, ThemePreset[]> = {
   ],
 };
 
+const ROLE_PRIORITY: Record<string, number> = {
+  super_admin: 100, organization_admin: 90, ceo: 90, hr_admin: 80, hr: 80,
+  hr_manager: 70, support: 70, finance: 70, finance_manager: 70,
+  department_head: 60, manager: 60, team_lead: 50, consultant: 20,
+  intern: 10, employee: 5,
+};
+
+function resolveEffectiveRole(...values: unknown[]): string {
+  const candidates = values
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  return candidates.sort((a, b) => (ROLE_PRIORITY[b] ?? 0) - (ROLE_PRIORITY[a] ?? 0))[0] || 'employee';
+}
+
 export default function ProfilePage() {
   const { user } = useAuthStore();
-  const resolvedEmpId = Number(user?.employeeId || user?.id || 0);
-  const { employee, isLoading, refetch } = useEmployee(resolvedEmpId || 'me');
+  // Always resolve identity through the authenticated employee endpoint.  A
+  // users.id is not an employees.id, especially for managers and team leads.
+  const { employee, isLoading, refetch } = useEmployee('me');
+  const resolvedEmpId = Number(employee?.id || 0);
   const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
 
   const [activeTab, setActiveTab] = useState<
@@ -337,7 +354,14 @@ export default function ProfilePage() {
 
   // Role Determination & Theme Switcher
   // Always read from auth store (user) — it is updated on login and reflects the assigned role correctly.
-  const roleCode = (user?.accessRole || user?.roles?.[0] || user?.role || 'employee').toLowerCase();
+  const roleCode = resolveEffectiveRole(
+    employee?.accessRole,
+    (employee as any)?.access_role,
+    (employee as any)?.roles,
+    user?.accessRole,
+    user?.role,
+    user?.roles,
+  );
   const normalizedRole = roleCode.includes('finance')
     ? 'finance'
     : roleCode.includes('intern')
