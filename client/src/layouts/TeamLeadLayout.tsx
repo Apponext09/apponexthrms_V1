@@ -500,7 +500,7 @@ export function TeamLeadLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div >
   );
 }
