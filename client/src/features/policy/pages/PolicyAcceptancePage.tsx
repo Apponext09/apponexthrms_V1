@@ -346,9 +346,9 @@ export function PolicyAcceptancePage() {
                 <div className="w-full h-[580px] bg-slate-50 relative overflow-hidden rounded-xl">
                   {/* Clipped iframe to hide any browser native PDF toolbar */}
                   <iframe
-                    src={pdfBlobUrl || currentPolicy.fileUrl}
+                    src={`${pdfBlobUrl || currentPolicy.fileUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
                     title={currentPolicy?.title || 'Policy Document'}
-                    className="w-full h-[620px] border-0 -mt-10"
+                    className="w-full h-[calc(100%+44px)] border-0 -mt-[44px]"
                   />
                 </div>
               ) : currentPolicy.fileUrl.startsWith('data:image/') || /\.(jpg|jpeg|png|webp)$/i.test(currentPolicy.fileUrl) ? (

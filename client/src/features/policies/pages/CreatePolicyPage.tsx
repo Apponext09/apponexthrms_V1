@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { policiesApi } from '../api/policiesApi';
-import type { PolicySection, TargetAssignment, RolePolicyRecord } from '../types/policy';
+import type { PolicySection, TargetAssignment, RolePolicyRecord, SignatureMode } from '../types/policy';
 
 import { PolicyInformationStep } from '../components/PolicyInformationStep';
 import { PolicyContentEditorStep } from '../components/PolicyContentEditorStep';
@@ -32,6 +32,7 @@ export const CreatePolicyPage: React.FC = () => {
     reviewDate: string;
     expiryDate: string;
     status: string;
+    signatureMode: SignatureMode;
     applicableTo: 'all' | 'gender_wise';
     selectedGenders: string[];
   }>({
@@ -43,12 +44,15 @@ export const CreatePolicyPage: React.FC = () => {
     reviewDate: '',
     expiryDate: '',
     status: 'published',
+    signatureMode: 'ACKNOWLEDGEMENT',
     applicableTo: 'all',
     selectedGenders: ['all'],
   });
 
-  // Step 2: Content Sections
+  // Step 2: Content Sections & File Attachment & Supporting Attachments
   const [sections, setSections] = useState<PolicySection[]>([]);
+  const [attachedFile, setAttachedFile] = useState<{ fileUrl: string; fileName: string; fileSize?: number; fileType?: string } | null>(null);
+  const [attachments, setAttachments] = useState<any[]>([]);
 
   // Step 3: Target Assignments & Options
   const [assignments, setAssignments] = useState<TargetAssignment[]>([
@@ -81,16 +85,31 @@ export const CreatePolicyPage: React.FC = () => {
             reviewDate: p.reviewDate ? p.reviewDate.split('T')[0] : '',
             expiryDate: p.expiryDate ? p.expiryDate.split('T')[0] : '',
             status: p.status || 'published',
+            signatureMode: (p as any).signatureMode || (p as any).signature_mode || 'ACKNOWLEDGEMENT',
             applicableTo: isGenderWise ? 'gender_wise' : 'all',
             selectedGenders: isGenderWise ? pGender.split(',') : ['all'],
           });
 
+
           setSections(p.sections || []);
+
+          if ((p as any).fileUrl && typeof (p as any).fileUrl === 'string' && (p as any).fileUrl.startsWith('/uploads/')) {
+            setAttachedFile({
+              fileUrl: (p as any).fileUrl,
+              fileName: (p as any).fileName || 'Attached Document',
+              fileSize: (p as any).fileSize,
+              fileType: (p as any).fileType,
+            });
+          }
+
+          if ((p as any).attachments && Array.isArray((p as any).attachments)) {
+            setAttachments((p as any).attachments);
+          }
 
           if (p.assignments && p.assignments.length > 0) {
             setAssignments(p.assignments);
-          } else if (p.assignedRoles && p.assignedRoles.length > 0) {
-            setAssignments(p.assignedRoles.map((r) => ({ targetType: 'role', targetId: r })));
+          } else if (p.targetRoles && p.targetRoles.length > 0) {
+            setAssignments(p.targetRoles.map((r) => ({ targetType: 'role', targetId: r })));
           }
 
           setOptions({
@@ -120,13 +139,22 @@ export const CreatePolicyPage: React.FC = () => {
 
     const deptAssignments = assignments
       .filter((a) => a.targetType === 'department')
-      .map((a) => Number(a.targetId))
-      .filter((id) => !isNaN(id) && id > 0);
+      .map((a) => a.targetId)
+      .filter((id) => id !== 'all');
 
-    const fileUrl =
-      sections && sections.length > 0
-        ? JSON.stringify(sections)
-        : infoData.description || 'Policy Document';
+    const empAssignments = assignments
+      .filter((a) => a.targetType === 'employee')
+      .map((a) => a.targetId)
+      .filter((id) => id !== 'all');
+
+    const desigAssignments = assignments
+      .filter((a) => a.targetType === 'designation')
+      .map((a) => a.targetId)
+      .filter((id) => id !== 'all');
+
+    const customAssignments = assignments.filter((a) => a.targetType === 'custom' || a.targetType === 'location');
+
+    const fileUrl = attachedFile?.fileUrl || (sections && sections.length > 0 ? JSON.stringify(sections) : infoData.description || 'Policy Document');
 
     const genderVal =
       infoData.applicableTo === 'gender_wise'
@@ -143,13 +171,21 @@ export const CreatePolicyPage: React.FC = () => {
       expiryDate: infoData.expiryDate,
       status: isPublished ? 'published' : 'draft',
       isActive: isPublished,
+      signatureMode: (infoData.signatureMode || 'ACKNOWLEDGEMENT') as SignatureMode,
       fileUrl: fileUrl,
+      fileName: attachedFile?.fileName || null,
+      fileSize: attachedFile?.fileSize || null,
+      fileType: attachedFile?.fileType || null,
       version: '1.0',
       applicableGender: genderVal,
       applicableDepartmentIds: deptAssignments,
+      applicableEmployeeIds: empAssignments,
+      applicableDesignationIds: desigAssignments,
+      customScope: { assignments: customAssignments },
       roleMappings: roleMappings.length > 0 ? roleMappings : [{ roleCode: 'all', isMandatory: true }],
       sections: sections,
       assignments: assignments,
+      attachments: attachments,
       sendNotification: options.sendNotification,
       requireAcknowledgement: options.requireAcknowledgement,
       allowDownload: options.allowDownload,
@@ -177,9 +213,15 @@ export const CreatePolicyPage: React.FC = () => {
       }
 
       navigate('/policies/manage');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to save draft:', err);
-      toast.error('Failed to save draft policy.');
+      const errMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.error?.details?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to save draft policy.';
+      toast.error(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -201,7 +243,12 @@ export const CreatePolicyPage: React.FC = () => {
       navigate('/policies/manage');
     } catch (err: any) {
       console.error('Failed to publish policy:', err);
-      const errMsg = err?.response?.data?.message || err?.message || 'Failed to publish policy.';
+      const errMsg =
+        err?.response?.data?.error?.message ||
+        err?.response?.data?.error?.details?.message ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Failed to publish policy.';
       toast.error(errMsg);
     } finally {
       setIsSubmitting(false);
@@ -308,6 +355,10 @@ export const CreatePolicyPage: React.FC = () => {
         <PolicyContentEditorStep
           sections={sections}
           onChangeSections={(sec) => setSections(sec)}
+          attachedFile={attachedFile}
+          onFileUploaded={(fileInfo) => setAttachedFile(fileInfo)}
+          attachments={attachments}
+          onAttachmentsChange={(atts) => setAttachments(atts)}
           onBack={() => setCurrentStep(1)}
           onNext={() => setCurrentStep(3)}
           onSaveDraft={handleSaveDraft}
@@ -333,6 +384,8 @@ export const CreatePolicyPage: React.FC = () => {
           policyInfo={infoData}
           sections={sections}
           assignments={assignments}
+          attachedFile={attachedFile}
+          attachments={attachments}
           options={options}
           onBack={() => setCurrentStep(3)}
           onSaveDraft={handleSaveDraft}

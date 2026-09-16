@@ -1065,23 +1065,33 @@ async function ensureDepartmentColumns() {
   }
 }
 
-function parseDeptCompanyIds(rawIds: any, singleCompanyId?: any): number[] {
-  let ids: number[] = [];
-  if (Array.isArray(rawIds)) {
-    ids = rawIds.map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
-  } else if (typeof rawIds === 'string' && rawIds.trim()) {
-    try {
-      const parsed = JSON.parse(rawIds);
-      if (Array.isArray(parsed)) {
-        ids = parsed.map((v) => Number(v)).filter((v) => !isNaN(v) && v > 0);
-      }
-    } catch { }
+function parseDeptCompanyIds(rawCompanyIds: any, rawCompanyId?: any): number[] {
+  const out = new Set<number>();
+  const add = (v: any) => {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) out.add(n);
+  };
+
+  if (Array.isArray(rawCompanyIds)) {
+    rawCompanyIds.forEach(add);
+  } else if (typeof rawCompanyIds === 'string' && rawCompanyIds.trim()) {
+    const str = rawCompanyIds.trim();
+    if (str.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(str);
+        if (Array.isArray(parsed)) parsed.forEach(add);
+      } catch {}
+    } else {
+      str.split(',').forEach((s) => add(s.trim()));
+    }
+  } else if (typeof rawCompanyIds === 'number') {
+    add(rawCompanyIds);
   }
-  if (ids.length === 0 && singleCompanyId) {
-    const num = Number(singleCompanyId);
-    if (!isNaN(num) && num > 0) ids = [num];
+
+  if (rawCompanyId !== undefined && rawCompanyId !== null && rawCompanyId !== '') {
+    add(rawCompanyId);
   }
-  return ids;
+  return [...out];
 }
 
 function formatDeptResponse(dept: any) {
@@ -1389,20 +1399,7 @@ async function tableColumns(db: any, table: string): Promise<Set<string>> {
   }
 }
 
-// Normalize a department's multi-company assignment from any of the shapes the client sends
-// (array of ids, comma-separated string, single id) into a de-duped positive-number array.
-function parseDeptCompanyIds(rawCompanyIds: any, rawCompanyId: any): number[] {
-  const out = new Set<number>();
-  const add = (v: any) => {
-    const n = Number(v);
-    if (Number.isFinite(n) && n > 0) out.add(n);
-  };
-  if (Array.isArray(rawCompanyIds)) rawCompanyIds.forEach(add);
-  else if (typeof rawCompanyIds === 'string' && rawCompanyIds.trim()) rawCompanyIds.split(',').forEach((s) => add(s.trim()));
-  else if (typeof rawCompanyIds === 'number') add(rawCompanyIds);
-  if (rawCompanyId !== undefined && rawCompanyId !== null && rawCompanyId !== '') add(rawCompanyId);
-  return [...out];
-}
+
 
 // Update department by ID (supports PUT and PATCH)
 const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) => {
