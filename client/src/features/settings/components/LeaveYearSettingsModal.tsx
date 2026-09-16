@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -81,17 +81,29 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
     opt.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isAllSelected = options.length > 0 && selectedValues.length === options.length;
+  const isAllSelected =
+    options.length > 0 &&
+    options.every(
+      (opt) =>
+        opt.id !== undefined &&
+        opt.id !== null &&
+        opt.id !== '' &&
+        selectedValues.some((v) => String(v) === String(opt.id))
+    );
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
       onChange([]);
     } else {
-      onChange(options.map((opt) => opt.id));
+      const validIds = options
+        .map((opt) => opt.id)
+        .filter((id) => id !== undefined && id !== null && id !== '');
+      onChange(validIds);
     }
   };
 
   const toggleOption = (id: string | number) => {
+    if (id === undefined || id === null || id === '') return;
     const isPresent = selectedValues.some((v) => String(v) === String(id));
     if (isPresent) {
       onChange(selectedValues.filter((v) => String(v) !== String(id)));
@@ -176,7 +188,11 @@ const FilterMultiSelectPopover: React.FC<FilterMultiSelectPopoverProps> = ({
           {/* Options List */}
           <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
             {filteredOptions.map((opt) => {
-              const isChecked = selectedValues.some((v) => String(v) === String(opt.id));
+              const isChecked =
+                opt.id !== undefined &&
+                opt.id !== null &&
+                opt.id !== '' &&
+                selectedValues.some((v) => String(v) === String(opt.id));
               return (
                 <div
                   key={opt.id}

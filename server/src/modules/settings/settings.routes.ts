@@ -85,11 +85,11 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
         });
       }
 
-      // Dynamically detect existing ID column
+      // Dynamically detect existing ID column (prioritize primary key id)
+      const hasId = await db.schema.hasColumn(table, 'id');
       const hasCompanyId = await db.schema.hasColumn(table, 'company_id');
       const hasBranchId = await db.schema.hasColumn(table, 'branch_id');
-      const hasId = await db.schema.hasColumn(table, 'id');
-      const idCol = hasCompanyId ? 'company_id' : (hasBranchId ? 'branch_id' : (hasId ? 'id' : '1'));
+      const idCol = hasId ? 'id' : (hasCompanyId ? 'company_id' : (hasBranchId ? 'branch_id' : '1'));
 
       // Dynamically detect existing Name column
       const hasCompanyName = await db.schema.hasColumn(table, 'company_name');
@@ -120,9 +120,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       const uniqueList: any[] = [];
       for (const r of rows) {
         const cleanName = String(r.rawName || '').trim();
+        const rawIdVal = r.rawId !== undefined && r.rawId !== null ? r.rawId : (r.id !== undefined && r.id !== null ? r.id : cleanName);
         if (cleanName && cleanName !== 'null' && cleanName !== 'undefined' && !seen.has(cleanName.toLowerCase())) {
           seen.add(cleanName.toLowerCase());
-          uniqueList.push({ id: r.rawId, name: cleanName });
+          uniqueList.push({ id: rawIdVal, name: cleanName });
         }
       }
       return uniqueList;
