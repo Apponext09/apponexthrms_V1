@@ -85,11 +85,11 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
         });
       }
 
-      // Dynamically detect existing ID column
+      // Dynamically detect existing ID column (prioritize primary key id)
+      const hasId = await db.schema.hasColumn(table, 'id');
       const hasCompanyId = await db.schema.hasColumn(table, 'company_id');
       const hasBranchId = await db.schema.hasColumn(table, 'branch_id');
-      const hasId = await db.schema.hasColumn(table, 'id');
-      const idCol = hasCompanyId ? 'company_id' : (hasBranchId ? 'branch_id' : (hasId ? 'id' : '1'));
+      const idCol = hasId ? 'id' : (hasCompanyId ? 'company_id' : (hasBranchId ? 'branch_id' : '1'));
 
       // Dynamically detect existing Name column
       const hasCompanyName = await db.schema.hasColumn(table, 'company_name');
@@ -120,9 +120,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       const uniqueList: any[] = [];
       for (const r of rows) {
         const cleanName = String(r.rawName || '').trim();
+        const rawIdVal = r.rawId !== undefined && r.rawId !== null ? r.rawId : (r.id !== undefined && r.id !== null ? r.id : cleanName);
         if (cleanName && cleanName !== 'null' && cleanName !== 'undefined' && !seen.has(cleanName.toLowerCase())) {
           seen.add(cleanName.toLowerCase());
-          uniqueList.push({ id: r.rawId, name: cleanName });
+          uniqueList.push({ id: rawIdVal, name: cleanName });
         }
       }
       return uniqueList;
@@ -1057,23 +1058,27 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .offset(offset);
 
   const formatted = departments.map((d: any) => {
-    // Parse company_ids: MySQL TEXT column stores JSON string
+    // Parse company_ids: MySQL TEXT column stores JSON string, Knex may return company_ids or companyIds
     let companyIds: number[] = [];
-    const rawCompIds = d.company_ids;
+    const rawCompIds = d.company_ids ?? d.companyIds;
     if (Array.isArray(rawCompIds)) {
       companyIds = rawCompIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
     } else if (typeof rawCompIds === 'string' && rawCompIds.trim()) {
       try {
         const parsed = JSON.parse(rawCompIds);
         if (Array.isArray(parsed)) companyIds = parsed.map(Number).filter((n: number) => !isNaN(n) && n > 0);
-      } catch { }
-    } else if (d.company_id) {
-      companyIds = [Number(d.company_id)];
+      } catch {
+        const parts = rawCompIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+        if (parts.length > 0) companyIds = parts;
+      }
+    }
+    if (companyIds.length === 0 && (d.company_id || d.companyId)) {
+      companyIds = [Number(d.company_id || d.companyId)];
     }
 
     // Parse company_emails: MySQL TEXT column stores JSON string
     let companyEmails: Record<string, string> = {};
-    const rawCompEmails = d.company_emails;
+    const rawCompEmails = d.company_emails ?? d.companyEmails;
     if (rawCompEmails && typeof rawCompEmails === 'object' && !Array.isArray(rawCompEmails)) {
       companyEmails = rawCompEmails;
     } else if (typeof rawCompEmails === 'string' && rawCompEmails.trim()) {
@@ -1280,6 +1285,23 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const created = await db('departments').where('id', id).first();
 
+  let createdCompanyIds: number[] = companyIdsArray;
+  if (createdCompanyIds.length === 0) {
+    const rawC = created?.company_ids ?? created?.companyIds;
+    createdCompanyIds = parseDeptCompanyIds(rawC, created?.company_id ?? created?.companyId);
+  }
+
+  let createdCompanyEmails: Record<string, string> = {};
+  const rawCE = created?.company_emails ?? created?.companyEmails ?? rawCompanyEmails;
+  if (rawCE && typeof rawCE === 'object' && !Array.isArray(rawCE)) {
+    createdCompanyEmails = rawCE;
+  } else if (typeof rawCE === 'string' && rawCE.trim()) {
+    try {
+      const p = JSON.parse(rawCE);
+      if (p && typeof p === 'object' && !Array.isArray(p)) createdCompanyEmails = p;
+    } catch {}
+  }
+
   const response: ApiResponse = {
     success: true,
     data: {
@@ -1293,6 +1315,10 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
       is_active: created?.is_active || isActive,
       isActive: created?.is_active || isActive,
       status: created?.status || status,
+      company_ids: createdCompanyIds,
+      companyIds: createdCompanyIds,
+      company_emails: createdCompanyEmails,
+      companyEmails: createdCompanyEmails,
     },
     message: 'Department created successfully',
   };
@@ -1317,22 +1343,32 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
 
   // Parse company_ids
   let deptCompanyIds: number[] = [];
-  const rawCIds = dept.company_ids;
+  const rawCIds = dept.company_ids ?? dept.companyIds;
   if (Array.isArray(rawCIds)) {
     deptCompanyIds = rawCIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
   } else if (typeof rawCIds === 'string' && rawCIds.trim()) {
-    try { const p = JSON.parse(rawCIds); if (Array.isArray(p)) deptCompanyIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0); } catch { }
-  } else if (dept.company_id) {
-    deptCompanyIds = [Number(dept.company_id)];
+    try {
+      const p = JSON.parse(rawCIds);
+      if (Array.isArray(p)) deptCompanyIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } catch {
+      const parts = rawCIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+      if (parts.length > 0) deptCompanyIds = parts;
+    }
+  }
+  if (deptCompanyIds.length === 0 && (dept.company_id || dept.companyId)) {
+    deptCompanyIds = [Number(dept.company_id || dept.companyId)];
   }
 
   // Parse company_emails
   let deptCompanyEmails: Record<string, string> = {};
-  const rawCEmails = dept.company_emails;
+  const rawCEmails = dept.company_emails ?? dept.companyEmails;
   if (rawCEmails && typeof rawCEmails === 'object' && !Array.isArray(rawCEmails)) {
     deptCompanyEmails = rawCEmails;
   } else if (typeof rawCEmails === 'string' && rawCEmails.trim()) {
-    try { const p = JSON.parse(rawCEmails); if (p && typeof p === 'object' && !Array.isArray(p)) deptCompanyEmails = p; } catch { }
+    try {
+      const p = JSON.parse(rawCEmails);
+      if (p && typeof p === 'object' && !Array.isArray(p)) deptCompanyEmails = p;
+    } catch { }
   }
 
   res.json({
@@ -1357,7 +1393,7 @@ function parseDeptCompanyIds(rawIds: any, singleId: any): number[] {
   if (Array.isArray(rawIds)) {
     return rawIds.map((id: any) => Number(id)).filter((id: number) => !isNaN(id) && id > 0);
   }
-  if (typeof rawIds === 'string') {
+  if (typeof rawIds === 'string' && rawIds.trim()) {
     try {
       const parsed = JSON.parse(rawIds);
       if (Array.isArray(parsed)) {
@@ -1457,22 +1493,32 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   // Parse company_ids from updated row
   let updCompIds: number[] = [];
-  const rawUpCIds = updated?.company_ids;
+  const rawUpCIds = updated?.company_ids ?? updated?.companyIds;
   if (Array.isArray(rawUpCIds)) {
     updCompIds = rawUpCIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
   } else if (typeof rawUpCIds === 'string' && rawUpCIds.trim()) {
-    try { const p = JSON.parse(rawUpCIds); if (Array.isArray(p)) updCompIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0); } catch { }
-  } else if (updated?.company_id) {
-    updCompIds = [Number(updated.company_id)];
+    try {
+      const p = JSON.parse(rawUpCIds);
+      if (Array.isArray(p)) updCompIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } catch {
+      const parts = rawUpCIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+      if (parts.length > 0) updCompIds = parts;
+    }
+  }
+  if (updCompIds.length === 0 && (updated?.company_id || updated?.companyId)) {
+    updCompIds = [Number(updated.company_id || updated.companyId)];
   }
 
   // Parse company_emails from updated row
   let updCompEmails: Record<string, string> = {};
-  const rawUpEmails = updated?.company_emails;
+  const rawUpEmails = updated?.company_emails ?? updated?.companyEmails;
   if (rawUpEmails && typeof rawUpEmails === 'object' && !Array.isArray(rawUpEmails)) {
     updCompEmails = rawUpEmails;
   } else if (typeof rawUpEmails === 'string' && rawUpEmails.trim()) {
-    try { const p = JSON.parse(rawUpEmails); if (p && typeof p === 'object' && !Array.isArray(p)) updCompEmails = p; } catch { }
+    try {
+      const p = JSON.parse(rawUpEmails);
+      if (p && typeof p === 'object' && !Array.isArray(p)) updCompEmails = p;
+    } catch { }
   }
 
   res.json({

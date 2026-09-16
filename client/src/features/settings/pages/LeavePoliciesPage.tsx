@@ -1393,7 +1393,7 @@ export function LeavePoliciesPage() {
   };
 
   const getUniqueSubDepartments = () => {
-    const list = subDepartmentsList || [];
+    const list = subDepartmentsList.length > 0 ? subDepartmentsList : [];
     const seen = new Set<string>();
     return list.filter((item: any) => {
       const name = item.name || item.sub_department_name || item.subDepartmentName;
@@ -1404,7 +1404,7 @@ export function LeavePoliciesPage() {
   };
 
   const getUniqueDesignations = () => {
-    const list = designationsList || [];
+    const list = designationsList.length > 0 ? designationsList : designations;
     const seen = new Set<string>();
     return list.filter((item: any) => {
       const name = item.name || item.designation_name || item.designationName;
