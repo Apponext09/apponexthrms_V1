@@ -100,7 +100,7 @@ export function Topbar({
 
           {/* Right actions */}
           <div className="flex items-center gap-2">
-            <div className="hidden 2xl:block">
+            <div className="hidden min-[1180px]:block">
               <GlobalSearchButton />
             </div>
 

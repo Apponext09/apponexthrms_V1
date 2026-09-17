@@ -39,9 +39,12 @@ const C = {
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const INTERN_NAV = [
   {
+    label: 'OVERVIEW',
+    items: [{ name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard }],
+  },
+  {
     label: 'EMPLOYEE CORE',
     items: [
-      { name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard },
       { name: 'My Lifecycle', href: '/intern/lifecycle', icon: GitBranch },
       { name: 'Org Structure', href: '/intern/org-chart', icon: Building2 },
       { name: 'ID Card', href: '/intern/id-card', icon: Shield },
@@ -73,7 +76,6 @@ const INTERN_NAV = [
     label: 'COMPANY',
     items: [
       { name: 'Announcements', href: '/intern/announcements', icon: Megaphone },
-      { name: 'Org Chart',     href: '/intern/org-chart',     icon: Building2 },
     ],
   },
 ];

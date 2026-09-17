@@ -100,7 +100,6 @@ const FINANCE_NAV = [
     label: "ORGANISATION",
     items: [
       { name: "Announcements", href: "/finance/announcements", icon: Megaphone },
-      { name: "Org Chart",     href: "/finance/org-chart",     icon: Building2 },
     ],
   },
 ];

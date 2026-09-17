@@ -460,8 +460,8 @@ export function GlobalSearch() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="overflow-hidden p-0 shadow-soft-lg">
-        <div className="flex flex-col max-h-[500px]">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-xl overflow-hidden p-0 shadow-soft-lg sm:w-full">
+        <div className="flex max-h-[min(500px,calc(100dvh-2rem))] flex-col">
           {/* Search Input */}
           <div className="flex items-center border-b border-border px-4 py-3 gap-2">
             <Search className="h-5 w-5 text-muted-foreground flex-shrink-0" />
@@ -770,7 +770,7 @@ export function GlobalSearchButton() {
     )
     .slice(0, 6);
   return (
-    <div className="relative w-64">
+    <div className="relative w-[min(16rem,calc(100vw-2rem))] max-w-full">
       <Search className="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={inlineQuery}
@@ -780,7 +780,7 @@ export function GlobalSearchButton() {
           setInlineOpen(true);
         }}
         placeholder="Search modules..."
-        className="h-9 border-border bg-muted/50 pl-9 text-sm"
+        className="h-9 w-full border-border bg-muted/50 pl-9 text-sm"
       />
       {inlineOpen && inlineQuery && (
         <div className="absolute right-0 top-10 z-50 w-full overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg">

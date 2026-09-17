@@ -563,7 +563,7 @@ export function HRLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <div className="hidden min-[1180px]:block"><GlobalSearchButton /></div>
             <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -580,7 +580,7 @@ export function HRLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

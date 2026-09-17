@@ -441,8 +441,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr', 'hr_manager', 'super_admin'],
     collapsible: true,
     items: [
-      { name: 'General Shift', href: '/operational-masters?tab=general-shift', icon: 'Clock' },
-      { name: 'Roster Shift', href: '/operational-masters?tab=roster-shift', icon: 'Clock' },
       { name: 'OT Rule', href: '/operational-masters?tab=ot-rule', icon: 'Sliders' },
       { name: 'Break', href: '/operational-masters?tab=break', icon: 'Coffee' },
       { name: 'Holiday', href: '/operational-masters?tab=holiday', icon: 'Calendar' },
