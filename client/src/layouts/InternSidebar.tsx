@@ -14,6 +14,7 @@ import {
   CreditCard,
   Shield,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -43,6 +44,7 @@ const INTERN_NAV = [
     items: [
       { name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard },
       { name: 'My Profile',   href: '/intern/profile',   icon: User },
+      { name: 'My Lifecycle', href: '/intern/lifecycle', icon: RefreshCw },
     ],
   },
   {

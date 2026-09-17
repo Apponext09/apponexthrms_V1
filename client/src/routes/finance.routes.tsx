@@ -16,6 +16,7 @@ const DocumentsPage = lazy(() => import('../features/employee/portal-pages/Docum
 const HolidayCalendarPage = lazy(() => import('../features/employee/portal-pages/HolidayCalendarPage'));
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
 const OrgChartPage = lazy(() => import('../features/employee/portal-pages/OrgChartPage'));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 
 // ── Lazy Imports: Expense & Disbursal Module Pages ──────────────────────────────
 const FinanceVerificationPage = lazy(() => import('../features/expenses/pages/FinanceVerificationPage').then(m => ({ default: m.FinanceVerificationPage })));
@@ -72,6 +73,8 @@ export const financeRoutes = (
 
     {/* Self-Service & Employee Portal Pages */}
     <Route path="/finance/profile" element={<ProfilePage />} />
+    <Route path="/finance/lifecycle" element={<MyLifecyclePage />} />
+    <Route path="/finance/lifecycle/*" element={<MyLifecyclePage />} />
     <Route path="/finance/attendance" element={<AttendancePage />} />
     <Route path="/finance/face-punch" element={<FaceAttendancePage />} />
     <Route path="/finance/leaves" element={<LeavePage />} />

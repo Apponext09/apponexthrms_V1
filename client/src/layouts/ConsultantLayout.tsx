@@ -17,6 +17,7 @@ import { ConsultantSidebar } from './ConsultantSidebar';
 // ── Page title helper ─────────────────────────────────────────────────────────
 function getPageTitle(pathname: string): string {
   if (pathname.includes('/attendance'))       return 'My Attendance';
+  if (pathname.includes('/lifecycle'))        return 'My Lifecycle';
   if (pathname.includes('/leaves'))           return 'My Leaves';
   if (pathname.includes('/payslips'))         return 'My Payslips';
   if (pathname.includes('/expenses'))         return 'Expense Claims';

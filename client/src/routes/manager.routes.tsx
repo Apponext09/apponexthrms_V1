@@ -40,6 +40,7 @@ const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSet
 const PoliciesPage = lazy(() => import('../features/employee/portal-pages/PoliciesPage'));
 const ManagerIjpApprovalsPage = lazy(() => import('../features/manager/pages/ManagerIjpApprovalsPage'));
 const ManagerLmsPage = lazy(() => import('../features/lms/pages/ManagerLmsPage').then(m => ({ default: m.ManagerLmsPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 
 const MANAGER_ALLOWED_ROLES: Role[] = [
   'department_head',
@@ -61,6 +62,8 @@ export const managerRoutes = (
     <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
     <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
     <Route path="/manager/team" element={<MyTeamPage />} />
+    <Route path="/manager/lifecycle" element={<MyLifecyclePage />} />
+    <Route path="/manager/lifecycle/*" element={<MyLifecyclePage />} />
     <Route path="/manager/attendance" element={<AttendanceDashboard />} />
     <Route path="/manager/attendance-regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
     <Route path="/manager/regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />

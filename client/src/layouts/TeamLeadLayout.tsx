@@ -10,7 +10,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX, Shield
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX, Shield, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -43,6 +43,7 @@ const TEAM_LEAD_NAV = [
     items: [
       { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
       { name: 'My Team', href: '/team-lead/members', icon: Building2 },
+      { name: 'My Lifecycle', href: '/team-lead/lifecycle', icon: RefreshCw },
     ],
   },
   {

@@ -17,31 +17,32 @@ import { cn } from "@/lib/utils";
 
 // -- Page title helper ----------------------------------------------------------
 function getPageTitle(pathname: string): string {
-  if (pathname.includes("/face-punch"))      return "Face Punch Terminal";
-  if (pathname.includes("/expenses/verification")) return "Finance Expense Verification";
-  if (pathname.includes("/expenses/finance-verification")) return "Finance Expense Verification";
-  if (pathname.includes("/expenses/reimbursements")) return "Reimbursements & Disbursals";
-  if (pathname.includes("/expenses/approvals")) return "Expense Approvals";
-  if (pathname.includes("/expenses/dashboard")) return "Expense Analytics Dashboard";
-  if (pathname.includes("/expenses/my-expenses")) return "My Expenses";
-  if (pathname.includes("/expenses/travel-requests")) return "Travel Requests";
-  if (pathname.includes("/expenses/travel-advances")) return "Travel Advances";
-  if (pathname.includes("/expenses/mileage-claims")) return "Mileage Claims";
-  if (pathname.includes("/expenses/categories")) return "Expense Categories";
-  if (pathname.includes("/expenses/policies")) return "Expense Policies";
-  if (pathname.includes("/expenses/reports")) return "Expense Reports & Export";
-  if (pathname.includes("/expenses/settings")) return "Expense Settings & Workflows";
-  if (pathname.includes("/reports"))         return "Finance Reports";
-  if (pathname.includes("/approvals"))       return "Finance Approvals";
-  if (pathname.includes("/dashboard"))       return "Finance Dashboard";
-  if (pathname.includes("/attendance"))      return "My Attendance";
-  if (pathname.includes("/leaves"))          return "My Leaves";
-  if (pathname.includes("/payslips"))        return "My Payslips";
-  if (pathname.includes("/documents"))       return "My Documents";
-  if (pathname.includes("/holiday-calendar")) return "Holiday Calendar";
-  if (pathname.includes("/announcements"))   return "Announcements";
-  if (pathname.includes("/org-chart"))       return "Organisation Chart";
-  if (pathname.includes("/profile"))         return "My Profile";
+  if (pathname.startsWith("/finance/expenses/verification") || pathname.startsWith("/finance/expenses/finance-verification"))
+    return "Finance Expense Verification";
+  if (pathname.startsWith("/finance/expenses/reimbursements")) return "Reimbursements & Disbursals";
+  if (pathname.startsWith("/finance/expenses/travel-advances")) return "Travel Advances";
+  if (pathname.startsWith("/finance/expenses/travel-requests")) return "Travel Requests";
+  if (pathname.startsWith("/finance/expenses/mileage-claims")) return "Mileage Claims";
+  if (pathname.startsWith("/finance/expenses/approvals")) return "Expense Approvals";
+  if (pathname.startsWith("/finance/expenses/reports")) return "Expense Reports & Export";
+  if (pathname.startsWith("/finance/expenses/my-expenses")) return "My Expenses";
+  if (pathname.startsWith("/finance/expenses/categories")) return "Expense Categories";
+  if (pathname.startsWith("/finance/expenses/policies")) return "Expense Policies";
+  if (pathname.startsWith("/finance/expenses/settings")) return "Expense Settings & Workflows";
+  if (pathname.startsWith("/finance/expenses/dashboard")) return "Expense Analytics Dashboard";
+  if (pathname.startsWith("/finance/reports")) return "Financial Reports";
+  if (pathname.startsWith("/finance/approvals")) return "Finance Approval Inbox";
+  if (pathname.startsWith("/finance/face-punch")) return "Face Punch Terminal";
+  if (pathname.startsWith("/finance/attendance")) return "My Attendance";
+  if (pathname.startsWith("/finance/lifecycle")) return "My Lifecycle";
+  if (pathname.startsWith("/finance/leaves")) return "My Leaves";
+  if (pathname.startsWith("/finance/payslips")) return "My Payslips";
+  if (pathname.startsWith("/finance/documents")) return "My Documents";
+  if (pathname.startsWith("/finance/holiday-calendar")) return "Holiday Calendar";
+  if (pathname.startsWith("/finance/announcements")) return "Announcements";
+  if (pathname.startsWith("/finance/org-chart")) return "Organisation Chart";
+  if (pathname.startsWith("/finance/profile")) return "My Profile";
+  if (pathname.startsWith("/finance/dashboard") || pathname === "/finance") return "Finance Dashboard";
   return "Finance Portal";
 }
 

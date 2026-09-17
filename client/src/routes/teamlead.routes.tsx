@@ -36,6 +36,7 @@ const MrfRequestPage = lazy(() => import('../features/recruitment/pages/MrfReque
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 
 // ── Team Lead Portal Routes (/team-lead/*) ────────────────────────────────────
 export const teamLeadRoutes = (
@@ -49,6 +50,8 @@ export const teamLeadRoutes = (
     <Route path="/team-lead" element={<Navigate to="/team-lead/dashboard" replace />} />
     <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
     <Route path="/team-lead/members" element={<TeamMembersPage />} />
+    <Route path="/team-lead/lifecycle" element={<MyLifecyclePage />} />
+    <Route path="/team-lead/lifecycle/*" element={<MyLifecyclePage />} />
     <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
     <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
     <Route path="/team-lead/attendance-log" element={<AttendancePage />} />

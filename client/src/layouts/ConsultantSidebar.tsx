@@ -16,6 +16,7 @@ import {
   Activity,
   Shield,
   ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -45,6 +46,7 @@ const CONSULTANT_NAV = [
     items: [
       { name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard },
       { name: 'My Profile',   href: '/consultant/profile',   icon: User },
+      { name: 'My Lifecycle', href: '/consultant/lifecycle', icon: RefreshCw },
     ],
   },
   {
