@@ -5,6 +5,7 @@ import { TeamLeadLayout } from '../layouts/TeamLeadLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const TeamLeadDashboardPage = lazy(() => import('../features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const TeamMembersPage = lazy(() => import('../features/team-lead/pages/TeamMembersPage').then(m => ({ default: m.TeamMembersPage })));
 // Team Leads use the employee profile view; edits require HR/Admin approval.
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
@@ -85,6 +86,7 @@ export const teamLeadRoutes = (
     <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
     <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
     <Route path="/team-lead/profile" element={<ProfilePage />} />
+    <Route path="/team-lead/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/team-lead/leaves" element={<LeavePage />} />
     <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
     <Route path="/team-lead/leaves/approvals-dashboard" element={<ApprovalsDashboardPage />} />

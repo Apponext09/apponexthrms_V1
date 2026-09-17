@@ -179,6 +179,7 @@ export default function FaceAttendancePage() {
       const res = await apiClient.get('/attendance/my-shift');
       const s = res.data?.data;
       if (s) {
+        setHasShift(true);
         setMyShift({
           shiftName: s.shift_name || s.shiftName || '',
           startTime: s.start_time || s.startTime || '',
@@ -188,8 +189,14 @@ export default function FaceAttendancePage() {
           gracePeriodMinutes: Number(s.grace_period_minutes || s.gracePeriodMinutes || 15),
           durationHours: Number(s.duration_hours || s.durationHours || 9),
         });
+      } else {
+        // HR uses this same self-service flow as employees, managers, and TLs:
+        // a normal-day face punch requires an active shift assignment.
+        setHasShift(false);
+        setMyShift((current) => ({ ...current, shiftName: 'No shift assigned', startTime: '', endTime: '' }));
       }
     } catch (err) {
+      setHasShift(false);
       console.warn('Failed to fetch assigned shift:', err);
     }
   };
@@ -1416,7 +1423,7 @@ export default function FaceAttendancePage() {
               <div className="p-3 rounded-2xl bg-muted/30 border border-border/40 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Shift Type</span>
-                  <span className="font-bold text-foreground">{myShift.shiftName}</span>
+                  <span className="font-bold text-foreground">{myShift.shiftName || 'No shift assigned'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Timing</span>

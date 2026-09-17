@@ -403,7 +403,11 @@ export function EmployeeProfilePage() {
         </TabsContent>
 
         <TabsContent value="documents" className="mt-0 space-y-4">
-          <EmployeeDocuments employeeId={employee.id as number} readOnly={isEmployeePortal} />
+          <EmployeeDocuments
+            employeeId={employee.id as number}
+            readOnly={isEmployeePortal}
+            canEdit={!isEmployeePortal || editUnlocked}
+          />
         </TabsContent>
 
         <TabsContent value="statutory" className="mt-0 space-y-4">

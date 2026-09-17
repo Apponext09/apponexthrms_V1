@@ -142,10 +142,47 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       },
       { name: 'Break Logs', href: '/attendance/break-logs', icon: 'Coffee' },
       {
-        name: 'HR Face Punch',
+        // This is the employee self-service punch terminal.  HR users punch in
+        // exactly as any other employee; it is not an HR-only terminal.
+        name: 'Face Punch',
+        // Never send HR users to /attendance/face-punch: that route is the
+        // CEO terminal in the admin shell. This route renders the same
+        // employee/manager/team-lead self-punch screen.
+        href: '/hr/face-attendance',
+        icon: 'ScanFace',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'CEO Face Punch',
         href: '/attendance/face-punch',
         icon: 'ScanFace',
-        minRoles: ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager'],
+        minRoles: ['organization_admin', 'ceo'],
+      },
+      {
+        name: 'My Attendance Logs',
+        // These must use HR routes: /employee/* is intentionally guarded
+        // against HR roles, even though the rendered UI is shared.
+        href: '/hr/my-attendance',
+        icon: 'Clock',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'Attendance Correction',
+        href: '/hr/my-attendance-correction',
+        icon: 'RefreshCw',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'My Shifts',
+        href: '/hr/my-shifts',
+        icon: 'CalendarDays',
+        minRoles: ['hr', 'hr_admin', 'hr_manager'],
+      },
+      {
+        name: 'Work Hour Workflow',
+        href: '/attendance/workflow-settings',
+        icon: 'GitBranch',
+        minRoles: ['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager'],
       },
     ],
   },
@@ -358,7 +395,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr', 'hr_manager'],
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
-      { name: 'Workflow Builder', href: '/workflow', icon: 'GitBranch' },
       { name: 'Configuration', href: '/configuration', icon: 'Sliders' },
       { name: 'Announcements', href: '/hr-operations/announcements', icon: 'Megaphone' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },

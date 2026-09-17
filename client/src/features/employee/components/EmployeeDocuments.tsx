@@ -42,6 +42,8 @@ interface EmployeeDocumentsProps {
   employeeId?: number;
   /** If true, verification/approval/delete actions are restricted. Employees can upload documents for HR verification. */
   readOnly?: boolean;
+  /** Lets the profile owner edit documents during an HR-approved profile-edit window. */
+  canEdit?: boolean;
 }
 
 const DOCUMENT_TYPES = [
@@ -57,7 +59,7 @@ const STATUS_STYLES: Record<string, string> = {
   expired: 'bg-muted text-muted-foreground border-border',
 };
 
-export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocumentsProps): JSX.Element {
+export function EmployeeDocuments({ employeeId, readOnly = false, canEdit = !readOnly }: EmployeeDocumentsProps): JSX.Element {
   const id = employeeId || 0;
   const { documents, isLoading, refetch } = useEmployeeDocuments(id);
   const { uploadDocument, isLoading: isUploading } = useUploadDocument();
@@ -203,25 +205,34 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
           </CardTitle>
           <CardDescription className="text-xs">
             {readOnly
-              ? 'Upload your official documents for HR & Admin verification and track approval status.'
+              ? canEdit
+                ? 'Update documents while profile editing is approved. HR & Admin verify each submission.'
+                : 'Documents are locked until HR approves your full profile-edit request.'
               : 'Manage employee documents, files, and verification approvals'}
           </CardDescription>
         </div>
-        {/* Upload button is available to BOTH employees and HR/Admin */}
-        <Button
-          size="sm"
-          className="h-8 w-full shrink-0 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg cursor-pointer sm:w-auto"
-          onClick={() => setOpen(true)}
-        >
-          <Upload className="w-3.5 h-3.5" />
-          Upload Document
-        </Button>
+        {canEdit && (
+          <Button
+            size="sm"
+            className="h-8 w-full shrink-0 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg cursor-pointer sm:w-auto"
+            onClick={() => setOpen(true)}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            Upload Document
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
-        {readOnly && (
+        {readOnly && !canEdit && (
           <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-amber-500/8 border border-amber-500/25 text-xs text-amber-700 dark:text-amber-400 font-medium">
             <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
-            Document verification &amp; approval is performed by HR &amp; Admin only. Newly uploaded documents remain pending until approved.
+            Documents are locked. Request a full profile edit approval to upload or replace documents. Verification &amp; approval remains with HR &amp; Admin.
+          </div>
+        )}
+        {readOnly && canEdit && (
+          <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-blue-500/8 border border-blue-500/25 text-xs text-blue-700 dark:text-blue-400 font-medium">
+            <ShieldAlert className="w-4 h-4 shrink-0 text-blue-600" />
+            Your profile edit approval is active. Document verification &amp; approval remains with HR &amp; Admin.
           </div>
         )}
         {isLoading ? (
@@ -300,8 +311,8 @@ export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocu
                       </div>
                     )}
 
-                    {/* Delete — strictly HR & Admin ONLY (!readOnly) */}
-                    {!readOnly && (
+                    {/* Profile owners can remove a document only while an approved edit window is active. */}
+                    {canEdit && (
                       <Button
                         variant="ghost"
                         size="sm"
