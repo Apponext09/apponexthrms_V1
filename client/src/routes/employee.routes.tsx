@@ -26,7 +26,7 @@ const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageC
 const AssetPage = lazy(() => import('../features/employee/portal-pages/AssetPage'));
 const DocumentsPage = lazy(() => import('../features/employee/portal-pages/DocumentsPage'));
 const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
-const OrgChartPage = lazy(() => import('../features/employee/portal-pages/OrgChartPage'));
+const OrgChartPage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
 const TeamDirectoryPage = lazy(() => import('../features/employee/portal-pages/TeamDirectoryPage'));
 const PerformancePage = lazy(() => import('../features/employee/portal-pages/PerformancePage'));
 const GoalsPage = lazy(() => import('../features/employee/portal-pages/GoalsPage'));

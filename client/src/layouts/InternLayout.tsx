@@ -14,6 +14,8 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { Toaster } from '@/components/ui/toast';
 import { InternSidebar } from './InternSidebar';
 import { cn } from '@/lib/utils';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Page title helper ─────────────────────────────────────────────────────────
 function getPageTitle(pathname: string): string {
@@ -112,6 +114,8 @@ export function InternLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <LiveDateTimeDisplay />
             {/* Theme toggle */}
             <Button
               variant="ghost"

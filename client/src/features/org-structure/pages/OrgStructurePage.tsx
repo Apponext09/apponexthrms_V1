@@ -483,7 +483,8 @@ export function OrgStructurePage() {
   });
 
   const userRole = (user as any)?.accessRole || (user as any)?.role || '';
-  const isAdminOrManager = ['hr', 'hr_admin', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
+  // Every portal uses this same canvas. Only HR/admin personas can modify or export it.
+  const isAdminOrManager = ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager', 'super_admin', 'platform_admin'].includes(userRole);
   const canExport = isAdminOrManager || isExportEnabledForEmployees;
 
   // Local employees state for optimistic UI updates
@@ -534,11 +535,13 @@ export function OrgStructurePage() {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!isAdminOrManager) return;
     const emp: Employee = event.active.data.current?.emp;
     if (emp) setActiveDragEmp(emp);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (!isAdminOrManager) return;
     setActiveDragEmp(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -629,6 +632,17 @@ export function OrgStructurePage() {
 
     toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
   };
+
+  // In view-only portals, open the shared chart around the signed-in employee.
+  useEffect(() => {
+    if (isAdminOrManager || !user?.employeeId || !(localEmps || employees)?.length) return;
+    const currentEmployee = (localEmps || employees || []).find((employee: any) => Number(employee.id) === Number(user.employeeId));
+    if (currentEmployee) {
+      handleSearchSubmit(`${currentEmployee.firstName || ''} ${currentEmployee.lastName || ''}`.trim());
+    }
+  // This is intentionally an initial focus action, not a response to canvas pan/zoom.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminOrManager, user?.employeeId, localEmps, employees]);
 
   // Build Dynamic Hierarchy Tree Structure from Database
   const treeData = useMemo(() => {
@@ -1064,7 +1078,7 @@ export function OrgStructurePage() {
       </div>
 
       {/* ─── Interactive Pure Line Tree Canvas wrapped in @dnd-kit DndContext ─── */}
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext sensors={isAdminOrManager ? sensors : []} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={containerRef}
           onWheel={handleWheel}

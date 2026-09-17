@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Bell, Plus, Search, Check, X, Trash2,
   AlertCircle, Code2, Flag, FileText, Loader2
@@ -96,21 +96,33 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
   }, [selectedCompanyId]);
 
   // Fetch live stored merge codes from API
+  const fetchMergeCodes = async () => {
+    try {
+      const res = await apiClient.get('/settings/merge-codes?pageSize=200');
+      const items = res.data?.data || [];
+      setDbMergeCodes(items);
+    } catch {
+      /* fallback */
+    }
+  };
+
   useEffect(() => {
-    apiClient.get('/settings/merge-codes?pageSize=100')
-      .then((res) => {
-        const items = res.data?.data || [];
-        setDbMergeCodes(items);
-      })
-      .catch(() => { /* fallback to default list */ });
-  }, []);
+    fetchMergeCodes();
+  }, [selectedCompanyId]);
 
   // Group stored merge codes by Module Name (e.g. Employee, Workhour, Leave, etc.)
+  // STRICTLY only include active merge codes (is_active === 'Yes')
   const groupedMergeCodes = useMemo(() => {
     const map: Record<string, Array<{ id: string | number; subModule: string; code: string; desc: string }>> = {};
 
     if (dbMergeCodes.length > 0) {
       dbMergeCodes.forEach((item: any) => {
+        const rawActive = item.isActive !== undefined ? item.isActive : (item.is_active !== undefined ? item.is_active : 'Yes');
+        const isItemActive = rawActive === 'Yes' || rawActive === 'yes' || rawActive === true || rawActive === 1 || rawActive === '1';
+
+        // Skip any inactive merge codes so they NEVER appear in the Choose Fields dropdown
+        if (!isItemActive) return;
+
         const mod = (item.moduleName || item.module_name || 'General').trim();
         const subMod = (item.subModuleName || item.sub_module_name || '').trim();
         const desc = (item.description || '').trim();
@@ -124,34 +136,6 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
           desc,
         });
       });
-    } else {
-      // Fallback default grouped items if DB is empty
-      map['Employee'] = [
-        { id: 'e1', subModule: 'Name', code: '{{employee_name}}', desc: 'Employee Name' },
-        { id: 'e2', subModule: 'Company Name', code: '{{company_name}}', desc: 'Company Name' },
-        { id: 'e3', subModule: 'Department', code: '{{department_name}}', desc: 'Department' },
-        { id: 'e4', subModule: 'Grade', code: '{{grade_name}}', desc: 'Grade' },
-        { id: 'e5', subModule: 'Location', code: '{{location_name}}', desc: 'Location' },
-        { id: 'e6', subModule: 'Shift ID', code: '{{shift_id}}', desc: 'Shift ID' },
-        { id: 'e7', subModule: 'Payroll Slab', code: '{{payroll_slab}}', desc: 'Payroll Slab' },
-        { id: 'e8', subModule: 'Created', code: '{{created_date}}', desc: 'Created Date' },
-        { id: 'e9', subModule: 'Employee Code', code: '{{employee_code}}', desc: 'Employee Code' },
-        { id: 'e10', subModule: 'Gender', code: '{{gender}}', desc: 'Gender' },
-        { id: 'e11', subModule: 'Email', code: '{{email}}', desc: 'Email' },
-        { id: 'e12', subModule: 'DOB', code: '{{dob}}', desc: 'Date of Birth' },
-      ];
-      map['Workhour'] = [
-        { id: 'w1', subModule: 'Application', code: '{{workhour_date}}', desc: 'Workhour Date' },
-        { id: 'w2', subModule: 'Approval', code: '{{manager_name}}', desc: 'Manager Name' },
-      ];
-      map['Leave'] = [
-        { id: 'l1', subModule: 'Application', code: '{{leave_type}}', desc: 'Leave Type' },
-        { id: 'l2', subModule: 'Start Date', code: '{{start_date}}', desc: 'Start Date' },
-        { id: 'l3', subModule: 'End Date', code: '{{end_date}}', desc: 'End Date' },
-      ];
-      map['System'] = [
-        { id: 's1', subModule: 'Notification', code: '{{action_url}}', desc: 'Action URL Link' },
-      ];
     }
     return map;
   }, [dbMergeCodes]);
@@ -196,10 +180,11 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
     showToast.info('Form Reset', 'Form fields restored.');
   };
 
-  // Open Merge Codes Modal
+  // Open Merge Codes Modal & fetch fresh data
   const openMergeCodeModal = (target: 'subject' | 'email') => {
     setMergeTargetField(target);
     setSelectedMergeCode('');
+    fetchMergeCodes();
     setIsMergeModalOpen(true);
   };
 

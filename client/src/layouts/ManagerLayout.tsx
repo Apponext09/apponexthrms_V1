@@ -20,6 +20,8 @@ import { NotificationDrawer } from '@/features/notifications/components/Notifica
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Accent palette for Manager (violet/purple) ──────────────────────────────
 const C = {
@@ -40,11 +42,13 @@ const C = {
 
 const MANAGER_NAV = [
   {
-    label: '',
+    label: 'EMPLOYEE CORE',
     items: [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
       { name: 'My Department', href: '/manager/team', icon: Building2 },
       { name: 'My Lifecycle', href: '/manager/lifecycle', icon: GitBranch },
+      { name: 'Org Structure', href: '/manager/org-chart', icon: Building2 },
+      { name: 'ID Card', href: '/manager/id-card', icon: Shield },
     ],
   },
   {
@@ -497,19 +501,8 @@ export function ManagerLayout() {
           </Button>
 
           <div className="flex items-center gap-2">
-            <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">Manager Portal</span>
-            <span className={cn(
-              'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
-              C.badge
-            )}>
-              {roleInfo.roleTitle} · {roleInfo.departmentName}
-            </span>
-          </div>
-
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-2">
+            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

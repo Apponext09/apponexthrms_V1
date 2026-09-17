@@ -14,6 +14,8 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
 import { useEmployeeLocationTracker } from '@/features/Livetracking';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 export function EmployeeLayout() {
   useNotificationSocket();
@@ -112,6 +114,8 @@ export function EmployeeLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <LiveDateTimeDisplay />
             {/* Dark & Light Mode Theme Toggle Button */}
             <Button
               variant="ghost"

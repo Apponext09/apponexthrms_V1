@@ -77,10 +77,14 @@ export function NotificationActionModal({
   const fetchDbMergeCodes = async () => {
     setLoadingCodes(true);
     try {
-      const res = await api.get('/settings/merge-codes');
+      const res = await api.get('/settings/merge-codes?pageSize=200');
       const items = res.data?.data ?? res.data ?? [];
       if (Array.isArray(items) && items.length > 0) {
         const codes = items
+          .filter((it: any) => {
+            const raw = it.is_active ?? it.isActive ?? 'Yes';
+            return raw === 'Yes' || raw === 'yes' || raw === true || raw === 1 || raw === '1';
+          })
           .map((it: any) => it.merge_code || it.code)
           .filter(Boolean);
         if (codes.length > 0) {
