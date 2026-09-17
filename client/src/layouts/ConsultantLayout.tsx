@@ -22,6 +22,8 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes('/leaves'))           return 'My Leaves';
   if (pathname.includes('/payslips'))         return 'My Payslips';
   if (pathname.includes('/expenses'))         return 'Expense Claims';
+  if (pathname.includes('/travel-advances'))  return 'Travel Advances';
+  if (pathname.includes('/mileage-claims'))   return 'Mileage Claims';
   if (pathname.includes('/travel'))           return 'Travel Requests';
   if (pathname.includes('/documents'))        return 'My Documents';
   if (pathname.includes('/holiday-calendar')) return 'Holiday Calendar';
@@ -133,7 +135,7 @@ export function ConsultantLayout() {
         </header>
 
         {/* ── Page Content ── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
       </div>

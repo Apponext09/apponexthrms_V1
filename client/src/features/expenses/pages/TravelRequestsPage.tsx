@@ -476,7 +476,15 @@ export const TravelRequestsPage: React.FC = () => {
                           )}
                           {canAct && (
                             <a
-                              href={path.startsWith('/manager') ? '/manager/expenses/approvals' : (path.startsWith('/team-lead') ? '/team-lead/expenses/approvals' : '/dashboard/expenses/approvals')}
+                              href={
+                                path.startsWith('/finance')
+                                  ? '/finance/expenses/approvals'
+                                  : path.startsWith('/manager')
+                                    ? '/manager/expenses/approvals'
+                                    : path.startsWith('/team-lead')
+                                      ? '/team-lead/expenses/approvals'
+                                      : '/expenses/approvals'
+                              }
                               className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded text-[11px] font-semibold transition-all inline-flex items-center gap-1"
                             >
                               Approve in Expense Approvals →

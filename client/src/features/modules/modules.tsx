@@ -364,6 +364,8 @@ export function ModuleManagementPage(): JSX.Element {
     if (param === 'manager') return 'manager';
     if (param === 'team-lead' || param === 'tl') return 'tl';
     if (param === 'employee' || param === 'emp') return 'emp';
+    if (param === 'intern') return 'intern';
+    if (param === 'consultant') return 'consultant';
     return 'ceo';
   };
 

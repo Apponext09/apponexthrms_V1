@@ -69,7 +69,12 @@ export default function ShiftRosterPage() {
   const [swapRequests, setSwapRequests] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   
-  const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // Default to July 2026 for development
+  // Always start on the user's current calendar month. A fixed development
+  // month made the sidebar-selected roster appear disconnected from Today.
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [shiftsRangeMap, setShiftsRangeMap] = useState<Record<string, any>>({});
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
@@ -747,7 +752,10 @@ export default function ShiftRosterPage() {
                     variant="outline"
                     size="sm"
                     className="h-7 rounded-lg text-xs font-bold border-border bg-background"
-                    onClick={() => setCurrentMonth(new Date(2026, 6, 1))}
+                    onClick={() => {
+                      const today = new Date();
+                      setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+                    }}
                   >
                     Current
                   </Button>

@@ -56,6 +56,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'RefreshCw',
         minRoles: ['organization_admin', 'hr', 'hr_manager'],
       },
+      {
+        name: 'My Lifecycle',
+        href: '/employee/lifecycle',
+        icon: 'GitBranch',
+        minRoles: ['hr', 'hr_manager'],
+      },
       { name: 'Org. Structure', href: '/org-structure', icon: 'GitBranch' },
     ],
   },
@@ -467,7 +473,8 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Manager', href: '/modules?module=manager', icon: 'UserCheck' },
       { name: 'Team Lead', href: '/modules?module=team-lead', icon: 'UserCog' },
       { name: 'Employee', href: '/modules?module=employee', icon: 'User' },
-      { name: 'Intern', href: '/modules?module=intern', icon: 'GraduationCap', badge: 'Coming Soon' },
+      { name: 'Intern', href: '/modules?module=intern', icon: 'GraduationCap' },
+      { name: 'Consultant', href: '/modules?module=consultant', icon: 'Briefcase' },
     ],
   },
 

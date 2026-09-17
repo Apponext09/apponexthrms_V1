@@ -9,6 +9,7 @@ const EmployeeListPage = lazy(() => import('../features/employee/pages/EmployeeL
 const EmployeeProfilePage = lazy(() => import('../features/employee/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
 const EmployeeEditPage = lazy(() => import('../features/employee/pages/EmployeeEditPage').then(m => ({ default: m.EmployeeEditPage })));
 const EmployeeLifecyclePage = lazy(() => import('../features/HR/EmployeeLifecycle/EmployeeLifecyclePage'));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const OrgStructurePage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
 const PayrollDashboard = lazy(() => import('../features/payroll/pages/PayrollDashboard').then(m => ({ default: m.PayrollDashboard })));
 const PayrollSettingsPage = lazy(() => import('../features/payroll/pages/PayrollSettingsPage').then(m => ({ default: m.PayrollSettingsPage })));
@@ -160,6 +161,8 @@ export const hrRoutes = (
     <Route path="/hr/dashboard" element={<Navigate to="/dashboard" replace />} />
     <Route path="/hr/profile" element={<EmployeeProfilePage />} />
     <Route path="/hr/my-profile" element={<EmployeeProfilePage />} />
+    <Route path="/hr/lifecycle" element={<MyLifecyclePage />} />
+    <Route path="/hr/lifecycle/*" element={<MyLifecyclePage />} />
 
     {/* People & Employee Lifecycle */}
     <Route path="/hr/employees" element={<EmployeeListPage />} />

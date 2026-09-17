@@ -71,7 +71,9 @@ const CONSULTANT_NAV = [
     label: 'EXPENSES',
     items: [
       { name: 'Expense Claims',   href: '/consultant/expenses', icon: ReceiptIndianRupee },
-      { name: 'Travel Requests',  href: '/consultant/travel',   icon: Plane },
+      { name: 'Travel Requests',  href: '/consultant/travel-requests', icon: Plane },
+      { name: 'Travel Advances',  href: '/consultant/travel-advances', icon: CreditCard },
+      { name: 'Mileage Claims',   href: '/consultant/mileage-claims',  icon: Activity },
     ],
   },
   {

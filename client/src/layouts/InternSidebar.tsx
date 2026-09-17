@@ -12,6 +12,9 @@ import {
   Building2,
   GraduationCap,
   CreditCard,
+  ReceiptIndianRupee,
+  Plane,
+  Activity,
   Shield,
   ChevronDown,
   GitBranch,
@@ -76,6 +79,15 @@ const INTERN_NAV = [
     label: 'COMPANY',
     items: [
       { name: 'Announcements', href: '/intern/announcements', icon: Megaphone },
+    ],
+  },
+  {
+    label: 'EXPENSES',
+    items: [
+      { name: 'Expense Claims', href: '/intern/expenses', icon: ReceiptIndianRupee },
+      { name: 'Travel Requests', href: '/intern/travel-requests', icon: Plane },
+      { name: 'Travel Advances', href: '/intern/travel-advances', icon: CreditCard },
+      { name: 'Mileage Claims', href: '/intern/mileage-claims', icon: Activity },
     ],
   },
 ];
