@@ -122,12 +122,14 @@ export const PolicyESignModal: React.FC<PolicyESignModalProps> = ({
       const apiBase = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
       const rootUrl = apiBase.replace(/\/api\/v1\/?$/, '');
 
+      const urlParams = new URLSearchParams(signingUrl?.split('?')[1] || '');
+      const token = urlParams.get('token') || 'simulated_provider_auth_token';
+
       // Trigger provider webhook authentication call
       await fetch(`${rootUrl}/api/integrations/esign/webhook`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-esign-signature': 'simulated_provider_auth_token',
         },
         body: JSON.stringify({
           transactionId,
@@ -135,7 +137,8 @@ export const PolicyESignModal: React.FC<PolicyESignModalProps> = ({
           event: 'SIGNED',
           status: 'SIGNED',
           signedAt: new Date().toISOString(),
-          token: 'simulated_provider_auth_token',
+          token,
+          documentBase64: signatureData,
         }),
       });
 

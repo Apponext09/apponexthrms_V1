@@ -1719,6 +1719,7 @@ export class PolicyRepository {
       .leftJoin('users as u', 'pq.user_id', 'u.id')
       .leftJoin('employees as e', 'pq.employee_id', 'e.id')
       .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('designations as desig', 'e.current_designation_id', 'desig.id')
       .leftJoin('users as u_reply', 'pq.replied_by', 'u_reply.id')
       .leftJoin('employees as e_reply', 'u_reply.employee_id', 'e_reply.id')
       .where('pq.organization_id', ctx.organizationId);
@@ -1731,8 +1732,10 @@ export class PolicyRepository {
       .select(
         'pq.*',
         'pd.title as policyTitle',
+        'u.email as userEmail',
         'e.employee_code as employeeCode',
         'd.name as departmentName',
+        'desig.name as roleName',
         this.db.raw("CONCAT_WS(' ', e.first_name, e.last_name) as employeeName"),
         this.db.raw("CONCAT_WS(' ', e_reply.first_name, e_reply.last_name) as repliedByName")
       )
@@ -1816,6 +1819,9 @@ export class PolicyRepository {
       employeeCode: r.employeeCode || null,
       departmentName: r.departmentName || null,
       policyTitle: r.policyTitle || null,
+      userName: r.employeeName || r.userEmail || `User ID ${r.userId || r.user_id}`,
+      userEmail: r.userEmail || null,
+      roleName: r.roleName || null,
     };
   }
 }

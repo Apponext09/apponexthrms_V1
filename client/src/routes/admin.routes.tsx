@@ -99,6 +99,7 @@ const WorkflowListPage = lazy(() => import('../features/workflow/pages/WorkflowL
 const WorkflowBuilderPage = lazy(() => import('../features/workflow/pages/WorkflowBuilderPage').then(m => ({ default: m.WorkflowBuilderPage })));
 const WorkflowDetailPage = lazy(() => import('../features/workflow/pages/WorkflowDetailPage').then(m => ({ default: m.WorkflowDetailPage })));
 const WorkflowSettingsPage = lazy(() => import('../features/workflow/pages/WorkflowSettingsPage').then(m => ({ default: m.WorkflowSettingsPage })));
+const WorkHourWorkflowPage = lazy(() => import('../features/attendance/pages/WorkHourWorkflowPage'));
 const NotificationCenterPage = lazy(() => import('../features/notifications/pages/NotificationCenterPage').then(m => ({ default: m.NotificationCenterPage })));
 const NotificationPreferencesPage = lazy(() => import('../features/notifications/pages/NotificationPreferencesPage').then(m => ({ default: m.NotificationPreferencesPage })));
 const EmployeeRequestsPage = lazy(() => import('../features/HR/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
@@ -183,6 +184,7 @@ export const adminRoutes = (
     {/* Attendance Admin */}
     <Route path="/attendance" element={<AttendanceDashboard />} />
     <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
+    <Route path="/attendance/workflow-settings" element={<WorkHourWorkflowPage />} />
     <Route path="/attendance/locations" element={<HRAttendanceLocationPage />} />
     <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
     <Route path="/attendance/location-mapping" element={<HRAttendanceLocationPage />} />

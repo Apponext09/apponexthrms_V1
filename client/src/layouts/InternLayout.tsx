@@ -124,18 +124,6 @@ export function InternLayout() {
 
             {/* Notifications bell */}
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            {/* Avatar */}
-            <Avatar
-              className="h-8 w-8 cursor-pointer border-2 border-amber-300 dark:border-amber-700"
-              onClick={() => navigate('/intern/profile')}
-              title="My Profile"
-            >
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-amber-500 text-xs font-bold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
 

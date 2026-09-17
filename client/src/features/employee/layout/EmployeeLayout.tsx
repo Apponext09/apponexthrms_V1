@@ -112,12 +112,6 @@ export function EmployeeLayout() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Organization Name Badge */}
-            <div className="mr-1 hidden h-9 max-w-48 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 text-xs font-bold text-foreground sm:inline-flex">
-              <Building2 className="size-3.5 flex-shrink-0 text-primary" />
-              <span className="truncate">{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
-
             {/* Dark & Light Mode Theme Toggle Button */}
             <Button
               variant="ghost"
@@ -136,23 +130,6 @@ export function EmployeeLayout() {
 
             {/* Notifications Dropdown Popup */}
             <NotificationBell className="size-9 rounded-lg border border-border bg-card" iconClassName="size-4" />
-
-            {/* Profile Avatar Badge */}
-            <button
-              type="button"
-              onClick={() => navigate('/employee/profile')}
-              className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity"
-            >
-              <Avatar className="size-8 border border-primary/30">
-                <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
-                <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
-                  {getInitials()}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-xs font-semibold text-foreground hidden md:inline-block truncate max-w-[120px]">
-                {employeeName}
-              </span>
-            </button>
           </div>
         </header>
 

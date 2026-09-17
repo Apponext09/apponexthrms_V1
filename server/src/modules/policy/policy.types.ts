@@ -276,6 +276,9 @@ export interface PolicyQuery {
   employeeCode?: string | null;
   departmentName?: string | null;
   policyTitle?: string | null;
+  userName?: string | null;
+  userEmail?: string | null;
+  roleName?: string | null;
 }
 
 

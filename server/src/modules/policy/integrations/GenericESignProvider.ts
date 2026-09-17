@@ -60,7 +60,11 @@ export class GenericESignProvider implements IESignatureProvider {
     if (signatureHeader && (rawBody || body)) {
       const payloadToSign = rawBody || JSON.stringify(body);
       const computed = crypto.createHmac('sha256', this.webhookSecret).update(payloadToSign).digest('hex');
-      isValid = crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(String(signatureHeader)));
+      const computedBuf = Buffer.from(computed);
+      const headerBuf = Buffer.from(String(signatureHeader));
+      if (computedBuf.length === headerBuf.length) {
+        isValid = crypto.timingSafeEqual(computedBuf, headerBuf);
+      }
     } else if (body && body.token && body.transactionId) {
       const computed = crypto.createHmac('sha256', this.webhookSecret).update(body.transactionId).digest('hex');
       isValid = computed === body.token;

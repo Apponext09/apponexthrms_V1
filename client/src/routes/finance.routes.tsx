@@ -1,12 +1,11 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-
-// Portal shell is lazy-loaded so it is not part of the pre-login bundle
-const FinanceLayout = lazy(() => import('../layouts/FinanceLayout').then(m => ({ default: m.FinanceLayout })));
+import { FinanceLayout } from '../layouts/FinanceLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const FinanceDashboardPage = lazy(() => import('../features/finance/pages/FinanceDashboardPage').then(m => ({ default: m.FinanceDashboardPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const FinanceReportsPage = lazy(() => import('../features/finance/pages/FinanceReportsPage').then(m => ({ default: m.FinanceReportsPage })));
 const FinanceApprovalsPage = lazy(() => import('../features/finance/pages/FinanceApprovalsPage').then(m => ({ default: m.FinanceApprovalsPage })));
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
@@ -74,6 +73,7 @@ export const financeRoutes = (
 
     {/* Self-Service & Employee Portal Pages */}
     <Route path="/finance/profile" element={<ProfilePage />} />
+    <Route path="/finance/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/finance/attendance" element={<AttendancePage />} />
     <Route path="/finance/face-punch" element={<FaceAttendancePage />} />
     <Route path="/finance/leaves" element={<LeavePage />} />

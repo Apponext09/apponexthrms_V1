@@ -25,6 +25,7 @@ import {
   LineChart,
   Sliders,
   ChevronDown,
+  GitBranch,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -80,6 +81,7 @@ const FINANCE_NAV = [
       { name: "My Attendance",    href: "/finance/attendance",       icon: Clock },
       { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
       { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
+      { name: "My Lifecycle",     href: "/finance/lifecycle",        icon: GitBranch },
       { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
     ],
   },
@@ -134,10 +136,14 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
 
       {/* -- User Footer -- */}
       <div className="border-t border-border p-3">
-        <div className={cn("flex items-center gap-3", !open && "justify-center")}>
-          <Avatar className={cn("h-8 w-8 flex-shrink-0 border-2", C.avatarBorder)}>
+        <div
+          onClick={() => navigate('/finance/profile')}
+          className={cn('flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors', !open && 'justify-center')}
+          title="View Profile"
+        >
+          <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
             <AvatarImage src={user?.avatarUrl} />
-            <AvatarFallback className={cn("text-xs font-bold text-white", C.avatarBg)}>
+            <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
               {initials}
             </AvatarFallback>
           </Avatar>
@@ -145,18 +151,18 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
             {open && (
               <motion.div
                 initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: "auto" }}
+                animate={{ opacity: 1, width: 'auto' }}
                 exit={{ opacity: 0, width: 0 }}
                 className="flex flex-1 items-center justify-between overflow-hidden"
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-foreground">
                     {(() => {
-                      const fName = (user?.firstName || (user as any)?.first_name || "").trim();
-                      let lName  = (user?.lastName  || (user as any)?.last_name  || "").trim();
-                      if (lName.toLowerCase() === "user") lName = "";
+                      const fName = (user?.firstName || (user as any)?.first_name || '').trim();
+                      let lName  = (user?.lastName  || (user as any)?.last_name  || '').trim();
+                      if (lName.toLowerCase() === 'user') lName = '';
                       const full = `${fName} ${lName}`.trim();
-                      return full || fName || "User";
+                      return full || fName || 'User';
                     })()}
                   </p>
                   <p className="truncate text-[10px] text-muted-foreground">Finance</p>
@@ -165,7 +171,7 @@ export function FinanceSidebar({ open, onOpenChange }: FinanceSidebarProps) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleLogout}
+                  onClick={(e) => { e.stopPropagation(); handleLogout(); }}
                   title="Sign out"
                 >
                   <LogOut size={13} />

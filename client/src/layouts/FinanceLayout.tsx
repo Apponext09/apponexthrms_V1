@@ -140,18 +140,6 @@ export function FinanceLayout() {
 
             {/* Notifications bell */}
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            {/* Avatar */}
-            <Avatar
-              className="h-8 w-8 cursor-pointer border-2 border-emerald-400 dark:border-emerald-700"
-              onClick={() => navigate("/finance/profile")}
-              title="My Profile"
-            >
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-emerald-600 text-xs font-bold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
 

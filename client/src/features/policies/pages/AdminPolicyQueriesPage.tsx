@@ -121,7 +121,9 @@ export const AdminPolicyQueriesPage: React.FC = () => {
                   <div>
                     <div className="font-bold text-sm">Policy: {q.policyTitle || q.policyDocumentId} (v{q.policyVersion || '1.0'})</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      Asked by: <span className="font-semibold text-foreground">{q.userName || q.userEmail || `User ID ${q.userId}`}</span> on {new Date(q.createdAt).toLocaleString()}
+                      Submitted by: <span className="font-semibold text-foreground">{q.userName || q.userEmail || `User ID ${q.userId}`}</span> 
+                      {q.roleName ? ` • Role: ${q.roleName}` : ''}
+                      <span className="ml-1">• {new Date(q.createdAt).toLocaleString()}</span>
                     </div>
                   </div>
                   <Badge variant={q.status === 'OPEN' ? 'destructive' : q.status === 'REPLIED' ? 'secondary' : 'outline'}>

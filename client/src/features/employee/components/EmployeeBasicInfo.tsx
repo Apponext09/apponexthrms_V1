@@ -13,7 +13,6 @@ import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
-import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import type { Employee } from '@/types';
 
 interface EmployeeBasicInfoProps {
@@ -108,7 +107,6 @@ export function EmployeeBasicInfo({
 
   const isEmployeePortal = !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const { consumePermission } = useConsumeEditPermission();
   const isAdmin = isAdminOrHR;
 
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
@@ -203,10 +201,6 @@ export function EmployeeBasicInfo({
       const updatedData = res?.data || res || {};
       const newStatus = updatedData.employeeStatus || updatedData.employee_status || payload.employeeStatus;
       
-      // Consume the approved edit permission so employee can't edit again without another approval
-      if (isEmployeePortal && approvedRequestId) {
-        await consumePermission(approvedRequestId);
-      }
       showToast.success('Employee basic information saved');
       setForm((prev: any) => ({
         ...prev,

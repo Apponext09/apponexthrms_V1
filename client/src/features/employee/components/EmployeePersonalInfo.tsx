@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Edit, Save, X, Loader2, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
-import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import {
   useEmployeePersonalInfo,
@@ -40,7 +39,6 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
 
   const isEmployeePortal = !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const { consumePermission } = useConsumeEditPermission();
 
   const { personalInfo, isLoading } = useEmployeePersonalInfo(employeeId);
   const { updatePersonalInfo, isLoading: isSaving } = useUpdatePersonalInfo(employeeId);
@@ -58,10 +56,6 @@ export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approve
         payload.childrenCount = Number(payload.childrenCount) || 0;
       }
       await updatePersonalInfo(payload);
-      // Consume the approved edit permission so employee can't edit again without another approval
-      if (isEmployeePortal && approvedRequestId) {
-        await consumePermission(approvedRequestId);
-      }
       showToast.success('Personal information saved');
       setIsEditing(false);
     } catch {

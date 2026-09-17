@@ -1,13 +1,12 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-
-// Portal shell is lazy-loaded so it is not part of the pre-login bundle
-const ManagerLayout = lazy(() => import('../layouts/ManagerLayout').then(m => ({ default: m.ManagerLayout })));
+import { ManagerLayout } from '../layouts/ManagerLayout';
 import type { Role } from '@/config/roles';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const ManagerDashboardPage = lazy(() => import('../features/manager/pages/ManagerDashboardPage').then(m => ({ default: m.ManagerDashboardPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const MyTeamPage = lazy(() => import('../features/manager/pages/MyTeamPage').then(m => ({ default: m.MyTeamPage })));
 const DepartmentDashboard = lazy(() => import('../features/manager/pages/DepartmentDashboard').then(m => ({ default: m.DepartmentDashboard })));
 const AttendanceDashboard = lazy(() => import('../features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
@@ -113,6 +112,7 @@ export const managerRoutes = (
     <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
     <Route path="/manager/approvals" element={<ApprovalsPage />} />
     <Route path="/manager/profile" element={<ProfilePage />} />
+    <Route path="/manager/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/manager/leaves" element={<LeavePage />} />
     <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
     <Route path="/manager/settlements" element={<TeamSettlementsPage />} />

@@ -1,12 +1,11 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-
-// Portal shell is lazy-loaded so it is not part of the pre-login bundle
-const ConsultantLayout = lazy(() => import('../layouts/ConsultantLayout').then(m => ({ default: m.ConsultantLayout })));
+import { ConsultantLayout } from '../layouts/ConsultantLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const ConsultantDashboardPage = lazy(() => import('../features/consultant/pages/ConsultantDashboardPage').then(m => ({ default: m.ConsultantDashboardPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
 const AttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
@@ -31,6 +30,7 @@ export const consultantRoutes = (
     <Route path="/consultant" element={<Navigate to="/consultant/dashboard" replace />} />
     <Route path="/consultant/dashboard" element={<ConsultantDashboardPage />} />
     <Route path="/consultant/profile" element={<ProfilePage />} />
+    <Route path="/consultant/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/consultant/attendance" element={<AttendancePage />} />
     <Route path="/consultant/leaves" element={<LeavePage />} />
     <Route path="/consultant/payslips" element={<PayslipViewer />} />

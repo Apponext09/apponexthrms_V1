@@ -210,20 +210,39 @@ export class WorkflowSettingsService {
     const stepNumber = input.stepNumber ?? existingSteps.length + 1;
     const stepName = input.stepName || this.getDefaultStepName(input.stepType);
 
+    // The last configured step completes the workflow. When a new step is
+    // appended, it becomes the new final step.
+    await (this.stepRepo as any).query(ctx)
+      .where('workflow_id', input.workflowId)
+      .whereNull('deleted_at')
+      .update({ is_final_step: false });
+
+    // The UI selects an employee record; approvals are assigned to the linked
+    // authenticated user record.
+    let approverId = input.approverId;
+    if (input.stepType === 'employee' && input.approverId) {
+      const user = await db('users')
+        .where({ organization_id: ctx.organizationId, employee_id: input.approverId })
+        .whereNull('deleted_at')
+        .first('id');
+      if (!user) throw new NotFoundError('The selected employee does not have an active user account');
+      approverId = Number(user.id);
+    }
+
     const step = await this.stepRepo.create(ctx, {
       uuid: uuidv4(),
       workflow_id: input.workflowId,
       step_number: stepNumber,
       step_name: stepName,
       approver_type: mapToDbApproverType(input.stepType),
-      approver_id: input.approverId ?? null,
+      approver_id: approverId ?? null,
       approver_role_id: input.approverRoleId ?? null,
       approver_department_id: input.approverDepartmentId ?? null,
       approval_mode: 'single_person',
       can_delegate: true,
       can_reject: true,
       can_reassign: false,
-      is_final_step: false,
+      is_final_step: true,
       action_on_approval: 'proceed',
       action_on_rejection: 'reject',
       form_permissions: input.formPermissions ? JSON.stringify(input.formPermissions) : null,

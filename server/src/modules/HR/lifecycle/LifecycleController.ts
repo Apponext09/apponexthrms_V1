@@ -52,6 +52,17 @@ export class LifecycleController {
     res.json({ success: true, data });
   });
 
+  /**
+   * Return lifecycle details for the authenticated user's linked employee.
+   * This avoids relying on a client-side employeeId, which is not present in
+   * every role's login payload.
+   */
+  getMyEmployeeLifecycleDetails = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.lifecycleService.getEmployeeLifecycleDetails(ctx, 0);
+    res.json({ success: true, data });
+  });
+
   transferEmployee = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const {

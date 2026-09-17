@@ -5,7 +5,6 @@ import { apiClient } from '@/config/api';
 import type { Employee } from '@/types';
 import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck, Lock, Eye, EyeOff } from 'lucide-react';
 import { ProfileEditRequestModal } from './ProfileEditRequestModal';
-import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import { useAuthStore } from '@/features/auth/store/authStore';
 
 // Helper functions to mask sensitive statutory & banking fields
@@ -102,7 +101,6 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
 
   const isEmployeePortal = !isAdminOrHR;
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const { consumePermission } = useConsumeEditPermission();
 
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -304,10 +302,6 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
 
       showToast.success('Statutory & Banking Details saved successfully!');
       setIsEditing(false);
-      // Consume the approved edit permission so employee can't edit again without another approval
-      if (isEmployeePortal && approvedRequestId) {
-        await consumePermission(approvedRequestId);
-      }
       onUpdate?.();
     } catch (err: any) {
       showToast.error(err?.response?.data?.message || 'Failed to save statutory details');
