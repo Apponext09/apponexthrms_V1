@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { requirePermission } from '../../common/middleware/requirePermission';
+import { denyRoles } from '../../common/middleware/denyRoles';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import { goalController } from './controllers/GoalController';
 import { okrController } from './controllers/OKRController';
@@ -18,6 +19,7 @@ const router = Router();
 
 // Apply authentication and tenant resolution for all performance routes
 router.use(authenticate, resolveTenant);
+router.use(denyRoles(['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager']));
 
 // Root endpoint - get performance summary
 router.get('/', asyncHandler(async (req, res) => {

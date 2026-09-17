@@ -19,6 +19,8 @@ import { NotificationDrawer } from '@/features/notifications/components/Notifica
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Accent palette for Team Lead (emerald/teal) ───────────────────────────────
 const C = {
@@ -38,11 +40,13 @@ const C = {
 
 const TEAM_LEAD_NAV = [
   {
-    label: '',
+    label: 'EMPLOYEE CORE',
     items: [
       { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
       { name: 'My Team', href: '/team-lead/members', icon: Building2 },
       { name: 'My Lifecycle', href: '/team-lead/lifecycle', icon: GitBranch },
+      { name: 'Org Structure', href: '/team-lead/org-chart', icon: Building2 },
+      { name: 'ID Card', href: '/team-lead/id-card', icon: Shield },
     ],
   },
   {
@@ -506,6 +510,8 @@ export function TeamLeadLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
+            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

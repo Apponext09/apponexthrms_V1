@@ -13,6 +13,8 @@ import { NotificationDrawer } from '@/features/notifications/components/Notifica
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Toaster } from '@/components/ui/toast';
 import { ConsultantSidebar } from './ConsultantSidebar';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Page title helper ─────────────────────────────────────────────────────────
 function getPageTitle(pathname: string): string {
@@ -113,6 +115,8 @@ export function ConsultantLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <LiveDateTimeDisplay />
             {/* Theme toggle */}
             <Button
               variant="ghost"

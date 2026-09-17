@@ -19,6 +19,7 @@ import { useRbac } from '@/lib/rbac';
 import { getVisibleSections } from '@/config/navigation';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import * as LucideIcons from 'lucide-react';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 
 export function Topbar({
   onMenuClick,
@@ -105,6 +106,8 @@ export function Topbar({
 
             {/* Organization & Sub-Company Context Switcher */}
             <CompanySelector />
+
+            <LiveDateTimeDisplay />
 
             {/* Theme toggle */}
             <Button

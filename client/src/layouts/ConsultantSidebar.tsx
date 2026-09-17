@@ -17,6 +17,8 @@ import {
   Shield,
   ChevronDown,
   GitBranch,
+  ScanFace,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -29,30 +31,31 @@ import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
 
 // ── Violet accent constants ───────────────────────────────────────────────────
 const C = {
-  activeBg: 'bg-violet-600 dark:bg-violet-600',
+  activeBg: 'bg-primary',
   activeText: 'text-white',
-  hoverBg: 'hover:bg-violet-50 dark:hover:bg-violet-950/30',
-  hoverText: 'hover:text-violet-700 dark:hover:text-violet-400',
-  icon: 'text-violet-500',
+  hoverBg: 'hover:bg-muted', hoverText: 'hover:text-foreground', icon: 'text-primary',
   sectionLabel: 'text-muted-foreground',
-  avatarBg: 'bg-violet-600',
-  avatarBorder: 'border-violet-300 dark:border-violet-700',
+  avatarBg: 'bg-primary', avatarBorder: 'border-primary/30',
 };
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const CONSULTANT_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'EMPLOYEE CORE',
     items: [
       { name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard },
       { name: 'My Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
+      { name: 'Org Structure', href: '/consultant/org-chart', icon: Building2 },
+      { name: 'ID Card', href: '/consultant/id-card', icon: Shield },
     ],
   },
   {
-    label: 'TIME & ATTENDANCE',
+    label: 'ATTENDANCE',
     items: [
-      { name: 'Attendance',       href: '/consultant/attendance',       icon: Clock },
-      { name: 'Holiday Calendar', href: '/consultant/holiday-calendar', icon: Calendar },
+      { name: 'Face Punch', href: '/consultant/face-attendance', icon: ScanFace },
+      { name: 'My Attendance Log', href: '/consultant/attendance', icon: Clock },
+      { name: 'My Shifts', href: '/consultant/shift-roster', icon: Calendar },
+      { name: 'Attendance Correction', href: '/consultant/attendance-regularization', icon: RefreshCw },
     ],
   },
   {
@@ -74,13 +77,7 @@ const CONSULTANT_NAV = [
       { name: 'My Payslips', href: '/consultant/payslips', icon: CreditCard },
     ],
   },
-  {
-    label: 'DOCUMENTS',
-    items: [
-      { name: 'My Documents', href: '/consultant/documents', icon: BookOpen },
-      { name: 'ID Card',      href: '/consultant/id-card',   icon: Shield },
-    ],
-  },
+  { label: 'DOCUMENTS', items: [{ name: 'My Documents', href: '/consultant/documents', icon: BookOpen }] },
   {
     label: 'COMPANY',
     items: [

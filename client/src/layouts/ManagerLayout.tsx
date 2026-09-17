@@ -20,6 +20,8 @@ import { NotificationDrawer } from '@/features/notifications/components/Notifica
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
+import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 
 // ── Accent palette for Manager (violet/purple) ──────────────────────────────
 const C = {
@@ -40,11 +42,13 @@ const C = {
 
 const MANAGER_NAV = [
   {
-    label: '',
+    label: 'EMPLOYEE CORE',
     items: [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
       { name: 'My Department', href: '/manager/team', icon: Building2 },
       { name: 'My Lifecycle', href: '/manager/lifecycle', icon: GitBranch },
+      { name: 'Org Structure', href: '/manager/org-chart', icon: Building2 },
+      { name: 'ID Card', href: '/manager/id-card', icon: Shield },
     ],
   },
   {
@@ -510,6 +514,8 @@ export function ManagerLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
+            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

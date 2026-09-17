@@ -436,14 +436,15 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       .filter((id: any): id is number => typeof id === 'number' && id > 0);
 
     if (locationIds.length > 0) {
-      const locs = await this.db('attendance_locations')
+      // current_location_id references the organization locations master.
+      const locs = await this.db('locations')
         .where('organization_id', ctx.organizationId)
         .whereIn('id', Array.from(new Set(locationIds)))
-        .select('id', 'location_name');
+        .select('id', 'name', 'location_name');
 
       const locMap = new Map<number, string>();
       for (const l of locs) {
-        locMap.set(Number(l.id), l.location_name);
+        locMap.set(Number(l.id), l.name || l.location_name);
       }
 
       for (const item of result.items) {
