@@ -41,9 +41,12 @@ const C = {
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const CONSULTANT_NAV = [
   {
+    label: 'OVERVIEW',
+    items: [{ name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard }],
+  },
+  {
     label: 'EMPLOYEE CORE',
     items: [
-      { name: 'My Dashboard', href: '/consultant/dashboard', icon: LayoutDashboard },
       { name: 'My Lifecycle', href: '/consultant/lifecycle', icon: GitBranch },
       { name: 'Org Structure', href: '/consultant/org-chart', icon: Building2 },
       { name: 'ID Card', href: '/consultant/id-card', icon: Shield },
@@ -82,7 +85,6 @@ const CONSULTANT_NAV = [
     label: 'COMPANY',
     items: [
       { name: 'Announcements', href: '/consultant/announcements', icon: Megaphone },
-      { name: 'Org Chart',     href: '/consultant/org-chart',     icon: Building2 },
     ],
   },
 ];

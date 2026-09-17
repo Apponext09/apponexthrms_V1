@@ -42,13 +42,25 @@ const C = {
 
 const MANAGER_NAV = [
   {
-    label: 'EMPLOYEE CORE',
+    label: 'OVERVIEW',
     items: [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
-      { name: 'My Department', href: '/manager/team', icon: Building2 },
-      { name: 'My Lifecycle', href: '/manager/lifecycle', icon: GitBranch },
-      { name: 'Org Structure', href: '/manager/org-chart', icon: Building2 },
-      { name: 'ID Card', href: '/manager/id-card', icon: Shield },
+    ],
+  },
+  {
+    label: 'EMPLOYEE CORE',
+    items: [
+      {
+        name: 'Employee Core',
+        href: '/manager/dashboard',
+        icon: Users,
+        subItems: [
+          { name: 'My Department', href: '/manager/team', icon: Building2 },
+          { name: 'My Lifecycle', href: '/manager/lifecycle', icon: GitBranch },
+          { name: 'Org Structure', href: '/manager/org-chart', icon: Building2 },
+          { name: 'ID Card', href: '/manager/id-card', icon: Shield },
+        ],
+      },
     ],
   },
   {
@@ -77,6 +89,7 @@ const MANAGER_NAV = [
           { name: 'Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
           { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
           { name: 'My Attendance Log', href: '/manager/attendance-log', icon: Clock },
+          { name: 'Live Tracking', href: '/manager/live-tracking', icon: Navigation },
           { name: 'My Shift', href: '/manager/my-shift', icon: Calendar },
           { name: 'Attendance Correction', href: '/manager/attendance-correction', icon: CheckCircle2 },
         ],
@@ -501,7 +514,7 @@ export function ManagerLayout() {
           </Button>
 
           <div className="flex items-center gap-2">
-            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <div className="hidden min-[1180px]:block"><GlobalSearchButton /></div>
             <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -521,7 +534,7 @@ export function ManagerLayout() {
       </div>
 
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

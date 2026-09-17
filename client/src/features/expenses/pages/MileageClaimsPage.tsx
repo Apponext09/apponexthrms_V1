@@ -248,16 +248,10 @@ export const MileageClaimsPage: React.FC = () => {
       <LegacyWorkflowNotice rows={claims} prefix="mc_" onComplete={fetchMileage} />
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-2 ${
-          toast.type === 'success'
-            ? 'bg-emerald-50 dark:bg-emerald-950/90 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200'
-            : toast.type === 'error'
-            ? 'bg-rose-50 dark:bg-rose-950/90 border-rose-300 dark:border-rose-700 text-rose-800 dark:text-rose-200'
-            : 'bg-blue-50 dark:bg-blue-950/90 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200'
-        }`}>
-          {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />}
-          {toast.type === 'error' && <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />}
-          {toast.type === 'info' && <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />}
+        <div className="fixed top-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900 shadow-2xl transition-all animate-in fade-in slide-in-from-top-2">
+          {toast.type === 'success' && <CheckCircle2 className="h-5 w-5 shrink-0 text-gray-500" />}
+          {toast.type === 'error' && <AlertTriangle className="h-5 w-5 shrink-0 text-gray-500" />}
+          {toast.type === 'info' && <CheckCircle className="h-5 w-5 shrink-0 text-gray-500" />}
           <span className="text-xs font-semibold">{toast.message}</span>
           <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold">✕</button>
         </div>

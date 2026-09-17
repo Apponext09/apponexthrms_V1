@@ -277,7 +277,7 @@ export function CompanyMasterForm({
       if (cities.length > 0) {
         setFormCity(cities[0]);
         clearFieldError('city');
-        setFormZipCode(LOCATION_DATA[countryVal][firstState].zipDefault || '');
+        setFormZipCode((LOCATION_DATA[countryVal][firstState].zipDefault || '').replace(/\D/g, '').slice(0, 10));
         clearFieldError('zipCode');
       } else {
         setFormCity('');
@@ -299,7 +299,7 @@ export function CompanyMasterForm({
       if (cities.length > 0) {
         setFormCity(cities[0]);
         clearFieldError('city');
-        setFormZipCode(LOCATION_DATA[formCountry][stateVal].zipDefault || '');
+        setFormZipCode((LOCATION_DATA[formCountry][stateVal].zipDefault || '').replace(/\D/g, '').slice(0, 10));
         clearFieldError('zipCode');
       } else {
         setFormCity('');
@@ -316,7 +316,7 @@ export function CompanyMasterForm({
     setFormCity(cityVal);
     clearFieldError('city');
     if (formCountry && formState && LOCATION_DATA[formCountry]?.[formState]) {
-      setFormZipCode(LOCATION_DATA[formCountry][formState].zipDefault || '');
+      setFormZipCode((LOCATION_DATA[formCountry][formState].zipDefault || '').replace(/\D/g, '').slice(0, 10));
       clearFieldError('zipCode');
     }
   };
@@ -354,14 +354,8 @@ export function CompanyMasterForm({
   };
 
   const handleZipCodeChange = (val: string) => {
-    const isIndia = !formCountry || formCountry.toLowerCase() === 'india';
-    let clean = val;
-    if (isIndia) {
-      // Numbers only, strictly max 6 digits
-      clean = val.replace(/\D/g, '').slice(0, 6);
-    } else {
-      clean = val.slice(0, 10);
-    }
+    // Postal code is a numeric value for Company Master records.
+    const clean = val.replace(/\D/g, '').slice(0, 10);
     setFormZipCode(clean);
     clearFieldError('zipCode');
   };
@@ -373,8 +367,7 @@ export function CompanyMasterForm({
   };
 
   const handleContactNumberChange = (val: string) => {
-    // Allow numbers, +, -, spaces, parentheses, up to 16 characters
-    const clean = val.replace(/[^0-9+\s\-()]/g, '').slice(0, 16);
+    const clean = val.replace(/\D/g, '').slice(0, 15);
     setFormContactNumber(clean);
     clearFieldError('contactNumber');
   };
@@ -596,8 +589,22 @@ export function CompanyMasterForm({
       newErrors.name = 'Company Name cannot exceed 150 characters.';
     }
 
-    // 2. Company Code (if provided)
-    if (formCode.trim() && !/^[A-Za-z0-9-_]{2,30}$/.test(formCode.trim())) {
+    if (!formEmployerName.trim()) {
+      newErrors.employerName = 'Employer Name is required.';
+    } else if (formEmployerName.trim().length < 2 || formEmployerName.trim().length > 150) {
+      newErrors.employerName = 'Employer Name must be 2-150 characters.';
+    }
+
+    if (!formClassOfEstablishment.trim()) {
+      newErrors.classOfEstablishment = 'Class Of Establishment is required (e.g. LLP or Pvt. Ltd.).';
+    } else if (formClassOfEstablishment.trim().length < 2 || formClassOfEstablishment.trim().length > 100) {
+      newErrors.classOfEstablishment = 'Class Of Establishment must be 2-100 characters.';
+    }
+
+    // 2. Establishment Company Code
+    if (!formCode.trim()) {
+      newErrors.code = 'Establishment Company Code is required.';
+    } else if (!/^[A-Za-z0-9-_]{2,30}$/.test(formCode.trim())) {
       newErrors.code = 'Code must be 2-30 characters (letters, numbers, hyphens, underscores).';
     }
 
@@ -628,12 +635,10 @@ export function CompanyMasterForm({
       newErrors.zipCode = 'ZIP / PIN Code is required.';
     } else {
       const isIndia = !formCountry || formCountry.toLowerCase() === 'india';
-      if (isIndia) {
-        if (!/^\d{6}$/.test(formZipCode.trim())) {
-          newErrors.zipCode = 'PIN Code must be exactly 6 digits (e.g. 400708).';
-        }
-      } else if (!/^[A-Za-z0-9\s-]{3,10}$/.test(formZipCode.trim())) {
-        newErrors.zipCode = 'Invalid Postal / ZIP Code format (3-10 characters).';
+      if (isIndia && !/^\d{6}$/.test(formZipCode.trim())) {
+        newErrors.zipCode = 'PIN Code must be exactly 6 digits (e.g. 400708).';
+      } else if (!isIndia && !/^\d{3,10}$/.test(formZipCode.trim())) {
+        newErrors.zipCode = 'Postal / ZIP Code must contain 3-10 digits.';
       }
     }
 
@@ -641,9 +646,8 @@ export function CompanyMasterForm({
     if (!formContactNumber.trim()) {
       newErrors.contactNumber = 'Contact Number is required.';
     } else {
-      const digitsOnly = formContactNumber.replace(/\D/g, '');
-      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
-        newErrors.contactNumber = 'Contact Number must contain a valid 10-15 digit number (e.g. +91 9898989899).';
+      if (!/^\d{10,15}$/.test(formContactNumber)) {
+        newErrors.contactNumber = 'Contact Number must contain 10-15 digits only.';
       }
     }
 
@@ -654,13 +658,11 @@ export function CompanyMasterForm({
       newErrors.email = 'Please enter a valid email address (e.g. contact@apponext.com).';
     }
 
-    // 10. PAN / TIN Number (Optional, but if filled, validate format)
+    // 10. PAN Number (optional, but must be a 10-character alphanumeric identifier)
     if (formPanTin.trim()) {
       const panUpper = formPanTin.trim().toUpperCase();
-      const isPan = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panUpper);
-      const isTin = /^[A-Z0-9]{9,15}$/.test(panUpper);
-      if (!isPan && !isTin) {
-        newErrors.panTin = 'Invalid PAN/TIN format. Standard PAN must be 10 characters (e.g. ABCDE1234F).';
+      if (!/^(?=.*[A-Z])(?=.*\d)[A-Z0-9]{10}$/.test(panUpper)) {
+        newErrors.panTin = 'PAN Number must be exactly 10 alphanumeric characters and include both letters and numbers (e.g. ABCDE1234F).';
       }
     }
 
@@ -948,7 +950,7 @@ export function CompanyMasterForm({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Employer Name</label>
+            <label className="text-xs font-semibold text-foreground">Employer Name <span className="text-rose-500">*</span></label>
             <Input
               type="text"
               value={formEmployerName}
@@ -968,12 +970,12 @@ export function CompanyMasterForm({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Class Of Establishment</label>
+            <label className="text-xs font-semibold text-foreground">Class Of Establishment <span className="text-rose-500">*</span></label>
             <Input
               type="text"
               value={formClassOfEstablishment}
               onChange={(e) => handleClassOfEstablishmentChange(e.target.value)}
-              placeholder="e.g. Commercial IT Enterprise"
+              placeholder="e.g. LLP, Pvt. Ltd., Partnership"
               className={cn(
                 "text-xs h-10 bg-background rounded-xl transition-all",
                 errors.classOfEstablishment && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
@@ -988,7 +990,7 @@ export function CompanyMasterForm({
           </div>
 
           <div className="space-y-1.5 md:col-span-2">
-            <label className="text-xs font-semibold text-foreground">Establishment Company Code</label>
+            <label className="text-xs font-semibold text-foreground">Establishment Company Code <span className="text-rose-500">*</span></label>
             <Input
               type="text"
               value={formCode}
@@ -1132,16 +1134,15 @@ export function CompanyMasterForm({
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center justify-between">
               <span>ZIP / PIN Code <span className="text-rose-500">*</span></span>
-              {(!formCountry || formCountry.toLowerCase() === 'india') && (
-                <span className="text-[10px] text-muted-foreground font-mono">6 Digits ({formZipCode.length}/6)</span>
-              )}
+              <span className="text-[10px] text-muted-foreground font-mono">Numbers only</span>
             </label>
             <Input
               type="text"
               value={formZipCode}
+              inputMode="numeric"
               maxLength={(!formCountry || formCountry.toLowerCase() === 'india') ? 6 : 10}
               onChange={(e) => handleZipCodeChange(e.target.value)}
-              placeholder={(!formCountry || formCountry.toLowerCase() === 'india') ? "e.g. 400708" : "e.g. ZIP code"}
+              placeholder={(!formCountry || formCountry.toLowerCase() === 'india') ? "e.g. 400708" : "e.g. 10001"}
               className={cn(
                 "text-xs h-10 font-mono bg-background rounded-xl transition-all",
                 errors.zipCode && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
@@ -1167,13 +1168,13 @@ export function CompanyMasterForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center gap-1">
-              <span>PAN / TIN Number</span>
+              <span>PAN Number</span>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </label>
             <Input
               type="text"
               value={formPanTin}
-              maxLength={15}
+              maxLength={10}
               onChange={(e) => handlePanTinChange(e.target.value)}
               placeholder="e.g. AAACD1234F"
               className={cn(
@@ -1192,14 +1193,15 @@ export function CompanyMasterForm({
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center justify-between">
               <span>Contact Number <span className="text-rose-500">*</span></span>
-              <span className="text-[10px] text-muted-foreground font-mono">10-15 digits</span>
+              <span className="text-[10px] text-muted-foreground font-mono">Numbers only, 10-15 digits</span>
             </label>
             <Input
               type="text"
               value={formContactNumber}
-              maxLength={16}
+              inputMode="numeric"
+              maxLength={15}
               onChange={(e) => handleContactNumberChange(e.target.value)}
-              placeholder="e.g. +91 9898989899"
+              placeholder="e.g. 9898989899"
               className={cn(
                 "text-xs h-10 bg-background rounded-xl transition-all",
                 errors.contactNumber && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"

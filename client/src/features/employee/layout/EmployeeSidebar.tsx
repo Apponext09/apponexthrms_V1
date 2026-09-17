@@ -433,7 +433,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
       {/* Navigation List */}
       <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {/* SEPARATE STANDALONE DASHBOARD LINK */}
         <div className="pb-1">
           <button
             onClick={() => handleItemClick('/employee/dashboard', 'Dashboard')}
@@ -447,19 +446,8 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
             )}
           >
             <LayoutDashboard className={cn('size-4 flex-shrink-0', isDashboardActive ? 'text-white dark:text-slate-950' : 'text-violet-500')} />
-
             <AnimatePresence>
-              {open && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="flex-1 text-left overflow-hidden"
-                >
-                  <span className="truncate">Dashboard</span>
-                </motion.div>
-              )}
+              {open && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex-1 overflow-hidden text-left"><span className="truncate">Dashboard</span></motion.div>}
             </AnimatePresence>
           </button>
         </div>
