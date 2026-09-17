@@ -111,6 +111,7 @@ export class EmployeeService {
     mobile?: string;
     dateOfBirth?: string;
     gender?: 'male' | 'female' | 'other';
+    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed';
     dateOfJoining: string;
     employmentType: string;
     status?: string;
@@ -132,6 +133,20 @@ export class EmployeeService {
     salary_slab_id?: number | string;
   }): Promise<{ employee: Employee; generatedPassword?: string }> {
     await this.ensureEmployeeColumns();
+
+    // Validate formats
+    if (input.employeeCode && !/^[a-zA-Z0-9]+$/.test(input.employeeCode)) {
+      throw new ValidationError(`Employee code '${input.employeeCode}' must contain only alphanumeric characters without special characters`);
+    }
+    if (input.firstName && !/^[a-zA-Z\s]+$/.test(input.firstName)) {
+      throw new ValidationError('First name must contain only alphabetic characters');
+    }
+    if (input.lastName && !/^[a-zA-Z\s]+$/.test(input.lastName)) {
+      throw new ValidationError('Last name must contain only alphabetic characters');
+    }
+    if (input.mobile && !/^\d{10}$/.test(input.mobile)) {
+      throw new ValidationError('Mobile number must be a valid 10-digit number');
+    }
 
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
@@ -231,6 +246,7 @@ export class EmployeeService {
       mobile: input.mobile || null,
       date_of_birth: input.dateOfBirth || null,
       gender: input.gender || null,
+      marital_status: input.maritalStatus || null,
       date_of_joining: input.dateOfJoining,
       employment_type: input.employmentType,
       current_designation_id: currentDesignationId,
@@ -614,6 +630,8 @@ export class EmployeeService {
     if (input.mobile !== undefined) payload.mobile = input.mobile;
     if (input.dateOfBirth !== undefined) payload.date_of_birth = input.dateOfBirth;
     if (input.gender !== undefined) payload.gender = input.gender;
+    if (input.maritalStatus !== undefined) payload.marital_status = input.maritalStatus;
+    if (input.marital_status !== undefined) payload.marital_status = input.marital_status;
     if (input.bloodGroup !== undefined) payload.blood_group = input.bloodGroup;
     if (input.blood_group !== undefined) payload.blood_group = input.blood_group;
     if (input.nationality !== undefined) payload.nationality = input.nationality;
@@ -1144,7 +1162,11 @@ export class EmployeeService {
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }
-    return this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+    const personalInfo = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+    return {
+      ...(personalInfo || {}),
+      maritalStatus: (employee as any).marital_status || null,
+    };
   }
 
   /**
@@ -1154,6 +1176,7 @@ export class EmployeeService {
     fatherName?: string | null;
     motherName?: string | null;
     spouseName?: string | null;
+    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | null;
     childrenCount?: number;
     permanentAddress?: string | null;
     currentAddress?: string | null;
@@ -1168,6 +1191,13 @@ export class EmployeeService {
     }
 
     const existing = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+
+    if (input.maritalStatus !== undefined) {
+      await this.employeeRepo.update(ctx, employeeId, {
+        marital_status: input.maritalStatus,
+        updated_by: ctx.userId,
+      } as any);
+    }
 
     const data: Record<string, unknown> = {
       father_name: input.fatherName,

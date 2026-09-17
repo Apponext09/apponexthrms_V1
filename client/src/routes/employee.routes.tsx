@@ -35,6 +35,11 @@ const GoalsPage = lazy(() => import('../features/employee/portal-pages/GoalsPage
 const FeedbackPage = lazy(() => import('../features/employee/portal-pages/FeedbackPage'));
 const LearningPage = lazy(() => import('../features/employee/portal-pages/LearningPage'));
 const TrainingPage = lazy(() => import('../features/employee/portal-pages/TrainingPage'));
+const CourseCatalogPage = lazy(() => import('../features/lms/pages/CourseCatalogPage').then(m => ({ default: m.CourseCatalogPage })));
+const CourseDetailPage = lazy(() => import('../features/lms/pages/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
+const MyEnrollmentsPage = lazy(() => import('../features/lms/pages/MyEnrollmentsPage').then(m => ({ default: m.MyEnrollmentsPage })));
+const AssessmentPlayerPage = lazy(() => import('../features/lms/pages/AssessmentPlayerPage').then(m => ({ default: m.AssessmentPlayerPage })));
+const MyCertificatesPage = lazy(() => import('../features/lms/pages/MyCertificatesPage').then(m => ({ default: m.MyCertificatesPage })));
 const PoliciesPage = lazy(() => import('../features/employee/portal-pages/PoliciesPage'));
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
 const SurveysPage = lazy(() => import('../features/employee/portal-pages/SurveysPage'));
@@ -98,6 +103,14 @@ export const employeePortalRoutes = (
     <Route path="/employee/feedback" element={<FeedbackPage />} />
     <Route path="/employee/learning" element={<LearningPage />} />
     <Route path="/employee/training" element={<TrainingPage />} />
+    <Route path="/employee/lms" element={<Navigate to="/employee/lms/my-learning" replace />} />
+    <Route path="/employee/lms/catalog" element={<CourseCatalogPage />} />
+    <Route path="/employee/lms/catalog/:id" element={<CourseDetailPage />} />
+    <Route path="/employee/lms/course/:id" element={<CourseDetailPage />} />
+    <Route path="/employee/lms/my-learning" element={<MyEnrollmentsPage />} />
+    <Route path="/employee/lms/assessment/:id" element={<AssessmentPlayerPage />} />
+    <Route path="/employee/lms/assessment/:courseId" element={<AssessmentPlayerPage />} />
+    <Route path="/employee/lms/certificates" element={<MyCertificatesPage />} />
     <Route path="/employee/policies" element={<PoliciesPage />} />
     <Route path="/employee/announcements" element={<AnnouncementsPage />} />
     <Route path="/employee/surveys" element={<SurveysPage />} />

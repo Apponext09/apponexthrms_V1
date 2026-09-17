@@ -37,11 +37,31 @@ export function resolveTenant(req: Request, res: Response, next: NextFunction): 
     throw new UnauthorizedError('Invalid JWT claims');
   }
 
-  // Extract companyId: JWT claims take top priority for branch-locked tokens (e.g. company_admin login)
+  // A branch-locked company admin must always remain in the company embedded in
+  // their token. Organization-level admins can switch context, so their explicit
+  // X-Company-Id selection must take precedence over an incidental JWT companyId.
   let companyId: number | undefined;
   const jwtCid = (req.user as any)?.cid || (req.user as any)?.companyId || (req.user as any)?.company_id;
+  const rawRoles = (req.user as any).roles || (req.user as any).roleCodes || [];
+  const roles = (Array.isArray(rawRoles) ? rawRoles : [rawRoles])
+    .map((role: unknown) => String(role).toLowerCase());
+  const accessRole = String((req.user as any).role || (req.user as any).accessRole || '').toLowerCase();
+  const isBranchLocked = Boolean(
+    jwtCid &&
+    (roles.includes('company_admin') || accessRole === 'company_admin') &&
+    !roles.includes('super_admin') &&
+    accessRole !== 'super_admin'
+  );
 
-  if (jwtCid) {
+  const headerCompanyId = req.headers['x-company-id'] || req.headers['company-id'];
+  if (!isBranchLocked && headerCompanyId && typeof headerCompanyId === 'string' && headerCompanyId !== 'all') {
+    const parsed = parseInt(headerCompanyId, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      companyId = parsed;
+    }
+  }
+
+  if (!companyId && jwtCid) {
     const parsed = parseInt(jwtCid, 10);
     if (!isNaN(parsed) && parsed > 0) {
       companyId = parsed;
@@ -49,7 +69,6 @@ export function resolveTenant(req: Request, res: Response, next: NextFunction): 
   }
 
   if (!companyId) {
-    const headerCompanyId = req.headers['x-company-id'] || req.headers['company-id'];
     if (headerCompanyId && typeof headerCompanyId === 'string' && headerCompanyId !== 'all') {
       const parsed = parseInt(headerCompanyId, 10);
       if (!isNaN(parsed) && parsed > 0) {
@@ -66,6 +85,7 @@ export function resolveTenant(req: Request, res: Response, next: NextFunction): 
     companyId,
     role: (req.user as any).role || (req.user as any).accessRole,
     roles: (req.user as any).roles || (req.user as any).roleCodes || [],
+    employeeId: (req.user as any).employeeId || (req.user as any).employee_id || (req.user as any).eid,
   };
 
   next();

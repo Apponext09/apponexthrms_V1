@@ -252,5 +252,32 @@ export interface TargetOptionsData {
   reportingManagers: TargetOptionItem[];
 }
 
+export type PolicyQueryStatus = 'OPEN' | 'REPLIED' | 'CLOSED';
+
+export interface PolicyQuery {
+  id: number;
+  uuid: string;
+  organizationId: number;
+  companyId?: number | null;
+  policyDocumentId: number;
+  policyVersionId?: number | null;
+  policyVersion?: string | null;
+  employeeId?: number | null;
+  userId: number;
+  question: string;
+  status: PolicyQueryStatus;
+  reply?: string | null;
+  repliedBy?: number | null;
+  repliedByName?: string | null;
+  repliedAt?: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  employeeName?: string | null;
+  employeeCode?: string | null;
+  departmentName?: string | null;
+  policyTitle?: string | null;
+}
+
+
 
 

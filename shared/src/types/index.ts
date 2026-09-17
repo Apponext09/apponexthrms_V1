@@ -11,6 +11,8 @@ export interface JwtClaims {
   role?: string;
   id?: number | string;
   userId?: number | string;
+  employeeId?: number | string;
+  employee_id?: number | string;
   email?: string;
   iat: number;
   exp: number;
@@ -187,6 +189,7 @@ export interface AuditLog {
 // API Response
 export interface ApiResponse<T = unknown> {
   success: boolean;
+  message?: string;
   data?: T;
   error?: {
     code: string;

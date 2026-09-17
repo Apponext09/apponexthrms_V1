@@ -148,23 +148,6 @@ export default function ReferralPage() {
       }
     }
 
-    // 5. Ultimate fallback if DB has no positions configured
-    if (foundPositions.length === 0) {
-      const defaultPositions = [
-        { title: 'Software Engineer', code: 'SE-01', department: 'IT & Software' },
-        { title: 'Full Stack Developer', code: 'DEV-01', department: 'IT & Software' },
-        { title: 'Frontend Developer (React)', code: 'FE-01', department: 'IT & Software' },
-        { title: 'Backend Developer (Node.js)', code: 'BE-01', department: 'IT & Software' },
-        { title: 'UI/UX Designer', code: 'DES-01', department: 'Design' },
-        { title: 'Sales Executive', code: 'SE-02', department: 'Sales & BD' },
-        { title: 'Business Development Manager', code: 'BDM-01', department: 'Sales & BD' },
-        { title: 'HR Executive', code: 'HR-01', department: 'Human Resources' },
-        { title: 'Accountant', code: 'ACC-01', department: 'Finance & Accounts' },
-        { title: 'Operations Associate', code: 'OPS-01', department: 'Operations' },
-      ];
-      defaultPositions.forEach(p => addPosition(p.title, p.code, p.code, p.department));
-    }
-
     setPositions(foundPositions);
     if (foundPositions.length > 0) {
       setForm(prev => ({

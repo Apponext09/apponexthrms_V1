@@ -60,6 +60,9 @@ export interface ApprovalLog {
   approverRole: string;
   action: string;
   comments?: string;
+  isAbsenteeOverride?: boolean;
+  is_absentee_override?: boolean;
+  delegatedForUserId?: number;
   createdAt: string;
 }
 
@@ -235,39 +238,36 @@ export interface ExpenseWorkflowLevel {
 export interface ExpenseWorkflow {
   id: number;
   name: string;
+  targetRole?: string; // 'all' | 'ceo' | 'hr' | 'manager'
+  target_role?: string;
   description?: string;
   minAmount: number;
   maxAmount: number;
-  departmentId?: number;
+  departmentId?: number | null;
+  department_id?: number | null;
+  departmentName?: string;
+  department_name?: string;
   isActive: boolean;
   levels?: ExpenseWorkflowLevel[];
 }
 
 export interface ExpenseSummary {
-  totalSubmittedClaims?: number;
-  totalPendingManager?: number;
-  totalPendingLevel1?: number;
-  totalPendingLevel2?: number;
-  totalPendingFinance?: number;
+  totalClaimed?: number;
   totalApproved?: number;
-  totalRejected?: number;
-  totalReturned?: number;
+  totalPending?: number;
   totalPaid?: number;
-  totalClaimedAmount?: number;
-  totalApprovedAmount: number;
-  totalReimbursedAmount: number;
+  totalClaims?: number;
   totalPendingAmount?: number;
-  pendingFinanceCount?: number;
-  pendingFinanceAmount?: number;
-  pendingAdvancesCount?: number;
-  pendingAdvancesAmount?: number;
-  categoryBreakdown?: Array<{
-    category: string;
-    amount: number;
-    count?: number;
-  }>;
-  recentClaims?: ExpenseClaim[];
-  [key: string]: any;
+  totalApprovedAmount?: number;
+  totalReimbursedAmount?: number;
+  reimbursedCount?: number;
+  pendingCount?: number;
+  approvedCount?: number;
+  rejectedCount?: number;
+  claimsCount?: number;
+  categoryBreakdown?: Array<{ name: string; amount: number; percentage?: number }>;
+  departmentBreakdown?: Array<{ name: string; amount: number }>;
+  monthlyTrend?: Array<{ month: string; amount: number }>;
 }
 
 export const expenseApi = {
@@ -292,7 +292,8 @@ export const expenseApi = {
   updateClaim: (id: number | string, data: any) => apiClient.put(`/expenses/claims/${id}`, data).then((res) => res.data.data),
 
   // Actions
-  managerApproveClaim: (id: number | string, comments?: string) => apiClient.post(`/expenses/claims/${id}/manager-approve`, { comments }).then((res) => res.data.data),
+  managerApproveClaim: (id: number | string, comments?: string, options?: { isAbsenteeOverride?: boolean; delegatedForId?: number }) =>
+    apiClient.post(`/expenses/claims/${id}/manager-approve`, { comments, ...(options || {}) }).then((res) => res.data.data),
   bulkApproveClaims: (ids: (number | string)[], comments?: string) =>
     apiClient.post('/expenses/claims/bulk-approve', { ids, comments }).then((res) => res.data.data),
   financeVerifyClaim: (id: number | string, data: { items?: any[]; comments?: string }) => apiClient.post(`/expenses/claims/${id}/finance-verify`, data).then((res) => res.data.data),
@@ -307,6 +308,7 @@ export const expenseApi = {
     return apiClient.get('/expenses/travel-requests', { params: p }).then((res) => res.data.data);
   },
   createTravelRequest: (data: any) => apiClient.post('/expenses/travel-requests', data).then((res) => res.data.data),
+  updateTravelRequest: (id: number, data: any) => apiClient.put(`/expenses/travel-requests/${id}`, data).then((res) => res.data.data),
   updateTravelRequestStatus: (id: number, status: string, notes?: string) => apiClient.put(`/expenses/travel-requests/${id}/status`, { status, notes }).then((res) => res.data.data),
 
   getTravelAdvances: (params?: Record<string, any> | number | null) => {

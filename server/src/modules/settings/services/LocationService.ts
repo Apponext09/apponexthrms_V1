@@ -88,11 +88,28 @@ export class LocationService {
       validUserId = firstUser ? Number(firstUser.id) : 1;
     }
 
-    let companyId = data.companyId ? parseInt(data.companyId, 10) : null;
+    // Resolve company_id: check companies table, then branches, then trust the provided value
+    let companyId: number | null = data.companyId ? parseInt(data.companyId, 10) : null;
     if (companyId) {
-      const branchExists = await db('branches').where('id', companyId).first('id').catch(() => null);
-      if (!branchExists) {
-        companyId = null;
+      const hasCompaniesTable = await db.schema.hasTable('companies').catch(() => false);
+      if (hasCompaniesTable) {
+        const compExists = await db('companies').where('id', companyId).first('id').catch(() => null);
+        if (!compExists) {
+          // Fallback: check branches table
+          const branchExists = await db('branches').where('id', companyId).first('id').catch(() => null);
+          if (!branchExists) {
+            // Neither table confirms this ID; keep it anyway (trust frontend) unless it's completely invalid
+            // Only null it out if it's not a valid positive integer
+            if (isNaN(companyId) || companyId <= 0) companyId = null;
+          }
+        }
+      } else {
+        // No companies table — try branches only
+        const branchExists = await db('branches').where('id', companyId).first('id').catch(() => null);
+        if (!branchExists) {
+          // Keep the ID as-is (trust frontend)
+          if (isNaN(companyId) || companyId <= 0) companyId = null;
+        }
       }
     }
 
@@ -170,10 +187,18 @@ export class LocationService {
       ...(data.companyId !== undefined ? {
         company_id: await (async () => {
           const cid = data.companyId ? parseInt(data.companyId, 10) : null;
-          if (!cid) return null;
+          if (!cid || isNaN(cid) || cid <= 0) return null;
           const db = getKnex();
+          const hasCompaniesTable = await db.schema.hasTable('companies').catch(() => false);
+          if (hasCompaniesTable) {
+            const compExists = await db('companies').where('id', cid).first('id').catch(() => null);
+            if (compExists) return cid;
+          }
+          // Try branches fallback
           const branchExists = await db('branches').where('id', cid).first('id').catch(() => null);
-          return branchExists ? cid : null;
+          if (branchExists) return cid;
+          // Trust the frontend-provided ID as-is
+          return cid;
         })()
       } : {}),
       ...(data.isActive !== undefined ? {

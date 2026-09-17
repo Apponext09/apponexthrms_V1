@@ -8,9 +8,13 @@ const TeamLeadLayout = lazy(() => import('../layouts/TeamLeadLayout').then(m => 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const TeamLeadDashboardPage = lazy(() => import('../features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
 const TeamMembersPage = lazy(() => import('../features/team-lead/pages/TeamMembersPage').then(m => ({ default: m.TeamMembersPage })));
-const TeamLeadProfilePage = lazy(() => import('../features/team-lead/pages/TeamLeadProfilePage').then(m => ({ default: m.TeamLeadProfilePage })));
+// Team Leads use the employee profile view; edits require HR/Admin approval.
+const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
 const AttendanceDashboard = lazy(() => import('../features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
 const FaceAttendancePage = lazy(() => import('../features/employee/portal-pages/FaceAttendancePage'));
+const AttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
+const ShiftRosterPage = lazy(() => import('../features/employee/portal-pages/ShiftRosterPage'));
+const RegularizationPage = lazy(() => import('../features/employee/portal-pages/RegularizationPage'));
 const EmployeePayrollPortal = lazy(() => import('../features/payroll/pages/EmployeePayrollPortal').then(m => ({ default: m.EmployeePayrollPortal })));
 const EmployeeLoanRequest = lazy(() => import('../features/payroll/components/EmployeeLoanRequest').then(m => ({ default: m.EmployeeLoanRequest })));
 const ExpenseApprovalsPage = lazy(() => import('../features/expenses/pages/ExpenseApprovalsPage').then(m => ({ default: m.ExpenseApprovalsPage })));
@@ -21,7 +25,13 @@ const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageC
 const PayslipViewer = lazy(() => import('../features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
 const SalaryRevisionManagement = lazy(() => import('../features/payroll/pages/SalaryRevisionManagement').then(m => ({ default: m.SalaryRevisionManagement })));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
+const ApprovalsDashboardPage = lazy(() => import('../features/leaves/pages/ApprovalsDashboardPage').then(m => ({ default: m.ApprovalsDashboardPage })));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
+const PerformanceDashboard = lazy(() => import('../features/performance/pages/PerformanceDashboard').then(m => ({ default: m.PerformanceDashboard })));
+const ReviewCyclesPage = lazy(() => import('../features/performance/pages/ReviewCyclesPage').then(m => ({ default: m.ReviewCyclesPage })));
+const GoalManagementPage = lazy(() => import('../features/performance/pages/GoalManagementPage').then(m => ({ default: m.GoalManagementPage })));
+const ApprovalsPage = lazy(() => import('../features/employee/portal-pages/ApprovalsPage'));
+const PoliciesPage = lazy(() => import('../features/employee/portal-pages/PoliciesPage'));
 const InterviewCalendarPage = lazy(() => import('../features/recruitment/pages/InterviewCalendarPage').then(m => ({ default: m.InterviewCalendarPage })));
 const InterviewerRatingPage = lazy(() => import('../features/recruitment/pages/InterviewerRatingPage').then(m => ({ default: m.InterviewerRatingPage })));
 const MrfRequestPage = lazy(() => import('../features/recruitment/pages/MrfRequestPage').then(m => ({ default: m.MrfRequestPage })));
@@ -43,6 +53,9 @@ export const teamLeadRoutes = (
     <Route path="/team-lead/members" element={<TeamMembersPage />} />
     <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
     <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
+    <Route path="/team-lead/attendance-log" element={<AttendancePage />} />
+    <Route path="/team-lead/my-shift" element={<ShiftRosterPage />} />
+    <Route path="/team-lead/attendance-correction" element={<RegularizationPage />} />
     <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
     <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
     <Route
@@ -50,7 +63,7 @@ export const teamLeadRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_1"
-          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected', 'all']}
+          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve your team's expense claims — Level 1 (Team Lead) queue"
         />
       }
@@ -60,7 +73,7 @@ export const teamLeadRoutes = (
       element={
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_1"
-          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected', 'all']}
+          allowedStatuses={['pending_level_1', 'pending_approvals', 'returned', 'rejected']}
           portalLabel="Approve your team's expense claims — Level 1 (Team Lead) queue"
         />
       }
@@ -73,9 +86,15 @@ export const teamLeadRoutes = (
     <Route path="/team-lead/payslips" element={<PayslipViewer />} />
     <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
     <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
-    <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
+    <Route path="/team-lead/profile" element={<ProfilePage />} />
     <Route path="/team-lead/leaves" element={<LeavePage />} />
     <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
+    <Route path="/team-lead/leaves/approvals-dashboard" element={<ApprovalsDashboardPage />} />
+    <Route path="/team-lead/performance" element={<PerformanceDashboard />} />
+    <Route path="/team-lead/performance/reviews" element={<ReviewCyclesPage />} />
+    <Route path="/team-lead/performance/goals" element={<GoalManagementPage />} />
+    <Route path="/team-lead/approvals" element={<ApprovalsPage />} />
+    <Route path="/team-lead/policies" element={<PoliciesPage />} />
     <Route path="/team-lead/interview-schedule" element={<InterviewCalendarPage />} />
     <Route path="/team-lead/interviewer-rating" element={<InterviewerRatingPage />} />
     <Route path="/team-lead/mrf-request" element={<MrfRequestPage />} />

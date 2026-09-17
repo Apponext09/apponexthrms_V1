@@ -19,6 +19,7 @@ import { EmployeeStatutoryDetails } from '../components/EmployeeStatutoryDetails
 import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 import { ProfileEditRequestModal } from '../components/ProfileEditRequestModal';
 import { MyProfileRequestsView } from '../components/MyProfileRequestsView';
+import { CoreCircularLoader } from '@/components/ui/core-circular-loader';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
@@ -37,13 +38,20 @@ export function EmployeeProfilePage() {
   const { user } = useAuthStore();
   const isSelf = !id || id === 'me';
   const targetId: number | string = isSelf ? 'me' : (parseInt(id, 10) || 'me');
-  const { employee, isLoading, refetch } = useEmployee(targetId);
+  const { employee: loadedEmployee, isLoading, refetch } = useEmployee(targetId);
+  const employee = loadedEmployee || ({
+    id: typeof targetId === 'number' ? targetId : Number(user?.employeeId || 0),
+    firstName: '',
+    lastName: '',
+    email: '',
+    employeeCode: '',
+    status: 'active',
+  } as any);
   const resolvedEmpId = employee?.id || (typeof targetId === 'number' ? targetId : Number(user?.employeeId || 0));
   const { professionalInfo } = useEmployeeProfessionalInfo(resolvedEmpId);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isEditRequestModalOpen, setIsEditRequestModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
-  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   // Check user roles to determine if user is Admin/HR
   const userRoles = Array.isArray(user?.roles) ? user.roles : [];
@@ -67,15 +75,10 @@ export function EmployeeProfilePage() {
   const isStatutoryUnlocked = !isEmployeePortal || editUnlocked;
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-3">
-        <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
-        <p className="text-xs text-muted-foreground font-medium">Loading employee profile...</p>
-      </div>
-    );
+    return <CoreCircularLoader />;
   }
 
-  if (!employee || !employee.id) {
+  if (!loadedEmployee || !loadedEmployee.id) {
     return (
       <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-700 dark:text-rose-300 text-sm font-semibold">
         Employee profile not found.
@@ -386,8 +389,6 @@ export function EmployeeProfilePage() {
         <TabsContent value="details" className="mt-0 space-y-4">
           <EmployeeDetailsCombined
             employee={employee}
-            isEditingBasicInfo={isEditingBasicInfo}
-            onEditBasicInfoToggle={setIsEditingBasicInfo}
             editUnlocked={!isEmployeePortal || editUnlocked}
             isBasicUnlocked={isBasicUnlocked}
             isPersonalUnlocked={isPersonalUnlocked}

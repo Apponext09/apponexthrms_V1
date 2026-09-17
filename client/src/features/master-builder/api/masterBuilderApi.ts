@@ -16,6 +16,10 @@ export interface CustomMasterItem {
   recordsCount: number;
   createdAt: string;
   updatedAt: string;
+  /** True if this master bridges to a real DB table */
+  isSystem?: boolean;
+  systemTable?: string;
+  systemNameColumn?: string;
 }
 
 export interface CustomMasterField {
@@ -23,7 +27,11 @@ export interface CustomMasterField {
   uuid: string;
   fieldName: string;
   fieldKey: string;
-  fieldType: string; // text, number, email, phone, date, choice, textarea, lookup, boolean
+  /**
+   * text | number | email | phone | date | choice | textarea | lookup | boolean
+   * image | file | db_lookup | section
+   */
+  fieldType: string;
   isRequired: boolean;
   isUnique: boolean;
   showInTable: boolean;
@@ -33,9 +41,34 @@ export interface CustomMasterField {
   defaultValue?: string;
   lookupMasterId?: number;
   choiceListId?: number;
-  optionsJson?: any;
+  optionsJson?: {
+    /** For db_lookup: the entity key (companies, departments, etc.) */
+    dbLookupEntity?: string;
+    /** Column span: 1 = full width, 2 = half (default) */
+    colSpan?: 1 | 2;
+    /** For section type */
+    sectionTitle?: string;
+    sectionNumber?: string | number;
+    sectionIcon?: string;
+    sectionDescription?: string;
+    sectionColor?: string;
+    /** For image/file upload */
+    fileAccept?: string;
+    maxFileSizeMb?: number;
+  };
   validationRules?: any;
   displayOrder: number;
+  /** Maps to a real DB column for system masters — null = extra field */
+  columnMap?: string | null;
+  /** Core system fields cannot be deleted */
+  isCore?: boolean;
+
+  // Optional snake_case aliases for raw database fallbacks
+  field_name?: string;
+  field_key?: string;
+  field_type?: string;
+  is_active?: boolean;
+  options_json?: any;
 }
 
 export interface CustomMasterValidationRule {
@@ -84,6 +117,13 @@ export interface DynamicRecordItem {
   data: Record<string, any>;
   createdAt: string;
   updatedAt?: string;
+}
+
+/** Option item returned by the db-lookup-options endpoint */
+export interface DbLookupOption {
+  label: string;
+  value: string | number;
+  meta?: Record<string, any>;
 }
 
 export const masterBuilderApi = {
@@ -198,5 +238,14 @@ export const masterBuilderApi = {
 
   async deleteRecord(masterId: number, recordId: number): Promise<void> {
     await apiClient.delete(`/master-builder/masters/${masterId}/records/${recordId}`);
+  },
+
+  /**
+   * Fetch dropdown options for a real DB entity.
+   * entity: 'companies' | 'departments' | 'designations' | 'locations' | 'employees' | 'grades' | 'employee_status' | 'employment_type'
+   */
+  async getDbLookupOptions(entity: string): Promise<DbLookupOption[]> {
+    const res = await apiClient.get(`/master-builder/db-lookup-options/${entity}`);
+    return res.data?.data || [];
   },
 };

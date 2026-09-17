@@ -1038,12 +1038,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-bold text-foreground">Payroll Structure & Compensation</h3>
-                {activeSlabName && payStructures.length > 0 && (
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-bold text-[10px]">
-                    <Layers className="w-3 h-3 mr-1 text-emerald-600 dark:text-emerald-400" />
-                    {activeSlabName}
-                  </Badge>
-                )}
+               
               </div>
               <p className="text-[11px] text-muted-foreground">Assigned salary slab, monthly gross, statutory deductions & net take-home</p>
             </div>
@@ -1079,13 +1074,13 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-muted/40 text-muted-foreground border-b border-border/60 text-[10px] font-bold uppercase tracking-wider">
-                <th className="px-4 py-3 w-24">Action</th>
                 <th className="px-4 py-3">Slab Template</th>
                 <th className="px-4 py-3 text-right">Annual CTC</th>
                 <th className="px-4 py-3 text-right">Monthly Gross</th>
                 <th className="px-4 py-3 text-right">Net Take-Home</th>
                 <th className="px-4 py-3">Effective From</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 w-24">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
@@ -1128,35 +1123,6 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   const ctcDisplay = rec.ctc || (rec.gross * 12);
                   return (
                     <tr key={rec.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => handleViewModal(rec)}
-                            title="View Full Breakdown"
-                            className="p-1 rounded-md text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                          {canEditPayroll && (
-                            <>
-                              <button
-                                onClick={() => handleOpenEditModal(rec)}
-                                title="Edit Pay Structure"
-                                className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(rec)}
-                                title="Delete Pay Structure"
-                                className="p-1 rounded-md text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
                       <td className="px-4 py-3 font-semibold text-foreground">
                         <div className="flex items-center gap-1.5">
                           <span>{rec.slab}</span>
@@ -1190,6 +1156,28 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                         >
                           {rec.status}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {canEditPayroll && (
+                            <>
+                              <button
+                                onClick={() => handleOpenEditModal(rec)}
+                                title="Edit Pay Structure"
+                                className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(rec)}
+                                title="Delete Pay Structure"
+                                className="p-1 rounded-md text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

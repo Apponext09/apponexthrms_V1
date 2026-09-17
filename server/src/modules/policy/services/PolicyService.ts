@@ -879,5 +879,74 @@ export class PolicyService {
   async listSignaturesForPolicy(ctx: TenantContext, policyId: number) {
     return this.policyRepo.listSignaturesForPolicy(ctx, policyId);
   }
+
+  /**
+   * ── POLICY QUERY METHODS ──────────────────────────────────────
+   */
+
+  async submitPolicyQuery(
+    ctx: TenantContext,
+    policyDocumentId: number,
+    policyVersionId: number | null,
+    policyVersion: string | null,
+    question: string,
+    jwtRoles?: string[]
+  ) {
+    if (!question || !question.trim()) {
+      throw new ValidationError('Question cannot be empty');
+    }
+
+    const roleCodes = await this.getUserRoleCodes(ctx.organizationId, ctx.userId, jwtRoles);
+    const isApplicable = await this.policyRepo.isPolicyApplicableToUser(ctx, ctx.userId, roleCodes, policyDocumentId);
+
+    if (!isApplicable) {
+      throw new ValidationError('Policy is not assigned to you, or you lack access permissions.');
+    }
+
+    return this.policyRepo.createPolicyQuery(ctx, {
+      policyDocumentId,
+      policyVersionId,
+      policyVersion,
+      userId: ctx.userId,
+      question: question.trim(),
+    });
+  }
+
+  async getUserPolicyQueries(ctx: TenantContext) {
+    return this.policyRepo.getUserPolicyQueries(ctx, ctx.userId);
+  }
+
+  async getPolicyQueriesByPolicyId(ctx: TenantContext, policyDocumentId: number, jwtRoles?: string[]) {
+    const roleCodes = await this.getUserRoleCodes(ctx.organizationId, ctx.userId, jwtRoles);
+    const isAdminOrHr = roleCodes.some((r) =>
+      ['super_admin', 'superadmin', 'admin', 'hr', 'hr_manager', 'hr_admin'].includes(r.toLowerCase())
+    );
+
+    if (isAdminOrHr) {
+      return this.policyRepo.getPolicyQueriesByPolicyId(ctx, policyDocumentId);
+    } else {
+      const isApplicable = await this.policyRepo.isPolicyApplicableToUser(ctx, ctx.userId, roleCodes, policyDocumentId);
+      if (!isApplicable) {
+        throw new ValidationError('Policy is not assigned to you, or you lack access permissions.');
+      }
+      return this.policyRepo.getPolicyQueriesByPolicyId(ctx, policyDocumentId, ctx.userId);
+    }
+  }
+
+  async getAdminPolicyQueries(ctx: TenantContext, statusFilter?: string) {
+    return this.policyRepo.getAdminPolicyQueries(ctx, statusFilter);
+  }
+
+  async replyToPolicyQuery(ctx: TenantContext, queryId: number, reply: string, status: 'OPEN' | 'REPLIED' | 'CLOSED') {
+    if (!reply || !reply.trim()) {
+      throw new ValidationError('Reply content cannot be empty');
+    }
+
+    const updated = await this.policyRepo.replyToPolicyQuery(ctx, queryId, reply.trim(), status, ctx.userId);
+    if (!updated) {
+      throw new NotFoundError('Policy query not found');
+    }
+    return updated;
+  }
 }
 

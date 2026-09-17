@@ -13,7 +13,10 @@ const DepartmentDashboard = lazy(() => import('../features/manager/pages/Departm
 const AttendanceDashboard = lazy(() => import('../features/attendance/pages/AttendanceDashboard').then(m => ({ default: m.AttendanceDashboard })));
 const ManagerHRRegularizationApprovals = lazy(() => import('../features/attendance/components/ManagerHRRegularizationApprovals').then(m => ({ default: m.ManagerHRRegularizationApprovals })));
 const FaceAttendancePage = lazy(() => import('../features/employee/portal-pages/FaceAttendancePage'));
+const AttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
+const ShiftRosterPage = lazy(() => import('../features/employee/portal-pages/ShiftRosterPage'));
 const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalInboxPage').then(m => ({ default: m.ApprovalInboxPage })));
+const ApprovalsDashboardPage = lazy(() => import('../features/leaves/pages/ApprovalsDashboardPage').then(m => ({ default: m.ApprovalsDashboardPage })));
 const MrfRequestPage = lazy(() => import('../features/recruitment/pages/MrfRequestPage').then(m => ({ default: m.MrfRequestPage })));
 const InterviewCalendarPage = lazy(() => import('../features/recruitment/pages/InterviewCalendarPage').then(m => ({ default: m.InterviewCalendarPage })));
 const InterviewerRatingPage = lazy(() => import('../features/recruitment/pages/InterviewerRatingPage').then(m => ({ default: m.InterviewerRatingPage })));
@@ -30,12 +33,15 @@ const PerformanceDashboard = lazy(() => import('../features/performance/pages/Pe
 const ReviewCyclesPage = lazy(() => import('../features/performance/pages/ReviewCyclesPage').then(m => ({ default: m.ReviewCyclesPage })));
 const GoalManagementPage = lazy(() => import('../features/performance/pages/GoalManagementPage').then(m => ({ default: m.GoalManagementPage })));
 const ApprovalsPage = lazy(() => import('../features/employee/portal-pages/ApprovalsPage'));
-const EmployeeProfilePage = lazy(() => import('../features/employee/pages/EmployeeProfilePage').then(m => ({ default: m.EmployeeProfilePage })));
+// Managers use the same self-service profile and HR approval flow as employees.
+const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
 const PoliciesPage = lazy(() => import('../features/employee/portal-pages/PoliciesPage'));
+const ManagerIjpApprovalsPage = lazy(() => import('../features/manager/pages/ManagerIjpApprovalsPage'));
+const ManagerLmsPage = lazy(() => import('../features/lms/pages/ManagerLmsPage').then(m => ({ default: m.ManagerLmsPage })));
 
 const MANAGER_ALLOWED_ROLES: Role[] = [
   'department_head',
@@ -60,11 +66,16 @@ export const managerRoutes = (
     <Route path="/manager/attendance" element={<AttendanceDashboard />} />
     <Route path="/manager/attendance-regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
     <Route path="/manager/regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
+    <Route path="/manager/attendance-correction" element={<ManagerHRRegularizationApprovals role="manager" />} />
     <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
+    <Route path="/manager/attendance-log" element={<AttendancePage />} />
+    <Route path="/manager/my-shift" element={<ShiftRosterPage />} />
     <Route path="/manager/leave-approvals" element={<ApprovalInboxPage />} />
     <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
+    <Route path="/manager/leaves/approvals-dashboard" element={<ApprovalsDashboardPage />} />
     <Route path="/manager/hiring" element={<DepartmentDashboard />} />
     <Route path="/manager/mrf-request" element={<MrfRequestPage />} />
+    <Route path="/manager/ijp-approvals" element={<ManagerIjpApprovalsPage />} />
     <Route path="/manager/interview-schedule" element={<InterviewCalendarPage />} />
     <Route path="/manager/interviewer-rating" element={<InterviewerRatingPage />} />
     <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
@@ -101,11 +112,13 @@ export const managerRoutes = (
     <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
     <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
     <Route path="/manager/approvals" element={<ApprovalsPage />} />
-    <Route path="/manager/profile" element={<EmployeeProfilePage />} />
+    <Route path="/manager/profile" element={<ProfilePage />} />
     <Route path="/manager/leaves" element={<LeavePage />} />
     <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
     <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
     <Route path="/manager/policies" element={<PoliciesPage />} />
+    <Route path="/manager/lms" element={<ManagerLmsPage />} />
+    <Route path="/manager/learning" element={<ManagerLmsPage />} />
     <Route path="/manager/live-tracking/history" element={<TrackingHistoryPage />} />
   </Route>
 );

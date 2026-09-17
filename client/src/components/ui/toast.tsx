@@ -6,40 +6,52 @@ export { toast };
 export interface ToasterProps extends React.ComponentProps<typeof SonnerToaster> {}
 
 /**
- * Solid WhatsApp Web style Toast Notifications Container
- * Positioned in the bottom-right corner with 100% solid, opaque backgrounds.
+ * Light-themed Toast Notifications Container
+ * Positioned in the top-right corner with white backgrounds.
+ * - Success: Green  | Error: Red  | Warning: Amber  | Info: Blue
+ * Duration: 1500ms
  */
 export function Toaster({ position = 'top-right', ...props }: ToasterProps) {
   return (
     <SonnerToaster
       position={position}
-      visibleToasts={1}
+      visibleToasts={3}
       richColors={false}
       closeButton
       expand={false}
-      duration={2500}
+      duration={1500}
       className="toaster group"
       toastOptions={{
         style: {
-          backgroundColor: '#0f172a',
-          color: '#ffffff',
-          border: '1px solid #334155',
-          borderRadius: '14px',
-          padding: '14px 18px',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          fontSize: '13px',
+          fontWeight: '600',
+          background: '#ffffff',
+          color: '#111827',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.10), 0 1px 6px rgba(0, 0, 0, 0.06)',
+          border: '1.5px solid #e5e7eb',
           opacity: 1,
         },
         classNames: {
           toast:
-            'group toast !bg-[#0f172a] !text-white !border-slate-700 !shadow-2xl !rounded-2xl !p-4 !gap-3 !opacity-100 font-sans animate-in fade-in-0 slide-in-from-top-5 slide-in-from-right-5 duration-300 ease-out',
-          title: '!text-xs !font-extrabold !text-white tracking-tight',
-          description: '!text-[11px] !text-slate-300 mt-0.5 leading-snug font-medium',
+            'group toast !bg-white !rounded-xl !p-4 !gap-3 !opacity-100 font-sans animate-in fade-in-0 slide-in-from-top-4 slide-in-from-right-4 duration-300 ease-out',
+          title: '!text-[13px] !font-bold tracking-tight',
+          description: '!text-[12px] mt-0.5 leading-snug font-medium opacity-80',
+          success:
+            '!text-[#15803d] !border-[#86efac]',
+          error:
+            '!text-[#be123c] !border-[#fda4af]',
+          warning:
+            '!text-[#b45309] !border-[#fcd34d]',
+          info:
+            '!text-[#1d4ed8] !border-[#93c5fd]',
           actionButton:
-            '!bg-emerald-500 !text-white font-bold text-xs rounded-xl px-3 py-1.5 shadow-xs',
+            '!bg-current !text-white font-bold text-xs rounded-lg px-3 py-1.5',
           cancelButton:
-            '!bg-slate-800 !text-slate-300 font-bold text-xs rounded-xl px-3 py-1.5',
+            '!bg-white !text-gray-500 font-bold text-xs rounded-lg px-3 py-1.5 border border-gray-200',
           closeButton:
-            '!bg-slate-800 !border-slate-700 !text-slate-400 hover:!text-white hover:!bg-slate-700 transition-colors rounded-full p-1',
+            '!bg-white !border-gray-200 !text-gray-400 hover:!text-gray-700 hover:!bg-gray-50 transition-colors rounded-full',
         },
       }}
       {...props}

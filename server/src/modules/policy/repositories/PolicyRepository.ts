@@ -11,6 +11,9 @@ import type {
   PolicyVersionHistoryRecord,
   PolicyAttachment,
   PolicyAttachmentInput,
+  PolicySignature,
+  PolicyQuery,
+  PolicyQueryStatus,
 } from '../policy.types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -1588,5 +1591,233 @@ export class PolicyRepository {
       };
     });
   }
+
+  /**
+   * Helper to ensure policy_queries table exists
+   */
+  private async ensurePolicyQueriesTable(): Promise<void> {
+    const exists = await this.db.schema.hasTable('policy_queries');
+    if (!exists) {
+      await this.db.schema.createTable('policy_queries', (table) => {
+        table.increments('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.integer('organization_id').notNullable().index();
+        table.integer('company_id').nullable();
+        table.integer('policy_document_id').notNullable().index();
+        table.integer('policy_version_id').nullable();
+        table.string('policy_version', 50).nullable();
+        table.integer('employee_id').nullable().index();
+        table.integer('user_id').notNullable().index();
+        table.text('question').notNullable();
+        table.string('status', 20).notNullable().defaultTo('OPEN');
+        table.text('reply').nullable();
+        table.integer('replied_by').nullable();
+        table.timestamp('replied_at').nullable();
+        table.timestamps(true, true);
+      });
+    }
+  }
+
+  /**
+   * Create a new employee question/query about a policy
+   */
+  async createPolicyQuery(
+    ctx: TenantContext,
+    input: {
+      policyDocumentId: number;
+      policyVersionId?: number | null;
+      policyVersion?: string | null;
+      userId: number;
+      question: string;
+    }
+  ): Promise<PolicyQuery> {
+    await this.ensurePolicyQueriesTable();
+
+    // Resolve employee_id from user
+    const userRow = await this.db('users').where('id', input.userId).select('employee_id', 'company_id').first();
+    const employeeId = userRow?.employee_id || null;
+    const companyId = ctx.companyId || userRow?.company_id || null;
+
+    const queryUuid = uuidv4();
+    const [id] = await this.db('policy_queries').insert({
+      uuid: queryUuid,
+      organization_id: ctx.organizationId,
+      company_id: companyId,
+      policy_document_id: input.policyDocumentId,
+      policy_version_id: input.policyVersionId || null,
+      policy_version: input.policyVersion || null,
+      employee_id: employeeId,
+      user_id: input.userId,
+      question: input.question,
+      status: 'OPEN',
+      created_at: this.db.fn.now(),
+      updated_at: this.db.fn.now(),
+    });
+
+    const record = await this.db('policy_queries').where('id', id).first();
+    return this.mapQueryRecord(record);
+  }
+
+  /**
+   * Get all policy queries asked by a specific employee/user
+   */
+  async getUserPolicyQueries(ctx: TenantContext, userId: number): Promise<PolicyQuery[]> {
+    await this.ensurePolicyQueriesTable();
+
+    const records = await this.db('policy_queries as pq')
+      .leftJoin('policy_documents as pd', 'pq.policy_document_id', 'pd.id')
+      .leftJoin('users as u_reply', 'pq.replied_by', 'u_reply.id')
+      .leftJoin('employees as e_reply', 'u_reply.employee_id', 'e_reply.id')
+      .where('pq.organization_id', ctx.organizationId)
+      .where('pq.user_id', userId)
+      .select(
+        'pq.*',
+        'pd.title as policyTitle',
+        this.db.raw("CONCAT_WS(' ', e_reply.first_name, e_reply.last_name) as repliedByName")
+      )
+      .orderBy('pq.created_at', 'desc');
+
+    return records.map((r: any) => this.mapQueryRecord(r));
+  }
+
+  /**
+   * Get policy queries for a specific policy document
+   */
+  async getPolicyQueriesByPolicyId(ctx: TenantContext, policyDocumentId: number, userId?: number): Promise<PolicyQuery[]> {
+    await this.ensurePolicyQueriesTable();
+
+    let query = this.db('policy_queries as pq')
+      .leftJoin('policy_documents as pd', 'pq.policy_document_id', 'pd.id')
+      .leftJoin('users as u_reply', 'pq.replied_by', 'u_reply.id')
+      .leftJoin('employees as e_reply', 'u_reply.employee_id', 'e_reply.id')
+      .where('pq.organization_id', ctx.organizationId)
+      .where('pq.policy_document_id', policyDocumentId);
+
+    if (userId) {
+      query = query.where('pq.user_id', userId);
+    }
+
+    const records = await query
+      .select(
+        'pq.*',
+        'pd.title as policyTitle',
+        this.db.raw("CONCAT_WS(' ', e_reply.first_name, e_reply.last_name) as repliedByName")
+      )
+      .orderBy('pq.created_at', 'desc');
+
+    return records.map((r: any) => this.mapQueryRecord(r));
+  }
+
+  /**
+   * Get all policy queries for HR / Admin dashboard across organization
+   */
+  async getAdminPolicyQueries(ctx: TenantContext, statusFilter?: string): Promise<PolicyQuery[]> {
+    await this.ensurePolicyQueriesTable();
+
+    let query = this.db('policy_queries as pq')
+      .leftJoin('policy_documents as pd', 'pq.policy_document_id', 'pd.id')
+      .leftJoin('users as u', 'pq.user_id', 'u.id')
+      .leftJoin('employees as e', 'pq.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('users as u_reply', 'pq.replied_by', 'u_reply.id')
+      .leftJoin('employees as e_reply', 'u_reply.employee_id', 'e_reply.id')
+      .where('pq.organization_id', ctx.organizationId);
+
+    if (statusFilter && statusFilter !== 'all') {
+      query = query.where('pq.status', statusFilter.toUpperCase());
+    }
+
+    const records = await query
+      .select(
+        'pq.*',
+        'pd.title as policyTitle',
+        'e.employee_code as employeeCode',
+        'd.name as departmentName',
+        this.db.raw("CONCAT_WS(' ', e.first_name, e.last_name) as employeeName"),
+        this.db.raw("CONCAT_WS(' ', e_reply.first_name, e_reply.last_name) as repliedByName")
+      )
+      .orderBy('pq.created_at', 'desc');
+
+    return records.map((r: any) => this.mapQueryRecord(r));
+  }
+
+  /**
+   * HR / Admin reply to employee policy question
+   */
+  async replyToPolicyQuery(
+    ctx: TenantContext,
+    queryId: number,
+    reply: string,
+    status: PolicyQueryStatus,
+    repliedBy: number
+  ): Promise<PolicyQuery | null> {
+    await this.ensurePolicyQueriesTable();
+
+    const existing = await this.db('policy_queries')
+      .where('id', queryId)
+      .where('organization_id', ctx.organizationId)
+      .first();
+
+    if (!existing) return null;
+
+    await this.db('policy_queries')
+      .where('id', queryId)
+      .update({
+        reply,
+        status: status || 'REPLIED',
+        replied_by: repliedBy,
+        replied_at: this.db.fn.now(),
+        updated_at: this.db.fn.now(),
+      });
+
+    const updated = await this.db('policy_queries').where('id', queryId).first();
+    return this.mapQueryRecord(updated);
+  }
+
+  /**
+   * Helper to verify if a policy is assigned/applicable to a user
+   */
+  async isPolicyApplicableToUser(
+    ctx: TenantContext,
+    userId: number,
+    roleCodes: string[],
+    policyId: number
+  ): Promise<boolean> {
+    const roles = expandRoleCodes(roleCodes);
+    const isAdmin = roles.some((r) =>
+      ['organization_admin', 'org_admin', 'admin', 'hr', 'hr_admin', 'hr_manager', 'ceo'].includes(r)
+    );
+    if (isAdmin) return true;
+
+    const userPolicies = await this.getUserPoliciesWithAcceptance(ctx, userId, roleCodes);
+    return userPolicies.some((p) => p.id === policyId);
+  }
+
+  private mapQueryRecord(r: any): PolicyQuery {
+    return {
+      id: r.id,
+      uuid: r.uuid,
+      organizationId: r.organizationId || r.organization_id,
+      companyId: r.companyId || r.company_id,
+      policyDocumentId: r.policyDocumentId || r.policy_document_id,
+      policyVersionId: r.policyVersionId || r.policy_version_id,
+      policyVersion: r.policyVersion || r.policy_version,
+      employeeId: r.employeeId || r.employee_id,
+      userId: r.userId || r.user_id,
+      question: r.question,
+      status: r.status as PolicyQueryStatus,
+      reply: r.reply || null,
+      repliedBy: r.repliedBy || r.replied_by || null,
+      repliedByName: r.repliedByName || null,
+      repliedAt: r.repliedAt || r.replied_at || null,
+      createdAt: r.createdAt || r.created_at,
+      updatedAt: r.updatedAt || r.updated_at,
+      employeeName: r.employeeName || null,
+      employeeCode: r.employeeCode || null,
+      departmentName: r.departmentName || null,
+      policyTitle: r.policyTitle || null,
+    };
+  }
 }
+
 

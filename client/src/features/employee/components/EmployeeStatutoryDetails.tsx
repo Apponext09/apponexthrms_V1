@@ -78,6 +78,11 @@ function maskUAN(val: string): string {
   return '•'.repeat(maskedCount) + visible;
 }
 
+function normalizeVerificationStatus(value: unknown): 'verified' | 'not_verified' {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return normalized === 'not_verified' || normalized === 'unverified' ? 'not_verified' : 'verified';
+}
+
 interface EmployeeStatutoryDetailsProps {
   employee: Employee;
   onUpdate?: () => void;
@@ -115,7 +120,6 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
     uanNumber: '',
     pfNumber: '',
     esicNumber: '',
-    userBand: '',
     payrollSlab: '',
     employeeShare: '',
     employerShare: '',
@@ -148,13 +152,12 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
       uanNumber: e?.uanNo || e?.uan_no || e?.uan_number || e?.uanNumber || '',
       pfNumber: e?.pfNo || e?.pf_no || e?.pf_number || e?.pfNumber || '',
       esicNumber: e?.esicNo || e?.esic_no || e?.esic_number || e?.esicNumber || '',
-      userBand: e?.userBand || e?.user_band || '',
       payrollSlab: initialSlab,
       employeeShare: e?.employeeShare || e?.employee_share || '',
       employerShare: e?.employerShare || e?.employer_share || '',
-      backgroundVerification: e?.backgroundVerification || e?.background_verification || 'Verified',
+      backgroundVerification: normalizeVerificationStatus(e?.backgroundVerification || e?.background_verification),
       eligibleForEps: e?.eligibleForEps || e?.eligible_for_eps || 'N',
-      panStatus: e?.panStatus || e?.pan_status || 'VERIFIED',
+      panStatus: normalizeVerificationStatus(e?.panStatus || e?.pan_status),
     });
 
     if (employee?.id) {
@@ -179,13 +182,12 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
             uanNumber: d.uanNo || d.uan_no || d.uan_number || d.uanNumber || '',
             pfNumber: d.pfNo || d.pf_no || d.pf_number || d.pfNumber || '',
             esicNumber: d.esicNo || d.esic_no || d.esic_number || d.esicNumber || '',
-            userBand: d.userBand || d.user_band || '',
             payrollSlab: sName || initialSlab,
             employeeShare: d.employeeShare || d.employee_share || '',
             employerShare: d.employerShare || d.employer_share || '',
-            backgroundVerification: d.backgroundVerification || d.background_verification || 'Verified',
+            backgroundVerification: normalizeVerificationStatus(d.backgroundVerification || d.background_verification),
             eligibleForEps: d.eligibleForEps || d.eligible_for_eps || 'N',
-            panStatus: d.panStatus || d.pan_status || 'VERIFIED',
+            panStatus: normalizeVerificationStatus(d.panStatus || d.pan_status),
           });
         } else if (sName) {
           setFormData(prev => ({ ...prev, payrollSlab: sName }));
@@ -222,10 +224,9 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         pfNumber: d.pfNo || d.pf_no || d.pf_number || prev.pfNumber,
         uanNumber: d.uanNo || d.uan_no || d.uan_number || prev.uanNumber,
         esicNumber: d.esicNo || d.esic_no || d.esic_number || prev.esicNumber,
-        userBand: d.userBand || d.user_band || prev.userBand,
         eligibleForEps: d.eligibleForEps || d.eligible_for_eps || prev.eligibleForEps,
-        backgroundVerification: d.backgroundVerification || d.background_verification || prev.backgroundVerification,
-        panStatus: d.panStatus || d.pan_status || prev.panStatus,
+        backgroundVerification: normalizeVerificationStatus(d.backgroundVerification || d.background_verification || prev.backgroundVerification),
+        panStatus: normalizeVerificationStatus(d.panStatus || d.pan_status || prev.panStatus),
         payrollSlab: sName || prev.payrollSlab,
       }));
       showToast.success('Refreshed statutory details');
@@ -256,8 +257,6 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
         uan_no: formData.uanNumber,
         esicNo: formData.esicNumber,
         esic_no: formData.esicNumber,
-        userBand: formData.userBand,
-        user_band: formData.userBand,
         panStatus: formData.panStatus,
         pan_status: formData.panStatus,
         eligibleForEps: formData.eligibleForEps,
@@ -281,13 +280,12 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
           uanNumber: updatedEmp.uanNo || updatedEmp.uan_no || updatedEmp.uan_number || updatedEmp.uanNumber || formData.uanNumber,
           pfNumber: updatedEmp.pfNo || updatedEmp.pf_no || updatedEmp.pf_number || updatedEmp.pfNumber || formData.pfNumber,
           esicNumber: updatedEmp.esicNo || updatedEmp.esic_no || updatedEmp.esic_number || updatedEmp.esicNumber || formData.esicNumber,
-          userBand: updatedEmp.userBand || updatedEmp.user_band || formData.userBand,
           payrollSlab: formData.payrollSlab,
           employeeShare: updatedEmp.employeeShare || updatedEmp.employee_share || formData.employeeShare,
           employerShare: updatedEmp.employerShare || updatedEmp.employer_share || formData.employerShare,
-          backgroundVerification: updatedEmp.backgroundVerification || updatedEmp.background_verification || formData.backgroundVerification,
+          backgroundVerification: normalizeVerificationStatus(updatedEmp.backgroundVerification || updatedEmp.background_verification || formData.backgroundVerification),
           eligibleForEps: updatedEmp.eligibleForEps || updatedEmp.eligible_for_eps || formData.eligibleForEps,
-          panStatus: updatedEmp.panStatus || updatedEmp.pan_status || formData.panStatus,
+          panStatus: normalizeVerificationStatus(updatedEmp.panStatus || updatedEmp.pan_status || formData.panStatus),
         });
       }
 
@@ -472,10 +470,9 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
               isEditing={isEditing}
               onChange={v => handleChange('esicNumber', v)}
             />
-            <FieldItem
+            <VerificationStatusField
               label="PAN Status"
               value={formData.panStatus}
-              placeholder="VERIFIED"
               isEditing={isEditing}
               onChange={v => handleChange('panStatus', v)}
             />
@@ -513,14 +510,6 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
               )}
             </div>
 
-            <FieldItem
-              label="User Band / Grade Tier"
-              value={formData.userBand}
-              placeholder="e.g. Band-3 / Tier-A"
-              isEditing={isEditing}
-              onChange={v => handleChange('userBand', v)}
-            />
-
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Eligible for EPS (Pension Scheme)</label>
               {isEditing ? (
@@ -539,10 +528,9 @@ export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = fa
               )}
             </div>
 
-            <FieldItem
+            <VerificationStatusField
               label="Background Verification Status"
               value={formData.backgroundVerification}
-              placeholder="e.g. Verified / In Progress"
               isEditing={isEditing}
               onChange={v => handleChange('backgroundVerification', v)}
             />
@@ -614,6 +602,40 @@ function FieldItem({
           ) : (
             <span className="text-muted-foreground/60 italic text-[11px]">Not specified</span>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VerificationStatusField({
+  label,
+  value,
+  isEditing,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  isEditing: boolean;
+  onChange: (value: 'verified' | 'not_verified') => void;
+}) {
+  const normalizedValue = normalizeVerificationStatus(value);
+
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+      {isEditing ? (
+        <select
+          value={normalizedValue}
+          onChange={(event) => onChange(event.target.value as 'verified' | 'not_verified')}
+          className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background focus:ring-2 focus:ring-primary text-foreground font-medium"
+        >
+          <option value="verified">Verified</option>
+          <option value="not_verified">Not Verified</option>
+        </select>
+      ) : (
+        <div className="h-9 px-3 border border-border rounded-lg bg-muted/20 flex items-center text-xs font-medium text-foreground">
+          {normalizedValue === 'verified' ? 'Verified' : 'Not Verified'}
         </div>
       )}
     </div>

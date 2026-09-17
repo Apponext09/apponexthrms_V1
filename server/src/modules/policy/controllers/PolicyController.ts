@@ -621,6 +621,112 @@ export class PolicyController {
       next(error);
     }
   };
+
+  /**
+   * ── POLICY QUERY CONTROLLER METHODS ──────────────────────────────────────
+   */
+
+  /**
+   * POST /policies/:id/queries
+   */
+  submitPolicyQuery = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const policyId = parseInt(req.params.id, 10);
+      const { policyVersionId, policyVersion, question } = req.body;
+      const jwtRoles = (req.user as any)?.roles;
+
+      const query = await this.policyService.submitPolicyQuery(
+        req.ctx,
+        policyId,
+        policyVersionId,
+        policyVersion,
+        question,
+        jwtRoles
+      );
+
+      res.status(201).json({
+        success: true,
+        data: query,
+        message: 'Query submitted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /policies/my-queries
+   */
+  getMyQueries = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const queries = await this.policyService.getUserPolicyQueries(req.ctx);
+      res.status(200).json({
+        success: true,
+        data: queries,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /policies/:id/queries
+   */
+  getPolicyQueriesByPolicyId = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const policyId = parseInt(req.params.id, 10);
+      const jwtRoles = (req.user as any)?.roles;
+
+      const queries = await this.policyService.getPolicyQueriesByPolicyId(req.ctx, policyId, jwtRoles);
+      res.status(200).json({
+        success: true,
+        data: queries,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * GET /policies/admin/queries
+   */
+  getAdminPolicyQueries = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const statusFilter = req.query.status as string;
+
+      const queries = await this.policyService.getAdminPolicyQueries(req.ctx, statusFilter);
+      res.status(200).json({
+        success: true,
+        data: queries,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * POST /policies/queries/:queryId/reply
+   */
+  replyToPolicyQuery = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.ctx) throw new UnauthorizedError('Tenant context not resolved');
+      const queryId = parseInt(req.params.queryId, 10);
+      const { reply, status } = req.body;
+
+      const updated = await this.policyService.replyToPolicyQuery(req.ctx, queryId, reply, status);
+      res.status(200).json({
+        success: true,
+        data: updated,
+        message: 'Reply submitted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const policyController = new PolicyController();

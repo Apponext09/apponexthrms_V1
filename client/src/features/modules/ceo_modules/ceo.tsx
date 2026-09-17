@@ -84,7 +84,6 @@ export const CEO_MODULES: ModuleNode[] = [
       { id: 'ceo_leave_approvals_inbox', name: 'Leave Approvals', defaultEnabled: true },
       { id: 'ceo_approvals_dashboard', name: 'Approvals Dashboard', defaultEnabled: true },
       { id: 'ceo_leave_policies', name: 'Leave Settings', defaultEnabled: true },
-      { id: 'ceo_holiday_calendar', name: 'Holiday Management', defaultEnabled: true },
     ],
   },
   {

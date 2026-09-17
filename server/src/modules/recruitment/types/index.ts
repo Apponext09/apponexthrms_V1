@@ -16,7 +16,7 @@ export const createJobSchema = z.object({
   minSalary: z.number().optional(),
   maxSalary: z.number().optional(),
   currency: z.string().optional(),
-  employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
+  employmentType: z.string().default('onsite'),
   noOfPositions: z.number().min(1).default(1),
   expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
     const datePart = String(value).slice(0, 10);
@@ -44,8 +44,10 @@ const candidateSourceSchema = z.preprocess((value) => {
   if (['bulk', 'bulk_import', 'csv', 'import'].includes(raw)) return 'bulk_import';
   if (['resume_bank', 'resume bank'].includes(raw)) return 'resume_bank';
   if (['direct', 'direct_apply', 'direct apply', 'direct application'].includes(raw)) return 'direct_apply';
+  if (['internal_opening', 'internal opening', 'internal', 'internal_employee', 'ijp'].includes(raw)) return 'internal_opening';
+  if (['other', 'others'].includes(raw)) return 'other';
   return raw || undefined;
-}, z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency', 'bulk_import', 'resume_bank']).optional());
+}, z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency', 'bulk_import', 'resume_bank', 'internal_opening', 'other']).optional());
 
 // Candidate schemas
 export const createCandidateSchema = z.object({

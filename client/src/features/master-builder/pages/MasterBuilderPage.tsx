@@ -33,6 +33,12 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -592,9 +598,23 @@ export function MasterBuilderPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     Master name <span className="text-destructive">*</span>
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                          <p className="font-semibold text-foreground">Master Entity Name (Singular)</p>
+                          <p className="text-muted-foreground leading-relaxed">
+                            The singular display name of this entity (e.g., <span className="text-foreground font-mono">Cost Centre</span>, <span className="text-foreground font-mono">Project</span>, <span className="text-foreground font-mono">Skill</span>). Used in form labels, breadcrumbs, and detail dialogs.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </label>
                   <Input
                     placeholder="e.g. Cost Centre"
@@ -606,9 +626,23 @@ export function MasterBuilderPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     Plural name
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                          <p className="font-semibold text-foreground">Plural Display Name</p>
+                          <p className="text-muted-foreground leading-relaxed">
+                            The plural form used in table headers, sidebar navigation menus, and bulk export titles (e.g., <span className="text-foreground font-mono">Cost Centres</span>, <span className="text-foreground font-mono">Projects</span>, <span className="text-foreground font-mono">Skills</span>).
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </label>
                   <Input
                     placeholder="e.g. Cost Centres"
@@ -621,9 +655,23 @@ export function MasterBuilderPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     System code <span className="text-destructive">*</span>
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                          <p className="font-semibold text-foreground">Unique System Code</p>
+                          <p className="text-muted-foreground leading-relaxed">
+                            Unique database snake_case identifier (e.g., <span className="text-foreground font-mono">cost_centre</span>). Used in backend APIs, database lookups, and reporting exports.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </label>
                   <Input
                     placeholder="cost_centre"
@@ -635,9 +683,31 @@ export function MasterBuilderPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     Employee profile linkage
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-sm text-xs p-3.5 space-y-2 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                          <p className="font-semibold text-foreground">How this master connects to Employees:</p>
+                          <div className="space-y-1.5 text-muted-foreground leading-relaxed">
+                            <div>
+                              <strong className="text-foreground">1. None:</strong> Standalone lookup list (e.g. Asset Categories, Project Codes). Does not attach to employee profiles.
+                            </div>
+                            <div>
+                              <strong className="text-primary font-semibold">2. Primary Assignment:</strong> Single-choice selection on Employee Create, Edit, and Profile card (e.g. Cost Center, Business Unit, Band).
+                            </div>
+                            <div>
+                              <strong className="text-indigo-500 font-semibold">3. Secondary Linkage:</strong> Multi-select tag chips for assigning multiple records per employee (e.g. Tech Stack, Skillsets, Certifications).
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </label>
                   <select
                     value={formEmployeeLinkage}
@@ -651,10 +721,56 @@ export function MasterBuilderPage() {
                 </div>
               </div>
 
+              {/* Dynamic Helper Info Banner for Employee Profile Linkage */}
+              {formEmployeeLinkage === 'primary_assignment' && (
+                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <span className="text-base leading-none">✨</span>
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">Primary Employee Assignment Enabled</p>
+                    <p className="text-primary/90 text-[11px] leading-relaxed">
+                      A single-select dropdown for this master will automatically appear on <strong>Employee Creation</strong>, <strong>Employee Edit</strong>, and the <strong>Employee Profile</strong> page (e.g. Cost Center, Band, Division).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {formEmployeeLinkage === 'secondary_linkage' && (
+                <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-700 dark:text-indigo-300 flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <span className="text-base leading-none">🏷️</span>
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">Secondary Attribute Linkage Enabled</p>
+                    <p className="text-indigo-700/90 dark:text-indigo-300/90 text-[11px] leading-relaxed">
+                      A multi-select tag picker will automatically appear on <strong>Employee Profiles</strong> and edit forms, allowing multiple records to be tagged to each employee (e.g. Tech Stack, Certifications, Skillsets).
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {formEmployeeLinkage === 'none' && (
+                <div className="p-2.5 rounded-lg bg-muted/40 border border-border/60 text-[11px] text-muted-foreground flex items-center gap-2">
+                  <span className="text-sm">ℹ️</span>
+                  <span>Standalone master list — records will be used for general lookup and won't attach to employee profiles.</span>
+                </div>
+              )}
+
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   Description
-                  <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                        <p className="font-semibold text-foreground">Business Description</p>
+                        <p className="text-muted-foreground leading-relaxed">
+                          A brief explanation for HR administrators describing what this custom master is used for and its business guidelines.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </label>
                 <textarea
                   placeholder="What this master is for..."
@@ -673,11 +789,25 @@ export function MasterBuilderPage() {
                 Hierarchy & history
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+              <div className="flex items-center justify-between p-3.5 rounded-lg border border-border bg-background hover:bg-muted/30 transition-colors">
                 <div>
                   <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                     Parent-child hierarchy
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                          <p className="font-semibold text-foreground">Hierarchical Tree Structure</p>
+                          <p className="text-muted-foreground leading-relaxed">
+                            When enabled, records in this master can nest inside parent records of the same master (e.g., Parent Department &rarr; Sub-Department, Regional Office &rarr; Branch).
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </span>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Allow records in this master to nest inside parent records of the same master
@@ -691,11 +821,25 @@ export function MasterBuilderPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+              <div className="flex items-center justify-between p-3.5 rounded-lg border border-border bg-background hover:bg-muted/30 transition-colors">
                 <div>
                   <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                     History & effective dating
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                          <p className="font-semibold text-foreground">Effective Dating & Auditing</p>
+                          <p className="text-muted-foreground leading-relaxed">
+                            Maintains version history with effective start and end dates for regulatory compliance and audit logs whenever record properties change.
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </span>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Keep version history with effective start and end dates
@@ -730,7 +874,24 @@ export function MasterBuilderPage() {
           </DialogHeader>
           <form onSubmit={handleSaveChoiceList} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">List Name *</label>
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                List Name <span className="text-destructive">*</span>
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                      <p className="font-semibold text-foreground">Choice List Title</p>
+                      <p className="text-muted-foreground leading-relaxed">
+                        The readable name of this shared choice list (e.g. <span className="text-foreground font-mono">Priority Levels</span>, <span className="text-foreground font-mono">Asset Conditions</span>).
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </label>
               <Input
                 placeholder="e.g. Priority Levels"
                 value={clName}
@@ -744,7 +905,24 @@ export function MasterBuilderPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">List Code *</label>
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                List Code <span className="text-destructive">*</span>
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-help inline-flex text-muted-foreground hover:text-primary transition-colors">
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start" className="max-w-xs text-xs p-3 space-y-1 bg-popover/95 backdrop-blur border shadow-xl z-[9999]">
+                      <p className="font-semibold text-foreground">Unique System Code</p>
+                      <p className="text-muted-foreground leading-relaxed">
+                        Database identifier used when binding this choice list to custom master dropdown fields.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </label>
               <Input
                 placeholder="priority_levels"
                 value={clCode}

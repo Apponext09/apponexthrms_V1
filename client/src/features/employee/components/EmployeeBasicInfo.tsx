@@ -18,8 +18,6 @@ import type { Employee } from '@/types';
 
 interface EmployeeBasicInfoProps {
   employee: Employee;
-  isEditing?: boolean;
-  onEditToggle?: (editing: boolean) => void;
   /** When true, employee has an approved request and can edit */
   editUnlocked?: boolean;
   /** The approved request ID to consume after saving */
@@ -96,8 +94,6 @@ const roleColors: Record<string, string> = {
 
 export function EmployeeBasicInfo({
   employee,
-  isEditing: externalIsEditing,
-  onEditToggle,
   editUnlocked = true,
   approvedRequestId,
 }: EmployeeBasicInfoProps) {
@@ -123,12 +119,8 @@ export function EmployeeBasicInfo({
   const { employeeStatuses } = useEmployeeStatuses();
   const [internalIsEditing, setInternalIsEditing] = useState(false);
 
-  const isEditing = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing;
-
-  const setIsEditing = (val: boolean) => {
-    setInternalIsEditing(val);
-    onEditToggle?.(val);
-  };
+  const isEditing = internalIsEditing;
+  const setIsEditing = setInternalIsEditing;
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -147,6 +139,12 @@ export function EmployeeBasicInfo({
   }, [employee]);
 
   const handleSave = async () => {
+    const mobile = (form.mobile || '').trim();
+    if (mobile && !/^\d{10}$/.test(mobile)) {
+      showToast.error('Mobile number must be exactly 10 digits');
+      return;
+    }
+
     // Only validate password if the user intentionally typed a new one
     const newPassword = form.password?.trim() || '';
     const confirmPwd = form.confirmPassword?.trim() || '';
@@ -179,7 +177,7 @@ export function EmployeeBasicInfo({
         lastName: form.lastName,
         middleName: form.middleName || null,
         email: form.email,
-        mobile: form.mobile || null,
+        mobile: mobile || null,
         dateOfBirth: formattedDob === '' ? null : formattedDob,
         gender: form.gender || null,
         nationality: form.nationality || null,
@@ -343,7 +341,7 @@ export function EmployeeBasicInfo({
             </div>
             <div>
               <Label htmlFor="mobile">Mobile Number</Label>
-              <Input id="mobile" value={form.mobile || ''} onChange={(e) => setForm({ ...form, mobile: e.target.value })} className="mt-1" />
+              <Input id="mobile" inputMode="numeric" maxLength={10} value={form.mobile || ''} onChange={(e) => setForm({ ...form, mobile: e.target.value.replace(/\D/g, '') })} className="mt-1" />
             </div>
 
             <div>

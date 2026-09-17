@@ -652,13 +652,12 @@ export const ApplicantTrackerPage: React.FC = () => {
           };
         });
 
-        // Only display active recruitment pipeline candidates in Applicant Tracker (exclude unshortlisted & hired on-role employees)
+        // Only display active recruitment pipeline candidates in Applicant Tracker (exclude unshortlisted, draft, and completed hired/onboarded applications)
         const shortlistedPipeline = mapped.filter((app: any) => {
           const st = String(app.status || '').toLowerCase();
-          const candSt = String(app.candidateStatus || app.candidate_status || '').toLowerCase();
-          const isHiredEmployee = st === 'hired' || st === 'onboarded' || candSt === 'hired' || candSt === 'onboarded' || Boolean(app.employeeId || app.employeeCode);
+          const isFinishedHired = st === 'hired' || st === 'onboarded';
 
-          return st !== 'unshortlisted' && st !== 'bank_only' && st !== 'draft' && !isHiredEmployee;
+          return st !== 'unshortlisted' && st !== 'bank_only' && st !== 'draft' && !isFinishedHired;
         });
 
         // Deduplicate rows by application ID and candidate email + position title

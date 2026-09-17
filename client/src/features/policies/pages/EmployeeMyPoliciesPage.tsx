@@ -3,7 +3,9 @@ import { policiesApi } from '../api/policiesApi';
 import type { RolePolicyRecord } from '../types/policy';
 import { PolicyStatusBadge } from '../components/PolicyStatusBadge';
 import { PolicyReader } from '../components/PolicyReader';
+import { MyQueriesList } from '../components/MyQueriesList';
 import { PolicyAcknowledgementModal } from '../components/PolicyAcknowledgementModal';
+import { AskQueryModal } from '../components/AskQueryModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,19 +21,21 @@ import {
   FileText,
   RefreshCw,
   ShieldCheck,
+  HelpCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const EmployeeMyPoliciesPage: React.FC = () => {
   const [policies, setPolicies] = useState<RolePolicyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived' | 'queries'>('active');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Reader & Modal states
   const [readerPolicy, setReaderPolicy] = useState<RolePolicyRecord | null>(null);
   const [acknowledgePolicy, setAcknowledgePolicy] = useState<RolePolicyRecord | null>(null);
   const [eSignPolicy, setESignPolicy] = useState<RolePolicyRecord | null>(null);
+  const [askQueryPolicy, setAskQueryPolicy] = useState<RolePolicyRecord | null>(null);
 
   const fetchMyPolicies = async () => {
     try {
@@ -114,18 +118,31 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
           >
             Archived Policies ({policies.filter((p) => (p.status || '').toLowerCase() === 'archived').length})
           </Button>
+          <Button
+            type="button"
+            variant={activeTab === 'queries' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActiveTab('queries')}
+            className="h-8 rounded-lg text-xs font-bold"
+          >
+            My Queries
+          </Button>
         </div>
 
-        <Input
-          placeholder="Search policy name, ref, or keyword..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8 text-xs max-w-xs bg-background"
-        />
+        {activeTab !== 'queries' && (
+          <Input
+            placeholder="Search policy name, ref, or keyword..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 text-xs max-w-xs bg-background"
+          />
+        )}
       </div>
 
       {/* Main View */}
-      {loading ? (
+      {activeTab === 'queries' ? (
+        <MyQueriesList />
+      ) : loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-card border border-border rounded-xl space-y-3">
           <div className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <p className="text-xs font-medium text-muted-foreground">Loading your assigned policies...</p>
@@ -230,6 +247,15 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
                         <ShieldCheck className="w-3.5 h-3.5" /> Acknowledge
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setAskQueryPolicy(p)}
+                      className="w-full text-xs font-bold h-8 gap-1 text-muted-foreground border border-transparent hover:border-border"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5" /> Ask HR
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -261,6 +287,14 @@ export const EmployeeMyPoliciesPage: React.FC = () => {
           policy={acknowledgePolicy}
           onConfirm={handleConfirmAcknowledgement}
           onClose={() => setAcknowledgePolicy(null)}
+        />
+      )}
+
+      {/* Ask Query Modal */}
+      {askQueryPolicy && (
+        <AskQueryModal
+          policy={askQueryPolicy}
+          onClose={() => setAskQueryPolicy(null)}
         />
       )}
     </div>

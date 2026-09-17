@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,7 +38,6 @@ import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
 import { lifecycleApi, EmployeeLifecycleSummary, EmployeeLifecycleDetails } from './api/lifecycleApi';
 import { ChronologicalLifecycleFlow } from './components/ChronologicalLifecycleFlow';
-import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { fetchWithFallback, API_ENDPOINTS } from '@/lib/apiHelpers';
 
 import { useLocation } from 'react-router-dom';
@@ -50,12 +49,11 @@ import {
 export default function EmployeeLifecyclePage() {
   const location = useLocation();
   const { config: customConfig } = useLifecycleCustomizationStore();
-  const { selectedCompanyId } = useCompanyStore();
   const [employees, setEmployees] = useState<EmployeeLifecycleSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
-  const [companyFilter, setCompanyFilter] = useState<string>(selectedCompanyId ? String(selectedCompanyId) : '');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState('all');
   const [desigFilter, setDesigFilter] = useState('all');
   const [empTypeFilter, setEmpTypeFilter] = useState('all');
@@ -66,7 +64,6 @@ export default function EmployeeLifecyclePage() {
   const [pageSize, setPageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
 
-  const hasInitializedCompanyRef = useRef(false);
 
   // Top-Level Main View Tab State
   const [mainViewTab, setMainViewTab] = useState<'directory' | 'onboarding' | 'transfers' | 'offboarding'>('directory');
@@ -154,13 +151,11 @@ export default function EmployeeLifecyclePage() {
   const fetchLifecycleData = async () => {
     try {
       setLoading(true);
-      const effectiveCompanyId = selectedCompanyId ? String(selectedCompanyId) : (companyFilter && companyFilter !== 'all' ? companyFilter : undefined);
-
       const response = await lifecycleApi.getSummaries({
         search,
         stage: stageFilter,
         departmentId: deptFilter !== 'all' ? Number(deptFilter) : undefined,
-        companyId: effectiveCompanyId,
+        companyId: companyFilter,
         page,
         pageSize,
       });
@@ -242,13 +237,6 @@ export default function EmployeeLifecyclePage() {
       console.warn('Metadata load error:', err);
     }
   };
-
-  // Sync company filter with currently selected company in topbar switcher (handles null when switching back to Organization)
-  useEffect(() => {
-    if (companyFilter !== 'all') {
-      setCompanyFilter(selectedCompanyId ? String(selectedCompanyId) : '');
-    }
-  }, [selectedCompanyId]);
 
   // Fetch data when filters or pagination changes
   useEffect(() => {
@@ -738,7 +726,7 @@ export default function EmployeeLifecyclePage() {
                       onChange={(e) => setCompanyFilter(e.target.value)}
                       className="w-full h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
                     >
-                      <option value="all">All Companies (Parent &amp; Sub-Companies)</option>
+                      <option value="all">Organization (All Employees)</option>
                       {companies.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}

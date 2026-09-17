@@ -11,6 +11,7 @@ export interface TenantContext {
   companyId?: number;
   role?: string;
   roles?: string[];
+  employeeId?: number;
 }
 
 /**

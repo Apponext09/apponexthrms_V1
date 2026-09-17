@@ -87,25 +87,14 @@ export interface MasterCategory {
 
 export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'master-builder', name: 'Master Builder', icon: Boxes, category: 'Templates & System', description: 'Define custom master entities, dynamic fields, validation rules and choice lists.', defaultItemCount: 4 },
+  // System Masters — backed by real DB tables, fields managed via Master Builder
   { id: 'company', name: 'Company', icon: Building2, category: 'Core & Structure', description: 'Manage company profiles, legal entities, and organization details.', defaultItemCount: 3 },
   { id: 'location', name: 'Location', icon: MapPin, category: 'Core & Structure', description: 'Configure office locations, branches, and geographic sites.', defaultItemCount: 8 },
   { id: 'department', name: 'Department', icon: Layers, category: 'Core & Structure', description: 'Manage organizational departments, divisions, and teams.', defaultItemCount: 12 },
   { id: 'designation', name: 'Designation', icon: Briefcase, category: 'Core & Structure', description: 'Job designations, roles, and title hierarchies.', defaultItemCount: 24 },
-  { id: 'general-shift', name: 'General Shift', icon: Clock, category: 'Policies & Rules', description: 'General work shift timings, start/end hours, and attendance rules.', defaultItemCount: 5 },
-  { id: 'roster-shift', name: 'Roster Shift', icon: Clock, category: 'Policies & Rules', description: 'Rotational & roster shift patterns, weekly shift rosters, and cycle schedules.', defaultItemCount: 4 },
-  { id: 'ot-rule', name: 'OT Rule', icon: Sliders, category: 'Policies & Rules', description: 'Overtime calculation rules, rate multipliers, and cap limits.', defaultItemCount: 3 },
   { id: 'grade', name: 'Grade', icon: Award, category: 'Core & Structure', description: 'Employee pay grades, bands, and seniority levels.', defaultItemCount: 7 },
-  { id: 'holiday', name: 'Holiday', icon: Calendar, category: 'Events & Planning', description: 'Holiday calendar schedules, regional lists, and floaters.', defaultItemCount: 14 },
   { id: 'employee-status', name: 'Employee Status', icon: Users, category: 'Core & Structure', description: 'Active, On-Probation, Suspended, and Exit employee states.', defaultItemCount: 5 },
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
-  { id: 'offer-templates', name: 'Letter & Offer Master', icon: FileText, category: 'Templates & System', description: 'Design MNC letter formats for Hiring, Onboarding (Appointment/NDA), Employment (Increment/Promotion/Warning), and Exit (Relieving/Experience).', defaultItemCount: 14 },
-  { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
-  { id: 'notification-merge-codes', name: 'Notification Merge Codes', icon: Code2, category: 'Templates & System', description: 'Store module and sub-module merge tags for notification templates.', defaultItemCount: 8 },
-  { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
-  { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
-  { id: 'kra', name: 'KRA Form', icon: FileText, category: 'Templates & System', description: 'Key Result Area forms, evaluation templates, and performance metrics.', defaultItemCount: 5 },
-  { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
-  { id: 'event', name: 'Event', icon: Smile, category: 'Events & Planning', description: 'Company events, townhalls, celebrations, and employee engagement activities.', defaultItemCount: 4 },
 ];
 
 interface MasterItemRecord {
@@ -213,19 +202,68 @@ export function MastersHubPage() {
     };
   }, []);
 
+  const getIconForMaster = (iconName?: string, code?: string) => {
+    const i = (iconName || '').toLowerCase();
+    const c = (code || '').toLowerCase();
+    if (c === 'master-builder') return Boxes;
+    if (c === 'company' || i === 'building2' || i === 'building') return Building2;
+    if (c === 'location' || i === 'mappin' || i === 'map-pin') return MapPin;
+    if (c === 'department' || i === 'layers') return Layers;
+    if (c === 'designation' || i === 'briefcase') return Briefcase;
+    if (c === 'grade' || i === 'award') return Award;
+    if (c === 'employee-status' || c === 'employment_status' || i === 'users' || i === 'user') return Users;
+    if (c === 'emp-type' || c === 'employee_types' || c === 'employment_type') return Users;
+    if (c === 'holiday' || i === 'calendar') return Calendar;
+    if (c === 'general-shift' || c === 'roster-shift' || c === 'shift' || i === 'clock') return Clock;
+    if (c === 'break' || i === 'coffee') return Coffee;
+    if (c === 'roles-responsibility' || i === 'shieldcheck' || i === 'shield') return ShieldCheck;
+    if (c === 'kra' || c === 'resource-plan' || c === 'offer-templates' || i === 'filetext') return FileText;
+    if (c === 'notification-templates' || i === 'bell') return Bell;
+    if (c === 'notification-merge-codes' || i === 'code2') return Code2;
+    if (c === 'ot-rule' || i === 'sliders') return Sliders;
+    if (c === 'event' || i === 'smile') return Smile;
+    return Boxes;
+  };
+
+  const getCategoryForMaster = (code: string) => {
+    const c = code.toLowerCase();
+    if (['company', 'location', 'department', 'designation', 'grade', 'employee-status', 'emp-type', 'branch', 'cost-center'].includes(c)) {
+      return 'Core & Structure';
+    }
+    if (['general-shift', 'roster-shift', 'shift', 'break', 'holiday', 'ot-rule', 'policy'].includes(c)) {
+      return 'Policies & Rules';
+    }
+    if (['events', 'event', 'resource-plan'].includes(c)) {
+      return 'Events & Planning';
+    }
+    return 'Templates & System';
+  };
+
   const mergedCategories = useMemo(() => {
-    const customCats: MasterCategory[] = customMasters
-      .filter((cm) => !MASTER_CATEGORIES.some((mc) => mc.id === cm.code))
-      .map((cm) => ({
-        id: cm.code,
-        name: cm.name,
-        icon: Boxes,
-        category: 'Templates & System',
-        description: cm.description || `Custom Master for ${cm.name}`,
-        defaultItemCount: cm.recordsCount || 0,
-        isCustom: true,
-      }));
-    return [...MASTER_CATEGORIES, ...customCats];
+    const builderTab: MasterCategory = {
+      id: 'master-builder',
+      name: 'Master Builder',
+      icon: Boxes,
+      category: 'Templates & System',
+      description: 'Define custom master entities, dynamic fields, validation rules and choice lists.',
+      defaultItemCount: customMasters.length,
+    };
+
+    if (customMasters.length === 0) {
+      return [builderTab, ...MASTER_CATEGORIES.filter(m => m.id !== 'master-builder')];
+    }
+
+    const dynamicCategories: MasterCategory[] = customMasters.map((cm) => ({
+      id: cm.code,
+      name: cm.name,
+      icon: getIconForMaster(cm.icon, cm.code),
+      category: getCategoryForMaster(cm.code),
+      description: cm.description || `Manage ${cm.name} records and configurations.`,
+      defaultItemCount: cm.recordsCount || 0,
+      isCustom: !cm.isSystem,
+    }));
+
+    return [builderTab, ...dynamicCategories];
   }, [customMasters]);
 
   // Normalize common URL alias variants to canonical master IDs
@@ -251,23 +289,43 @@ export function MastersHubPage() {
 
   const resolveTabId = (raw: string | null | undefined): string | null => {
     if (!raw) return null;
-    if (MASTER_CATEGORIES.some(m => m.id === raw)) return raw;
-    return TAB_ALIASES[raw] || null;
+    // 1. Check mergedCategories
+    if (mergedCategories.some(m => m.id === raw)) return raw;
+    // 2. Check URL aliases
+    if (TAB_ALIASES[raw]) return TAB_ALIASES[raw];
+    // 3. Check dynamically loaded custom master codes
+    if (customMasters.some(cm => cm.code === raw)) return raw;
+    return null;
   };
 
   useEffect(() => {
     const pathSegments = location.pathname.split('/').filter(Boolean);
+    const rawParam = searchParams.get('tab');
+    const rawFromPath = pathSegments.includes('masters') ? pathSegments[pathSegments.indexOf('masters') + 1] : null;
+    const rawTab = rawFromPath || rawParam;
+
+    const OPERATIONAL_TABS = [
+      'general-shift', 'roster-shift', 'ot-rule', 'break', 'breaks', 'holiday', 'events', 'event',
+      'notification-templates', 'notification-merge-codes', 'offer-templates',
+      'roles-responsibility', 'kra', 'resource-plan'
+    ];
+
+    if (rawTab && OPERATIONAL_TABS.includes(rawTab)) {
+      const opBasePath = location.pathname.includes('/hr/') ? '/hr/operational-masters' : '/operational-masters';
+      navigate(`${opBasePath}?tab=${rawTab}`, { replace: true });
+      return;
+    }
+
     let masterId: string | null = null;
 
-    if (pathSegments.includes('masters')) {
-      const masterIndex = pathSegments.indexOf('masters');
-      masterId = resolveTabId(pathSegments[masterIndex + 1]);
+    if (rawFromPath) {
+      masterId = resolveTabId(rawFromPath);
     }
 
     if (masterId) {
       setSelectedMasterId(masterId);
     } else {
-      const tabFromUrl = resolveTabId(searchParams.get('tab'));
+      const tabFromUrl = resolveTabId(rawParam);
       if (tabFromUrl) {
         setSelectedMasterId(tabFromUrl);
       }
@@ -459,34 +517,18 @@ export function MastersHubPage() {
 
 
       <Suspense fallback={<MasterTabLoader />}>
-        {selectedMasterId === 'grade' ? (
+        {selectedMasterId === 'company' ? (
+          <CompanyMasterForm />
+        ) : selectedMasterId === 'department' ? (
+          <DepartmentMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'location' ? (
+          <LocationMasterForm onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'designation' ? (
+          <DesignationMaster onCancel={() => handleSelectMaster('company')} />
+        ) : selectedMasterId === 'grade' ? (
           <GradeMasterCustomUI />
         ) : selectedMasterId === 'emp-type' ? (
           <EmploymentTypeMasterCustomUI />
-        ) : selectedMasterId === 'company' ? (
-          <CompanyMasterForm
-            companiesList={fullCompanyRecords}
-            onCancel={() => handleSelectMaster('company')}
-            onSave={handleCompanySave}
-          />
-        ) : selectedMasterId === 'location' ? (
-          <LocationMasterForm
-            onCancel={() => handleSelectMaster('company')}
-            onSave={(data) => {
-              const newRec: MasterItemRecord = {
-                id: `loc-${Date.now()}`,
-                code: `LOC-${Math.floor(100 + Math.random() * 900)}`,
-                name: data.locationName || 'New Office Location',
-                description: `${data.officeType} - ${data.city}, ${data.state}`,
-                status: data.isActive ? 'Active' : 'Inactive',
-                createdAt: new Date().toISOString().split('T')[0]
-              };
-              setRecords(prev => ({
-                ...prev,
-                location: [newRec, ...(prev.location || [])]
-              }));
-            }}
-          />
         ) : selectedMasterId === 'employee-status' ? (
           <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
         ) : selectedMasterId === 'holiday' ? (
@@ -499,12 +541,6 @@ export function MastersHubPage() {
           <RosterShiftMasterForm
             onCancel={() => handleSelectMaster('company')}
           />
-        ) : selectedMasterId === 'department' ? (
-          <DepartmentMasterForm
-            onCancel={() => handleSelectMaster('company')}
-          />
-        ) : selectedMasterId === 'designation' ? (
-          <DesignationMaster onCancel={() => handleSelectMaster('company')} />
         ) : selectedMasterId === 'break' ? (
           <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
         ) : selectedMasterId === 'roles-responsibility' ? (
@@ -526,6 +562,7 @@ export function MastersHubPage() {
         ) : selectedMasterId === 'master-builder' ? (
           <MasterBuilderPage />
         ) : selectedMaster?.isCustom ? (
+          // Dynamic Master View for user-created custom masters
           <DynamicMasterView masterIdOrCode={selectedMasterId} />
         ) : (
 
@@ -699,9 +736,7 @@ export function MastersHubPage() {
             <CompanyMasterForm
               hideFiltersAndList={true}
               isNew={!editingRecord}
-              companiesList={fullCompanyRecords}
               onCancel={() => setIsAddModalOpen(false)}
-              onSave={handleCompanySave}
             />
           ) : (
             <form onSubmit={handleSaveRecord} className="space-y-4">

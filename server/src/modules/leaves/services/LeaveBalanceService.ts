@@ -254,9 +254,16 @@ export class LeaveBalanceService {
       throw new NotFoundError('Leave balance not found');
     }
 
-    const newConsumed = balance.consumed_balance + approvedDays;
-    const newAvailable = balance.opening_balance + balance.credited_balance + balance.carry_forward_balance - balance.encashed_balance - newConsumed;
-    const newPending = Math.max(0, balance.pending_approval_balance - approvedDays);
+    const pendingVal = parseFloat(String(balance.pending_approval_balance || 0));
+    const openingVal = parseFloat(String(balance.opening_balance || 0));
+    const carryVal = parseFloat(String(balance.carry_forward_balance || 0));
+    const creditVal = parseFloat(String(balance.credited_balance || 0));
+    const encashedVal = parseFloat(String(balance.encashed_balance || 0));
+    const consumedVal = parseFloat(String(balance.consumed_balance || 0));
+
+    const newConsumed = consumedVal + approvedDays;
+    const newAvailable = Math.max(0, openingVal + creditVal + carryVal - encashedVal - newConsumed);
+    const newPending = Math.max(0, pendingVal - approvedDays);
 
     return this.balanceRepo.update(ctx, balance.id, {
       consumed_balance: newConsumed,
@@ -284,9 +291,14 @@ export class LeaveBalanceService {
     }
 
     const pendingVal = parseFloat(String(balance.pending_approval_balance || 0));
-    const availableVal = parseFloat(String(balance.available_balance || 0));
+    const openingVal = parseFloat(String(balance.opening_balance || 0));
+    const carryVal = parseFloat(String(balance.carry_forward_balance || 0));
+    const creditVal = parseFloat(String(balance.credited_balance || 0));
+    const encashedVal = parseFloat(String(balance.encashed_balance || 0));
+    const consumedVal = parseFloat(String(balance.consumed_balance || 0));
+
     const newPending = Math.max(0, pendingVal - rejectedDays);
-    const newAvailable = availableVal + rejectedDays;
+    const newAvailable = Math.max(0, openingVal + carryVal + creditVal - encashedVal - consumedVal);
 
     return this.balanceRepo.update(ctx, balance.id, {
       pending_approval_balance: newPending,
@@ -312,10 +324,19 @@ export class LeaveBalanceService {
       throw new NotFoundError('Leave balance not found');
     }
 
-    const newConsumed = Math.max(0, balance.consumed_balance - cancelledDays);
-    const newAvailable = balance.opening_balance + balance.credited_balance + balance.carry_forward_balance - balance.encashed_balance - newConsumed;
+    const pendingVal = parseFloat(String(balance.pending_approval_balance || 0));
+    const openingVal = parseFloat(String(balance.opening_balance || 0));
+    const carryVal = parseFloat(String(balance.carry_forward_balance || 0));
+    const creditVal = parseFloat(String(balance.credited_balance || 0));
+    const encashedVal = parseFloat(String(balance.encashed_balance || 0));
+    const consumedVal = parseFloat(String(balance.consumed_balance || 0));
+
+    const newPending = Math.max(0, pendingVal - cancelledDays);
+    const newConsumed = Math.max(0, consumedVal - cancelledDays);
+    const newAvailable = Math.max(0, openingVal + carryVal + creditVal - encashedVal - newConsumed);
 
     return this.balanceRepo.update(ctx, balance.id, {
+      pending_approval_balance: newPending,
       consumed_balance: newConsumed,
       available_balance: newAvailable,
       last_updated_at: new Date().toISOString(),
@@ -339,12 +360,20 @@ export class LeaveBalanceService {
       throw new NotFoundError('Leave balance not found');
     }
 
-    const newPending = balance.pending_approval_balance + days;
-    const newAvailable = balance.available_balance - days;
+    const pendingVal = parseFloat(String(balance.pending_approval_balance || 0));
+    const openingVal = parseFloat(String(balance.opening_balance || 0));
+    const carryVal = parseFloat(String(balance.carry_forward_balance || 0));
+    const creditVal = parseFloat(String(balance.credited_balance || 0));
+    const encashedVal = parseFloat(String(balance.encashed_balance || 0));
+    const consumedVal = parseFloat(String(balance.consumed_balance || 0));
+
+    const newPending = pendingVal + days;
+    // Available balance is ONLY deducted when the leave is approved (consumed)
+    const newAvailable = Math.max(0, openingVal + carryVal + creditVal - encashedVal - consumedVal);
 
     return this.balanceRepo.update(ctx, balance.id, {
       pending_approval_balance: newPending,
-      available_balance: Math.max(0, newAvailable),
+      available_balance: newAvailable,
       last_updated_at: new Date().toISOString(),
       updated_by: ctx.userId,
     } as any);

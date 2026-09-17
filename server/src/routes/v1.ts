@@ -33,6 +33,7 @@ import { recruitmentController } from '../modules/recruitment/controllers/Recrui
 import policyRoutes from '../modules/policy/policy.routes';
 import { policyController } from '../modules/policy/controllers/PolicyController';
 import masterBuilderRoutes from '../modules/master-builder/masterBuilder.routes';
+import lmsRoutes from '../modules/lms/lms.routes';
 
 const router = Router();
 
@@ -81,6 +82,7 @@ router.use('/recruitment', recruitmentRoutes);
 router.use('/policies', policyRoutes);
 router.use('/master/holiday-calendars', masterHolidayCalendarRoutes);
 router.use('/master-builder', masterBuilderRoutes);
+router.use('/lms', lmsRoutes);
 
 /**
  * Public Job Reference Routes (no auth required)

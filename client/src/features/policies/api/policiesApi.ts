@@ -553,5 +553,57 @@ export const policiesApi = {
     const cleanBase = apiBase.endsWith('/v1') ? apiBase : `${apiBase}/v1`;
     return `${cleanBase}/policies/signatures/${signatureId}/download-evidence`;
   },
+
+  /**
+   * Submit a policy query (Ask HR)
+   */
+  async submitPolicyQuery(policyId: number, data: { policyVersionId?: number; policyVersion?: string; question: string }): Promise<any> {
+    const res = await apiClient.post(`/policies/${policyId}/queries`, data);
+    return res.data?.data;
+  },
+
+  /**
+   * Get employee's own policy queries
+   */
+  async getMyQueries(): Promise<any[]> {
+    try {
+      const res = await apiClient.get('/policies/my-queries');
+      return res.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Get queries for a specific policy (Admin/HR view)
+   */
+  async getPolicyQueries(policyId: number): Promise<any[]> {
+    try {
+      const res = await apiClient.get(`/policies/${policyId}/queries`);
+      return res.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Get all admin policy queries
+   */
+  async getAdminQueries(status?: string): Promise<any[]> {
+    try {
+      const res = await apiClient.get('/policies/admin/queries', { params: status ? { status } : undefined });
+      return res.data?.data || [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Reply to a policy query (Admin/HR)
+   */
+  async replyToQuery(queryId: number, data: { reply: string; status: 'OPEN' | 'REPLIED' | 'CLOSED' }): Promise<any> {
+    const res = await apiClient.post(`/policies/queries/${queryId}/reply`, data);
+    return res.data?.data;
+  }
 };
 

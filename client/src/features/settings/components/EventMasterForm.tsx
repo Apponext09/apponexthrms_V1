@@ -485,7 +485,13 @@ export function EventMasterForm({
                   onChange={(selected) => setFormEmploymentTypes(selected as string[])}
                 />
 
-               
+                <EventAudienceAccordion
+                  title="Employment Statuses"
+                  icon={<Globe className="h-4 w-4" />}
+                  options={audienceOpts?.employeeStatuses || []}
+                  selectedIds={formEmployeeStatusIds}
+                  onChange={setFormEmployeeStatusIds}
+                />
               </div>
             </div>
 

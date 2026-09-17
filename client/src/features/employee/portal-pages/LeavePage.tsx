@@ -102,11 +102,10 @@ export default function LeavePage() {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [optionalHolidays, setOptionalHolidays] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'history' | 'optional-holidays' | 'encashment'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'encashment'>('history');
 
   // Pagination states
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(5);
-  const [visibleOptionalHolidaysCount, setVisibleOptionalHolidaysCount] = useState(5);
   const [visibleEncashmentCount, setVisibleEncashmentCount] = useState(5);
 
   // Encashment states
@@ -117,6 +116,8 @@ export default function LeavePage() {
     encashmentDays: '',
     reason: '',
   });
+  const [encashmentPreview, setEncashmentPreview] = useState<any>(null);
+  const [encashmentPreviewLoading, setEncashmentPreviewLoading] = useState(false);
 
   // Form modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -295,29 +296,42 @@ export default function LeavePage() {
     }
   };
 
-  const handleSelectOptionalHoliday = async (holidayId: number) => {
-    try {
-      const res = await apiClient.post('/leaves/optional-holidays', { holidayId });
-      if (res.data?.success) {
-        toast.success('Optional holiday selected successfully!');
-        fetchData();
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to select optional holiday');
+  // Live Encashment Preview Debounce Effect
+  useEffect(() => {
+    if (!isEncashmentModalOpen || !encashmentForm.leaveTypeId || !encashmentForm.encashmentDays || isNaN(parseFloat(encashmentForm.encashmentDays)) || parseFloat(encashmentForm.encashmentDays) <= 0) {
+      setEncashmentPreview(null);
+      return;
     }
-  };
 
-  const handleCancelOptionalHoliday = async (selectionId: number) => {
-    try {
-      const res = await apiClient.delete(`/leaves/optional-holidays/${selectionId}`);
-      if (res.data?.success) {
-        toast.success('Optional holiday selection cancelled successfully');
-        fetchData();
+    let isMounted = true;
+    const fetchPreview = async () => {
+      setEncashmentPreviewLoading(true);
+      try {
+        const res = await apiClient.post('/leaves/encashments/preview', {
+          leaveTypeId: parseInt(encashmentForm.leaveTypeId, 10),
+          encashmentDays: parseFloat(encashmentForm.encashmentDays),
+        });
+        if (isMounted) {
+          if (res.data?.success) {
+            setEncashmentPreview({ success: true, data: res.data.data });
+          }
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          const errMsg = err.response?.data?.message || err.response?.data?.error?.message || 'Failed to calculate encashment preview.';
+          setEncashmentPreview({ success: false, error: errMsg });
+        }
+      } finally {
+        if (isMounted) setEncashmentPreviewLoading(false);
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to cancel optional holiday selection');
-    }
-  };
+    };
+
+    const timer = setTimeout(fetchPreview, 350);
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [isEncashmentModalOpen, encashmentForm.leaveTypeId, encashmentForm.encashmentDays]);
 
   useEffect(() => {
     fetchData();
@@ -799,7 +813,8 @@ export default function LeavePage() {
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
     const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
-    const calculatedAvail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
+    // Balance is only deducted when approved (consumed). Pending, Rejected, and Cancelled requests do not deduct balance.
+    const calculatedAvail = isAllowNeg ? (total - consumed) : Math.max(0, total - consumed);
     return {
       ...b,
       allocated_balance: total,
@@ -1314,9 +1329,9 @@ export default function LeavePage() {
           const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
-          // Formula: Available = Total Allocated - Consumed - Pending Approval
+          // Formula: Available = Total Allocated - Consumed (only deducts when approved)
           const isAllowNeg = Boolean(bal.allow_negative_balance || bal.allowNegativeBalance);
-          const avail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
+          const avail = isAllowNeg ? (total - consumed) : Math.max(0, total - consumed);
 
           const percent = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0;
 
@@ -1353,15 +1368,6 @@ export default function LeavePage() {
             }`}
         >
           My Leaves History
-        </button>
-        <button
-          onClick={() => setActiveTab('optional-holidays')}
-          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'optional-holidays'
-              ? 'border-violet-600 text-violet-600'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-        >
-          Optional Holidays Pool
         </button>
         <button
           onClick={() => setActiveTab('encashment')}
@@ -1508,86 +1514,6 @@ export default function LeavePage() {
                   </Button>
                 </div>
               )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'optional-holidays' && (
-        <div className="space-y-4">
-          <div className="bg-card p-5 border border-border rounded-3xl flex items-start gap-3">
-            <Info className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
-            <div>
-              <h2 className="text-sm font-extrabold text-foreground">Floating Holidays Guide</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Select your optional holidays from the calendar pool below. Your assigned policy allows you to select regional/festival holidays up to your designated annual quota limit.
-              </p>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground bg-card rounded-3xl border border-border">
-              <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
-              <p className="text-xs font-medium">Loading optional holidays...</p>
-            </div>
-          ) : optionalHolidays.length === 0 ? (
-            <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-2">
-              <Calendar className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-              <h3 className="text-sm font-bold text-foreground">No Optional Holidays</h3>
-              <p className="text-xs text-muted-foreground">No regional optional holidays are currently configured for your location calendar.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {optionalHolidays.slice(0, visibleOptionalHolidaysCount).map((holiday: any) => (
-                <div
-                  key={holiday.id}
-                  className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
-                    }`}
-                >
-                  <div className="space-y-1">
-                    <h4 className="text-xs font-extrabold text-foreground">{holiday.holiday_name}</h4>
-                    <p className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-violet-500" />
-                      {new Date(holiday.holiday_date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </p>
-                    {holiday.description && <p className="text-[10px] text-muted-foreground italic mt-0.5">{holiday.description}</p>}
-                  </div>
-
-                  <div>
-                    {holiday.selected ? (
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                          Selected
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelOptionalHoliday(holiday.selection_id)}
-                          className="text-[10px] h-7 text-rose-600 hover:bg-rose-500/10 font-bold rounded-lg px-2"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => handleSelectOptionalHoliday(holiday.id)}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold text-[11px] h-8 rounded-xl px-3"
-                      >
-                        Select
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!loading && optionalHolidays.length > visibleOptionalHolidaysCount && (
-            <div className="flex justify-center pt-2">
-              <Button variant="outline" size="sm" onClick={() => setVisibleOptionalHolidaysCount(prev => prev + 10)} className="text-xs font-bold text-violet-600 border-violet-200 hover:bg-violet-50 hover:text-violet-700 rounded-xl px-6 h-9">
-                Load Next 10
-              </Button>
             </div>
           )}
         </div>
@@ -1800,6 +1726,42 @@ export default function LeavePage() {
               })()}
             </div>
 
+            {/* Dynamic Calculation Preview or Salary Structure Warning */}
+            {encashmentPreviewLoading && (
+              <div className="p-3 bg-muted/50 rounded-xl border border-border flex items-center justify-center gap-2 text-xs text-muted-foreground font-medium">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" /> Calculating payout from assigned salary structure...
+              </div>
+            )}
+
+            {!encashmentPreviewLoading && encashmentPreview && !encashmentPreview.success && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-1">
+                <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>Salary Structure Required</span>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium leading-relaxed">
+                  {encashmentPreview.error}
+                </p>
+              </div>
+            )}
+
+            {!encashmentPreviewLoading && encashmentPreview?.success && encashmentPreview.data && (
+              <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground font-semibold">Daily Rate:</span>
+                  <span className="font-bold text-foreground font-mono">₹{encashmentPreview.data.dailyRate} / day</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground font-semibold">Estimated Payout:</span>
+                  <span className="font-extrabold text-violet-700 dark:text-violet-400 text-sm font-mono">₹{encashmentPreview.data.totalAmount}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-violet-500/20">
+                  <span>Policy Formula:</span>
+                  <span className="font-mono text-[10px] bg-background/80 px-1.5 py-0.5 rounded border">{encashmentPreview.data.formula || 'Basic + DA'}</span>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-foreground block">Reason / Remarks</label>
               <textarea
@@ -1817,8 +1779,8 @@ export default function LeavePage() {
               </Button>
               <Button
                 type="submit"
-                disabled={submitting}
-                className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-5 rounded-xl"
+                disabled={submitting || (encashmentPreview && !encashmentPreview.success)}
+                className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Submitting...' : 'Submit Request'}
               </Button>

@@ -175,6 +175,61 @@ export class CandidateService {
         updated_by: ctx.userId,
       } as any);
 
+      // Auto-index new candidate into resume_bank for Resume Source Screen Bank
+      try {
+        const { getKnex } = await import('../../../db/knex');
+        const db = getKnex();
+        const existingInBank = await db('resume_bank')
+          .where('candidate_id', candidate.id)
+          .where('organization_id', ctx.organizationId)
+          .first()
+          .catch(() => null);
+
+        if (!existingInBank) {
+          const { ResumeBankRepository } = await import('../repositories/ResumeBankRepository');
+          const rbRepo = new ResumeBankRepository();
+          const trackerId = await rbRepo.getNextTrackerId(ctx).catch(() => `TRK-${candidate.id}`);
+          const hasResumeUrlCol = await db.schema.hasColumn('resume_bank', 'resume_file_url').catch(() => false);
+
+          const rawSource = input.source || candidate.source || 'Direct Application';
+          const formattedSource = 
+            rawSource === 'internal_opening' ? 'Internal Job Posting (IJP)' :
+            rawSource === 'direct_apply' ? 'Direct Application' :
+            rawSource === 'employee_referral' ? 'Employee Referral' :
+            rawSource === 'recruitment_agency' ? 'Recruitment Agency' :
+            rawSource === 'job_board' ? 'Job Board' :
+            rawSource === 'bulk_import' ? 'Bulk Import' :
+            rawSource === 'resume_bank' ? 'Resume Bank' :
+            rawSource === 'other' ? 'Other' :
+            rawSource;
+
+          const rbPayload: any = {
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            tracker_id: trackerId,
+            candidate_id: candidate.id,
+            source: formattedSource,
+            position: input.currentCompany || 'Candidate Applicant',
+            status: 'Applied',
+            uploaded_by: ctx.userId || 1,
+            created_at: new Date(),
+            updated_at: new Date(),
+          };
+
+          if (hasResumeUrlCol && resumePath) {
+            rbPayload.resume_file_url = resumePath;
+          }
+
+          const [rbId] = await db('resume_bank').insert(rbPayload).catch(() => []);
+          const hasResumeBankIdCol = await db.schema.hasColumn('candidates', 'resume_bank_id').catch(() => false);
+          if (rbId && hasResumeBankIdCol) {
+            await db('candidates').where('id', candidate.id).update({ resume_bank_id: rbId }).catch(() => {});
+          }
+        }
+      } catch (rbSyncErr) {
+        console.warn('Auto index candidate into resume_bank non-blocking error:', rbSyncErr);
+      }
+
       await this.auditService.log(ctx, {
         action: 'CREATE',
         entityType: 'CANDIDATE',

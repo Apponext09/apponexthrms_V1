@@ -63,13 +63,123 @@ export class JobReferenceService {
   async getPublicJobData(mrfId: number | string) {
     const db = getKnex();
     const idStr = String(mrfId).trim();
+    const idNum = !isNaN(Number(idStr)) ? Number(idStr) : null;
 
-    // 1. Try finding in mrf_requests
+    // 1. Try finding in jobs table (created from Job Management) first
+    let jobQuery = db('jobs as j')
+      .leftJoin('departments as d', 'j.department_id', 'd.id')
+      .leftJoin('designations as des', 'j.designation_id', 'des.id')
+      .leftJoin('mrf_requests as m', 'j.mrf_request_id', 'm.id')
+      .whereNull('j.deleted_at')
+      .where((q) => {
+        if (idNum !== null) {
+          q.where('j.id', idNum)
+           .orWhere('j.job_code', idStr)
+           .orWhere('j.mrf_request_id', idNum);
+        } else {
+          q.where('j.job_code', idStr)
+           .orWhere('j.uuid', idStr);
+        }
+      });
+
+    const job = await jobQuery
+      .select(
+        'j.*',
+        'd.name as dept_name',
+        'des.name as desig_name',
+        'm.qualification_required as mrf_qualification',
+        'm.experience_desired as mrf_experience',
+        'm.skills as mrf_skills',
+        'm.target_closure_date as mrf_closure_date'
+      )
+      .first();
+
+    if (job) {
+      const jobCode = (job as any).jobCode || (job as any).job_code || '';
+      const jobTitle = (job as any).jobTitle || (job as any).job_title || `Position ${jobCode}`;
+      const jobOrgId = (job as any).organizationId || (job as any).organization_id;
+      const jobNoPos = (job as any).noOfPositions || (job as any).no_of_positions || 1;
+      const jobDeptId = (job as any).departmentId || (job as any).department_id;
+      const jobDeptName = (job as any).deptName || (job as any).dept_name || '';
+      const jobDesigName = (job as any).desigName || (job as any).desig_name || '';
+      const jobType = (job as any).jobType || (job as any).job_type || '';
+      const jobEmpType = (job as any).employmentType || (job as any).employment_type || '';
+      const jobMinExp = (job as any).minExperienceYears || (job as any).min_experience_years;
+      const jobMaxExp = (job as any).maxExperienceYears || (job as any).max_experience_years;
+      const jobExpLevel = (job as any).experienceLevel || (job as any).experience_level || '';
+      const jobDesc = (job as any).jobDescription || (job as any).job_description || '';
+      const jobStatus = (job as any).status;
+      const jobExpiry = (job as any).expiryDate || (job as any).expiry_date || (job as any).mrf_closure_date || null;
+      const jobCreatedAt = (job as any).createdAt || (job as any).created_at;
+
+      const effectiveEmpType = jobType === 'full_time' ? 'Full Time'
+        : jobType === 'part_time' ? 'Part Time'
+        : jobType === 'contract' ? 'Contract'
+        : jobType === 'internship' ? 'Internship'
+        : (jobEmpType || jobType || 'Full Time');
+
+      // Fetch skills from job_skills, fallback to mrf_skills
+      let parsedSkills: any[] = [];
+      try {
+        const skillRows = await db('job_skills').where('job_id', job.id).select('skill_name');
+        parsedSkills = skillRows.map((r: any) => (r as any).skillName || (r as any).skill_name).filter(Boolean);
+      } catch { /* ignore */ }
+
+      if (parsedSkills.length === 0 && (job as any).mrf_skills) {
+        const rawSkills = (job as any).mrf_skills;
+        if (typeof rawSkills === 'string') {
+          try {
+            parsedSkills = JSON.parse(rawSkills);
+          } catch {
+            parsedSkills = rawSkills.split(',').map((s: string) => s.trim());
+          }
+        } else if (Array.isArray(rawSkills)) {
+          parsedSkills = rawSkills;
+        }
+      }
+
+      const qual = (job as any).mrf_qualification || 'Graduate / Diploma';
+      const exp = jobMinExp ? `${jobMinExp}-${jobMaxExp || 5} Years` : ((job as any).mrf_experience || jobExpLevel || 'Experienced');
+
+      return {
+        id: job.id,
+        organizationId: jobOrgId,
+        organization_id: jobOrgId,
+        mrNumber: jobCode,
+        mr_number: jobCode,
+        positionTitle: jobTitle,
+        position_title: jobTitle,
+        numberOfPositions: jobNoPos,
+        number_of_positions: jobNoPos,
+        departmentId: jobDeptId,
+        department_id: jobDeptId,
+        departmentName: jobDeptName,
+        department_name: jobDeptName,
+        designationName: jobDesigName,
+        designation_name: jobDesigName,
+        employmentType: effectiveEmpType,
+        employment_type: effectiveEmpType,
+        qualificationRequired: qual,
+        qualification_required: qual,
+        experienceDesired: exp,
+        experience_desired: exp,
+        skills: parsedSkills,
+        jobDescription: jobDesc,
+        job_description: jobDesc,
+        status: jobStatus,
+        targetClosureDate: jobExpiry,
+        target_closure_date: jobExpiry,
+        createdAt: jobCreatedAt,
+        created_at: jobCreatedAt,
+      };
+    }
+
+    // 2. Fallback: Try finding in mrf_requests
     const mrf = await db('mrf_requests')
       .whereNull('deleted_at')
       .where((q) => {
-        if (!isNaN(Number(idStr))) {
-          q.where('id', Number(idStr))
+        if (idNum !== null) {
+          q.where('id', idNum)
            .orWhere('mr_number', idStr)
            .orWhere('mr_number', `MR-${idStr}`)
            .orWhere('mr_number', `MR-0${idStr}`)
@@ -83,7 +193,6 @@ export class JobReferenceService {
       .first();
 
     if (mrf) {
-      // Knex camelCase: mrf.department_id → mrf.departmentId, etc.
       const mrfDeptId = (mrf as any).departmentId || (mrf as any).department_id;
       const mrfGradeId = (mrf as any).gradeId || (mrf as any).grade_id;
       const mrfMrNumber = (mrf as any).mrNumber || (mrf as any).mr_number || '';
@@ -98,14 +207,12 @@ export class JobReferenceService {
       const mrfClosureDate = (mrf as any).targetClosureDate || (mrf as any).target_closure_date || null;
       const mrfCreatedAt = (mrf as any).createdAt || (mrf as any).created_at;
 
-      // Resolve department name
       let departmentName = '';
       if (mrfDeptId) {
         const dept = await db('departments').where('id', mrfDeptId).first();
         departmentName = (dept as any)?.name || '';
       }
 
-      // Resolve designation name
       let designationName = '';
       if (mrfGradeId) {
         const desig = await db('designations').where('id', mrfGradeId).first();
@@ -159,92 +266,6 @@ export class JobReferenceService {
       };
     }
 
-    // 2. Try finding in jobs table (created from Job Management)
-    const job = await db('jobs as j')
-      .leftJoin('departments as d', 'j.department_id', 'd.id')
-      .leftJoin('designations as des', 'j.designation_id', 'des.id')
-      .whereNull('j.deleted_at')
-      .where((q) => {
-        if (!isNaN(Number(idStr))) {
-          q.where('j.id', Number(idStr))
-           .orWhere('j.job_code', idStr);
-        } else {
-          q.where('j.job_code', idStr)
-           .orWhere('j.uuid', idStr);
-        }
-      })
-      .select(
-        'j.*',
-        'd.name as dept_name',
-        'des.name as desig_name'
-      )
-      .first();
-
-    if (job) {
-      // Knex camelCase: job.job_title → job.jobTitle, etc.
-      const jobCode = (job as any).jobCode || (job as any).job_code || '';
-      const jobTitle = (job as any).jobTitle || (job as any).job_title || `Position ${jobCode}`;
-      const jobOrgId = (job as any).organizationId || (job as any).organization_id;
-      const jobNoPos = (job as any).noOfPositions || (job as any).no_of_positions || 1;
-      const jobDeptId = (job as any).departmentId || (job as any).department_id;
-      const jobDeptName = (job as any).deptName || (job as any).dept_name || '';
-      const jobDesigName = (job as any).desigName || (job as any).desig_name || '';
-      const jobType = (job as any).jobType || (job as any).job_type || '';
-      const jobEmpType = (job as any).employmentType || (job as any).employment_type || '';
-      const jobMinExp = (job as any).minExperienceYears || (job as any).min_experience_years;
-      const jobMaxExp = (job as any).maxExperienceYears || (job as any).max_experience_years;
-      const jobExpLevel = (job as any).experienceLevel || (job as any).experience_level || '';
-      const jobDesc = (job as any).jobDescription || (job as any).job_description || '';
-      const jobStatus = (job as any).status;
-      const jobExpiry = (job as any).expiryDate || (job as any).expiry_date || null;
-      const jobCreatedAt = (job as any).createdAt || (job as any).created_at;
-
-      const effectiveEmpType = jobType === 'full_time' ? 'Full Time'
-        : jobType === 'part_time' ? 'Part Time'
-        : jobType === 'contract' ? 'Contract'
-        : jobType === 'internship' ? 'Internship'
-        : (jobEmpType || jobType || 'Full Time');
-
-      // Fetch skills from job_skills
-      let parsedSkills: any[] = [];
-      try {
-        const skillRows = await db('job_skills').where('job_id', job.id).select('skill_name');
-        parsedSkills = skillRows.map((r: any) => (r as any).skillName || (r as any).skill_name).filter(Boolean);
-      } catch { /* ignore */ }
-
-      return {
-        id: job.id,
-        organizationId: jobOrgId,
-        organization_id: jobOrgId,
-        mrNumber: jobCode,
-        mr_number: jobCode,
-        positionTitle: jobTitle,
-        position_title: jobTitle,
-        numberOfPositions: jobNoPos,
-        number_of_positions: jobNoPos,
-        departmentId: jobDeptId,
-        department_id: jobDeptId,
-        departmentName: jobDeptName,
-        department_name: jobDeptName,
-        designationName: jobDesigName,
-        designation_name: jobDesigName,
-        employmentType: effectiveEmpType,
-        employment_type: effectiveEmpType,
-        qualificationRequired: 'Graduate',
-        qualification_required: 'Graduate',
-        experienceDesired: jobMinExp ? `${jobMinExp}-${jobMaxExp || 5} Years` : (jobExpLevel || 'Experienced'),
-        experience_desired: jobMinExp ? `${jobMinExp}-${jobMaxExp || 5} Years` : (jobExpLevel || 'Experienced'),
-        skills: parsedSkills,
-        jobDescription: jobDesc,
-        job_description: jobDesc,
-        status: jobStatus,
-        targetClosureDate: jobExpiry,
-        target_closure_date: jobExpiry,
-        createdAt: jobCreatedAt,
-        created_at: jobCreatedAt,
-      };
-    }
-
     return null;
   }
 
@@ -287,20 +308,17 @@ export class JobReferenceService {
 
     let employmentTypes: string[] = ['Full Time', 'Part Time', 'Contract', 'Internship'];
     try {
-      const mrfTypes = await db('mrf_requests')
-        .whereNotNull('employment_type')
-        .where((q) => q.whereNot('status', 'Closed').orWhereNull('status'))
-        .distinct('employment_type')
-        .pluck('employment_type');
-      
       const jobTypes = await db('jobs')
         .whereNotNull('job_type')
-        .where((q) => q.where('status', 'published').orWhere('status', 'active'))
+        .where((q) => {
+          q.where('is_published_external', true).orWhere('is_published_external', 1);
+        })
+        .where((q) => q.where('status', 'published').orWhere('status', 'active').orWhere('status', 'open'))
         .distinct('job_type')
         .pluck('job_type');
 
-      const formattedJobTypes = jobTypes.map((t: string) => t === 'full_time' ? 'Full Time' : (t === 'part_time' ? 'Part Time' : t));
-      employmentTypes = Array.from(new Set([...employmentTypes, ...mrfTypes, ...formattedJobTypes])).filter(Boolean);
+      const formattedJobTypes = jobTypes.map((t: string) => t === 'full_time' ? 'Full Time' : (t === 'part_time' ? 'Part Time' : (t === 'contract' ? 'Contract' : (t === 'internship' ? 'Internship' : t))));
+      employmentTypes = Array.from(new Set([...employmentTypes, ...formattedJobTypes])).filter(Boolean);
     } catch (err) {
       console.error('Error fetching employmentTypes:', err);
     }
@@ -349,7 +367,19 @@ export class JobReferenceService {
   }
 
   /**
-   * List active job openings (Both Jobs from Job Management and MRF Requests)
+   * List active job postings for external public consumption
+   */
+  async listPublicJobs(organizationId: number, options?: { page?: number; pageSize?: number; search?: string }) {
+    return this.listOpenings(organizationId, {
+      page: options?.page,
+      pageSize: options?.pageSize,
+      search: options?.search,
+    });
+  }
+
+  /**
+   * List active job openings on the Career Portal
+   * Strictly respects Job Publishing status and "Job Visibility & Candidate Reach" (is_published_external)
    */
   async listOpenings(_orgId?: number, filters?: {
     departmentId?: number;
@@ -368,16 +398,24 @@ export class JobReferenceService {
 
     const todayStr = new Date().toISOString().substring(0, 10);
 
-    // ── 1. Fetch REAL published / active jobs from `jobs` table (Job Management) ──
+    // ── Fetch REAL published & externally visible jobs from `jobs` table ──
     try {
       const jobsQuery = db('jobs as j')
         .leftJoin('departments as d', 'j.department_id', 'd.id')
         .leftJoin('designations as des', 'j.designation_id', 'des.id')
+        .leftJoin('mrf_requests as m', 'j.mrf_request_id', 'm.id')
         .whereNull('j.deleted_at')
         .whereNull('j.closed_at')
         .where((q) => {
-          q.whereNull('j.status')
-           .orWhereIn('j.status', ['published', 'active', 'open', 'Approved', 'Open', 'Active', 'Published', 'in_progress']);
+          q.where('j.is_published_external', true)
+           .orWhere('j.is_published_external', 1);
+        })
+        .where((q) => {
+          q.whereIn('j.status', ['published', 'active', 'open', 'Published', 'Active', 'Open', 'Approved']);
+        })
+        .where((q) => {
+          q.whereNull('j.expiry_date')
+           .orWhere('j.expiry_date', '>=', todayStr);
         });
 
       if (_orgId) {
@@ -415,7 +453,10 @@ export class JobReferenceService {
           'des.name as desig_name',
           'j.job_type', 'j.employment_type',
           'j.experience_level', 'j.min_experience_years', 'j.max_experience_years',
-          'j.job_description', 'j.status', 'j.expiry_date', 'j.closed_at', 'j.created_at'
+          'j.job_description', 'j.status', 'j.expiry_date', 'j.closed_at', 'j.created_at',
+          'm.qualification_required as mrf_qualification',
+          'm.experience_desired as mrf_experience',
+          'm.skills as mrf_skills'
         )
         .orderBy('j.created_at', 'desc');
 
@@ -468,6 +509,23 @@ export class JobReferenceService {
           : jobType === 'internship' ? 'Internship'
           : (empType || jobType || 'Full Time');
 
+        let parsedSkills: string[] = jobSkillsMap.get(Number(j.id)) || [];
+        if (parsedSkills.length === 0 && (j as any).mrf_skills) {
+          const rawSkills = (j as any).mrf_skills;
+          if (typeof rawSkills === 'string') {
+            try {
+              parsedSkills = JSON.parse(rawSkills);
+            } catch {
+              parsedSkills = rawSkills.split(',').map((s: string) => s.trim());
+            }
+          } else if (Array.isArray(rawSkills)) {
+            parsedSkills = rawSkills;
+          }
+        }
+
+        const qual = (j as any).mrf_qualification || 'Graduate / Diploma';
+        const exp = minExp ? `${minExp}-${maxExp || 5} Years` : ((j as any).mrf_experience || expLevel || 'Experienced');
+
         allOpenings.push({
           id: j.id,
           mr_number: jobCode,
@@ -477,9 +535,9 @@ export class JobReferenceService {
           department_name: deptName,
           designation_name: desigName,
           employment_type: effectiveEmpType,
-          qualification_required: 'Graduate / Diploma',
-          experience_desired: minExp ? `${minExp}-${maxExp || 5} Years` : (expLevel || 'Experienced'),
-          skills: jobSkillsMap.get(Number(j.id)) || [],
+          qualification_required: qual,
+          experience_desired: exp,
+          skills: parsedSkills,
           job_description: jobDesc,
           target_closure_date: expDateRaw || null,
           created_at: createdAt,
@@ -488,177 +546,6 @@ export class JobReferenceService {
       }
     } catch (jobsErr) {
       console.error('Error fetching jobs in listOpenings:', jobsErr);
-    }
-
-    // ── 2. Fetch active MRFs from `mrf_requests` table ──
-    try {
-      const mrfQuery = db('mrf_requests as m')
-        .leftJoin('departments as d', 'm.department_id', 'd.id')
-        .leftJoin('designations as des', 'm.grade_id', 'des.id')
-        .whereNull('m.deleted_at')
-        .where((q) => {
-          q.whereNull('m.status')
-           .orWhereNotIn('m.status', ['Closed', 'closed', 'Rejected', 'rejected', 'Archived', 'archived']);
-        });
-
-      if (_orgId) {
-        mrfQuery.andWhere((q) => {
-          q.where('m.organization_id', _orgId)
-           .orWhereNull('m.organization_id');
-        });
-      }
-      if (filters?.departmentId) {
-        mrfQuery.where('m.department_id', filters.departmentId);
-      } else if (filters?.departmentName && filters.departmentName !== 'All' && filters.departmentName !== 'All Departments') {
-        mrfQuery.where('d.name', filters.departmentName);
-      }
-      if (filters?.employmentType && filters.employmentType !== 'All' && filters.employmentType !== 'All Types') {
-        mrfQuery.where('m.employment_type', filters.employmentType);
-      }
-      if (filters?.search) {
-        mrfQuery.andWhere((q) => {
-          q.where('m.position_title', 'like', `%${filters.search}%`)
-           .orWhere('m.mr_number', 'like', `%${filters.search}%`)
-           .orWhere('d.name', 'like', `%${filters.search}%`);
-        });
-      }
-
-      const mrfRows = await mrfQuery
-        .select(
-          'm.id', 'm.mr_number', 'm.position_title', 'm.number_of_positions',
-          'm.department_id', 'd.name as dept_name',
-          'des.name as desig_name',
-          'm.employment_type', 'm.qualification_required', 'm.experience_desired',
-          'm.skills', 'm.job_description', 'm.status', 'm.target_closure_date', 'm.created_at'
-        )
-        .orderBy('m.created_at', 'desc');
-
-      for (const m of mrfRows) {
-        const mStatus = String((m as any).status || '').toLowerCase();
-        if (mStatus === 'closed' || mStatus === 'archived' || mStatus === 'rejected') {
-          continue;
-        }
-
-        const closureDateRaw = (m as any).targetClosureDate || (m as any).target_closure_date;
-        const mrNumber = (m as any).mrNumber || (m as any).mr_number || '';
-        const posTitle = (m as any).positionTitle || (m as any).position_title || '';
-        const numPos = (m as any).numberOfPositions || (m as any).number_of_positions || 1;
-        const deptId = (m as any).departmentId || (m as any).department_id;
-        const deptName = (m as any).deptName || (m as any).dept_name || '';
-        const desigName = (m as any).desigName || (m as any).desig_name || '';
-        const empType = (m as any).employmentType || (m as any).employment_type || 'Full Time';
-        const qual = (m as any).qualificationRequired || (m as any).qualification_required || '';
-        const exp = (m as any).experienceDesired || (m as any).experience_desired || '';
-        const rawSkills = (m as any).skills;
-        const jobDesc = (m as any).jobDescription || (m as any).job_description || '';
-        const createdAt = (m as any).createdAt || (m as any).created_at || new Date().toISOString();
-
-        allOpenings.push({
-          id: m.id,
-          mr_number: mrNumber,
-          position_title: posTitle,
-          number_of_positions: numPos,
-          department_id: deptId,
-          department_name: deptName,
-          designation_name: desigName,
-          employment_type: empType,
-          qualification_required: qual,
-          experience_desired: exp,
-          skills: rawSkills,
-          job_description: jobDesc,
-          target_closure_date: closureDateRaw,
-          created_at: createdAt,
-          source_type: 'mrf',
-        });
-      }
-    } catch (mrfErr) {
-      console.error('Error fetching mrf_requests in listOpenings:', mrfErr);
-    }
-
-    // ── 3. Fallback: If no openings recorded yet, fetch active designations / roles ──
-    if (allOpenings.length === 0) {
-      try {
-        const desigQuery = db('designations as des')
-          .leftJoin('departments as d', 'des.department_id', 'd.id')
-          .whereNull('des.deleted_at');
-        if (_orgId) {
-          desigQuery.andWhere((q) => {
-            q.where('des.organization_id', _orgId)
-             .orWhereNull('des.organization_id');
-          });
-        }
-        let desigRows = await desigQuery.select(
-          'des.id', 'des.name as desig_name', 'des.code as desig_code',
-          'des.department_id', 'd.name as dept_name'
-        ).limit(100);
-
-        if (desigRows.length === 0) {
-          desigRows = await db('designations as des')
-            .leftJoin('departments as d', 'des.department_id', 'd.id')
-            .whereNull('des.deleted_at')
-            .select(
-              'des.id', 'des.name as desig_name', 'des.code as desig_code',
-              'des.department_id', 'd.name as dept_name'
-            ).limit(100);
-        }
-
-        for (const d of desigRows) {
-          const dName = (d as any).desigName || (d as any).name || (d as any).title || '';
-          if (dName) {
-            allOpenings.push({
-              id: d.id,
-              mr_number: (d as any).desigCode || (d as any).code || `POS-0${d.id}`,
-              position_title: dName,
-              number_of_positions: 1,
-              department_id: (d as any).departmentId || (d as any).department_id,
-              department_name: (d as any).deptName || (d as any).dept_name || 'General',
-              designation_name: dName,
-              employment_type: 'Full Time',
-              qualification_required: 'Graduate',
-              experience_desired: 'Experienced',
-              skills: [],
-              job_description: `Open position for ${dName}`,
-              created_at: new Date().toISOString(),
-              source_type: 'designation',
-            });
-          }
-        }
-      } catch (desigErr) {
-        console.warn('Could not fallback to designations in listOpenings:', desigErr);
-      }
-    }
-
-    // ── 4. Fallback defaults if database has no records yet ──
-    if (allOpenings.length === 0) {
-      const defaultPositions = [
-        { title: 'Software Engineer', code: 'SE-01', department: 'IT & Software' },
-        { title: 'Full Stack Developer', code: 'DEV-01', department: 'IT & Software' },
-        { title: 'Frontend Developer (React)', code: 'FE-01', department: 'IT & Software' },
-        { title: 'Backend Developer (Node.js)', code: 'BE-01', department: 'IT & Software' },
-        { title: 'UI/UX Designer', code: 'DES-01', department: 'Design' },
-        { title: 'Sales Executive', code: 'SE-02', department: 'Sales & BD' },
-        { title: 'Business Development Manager', code: 'BDM-01', department: 'Sales & BD' },
-        { title: 'HR Executive', code: 'HR-01', department: 'Human Resources' },
-        { title: 'Accountant', code: 'ACC-01', department: 'Finance & Accounts' },
-        { title: 'Operations Associate', code: 'OPS-01', department: 'Operations' },
-      ];
-      defaultPositions.forEach((p, idx) => {
-        allOpenings.push({
-          id: idx + 1,
-          mr_number: p.code,
-          position_title: p.title,
-          number_of_positions: 1,
-          department_name: p.department,
-          designation_name: p.title,
-          employment_type: 'Full Time',
-          qualification_required: 'Graduate',
-          experience_desired: 'Experienced',
-          skills: [],
-          job_description: `Open position for ${p.title}`,
-          created_at: new Date().toISOString(),
-          source_type: 'default',
-        });
-      });
     }
 
     // Deduplicate by mr_number
@@ -718,13 +605,17 @@ export class JobReferenceService {
         created_at: item.created_at,
         createdAt: item.created_at,
         skills: parsedSkills,
-        sourceType: item.source_type,
       };
     });
 
     return {
       items: parsed,
-      meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      meta: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize) || 1,
+      },
     };
   }
 

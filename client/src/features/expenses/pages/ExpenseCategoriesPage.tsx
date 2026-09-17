@@ -25,6 +25,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
   const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [spendingLimit, setSpendingLimit] = useState<number>(0);
+  const [unlimitedSpending, setUnlimitedSpending] = useState(false);
   const [isReceiptMandatory, setIsReceiptMandatory] = useState(true);
   const [minAmountForReceipt, setMinAmountForReceipt] = useState<number>(500);
   const [autoApprovalThreshold, setAutoApprovalThreshold] = useState<number>(0);
@@ -55,7 +56,9 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setName(cat.name);
       setCode(cat.code);
       setDescription(cat.description || '');
-      setSpendingLimit(cat.spendingLimit);
+      const isUnlimited = !cat.spendingLimit || Number(cat.spendingLimit) === 0;
+      setUnlimitedSpending(isUnlimited);
+      setSpendingLimit(isUnlimited ? 0 : cat.spendingLimit);
       setIsReceiptMandatory(cat.isReceiptMandatory);
       setMinAmountForReceipt(cat.minAmountForReceipt);
       setAutoApprovalThreshold(Number(cat.autoApprovalThreshold ?? (cat as any).auto_approval_threshold ?? 0));
@@ -65,6 +68,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setName('');
       setCode('');
       setDescription('');
+      setUnlimitedSpending(false);
       setSpendingLimit(10000);
       setIsReceiptMandatory(true);
       setMinAmountForReceipt(500);
@@ -75,7 +79,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
   };
 
   const handleDeleteCategory = async (cat: ExpenseCategory) => {
-    if (!window.confirm(`Are you sure you want to delete "${cat.name}"? If it is referenced in existing claims, it will be safely deactivated.`)) {
+    if (!window.confirm(`Are you sure you want to delete "${cat.name}"? This category will be permanently deleted.`)) {
       return;
     }
     try {
@@ -98,7 +102,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
         name,
         code: code || name.toUpperCase().replace(/\s+/g, '_'),
         description,
-        spendingLimit,
+        spendingLimit: unlimitedSpending ? 0 : spendingLimit,
         isReceiptMandatory,
         minAmountForReceipt,
         autoApprovalThreshold,
@@ -268,13 +272,48 @@ export const ExpenseCategoriesPage: React.FC = () => {
 
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Spending Limit per Claim (₹)</label>
-                <input
-                  type="number"
-                  placeholder="0 for unlimited"
-                  value={spendingLimit || ''}
-                  onChange={(e) => setSpendingLimit(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                />
+
+                {/* Unlimited toggle */}
+                <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+                  <div
+                    onClick={() => {
+                      const next = !unlimitedSpending;
+                      setUnlimitedSpending(next);
+                      if (next) setSpendingLimit(0);
+                    }}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                      unlimitedSpending ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        unlimitedSpending ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </div>
+                  <span className={`text-xs font-semibold ${
+                    unlimitedSpending ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
+                  }`}>
+                    {unlimitedSpending ? 'Unlimited (no cap on claim amount)' : 'Set a spending cap'}
+                  </span>
+                </label>
+
+                {!unlimitedSpending && (
+                  <input
+                    type="number"
+                    placeholder="e.g. 10000"
+                    min={1}
+                    value={spendingLimit || ''}
+                    onChange={(e) => setSpendingLimit(Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                  />
+                )}
+
+                {unlimitedSpending && (
+                  <div className="w-full px-3 py-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                    ∞ Unlimited — employees can claim any amount under this category
+                  </div>
+                )}
               </div>
 
               <div>

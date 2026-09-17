@@ -86,13 +86,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
         });
       }
 
-      // Dynamically detect existing ID column. The primary key `id` must win — several master
-      // tables (locations, departments, designations, grades, employee_types…) also carry a
-      // nullable `company_id`, and preferring that returned id:null for every option, breaking
-      // every dropdown fed by scope-masters (leave-year settings, policy filters, reports).
+      // Dynamically detect existing ID column (prioritize primary key id)
+      const hasId = await db.schema.hasColumn(table, 'id');
       const hasCompanyId = await db.schema.hasColumn(table, 'company_id');
       const hasBranchId = await db.schema.hasColumn(table, 'branch_id');
-      const hasId = await db.schema.hasColumn(table, 'id');
       const idCol = hasId ? 'id' : (hasCompanyId ? 'company_id' : (hasBranchId ? 'branch_id' : '1'));
 
       // Dynamically detect existing Name column
@@ -124,9 +121,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       const uniqueList: any[] = [];
       for (const r of rows) {
         const cleanName = String(r.rawName || '').trim();
+        const rawIdVal = r.rawId !== undefined && r.rawId !== null ? r.rawId : (r.id !== undefined && r.id !== null ? r.id : cleanName);
         if (cleanName && cleanName !== 'null' && cleanName !== 'undefined' && !seen.has(cleanName.toLowerCase())) {
           seen.add(cleanName.toLowerCase());
-          uniqueList.push({ id: r.rawId, name: cleanName });
+          uniqueList.push({ id: rawIdVal, name: cleanName });
         }
       }
       return uniqueList;
@@ -1139,13 +1137,51 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .limit(pageSize)
     .offset(offset);
 
-  const formatted = departments.map((d: any) => ({
-    ...d,
-    colour: d.colour || d.color || '#00b4d8',
-    color: d.color || d.colour || '#00b4d8',
-    is_active: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
-    isActive: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
-  }));
+  const formatted = departments.map((d: any) => {
+    // Parse company_ids: MySQL TEXT column stores JSON string, Knex may return company_ids or companyIds
+    let companyIds: number[] = [];
+    const rawCompIds = d.company_ids ?? d.companyIds;
+    if (Array.isArray(rawCompIds)) {
+      companyIds = rawCompIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } else if (typeof rawCompIds === 'string' && rawCompIds.trim()) {
+      try {
+        const parsed = JSON.parse(rawCompIds);
+        if (Array.isArray(parsed)) companyIds = parsed.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+      } catch {
+        const parts = rawCompIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+        if (parts.length > 0) companyIds = parts;
+      }
+    }
+    if (companyIds.length === 0 && (d.company_id || d.companyId)) {
+      companyIds = [Number(d.company_id || d.companyId)];
+    }
+
+    // Parse company_emails: MySQL TEXT column stores JSON string
+    let companyEmails: Record<string, string> = {};
+    const rawCompEmails = d.company_emails ?? d.companyEmails;
+    if (rawCompEmails && typeof rawCompEmails === 'object' && !Array.isArray(rawCompEmails)) {
+      companyEmails = rawCompEmails;
+    } else if (typeof rawCompEmails === 'string' && rawCompEmails.trim()) {
+      try {
+        const parsed = JSON.parse(rawCompEmails);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) companyEmails = parsed;
+      } catch { }
+    }
+
+    return {
+      ...d,
+      colour: d.colour || d.color || '#00b4d8',
+      color: d.color || d.colour || '#00b4d8',
+      is_active: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
+      isActive: d.is_active || (d.status === 'inactive' ? 'No' : 'Yes'),
+      company_ids: companyIds,
+      companyIds: companyIds,
+      company_emails: companyEmails,
+      companyEmails: companyEmails,
+      email: d.email || d.department_email || '',
+      description: d.description || '',
+    };
+  });
 
   const response: ApiResponse = {
     success: true,
@@ -1278,61 +1314,75 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
   const status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
 
-  // Reject a duplicate code up front with a clean 409 rather than letting the
-  // UNIQUE(organization_id, active_code) index surface as a raw 500. (S2-R1)
-  const codeClash = await db('departments')
-    .where({ organization_id: ctx.organizationId, code })
-    .whereNull('deleted_at')
-    .first('id');
-  if (codeClash) {
-    res.status(409).json({ success: false, message: `Department code '${code}' already exists` });
-    return;
+  // Ensure each column exists — each in its own try/catch so one failure doesn't block others
+  const colDefs: Array<{ name: string; add: (t: any) => void }> = [
+    { name: 'email',          add: (t) => t.string('email', 255).nullable() },
+    { name: 'colour',         add: (t) => t.string('colour', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'color',          add: (t) => t.string('color', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'is_active',      add: (t) => t.string('is_active', 10).nullable().defaultTo('Yes') },
+    { name: 'company_ids',    add: (t) => t.text('company_ids').nullable() },
+    { name: 'company_emails', add: (t) => t.text('company_emails').nullable() },
+    { name: 'company_id',     add: (t) => t.integer('company_id').nullable() },
+    { name: 'description',    add: (t) => t.text('description').nullable() },
+  ];
+  for (const col of colDefs) {
+    try {
+      const exists = await db.schema.hasColumn('departments', col.name);
+      if (!exists) await db.schema.alterTable('departments', col.add);
+    } catch { /* already added by concurrent request */ }
   }
 
-  // Ensure missing columns on departments table are added if not present yet
-  try {
-    const hasColour = await db.schema.hasColumn('departments', 'colour');
-    const hasColor = await db.schema.hasColumn('departments', 'color');
-    const hasEmail = await db.schema.hasColumn('departments', 'email');
-    const hasIsActive = await db.schema.hasColumn('departments', 'is_active');
-    if (!hasColour || !hasColor || !hasEmail || !hasIsActive) {
-      await db.schema.alterTable('departments', (table) => {
-        if (!hasEmail) table.string('email', 255).nullable();
-        if (!hasColour) table.string('colour', 50).nullable().defaultTo('#00b4d8');
-        if (!hasColor) table.string('color', 50).nullable().defaultTo('#00b4d8');
-        if (!hasIsActive) table.string('is_active', 10).nullable().defaultTo('Yes');
-      });
-    }
-  } catch (e) {
-    // Ignore concurrency/already altered table errors
-  }
+  // Build insert payload — always include all extended fields
+  const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
+  const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, companyId);
 
-  // Safe insertion matching existing table columns
-  const cols = await tableColumns(db, 'departments');
+  const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
+  const companyEmailsJson = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
+    ? JSON.stringify(rawCompanyEmails) : null;
+
   const insertPayload: Record<string, any> = {
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
+    email: email || null,
+    colour,
+    color: colour,
+    description: description || null,
+    is_active: isActive,
+    status,
+    company_id: companyIdsArray.length > 0 ? companyIdsArray[0] : (companyId ? Number(companyId) : null),
+    company_ids: companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null,
+    company_emails: companyEmailsJson,
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   };
 
-  if (cols.has('description')) insertPayload.description = description;
-  if (cols.has('colour')) insertPayload.colour = colour;
-  if (cols.has('color')) insertPayload.color = colour;
-  if (cols.has('email')) insertPayload.email = email;
-  if (cols.has('company_id')) insertPayload.company_id = companyId ? Number(companyId) : null;
-  if (cols.has('is_active')) insertPayload.is_active = isActive;
-  if (cols.has('status')) insertPayload.status = status;
-
   const [id] = await db('departments').insert(insertPayload);
+
 
   const created = await db('departments').where('id', id).first();
 
-  const response = {
+  let createdCompanyIds: number[] = companyIdsArray;
+  if (createdCompanyIds.length === 0) {
+    const rawC = created?.company_ids ?? created?.companyIds;
+    createdCompanyIds = parseDeptCompanyIds(rawC, created?.company_id ?? created?.companyId);
+  }
+
+  let createdCompanyEmails: Record<string, string> = {};
+  const rawCE = created?.company_emails ?? created?.companyEmails ?? rawCompanyEmails;
+  if (rawCE && typeof rawCE === 'object' && !Array.isArray(rawCE)) {
+    createdCompanyEmails = rawCE;
+  } else if (typeof rawCE === 'string' && rawCE.trim()) {
+    try {
+      const p = JSON.parse(rawCE);
+      if (p && typeof p === 'object' && !Array.isArray(p)) createdCompanyEmails = p;
+    } catch {}
+  }
+
+  const response: ApiResponse = {
     success: true,
     data: {
       ...created,
@@ -1345,6 +1395,10 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
       is_active: created?.is_active || isActive,
       isActive: created?.is_active || isActive,
       status: created?.status || status,
+      company_ids: createdCompanyIds,
+      companyIds: createdCompanyIds,
+      company_emails: createdCompanyEmails,
+      companyEmails: createdCompanyEmails,
     },
     message: 'Department created successfully',
   };
@@ -1369,6 +1423,36 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
     return;
   }
 
+  // Parse company_ids
+  let deptCompanyIds: number[] = [];
+  const rawCIds = dept.company_ids ?? dept.companyIds;
+  if (Array.isArray(rawCIds)) {
+    deptCompanyIds = rawCIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+  } else if (typeof rawCIds === 'string' && rawCIds.trim()) {
+    try {
+      const p = JSON.parse(rawCIds);
+      if (Array.isArray(p)) deptCompanyIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } catch {
+      const parts = rawCIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+      if (parts.length > 0) deptCompanyIds = parts;
+    }
+  }
+  if (deptCompanyIds.length === 0 && (dept.company_id || dept.companyId)) {
+    deptCompanyIds = [Number(dept.company_id || dept.companyId)];
+  }
+
+  // Parse company_emails
+  let deptCompanyEmails: Record<string, string> = {};
+  const rawCEmails = dept.company_emails ?? dept.companyEmails;
+  if (rawCEmails && typeof rawCEmails === 'object' && !Array.isArray(rawCEmails)) {
+    deptCompanyEmails = rawCEmails;
+  } else if (typeof rawCEmails === 'string' && rawCEmails.trim()) {
+    try {
+      const p = JSON.parse(rawCEmails);
+      if (p && typeof p === 'object' && !Array.isArray(p)) deptCompanyEmails = p;
+    } catch { }
+  }
+
   res.json({
     success: true,
     data: {
@@ -1377,27 +1461,15 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
       color: dept.color || dept.colour || '#00b4d8',
       is_active: dept.is_active || (dept.status === 'inactive' ? 'No' : 'Yes'),
       isActive: dept.is_active || (dept.status === 'inactive' ? 'No' : 'Yes'),
+      company_ids: deptCompanyIds,
+      companyIds: deptCompanyIds,
+      company_emails: deptCompanyEmails,
+      companyEmails: deptCompanyEmails,
+      email: dept.email || '',
+      description: dept.description || '',
     },
   });
 }));
-
-// getKnex()'s postProcessResponse mangles the metadata rows knex.columnInfo() relies on, so
-// `db(table).columnInfo()` returns `{}` here — every `'col' in cols` guard then silently fails
-// and the column is dropped from the write. Read the real column list via SHOW COLUMNS instead.
-async function tableColumns(db: any, table: string): Promise<Set<string>> {
-  try {
-    const rows: any = await db.raw('SHOW COLUMNS FROM ??', [table]);
-    const list = Array.isArray(rows?.[0]) ? rows[0] : (Array.isArray(rows) ? rows : []);
-    const s = new Set<string>();
-    for (const r of list) {
-      const f = r?.Field ?? r?.field ?? r?.FIELD;
-      if (f) s.add(String(f));
-    }
-    return s;
-  } catch {
-    return new Set<string>();
-  }
-}
 
 
 
@@ -1410,63 +1482,68 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const name = req.body.name || req.body.departmentName;
   const code = req.body.code || req.body.departmentCode;
-  const email = req.body.email;
+  const email = req.body.email;         // undefined = not sent, null/'' = clear it
   const colour = req.body.colour || req.body.color;
   const description = req.body.description;
   const isActive = req.body.isActive || req.body.is_active;
 
+  // Ensure each column exists individually so one missing col doesn't block others
+  const colDefs: Array<{ name: string; add: (t: any) => void }> = [
+    { name: 'email',          add: (t) => t.string('email', 255).nullable() },
+    { name: 'colour',         add: (t) => t.string('colour', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'color',          add: (t) => t.string('color', 50).nullable().defaultTo('#00b4d8') },
+    { name: 'is_active',      add: (t) => t.string('is_active', 10).nullable().defaultTo('Yes') },
+    { name: 'company_ids',    add: (t) => t.text('company_ids').nullable() },
+    { name: 'company_emails', add: (t) => t.text('company_emails').nullable() },
+    { name: 'company_id',     add: (t) => t.integer('company_id').nullable() },
+    { name: 'description',    add: (t) => t.text('description').nullable() },
+  ];
+  for (const col of colDefs) {
+    try {
+      const exists = await db.schema.hasColumn('departments', col.name);
+      if (!exists) await db.schema.alterTable('departments', col.add);
+    } catch { /* already added by concurrent request */ }
+  }
+
+  // Build update payload — always include all fields that were sent
   const updatePayload: Record<string, any> = {
     updated_at: new Date(),
     updated_by: ctx.userId || 1,
   };
 
-  const cols = await tableColumns(db, 'departments');
-
   if (name !== undefined) updatePayload.name = name;
-  if (code !== undefined) {
-    const clash = await db('departments')
-      .where({ organization_id: ctx.organizationId, code })
-      .whereNull('deleted_at')
-      .whereNot('id', id)
-      .first('id');
-    if (clash) {
-      res.status(409).json({ success: false, message: `Department code '${code}' already exists` });
-      return;
-    }
-    updatePayload.code = code;
-  }
-  if (email !== undefined && cols.has('email')) updatePayload.email = email;
+  if (code !== undefined) updatePayload.code = code;
+  if (email !== undefined) updatePayload.email = email || null;
   if (colour !== undefined) {
-    if (cols.has('colour')) updatePayload.colour = colour;
-    if (cols.has('color')) updatePayload.color = colour;
+    updatePayload.colour = colour;
+    updatePayload.color = colour;
   }
-  if (description !== undefined && cols.has('description')) updatePayload.description = description;
+  if (description !== undefined) updatePayload.description = description || null;
   if (isActive !== undefined) {
-    if (cols.has('is_active')) updatePayload.is_active = isActive;
-    if (cols.has('status')) updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
+    updatePayload.is_active = isActive;
+    updatePayload.status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
   }
 
+  // Company IDs
   const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
-  const rawCompanyId = req.body.companyId !== undefined ? req.body.companyId : req.body.company_id;
-
+  const rawCompanyId  = req.body.companyId  !== undefined ? req.body.companyId  : req.body.company_id;
   if (rawCompanyIds !== undefined || rawCompanyId !== undefined) {
     const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, rawCompanyId);
-    if (cols.has('company_ids')) {
-      updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
-    }
-    if (cols.has('company_id')) {
-      updatePayload.company_id = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
-    }
+    updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
+    updatePayload.company_id  = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
   }
 
-  const rawCompanyEmails = req.body.companyEmails !== undefined ? req.body.companyEmails : (req.body.company_emails !== undefined ? req.body.company_emails : req.body.defaultEmails);
-  if (rawCompanyEmails !== undefined && cols.has('company_emails')) {
-    updatePayload.company_emails = rawCompanyEmails && typeof rawCompanyEmails === 'object' ? JSON.stringify(rawCompanyEmails) : null;
+  // Company emails
+  const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
+  if (rawCompanyEmails !== undefined) {
+    updatePayload.company_emails = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
+      ? JSON.stringify(rawCompanyEmails) : null;
   }
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
     .update(updatePayload);
+
 
   if (!count) {
     res.status(404).json({ success: false, message: 'Department not found' });
@@ -1477,6 +1554,36 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
     .where({ id, organization_id: ctx.organizationId })
     .first();
 
+  // Parse company_ids from updated row
+  let updCompIds: number[] = [];
+  const rawUpCIds = updated?.company_ids ?? updated?.companyIds;
+  if (Array.isArray(rawUpCIds)) {
+    updCompIds = rawUpCIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+  } else if (typeof rawUpCIds === 'string' && rawUpCIds.trim()) {
+    try {
+      const p = JSON.parse(rawUpCIds);
+      if (Array.isArray(p)) updCompIds = p.map(Number).filter((n: number) => !isNaN(n) && n > 0);
+    } catch {
+      const parts = rawUpCIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+      if (parts.length > 0) updCompIds = parts;
+    }
+  }
+  if (updCompIds.length === 0 && (updated?.company_id || updated?.companyId)) {
+    updCompIds = [Number(updated.company_id || updated.companyId)];
+  }
+
+  // Parse company_emails from updated row
+  let updCompEmails: Record<string, string> = {};
+  const rawUpEmails = updated?.company_emails ?? updated?.companyEmails;
+  if (rawUpEmails && typeof rawUpEmails === 'object' && !Array.isArray(rawUpEmails)) {
+    updCompEmails = rawUpEmails;
+  } else if (typeof rawUpEmails === 'string' && rawUpEmails.trim()) {
+    try {
+      const p = JSON.parse(rawUpEmails);
+      if (p && typeof p === 'object' && !Array.isArray(p)) updCompEmails = p;
+    } catch { }
+  }
+
   res.json({
     success: true,
     data: {
@@ -1485,6 +1592,12 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
       color: updated?.color || updated?.colour || colour || '#00b4d8',
       is_active: updated?.is_active || isActive || 'Yes',
       isActive: updated?.is_active || isActive || 'Yes',
+      company_ids: updCompIds,
+      companyIds: updCompIds,
+      company_emails: updCompEmails,
+      companyEmails: updCompEmails,
+      email: updated?.email || '',
+      description: updated?.description || '',
     },
     message: 'Department updated successfully',
   });

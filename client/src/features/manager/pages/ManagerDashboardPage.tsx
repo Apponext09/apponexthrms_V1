@@ -48,9 +48,9 @@ export function ManagerDashboardPage() {
     },
     {
       label: 'Leave Requests',
-      value: '3',
+      value: isDashboardLoading ? 'â€”' : dashboard.pendingLeaveRequests,
       icon: CheckCircle2,
-      sub: '1 pending approval',
+      sub: 'Awaiting department action',
       accent: 'amber',
       badge: 'Action Needed',
     },

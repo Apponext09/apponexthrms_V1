@@ -64,7 +64,7 @@
     "maplibre-gl": "^6.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-hook-form": "^7.48.0",
+    "react-hook-form": "^7.55.0",
     "react-leaflet": "^4.2.1",
     "react-query": "^3.39.3",
     "react-router-dom": "^7.18.1",

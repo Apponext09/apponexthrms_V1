@@ -17,6 +17,7 @@ router.use(authenticate, resolveTenant);
 // User-facing policy endpoints (Must be accessible by all authenticated roles)
 router.get('/my-policies', policyController.getMyPolicies);
 router.get('/pending', policyController.getPendingPolicies);
+router.get('/my-queries', policyController.getMyQueries);
 
 // Dynamic Master Target Options endpoint
 router.get('/target-options', policyController.getTargetOptions);
@@ -44,11 +45,16 @@ router.get('/signatures/:signatureId/download-signed', policyController.download
 router.get('/signatures/:signatureId/download-evidence', policyController.downloadSignedEvidence);
 
 // Admin & HR management endpoints
+router.get('/admin/queries', policyController.getAdminPolicyQueries);
+router.post('/queries/:queryId/reply', policyController.replyToPolicyQuery);
+
 router.get('/', policyController.listPolicies);
 router.post('/', policyController.createPolicy);
 router.get('/:id', policyController.getPolicy);
 router.put('/:id', policyController.updatePolicy);
 router.delete('/:id', policyController.deletePolicy);
+router.get('/:id/queries', policyController.getPolicyQueriesByPolicyId);
+router.post('/:id/queries', policyController.submitPolicyQuery);
 router.get('/:id/audit', policyController.getPolicyAudit);
 router.get('/:id/versions', policyController.getVersionHistory);
 router.get('/:id/attachments', policyController.getAttachments);

@@ -9,5 +9,6 @@ router.use(authenticate, resolveTenant);
 
 // GET /api/v1/dashboard/admin/stats
 router.get('/admin/stats', adminDashboardController.getAdminStats);
+router.get('/me/stats', adminDashboardController.getMyStats);
 
 export default router;

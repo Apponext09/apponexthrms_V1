@@ -296,9 +296,10 @@ export function TeamLeadProfilePage() {
               ) : (
                 <div className="divide-y divide-border/50 max-h-[360px] overflow-y-auto">
                   {members.map((m: any) => {
-                    const firstName = m.first_name || m.firstName || '';
-                    const lastName = m.last_name || m.lastName || '';
-                    const mInitials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase();
+                    const firstName = m.firstName || m.first_name || '';
+                    const lastName = m.lastName || m.last_name || '';
+                    const fullName = `${firstName} ${lastName}`.trim() || m.name || m.email || `Employee #${m.id}`;
+                    const mInitials = `${firstName[0] || fullName[0] || 'E'}${lastName[0] || ''}`.toUpperCase();
 
                     return (
                       <div key={m.id} className="flex items-center gap-3 p-3.5 hover:bg-muted/40 transition-colors">
@@ -306,11 +307,11 @@ export function TeamLeadProfilePage() {
                           {mInitials}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-foreground truncate">{firstName} {lastName}</p>
+                          <p className="text-xs font-bold text-foreground truncate">{fullName}</p>
                           <p className="text-[10px] text-muted-foreground truncate">{m.designation || 'Specialist'}</p>
                         </div>
                         <Badge variant="outline" className="text-[9px] font-mono shrink-0 uppercase bg-muted/60 text-muted-foreground border-border/80">
-                          {m.code || `EMP-${m.id}`}
+                          {m.employeeCode || m.code || `EMP-${m.id}`}
                         </Badge>
                       </div>
                     );

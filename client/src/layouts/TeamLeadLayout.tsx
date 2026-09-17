@@ -39,34 +39,49 @@ const C = {
 
 const TEAM_LEAD_NAV = [
   {
-    label: 'OVERVIEW',
+    label: '',
     items: [
-      { name: 'My Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
-      { name: 'My Leaves', href: '/team-lead/leaves', icon: Palmtree },
+      { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
+      { name: 'My Team', href: '/team-lead/members', icon: Building2 },
     ],
   },
   {
-    label: 'MY TEAM',
+    label: 'LEAVES',
     items: [
-      { name: 'Team Members', href: '/team-lead/members', icon: Users },
+      {
+        name: 'Leaves',
+        href: '/team-lead/leaves',
+        icon: Palmtree,
+        subItems: [
+          { name: 'My Leaves', href: '/team-lead/leaves', icon: Palmtree },
+          { name: 'Leave Approvals', href: '/team-lead/leaves/approvals', icon: CheckCircle2 },
+          { name: 'Approvals Dashboard', href: '/team-lead/leaves/approvals-dashboard', icon: LayoutDashboard },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'ATTENDANCE',
+    items: [
       {
         name: 'Attendance',
         href: '/team-lead/attendance',
         icon: Clock,
         subItems: [
-          { name: 'Attendance Dashboard', href: '/team-lead/attendance', icon: LayoutDashboard },
-          { name: 'Live Employee Tracking', href: '/team-lead/live-tracking', icon: Navigation },
+          { name: 'Dashboard', href: '/team-lead/attendance', icon: LayoutDashboard },
           { name: 'Face Attendance', href: '/team-lead/face-attendance', icon: Scan },
+          { name: 'My Attendance Log', href: '/team-lead/attendance-log', icon: Clock },
+          { name: 'My Shift', href: '/team-lead/my-shift', icon: Calendar },
+          { name: 'Attendance Correction', href: '/team-lead/attendance-correction', icon: CheckCircle2 },
         ],
       },
-      { name: 'Leave Approvals', href: '/team-lead/leaves/approvals', icon: CheckCircle2 },
     ],
   },
   {
-    label: 'MY PAYROLL',
+    label: 'PAYROLL',
     items: [
       {
-        name: 'My Payroll',
+        name: 'Payroll',
         href: '/team-lead/payroll',
         icon: CreditCard,
         subItems: [
@@ -77,40 +92,76 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'LOAN MANAGEMENT',
+    label: 'LOAN MGMT',
     items: [
-      { name: 'Loan Requests', href: '/team-lead/loans', icon: Percent },
+      {
+        name: 'Loan Mgmt',
+        href: '/team-lead/loans',
+        icon: Percent,
+        subItems: [
+          { name: 'Loan Request', href: '/team-lead/loans', icon: Percent },
+        ],
+      },
     ],
   },
   {
-    label: 'EXPENSE MANAGEMENT',
+    label: 'EXPENSE',
     items: [
-      { name: 'Expense Approvals', href: '/team-lead/expenses/approvals', icon: CheckCircle2 },
-      { name: 'My Expenses', href: '/team-lead/expenses/my-expenses', icon: FileText },
-      { name: 'Travel Requests', href: '/team-lead/expenses/travel-requests', icon: Clock },
-      { name: 'Travel Advances', href: '/team-lead/expenses/travel-advances', icon: Percent },
-      { name: 'Mileage Claims', href: '/team-lead/expenses/mileage-claims', icon: Navigation },
+      {
+        name: 'Expense',
+        href: '/team-lead/expenses/approvals',
+        icon: FileText,
+        subItems: [
+          { name: 'Approvals', href: '/team-lead/expenses/approvals', icon: CheckCircle2 },
+          { name: 'My Expenses', href: '/team-lead/expenses/my-expenses', icon: FileText },
+          { name: 'Travel Requests', href: '/team-lead/expenses/travel-requests', icon: Clock },
+          { name: 'Travel Advances', href: '/team-lead/expenses/travel-advances', icon: Percent },
+          { name: 'Mileage Claims', href: '/team-lead/expenses/mileage-claims', icon: Navigation },
+        ],
+      },
     ],
   },
   {
     label: 'PERFORMANCE',
     items: [
-      { name: 'Team Goals', href: '/performance/goals', icon: BarChart3 },
-      { name: 'Reviews', href: '/performance/reviews', icon: Award },
+      {
+        name: 'Performance',
+        href: '/team-lead/performance',
+        icon: BarChart3,
+        subItems: [
+          { name: 'Dashboard', href: '/team-lead/performance', icon: BarChart3 },
+          { name: 'Reviews', href: '/team-lead/performance/reviews', icon: Award },
+          { name: 'Goals', href: '/team-lead/performance/goals', icon: CheckCircle2 },
+        ],
+      },
     ],
   },
   {
-    label: 'HIRING',
+    label: 'RECRUITMENT',
     items: [
-      { name: 'MRF Request', href: '/team-lead/mrf-request', icon: FileText },
-      { name: 'Interview Schedule', href: '/team-lead/interview-schedule', icon: Calendar },
+      {
+        name: 'Recruitment',
+        href: '/team-lead/mrf-request',
+        icon: Users,
+        subItems: [
+          { name: 'MRF Request', href: '/team-lead/mrf-request', icon: FileText },
+          { name: 'Interview Schedule', href: '/team-lead/interview-schedule', icon: Calendar },
+        ],
+      },
     ],
   },
   {
     label: 'APPROVALS & GOVERNANCE',
     items: [
-      { name: 'My Approvals', href: '/approvals', icon: CheckCircle2 },
-      { name: 'Company Policies', href: '/employee/policies', icon: Shield },
+      {
+        name: 'Approvals & Governance',
+        href: '/team-lead/approvals',
+        icon: Shield,
+        subItems: [
+          { name: 'My Approvals', href: '/team-lead/approvals', icon: CheckCircle2 },
+          { name: 'Company Policies', href: '/team-lead/policies', icon: Shield },
+        ],
+      },
     ],
   },
 ];
@@ -138,8 +189,8 @@ function isItemActive(href: string, pathname: string, allHrefs: string[]): boole
 interface TeamLeadSidebarNavContentProps {
   sidebarOpen: boolean;
   setMobileOpen: (open: boolean) => void;
-  payrollOpen: boolean;
-  setPayrollOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  openMenu: string | null;
+  setOpenMenu: React.Dispatch<React.SetStateAction<string | null>>;
   pathname: string;
   user: any;
   roleInfo: any;
@@ -151,8 +202,8 @@ interface TeamLeadSidebarNavContentProps {
 function TeamLeadSidebarNavContent({
   sidebarOpen,
   setMobileOpen,
-  payrollOpen,
-  setPayrollOpen,
+  openMenu,
+  setOpenMenu,
   pathname,
   user,
   roleInfo,
@@ -166,11 +217,11 @@ function TeamLeadSidebarNavContent({
       <PortalSidebarBrand open={sidebarOpen} portalLabel="Team Lead Portal" />
 
       {/* ── Nav ── */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
+      <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
         {TEAM_LEAD_NAV.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
-              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
+              {sidebarOpen && section.label && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
@@ -189,13 +240,13 @@ function TeamLeadSidebarNavContent({
                   const isSubActive = item.subItems.some((sub: any) =>
                     isItemActive(sub.href, pathname, ALL_TEAM_LEAD_HREFS)
                   );
-                  const isOpen = payrollOpen || isSubActive;
+                  const isOpen = openMenu === item.href || isSubActive;
 
                   return (
                     <div key={item.href} className="space-y-1">
                       <button
                         type="button"
-                        onClick={() => setPayrollOpen(!payrollOpen)}
+                        onClick={() => setOpenMenu(isOpen ? null : item.href)}
                         className={cn(
                           'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
                           isSubActive
@@ -352,7 +403,7 @@ export function TeamLeadLayout() {
   const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [payrollOpen, setPayrollOpen] = useState(true);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
@@ -373,8 +424,8 @@ export function TeamLeadLayout() {
     <TeamLeadSidebarNavContent
       sidebarOpen={sidebarOpen}
       setMobileOpen={setMobileOpen}
-      payrollOpen={payrollOpen}
-      setPayrollOpen={setPayrollOpen}
+      openMenu={openMenu}
+      setOpenMenu={setOpenMenu}
       pathname={location.pathname}
       user={user}
       roleInfo={roleInfo}
@@ -455,41 +506,12 @@ export function TeamLeadLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            {/* Organization Name Badge */}
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm mr-1">
-              <Building2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
-
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
 
-            <div className="w-px h-5 bg-border mx-1" />
-
-            <button
-              onClick={() => navigate('/team-lead/profile')}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
-            >
-              <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className={cn(C.avatarBg, 'text-white text-[10px] font-bold')}>
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{(() => {
-  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-  if (lName.toLowerCase() === 'user') lName = '';
-  const full = `${fName} ${lName}`.trim();
-  return full || fName || 'User';
-})()}</p>
-                <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
-              </div>
-            </button>
           </div>
         </header>
 
@@ -500,7 +522,7 @@ export function TeamLeadLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div >
   );
 }

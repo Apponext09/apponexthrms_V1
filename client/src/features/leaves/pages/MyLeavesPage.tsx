@@ -544,15 +544,6 @@ export function MyLeavesPage() {
           >
             <CalendarDays className="w-4 h-4" /> My Leaves History
           </button>
-          <button
-            onClick={() => setActiveTab('optional-holidays')}
-            className={`py-2 px-4 rounded-xl text-xs sm:text-sm font-extrabold transition-all duration-200 flex items-center gap-2 ${activeTab === 'optional-holidays'
-                ? 'bg-card text-violet-600 shadow-md border border-border/60'
-                : 'text-muted-foreground hover:text-foreground'
-              }`}
-          >
-            <Sparkles className="w-4 h-4 text-amber-500" /> Optional Holidays Pool
-          </button>
         </div>
 
         {activeTab === 'history' ? (
@@ -666,79 +657,7 @@ export function MyLeavesPage() {
               </div>
             )}
           </>
-        ) : (
-          <div className="space-y-4">
-            <div className="bg-gradient-to-r from-violet-500/10 via-card to-card p-5 border border-violet-500/20 rounded-3xl flex items-start gap-3.5 shadow-sm">
-              <div className="p-2.5 rounded-2xl bg-violet-600 text-white shrink-0 shadow-md">
-                <Info className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-sm font-extrabold text-foreground">Floating Holidays Guide</h2>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Select your optional holidays from the calendar pool below. Your assigned policy allows you to select regional/festival holidays up to your designated annual quota limit.
-                </p>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="py-20 flex flex-col items-center justify-center space-y-3 text-muted-foreground bg-card rounded-3xl border border-border">
-                <Loader2 className="w-7 h-7 animate-spin text-violet-600" />
-                <p className="text-xs font-semibold">Loading optional holidays...</p>
-              </div>
-            ) : optionalHolidays.length === 0 ? (
-              <div className="p-14 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
-                <Calendar className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-                <h3 className="text-sm font-bold text-foreground">No Optional Holidays</h3>
-                <p className="text-xs text-muted-foreground">No regional optional holidays are currently configured for your location calendar.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {optionalHolidays.map((holiday) => (
-                  <div
-                    key={holiday.id}
-                    className={`p-5 bg-card rounded-3xl border transition-all duration-300 flex items-center justify-between gap-4 ${holiday.selected ? 'border-violet-600 bg-violet-600/5 shadow-md shadow-violet-600/10' : 'border-border hover:border-muted-foreground/30'
-                      }`}
-                  >
-                    <div className="space-y-1.5">
-                      <h4 className="text-sm font-extrabold text-foreground">{holiday.holiday_name}</h4>
-                      <p className="text-xs text-muted-foreground font-semibold flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-violet-500" />
-                        {new Date(holiday.holiday_date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </p>
-                      {holiday.description && <p className="text-xs text-muted-foreground italic">{holiday.description}</p>}
-                    </div>
-
-                    <div>
-                      {holiday.selected ? (
-                        <div className="flex flex-col items-end gap-1.5">
-                          <span className="text-xs font-extrabold text-emerald-600 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30 flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Selected
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCancelOptionalHoliday(holiday.selection_id)}
-                            className="text-xs h-7 text-rose-600 hover:bg-rose-500/10 font-bold rounded-xl px-2"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => handleSelectOptionalHoliday(holiday.id)}
-                          className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 rounded-2xl px-4 shadow-md shadow-violet-600/20"
-                        >
-                          Select
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        ) : null}
       </div>
 
       {/* Apply for Leave Popup Dialog */}

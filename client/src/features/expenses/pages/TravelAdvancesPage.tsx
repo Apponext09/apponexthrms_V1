@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState, useCallback } from 'react';
 import { expenseApi, TravelAdvance, TravelRequest } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
@@ -36,8 +37,23 @@ function getPortalBadge(role?: string) {
   );
 }
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, approverRole?: string) {
   const s = (status || '').toLowerCase();
+  if (s === 'pending_level_1') return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300">
+      <Clock className="w-3 h-3" />Team Lead Review
+    </span>
+  );
+  if (s === 'pending_level_2' || s === 'pending_manager') return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+      <Clock className="w-3 h-3" />Manager Review
+    </span>
+  );
+  if (s === 'pending_level_3') return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+      <Clock className="w-3 h-3" />HR Review
+    </span>
+  );
   if (['pending_finance', 'pending', 'requested'].includes(s)) return (
     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
       <ShieldCheck className="w-3 h-3" />Finance Review
@@ -55,7 +71,7 @@ function getStatusBadge(status: string) {
   );
   return (
     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-      <Clock className="w-3 h-3" />{status || 'Requested'}
+      <Clock className="w-3 h-3" />{approverRole || status || 'Requested'}
     </span>
   );
 }
@@ -126,7 +142,8 @@ export const TravelAdvancesPage: React.FC = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const empId = isManagement ? undefined : (user?.employeeId || (user as any)?.employee_id);
+      const userEmpId = user?.employeeId || (user as any)?.employee_id || (user as any)?.employeeId ;
+      const empId = isManagement ? undefined : userEmpId;
       const advParams: Record<string, any> = {};
       if (empId) advParams.employeeId = empId;
       if (statusFilter && statusFilter !== 'all') advParams.status = statusFilter;
@@ -136,12 +153,17 @@ export const TravelAdvancesPage: React.FC = () => {
       const trParams: Record<string, any> = {};
       if (empId) trParams.employeeId = empId;
 
-      const [advRes, trRes] = await Promise.all([
+      const [advRes, trRes, myTrRes] = await Promise.all([
         expenseApi.getTravelAdvances(advParams),
-        expenseApi.getTravelRequests(trParams)
+        expenseApi.getTravelRequests(trParams),
+        userEmpId ? expenseApi.getTravelRequests({ employeeId: userEmpId }).catch(() => []) : Promise.resolve([])
       ]);
       setAdvances(advRes || []);
-      setTravelRequests(trRes || []);
+
+      const mergedMap = new Map<number, TravelRequest>();
+      (trRes || []).forEach((tr: TravelRequest) => mergedMap.set(tr.id, tr));
+      (myTrRes || []).forEach((tr: TravelRequest) => mergedMap.set(tr.id, tr));
+      setTravelRequests(Array.from(mergedMap.values()));
     } catch (err) {
       console.error('Failed to load travel advances:', err);
     } finally {
@@ -173,10 +195,12 @@ export const TravelAdvancesPage: React.FC = () => {
 
   const handleApproveAdvance = async () => {
     if (!approveModal) return;
+    const reqAmt = Number((approveModal as any).advanceAmount ?? (approveModal as any).advance_amount ?? 0);
+    const finalAmt = approvedAmt > 0 ? approvedAmt : reqAmt;
     try {
       setActionLoading(approveModal.id);
-      await expenseApi.approveTravelAdvance(approveModal.id, { comments: approveComments, approvedAmount: approvedAmt || undefined });
-      setToast({ type: 'success', message: `Travel advance approved. ${money(approvedAmt || approveModal.advanceAmount)} disbursed.` });
+      const res: any = await expenseApi.approveTravelAdvance(approveModal.id, { comments: approveComments, ...((approveModal as any).currentStepFinance ? { approvedAmount: finalAmt } : {}) });
+      setToast({ type: 'success', message: res?.message || 'Workflow approval recorded. Disbursement is a separate step.' });
       setApproveModal(null); setApproveComments(''); setApprovedAmt(0);
       fetchData();
     } catch (err: any) {
@@ -204,6 +228,7 @@ export const TravelAdvancesPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
+      <LegacyWorkflowNotice rows={advances} prefix="ta_" onComplete={fetchData} />
 
       {/* Toast */}
       {toast && (
@@ -234,12 +259,12 @@ export const TravelAdvancesPage: React.FC = () => {
       </div>
 
       {/* Finance notice */}
-      {isFinance && (
+      {(
         <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-700 text-xs text-blue-800 dark:text-blue-300">
           <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <span className="font-semibold">Finance Actions Available</span>
-            <span className="text-blue-600 dark:text-blue-400"> — You can approve or reject pending advances below. Filter by <em>Finance Review</em> to see your queue.</span>
+            <span className="font-semibold">Workflow-controlled approvals</span>
+            <span className="text-blue-600 dark:text-blue-400"> — Approval actions appear only when the workflow assigns the current step to you. Payment is recorded separately after final approval.</span>
           </div>
         </div>
       )}
@@ -309,7 +334,7 @@ export const TravelAdvancesPage: React.FC = () => {
                   <th className="py-3.5 px-4">Settled</th>
                   <th className="py-3.5 px-4">Balance</th>
                   <th className="py-3.5 px-4">Status</th>
-                  {isFinance && <th className="py-3.5 px-4 text-right">Finance Action</th>}
+                  {<th className="py-3.5 px-4 text-right">Finance Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -332,7 +357,7 @@ export const TravelAdvancesPage: React.FC = () => {
                   const finNotes = adv.financeNotes || adv.finance_notes;
 
                   const isApproved = status.toLowerCase() === 'approved' || status.toLowerCase() === 'disbursed';
-                  const isPendingFinance = ['pending_finance', 'pending', 'requested'].includes(status.toLowerCase());
+                  const isPendingFinance = Boolean(adv.canApprove);
 
                   return (
                     <tr key={adv.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
@@ -372,7 +397,7 @@ export const TravelAdvancesPage: React.FC = () => {
                           <div className="text-[10px] text-slate-400 mt-0.5 max-w-[130px] line-clamp-1" title={finNotes}>Note: {finNotes}</div>
                         )}
                       </td>
-                      {isFinance && (
+                      {(
                         <td className="py-3.5 px-4 text-right">
                           {isPendingFinance ? (
                             <div className="flex items-center justify-end gap-1.5">
@@ -488,13 +513,20 @@ export const TravelAdvancesPage: React.FC = () => {
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
                   <option value="">-- Direct Advance / General --</option>
                   {travelRequests
-                    .filter((tr: any) => ['approved', 'pending_finance'].includes(String(tr.status || '').toLowerCase()))
+                    .filter((tr: any) => String(tr.status || '').toLowerCase() !== 'rejected')
                     .map((rawTr) => {
                       const tr = rawTr as any;
                       const rNum = tr.requestNumber || tr.request_number || `TRV-${tr.id}`;
                       const fLoc = tr.fromLocation || tr.from_location || '';
                       const tLoc = tr.toLocation || tr.to_location || '';
-                      return <option key={tr.id} value={tr.id}>{rNum}{fLoc || tLoc ? ` (${fLoc} → ${tLoc})` : ''}</option>;
+                      const statusStr = tr.status ? ` [${String(tr.status).toUpperCase().replace(/_/g, ' ')}]` : '';
+                      const empName = (tr.firstName || tr.first_name) ? ` (${tr.firstName || tr.first_name} ${tr.lastName || tr.last_name || ''})`.trim() : '';
+                      const route = (fLoc || tLoc) ? ` (${fLoc} → ${tLoc})` : (tr.purpose ? ` (${tr.purpose})` : '');
+                      return (
+                        <option key={tr.id} value={tr.id}>
+                          {rNum}{route}{empName}{statusStr}
+                        </option>
+                      );
                     })}
                 </select>
               </div>

@@ -13,6 +13,223 @@ export interface CustomMasterPayload {
   status?: string;
 }
 
+/**
+ * Registry of all "System Masters" — hardcoded masters whose data lives in real
+ * DB tables but whose field definitions are managed through Master Builder.
+ *
+ * To add a new system master in the future, just add an entry here.
+ * Everything else (seeding, bridging, frontend routing) is automatic.
+ */
+export interface SystemMasterDefinition {
+  /** Matches the `code` in custom_masters AND the sidebar master ID */
+  code: string;
+  name: string;
+  pluralName: string;
+  description: string;
+  icon: string;
+  /** Actual DB table that stores records */
+  systemTable: string;
+  /** PK column in the real table */
+  systemIdColumn: string;
+  /** Column used as the display name */
+  systemNameColumn: string;
+  hasHierarchy?: boolean;
+  hasHistory?: boolean;
+  /** Field definitions for this system master */
+  fields: Array<{
+    fieldName: string;
+    fieldKey: string;
+    fieldType: string;
+    isRequired?: boolean;
+    showInTable?: boolean;
+    helpText?: string;
+    placeholder?: string;
+    displayOrder: number;
+    /** Actual column in the real table — null means extra field in extended_data */
+    columnMap: string | null;
+    isCore: boolean;
+  }>;
+}
+
+/**
+ * Central registry of all system masters.
+ * Add new entries here to make any existing hardcoded master dynamic.
+ */
+export const SYSTEM_MASTERS: SystemMasterDefinition[] = [
+  {
+    code: 'company',
+    name: 'Company',
+    pluralName: 'Companies',
+    description: 'Manage company profiles, legal entities, and organization details.',
+    icon: 'Building2',
+    systemTable: 'company',          // actual table name is 'company' not 'companies'
+    systemIdColumn: 'company_id',    // PK is 'company_id' not 'id'
+    systemNameColumn: 'name',
+    hasHierarchy: false,
+    hasHistory: true,
+    fields: [
+      // 1. Company Profile & Identification
+      { fieldName: 'Company Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Legal registered company name', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Employer Name', fieldKey: 'employer_name', fieldType: 'text', isRequired: false, showInTable: false, helpText: 'Authorized Employer / HR Admin', displayOrder: 2, columnMap: 'employer_name', isCore: true },
+      { fieldName: 'Class Of Establishment', fieldKey: 'class_of_establishment', fieldType: 'text', isRequired: false, showInTable: false, helpText: 'e.g. Commercial IT Enterprise', displayOrder: 3, columnMap: 'class_of_establishment', isCore: true },
+      { fieldName: 'Establishment Company Code', fieldKey: 'code', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Unique establishment code (e.g. COM-100)', displayOrder: 4, columnMap: 'code', isCore: true },
+      // 2. Registered Headquarters Address
+      { fieldName: 'Address Line 1', fieldKey: 'address_line_1', fieldType: 'text', isRequired: true, showInTable: false, helpText: 'Building, Street, Suite No.', displayOrder: 5, columnMap: 'address_line_1', isCore: true },
+      { fieldName: 'Address Line 2', fieldKey: 'address_line_2', fieldType: 'text', isRequired: false, showInTable: false, helpText: 'Landmark, Area, Sector', displayOrder: 6, columnMap: 'address_line_2', isCore: true },
+      { fieldName: 'Country', fieldKey: 'country', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Registered country', displayOrder: 7, columnMap: 'country', isCore: true },
+      { fieldName: 'State', fieldKey: 'state', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'State / Province', displayOrder: 8, columnMap: 'state', isCore: true },
+      { fieldName: 'City', fieldKey: 'city', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'City / Municipality', displayOrder: 9, columnMap: 'city', isCore: true },
+      { fieldName: 'ZIP / Postal Code', fieldKey: 'zip_code', fieldType: 'text', isRequired: true, showInTable: false, helpText: 'Postal code / ZIP', displayOrder: 10, columnMap: 'zip_code', isCore: true },
+      // 3. Statutory, Contact & Communication
+      { fieldName: 'PAN / TIN Number', fieldKey: 'pan_tin', fieldType: 'text', isRequired: false, showInTable: true, helpText: 'Tax identification number', displayOrder: 11, columnMap: 'pan_tin', isCore: true },
+      { fieldName: 'Contact Number', fieldKey: 'contact_number', fieldType: 'phone', isRequired: true, showInTable: true, helpText: 'Primary contact telephone', displayOrder: 12, columnMap: 'contact_number', isCore: true },
+      { fieldName: 'Official Corporate Email', fieldKey: 'email', fieldType: 'email', isRequired: true, showInTable: true, helpText: 'Official company email', displayOrder: 13, columnMap: 'email', isCore: true },
+      // 4. Branding Assets & Media
+      { fieldName: 'Company Logo', fieldKey: 'logo', fieldType: 'image', isRequired: false, showInTable: false, helpText: 'Company logo image URL or base64', displayOrder: 14, columnMap: 'logo', isCore: true },
+      { fieldName: 'Company Official Stamp', fieldKey: 'company_stamp', fieldType: 'image', isRequired: false, showInTable: false, helpText: 'Official stamp image', displayOrder: 15, columnMap: 'company_stamp', isCore: true },
+      { fieldName: 'Authorized Signature', fieldKey: 'signature', fieldType: 'image', isRequired: false, showInTable: false, helpText: 'Authorized signature image', displayOrder: 16, columnMap: 'signature', isCore: true },
+      // 5. Status & System Controls
+      { fieldName: 'Active Status', fieldKey: 'is_active_toggle', fieldType: 'boolean', isRequired: false, showInTable: true, helpText: 'Whether company is actively operating', displayOrder: 17, columnMap: 'is_active_toggle', isCore: true },
+      { fieldName: 'Users Access', fieldKey: 'active_users_toggle', fieldType: 'boolean', isRequired: false, showInTable: false, helpText: 'Allow employee / user access', displayOrder: 18, columnMap: 'active_users_toggle', isCore: true },
+      { fieldName: 'Login Page Logo', fieldKey: 'login_page_logo_toggle', fieldType: 'boolean', isRequired: false, showInTable: false, helpText: 'Show company logo on login screen', displayOrder: 19, columnMap: 'login_page_logo_toggle', isCore: true },
+      // 6. Company Login Credentials
+      { fieldName: 'Want Credentials', fieldKey: 'has_credentials', fieldType: 'boolean', isRequired: false, showInTable: false, helpText: 'Enable admin login credentials', displayOrder: 20, columnMap: 'has_credentials', isCore: true },
+      { fieldName: 'Full Name', fieldKey: 'full_name', fieldType: 'text', isRequired: false, showInTable: false, helpText: 'Admin user full name', displayOrder: 21, columnMap: 'full_name', isCore: true },
+      { fieldName: 'Login Email', fieldKey: 'login_email', fieldType: 'email', isRequired: false, showInTable: false, helpText: 'Admin login email address', displayOrder: 22, columnMap: 'login_email', isCore: true },
+      // Other
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, helpText: 'Record status (Active/Inactive)', displayOrder: 23, columnMap: 'status', isCore: true },
+      { fieldName: 'Description', fieldKey: 'description', fieldType: 'textarea', isRequired: false, showInTable: false, helpText: 'Company description or overview', displayOrder: 24, columnMap: 'description', isCore: true },
+    ],
+  },
+  {
+    code: 'department',
+    name: 'Department',
+    pluralName: 'Departments',
+    description: 'Manage organizational departments, divisions, and teams.',
+    icon: 'Layers',
+    systemTable: 'departments',
+    systemIdColumn: 'id',
+    systemNameColumn: 'name',
+    hasHierarchy: true,
+    hasHistory: false,
+    fields: [
+      { fieldName: 'Department Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Name of the department', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Code', fieldKey: 'code', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Short unique code', displayOrder: 2, columnMap: 'code', isCore: true },
+      { fieldName: 'Parent Department', fieldKey: 'parent_department_id', fieldType: 'lookup', isRequired: false, showInTable: false, displayOrder: 3, columnMap: 'parent_department_id', isCore: true },
+      { fieldName: 'Department Head', fieldKey: 'department_head_id', fieldType: 'lookup', isRequired: false, showInTable: false, displayOrder: 4, columnMap: 'department_head_id', isCore: true },
+      { fieldName: 'Description', fieldKey: 'description', fieldType: 'textarea', isRequired: false, showInTable: false, displayOrder: 5, columnMap: 'description', isCore: true },
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 6, columnMap: 'status', isCore: true },
+    ],
+  },
+  {
+    code: 'location',
+    name: 'Location',
+    pluralName: 'Locations',
+    description: 'Configure office locations, branches, and geographic sites.',
+    icon: 'MapPin',
+    systemTable: 'locations',
+    systemIdColumn: 'id',
+    systemNameColumn: 'name',
+    hasHierarchy: false,
+    hasHistory: false,
+    fields: [
+      { fieldName: 'Location Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Name of the location', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Code', fieldKey: 'code', fieldType: 'text', isRequired: true, showInTable: true, displayOrder: 2, columnMap: 'code', isCore: true },
+      { fieldName: 'Office Type', fieldKey: 'type', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 3, columnMap: 'type', isCore: true },
+      { fieldName: 'Address Line 1', fieldKey: 'address_line1', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 4, columnMap: 'address_line1', isCore: true },
+      { fieldName: 'Address Line 2', fieldKey: 'address_line2', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 5, columnMap: 'address_line2', isCore: true },
+      { fieldName: 'City', fieldKey: 'city', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 6, columnMap: 'city', isCore: true },
+      { fieldName: 'State', fieldKey: 'state', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 7, columnMap: 'state', isCore: true },
+      { fieldName: 'Country', fieldKey: 'country', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 8, columnMap: 'country', isCore: true },
+      { fieldName: 'Postal Code', fieldKey: 'postal_code', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 9, columnMap: 'postal_code', isCore: true },
+      { fieldName: 'Latitude', fieldKey: 'latitude', fieldType: 'number', isRequired: false, showInTable: false, displayOrder: 10, columnMap: 'latitude', isCore: true },
+      { fieldName: 'Longitude', fieldKey: 'longitude', fieldType: 'number', isRequired: false, showInTable: false, displayOrder: 11, columnMap: 'longitude', isCore: true },
+      { fieldName: 'Geofence Radius (m)', fieldKey: 'geofence_radius_m', fieldType: 'number', isRequired: false, showInTable: false, displayOrder: 12, columnMap: 'geofence_radius_m', isCore: true },
+      { fieldName: 'Timezone', fieldKey: 'timezone', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 13, columnMap: 'timezone', isCore: true },
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 14, columnMap: 'status', isCore: true },
+    ],
+  },
+  {
+    code: 'designation',
+    name: 'Designation',
+    pluralName: 'Designations',
+    description: 'Job designations, roles, and title hierarchies.',
+    icon: 'Briefcase',
+    systemTable: 'designations',
+    systemIdColumn: 'id',
+    systemNameColumn: 'name',
+    hasHierarchy: false,
+    hasHistory: false,
+    fields: [
+      { fieldName: 'Designation Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Name of the designation', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Code', fieldKey: 'code', fieldType: 'text', isRequired: true, showInTable: true, displayOrder: 2, columnMap: 'code', isCore: true },
+      { fieldName: 'Department', fieldKey: 'department_id', fieldType: 'lookup', isRequired: false, showInTable: false, displayOrder: 3, columnMap: 'department_id', isCore: true },
+      { fieldName: 'Level', fieldKey: 'level', fieldType: 'number', isRequired: false, showInTable: false, displayOrder: 4, columnMap: 'level', isCore: true },
+      { fieldName: 'Description', fieldKey: 'description', fieldType: 'textarea', isRequired: false, showInTable: false, displayOrder: 5, columnMap: 'description', isCore: true },
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 6, columnMap: 'status', isCore: true },
+    ],
+  },
+  {
+    code: 'grade',
+    name: 'Grade',
+    pluralName: 'Grades',
+    description: 'Employee pay grades, bands, and seniority levels.',
+    icon: 'Award',
+    systemTable: 'grades',
+    systemIdColumn: 'id',
+    systemNameColumn: 'name',
+    hasHierarchy: false,
+    hasHistory: false,
+    fields: [
+      { fieldName: 'Grade Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Grade name/band', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Grade Code', fieldKey: 'code', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Short unique code', displayOrder: 2, columnMap: 'code', isCore: true },
+      { fieldName: 'Description', fieldKey: 'description', fieldType: 'textarea', isRequired: false, showInTable: false, displayOrder: 3, columnMap: 'description', isCore: true },
+      { fieldName: 'Color', fieldKey: 'color', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 4, columnMap: 'color', isCore: true },
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 5, columnMap: 'status', isCore: true },
+    ],
+  },
+  {
+    code: 'employee-status',
+    name: 'Employee Status',
+    pluralName: 'Employee Statuses',
+    description: 'Active, On-Probation, Suspended, and Exit employee states.',
+    icon: 'Users',
+    systemTable: 'employee_statuses',
+    systemIdColumn: 'id',
+    systemNameColumn: 'name',
+    hasHierarchy: false,
+    hasHistory: false,
+    fields: [
+      { fieldName: 'Status Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Employee status name', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Status Color', fieldKey: 'status_color', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 2, columnMap: 'status_color', isCore: true },
+      { fieldName: 'Is Probation Status', fieldKey: 'is_probation_status', fieldType: 'boolean', isRequired: false, showInTable: false, displayOrder: 3, columnMap: 'is_probation_status', isCore: true },
+      { fieldName: 'Probation Period Value', fieldKey: 'probation_period_value', fieldType: 'number', isRequired: false, showInTable: false, displayOrder: 4, columnMap: 'probation_period_value', isCore: true },
+      { fieldName: 'Probation Period Unit', fieldKey: 'probation_period_unit', fieldType: 'text', isRequired: false, showInTable: false, displayOrder: 5, columnMap: 'probation_period_unit', isCore: true },
+      { fieldName: 'Notify On Completion', fieldKey: 'notify_on_completion', fieldType: 'boolean', isRequired: false, showInTable: false, displayOrder: 6, columnMap: 'notify_on_completion', isCore: true },
+      { fieldName: 'Is Confirmation Status', fieldKey: 'is_confirmation_status', fieldType: 'boolean', isRequired: false, showInTable: false, displayOrder: 7, columnMap: 'is_confirmation_status', isCore: true },
+      { fieldName: 'Is Resignation Status', fieldKey: 'is_resignation_status', fieldType: 'boolean', isRequired: false, showInTable: false, displayOrder: 8, columnMap: 'is_resignation_status', isCore: true },
+      { fieldName: 'Inactive On Status Change', fieldKey: 'inactive_on_status_change', fieldType: 'boolean', isRequired: false, showInTable: false, displayOrder: 9, columnMap: 'inactive_on_status_change', isCore: true },
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 10, columnMap: 'status', isCore: true },
+    ],
+  },
+  {
+    code: 'emp-type',
+    name: 'Emp. Type',
+    pluralName: 'Employment Types',
+    description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).',
+    icon: 'Users',
+    systemTable: 'employee_types',
+    systemIdColumn: 'id',
+    systemNameColumn: 'name',
+    hasHierarchy: false,
+    hasHistory: false,
+    fields: [
+      { fieldName: 'Employment Type Name', fieldKey: 'name', fieldType: 'text', isRequired: true, showInTable: true, helpText: 'Classification title', displayOrder: 1, columnMap: 'name', isCore: true },
+      { fieldName: 'Status', fieldKey: 'status', fieldType: 'text', isRequired: false, showInTable: true, displayOrder: 2, columnMap: 'status', isCore: true },
+    ],
+  },
+];
+
 export interface CustomMasterFieldPayload {
   fieldName: string;
   fieldKey: string;
@@ -67,10 +284,470 @@ export class MasterBuilderService {
     return getKnex();
   }
 
+  // ── In-memory caches to avoid repeated schema introspection and re-seeding ──
+  /** Orgs that have already had system masters seeded this server session */
+  private static readonly seededOrgs = new Set<number>();
+  /** Cache for db.schema.hasColumn results: "table.column" -> boolean */
+  private static readonly columnCache = new Map<string, boolean>();
+
+  /**
+   * Cached hasColumn check — introspects DB only once per table.column per session
+   */
+  private async hasColumn(table: string, column: string): Promise<boolean> {
+    const key = `${table}.${column}`;
+    if (MasterBuilderService.columnCache.has(key)) {
+      return MasterBuilderService.columnCache.get(key)!;
+    }
+    const result = await this.db.schema.hasColumn(table, column);
+    MasterBuilderService.columnCache.set(key, result);
+    return result;
+  }
+
+  /**
+   * Ensure all System Masters from SYSTEM_MASTERS registry are seeded for this org.
+   * Runs on list/get requests, synchronizes missing core fields into custom_master_fields.
+   */
+  async ensureSystemMasters(orgId: number, companyId?: number) {
+    for (const def of SYSTEM_MASTERS) {
+      let masterId: number;
+      const existing = await this.db('custom_masters')
+        .where('organization_id', orgId)
+        .where('code', def.code)
+        .whereNull('deleted_at')
+        .select('id', 'system_table')
+        .first();
+
+      if (existing) {
+        masterId = existing.id;
+        // Always patch to pick up any corrections to the SYSTEM_MASTERS registry
+        await this.db('custom_masters')
+          .where('id', existing.id)
+          .update({
+            is_system: true,
+            system_table: def.systemTable,
+            system_id_column: def.systemIdColumn,
+            system_name_column: def.systemNameColumn,
+          });
+      } else {
+        // Insert the system master
+        const [insertedId] = await this.db('custom_masters').insert({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          company_id: companyId || null,
+          name: def.name,
+          plural_name: def.pluralName,
+          code: def.code,
+          description: def.description,
+          icon: def.icon,
+          employee_linkage: 'none',
+          has_hierarchy: Boolean(def.hasHierarchy),
+          has_history: Boolean(def.hasHistory),
+          status: 'Active',
+          is_system: true,
+          system_table: def.systemTable,
+          system_id_column: def.systemIdColumn,
+          system_name_column: def.systemNameColumn,
+        });
+        masterId = insertedId;
+      }
+
+      // Sync all core fields for this master into custom_master_fields.
+      // Re-fetch inside the loop to handle concurrent ensureSystemMasters calls
+      // (the UNIQUE constraint on (master_id, field_key) is the final safety net).
+      const existingFields = await this.db('custom_master_fields')
+        .where('master_id', masterId)
+        .select('id', 'field_key');
+      const existingKeySet = new Set(existingFields.map((f: any) => f.fieldKey || f.field_key));
+
+      for (const f of def.fields) {
+        if (!existingKeySet.has(f.fieldKey)) {
+          try {
+            await this.db('custom_master_fields').insert({
+              uuid: uuidv4(),
+              master_id: masterId,
+              field_name: f.fieldName,
+              field_key: f.fieldKey,
+              field_type: f.fieldType,
+              is_required: Boolean(f.isRequired),
+              show_in_table: f.showInTable !== false,
+              is_active: true,
+              help_text: f.helpText || null,
+              placeholder: f.placeholder || null,
+              display_order: f.displayOrder,
+              column_map: f.columnMap,
+              is_core: Boolean(f.isCore),
+            });
+          } catch (insertErr: any) {
+            // Swallow unique-constraint violations (ER_DUP_ENTRY / SQLITE_CONSTRAINT).
+            // This happens when two concurrent requests race into ensureSystemMasters;
+            // the winner already inserted the row, so we just update it instead.
+            const isDup =
+              insertErr?.code === 'ER_DUP_ENTRY' ||
+              insertErr?.code === 'SQLITE_CONSTRAINT' ||
+              String(insertErr?.message).includes('Duplicate entry');
+            if (!isDup) throw insertErr;
+            // Fall through to the update branch below
+          }
+        }
+        // Always keep core field metadata in sync with the SYSTEM_MASTERS registry
+        await this.db('custom_master_fields')
+          .where('master_id', masterId)
+          .where('field_key', f.fieldKey)
+          .update({
+            field_name: f.fieldName,
+            field_type: f.fieldType,
+            column_map: f.columnMap,
+            is_core: true,
+            display_order: f.displayOrder,
+            help_text: f.helpText || null,
+          });
+      }
+    }
+
+    // Mark this org as seeded for the rest of this server session
+    MasterBuilderService.seededOrgs.add(orgId);
+  }
+
+  /**
+   * Returns whether a master definition refers to a real DB table (system master)
+   */
+  private isSystemMaster(master: any): boolean {
+    return Boolean(master.isSystem ?? master.is_system) && Boolean(master.systemTable ?? master.system_table);
+  }
+
+  /**
+   * Get the fields for a master — split into core (columnMap set) and extra (columnMap null)
+   */
+  private async getMasterFields(masterId: number) {
+    const fields = await this.db('custom_master_fields')
+      .where('master_id', masterId)
+      .where('is_active', 1)
+      .orderBy('display_order', 'asc');
+    return fields;
+  }
+
+  /**
+   * List records from the real DB table, merged with any extended data.
+   * Returns them in the same DynamicRecordItem format as custom_master_records.
+   */
+  private async listSystemRecords(
+    orgId: number,
+    master: any,
+    options: { search?: string; status?: string; page?: number; limit?: number }
+  ) {
+    const table = master.systemTable || master.system_table;
+    const idCol = master.systemIdColumn || master.system_id_column || 'id';
+    const page = options.page || 1;
+    const limit = options.limit || 50;
+    const offset = (page - 1) * limit;
+
+    // Determine org filter column (some tables use organization_id)
+    const hasOrgCol = await this.hasColumn(table, 'organization_id');
+    // Check if deleted_at exists (e.g. 'locations' table has no deleted_at)
+    const hasDeletedAt = await this.hasColumn(table, 'deleted_at');
+
+    // Data query (SELECT *)
+    let query = this.db(table).select('*');
+    if (hasDeletedAt) query = query.whereNull('deleted_at') as any;
+    if (hasOrgCol) query = query.where('organization_id', orgId);
+
+    // Count query — MUST be built separately, never clone a SELECT * query with COUNT()
+    // because MySQL's only_full_group_by rejects mixing SELECT * with aggregates.
+    let countQuery = this.db(table).count(`${idCol} as cnt`);
+    if (hasDeletedAt) countQuery = countQuery.whereNull('deleted_at') as any;
+    if (hasOrgCol) countQuery = countQuery.where('organization_id', orgId);
+
+    if (options.status && options.status !== 'all') {
+      const hasStatusCol = await this.hasColumn(table, 'status');
+      if (hasStatusCol) {
+        query = query.where('status', options.status);
+        countQuery = countQuery.where('status', options.status) as any;
+      }
+    }
+
+    const totalRow = await countQuery.first();
+    const total = Number((totalRow as any)?.cnt || 0);
+
+    const rows = await query.orderBy(idCol, 'desc').limit(limit).offset(offset);
+
+    // Load extended data for all returned rows
+    const refIds = rows.map((r: any) => r[idCol]);
+    const extDataMap: Record<number, Record<string, any>> = {};
+    if (refIds.length > 0) {
+      const extRows = await this.db('custom_master_extended_data')
+        .where('master_id', master.id)
+        .whereIn('record_ref_id', refIds);
+      for (const ext of extRows) {
+        const d = typeof ext.data === 'string' ? JSON.parse(ext.data) : ext.data || {};
+        extDataMap[ext.record_ref_id] = d;
+      }
+    }
+
+    // Get field definitions to know which keys are valid
+    const fields = await this.getMasterFields(master.id);
+
+    let records = rows.map((r: any) => {
+      const rawData: Record<string, any> = {};
+      for (const [col, val] of Object.entries(r)) {
+        rawData[col] = val;
+        const camel = col.replace(/_([a-z0-9])/g, (_, g) => g.toUpperCase());
+        if (camel !== col) {
+          rawData[camel] = val;
+        }
+      }
+
+      const coreData: Record<string, any> = {};
+      for (const f of fields) {
+        const colMap = f.column_map || f.columnMap;
+        const fKey = f.field_key || f.fieldKey;
+        if (colMap && r[colMap] !== undefined) {
+          coreData[fKey] = r[colMap];
+        }
+      }
+      const extraData = extDataMap[r[idCol]] || {};
+      return {
+        id: r[idCol],
+        uuid: r.uuid || String(r[idCol]),
+        recordCode: r.code || r.record_code || null,
+        status: r.status || 'Active',
+        data: { ...rawData, ...coreData, ...extraData },
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
+
+    // In-memory search across all data fields
+    if (options.search && options.search.trim()) {
+      const q = options.search.toLowerCase().trim();
+      records = records.filter((item: any) => {
+        if (item.recordCode?.toLowerCase().includes(q)) return true;
+        return Object.values(item.data).some((v) => String(v || '').toLowerCase().includes(q));
+      });
+    }
+
+    return {
+      records,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
+  /**
+   * Create a record in the real DB table + store any extra fields in extended_data
+   */
+  private async createSystemRecord(
+    orgId: number,
+    companyId: number | undefined,
+    master: any,
+    userId: number,
+    payload: DynamicRecordPayload
+  ) {
+    const table = master.systemTable || master.system_table;
+    const idCol = master.systemIdColumn || master.system_id_column || 'id';
+    const fields = await this.getMasterFields(master.id);
+
+    // Split payload.data into core columns vs extra fields
+    const coreInsert: Record<string, any> = {};
+    const extraData: Record<string, any> = {};
+
+    const hasOrgCol = await this.hasColumn(table, 'organization_id');
+    const hasCompanyCol = await this.hasColumn(table, 'company_id');
+
+    if (hasOrgCol) coreInsert.organization_id = orgId;
+    if (hasCompanyCol) coreInsert.company_id = companyId || null;
+
+    // Assign uuid if table has it
+    const hasUuid = await this.hasColumn(table, 'uuid');
+    if (hasUuid) coreInsert.uuid = uuidv4();
+
+    const hasCreatedBy = await this.hasColumn(table, 'created_by');
+    const hasUpdatedBy = await this.hasColumn(table, 'updated_by');
+    if (hasCreatedBy) coreInsert.created_by = userId;
+    if (hasUpdatedBy) coreInsert.updated_by = userId;
+
+    for (const f of fields) {
+      const colMap = f.column_map || f.columnMap;
+      const fKey = f.field_key || f.fieldKey;
+      const camelKey = fKey ? fKey.replace(/_([a-z0-9])/g, (_: any, g: string) => g.toUpperCase()) : '';
+      const snakeKey = fKey ? fKey.replace(/([A-Z])/g, '_$1').toLowerCase() : '';
+      const val = payload.data?.[fKey] !== undefined
+        ? payload.data[fKey]
+        : (colMap && payload.data?.[colMap] !== undefined)
+        ? payload.data[colMap]
+        : (camelKey && payload.data?.[camelKey] !== undefined)
+        ? payload.data[camelKey]
+        : (snakeKey && payload.data?.[snakeKey] !== undefined)
+        ? payload.data[snakeKey]
+        : undefined;
+
+      if (colMap) {
+        // Core field → goes to real table column
+        if (val !== undefined) coreInsert[colMap] = val;
+      } else if (val !== undefined) {
+        // Extra field → goes to extended_data
+        extraData[fKey] = val;
+      }
+    }
+
+    const [newId] = await this.db(table).insert(coreInsert);
+
+    // Store extra fields if any
+    if (Object.keys(extraData).length > 0) {
+      await this.db('custom_master_extended_data').insert({
+        uuid: uuidv4(),
+        organization_id: orgId,
+        master_id: master.id,
+        record_ref_id: newId,
+        data: JSON.stringify(extraData),
+        created_by: userId,
+        updated_by: userId,
+      });
+    }
+
+    const row = await this.db(table).where(idCol, newId).first();
+    return this.formatSystemRecord(row, idCol, extraData, fields);
+  }
+
+  /**
+   * Update a record in the real DB table + update extended_data for extra fields
+   */
+  private async updateSystemRecord(
+    orgId: number,
+    master: any,
+    recordId: number,
+    userId: number,
+    payload: Partial<DynamicRecordPayload>
+  ) {
+    const table = master.systemTable || master.system_table;
+    const idCol = master.systemIdColumn || master.system_id_column || 'id';
+    const fields = await this.getMasterFields(master.id);
+
+    const coreUpdate: Record<string, any> = { updated_at: new Date() };
+    const extraData: Record<string, any> = {};
+
+    const hasUpdatedBy = await this.hasColumn(table, 'updated_by');
+    if (hasUpdatedBy) coreUpdate.updated_by = userId;
+
+    if (payload.data) {
+      for (const f of fields) {
+        const colMap = f.column_map || f.columnMap;
+        const fKey = f.field_key || f.fieldKey;
+        const camelKey = fKey ? fKey.replace(/_([a-z0-9])/g, (_: any, g: string) => g.toUpperCase()) : '';
+        const snakeKey = fKey ? fKey.replace(/([A-Z])/g, '_$1').toLowerCase() : '';
+        const val = payload.data[fKey] !== undefined
+          ? payload.data[fKey]
+          : (colMap && payload.data[colMap] !== undefined)
+          ? payload.data[colMap]
+          : (camelKey && payload.data[camelKey] !== undefined)
+          ? payload.data[camelKey]
+          : (snakeKey && payload.data[snakeKey] !== undefined)
+          ? payload.data[snakeKey]
+          : undefined;
+
+        if (val === undefined) continue;
+        if (colMap) {
+          coreUpdate[colMap] = val;
+        } else {
+          extraData[fKey] = val;
+        }
+      }
+    }
+
+    if (payload.status !== undefined) coreUpdate.status = payload.status;
+
+    await this.db(table)
+      .where(idCol, recordId)
+      .update(coreUpdate);
+
+    // Upsert extended data
+    if (Object.keys(extraData).length > 0) {
+      const existing = await this.db('custom_master_extended_data')
+        .where('master_id', master.id)
+        .where('record_ref_id', recordId)
+        .first();
+
+      if (existing) {
+        const merged = { ...(typeof existing.data === 'string' ? JSON.parse(existing.data) : existing.data), ...extraData };
+        await this.db('custom_master_extended_data')
+          .where('id', existing.id)
+          .update({ data: JSON.stringify(merged), updated_by: userId, updated_at: new Date() });
+      } else {
+        await this.db('custom_master_extended_data').insert({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          master_id: master.id,
+          record_ref_id: recordId,
+          data: JSON.stringify(extraData),
+          updated_by: userId,
+        });
+      }
+    }
+
+    const row = await this.db(table).where(idCol, recordId).first();
+    const extRow = await this.db('custom_master_extended_data')
+      .where('master_id', master.id)
+      .where('record_ref_id', recordId)
+      .first();
+    const extDataFinal = extRow ? (typeof extRow.data === 'string' ? JSON.parse(extRow.data) : extRow.data) : {};
+    return this.formatSystemRecord(row, idCol, extDataFinal, fields);
+  }
+
+  /**
+   * Soft-delete a system master record from the real table
+   */
+  private async deleteSystemRecord(master: any, recordId: number) {
+    const table = master.systemTable || master.system_table;
+    const idCol = master.systemIdColumn || master.system_id_column || 'id';
+    const hasDeletedAt = await this.hasColumn(table, 'deleted_at');
+    if (hasDeletedAt) {
+      await this.db(table).where(idCol, recordId).update({ deleted_at: new Date() });
+    } else {
+      await this.db(table).where(idCol, recordId).delete();
+    }
+    return true;
+  }
+
+  /**
+   * Helper: format a real-table row into DynamicRecordItem shape
+   */
+  private formatSystemRecord(row: any, idCol: string, extraData: Record<string, any>, fields: any[]) {
+    const rawData: Record<string, any> = {};
+    for (const [col, val] of Object.entries(row)) {
+      rawData[col] = val;
+      const camel = col.replace(/_([a-z0-9])/g, (_, g) => g.toUpperCase());
+      if (camel !== col) {
+        rawData[camel] = val;
+      }
+    }
+    const coreData: Record<string, any> = {};
+    for (const f of fields) {
+      const colMap = f.column_map || f.columnMap;
+      const fKey = f.field_key || f.fieldKey;
+      if (colMap && row[colMap] !== undefined) {
+        coreData[fKey] = row[colMap];
+      }
+    }
+    return {
+      id: row[idCol],
+      uuid: row.uuid || String(row[idCol]),
+      recordCode: row.code || null,
+      status: row.status || 'Active',
+      data: { ...rawData, ...coreData, ...extraData },
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SEED (existing custom masters + system masters)
+  // ══════════════════════════════════════════════════════════════════════════
+
   /**
    * Seed default custom masters for tenant if empty
    */
   async ensureSeedMasters(orgId: number, companyId?: number) {
+    // Always ensure system masters are present (idempotent)
+    await this.ensureSystemMasters(orgId, companyId);
+
     const existing = await this.db('custom_masters')
       .where('organization_id', orgId)
       .whereNull('deleted_at');
@@ -478,11 +1155,27 @@ export class MasterBuilderService {
       .where('master_id', masterId)
       .orderBy('id', 'asc');
 
-    const recordCountRes = await this.db('custom_master_records')
-      .where('master_id', masterId)
-      .whereNull('deleted_at')
-      .count('id as cnt')
-      .first();
+    // For system masters, count from the real backing table
+    let recordsCount = 0;
+    const isSystemM = this.isSystemMaster(master);
+    if (isSystemM) {
+      const realTable = master.systemTable || master.system_table;
+      try {
+        const idCol = master.systemIdColumn || master.system_id_column || 'id';
+        const hasDeletedAt = await this.hasColumn(realTable, 'deleted_at');
+        let q = this.db(realTable);
+        if (hasDeletedAt) q = q.whereNull('deleted_at') as any;
+        const cnt = await q.count(`${idCol} as cnt`).first();
+        recordsCount = Number((cnt as any)?.cnt || 0);
+      } catch (_) { }
+    } else {
+      const recordCountRes = await this.db('custom_master_records')
+        .where('master_id', masterId)
+        .whereNull('deleted_at')
+        .count('id as cnt')
+        .first();
+      recordsCount = Number((recordCountRes as any)?.cnt || 0);
+    }
 
     return {
       id: master.id,
@@ -496,7 +1189,10 @@ export class MasterBuilderService {
       hasHierarchy: Boolean(master.hasHierarchy ?? master.has_hierarchy),
       hasHistory: Boolean(master.hasHistory ?? master.has_history),
       status: master.status,
-      recordsCount: Number((recordCountRes as any)?.cnt || (recordCountRes as any)?.count || 0),
+      isSystem: isSystemM,
+      systemTable: master.systemTable || master.system_table || null,
+      systemNameColumn: master.systemNameColumn || master.system_name_column || 'name',
+      recordsCount,
       fields: fields.map((f: any) => ({
         id: f.id,
         uuid: f.uuid,
@@ -515,6 +1211,8 @@ export class MasterBuilderService {
         optionsJson: typeof (f.optionsJson || f.options_json) === 'string' ? JSON.parse(f.optionsJson || f.options_json) : (f.optionsJson || f.options_json),
         validationRules: typeof (f.validationRules || f.validation_rules) === 'string' ? JSON.parse(f.validationRules || f.validation_rules) : (f.validationRules || f.validation_rules),
         displayOrder: f.displayOrder || f.display_order || 0,
+        columnMap: f.columnMap || f.column_map || null,
+        isCore: Boolean(f.isCore ?? f.is_core),
       })),
       validationRules: rules.map((r: any) => ({
         id: r.id,
@@ -646,22 +1344,44 @@ export class MasterBuilderService {
   // ─── Fields ─────────────────────────────────────────────────────────────
 
   async addField(orgId: number, masterId: number, payload: CustomMasterFieldPayload) {
-    const master = await this.db('custom_masters')
+    let master = await this.db('custom_masters')
       .where('id', masterId)
       .where('organization_id', orgId)
       .whereNull('deleted_at')
       .first();
+
+    if (!master) {
+      master = await this.db('custom_masters')
+        .where('id', masterId)
+        .whereNull('deleted_at')
+        .first();
+    }
     if (!master) throw new Error('Master not found');
 
-    const key = payload.fieldKey
+    let key = payload.fieldKey
       ? payload.fieldKey.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_')
       : payload.fieldName.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
-    const [fieldId] = await this.db('custom_master_fields').insert({
+    if (!key) key = `field_${Date.now()}`;
+
+    // Ensure unique field_key within this master (prevents ER_DUP_ENTRY crash)
+    let uniqueKey = key;
+    let counter = 1;
+    while (true) {
+      const existing = await this.db('custom_master_fields')
+        .where('master_id', masterId)
+        .where('field_key', uniqueKey)
+        .first();
+      if (!existing) break;
+      uniqueKey = `${key}_${counter}`;
+      counter++;
+    }
+
+    const insertData: any = {
       uuid: uuidv4(),
       master_id: masterId,
       field_name: payload.fieldName.trim(),
-      field_key: key,
+      field_key: uniqueKey,
       field_type: payload.fieldType || 'text',
       is_required: Boolean(payload.isRequired),
       is_unique: Boolean(payload.isUnique),
@@ -672,12 +1392,30 @@ export class MasterBuilderService {
       default_value: payload.defaultValue || null,
       lookup_master_id: payload.lookupMasterId || null,
       choice_list_id: payload.choiceListId || null,
-      options_json: payload.optionsJson ? JSON.stringify(payload.optionsJson) : null,
-      validation_rules: payload.validationRules ? JSON.stringify(payload.validationRules) : null,
+      options_json: payload.optionsJson ? (typeof payload.optionsJson === 'string' ? payload.optionsJson : JSON.stringify(payload.optionsJson)) : null,
+      validation_rules: payload.validationRules ? (typeof payload.validationRules === 'string' ? payload.validationRules : JSON.stringify(payload.validationRules)) : null,
       display_order: payload.displayOrder || 0,
-    });
+    };
+
+    const insertRes: any = await this.db('custom_master_fields').insert(insertData);
+    const rawId: any = Array.isArray(insertRes) ? insertRes[0] : insertRes;
+    const fieldId = rawId && typeof rawId === 'object' ? (rawId.id || Object.values(rawId)[0]) : rawId;
 
     const f: any = await this.db('custom_master_fields').where('id', fieldId).first();
+    if (!f) throw new Error('Failed to retrieve newly created field');
+
+    let parsedOptions: any = undefined;
+    try {
+      const optVal = f.optionsJson || f.options_json;
+      parsedOptions = typeof optVal === 'string' ? JSON.parse(optVal) : optVal;
+    } catch (_) {}
+
+    let parsedValidation: any = undefined;
+    try {
+      const valRules = f.validationRules || f.validation_rules;
+      parsedValidation = typeof valRules === 'string' ? JSON.parse(valRules) : valRules;
+    } catch (_) {}
+
     return {
       id: f.id,
       uuid: f.uuid,
@@ -693,17 +1431,25 @@ export class MasterBuilderService {
       defaultValue: f.defaultValue || f.default_value,
       lookupMasterId: f.lookupMasterId || f.lookup_master_id,
       choiceListId: f.choiceListId || f.choice_list_id,
-      optionsJson: typeof (f.optionsJson || f.options_json) === 'string' ? JSON.parse(f.optionsJson || f.options_json) : (f.optionsJson || f.options_json),
-      validationRules: typeof (f.validationRules || f.validation_rules) === 'string' ? JSON.parse(f.validationRules || f.validation_rules) : (f.validationRules || f.validation_rules),
+      optionsJson: parsedOptions,
+      validationRules: parsedValidation,
       displayOrder: f.displayOrder || f.display_order || 0,
     };
   }
 
   async updateField(orgId: number, masterId: number, fieldId: number, payload: Partial<CustomMasterFieldPayload>) {
-    const master = await this.db('custom_masters')
+    let master = await this.db('custom_masters')
       .where('id', masterId)
       .where('organization_id', orgId)
+      .whereNull('deleted_at')
       .first();
+
+    if (!master) {
+      master = await this.db('custom_masters')
+        .where('id', masterId)
+        .whereNull('deleted_at')
+        .first();
+    }
     if (!master) throw new Error('Master not found');
 
     const updateData: any = { updated_at: new Date() };
@@ -719,8 +1465,12 @@ export class MasterBuilderService {
     if (payload.defaultValue !== undefined) updateData.default_value = payload.defaultValue;
     if (payload.lookupMasterId !== undefined) updateData.lookup_master_id = payload.lookupMasterId;
     if (payload.choiceListId !== undefined) updateData.choice_list_id = payload.choiceListId;
-    if (payload.optionsJson !== undefined) updateData.options_json = JSON.stringify(payload.optionsJson);
-    if (payload.validationRules !== undefined) updateData.validation_rules = JSON.stringify(payload.validationRules);
+    if (payload.optionsJson !== undefined) {
+      updateData.options_json = typeof payload.optionsJson === 'string' ? payload.optionsJson : JSON.stringify(payload.optionsJson);
+    }
+    if (payload.validationRules !== undefined) {
+      updateData.validation_rules = typeof payload.validationRules === 'string' ? payload.validationRules : JSON.stringify(payload.validationRules);
+    }
     if (payload.displayOrder !== undefined) updateData.display_order = payload.displayOrder;
 
     await this.db('custom_master_fields')
@@ -729,6 +1479,20 @@ export class MasterBuilderService {
       .update(updateData);
 
     const f: any = await this.db('custom_master_fields').where('id', fieldId).first();
+    if (!f) throw new Error('Field not found after update');
+
+    let parsedOptions: any = undefined;
+    try {
+      const optVal = f.optionsJson || f.options_json;
+      parsedOptions = typeof optVal === 'string' ? JSON.parse(optVal) : optVal;
+    } catch (_) {}
+
+    let parsedValidation: any = undefined;
+    try {
+      const valRules = f.validationRules || f.validation_rules;
+      parsedValidation = typeof valRules === 'string' ? JSON.parse(valRules) : valRules;
+    } catch (_) {}
+
     return {
       id: f.id,
       uuid: f.uuid,
@@ -744,8 +1508,8 @@ export class MasterBuilderService {
       defaultValue: f.defaultValue || f.default_value,
       lookupMasterId: f.lookupMasterId || f.lookup_master_id,
       choiceListId: f.choiceListId || f.choice_list_id,
-      optionsJson: typeof (f.optionsJson || f.options_json) === 'string' ? JSON.parse(f.optionsJson || f.options_json) : (f.optionsJson || f.options_json),
-      validationRules: typeof (f.validationRules || f.validation_rules) === 'string' ? JSON.parse(f.validationRules || f.validation_rules) : (f.validationRules || f.validation_rules),
+      optionsJson: parsedOptions,
+      validationRules: parsedValidation,
       displayOrder: f.displayOrder || f.display_order || 0,
     };
   }
@@ -962,6 +1726,14 @@ export class MasterBuilderService {
   }
 
   async listRecords(orgId: number, masterId: number, options: { search?: string; status?: string; page?: number; limit?: number }) {
+    // Load master to detect if it is a system master
+    const master = await this.db('custom_masters').where('id', masterId).first();
+    if (!master) return { records: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
+
+    if (this.isSystemMaster(master)) {
+      return this.listSystemRecords(orgId, master, options);
+    }
+
     const page = options.page || 1;
     const limit = options.limit || 50;
     const offset = (page - 1) * limit;
@@ -1021,7 +1793,30 @@ export class MasterBuilderService {
       .limit(limit)
       .offset(offset);
 
-    const parsed = rows.map(mapRow);
+    let parsed = rows.map((r: any) => {
+      let data = {};
+      try {
+        data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data || {};
+      } catch (e) { }
+      return {
+        id: r.id,
+        uuid: r.uuid,
+        recordCode: r.record_code,
+        status: r.status,
+        data,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
+
+    if (options.search && options.search.trim()) {
+      const q = options.search.toLowerCase().trim();
+      parsed = parsed.filter((item: any) => {
+        if (item.recordCode?.toLowerCase().includes(q)) return true;
+        const vals = Object.values(item.data).map((v) => String(v || '').toLowerCase());
+        return vals.some((v) => v.includes(q));
+      });
+    }
 
     return {
       records: parsed,
@@ -1117,13 +1912,25 @@ export class MasterBuilderService {
   }
 
   async createRecord(orgId: number, companyId: number | undefined, masterId: number, userId: number, payload: DynamicRecordPayload) {
-    const master = await this.db('custom_masters')
+    let master = await this.db('custom_masters')
       .where('id', masterId)
       .where('organization_id', orgId)
       .whereNull('deleted_at')
       .first();
 
+    if (!master) {
+      master = await this.db('custom_masters')
+        .where('id', masterId)
+        .whereNull('deleted_at')
+        .first();
+    }
+
     if (!master) throw new Error('Master not found');
+
+    // Delegate to bridge for system masters
+    if (this.isSystemMaster(master)) {
+      return this.createSystemRecord(orgId, companyId, master, userId, payload);
+    }
 
     const errors = await this.validateRecordData(orgId, masterId, payload.data || {});
     if (errors.length > 0) {
@@ -1134,7 +1941,7 @@ export class MasterBuilderService {
 
     const [recordId] = await this.db('custom_master_records').insert({
       uuid: uuidv4(),
-      organization_id: orgId,
+      organization_id: master.organization_id || orgId,
       company_id: companyId || null,
       master_id: masterId,
       record_code: code,
@@ -1148,6 +1955,22 @@ export class MasterBuilderService {
   }
 
   async updateRecord(orgId: number, masterId: number, recordId: number, userId: number, payload: Partial<DynamicRecordPayload>) {
+    let master = await this.db('custom_masters')
+      .where('id', masterId)
+      .where('organization_id', orgId)
+      .first();
+
+    if (!master) {
+      master = await this.db('custom_masters')
+        .where('id', masterId)
+        .first();
+    }
+
+    // Delegate to bridge for system masters
+    if (master && this.isSystemMaster(master)) {
+      return this.updateSystemRecord(orgId, master, recordId, userId, payload);
+    }
+
     const updateData: any = { updated_by: userId, updated_at: new Date() };
     if (payload.recordCode !== undefined) updateData.record_code = payload.recordCode;
     if (payload.status !== undefined) updateData.status = payload.status;
@@ -1169,13 +1992,354 @@ export class MasterBuilderService {
   }
 
   async deleteRecord(orgId: number, masterId: number, recordId: number) {
+    let master = await this.db('custom_masters')
+      .where('id', masterId)
+      .where('organization_id', orgId)
+      .first();
+
+    if (!master) {
+      master = await this.db('custom_masters')
+        .where('id', masterId)
+        .first();
+    }
+
+    // Delegate to bridge for system masters
+    if (master && this.isSystemMaster(master)) {
+      return this.deleteSystemRecord(master, recordId);
+    }
+
     await this.db('custom_master_records')
       .where('id', recordId)
       .where('master_id', masterId)
-      .where('organization_id', orgId)
       .update({ deleted_at: new Date() });
     return true;
+  }
+
+  // ─── DB Lookup Options ─────────────────────────────────────────────────────
+  /**
+   * Returns { label, value } options list for real DB entities.
+   * Used by the `db_lookup` field type in Master Builder forms.
+   */
+  async getDbLookupOptions(
+    orgId: number,
+    companyId: number | undefined,
+    entity: string
+  ): Promise<Array<{ label: string; value: string | number; meta?: Record<string, any> }>> {
+    const db = this.db;
+
+    switch (entity) {
+      case 'companies': {
+        const rows = await db('company')
+          .where('organization_id', orgId)
+          .whereNull('deleted_at')
+          .orderBy('name', 'asc')
+          .select('company_id as id', 'name', 'code');
+        return rows.map((r: any) => ({
+          label: `${r.name}${r.code ? ` (${r.code})` : ''}`,
+          value: r.id,
+          meta: { code: r.code },
+        }));
+      }
+
+      case 'departments': {
+        const query = db('departments')
+          .whereNull('deleted_at')
+          .orderBy('name', 'asc')
+          .select('id', 'name', 'code');
+        if (companyId) query.where('company_id', companyId);
+        else query.where('organization_id', orgId);
+        const rows = await query;
+        return rows.map((r: any) => ({ label: r.name, value: r.id, meta: { code: r.code } }));
+      }
+
+      case 'designations': {
+        const query = db('designations')
+          .whereNull('deleted_at')
+          .orderBy('title', 'asc')
+          .select('id', db.raw("COALESCE(title, name) as label_col"), 'code');
+        if (companyId) query.where('company_id', companyId);
+        else query.where('organization_id', orgId);
+        const rows = await query;
+        return rows.map((r: any) => ({ label: r.label_col || r.title || r.name, value: r.id }));
+      }
+
+      case 'locations': {
+        const query = db('locations')
+          .whereNull('deleted_at')
+          .orderBy('name', 'asc')
+          .select('id', 'name', 'code');
+        if (companyId) query.where('company_id', companyId);
+        else query.where('organization_id', orgId);
+        const rows = await query;
+        return rows.map((r: any) => ({ label: r.name, value: r.id }));
+      }
+
+      case 'employees': {
+        const query = db('employees as e')
+          .leftJoin('employee_profiles as ep', 'e.id', 'ep.employee_id')
+          .whereNull('e.deleted_at')
+          .orderByRaw("CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) ASC")
+          .select(
+            'e.id',
+            'e.employee_code',
+            db.raw("CONCAT(e.first_name, ' ', COALESCE(e.last_name, '')) as full_name")
+          );
+        if (companyId) query.where('e.company_id', companyId);
+        else query.where('e.organization_id', orgId);
+        const rows = await query;
+        return rows.map((r: any) => ({
+          label: `${r.full_name}${r.employee_code ? ` (${r.employee_code})` : ''}`,
+          value: r.id,
+        }));
+      }
+
+      case 'grades':
+      case 'employee_status':
+      case 'employment_type': {
+        // These are custom masters — fetch their records
+        const codeMap: Record<string, string> = {
+          grades: 'grade',
+          employee_status: 'employee-status',
+          employment_type: 'emp-type',
+        };
+        const masterCode = codeMap[entity];
+        const master = await db('custom_masters')
+          .where('organization_id', orgId)
+          .where('code', masterCode)
+          .whereNull('deleted_at')
+          .first();
+
+        if (!master) return [];
+
+        // Try system masters first
+        const sysDef = this.SYSTEM_MASTER_MAP?.[masterCode];
+        if (sysDef) {
+          try {
+            const rows = await db(sysDef.systemTable)
+              .where('organization_id', orgId)
+              .whereNull('deleted_at')
+              .orderBy(sysDef.systemNameColumn, 'asc')
+              .select(sysDef.systemIdColumn + ' as id', sysDef.systemNameColumn + ' as name', 'code');
+            return rows.map((r: any) => ({ label: r.name, value: r.code || r.id }));
+          } catch {}
+        }
+
+        // Fallback: custom_master_records
+        const records = await db('custom_master_records')
+          .where('master_id', master.id)
+          .where('organization_id', orgId)
+          .where('status', 'Active')
+          .whereNull('deleted_at')
+          .orderBy('record_code', 'asc')
+          .select('id', 'record_code', 'data');
+        return records.map((r: any) => {
+          const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data || {};
+          const label = data.name || data.title || r.record_code || `Record #${r.id}`;
+          return { label, value: r.record_code || r.id };
+        });
+      }
+
+      default:
+        throw new Error(`Unknown db_lookup entity: "${entity}". Supported: companies, departments, designations, locations, employees, grades, employee_status, employment_type`);
+    }
+  }
+
+  // Helper: map of system master codes (safe getter)
+  private get SYSTEM_MASTER_MAP(): Record<string, SystemMasterDefinition> {
+    const map: Record<string, SystemMasterDefinition> = {};
+    for (const sm of SYSTEM_MASTERS) {
+      map[sm.code] = sm;
+    }
+    return map;
+  }
+
+  // ─── Employee Profile Linkages ───────────────────────────────────────────
+
+  /**
+   * Returns all active custom masters configured with employee profile linkage
+   * ('primary_assignment' or 'secondary_linkage'), along with their active records.
+   */
+  async getEmployeeLinkedMasters(orgId: number) {
+    const db = this.db;
+    const masters = await db('custom_masters')
+      .where('organization_id', orgId)
+      .whereIn('employee_linkage', ['primary_assignment', 'secondary_linkage'])
+      .where('status', 'Active')
+      .whereNull('deleted_at')
+      .orderBy('name', 'asc');
+
+    if (masters.length === 0) {
+      return [];
+    }
+
+    const masterIds = masters.map((m: any) => m.id);
+
+    // Fetch all active records for these masters
+    const records = await db('custom_master_records')
+      .whereIn('master_id', masterIds)
+      .where('organization_id', orgId)
+      .where('status', 'Active')
+      .whereNull('deleted_at')
+      .orderBy('record_code', 'asc');
+
+    const recordsByMasterId: Record<number, any[]> = {};
+    for (const rec of records) {
+      if (!recordsByMasterId[rec.master_id]) {
+        recordsByMasterId[rec.master_id] = [];
+      }
+      let parsedData: any = {};
+      try {
+        parsedData = typeof rec.data === 'string' ? JSON.parse(rec.data) : rec.data || {};
+      } catch {}
+
+      const label = parsedData.name || parsedData.title || parsedData.label || rec.record_code || `Record #${rec.id}`;
+      recordsByMasterId[rec.master_id].push({
+        id: rec.id,
+        recordCode: rec.record_code,
+        label,
+        data: parsedData,
+      });
+    }
+
+    return masters.map((m: any) => ({
+      id: m.id,
+      uuid: m.uuid,
+      name: m.name,
+      pluralName: m.plural_name,
+      code: m.code,
+      description: m.description,
+      icon: m.icon,
+      employeeLinkage: m.employee_linkage,
+      records: recordsByMasterId[m.id] || [],
+    }));
+  }
+
+  /**
+   * Returns the custom master values assigned to a specific employee.
+   */
+  async getEmployeeMasterValues(orgId: number, employeeId: number) {
+    const db = this.db;
+    const hasTable = await db.schema.hasTable('employee_custom_master_values');
+    if (!hasTable) return [];
+
+    const rows = await db('employee_custom_master_values as ecmv')
+      .join('custom_masters as cm', 'ecmv.master_id', 'cm.id')
+      .leftJoin('custom_master_records as cmr', 'ecmv.record_id', 'cmr.id')
+      .where('ecmv.organization_id', orgId)
+      .where('ecmv.employee_id', employeeId)
+      .whereNull('cm.deleted_at')
+      .select(
+        'ecmv.id',
+        'ecmv.master_id as masterId',
+        'cm.name as masterName',
+        'cm.code as masterCode',
+        'cm.employee_linkage as employeeLinkage',
+        'ecmv.record_id as recordId',
+        'ecmv.record_ids_json as recordIdsJson',
+        'ecmv.custom_value as customValue',
+        'cmr.record_code as recordCode',
+        'cmr.data as recordData'
+      );
+
+    return rows.map((r: any) => {
+      let parsedRecordData: any = null;
+      try {
+        if (r.recordData) {
+          parsedRecordData = typeof r.recordData === 'string' ? JSON.parse(r.recordData) : r.recordData;
+        }
+      } catch {}
+
+      let parsedRecordIds: number[] = [];
+      try {
+        if (r.recordIdsJson) {
+          parsedRecordIds = typeof r.recordIdsJson === 'string' ? JSON.parse(r.recordIdsJson) : r.recordIdsJson;
+        }
+      } catch {}
+
+      const recordLabel = parsedRecordData?.name || parsedRecordData?.title || parsedRecordData?.label || r.recordCode || (r.recordId ? `Record #${r.recordId}` : null);
+
+      return {
+        id: r.id,
+        masterId: r.masterId,
+        masterName: r.masterName,
+        masterCode: r.masterCode,
+        employeeLinkage: r.employeeLinkage,
+        recordId: r.recordId,
+        recordIds: parsedRecordIds,
+        recordLabel,
+        customValue: r.customValue,
+      };
+    });
+  }
+
+  /**
+   * Saves / upserts custom master values for an employee.
+   */
+  async saveEmployeeMasterValues(
+    orgId: number,
+    employeeId: number,
+    assignments: Array<{
+      masterId: number;
+      recordId?: number | null;
+      recordIds?: number[] | null;
+      customValue?: string | null;
+    }>
+  ) {
+    const db = this.db;
+    const hasTable = await db.schema.hasTable('employee_custom_master_values');
+    if (!hasTable) return [];
+
+    for (const item of assignments) {
+      if (!item.masterId) continue;
+
+      const hasValue =
+        (item.recordId !== undefined && item.recordId !== null && item.recordId !== 0) ||
+        (Array.isArray(item.recordIds) && item.recordIds.length > 0) ||
+        (item.customValue !== undefined && item.customValue !== null && String(item.customValue).trim() !== '');
+
+      const existing = await db('employee_custom_master_values')
+        .where({
+          organization_id: orgId,
+          employee_id: employeeId,
+          master_id: item.masterId,
+        })
+        .first();
+
+      if (!hasValue) {
+        if (existing) {
+          await db('employee_custom_master_values')
+            .where('id', existing.id)
+            .delete();
+        }
+        continue;
+      }
+
+      const payload = {
+        organization_id: orgId,
+        employee_id: employeeId,
+        master_id: item.masterId,
+        record_id: item.recordId || null,
+        record_ids_json: item.recordIds ? JSON.stringify(item.recordIds) : null,
+        custom_value: item.customValue ? String(item.customValue).trim() : null,
+        updated_at: new Date(),
+      };
+
+      if (existing) {
+        await db('employee_custom_master_values')
+          .where('id', existing.id)
+          .update(payload);
+      } else {
+        await db('employee_custom_master_values').insert({
+          ...payload,
+          created_at: new Date(),
+        });
+      }
+    }
+
+    return this.getEmployeeMasterValues(orgId, employeeId);
   }
 }
 
 export const masterBuilderService = new MasterBuilderService();
+
+

@@ -16,10 +16,21 @@ export class GenericSettingsService {
   }
 
   async list(ctx: TenantContext, options?: any) {
-    return this.repo.list(ctx, options);
+    if (typeof (this.repo as any).ensureTable === 'function') {
+      await (this.repo as any).ensureTable();
+    }
+    try {
+      return await this.repo.list(ctx, options);
+    } catch (err) {
+      console.error(`[GenericSettingsService.list:${this.entityType}] Error:`, err);
+      return { data: [], items: [], meta: { total: 0, page: 1, limit: 50, totalPages: 0 } };
+    }
   }
 
   async getById(ctx: TenantContext, id: number | string) {
+    if (typeof (this.repo as any).ensureTable === 'function') {
+      await (this.repo as any).ensureTable();
+    }
     const item = await this.repo.getById(ctx, id);
     if (!item) throw new NotFoundError(`${this.entityType} not found`);
     return item;

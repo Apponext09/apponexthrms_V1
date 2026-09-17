@@ -33,7 +33,7 @@ export function AppShellLayout() {
       <GlobalSearch />
 
       {/* Toast notifications */}
-      <Toaster position="top-right" />
+      <Toaster position="bottom-right" />
     </div>
   );
 }

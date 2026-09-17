@@ -119,10 +119,11 @@ export function useDummyMappings() {
     queryFn: async () => {
       try {
         const { data } = await apiClient.get('/settings/companies');
-        const raw = data.data || [];
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
         return raw.map((c: any) => ({
           id: String(c.id ?? c.companyId ?? c.company_id ?? c.uuid ?? c.code ?? c.name),
-          name: c.name || c.company_name || c.companyName || `Company #${c.id || c.companyId}`
+          name: c.name || c.company_name || c.companyName || `Company #${c.id || c.companyId || ''}`,
+          code: c.code || c.company_code || '',
         }));
       } catch {
         return [];
@@ -134,11 +135,12 @@ export function useDummyMappings() {
     queryKey: ['mapping_locations'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/org-locations');
-        const raw = data.data || [];
+        const { data } = await apiClient.get('/settings/locations', { params: { pageSize: 200 } });
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
         return raw.map((l: any) => ({
           id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
-          name: l.name || l.location_name || l.locationName || `Location #${l.id}`
+          name: l.locationName || l.location_name || l.name || l.title || `Location #${l.id || ''}`,
+          code: l.officeType || l.office_type || l.city || '',
         }));
       } catch {
         return [];
@@ -150,11 +152,12 @@ export function useDummyMappings() {
     queryKey: ['mapping_departments'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/departments');
-        const raw = data.data || [];
+        const { data } = await apiClient.get('/settings/departments', { params: { pageSize: 200 } });
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
         return raw.map((d: any) => ({
           id: String(d.id ?? d.departmentId ?? d.department_id ?? d.uuid ?? d.name),
-          name: d.name || d.department_name || d.departmentName || `Department #${d.id}`
+          name: d.departmentName || d.department_name || d.name || `Department #${d.id || ''}`,
+          code: d.code || d.departmentCode || d.department_code || '',
         }));
       } catch {
         return [];
@@ -169,39 +172,41 @@ export function useDummyMappings() {
       const seenIds = new Set<string>();
 
       const processShiftItem = (s: any) => {
+        if (!s) return;
         if (typeof s === 'string') {
           if (!seenIds.has(s)) {
             seenIds.add(s);
-            allShifts.push({ id: s, name: s, isRoster: false });
+            allShifts.push({ id: s, name: s, isRoster: false, code: '' });
           }
           return;
         }
-        const sid = String(s.id ?? s.shiftId ?? s.shift_id ?? (s.name || ''));
+        const sid = String(s.id ?? s.shiftId ?? s.shift_id ?? s.uuid ?? (s.name || s.shift_name || ''));
         if (!sid || seenIds.has(sid)) return;
         seenIds.add(sid);
 
         const shiftTypeStr = (s.shift_type || s.shiftType || s.type || '').toLowerCase();
-        const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${sid}`;
+        const nameStr = s.shift_name || s.shiftName || s.name || s.title || `Shift #${sid}`;
         const isRoster = shiftTypeStr === 'roster' || nameStr.toLowerCase().includes('roster') || !!s.roster_pattern || !!s.rosterPattern;
 
         allShifts.push({
           id: sid,
           name: nameStr,
-          isRoster
+          isRoster,
+          code: s.code || s.shift_code || ''
         });
       };
 
       try {
-        const { data } = await apiClient.get('/settings/shifts');
+        const { data } = await apiClient.get('/settings/shifts', { params: { pageSize: 200 } });
         const raw = data?.data;
-        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        const list = Array.isArray(raw) ? raw : (raw?.items || (Array.isArray(data) ? data : []));
         list.forEach(processShiftItem);
       } catch (_) {}
 
       try {
-        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 100 } });
+        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 200 } });
         const raw = data?.data;
-        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        const list = Array.isArray(raw) ? raw : (raw?.items || (Array.isArray(data) ? data : []));
         list.forEach(processShiftItem);
       } catch (_) {}
 
@@ -213,11 +218,12 @@ export function useDummyMappings() {
     queryKey: ['mapping_grades'],
     queryFn: async () => {
       try {
-        const { data } = await apiClient.get('/settings/grades');
-        const raw = data.data || [];
+        const { data } = await apiClient.get('/settings/grades', { params: { pageSize: 200 } });
+        const raw = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : (data?.data?.items || []));
         return raw.map((g: any) => ({
-          id: String(g.id ?? g.gradeId ?? g.grade_id ?? g.grade_code ?? g.code ?? g.name),
-          name: g.name || g.grade_name || g.grade_code || g.code || `Grade #${g.id}`
+          id: String(g.id ?? g.gradeId ?? g.grade_id ?? g.uuid ?? g.code ?? g.name),
+          name: g.name || g.grade_name || g.gradeName || g.code || `Grade #${g.id || ''}`,
+          code: g.code || '',
         }));
       } catch {
         return [];
@@ -236,5 +242,6 @@ export function useDummyMappings() {
     generalShifts: fetchedGeneral,
     rosterShifts: fetchedRoster,
     grades: gradesQuery.data || [],
+    isLoading: companiesQuery.isLoading || locationsQuery.isLoading || departmentsQuery.isLoading || shiftsQuery.isLoading || gradesQuery.isLoading,
   };
 }

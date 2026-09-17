@@ -408,7 +408,24 @@ export const JobManagement: React.FC = () => {
                         </td>
                         <td className="py-3.5 px-5 font-mono font-bold text-xs text-foreground">{item.jobCode || item.job_code}</td>
                         <td className="py-3.5 px-5">
-                          <div className="font-bold text-foreground text-xs">{item.jobTitle || item.job_title}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-foreground text-xs">{item.jobTitle || item.job_title}</span>
+                            {/* Visibility Badge */}
+                            {(() => {
+                              const isInt = Boolean(item.isInternal ?? item.is_internal);
+                              const isExt = Boolean(item.isPublishedExternal ?? item.is_published_external ?? true);
+                              if (isInt && isExt) {
+                                return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20" title="Internal IJP + External Career Portal">🏢+🌐 Both</span>;
+                              }
+                              if (isInt) {
+                                return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20" title="Internal Job Posting (Employee Portal Only)">🏢 IJP Only</span>;
+                              }
+                              if (isExt) {
+                                return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="Public Career Portal">🌐 External</span>;
+                              }
+                              return <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-500/10 text-slate-500 border border-slate-500/20">🔒 Unlisted</span>;
+                            })()}
+                          </div>
                           <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
                             {stripHtml(item.jobDescription || item.job_description).substring(0, 75)}... 
                             <button onClick={() => setViewingJob(item)} className="text-primary font-bold hover:underline ml-1 inline">
@@ -638,26 +655,113 @@ interface CreateJobModalProps {
   onSubmit: (data: any) => void;
 }
 
+const extractList = (res: any): any[] => {
+  if (!res) return [];
+  const body = res?.data?.data !== undefined ? res.data.data : res?.data;
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.items)) return body.items;
+  if (Array.isArray(res?.data?.items)) return res.data.items;
+  if (Array.isArray(res?.data?.data?.items)) return res.data.data.items;
+  return [];
+};
+
 const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, onSubmit }) => {
   const [isFresher, setIsFresher] = useState(
     initialData ? (initialData.experienceLevel === 'entry' || initialData.minExperienceYears === 0) : false
   );
+  const [isOtherPosition, setIsOtherPosition] = useState(false);
   
   const [formData, setFormData] = useState({
     mrfRequestId: initialData?.mrfRequestId || initialData?.mrf_request_id || undefined,
     jobCode: initialData?.jobCode || initialData?.job_code || '',
     jobTitle: initialData?.jobTitle || initialData?.job_title || '',
     jobDescription: initialData?.jobDescription || initialData?.job_description || '',
-    jobType: initialData?.jobType || initialData?.job_type || 'full_time',
+    jobType: initialData?.jobType || initialData?.job_type || '',
     experienceLevel: initialData?.experienceLevel || initialData?.experience_level || 'mid',
-    minExperienceYears: initialData?.minExperienceYears || initialData?.min_experience_years || undefined,
-    maxExperienceYears: initialData?.maxExperienceYears || initialData?.max_experience_years || undefined,
+    minExperienceYears: initialData?.minExperienceYears !== undefined ? initialData.minExperienceYears : (initialData?.min_experience_years !== undefined ? initialData.min_experience_years : undefined),
+    maxExperienceYears: initialData?.maxExperienceYears !== undefined ? initialData.maxExperienceYears : (initialData?.max_experience_years !== undefined ? initialData.max_experience_years : undefined),
     currency: initialData?.currency || 'INR',
-    employmentType: initialData?.employmentType || initialData?.employment_type || 'onsite',
+    employmentType: initialData?.employmentType || initialData?.employment_type || '',
     noOfPositions: initialData?.noOfPositions || initialData?.no_of_positions || 1,
     expiryDate: String(initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '').slice(0, 10),
     departmentId: initialData?.departmentId || initialData?.department_id || undefined,
+    isInternal: initialData ? Boolean(initialData.isInternal ?? initialData.is_internal) : false,
+    isPublishedExternal: initialData ? Boolean(initialData.isPublishedExternal ?? initialData.is_published_external ?? true) : true,
   });
+
+  // Dynamic Departments from database
+  const { data: dbDepartments = [] } = useQuery({
+    queryKey: ['settings-departments-list'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get('/settings/departments');
+        const raw = extractList(res);
+        return raw.map((d: any) => ({
+          id: Number(d.id),
+          name: String(d.name || d.department_name || d.departmentName || ''),
+        })).filter((x: any) => x.id && x.name);
+      } catch {
+        return [];
+      }
+    }
+  });
+
+  // Dynamic Designations / Positions from database
+  const { data: dbPositions = [] } = useQuery({
+    queryKey: ['settings-designations-list'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get('/settings/designations', { params: { pageSize: 1000 } });
+        const raw = extractList(res);
+        return Array.from(new Set(raw.map((d: any) => String(d.name || d.title || '')).filter(Boolean)));
+      } catch {
+        return [];
+      }
+    }
+  });
+
+  // Dynamic Employment Types directly from database
+  const { data: dbEmploymentTypes = [] } = useQuery({
+    queryKey: ['settings-all-employment-types'],
+    queryFn: async () => {
+      const typesSet = new Set<string>();
+      try {
+        const res1 = await apiClient.get('/settings/employment-types', { params: { pageSize: 1000, limit: 1000 } });
+        const raw1 = extractList(res1);
+        raw1.forEach((item: any) => {
+          const name = typeof item === 'string' ? item : String(item.name || item.title || item.employee_type || item.employeeType || '').trim();
+          if (name) typesSet.add(name);
+        });
+      } catch (e) {
+        console.error('Failed /settings/employment-types', e);
+      }
+
+      try {
+        const res2 = await apiClient.get('/settings/employment-options');
+        const empOpts = res2.data?.data?.employeeTypes || res2.data?.employeeTypes || res2.data?.data?.employmentTypes || res2.data?.employmentTypes || [];
+        if (Array.isArray(empOpts)) {
+          empOpts.forEach((name: any) => {
+            const str = String(name || '').trim();
+            if (str) typesSet.add(str);
+          });
+        }
+      } catch (e) {
+        console.error('Failed /settings/employment-options', e);
+      }
+
+      return Array.from(typesSet);
+    }
+  });
+
+  // Auto initialize default type from DB if not already set
+  useEffect(() => {
+    if (dbEmploymentTypes.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        employmentType: prev.employmentType || dbEmploymentTypes[0],
+      }));
+    }
+  }, [dbEmploymentTypes]);
 
   // AI Screening Settings State
   const [aiSettings, setAiSettings] = useState({
@@ -714,7 +818,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     setFormData(prev => ({
       ...prev,
       [name]: name === 'noOfPositions' || name === 'minExperienceYears' || name === 'maxExperienceYears' 
-        ? parseInt(value, 10) 
+        ? (value === '' ? undefined : parseInt(value, 10)) 
         : value
     }));
   };
@@ -727,22 +831,57 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     }
     const mrf = mrfRequests.find((m: any) => m.id === mrfId);
     if (mrf) {
-      let mappedJobType = 'full_time';
-      const rawType = (mrf.employment_type || mrf.employmentType || '').toLowerCase();
-      if (rawType.includes('part')) mappedJobType = 'part_time';
-      else if (rawType.includes('contract')) mappedJobType = 'contract';
-      else if (rawType.includes('intern')) mappedJobType = 'internship';
-      else if (rawType.includes('full')) mappedJobType = 'full_time';
+      // 1. Position Name / Job Role from MRF
+      const posTitle = String(mrf.position_title || mrf.positionTitle || '').trim();
+      setIsOtherPosition(false);
+
+      // 2. Parse experience desired from MRF
+      const expStr = String(mrf.experience_desired || mrf.experienceDesired || mrf.experience || '').trim();
+      let minExp: number | undefined = undefined;
+      let maxExp: number | undefined = undefined;
+      let expLevel = 'mid';
+      let fresherFlag = false;
+
+      if (expStr) {
+        const lower = expStr.toLowerCase();
+        if (lower.includes('fresh')) {
+          fresherFlag = true;
+          minExp = 0;
+          maxExp = 1;
+          expLevel = 'entry';
+        } else {
+          const numbers = expStr.match(/\d+(\.\d+)?/g);
+          if (numbers && numbers.length >= 2) {
+            minExp = parseFloat(numbers[0]);
+            maxExp = parseFloat(numbers[1]);
+            fresherFlag = (minExp === 0);
+            expLevel = minExp === 0 ? 'entry' : minExp < 3 ? 'junior' : minExp <= 6 ? 'mid' : 'senior';
+          } else if (numbers && numbers.length === 1) {
+            minExp = parseFloat(numbers[0]);
+            maxExp = minExp + 2;
+            fresherFlag = (minExp === 0);
+            expLevel = minExp === 0 ? 'entry' : minExp < 3 ? 'junior' : minExp <= 6 ? 'mid' : 'senior';
+          }
+        }
+        setIsFresher(fresherFlag);
+      }
+
+      // 3. Map MRF employment type to Employment Type
+      const mrfEmpType = String(mrf.employment_type || mrf.employmentType || '').trim();
+      const matchedDb = mrfEmpType ? (dbEmploymentTypes.find(t => t.toLowerCase() === mrfEmpType.toLowerCase()) || mrfEmpType) : undefined;
 
       setFormData(prev => ({
         ...prev,
         mrfRequestId: mrf.id,
-        jobTitle: mrf.position_title || mrf.positionTitle || prev.jobTitle,
+        jobTitle: posTitle || prev.jobTitle,
+        jobType: posTitle || prev.jobType || 'Full Time',
         jobDescription: mrf.job_description || mrf.jobDescription || prev.jobDescription,
         noOfPositions: Number(mrf.number_of_positions || mrf.numberOfPositions) || prev.noOfPositions || 1,
         departmentId: mrf.department_id || mrf.departmentId ? Number(mrf.department_id || mrf.departmentId) : prev.departmentId,
-        jobType: mappedJobType,
-        employmentType: prev.employmentType || 'onsite',
+        employmentType: matchedDb || prev.employmentType || dbEmploymentTypes[0] || '',
+        minExperienceYears: minExp !== undefined ? minExp : prev.minExperienceYears,
+        maxExperienceYears: maxExp !== undefined ? maxExp : prev.maxExperienceYears,
+        experienceLevel: expLevel,
         expiryDate: String(mrf.expiry_date || mrf.expiryDate || mrf.target_closure_date || mrf.targetClosureDate || prev.expiryDate || '').slice(0, 10),
       }));
     }
@@ -780,6 +919,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
             }
             onSubmit({
               ...formData,
+              jobType: formData.jobTitle || formData.jobType || 'Full Time',
               expiryDate: deadline,
               aiSettings,
             });
@@ -808,6 +948,68 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
               </select>
               <p className="text-[11px] text-muted-foreground">Selecting an MRF will auto-fill job details based on manager requests. Pending MRFs will be automatically approved upon job creation.</p>
             </div>
+
+            {/* ── Visibility & Reach ── */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 border border-border/80 p-4 rounded-xl space-y-3">
+              <div>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider block">Job Visibility & Candidate Reach</label>
+                <p className="text-[11px] text-muted-foreground">Configure where this opening is visible and who is eligible to apply.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Internal Job Posting (IJP) Switch */}
+                <div 
+                  onClick={() => setFormData(prev => ({ ...prev, isInternal: !prev.isInternal }))}
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                    formData.isInternal 
+                      ? 'bg-blue-500/10 border-blue-500/40 text-blue-900 dark:text-blue-200' 
+                      : 'bg-card border-border/70 hover:bg-muted/50 text-foreground'
+                  }`}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={formData.isInternal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isInternal: e.target.checked }))}
+                    className="mt-0.5 rounded border-border text-blue-600 focus:ring-blue-500 h-4 w-4 shrink-0 pointer-events-none"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>🏢 Internal Opening (IJP)</span>
+                      {formData.isInternal && <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-blue-500 text-white rounded">Active</span>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Listed in Employee Portal for existing staff to explore and apply.
+                    </p>
+                  </div>
+                </div>
+
+                {/* External Career Portal Switch */}
+                <div 
+                  onClick={() => setFormData(prev => ({ ...prev, isPublishedExternal: !prev.isPublishedExternal }))}
+                  className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                    formData.isPublishedExternal 
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-900 dark:text-emerald-200' 
+                      : 'bg-card border-border/70 hover:bg-muted/50 text-foreground'
+                  }`}
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={formData.isPublishedExternal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, isPublishedExternal: e.target.checked }))}
+                    className="mt-0.5 rounded border-border text-emerald-600 focus:ring-emerald-500 h-4 w-4 shrink-0 pointer-events-none"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="text-xs font-bold flex items-center gap-1.5">
+                      <span>🌐 Career Portal (External)</span>
+                      {formData.isPublishedExternal && <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 bg-emerald-500 text-white rounded">Active</span>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      Publicly visible for outside candidates via Career Portal link.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -822,15 +1024,20 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Title <span className="text-rose-500">*</span></label>
-                <Input
-                  name="jobTitle"
-                  placeholder="e.g. Senior Full Stack Engineer"
-                  value={formData.jobTitle}
-                  onChange={handleChange}
-                  className="bg-background border-border text-xs rounded-xl h-9"
-                  required
-                />
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Department</label>
+                <select
+                  name="departmentId"
+                  value={formData.departmentId || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, departmentId: e.target.value ? Number(e.target.value) : undefined }))}
+                  className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
+                >
+                  <option value="">-- Select Department --</option>
+                  {dbDepartments.map((dept: any) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -844,18 +1051,65 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Type</label>
-                <select
-                  name="jobType"
-                  value={formData.jobType}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
-                >
-                  <option value="full_time">Full Time</option>
-                  <option value="part_time">Part Time</option>
-                  <option value="contract">Contract</option>
-                  <option value="internship">Internship</option>
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Position Name/ Job Role <span className="text-rose-500">*</span>
+                  </label>
+                  {isOtherPosition && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOtherPosition(false);
+                        const fallbackPos = dbPositions[0] || '';
+                        setFormData(prev => ({ ...prev, jobTitle: fallbackPos, jobType: fallbackPos }));
+                      }}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      ← Select from List
+                    </button>
+                  )}
+                </div>
+
+                {!isOtherPosition ? (
+                  <select
+                    value={formData.jobTitle}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === '__OTHER__') {
+                        setIsOtherPosition(true);
+                        setFormData(prev => ({ ...prev, jobTitle: '', jobType: '' }));
+                      } else {
+                        setFormData(prev => ({ ...prev, jobTitle: val, jobType: val }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9 cursor-pointer"
+                    required
+                  >
+                    <option value="">-- Select Position / Job Role --</option>
+                    {formData.jobTitle && !dbPositions.includes(formData.jobTitle) && (
+                      <option value={formData.jobTitle}>{formData.jobTitle}</option>
+                    )}
+                    {dbPositions.map((pos) => (
+                      <option key={pos} value={pos}>
+                        {pos}
+                      </option>
+                    ))}
+                    <option value="__OTHER__">Other</option>
+                  </select>
+                ) : (
+                  <Input
+                    name="jobTitle"
+                    placeholder="Type custom position / job role..."
+                    value={formData.jobTitle}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData(prev => ({ ...prev, jobTitle: val, jobType: val }));
+                    }}
+                    className="bg-background border-border text-xs rounded-xl h-9"
+                    required
+                    autoFocus
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -865,9 +1119,12 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                     <div 
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${isFresher ? 'bg-primary/30' : 'bg-muted'}`}
                       onClick={() => {
-                        setIsFresher(!isFresher);
-                        if (!isFresher) {
+                        const nextVal = !isFresher;
+                        setIsFresher(nextVal);
+                        if (nextVal) {
                           setFormData(prev => ({ ...prev, experienceLevel: 'entry', minExperienceYears: 0, maxExperienceYears: 1 }));
+                        } else {
+                          setFormData(prev => ({ ...prev, experienceLevel: 'mid', minExperienceYears: prev.minExperienceYears || 1, maxExperienceYears: prev.maxExperienceYears || 3 }));
                         }
                       }}
                     >
@@ -883,7 +1140,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       type="number"
                       name="minExperienceYears"
                       placeholder="Min (Yrs)"
-                      value={formData.minExperienceYears || ''}
+                      value={formData.minExperienceYears !== undefined && formData.minExperienceYears !== null ? formData.minExperienceYears : ''}
                       onChange={handleChange}
                       className="bg-background border-border text-xs rounded-xl h-9"
                       min={0}
@@ -892,7 +1149,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       type="number"
                       name="maxExperienceYears"
                       placeholder="Max (Yrs)"
-                      value={formData.maxExperienceYears || ''}
+                      value={formData.maxExperienceYears !== undefined && formData.maxExperienceYears !== null ? formData.maxExperienceYears : ''}
                       onChange={handleChange}
                       className="bg-background border-border text-xs rounded-xl h-9"
                       min={0}
@@ -904,16 +1161,21 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Employment Mode</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Employement Type</label>
                 <select
                   name="employmentType"
                   value={formData.employmentType}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
                 >
-                  <option value="onsite">Onsite</option>
-                  <option value="remote">Remote</option>
-                  <option value="hybrid">Hybrid</option>
+                  {formData.employmentType && !dbEmploymentTypes.includes(formData.employmentType) && (
+                    <option value={formData.employmentType}>{formData.employmentType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
+                  )}
+                  {dbEmploymentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1.5">

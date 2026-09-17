@@ -1,3 +1,4 @@
+import { ExpenseWorkflowDesigner } from './ExpenseWorkflowDesigner';
 import React, { useEffect, useState } from 'react';
 import { expenseApi, ExpenseWorkflow, ExpenseWorkflowLevel, MileageDesignationRate } from '../api/expenseApi';
 import { apiClient } from '@/config/api';
@@ -49,10 +50,13 @@ export const ExpenseSettingsPage: React.FC = () => {
 
   // Workflows state
   const [workflows, setWorkflows] = useState<ExpenseWorkflow[]>([]);
+  const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [isWfModalOpen, setIsWfModalOpen] = useState(false);
   const [editingWfId, setEditingWfId] = useState<number | null>(null);
   const [wfName, setWfName] = useState('');
+  const [wfTargetRole, setWfTargetRole] = useState<string>('all');
   const [wfDescription, setWfDescription] = useState('');
+  const [wfDepartmentId, setWfDepartmentId] = useState<number | ''>('');
   const [wfMinAmount, setWfMinAmount] = useState<number>(0);
   const [wfMaxAmount, setWfMaxAmount] = useState<number>(100000);
   const [wfLevels, setWfLevels] = useState<ExpenseWorkflowLevel[]>([
@@ -62,18 +66,28 @@ export const ExpenseSettingsPage: React.FC = () => {
 
   // Dynamic roles fetched from DB
   const [orgRoles, setOrgRoles] = useState<Array<{ id: number; name: string; code: string }>>([
-    { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' }
+    { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' },
+    { id: -1, name: 'CEO / Executive Admin', code: 'ceo' },
+    { id: -2, name: 'HR Admin / HR Manager', code: 'hr_admin' },
+    { id: -3, name: 'Finance Verification / Payout', code: 'finance' }
   ]);
 
   const fetchSettingsAndWorkflows = async () => {
     try {
       setLoading(true);
-      const [settingsRes, wfRes, catRes, rolesRes] = await Promise.all([
+      const [settingsRes, wfRes, catRes, rolesRes, deptRes] = await Promise.all([
         expenseApi.getSettings(),
         expenseApi.getWorkflows(),
         expenseApi.getCategories(),
-        apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } }))
+        apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } })),
+        apiClient.get('/settings/departments', { params: { pageSize: 200 } }).catch(() => ({ data: [] }))
       ]);
+
+      // Parse departments
+      const rawDepts = deptRes?.data?.data || deptRes?.data || [];
+      if (Array.isArray(rawDepts)) {
+        setDepartments(rawDepts.map((d: any) => ({ id: Number(d.id), name: d.name || String(d.id) })).filter((d) => d.id));
+      }
 
       // Parse roles from RBAC API
       const rolesData = rolesRes?.data?.data;
@@ -82,12 +96,23 @@ export const ExpenseSettingsPage: React.FC = () => {
         : Array.isArray(rolesData?.items)
           ? rolesData.items
           : [];
-      // Build approver role options: special "Reporting Manager" entry + all DB roles (excluding employee/intern/client etc.)
-      const specialEntry = { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' };
+      // Build approver role options: special entries + all DB roles (excluding employee/intern/client etc.)
+      const specialEntries = [
+        { id: 0, name: 'Reporting Manager (Org Hierarchy)', code: 'reporting_manager' },
+        { id: -1, name: 'CEO / Executive Admin', code: 'ceo' },
+        { id: -2, name: 'HR Admin / HR Manager', code: 'hr_admin' },
+        { id: -3, name: 'Finance Verification / Payout', code: 'finance' }
+      ];
       const filteredRoles = rawRoles
         .filter((r) => !['super_admin', 'employee', 'intern', 'client', 'consultant'].includes(r.code))
         .map((r) => ({ id: r.id, name: r.name, code: r.code }));
-      setOrgRoles([specialEntry, ...filteredRoles]);
+      const mergedRoles = [...specialEntries];
+      for (const fr of filteredRoles) {
+        if (!mergedRoles.some(m => m.code === fr.code)) {
+          mergedRoles.push(fr);
+        }
+      }
+      setOrgRoles(mergedRoles);
       if (settingsRes) {
         setAutoApprovalThreshold(settingsRes.autoApprovalThreshold || 500);
         setMileageRateCar(settingsRes.mileageRateCar || 12.00);
@@ -198,7 +223,9 @@ export const ExpenseSettingsPage: React.FC = () => {
     if (wf) {
       setEditingWfId(wf.id);
       setWfName(wf.name);
+      setWfTargetRole(wf.targetRole || (wf as any).target_role || 'all');
       setWfDescription(wf.description || '');
+      setWfDepartmentId(wf.departmentId || wf.department_id || '');
       setWfMinAmount(wf.minAmount || 0);
       setWfMaxAmount(wf.maxAmount || 100000);
       setWfLevels(
@@ -212,7 +239,9 @@ export const ExpenseSettingsPage: React.FC = () => {
     } else {
       setEditingWfId(null);
       setWfName('');
+      setWfTargetRole('all');
       setWfDescription('');
+      setWfDepartmentId('');
       setWfMinAmount(0);
       setWfMaxAmount(100000);
       setWfLevels([
@@ -252,7 +281,9 @@ export const ExpenseSettingsPage: React.FC = () => {
     try {
       const payload = {
         name: wfName,
+        targetRole: wfTargetRole,
         description: wfDescription,
+        departmentId: wfDepartmentId ? Number(wfDepartmentId) : null,
         minAmount: wfMinAmount,
         maxAmount: wfMaxAmount,
         isActive: true,
@@ -293,7 +324,7 @@ export const ExpenseSettingsPage: React.FC = () => {
             Expense Module Settings & Workflows
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Configure auto-approval limits, mileage rates, sub-module features, and dynamic multi-level approval workflows
+            Configure mileage rates, sub-module features, and mandatory approval workflows
           </p>
         </div>
 
@@ -322,55 +353,7 @@ export const ExpenseSettingsPage: React.FC = () => {
 
       {activeTab === 'general' ? (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-          {/* Auto Approval Threshold per category */}
-          <div className="space-y-2">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              Auto-Approval Threshold by Category
-            </h3>
-            <p className="text-xs text-slate-500">
-              Claims in a category at or below this amount, with no policy violations, skip manager approval. Set 0 to always require manager approval for that category.
-            </p>
-            {categoryThresholds.length === 0 ? (
-              <p className="text-xs text-slate-400">No expense categories found. Create categories first, then set thresholds here.</p>
-            ) : (
-              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold uppercase">
-                    <tr>
-                      <th className="py-2.5 px-3">Category</th>
-                      <th className="py-2.5 px-3">Code</th>
-                      <th className="py-2.5 px-3 w-48">Auto-approve up to (₹)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {categoryThresholds.map((cat, idx) => (
-                      <tr key={cat.id}>
-                        <td className="py-2 px-3 font-semibold text-slate-800 dark:text-slate-200">{cat.name}</td>
-                        <td className="py-2 px-3 text-slate-500 font-mono">{cat.code || '—'}</td>
-                        <td className="py-2 px-3">
-                          <input
-                            type="number"
-                            min={0}
-                            value={cat.autoApprovalThreshold || ''}
-                            onChange={(e) => {
-                              const next = [...categoryThresholds];
-                              next[idx] = { ...next[idx], autoApprovalThreshold: Number(e.target.value) };
-                              setCategoryThresholds(next);
-                            }}
-                            className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <hr className="border-slate-200 dark:border-slate-800" />
-
+          <p className="text-sm text-blue-700">Every submission requires a published workflow. Category limits never skip approval.</p>
           {/* Mileage Per-KM Rates by Designation */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -510,55 +493,6 @@ export const ExpenseSettingsPage: React.FC = () => {
 
           <hr className="border-slate-200 dark:border-slate-800" />
 
-          {/* Approval Workflow Rules */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-purple-500" />
-              Workflow Rules & Escalations
-            </h3>
-
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="reqMgr"
-                  checked={requireManagerApproval}
-                  onChange={(e) => setRequireManagerApproval(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="reqMgr" className="font-medium text-slate-800 dark:text-slate-200">
-                  Require Reporting Manager Review & Approval
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="reqFin"
-                  checked={requireFinanceApproval}
-                  onChange={(e) => setRequireFinanceApproval(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="reqFin" className="font-medium text-slate-800 dark:text-slate-200">
-                  Require Finance / Accounts Verification & Partial Approval
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="multiLvl"
-                  checked={multiLevelApproval}
-                  onChange={(e) => setMultiLevelApproval(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label htmlFor="multiLvl" className="font-medium text-slate-800 dark:text-slate-200">
-                  Enable Multi-Level Amount-Based Dynamic Escalation
-                </label>
-              </div>
-            </div>
-          </div>
-
           <div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Formatting &amp; Numbering</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -626,24 +560,6 @@ export const ExpenseSettingsPage: React.FC = () => {
                 />
               </label>
               <label className="block">
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">New Advance Status</span>
-                <input
-                  type="text"
-                  value={defaultAdvanceStatus}
-                  onChange={(e) => setDefaultAdvanceStatus(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Workflow Fallback Max Amount</span>
-                <input
-                  type="number"
-                  value={workflowFallbackMaxAmount}
-                  onChange={(e) => setWorkflowFallbackMaxAmount(Number(e.target.value))}
-                  className="mt-1 w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm"
-                />
-              </label>
-              <label className="block">
                 <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Number Sequence Digits</span>
                 <input
                   type="number"
@@ -668,234 +584,7 @@ export const ExpenseSettingsPage: React.FC = () => {
           </div>
         </div>
       ) : (
-        /* Workflows Tab */
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <GitBranch className="w-5 h-5 text-indigo-500" />
-              Configurable Dynamic Approval Workflows
-            </h2>
-            <button
-              onClick={() => openWorkflowModal()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Create New Workflow
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4">
-            {workflows.map((wf) => (
-              <div
-                key={wf.id}
-                className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">{wf.name}</h3>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        Active
-                      </span>
-                    </div>
-                    {wf.description && <p className="text-xs text-slate-500 mt-1">{wf.description}</p>}
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Amount Threshold: {money(wf.minAmount)} to {money(wf.maxAmount)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => openWorkflowModal(wf)}
-                      className="p-1.5 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg"
-                      title="Edit Workflow"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteWorkflow(wf.id)}
-                      className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg"
-                      title="Delete Workflow"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Level progression steps */}
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-2">
-                    Approval Progression Steps:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {wf.levels && wf.levels.length > 0 ? (
-                      wf.levels.map((lvl, idx) => (
-                        <React.Fragment key={idx}>
-                          <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium flex items-center gap-2">
-                            <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-                              {lvl.levelOrder}
-                            </span>
-                            <span className="text-slate-900 dark:text-white font-semibold">{lvl.stepName}</span>
-                            <span className="text-[10px] text-slate-400">({lvl.approverType.replace('_', ' ')})</span>
-                          </div>
-                          {idx < (wf.levels?.length || 0) - 1 && (
-                            <span className="text-slate-400 font-bold">→</span>
-                          )}
-                        </React.Fragment>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-400">Default Manager → Finance flow</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Workflow Create/Edit Modal */}
-      {isWfModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-              {editingWfId ? 'Edit Workflow Configuration' : 'Create Approval Workflow'}
-            </h3>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Workflow Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Senior Executive Expense Workflow"
-                  value={wfName}
-                  onChange={(e) => setWfName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Description</label>
-                <input
-                  type="text"
-                  placeholder="Optional workflow description..."
-                  value={wfDescription}
-                  onChange={(e) => setWfDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Min Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    value={wfMinAmount || ''}
-                    onChange={(e) => setWfMinAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Max Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    value={wfMaxAmount}
-                    onChange={(e) => setWfMaxAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Approval Levels */}
-              <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 dark:text-white">Approval Level Sequence</span>
-                  <button
-                    type="button"
-                    onClick={handleAddWfLevel}
-                    className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Plus className="w-3 h-3" /> Add Level
-                  </button>
-                </div>
-
-                {wfLevels.map((lvl, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-3"
-                  >
-                    <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                      {idx + 1}
-                    </span>
-
-                    <input
-                      type="text"
-                      placeholder="Step Name (e.g. Manager Review)"
-                      value={lvl.stepName}
-                      onChange={(e) => {
-                        const next = [...wfLevels];
-                        next[idx].stepName = e.target.value;
-                        setWfLevels(next);
-                      }}
-                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs flex-1"
-                    />
-
-                    <select
-                      value={lvl.approverType}
-                      onChange={(e) => {
-                        const next = [...wfLevels];
-                        const selectedRole = orgRoles.find((r) => r.code === e.target.value);
-                        next[idx].approverType = e.target.value;
-                        next[idx].approverRole = selectedRole?.name || e.target.value;
-                        setWfLevels(next);
-                      }}
-                      className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                    >
-                      {orgRoles.map((role) => (
-                        <option key={role.code} value={role.code}>
-                          {role.name}
-                        </option>
-                      ))}
-                    </select>
-
-                    {wfLevels.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveWfLevel(idx)}
-                        className="text-rose-500 hover:text-rose-700 p-1"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsWfModalOpen(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 rounded-xl text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveWorkflow}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700"
-              >
-                Save Workflow
-              </button>
-            </div>
-          </div>
-        </div>
+        <ExpenseWorkflowDesigner />
       )}
     </div>
   );

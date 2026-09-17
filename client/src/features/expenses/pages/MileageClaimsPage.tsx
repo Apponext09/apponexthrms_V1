@@ -1,3 +1,4 @@
+import { LegacyWorkflowNotice } from './LegacyWorkflowNotice';
 import React, { useEffect, useState } from 'react';
 import { expenseApi, MileageClaim, ExpenseSettings, ExpensePolicy, ExpenseCategory } from '../api/expenseApi';
 import { useAuthStore } from '../../auth/store/authStore';
@@ -11,7 +12,8 @@ import {
   MapPin,
   CheckCircle,
   XCircle,
-  AlertTriangle
+  AlertTriangle,
+  ShieldCheck
 } from 'lucide-react';
 
 import { useExpenseMoney } from '../utils/useExpenseMoney';
@@ -113,25 +115,36 @@ export const MileageClaimsPage: React.FC = () => {
       return pCatId === 0 || (mileageCatId && pCatId === Number(mileageCatId));
     });
 
-    const validPols = applicablePols.filter((p) => {
-      const maxClaim = Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0);
-      return maxClaim > 0;
-    });
+    if (applicablePols.length === 0) return null;
 
-    if (validPols.length === 0) return null;
-
-    const catSpecificPols = validPols.filter((p) => {
+    const catSpecificPols = applicablePols.filter((p) => {
       const pCatId = p.categoryId !== undefined && p.categoryId !== null ? Number(p.categoryId) : 0;
       return mileageCatId && pCatId === Number(mileageCatId);
     });
-    const targetPols = catSpecificPols.length > 0 ? catSpecificPols : validPols;
+    const targetPols = catSpecificPols.length > 0 ? catSpecificPols : applicablePols;
 
-    const minLimit = Math.min(...targetPols.map((p) => Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0)));
-    const pol = targetPols.find((p) => Number(p.maxLimitPerClaim || (p as any).max_limit_per_claim || 0) === minLimit);
+    const unlimitedPol = targetPols.find((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0) === 0);
+    if (unlimitedPol) {
+      return {
+        limit: 0,
+        isUnlimited: true,
+        policyName: unlimitedPol.policyName || (unlimitedPol as any).policy_name || 'Unlimited Policy'
+      };
+    }
+
+    const numericLimits = targetPols
+      .map((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0))
+      .filter((lim) => lim > 0);
+
+    if (numericLimits.length === 0) return null;
+
+    const minLimit = Math.min(...numericLimits);
+    const pol = targetPols.find((p) => Number(p.maxLimitPerClaim ?? (p as any).max_limit_per_claim ?? 0) === minLimit);
     const policyName = pol?.policyName || (pol as any)?.policy_name || 'Policy Limit';
 
     return {
       limit: minLimit,
+      isUnlimited: false,
       policyName
     };
   };
@@ -142,7 +155,7 @@ export const MileageClaimsPage: React.FC = () => {
       return;
     }
     const limitInfo = getPolicyLimitInfo();
-    if (limitInfo && calculatedAmount > limitInfo.limit) {
+    if (limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && calculatedAmount > limitInfo.limit) {
       setToast({ type: 'error', message: `⚠️ Policy Limit Exceeded: Calculated claim (${money(calculatedAmount)}) exceeds policy limit of ${money(limitInfo.limit)}.` });
       return;
     }
@@ -232,6 +245,7 @@ export const MileageClaimsPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto relative">
+      <LegacyWorkflowNotice rows={claims} prefix="mc_" onComplete={fetchMileage} />
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center gap-3 transition-all animate-in fade-in slide-in-from-top-2 ${
@@ -327,7 +341,7 @@ export const MileageClaimsPage: React.FC = () => {
                   <th className="py-3.5 px-4">Rate / km</th>
                   <th className="py-3.5 px-4">Total Amount</th>
                   <th className="py-3.5 px-4">Status</th>
-                  {isApprover && <th className="py-3.5 px-4">Actions</th>}
+                  {<th className="py-3.5 px-4">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -374,7 +388,7 @@ export const MileageClaimsPage: React.FC = () => {
                           {formatStatusText(mc.status)}
                         </span>
                       </td>
-                      {isApprover && (
+                      {(
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           {(() => {
                             const curUserId = user?.id || (user as any)?.userId || (user as any)?.employeeId;
@@ -385,11 +399,20 @@ export const MileageClaimsPage: React.FC = () => {
                             if (isSelfClaim) {
                               return <span className="text-xs text-slate-400 italic">Self Claim</span>;
                             }
-                            const isPending = ['pending', 'pending_level_1', 'pending_level_2', 'pending_level_3', 'pending_manager', 'submitted', 'pending_finance'].some(
-                              (s) => (mc.status || '').toLowerCase() === s
-                            ) || (mc.status || '').toLowerCase().startsWith('pending_level_');
+                            const stLower = (mc.status || '').toLowerCase();
+                            const isLevel1Stage = stLower === 'pending_level_1' || stLower === 'pending' || stLower === 'submitted';
+                            const isLevel2Stage = stLower === 'pending_level_2' || stLower === 'pending_manager';
+                            const isLevel3Stage = stLower === 'pending_level_3';
+                            const isFinanceStage = stLower === 'pending_finance';
 
-                            if (!isPending) {
+                            const pathName = window.location.pathname.toLowerCase();
+                            const isHrOrAdminPortal = pathName.startsWith('/hr') || pathName.startsWith('/admin') || pathName.startsWith('/expenses');
+                            const isManagerPortal = pathName.startsWith('/manager');
+                            const isTeamLeadPortal = pathName.startsWith('/team-lead');
+
+                            const canActAtStage = Boolean(mc.canApprove);
+
+                            if (!canActAtStage) {
                               return <span className="text-xs text-slate-400">—</span>;
                             }
 
@@ -485,7 +508,7 @@ export const MileageClaimsPage: React.FC = () => {
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Distance (km) *</label>
                   {(() => {
                     const limitInfo = getPolicyLimitInfo();
-                    const isExceeded = Boolean(limitInfo && calculatedAmount > limitInfo.limit);
+                    const isExceeded = Boolean(limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && calculatedAmount > limitInfo.limit);
                     return (
                       <input
                         type="number"
@@ -506,37 +529,32 @@ export const MileageClaimsPage: React.FC = () => {
               {/* Calculated total box */}
               {(() => {
                 const limitInfo = getPolicyLimitInfo();
-                const isExceeded = Boolean(limitInfo && calculatedAmount > limitInfo.limit);
-
+                const isExceeded = Boolean(limitInfo && !limitInfo.isUnlimited && limitInfo.limit > 0 && calculatedAmount > limitInfo.limit);
                 return (
-                  <div
-                    className={`p-3 rounded-xl flex flex-col gap-1 transition-all ${
-                      isExceeded
-                        ? 'bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 text-rose-800 dark:text-rose-300'
-                        : 'bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`font-semibold ${
-                          isExceeded ? 'text-rose-800 dark:text-rose-300' : 'text-amber-800 dark:text-amber-300'
-                        }`}
-                      >
-                        Calculated Mileage Claim:
-                      </span>
-                      <span
-                        className={`text-lg font-bold ${
-                          isExceeded ? 'text-rose-700 dark:text-rose-200' : 'text-amber-900 dark:text-amber-100'
-                        }`}
-                      >
-                        {money(calculatedAmount)}
-                      </span>
+                  <div className={`p-3 rounded-xl border flex items-center justify-between ${
+                    isExceeded
+                      ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800'
+                      : limitInfo?.isUnlimited
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
+                  }`}>
+                    <div>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Total Calculated Reimbursable Amount</p>
+                      <p className="text-base font-extrabold text-slate-900 dark:text-white mt-0.5">
+                        {money(calculatedAmount)} ({distanceKm} km × {vehicleType === 'car' ? `₹${carRate}` : `₹${bikeRate}`})
+                      </p>
                     </div>
                     {isExceeded && limitInfo && (
-                      <p className="mt-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                      <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
                         <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         Amount exceeds set policy limit of {money(limitInfo.limit)}! Cannot claim above set limit.
-                      </p>
+                      </span>
+                    )}
+                    {limitInfo?.isUnlimited && (
+                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        Unlimited Policy Active
+                      </span>
                     )}
                   </div>
                 );

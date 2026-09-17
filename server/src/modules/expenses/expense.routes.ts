@@ -3,11 +3,34 @@ import { ExpenseController } from './controllers/ExpenseController';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
+import { WorkflowExpenseService } from './services/WorkflowExpenseService';
 
 const router = Router();
 const controller = new ExpenseController();
 
 router.use(authenticate, resolveTenant);
+const workflowExpense = new WorkflowExpenseService();
+router.use(asyncHandler(async (req, _res, next) => {
+  const section = req.path.split('/')[1];
+  if (['categories', 'policies', 'settings', 'workflows'].includes(section) && req.method !== 'GET' && req.path !== '/policies/validate') {
+    await workflowExpense.assertAccess(req.ctx!, 'configure');
+  }
+  next();
+}));
+router.get('/payment-cycle', asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await workflowExpense.getPaymentCycle(req.ctx!, req.query) });
+}));
+router.get('/workflow-options', asyncHandler(async (req, res) => {
+  await workflowExpense.assertAccess(req.ctx!, 'configure');
+  const { getKnex } = await import('../../db/knex');
+  const db = getKnex();
+  const employees = await db('employees').where('organization_id', req.ctx!.organizationId).whereNull('deleted_at')
+    .select('id', 'first_name', 'last_name', 'employee_code', 'reporting_manager_id', 'current_department_id');
+  const departments = await db('departments').where('organization_id', req.ctx!.organizationId).whereNull('deleted_at').select('id', 'name');
+  const roles = await db('roles').where((q: any) => q.where('organization_id', req.ctx!.organizationId).orWhereNull('organization_id')).whereNull('deleted_at').select('id', 'name', 'code');
+  const users = await db('users').where({ organization_id: req.ctx!.organizationId, status: 'active' }).whereNull('deleted_at').select('id', 'first_name', 'last_name');
+  res.json({ success: true, data: { employees, departments, roles, users } });
+}));
 
 // Categories
 router.get('/categories', asyncHandler((req, res) => controller.getCategories(req, res)));
@@ -25,6 +48,7 @@ router.post('/policies/validate', asyncHandler((req, res) => controller.validate
 // Travel Requests & Advances
 router.get('/travel-requests', asyncHandler((req, res) => controller.getTravelRequests(req, res)));
 router.post('/travel-requests', asyncHandler((req, res) => controller.createTravelRequest(req, res)));
+router.put('/travel-requests/:id', asyncHandler((req, res) => controller.updateTravelRequest(req, res)));
 router.put('/travel-requests/:id/status', asyncHandler((req, res) => controller.updateTravelRequestStatus(req, res)));
 
 router.get('/travel-advances', asyncHandler((req, res) => controller.getTravelAdvances(req, res)));
@@ -56,6 +80,9 @@ router.delete('/workflows/:id', asyncHandler((req, res) => controller.deleteWork
 router.get('/claims', asyncHandler((req, res) => controller.getClaims(req, res)));
 router.get('/claims/:id', asyncHandler((req, res) => controller.getClaimById(req, res)));
 router.post('/claims', asyncHandler((req, res) => controller.submitClaim(req, res)));
+router.post('/claims/:id/resubmit-workflow', asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await workflowExpense.resubmitLegacy(req.ctx!, req.params.id) });
+}));
 router.put('/claims/:id', asyncHandler((req, res) => controller.updateClaim(req, res)));
 
 // Approvals & Workflow Actions

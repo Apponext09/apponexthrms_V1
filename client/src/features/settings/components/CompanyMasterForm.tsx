@@ -1,8 +1,8 @@
-﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
   Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X,
-  Eye, EyeOff, KeyRound
+  Eye, EyeOff, KeyRound, Boxes, AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,19 @@ import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { masterBuilderApi } from '@/features/master-builder/api/masterBuilderApi';
+
+const CORE_FIELD_KEYS = [
+  'name', 'employer_name', 'employerName', 'class_of_establishment', 'classOfEstablishment',
+  'code', 'address_line_1', 'addressLine1', 'address_line_2', 'addressLine2',
+  'country', 'state', 'city', 'zip_code', 'zipCode',
+  'pan_tin', 'panTin', 'contact_number', 'contactNumber', 'email',
+  'logo', 'company_stamp', 'companyStamp', 'signature',
+  'is_active_toggle', 'isActiveToggle', 'active_users_toggle', 'activeUsersToggle',
+  'login_page_logo_toggle', 'loginPageLogoToggle',
+  'has_credentials', 'hasCredentials', 'full_name', 'fullName', 'login_email', 'loginEmail',
+  'status', 'description'
+];
 
 export interface CompanyRecordItem {
   id: string;
@@ -154,13 +167,51 @@ export function CompanyMasterForm({
   const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>(isNew ? 'Active' : selectedCompany?.status || 'Active');
 
   // Credentials State
-  const [formHasCredentials, setFormHasCredentials]     = useState<boolean>(isNew ? false : selectedCompany?.hasCredentials ?? false);
-  const [formFullName, setFormFullName]                 = useState<string>(isNew ? '' : selectedCompany?.fullName || '');
-  const [formLoginEmail, setFormLoginEmail]             = useState<string>(isNew ? '' : selectedCompany?.loginEmail || '');
-  const [formPassword, setFormPassword]                 = useState<string>('');
-  const [formConfirmPassword, setFormConfirmPassword]   = useState<string>('');
-  const [showPassword, setShowPassword]                 = useState<boolean>(false);
-  const [showConfirmPassword, setShowConfirmPassword]   = useState<boolean>(false);
+  const [formHasCredentials, setFormHasCredentials] = useState<boolean>(isNew ? false : selectedCompany?.hasCredentials ?? false);
+  const [formFullName, setFormFullName] = useState<string>(isNew ? '' : selectedCompany?.fullName || '');
+  const [formLoginEmail, setFormLoginEmail] = useState<string>(isNew ? '' : selectedCompany?.loginEmail || '');
+  const [formPassword, setFormPassword] = useState<string>('');
+  const [formConfirmPassword, setFormConfirmPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+
+  // Field-wise Validation Errors State
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) => {
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  // Master Builder dynamic custom fields state (for extra fields designed in Master Builder)
+  const [companyMasterId, setCompanyMasterId] = useState<number | null>(null);
+  const [customFields, setCustomFields] = useState<any[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+
+  // Fetch Master Builder custom fields configured for 'company'
+  useEffect(() => {
+    const fetchMasterSchema = async () => {
+      try {
+        const masters = await masterBuilderApi.getMasters();
+        const comp = masters.find((m) => m.code === 'company');
+        if (comp) {
+          setCompanyMasterId(comp.id);
+          const detail = await masterBuilderApi.getMasterById(comp.id);
+          const extra = (detail.fields || []).filter(
+            (f: any) => !f.isCore && !f.is_core && !CORE_FIELD_KEYS.includes(f.fieldKey || f.field_key)
+          );
+          setCustomFields(extra);
+        }
+      } catch (err) {
+        console.warn('Could not load custom fields for company from master builder:', err);
+      }
+    };
+    fetchMasterSchema();
+  }, []);
 
   // Derived: do passwords match? (only meaningful when both are non-empty)
   const passwordsMatch = formPassword === formConfirmPassword;
@@ -197,6 +248,8 @@ export function CompanyMasterForm({
     setFormConfirmPassword('');
     setShowPassword(false);
     setShowConfirmPassword(false);
+    setCustomFieldValues({});
+    setErrors({});
   };
 
   // Compute available states based on selected country
@@ -214,14 +267,18 @@ export function CompanyMasterForm({
   // Handle Country change -> reset state, city & zip code
   const handleCountryChange = (countryVal: string) => {
     setFormCountry(countryVal);
+    clearFieldError('country');
     const states = LOCATION_DATA[countryVal] ? Object.keys(LOCATION_DATA[countryVal]) : [];
     if (states.length > 0) {
       const firstState = states[0];
       setFormState(firstState);
+      clearFieldError('state');
       const cities = LOCATION_DATA[countryVal][firstState].cities;
       if (cities.length > 0) {
         setFormCity(cities[0]);
+        clearFieldError('city');
         setFormZipCode(LOCATION_DATA[countryVal][firstState].zipDefault || '');
+        clearFieldError('zipCode');
       } else {
         setFormCity('');
         setFormZipCode('');
@@ -236,11 +293,14 @@ export function CompanyMasterForm({
   // Handle State change -> reset city & zip code
   const handleStateChange = (stateVal: string) => {
     setFormState(stateVal);
+    clearFieldError('state');
     if (formCountry && LOCATION_DATA[formCountry]?.[stateVal]) {
       const cities = LOCATION_DATA[formCountry][stateVal].cities;
       if (cities.length > 0) {
         setFormCity(cities[0]);
+        clearFieldError('city');
         setFormZipCode(LOCATION_DATA[formCountry][stateVal].zipDefault || '');
+        clearFieldError('zipCode');
       } else {
         setFormCity('');
         setFormZipCode('');
@@ -254,20 +314,124 @@ export function CompanyMasterForm({
   // Handle City change -> auto fill default zip code
   const handleCityChange = (cityVal: string) => {
     setFormCity(cityVal);
+    clearFieldError('city');
     if (formCountry && formState && LOCATION_DATA[formCountry]?.[formState]) {
       setFormZipCode(LOCATION_DATA[formCountry][formState].zipDefault || '');
+      clearFieldError('zipCode');
     }
   };
 
+  // Dedicated Sanitized Field Handlers
+  const handleNameChange = (val: string) => {
+    setFormName(val);
+    clearFieldError('name');
+  };
+
+  const handleEmployerNameChange = (val: string) => {
+    setFormEmployerName(val);
+    clearFieldError('employerName');
+  };
+
+  const handleClassOfEstablishmentChange = (val: string) => {
+    setFormClassOfEstablishment(val);
+    clearFieldError('classOfEstablishment');
+  };
+
+  const handleCodeChange = (val: string) => {
+    const clean = val.toUpperCase().replace(/[^A-Z0-9-_]/g, '').slice(0, 30);
+    setFormCode(clean);
+    clearFieldError('code');
+  };
+
+  const handleAddress1Change = (val: string) => {
+    setFormAddress1(val);
+    clearFieldError('addressLine1');
+  };
+
+  const handleAddress2Change = (val: string) => {
+    setFormAddress2(val);
+    clearFieldError('addressLine2');
+  };
+
+  const handleZipCodeChange = (val: string) => {
+    const isIndia = !formCountry || formCountry.toLowerCase() === 'india';
+    let clean = val;
+    if (isIndia) {
+      // Numbers only, strictly max 6 digits
+      clean = val.replace(/\D/g, '').slice(0, 6);
+    } else {
+      clean = val.slice(0, 10);
+    }
+    setFormZipCode(clean);
+    clearFieldError('zipCode');
+  };
+
+  const handlePanTinChange = (val: string) => {
+    const clean = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
+    setFormPanTin(clean);
+    clearFieldError('panTin');
+  };
+
+  const handleContactNumberChange = (val: string) => {
+    // Allow numbers, +, -, spaces, parentheses, up to 16 characters
+    const clean = val.replace(/[^0-9+\s\-()]/g, '').slice(0, 16);
+    setFormContactNumber(clean);
+    clearFieldError('contactNumber');
+  };
+
+  const handleEmailChange = (val: string) => {
+    setFormEmail(val.trim());
+    clearFieldError('email');
+  };
+
+  const handleLogoChange = (val: string) => {
+    setFormLogo(val);
+    clearFieldError('logo');
+  };
+
+  const handleFullNameChange = (val: string) => {
+    setFormFullName(val);
+    clearFieldError('fullName');
+  };
+
+  const handleLoginEmailChange = (val: string) => {
+    setFormLoginEmail(val.trim());
+    clearFieldError('loginEmail');
+  };
+
+  const handlePasswordChange = (val: string) => {
+    setFormPassword(val);
+    clearFieldError('password');
+    clearFieldError('confirmPassword');
+  };
+
+  const handleConfirmPasswordChange = (val: string) => {
+    setFormConfirmPassword(val);
+    clearFieldError('confirmPassword');
+  };
+
   // Device File Upload Handlers (Read as Base64 Data URL)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setField: (val: string) => void) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, setField: (val: string) => void, fieldKey?: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Check image file type
+    if (!file.type.startsWith('image/')) {
+      showToast.error('Invalid File', 'Please upload a valid image file (PNG, JPG, WebP, SVG).');
+      return;
+    }
+
+    // Check size limit (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast.error('File Too Large', 'Image file size must be less than 5MB.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
         setField(event.target.result as string);
+        if (fieldKey) clearFieldError(fieldKey);
         showToast.success('File Uploaded', `${file.name} loaded into form.`);
       }
     };
@@ -284,9 +448,9 @@ export function CompanyMasterForm({
       setFormAddress1(selectedCompany.addressLine1 || '');
       setFormAddress2(selectedCompany.addressLine2 || '');
       setFormCountry(selectedCompany.country || 'India');
-      setFormState(selectedCompany.state || 'Maharashtra');
-      setFormCity(selectedCompany.city || 'Thane');
-      setFormZipCode(selectedCompany.zipCode || '400708');
+      setFormState(selectedCompany.state || '');
+      setFormCity(selectedCompany.city || '');
+      setFormZipCode(selectedCompany.zipCode || '');
       setFormPanTin(selectedCompany.panTin || '');
       setFormContactNumber(selectedCompany.contactNumber || '');
       setFormEmail(selectedCompany.email || '');
@@ -308,12 +472,35 @@ export function CompanyMasterForm({
     }
   }, [selectedId, isNewMode, selectedCompany]);
 
-  const handleSelectCompany = (comp: CompanyRecordItem) => {
+  const handleSelectCompany = async (comp: CompanyRecordItem) => {
     setIsNewMode(false);
     setSelectedId(comp.id);
+    if (companyMasterId && customFields.length > 0) {
+      try {
+        const recRes = await masterBuilderApi.getRecords(companyMasterId, { limit: 100 });
+        const match = recRes.records?.find((r) => String(r.id) === String(comp.id));
+        if (match?.data) {
+          const extraVals: Record<string, any> = {};
+          customFields.forEach((cf: any) => {
+            const k = cf.fieldKey || cf.field_key;
+            if (match.data[k] !== undefined) {
+              extraVals[k] = match.data[k];
+            }
+          });
+          setCustomFieldValues(extraVals);
+        } else {
+          setCustomFieldValues({});
+        }
+      } catch (e) {
+        setCustomFieldValues({});
+      }
+    } else {
+      setCustomFieldValues({});
+    }
   };
 
   const handleReset = () => {
+    setCustomFieldValues({});
     if (isNewMode) {
       handleAddNewCompanyClick();
     } else if (selectedCompany) {
@@ -324,9 +511,9 @@ export function CompanyMasterForm({
       setFormAddress1(selectedCompany.addressLine1 || '');
       setFormAddress2(selectedCompany.addressLine2 || '');
       setFormCountry(selectedCompany.country || 'India');
-      setFormState(selectedCompany.state || 'Maharashtra');
-      setFormCity(selectedCompany.city || 'Thane');
-      setFormZipCode(selectedCompany.zipCode || '400708');
+      setFormState(selectedCompany.state || '');
+      setFormCity(selectedCompany.city || '');
+      setFormZipCode(selectedCompany.zipCode || '');
       setFormPanTin(selectedCompany.panTin || '');
       setFormContactNumber(selectedCompany.contactNumber || '');
       setFormEmail(selectedCompany.email || '');
@@ -362,10 +549,10 @@ export function CompanyMasterForm({
             name: c.name || '',
             employerName: c.employerName || c.employer_name || '',
             classOfEstablishment: c.classOfEstablishment || c.class_of_establishment || '',
-            addressLine1: c.addressLine1 || c.addressLine_1 || c.address_line_1 || '',
-            addressLine2: c.addressLine2 || c.addressLine_2 || c.address_line_2 || '',
+            addressLine1: c.addressLine1 || c.address_line_1 || c.addressLine_1 || c.address_line1 || c.address || '',
+            addressLine2: c.addressLine2 || c.address_line_2 || c.addressLine_2 || c.address_line2 || '',
             country: c.country || 'India',
-            zipCode: c.zipCode || c.zip_code || '',
+            zipCode: c.zipCode || c.zip_code || c.postal_code || c.postalCode || '',
             state: c.state || '',
             city: c.city || '',
             panTin: c.panTin || c.pan_tin || '',
@@ -397,21 +584,134 @@ export function CompanyMasterForm({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const newErrors: Record<string, string> = {};
+
+    // 1. Company Name
     if (!formName.trim()) {
-      showToast.error('Validation Error', 'Company Name is required.');
+      newErrors.name = 'Company Name is required.';
+    } else if (formName.trim().length < 2) {
+      newErrors.name = 'Company Name must be at least 2 characters.';
+    } else if (formName.trim().length > 150) {
+      newErrors.name = 'Company Name cannot exceed 150 characters.';
+    }
+
+    // 2. Company Code (if provided)
+    if (formCode.trim() && !/^[A-Za-z0-9-_]{2,30}$/.test(formCode.trim())) {
+      newErrors.code = 'Code must be 2-30 characters (letters, numbers, hyphens, underscores).';
+    }
+
+    // 3. Address Line 1
+    if (!formAddress1.trim()) {
+      newErrors.addressLine1 = 'Address Line 1 is required.';
+    } else if (formAddress1.trim().length < 3) {
+      newErrors.addressLine1 = 'Address Line 1 must be at least 3 characters.';
+    }
+
+    // 4. Country
+    if (!formCountry.trim()) {
+      newErrors.country = 'Country is required.';
+    }
+
+    // 5. State
+    if (!formState.trim()) {
+      newErrors.state = 'State is required.';
+    }
+
+    // 6. City
+    if (!formCity.trim()) {
+      newErrors.city = 'City is required.';
+    }
+
+    // 7. ZIP / PIN Code (Pincode validation)
+    if (!formZipCode.trim()) {
+      newErrors.zipCode = 'ZIP / PIN Code is required.';
+    } else {
+      const isIndia = !formCountry || formCountry.toLowerCase() === 'india';
+      if (isIndia) {
+        if (!/^\d{6}$/.test(formZipCode.trim())) {
+          newErrors.zipCode = 'PIN Code must be exactly 6 digits (e.g. 400708).';
+        }
+      } else if (!/^[A-Za-z0-9\s-]{3,10}$/.test(formZipCode.trim())) {
+        newErrors.zipCode = 'Invalid Postal / ZIP Code format (3-10 characters).';
+      }
+    }
+
+    // 8. Contact Number
+    if (!formContactNumber.trim()) {
+      newErrors.contactNumber = 'Contact Number is required.';
+    } else {
+      const digitsOnly = formContactNumber.replace(/\D/g, '');
+      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
+        newErrors.contactNumber = 'Contact Number must contain a valid 10-15 digit number (e.g. +91 9898989899).';
+      }
+    }
+
+    // 9. Official Corporate Email
+    if (!formEmail.trim()) {
+      newErrors.email = 'Official Corporate Email is required.';
+    } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formEmail.trim())) {
+      newErrors.email = 'Please enter a valid email address (e.g. contact@apponext.com).';
+    }
+
+    // 10. PAN / TIN Number (Optional, but if filled, validate format)
+    if (formPanTin.trim()) {
+      const panUpper = formPanTin.trim().toUpperCase();
+      const isPan = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panUpper);
+      const isTin = /^[A-Z0-9]{9,15}$/.test(panUpper);
+      if (!isPan && !isTin) {
+        newErrors.panTin = 'Invalid PAN/TIN format. Standard PAN must be 10 characters (e.g. ABCDE1234F).';
+      }
+    }
+
+    // 11. Company Logo
+    if (!formLogo.trim()) {
+      newErrors.logo = 'Company Logo is required. Please upload an image or enter a valid URL.';
+    }
+
+    // 12. Credentials Validation (if enabled)
+    if (formHasCredentials) {
+      if (!formFullName.trim()) {
+        newErrors.fullName = 'Administrator Full Name is required.';
+      }
+      if (!formLoginEmail.trim()) {
+        newErrors.loginEmail = 'Login Email is required.';
+      } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(formLoginEmail.trim())) {
+        newErrors.loginEmail = 'Please enter a valid Login Email address.';
+      }
+
+      if (isNewMode && !formPassword) {
+        newErrors.password = 'Password is required when credentials are enabled.';
+      } else if (formPassword && formPassword.length < 6) {
+        newErrors.password = 'Password must be at least 6 characters long.';
+      }
+
+      if (formPassword && formPassword !== formConfirmPassword) {
+        newErrors.confirmPassword = 'Password and Confirm Password do not match.';
+      }
+    }
+
+    // 13. Dynamic Custom Fields validation
+    if (customFields.length > 0) {
+      for (const cf of customFields) {
+        const key = cf.fieldKey || cf.field_key;
+        const name = cf.fieldName || cf.field_name || key;
+        const isReq = Boolean(cf.isRequired ?? cf.is_required);
+        if (isReq && (!customFieldValues[key] || !String(customFieldValues[key]).trim())) {
+          newErrors[key] = `${name} is required.`;
+        }
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      const firstError = Object.values(newErrors)[0];
+      showToast.error('Validation Error', firstError);
       return;
     }
 
+    setErrors({});
     setIsSaving(true);
-
-    // Validate credential passwords if credentials are enabled and password was entered
-    if (formHasCredentials && (formPassword || formConfirmPassword)) {
-      if (!passwordsMatch) {
-        showToast.error('Password Mismatch', 'Password and Confirm Password do not match.');
-        setIsSaving(false);
-        return;
-      }
-    }
 
     const payload = {
       code: formCode || `COM-${Math.floor(100 + Math.random() * 900)}`,
@@ -491,6 +791,18 @@ export function CompanyMasterForm({
         setSelectedId(savedCompany.id);
         if (onSave) onSave(savedCompany);
         queryClient.invalidateQueries({ queryKey: ['companies'] });
+
+        // Save extended custom field values if configured in Master Builder
+        if (companyMasterId && customFields.length > 0 && savedCompany.id) {
+          try {
+            await masterBuilderApi.updateRecord(companyMasterId, Number(savedCompany.id), {
+              data: customFieldValues,
+            });
+          } catch (extErr) {
+            console.warn('Extended data save notice:', extErr);
+          }
+        }
+
         showToast.success(
           isUpdating ? 'Company Updated' : 'Company Created',
           isUpdating ? `${savedCompany.name} updated successfully.` : `${savedCompany.name} created successfully.`
@@ -620,11 +932,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formName}
-              onChange={(e) => setFormName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               placeholder="e.g. Kosqu Global Technologies Ltd"
-              className="text-xs h-10 bg-background rounded-xl focus-visible:ring-primary"
-              required
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.name && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.name && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.name}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -632,10 +952,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formEmployerName}
-              onChange={(e) => setFormEmployerName(e.target.value)}
+              onChange={(e) => handleEmployerNameChange(e.target.value)}
               placeholder="e.g. Authorized Employer / HR Admin"
-              className="text-xs h-10 bg-background rounded-xl"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.employerName && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.employerName && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.employerName}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -643,10 +972,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formClassOfEstablishment}
-              onChange={(e) => setFormClassOfEstablishment(e.target.value)}
+              onChange={(e) => handleClassOfEstablishmentChange(e.target.value)}
               placeholder="e.g. Commercial IT Enterprise"
-              className="text-xs h-10 bg-background rounded-xl"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.classOfEstablishment && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.classOfEstablishment && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.classOfEstablishment}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5 md:col-span-2">
@@ -654,10 +992,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formCode}
-              onChange={(e) => setFormCode(e.target.value)}
+              onChange={(e) => handleCodeChange(e.target.value)}
               placeholder="e.g. HQ-MAIN-001"
-              className="text-xs h-10 font-mono uppercase bg-background rounded-xl"
+              className={cn(
+                "text-xs h-10 font-mono uppercase bg-background rounded-xl transition-all",
+                errors.code && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.code && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.code}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -677,11 +1024,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formAddress1}
-              onChange={(e) => setFormAddress1(e.target.value)}
+              onChange={(e) => handleAddress1Change(e.target.value)}
               placeholder="Building, Street, Suite No."
-              className="text-xs h-10 bg-background rounded-xl"
-              required
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.addressLine1 && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.addressLine1 && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.addressLine1}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -689,10 +1044,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formAddress2}
-              onChange={(e) => setFormAddress2(e.target.value)}
+              onChange={(e) => handleAddress2Change(e.target.value)}
               placeholder="Landmark, Area, Sector"
-              className="text-xs h-10 bg-background rounded-xl"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.addressLine2 && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.addressLine2 && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.addressLine2}
+              </p>
+            )}
           </div>
 
           {/* Country */}
@@ -703,11 +1067,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formCountry}
-              onChange={(e) => setFormCountry(e.target.value)}
-              placeholder="Enter Country"
-              className="text-xs h-10 bg-background rounded-xl"
-              required
+              onChange={(e) => handleCountryChange(e.target.value)}
+              placeholder="Enter Country (e.g. India)"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.country && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.country && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.country}
+              </p>
+            )}
           </div>
 
           {/* State */}
@@ -718,11 +1090,19 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formState}
-              onChange={(e) => setFormState(e.target.value)}
-              placeholder="Enter State"
-              className="text-xs h-10 bg-background rounded-xl"
-              required
+              onChange={(e) => handleStateChange(e.target.value)}
+              placeholder="Enter State (e.g. Maharashtra)"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.state && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.state && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.state}
+              </p>
+            )}
           </div>
 
           {/* City */}
@@ -733,26 +1113,46 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formCity}
-              onChange={(e) => setFormCity(e.target.value)}
-              placeholder="Enter City"
-              className="text-xs h-10 bg-background rounded-xl"
-              required
+              onChange={(e) => handleCityChange(e.target.value)}
+              placeholder="Enter City (e.g. Pune, Mumbai)"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.city && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.city && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.city}
+              </p>
+            )}
           </div>
 
           {/* ZIP Code */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">
-              ZIP / Postal Code <span className="text-rose-500">*</span>
+            <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+              <span>ZIP / PIN Code <span className="text-rose-500">*</span></span>
+              {(!formCountry || formCountry.toLowerCase() === 'india') && (
+                <span className="text-[10px] text-muted-foreground font-mono">6 Digits ({formZipCode.length}/6)</span>
+              )}
             </label>
             <Input
               type="text"
               value={formZipCode}
-              onChange={(e) => setFormZipCode(e.target.value)}
-              placeholder="e.g. 400708"
-              className="text-xs h-10 font-mono bg-background rounded-xl"
-              required
+              maxLength={(!formCountry || formCountry.toLowerCase() === 'india') ? 6 : 10}
+              onChange={(e) => handleZipCodeChange(e.target.value)}
+              placeholder={(!formCountry || formCountry.toLowerCase() === 'india') ? "e.g. 400708" : "e.g. ZIP code"}
+              className={cn(
+                "text-xs h-10 font-mono bg-background rounded-xl transition-all",
+                errors.zipCode && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.zipCode && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.zipCode}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -773,24 +1173,44 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formPanTin}
-              onChange={(e) => setFormPanTin(e.target.value)}
+              maxLength={15}
+              onChange={(e) => handlePanTinChange(e.target.value)}
               placeholder="e.g. AAACD1234F"
-              className="text-xs h-10 font-mono uppercase bg-background rounded-xl"
+              className={cn(
+                "text-xs h-10 font-mono uppercase bg-background rounded-xl transition-all",
+                errors.panTin && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.panTin && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.panTin}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">
-              Contact Number <span className="text-rose-500">*</span>
+            <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+              <span>Contact Number <span className="text-rose-500">*</span></span>
+              <span className="text-[10px] text-muted-foreground font-mono">10-15 digits</span>
             </label>
             <Input
               type="text"
               value={formContactNumber}
-              onChange={(e) => setFormContactNumber(e.target.value)}
+              maxLength={16}
+              onChange={(e) => handleContactNumberChange(e.target.value)}
               placeholder="e.g. +91 9898989899"
-              className="text-xs h-10 bg-background rounded-xl"
-              required
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.contactNumber && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.contactNumber && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.contactNumber}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5 md:col-span-2">
@@ -800,11 +1220,19 @@ export function CompanyMasterForm({
             <Input
               type="email"
               value={formEmail}
-              onChange={(e) => setFormEmail(e.target.value)}
+              onChange={(e) => handleEmailChange(e.target.value)}
               placeholder="e.g. contact@apponext.com"
-              className="text-xs h-10 bg-background rounded-xl"
-              required
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl transition-all",
+                errors.email && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+              )}
             />
+            {errors.email && (
+              <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {errors.email}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -817,18 +1245,24 @@ export function CompanyMasterForm({
         </div>
 
         {/* Company Logo Card */}
-        <div className="p-4 border border-border/80 rounded-2xl bg-muted/10 space-y-2">
+        <div className={cn(
+          "p-4 border rounded-2xl bg-muted/10 space-y-2 transition-all",
+          errors.logo ? "border-rose-500 bg-rose-50/10" : "border-border/80"
+        )}>
           <label className="text-xs font-semibold text-foreground flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               Company Logo <span className="text-rose-500">*</span>
             </span>
-            <span className="text-[11px] text-muted-foreground">PNG, JPG or WebP</span>
+            <span className="text-[11px] text-muted-foreground">PNG, JPG or WebP (Max 5MB)</span>
           </label>
 
           <div className="flex flex-wrap items-center gap-3">
             <div
               onClick={() => logoFileRef.current?.click()}
-              className="w-14 h-14 rounded-xl border border-dashed border-border bg-background flex items-center justify-center cursor-pointer hover:border-primary transition-all shrink-0 overflow-hidden"
+              className={cn(
+                "w-14 h-14 rounded-xl border border-dashed bg-background flex items-center justify-center cursor-pointer hover:border-primary transition-all shrink-0 overflow-hidden",
+                errors.logo ? "border-rose-500" : "border-border"
+              )}
             >
               {formLogo ? (
                 <img src={formLogo} alt="Logo" className="w-full h-full object-contain p-1" />
@@ -839,9 +1273,12 @@ export function CompanyMasterForm({
             <Input
               type="text"
               value={formLogo}
-              onChange={(e) => setFormLogo(e.target.value)}
+              onChange={(e) => handleLogoChange(e.target.value)}
               placeholder="Paste logo URL or click Upload"
-              className="text-xs h-10 bg-background rounded-xl flex-1 min-w-[200px]"
+              className={cn(
+                "text-xs h-10 bg-background rounded-xl flex-1 min-w-[200px]",
+                errors.logo && "border-rose-500 focus-visible:ring-rose-500"
+              )}
             />
             <Button
               type="button"
@@ -857,13 +1294,19 @@ export function CompanyMasterForm({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setFormLogo('')}
+                onClick={() => handleLogoChange('')}
                 className="h-10 text-xs px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
               >
                 <X className="h-4 w-4" />
               </Button>
             )}
           </div>
+          {errors.logo && (
+            <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+              <AlertCircle className="h-3 w-3 shrink-0" />
+              {errors.logo}
+            </p>
+          )}
         </div>
 
         {/* Company Stamp & Signature Grid */}
@@ -1095,10 +1538,19 @@ export function CompanyMasterForm({
               <Input
                 type="text"
                 value={formFullName}
-                onChange={(e) => setFormFullName(e.target.value)}
+                onChange={(e) => handleFullNameChange(e.target.value)}
                 placeholder="e.g. Admin User Name"
-                className="text-xs h-10 bg-background rounded-xl"
+                className={cn(
+                  "text-xs h-10 bg-background rounded-xl transition-all",
+                  errors.fullName && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+                )}
               />
+              {errors.fullName && (
+                <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {errors.fullName}
+                </p>
+              )}
             </div>
 
             {/* Login Email */}
@@ -1107,16 +1559,25 @@ export function CompanyMasterForm({
               <Input
                 type="email"
                 value={formLoginEmail}
-                onChange={(e) => setFormLoginEmail(e.target.value)}
+                onChange={(e) => handleLoginEmailChange(e.target.value)}
                 placeholder="e.g. admin@company.com"
-                className="text-xs h-10 bg-background rounded-xl"
+                className={cn(
+                  "text-xs h-10 bg-background rounded-xl transition-all",
+                  errors.loginEmail && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+                )}
               />
+              {errors.loginEmail && (
+                <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {errors.loginEmail}
+                </p>
+              )}
             </div>
 
             {/* Password */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                <span>Password</span>
+                <span>Password {isNewMode && <span className="text-rose-500">*</span>}</span>
                 {formPassword && formConfirmPassword && (
                   <span className={cn('text-[10px] font-bold flex items-center gap-1',
                     passwordsMatch ? 'text-emerald-500' : 'text-rose-500'
@@ -1130,9 +1591,12 @@ export function CompanyMasterForm({
                 <Input
                   type={showPassword ? 'text' : 'password'}
                   value={formPassword}
-                  onChange={(e) => setFormPassword(e.target.value)}
-                  placeholder="Enter new password"
-                  className="text-xs h-10 bg-background rounded-xl pr-10"
+                  onChange={(e) => handlePasswordChange(e.target.value)}
+                  placeholder="Enter new password (min 6 chars)"
+                  className={cn(
+                    "text-xs h-10 bg-background rounded-xl pr-10 transition-all",
+                    errors.password && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
+                  )}
                 />
                 <button
                   type="button"
@@ -1143,21 +1607,30 @@ export function CompanyMasterForm({
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {errors.password && (
+                <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {errors.password}
+                </p>
+              )}
             </div>
 
             {/* Confirm Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Confirm Password</label>
+              <label className="text-xs font-semibold text-foreground">
+                Confirm Password {formPassword && <span className="text-rose-500">*</span>}
+              </label>
               <div className="relative">
                 <Input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={formConfirmPassword}
-                  onChange={(e) => setFormConfirmPassword(e.target.value)}
+                  onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                   placeholder="Re-enter password"
                   className={cn(
-                    'text-xs h-10 bg-background rounded-xl pr-10',
-                    formConfirmPassword && !passwordsMatch && 'border-rose-400 focus-visible:ring-rose-400',
-                    formConfirmPassword && passwordsMatch && 'border-emerald-400 focus-visible:ring-emerald-400'
+                    'text-xs h-10 bg-background rounded-xl pr-10 transition-all',
+                    errors.confirmPassword && 'border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10',
+                    !errors.confirmPassword && formConfirmPassword && !passwordsMatch && 'border-rose-400 focus-visible:ring-rose-400',
+                    !errors.confirmPassword && formConfirmPassword && passwordsMatch && 'border-emerald-400 focus-visible:ring-emerald-400'
                   )}
                 />
                 <button
@@ -1169,12 +1642,95 @@ export function CompanyMasterForm({
                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {errors.confirmPassword && (
+                <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {errors.confirmPassword}
+                </p>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* SECTION 7: Form Actions */}
+      {/* SECTION 7: Dynamic Custom Fields from Master Builder */}
+      {customFields.length > 0 && (
+        <div className="space-y-4 pt-2 border-t border-border/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Boxes className="h-3.5 w-3.5 text-primary" />
+              <span>7. Custom Master Builder Fields</span>
+            </div>
+            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+              Dynamic Fields ({customFields.length})
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {customFields.map((field: any) => {
+              const fieldKey = field.fieldKey || field.field_key;
+              const fieldName = field.fieldName || field.field_name || fieldKey;
+              const isRequired = Boolean(field.isRequired ?? field.is_required);
+              const fieldType = field.fieldType || field.field_type || 'text';
+              const placeholder = field.placeholder || `Enter ${fieldName}`;
+              return (
+                <div key={field.id} className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    {fieldName} {isRequired && <span className="text-rose-500">*</span>}
+                  </label>
+                  {fieldType === 'textarea' ? (
+                    <textarea
+                      value={customFieldValues[fieldKey] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                      placeholder={placeholder}
+                      rows={3}
+                      className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  ) : fieldType === 'boolean' ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: true }))}
+                        className={cn(
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          customFieldValues[fieldKey]
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'bg-background text-muted-foreground border-border'
+                        )}
+                      >
+                        <Check className="h-3.5 w-3.5" /> Yes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: false }))}
+                        className={cn(
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          !customFieldValues[fieldKey]
+                            ? 'bg-muted text-foreground border-border'
+                            : 'bg-background text-muted-foreground border-border'
+                        )}
+                      >
+                        <X className="h-3.5 w-3.5" /> No
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      type={fieldType === 'number' ? 'number' : fieldType === 'email' ? 'email' : 'text'}
+                      value={customFieldValues[fieldKey] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                      placeholder={placeholder}
+                      className="text-xs h-10 bg-background rounded-xl"
+                      required={isRequired}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Form Actions */}
       <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
         {onCancel && (
           <Button
@@ -1219,7 +1775,6 @@ export function CompanyMasterForm({
     <div className="w-full space-y-6">
       {/* 2-Column Responsive Layout: Left Form Card (lg:col-span-7), Right Display List (lg:col-span-5) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
         {/* ========================================================================= */}
         {/* LEFT COLUMN: Company Information Form (lg:col-span-7)                     */}
         {/* ========================================================================= */}
@@ -1231,7 +1786,6 @@ export function CompanyMasterForm({
         {/* RIGHT COLUMN: Companies Directory List (lg:col-span-5)                    */}
         {/* ========================================================================= */}
         <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-6 shadow-xs text-foreground space-y-4">
-          
           {/* Directory Header */}
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-2">
@@ -1359,8 +1913,8 @@ export function CompanyMasterForm({
                           isSelected
                             ? 'bg-primary-foreground/20 text-primary-foreground'
                             : comp.status === 'Active'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
-                            : 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                              : 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400'
                         )}
                       >
                         {comp.status}

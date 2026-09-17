@@ -64,13 +64,16 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
       const rawIds = dept.companyIds ?? dept.company_ids;
       if (Array.isArray(rawIds)) {
         compIds = rawIds.map(Number).filter((n: number) => !isNaN(n) && n > 0);
-      } else if (typeof rawIds === 'string' && rawIds.trim()) {
+      } else if (typeof rawIds === 'string' && rawIds.trim() && rawIds !== '[]') {
         try {
           const parsed = JSON.parse(rawIds);
           if (Array.isArray(parsed)) {
             compIds = parsed.map(Number).filter((n: number) => !isNaN(n) && n > 0);
           }
-        } catch {}
+        } catch {
+          const parts = rawIds.split(',').map((s: string) => Number(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
+          if (parts.length > 0) compIds = parts;
+        }
       }
       if (compIds.length === 0) {
         const singleId = dept.company_id || dept.companyId;
@@ -96,17 +99,24 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
     }
   };
 
+  const isAllCompaniesSelected =
+    companies.length > 0 &&
+    companies.every((c) => selectedCompanyIds.some((id) => Number(id) === Number(c.id)));
+
   const handleToggleSelectAllCompanies = () => {
-    if (selectedCompanyIds.length === companies.length) {
+    if (isAllCompaniesSelected) {
       setSelectedCompanyIds([]);
     } else {
-      setSelectedCompanyIds(companies.map((c) => c.id));
+      setSelectedCompanyIds(companies.map((c) => Number(c.id)));
     }
   };
 
-  const handleToggleCompany = (companyId: number) => {
+  const handleToggleCompany = (companyId: number | string) => {
+    const numId = Number(companyId);
     setSelectedCompanyIds((prev) =>
-      prev.includes(companyId) ? prev.filter((id) => id !== companyId) : [...prev, companyId]
+      prev.some((id) => Number(id) === numId)
+        ? prev.filter((id) => Number(id) !== numId)
+        : [...prev, numId]
     );
   };
 
@@ -122,7 +132,8 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
     try {
       setIsSubmitting(true);
       const code = departmentCode.trim() || generateDeptCode(departmentName);
-      const firstCompanyId = selectedCompanyIds.length > 0 ? selectedCompanyIds[0] : null;
+      const cleanCompanyIds = selectedCompanyIds.map(Number).filter((n) => !isNaN(n) && n > 0);
+      const firstCompanyId = cleanCompanyIds.length > 0 ? cleanCompanyIds[0] : null;
 
       const payload = {
         name: departmentName.trim(),
@@ -135,8 +146,8 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
         description: description.trim() || null,
         companyId: firstCompanyId,
         company_id: firstCompanyId,
-        companyIds: selectedCompanyIds,
-        company_ids: selectedCompanyIds,
+        companyIds: cleanCompanyIds,
+        company_ids: cleanCompanyIds,
         companyEmails: defaultEmails,
         company_emails: defaultEmails,
         defaultEmails,
@@ -275,7 +286,7 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
                 <label className="flex items-center gap-2 font-bold text-foreground cursor-pointer border-b border-border/40 pb-2 text-xs">
                   <input
                     type="checkbox"
-                    checked={companies.length > 0 && selectedCompanyIds.length === companies.length}
+                    checked={isAllCompaniesSelected}
                     onChange={handleToggleSelectAllCompanies}
                     className="h-3.5 w-3.5 rounded text-cyan-600 focus:ring-cyan-500 border-input"
                   />
@@ -289,7 +300,7 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
                 ) : (
                   <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
                     {companies.map((comp) => {
-                      const isChecked = selectedCompanyIds.includes(comp.id);
+                      const isChecked = selectedCompanyIds.some((id) => Number(id) === Number(comp.id));
                       return (
                         <div key={comp.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
                           <label className="sm:col-span-6 flex items-center gap-2 text-foreground font-semibold cursor-pointer text-xs">

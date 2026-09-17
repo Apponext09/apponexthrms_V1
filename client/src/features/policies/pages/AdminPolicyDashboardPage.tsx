@@ -26,6 +26,7 @@ import {
   RefreshCw,
   X,
   Filter,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -155,6 +156,14 @@ export const AdminPolicyDashboardPage: React.FC = () => {
             className="font-bold text-xs gap-1.5 h-9"
           >
             <BarChart3 className="w-3.5 h-3.5 text-primary" /> Policy Reports
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate('/policies/queries')}
+            className="font-bold text-xs gap-1.5 h-9"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-primary" /> Policy Queries
           </Button>
         </div>
       </div>

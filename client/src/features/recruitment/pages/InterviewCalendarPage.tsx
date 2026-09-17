@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Calendar, Video, Clock, User, Star, Search, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, Filter, Building2, History, Phone, RotateCcw, X } from 'lucide-react';
+import { Calendar, Video, Clock, User, Star, Search, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, Filter, Building2, History, Phone, RotateCcw, X, RefreshCw } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient as api } from '@/config/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -381,22 +381,54 @@ export const InterviewCalendarPage: React.FC = () => {
     return name.substring(0, 2).toUpperCase();
   };
 
-  return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+  // 3 Top Cards State & Logic
+  const [isRefreshingToday, setIsRefreshingToday] = useState(false);
+  const [isRefreshingUpcoming, setIsRefreshingUpcoming] = useState(false);
+  const [isRefreshingPending, setIsRefreshingPending] = useState(false);
 
-      {/* ── Top Header Banner ────────────────────────────────────────────────── */}
+  const pendingFeedbackList = React.useMemo(() => {
+    return rawSchedule.filter((item: any) => {
+      const isCompleted = item.status === 'completed';
+      const isPastScheduled = item.scheduled_date && new Date(item.scheduled_date).getTime() < nowTime && item.status !== 'cancelled';
+      const hasFeedback = Boolean(item.feedback_submitted || item.feedbackSubmitted || (item.ratings && item.ratings.length > 0) || item.feedback_text);
+      return (isCompleted || isPastScheduled) && !hasFeedback;
+    });
+  }, [rawSchedule, nowTime]);
+
+  const handleRefreshSchedule = async (type: 'today' | 'upcoming' | 'pending') => {
+    if (type === 'today') {
+      setIsRefreshingToday(true);
+      await queryClient.invalidateQueries({ queryKey: ['interviews-today'] });
+      setTimeout(() => setIsRefreshingToday(false), 500);
+      toast.info("Today's schedule synced");
+    } else if (type === 'upcoming') {
+      setIsRefreshingUpcoming(true);
+      await queryClient.invalidateQueries({ queryKey: ['interviews-schedule'] });
+      setTimeout(() => setIsRefreshingUpcoming(false), 500);
+      toast.info("Upcoming schedule synced");
+    } else if (type === 'pending') {
+      setIsRefreshingPending(true);
+      await queryClient.invalidateQueries({ queryKey: ['interviews-schedule'] });
+      setTimeout(() => setIsRefreshingPending(false), 500);
+      toast.info("Pending feedback synced");
+    }
+  };
+
+  return (
+    <div className="space-y-6 pb-12">
+      {/* ── Header Banner ────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-2xl border border-border/80 shadow-2xs relative overflow-hidden">
         <div className="flex items-center gap-3.5 relative z-10">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold shrink-0 border border-indigo-500/20 shadow-xs">
-            <Calendar className="w-5 h-5" />
+          <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 border border-primary/20 shadow-xs">
+            <Video className="w-5 h-5" />
           </div>
           <div className="space-y-0.5">
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-                {isEmployeeView ? "My Assigned Interview Schedule" : "Interview Schedule & Scorecards"}
+                Interview Schedule & Rating
               </h1>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full">
-                {isEmployeeView ? "Employee Portal" : "Recruitment Desk"}
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25 font-bold text-[10px] px-2 py-0.5 rounded-full">
+                {isEmployeeView ? "My Assigned Interviews" : (assignedOnly ? "My Panel" : "All Company")}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -447,44 +479,171 @@ export const InterviewCalendarPage: React.FC = () => {
         </div>
       </div>
 
-      {/* ── KPI Stats Overview Cards ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* ── Top Schedule Cards Section ────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        
+        {/* Card 1: Today's Schedule */}
         <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Today's Active Meetings</p>
-              <p className="text-2xl font-black text-foreground">{activeTodayList.length}</p>
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Today's Interviews</CardTitle>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
-              <Clock className="w-6 h-6" />
-            </div>
+            <RefreshCw 
+              onClick={() => handleRefreshSchedule('today')}
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingToday ? 'animate-spin text-emerald-500' : ''
+              }`} 
+            />
+          </CardHeader>
+          <CardContent className="p-4">
+            {activeTodayList.length === 0 ? (
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                No interviews scheduled for today
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                {activeTodayList.map((item: any) => {
+                  const candidateName = item.candidate_name || item.candidateName || item.name || 'Candidate';
+                  const posTitle = item.position_title || item.positionTitle || item.jobTitle || 'N/A';
+                  const round = item.interview_round || item.interviewRound || 1;
+                  const intType = item.interview_type || item.interviewType || 'Interview';
+                  const timeStr = item.scheduled_date || item.scheduledDate;
+                  const meetingUrl = item.meeting_url || item.meetingUrl;
+
+                  return (
+                    <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="text-xs font-bold text-foreground truncate">{candidateName}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{posTitle} • Round {round}</div>
+                        <div className="text-[10px] text-primary font-bold uppercase tracking-wider">{intType}</div>
+                      </div>
+                      <div className="text-right space-y-1 shrink-0">
+                        <div className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                          {timeStr ? new Date(timeStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </div>
+                        {meetingUrl && (
+                          <a 
+                            href={meetingUrl} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="inline-block text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold px-2 py-0.5 rounded-md transition-all"
+                          >
+                            Join
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
+        {/* Card 2: Upcoming Schedule */}
         <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Upcoming Schedule</p>
-              <p className="text-2xl font-black text-foreground">{upcomingInterviews.length}</p>
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Upcoming Schedule</CardTitle>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-              <Calendar className="w-6 h-6" />
-            </div>
+            <RefreshCw 
+              onClick={() => handleRefreshSchedule('upcoming')}
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingUpcoming ? 'animate-spin text-amber-500' : ''
+              }`} 
+            />
+          </CardHeader>
+          <CardContent className="p-4">
+            {upcomingInterviews.length === 0 ? (
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                No upcoming interviews
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                {upcomingInterviews.map((item: any) => {
+                  const candidateName = item.candidate_name || item.candidateName || item.name || 'Candidate';
+                  const posTitle = item.position_title || item.positionTitle || item.jobTitle || 'N/A';
+                  const round = item.interview_round || item.interviewRound || 1;
+                  const intType = item.interview_type || item.interviewType || 'Interview';
+                  const dateVal = item.scheduled_date || item.scheduledDate;
+
+                  return (
+                    <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="text-xs font-bold text-foreground truncate">{candidateName}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{posTitle} • Round {round}</div>
+                        <div className="text-[10px] text-muted-foreground font-semibold uppercase">{intType}</div>
+                      </div>
+                      <div className="text-right space-y-0.5 shrink-0">
+                        <div className="text-[11px] font-bold text-amber-600 dark:text-amber-400 font-mono">
+                          {dateVal ? new Date(dateVal).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-mono">
+                          {dateVal ? new Date(dateVal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
+        {/* Card 3: Pending Feedback */}
         <Card className="bg-card border-border/80 shadow-2xs rounded-2xl overflow-hidden">
-          <CardContent className="p-5 flex items-center justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Assigned Mode</p>
-              <p className="text-xs font-bold text-foreground flex items-center gap-1.5 mt-1.5">
-                <ShieldCheck className="w-4 h-4 text-primary" />
-                {activeAssignedOnly ? "My Panel Assigned" : "Company Schedule"}
-              </p>
+          <CardHeader className="flex flex-row items-center justify-between p-4 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                <Star className="w-4 h-4" />
+              </div>
+              <CardTitle className="text-xs font-extrabold text-foreground">Pending Feedback</CardTitle>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-              <User className="w-6 h-6" />
-            </div>
+            <RefreshCw 
+              onClick={() => handleRefreshSchedule('pending')}
+              className={`h-3.5 w-3.5 text-muted-foreground hover:text-foreground cursor-pointer transition-transform duration-500 ${
+                isRefreshingPending ? 'animate-spin text-rose-500' : ''
+              }`} 
+            />
+          </CardHeader>
+          <CardContent className="p-4">
+            {pendingFeedbackList.length === 0 ? (
+              <div className="bg-muted/40 border border-border/60 rounded-xl p-5 text-center text-muted-foreground text-xs font-medium">
+                All interview feedback submitted
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                {pendingFeedbackList.map((item: any) => {
+                  const candidateName = item.candidate_name || item.candidateName || item.name || 'Candidate';
+                  const posTitle = item.position_title || item.positionTitle || item.jobTitle || 'N/A';
+                  const round = item.interview_round || item.interviewRound || 1;
+                  const intType = item.interview_type || item.interviewType || 'Interview';
+
+                  return (
+                    <div key={item.id} className="flex items-start justify-between p-2.5 rounded-xl border border-border/60 bg-muted/30 hover:bg-muted/60 transition-colors">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="text-xs font-bold text-foreground truncate">{candidateName}</div>
+                        <div className="text-[10px] text-muted-foreground truncate">{posTitle} • Round {round}</div>
+                        <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold uppercase">{intType}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openRatingModal(item.id, candidateName)}
+                        className="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-bold px-2 py-0.5 rounded-md transition-all cursor-pointer shrink-0"
+                      >
+                        Rate
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

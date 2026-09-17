@@ -35,6 +35,7 @@ export const ExpensePoliciesPage: React.FC = () => {
   const [maxLimitPerMonth, setMaxLimitPerMonth] = useState<number>(5000);
   const [requireReceiptAbove, setRequireReceiptAbove] = useState<number>(500);
   const [allowException, setAllowException] = useState(true);
+  const [isUnlimited, setIsUnlimited] = useState(false);
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -90,8 +91,12 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade(pol.grade || 'All');
       setDesignation(pol.designation || 'All');
       setLocation(pol.location || 'All');
-      setMaxLimitPerClaim(pol.maxLimitPerClaim);
-      setMaxLimitPerMonth(pol.maxLimitPerMonth);
+      const maxClaim = Number(pol.maxLimitPerClaim ?? (pol as any).max_limit_per_claim ?? 0);
+      const maxMonth = Number(pol.maxLimitPerMonth ?? (pol as any).max_limit_per_month ?? 0);
+      const unl = maxClaim === 0 && maxMonth === 0;
+      setIsUnlimited(unl);
+      setMaxLimitPerClaim(maxClaim > 0 ? maxClaim : 1000);
+      setMaxLimitPerMonth(maxMonth > 0 ? maxMonth : 5000);
       setRequireReceiptAbove(pol.requireReceiptAbove);
       setAllowException(pol.allowException);
       setIsActive(pol.isActive);
@@ -102,6 +107,7 @@ export const ExpensePoliciesPage: React.FC = () => {
       setGrade('All');
       setDesignation('All');
       setLocation('All');
+      setIsUnlimited(false);
       setMaxLimitPerClaim(1000);
       setMaxLimitPerMonth(5000);
       setRequireReceiptAbove(500);
@@ -109,6 +115,16 @@ export const ExpensePoliciesPage: React.FC = () => {
       setIsActive(true);
     }
     setIsModalOpen(true);
+  };
+
+  const handleCategorySelect = (cId: number | undefined) => {
+    setCategoryId(cId);
+    if (cId) {
+      const selectedCat = categories.find((c) => c.id === cId);
+      if (selectedCat && selectedCat.name.toLowerCase().includes('travel')) {
+        setIsUnlimited(true);
+      }
+    }
   };
 
   const handleSavePolicy = async () => {
@@ -124,8 +140,8 @@ export const ExpensePoliciesPage: React.FC = () => {
         grade,
         designation,
         location,
-        maxLimitPerClaim,
-        maxLimitPerMonth,
+        maxLimitPerClaim: isUnlimited ? 0 : maxLimitPerClaim,
+        maxLimitPerMonth: isUnlimited ? 0 : maxLimitPerMonth,
         requireReceiptAbove,
         allowException,
         isActive
@@ -227,10 +243,22 @@ export const ExpensePoliciesPage: React.FC = () => {
                         {pol.location || 'All'}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        {money(maxClaim)}
+                        {maxClaim > 0 ? (
+                          money(maxClaim)
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            No Limit
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                        {money(maxMonth)}
+                        {maxMonth > 0 ? (
+                          money(maxMonth)
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            No Limit
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300 font-semibold">
                         {money(reqReceipt)}
@@ -260,7 +288,7 @@ export const ExpensePoliciesPage: React.FC = () => {
         )}
       </div>
 
-      {/* CREATE MODAL */}
+      {/* CREATE / EDIT MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-6 space-y-4">
@@ -285,8 +313,8 @@ export const ExpensePoliciesPage: React.FC = () => {
                   <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Category</label>
                   <select
                     value={categoryId || ''}
-                    onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : undefined)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                    onChange={(e) => handleCategorySelect(e.target.value ? Number(e.target.value) : undefined)}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium"
                   >
                     <option value="">All Categories</option>
                     {categories.map((c) => (
@@ -348,36 +376,70 @@ export const ExpensePoliciesPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Claim (₹)</label>
+              {/* UNLIMITED / NO SPENDING LIMIT OPTION */}
+              <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/60 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    value={maxLimitPerClaim}
-                    onChange={(e) => setMaxLimitPerClaim(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                    type="checkbox"
+                    id="isUnlimited"
+                    checked={isUnlimited}
+                    onChange={(e) => setIsUnlimited(e.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                   />
+                  <label htmlFor="isUnlimited" className="font-semibold text-slate-800 dark:text-slate-200 cursor-pointer select-none">
+                    No Spending Limit / Unlimited (Remove Threshold Cap)
+                  </label>
                 </div>
+                {isUnlimited && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    Unlimited Active
+                  </span>
+                )}
+              </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Month</label>
-                  <input
-                    type="number"
-                    value={maxLimitPerMonth}
-                    onChange={(e) => setMaxLimitPerMonth(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
-                  />
+              {/* DYNAMIC LIMIT INPUTS vs UNLIMITED BANNER */}
+              {isUnlimited ? (
+                <div className="p-3 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">No Spending Limit Applied</p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                      Employees claiming under this policy (e.g. Travel) will not be restricted by per-claim or monthly maximum spending limits.
+                    </p>
+                  </div>
                 </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Claim (₹)</label>
+                    <input
+                      type="number"
+                      value={maxLimitPerClaim}
+                      onChange={(e) => setMaxLimitPerClaim(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                    />
+                  </div>
 
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Receipt Above (₹)</label>
-                  <input
-                    type="number"
-                    value={requireReceiptAbove}
-                    onChange={(e) => setRequireReceiptAbove(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
-                  />
+                  <div>
+                    <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Max / Month (₹)</label>
+                    <input
+                      type="number"
+                      value={maxLimitPerMonth}
+                      onChange={(e) => setMaxLimitPerMonth(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold"
+                    />
+                  </div>
                 </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Receipt Mandatory Above (₹)</label>
+                <input
+                  type="number"
+                  value={requireReceiptAbove}
+                  onChange={(e) => setRequireReceiptAbove(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs"
+                />
               </div>
 
               <div className="flex items-center gap-2 pt-1">
@@ -386,9 +448,9 @@ export const ExpensePoliciesPage: React.FC = () => {
                   id="allowException"
                   checked={allowException}
                   onChange={(e) => setAllowException(e.target.checked)}
-                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                 />
-                <label htmlFor="allowException" className="font-semibold text-slate-700 dark:text-slate-300">
+                <label htmlFor="allowException" className="font-semibold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                   Allow Employee Exception Justification
                 </label>
               </div>

@@ -76,14 +76,14 @@ export class UserRepository extends BaseRepository<User> {
 
     const roleCodesSet = new Set<string>(rolesRows.map((r) => r.code));
 
-    // Resolve accessRole from user.role or user_roles.
-    // Priority: explicit DB column first, then highest-privilege role from assignments.
+    // Resolve accessRole from actual role assignments first. The legacy user
+    // column can be stale (for example, "employee" after a promotion).
     // IMPORTANT: Never pick rolesRows[0] blindly — the DB return order is non-deterministic
     // and will cause lower-privilege roles (e.g. 'employee') to override higher ones
     // (e.g. 'finance') depending on insertion order.
-    let accessRole = (user as any).role || (user as any).access_role || (user as any).accessRole || '';
+    let accessRole = '';
 
-    if (!accessRole && rolesRows.length > 0) {
+    if (rolesRows.length > 0) {
       // Pick the highest-privilege role using a deterministic priority list
       const ROLE_PRIORITY: Record<string, number> = {
         super_admin: 100,
@@ -106,6 +106,11 @@ export class UserRepository extends BaseRepository<User> {
         (a, b) => (ROLE_PRIORITY[b.code] ?? 0) - (ROLE_PRIORITY[a.code] ?? 0)
       );
       accessRole = sorted[0].code;
+    }
+
+    // Retain support for legacy records which have no role assignment yet.
+    if (!accessRole) {
+      accessRole = (user as any).role || (user as any).access_role || (user as any).accessRole || '';
     }
 
     if (accessRole) {

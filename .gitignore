@@ -90,6 +90,7 @@ venv/
 **/.venv/
 **/venv_app/
 **/myenv/
+biometric/venv_new/
 biometric/venv/
 
 # Server Uploads & Candidate Resumes
@@ -106,3 +107,4 @@ server/test_*.js
 
 # Vite transient config-load artifacts
 *.timestamp-*.mjs
+*.zip

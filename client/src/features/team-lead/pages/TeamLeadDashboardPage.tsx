@@ -289,9 +289,10 @@ export function TeamLeadDashboardPage() {
               ) : (
                 <div className="divide-y divide-border/50 max-h-[440px] overflow-y-auto">
                   {members.slice(0, 10).map((emp: any, idx: number) => {
-                    const firstName = emp.first_name || emp.firstName || '';
-                    const lastName = emp.last_name || emp.lastName || '';
-                    const initials = `${firstName[0] || ''}${lastName[0] || ''}`.toUpperCase();
+                    const firstName = emp.firstName || emp.first_name || '';
+                    const lastName = emp.lastName || emp.last_name || '';
+                    const fullName = `${firstName} ${lastName}`.trim() || emp.name || emp.email || `Employee #${emp.id}`;
+                    const initials = `${firstName[0] || fullName[0] || 'E'}${lastName[0] || ''}`.toUpperCase();
                     const isActive = (emp.status || 'active').toLowerCase() === 'active';
                     const colorClass = memberAvatarPalettes[idx % memberAvatarPalettes.length];
 
@@ -308,7 +309,7 @@ export function TeamLeadDashboardPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-foreground truncate">
-                            {firstName} {lastName}
+                            {fullName}
                           </p>
                           <p className="text-[11px] text-muted-foreground truncate">
                             {emp.designation || 'Specialist'}

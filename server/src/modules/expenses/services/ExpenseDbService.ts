@@ -20,7 +20,8 @@ export class ExpenseDbService {
           });
         }
         await this.deactivateDuplicateCategories(db, organizationId);
-        await this.seedDefaultCategories(db, organizationId);
+        // NOTE: No default categories are auto-seeded.
+        // Admins must create categories manually via the Expense Settings > Categories page.
       }
 
       if (this.isInitialized) {
@@ -170,11 +171,24 @@ export class ExpenseDbService {
           table.bigInteger('approver_id').unsigned().nullable();
           table.string('approver_name', 150).notNullable();
           table.string('approver_role', 100).notNullable();
-          table.string('action', 50).notNullable();
+          table.string('action', 100).notNullable();
           table.text('comments').nullable();
+          table.boolean('is_absentee_override').defaultTo(false);
+          table.bigInteger('delegated_for_user_id').unsigned().nullable();
           table.timestamp('created_at').defaultTo(db.fn.now());
           table.index(['claim_id']);
+          table.index(['approver_id']);
         });
+      } else {
+        try {
+          const hasOverride = await db.schema.hasColumn('expense_approval_logs', 'is_absentee_override');
+          if (!hasOverride) {
+            await db.schema.table('expense_approval_logs', (t: any) => {
+              t.boolean('is_absentee_override').defaultTo(false);
+              t.bigInteger('delegated_for_user_id').unsigned().nullable();
+            });
+          }
+        } catch { /* ignore if column exists */ }
       }
 
       // 6. Travel Requests Table
@@ -289,6 +303,7 @@ export class ExpenseDbService {
           table.bigIncrements('id').primary();
           table.bigInteger('organization_id').unsigned().notNullable();
           table.string('name', 150).notNullable();
+          table.string('target_role', 50).defaultTo('all');
           table.text('description').nullable();
           table.decimal('min_amount', 15, 2).defaultTo(0);
           table.decimal('max_amount', 15, 2).defaultTo(10000000);
@@ -297,6 +312,13 @@ export class ExpenseDbService {
           table.timestamps(true, true);
           table.index(['organization_id']);
         });
+      } else {
+        const hasTargetRole = await db.schema.hasColumn('expense_workflows', 'target_role').catch(() => false);
+        if (!hasTargetRole) {
+          await db.schema.alterTable('expense_workflows', (table: any) => {
+            table.string('target_role', 50).defaultTo('all');
+          }).catch(() => null);
+        }
       }
 
       // 11. Expense Workflow Approval Levels Table
@@ -353,7 +375,6 @@ export class ExpenseDbService {
         ['default_advance_status', (t) => t.string('default_advance_status', 50).notNullable().defaultTo('pending_finance')],
         ['workflow_fallback_max_amount', (t) => t.decimal('workflow_fallback_max_amount', 15, 2).notNullable().defaultTo(10000000)],
         ['number_sequence_digits', (t) => t.integer('number_sequence_digits').notNullable().defaultTo(6)],
-        ['workflows_seeded', (t) => t.boolean('workflows_seeded').notNullable().defaultTo(false)],
       ];
       for (const [name, build] of cols) {
         const exists = await db.schema.hasColumn('expense_settings', name).catch(() => false);
@@ -459,8 +480,8 @@ export class ExpenseDbService {
           table.string('submitted_by_role', 50).nullable();
         }).catch(() => null);
       }
-      // Ensure workflow columns exist on workflow tables (expense_claims, travel_requests, mileage_claims)
-      if (['expense_claims', 'travel_requests', 'mileage_claims'].includes(tableName)) {
+      // Ensure workflow columns exist on workflow tables (expense_claims, travel_requests, mileage_claims, travel_advances)
+      if (['expense_claims', 'travel_requests', 'mileage_claims', 'travel_advances'].includes(tableName)) {
         const hasCurrentLevel = await db.schema.hasColumn(tableName, 'current_level').catch(() => false);
         if (!hasCurrentLevel) {
           await db.schema.alterTable(tableName, (table: any) => {
@@ -480,7 +501,6 @@ export class ExpenseDbService {
     // Auto-fix legacy claims submitted by Admin / CEO / HR stuck in pending_level_1
     try {
       const adminUsers = await db('users')
-        .where('organization_id', organizationId)
         .where(function (this: any) {
           this.whereRaw("LOWER(role) LIKE '%admin%'")
             .orWhereRaw("LOWER(role) LIKE '%ceo%'")
@@ -490,10 +510,9 @@ export class ExpenseDbService {
         .catch(() => []);
       const adminUserIds = (adminUsers || []).map((u: any) => Number(u.id)).filter(Boolean);
 
-      const tablesToMigrate = ['mileage_claims', 'expense_claims', 'travel_requests'];
+      const tablesToMigrate = ['mileage_claims', 'expense_claims', 'travel_requests', 'travel_advances'];
       for (const t of tablesToMigrate) {
         await db(t)
-          .where('organization_id', organizationId)
           .where(function (this: any) {
             this.whereIn('submitted_by_role', ['admin', 'ceo', 'organization_admin', 'super_admin', 'hr'])
               .orWhereIn('submitted_by_user_id', adminUserIds.length ? adminUserIds : [0]);
@@ -505,11 +524,25 @@ export class ExpenseDbService {
             current_level: 3,
             current_approver_role: 'Finance Verification'
           }).catch(() => null);
+
+        // Auto-fix any records where status is pending_level_2 or pending_manager but current_level < 2
+        await db(t)
+          .whereIn('status', ['pending_level_2', 'pending_manager'])
+          .where(function (this: any) {
+            this.whereNull('current_level').orWhere('current_level', '<', 2);
+          })
+          .update({ current_level: 2 }).catch(() => null);
+
+        // Auto-fix any records where status is pending_level_3 but current_level < 3
+        await db(t)
+          .where('status', 'pending_level_3')
+          .where(function (this: any) {
+            this.whereNull('current_level').orWhere('current_level', '<', 3);
+          })
+          .update({ current_level: 3 }).catch(() => null);
       }
     } catch { /* ignore */ }
-  }
-
-
+}
   private static async deactivateDuplicateCategories(db: any, organizationId: number): Promise<void> {
     try {
       const rows = await db('expense_categories')
@@ -534,41 +567,4 @@ export class ExpenseDbService {
     }
   }
 
-  public static async seedDefaultCategories(db: any, organizationId: number): Promise<void> {
-    try {
-      const existing = await db('expense_categories')
-        .where('organization_id', organizationId)
-        .first()
-        .catch(() => null);
-
-      if (existing) return;
-
-      const defaults = [
-        { name: 'Travel & Lodging', code: 'TRAVEL', description: 'Flight, train, hotel, and accommodation expenses', spending_limit: 50000, is_receipt_mandatory: true, min_amount_for_receipt: 500, auto_approval_threshold: 1000 },
-        { name: 'Meals & Food', code: 'MEALS', description: 'Business meals, food, and dining out expenses', spending_limit: 5000, is_receipt_mandatory: true, min_amount_for_receipt: 200, auto_approval_threshold: 500 },
-        { name: 'Fuel & Local Conveyance', code: 'CONVEYANCE', description: 'Cab, auto, bus, fuel, and local transport', spending_limit: 10000, is_receipt_mandatory: false, min_amount_for_receipt: 500, auto_approval_threshold: 500 },
-        { name: 'Office Supplies & Stationery', code: 'SUPPLIES', description: 'Paper, pens, toner, and small office consumables', spending_limit: 15000, is_receipt_mandatory: true, min_amount_for_receipt: 500, auto_approval_threshold: 1000 },
-        { name: 'Telephone & Internet', code: 'COMMUNICATION', description: 'Mobile recharge, broadband, and phone bill claims', spending_limit: 3000, is_receipt_mandatory: true, min_amount_for_receipt: 100, auto_approval_threshold: 500 },
-        { name: 'Client Entertainment', code: 'ENTERTAINMENT', description: 'Hosting clients, meeting refreshments, and events', spending_limit: 20000, is_receipt_mandatory: true, min_amount_for_receipt: 500, auto_approval_threshold: 0 },
-        { name: 'Training & Certification', code: 'TRAINING', description: 'Courses, exams, books, and skill development', spending_limit: 30000, is_receipt_mandatory: true, min_amount_for_receipt: 1000, auto_approval_threshold: 0 },
-        { name: 'Medical Expenses', code: 'MEDICAL', description: 'Emergency medical reimbursements and health checks', spending_limit: 25000, is_receipt_mandatory: true, min_amount_for_receipt: 500, auto_approval_threshold: 0 },
-        { name: 'Miscellaneous', code: 'MISC', description: 'Other general business expenses not categorized elsewhere', spending_limit: 5000, is_receipt_mandatory: false, min_amount_for_receipt: 500, auto_approval_threshold: 500 },
-      ];
-
-      const now = new Date();
-      const rows = defaults.map((d) => ({
-        organization_id: organizationId,
-        ...d,
-        is_active: true,
-        created_at: now,
-        updated_at: now,
-      }));
-
-      await db('expense_categories').insert(rows).catch((err: any) => {
-        console.error('Failed to seed default categories:', err);
-      });
-    } catch (err) {
-      console.error('Error seeding default categories:', err);
-    }
-  }
 }
