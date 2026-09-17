@@ -46,9 +46,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     const tableName = this.tableName;
     let q = this.db(tableName).where(`${tableName}.organization_id`, ctx.organizationId);
     if (this.companyScoped && ctx?.companyId) {
-      q = q.where((builder) => {
-        builder.where(`${tableName}.company_id`, ctx.companyId).orWhereNull(`${tableName}.company_id`);
-      });
+      q = q.where(`${tableName}.company_id`, ctx.companyId);
     }
     return q as QueryBuilder<T>;
   }
@@ -70,9 +68,12 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     try {
       // Use raw query to bypass Knex query validation issues
       const idCol = this.isPrimaryKeyUuid(id) ? 'uuid' : 'id';
+      const companyFilter = this.companyScoped && ctx?.companyId ? ' AND ?? = ?' : '';
+      const bindings: any[] = [this.tableName, 'organization_id', ctx.organizationId, idCol, id];
+      if (companyFilter) bindings.push('company_id', ctx.companyId);
       const result = await this.db.raw(
-        `SELECT * FROM ?? WHERE ?? = ? AND ?? = ? LIMIT 1`,
-        [this.tableName, 'organization_id', ctx.organizationId, idCol, id]
+        `SELECT * FROM ?? WHERE ?? = ? AND ?? = ?${companyFilter} LIMIT 1`,
+        bindings
       ) as any;
 
       // Extract results from raw query response
@@ -195,7 +196,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       created_at: mysqlNow(),
       updated_at: mysqlNow(),
     };
-    if (this.companyScoped && ctx?.companyId && insertPayload.company_id === undefined) {
+    if (this.companyScoped && ctx?.companyId) {
       insertPayload.company_id = ctx.companyId;
     }
     const [id] = await this.db(this.tableName).insert(insertPayload);
@@ -216,6 +217,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     const prepared = dataArray.map((data) => ({
       ...data,
       organization_id: ctx.organizationId,
+      ...(this.companyScoped && ctx?.companyId ? { company_id: ctx.companyId } : {}),
       created_at: now,
       updated_at: now,
     }));
@@ -233,10 +235,12 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Update a record
    */
   async update(ctx: TenantContext, id: number | string, data: Partial<T>): Promise<T> {
-    const updateData = {
+    const updateData: any = {
       ...data,
       updated_at: mysqlNow(),
     };
+    // A request may update fields only; it must never transfer a record to a different company.
+    if (this.companyScoped) delete updateData.company_id;
 
     await (this.query(ctx)
       .where(this.isPrimaryKeyUuid(id) ? 'uuid' : 'id', id)

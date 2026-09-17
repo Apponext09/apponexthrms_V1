@@ -80,9 +80,11 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
       }
 
       if (req.ctx?.organizationId && (await db.schema.hasColumn(table, 'organization_id'))) {
-        builder = builder.where(function () {
-          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
-        });
+        builder = builder.where('organization_id', req.ctx.organizationId);
+      }
+
+      if (req.ctx?.companyId && (await db.schema.hasColumn(table, 'company_id'))) {
+        builder = builder.where('company_id', req.ctx.companyId);
       }
 
       // Dynamically detect existing ID column (prioritize primary key id)
@@ -371,9 +373,10 @@ router.get('/scope-masters', asyncHandler(async (req: Request, res: Response) =>
     if (hasSalaryComps) {
       let q = db('salary_components').whereNull('deleted_at');
       if (req.ctx?.organizationId && (await db.schema.hasColumn('salary_components', 'organization_id'))) {
-        q = q.where(function () {
-          this.where('organization_id', req.ctx?.organizationId).orWhereNull('organization_id');
-        });
+        q = q.where('organization_id', req.ctx.organizationId);
+      }
+      if (req.ctx?.companyId && (await db.schema.hasColumn('salary_components', 'company_id'))) {
+        q = q.where('company_id', req.ctx.companyId);
       }
       const hasCompName = await db.schema.hasColumn('salary_components', 'component_name');
       const hasName = await db.schema.hasColumn('salary_components', 'name');
@@ -1042,15 +1045,7 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     .whereNull('deleted_at');
 
   if (ctx.companyId) {
-    const cIdNum = Number(ctx.companyId);
-    const cIdStr = String(ctx.companyId);
-    query = query.where((builder) => {
-      builder.where('company_id', cIdNum)
-        .orWhereRaw("JSON_CONTAINS(company_ids, ?)", [JSON.stringify(cIdNum)])
-        .orWhereRaw("JSON_CONTAINS(company_ids, ?)", [JSON.stringify(cIdStr)])
-        .orWhereNull('company_id')
-        .orWhereNull('company_ids');
-    });
+    query = query.where('company_id', ctx.companyId);
   }
 
   const departments = await query
@@ -1230,7 +1225,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
+  const companyId = ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
   const status = (isActive === 'No' || isActive === 'inactive') ? 'inactive' : 'active';
 
@@ -1253,8 +1248,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   }
 
   // Build insert payload — always include all extended fields
-  const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
-  const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, companyId);
+  const companyIdsArray = companyId ? [Number(companyId)] : [];
 
   const rawCompanyEmails = req.body.companyEmails ?? req.body.company_emails ?? req.body.defaultEmails;
   const companyEmailsJson = (rawCompanyEmails && typeof rawCompanyEmails === 'object')
@@ -1334,6 +1328,7 @@ router.get('/departments/:id', asyncHandler(async (req: Request, res: Response) 
 
   const dept = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .first();
 
   if (!dept) {
@@ -1462,12 +1457,9 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
   }
 
   // Company IDs
-  const rawCompanyIds = req.body.companyIds !== undefined ? req.body.companyIds : req.body.company_ids;
-  const rawCompanyId  = req.body.companyId  !== undefined ? req.body.companyId  : req.body.company_id;
-  if (rawCompanyIds !== undefined || rawCompanyId !== undefined) {
-    const companyIdsArray = parseDeptCompanyIds(rawCompanyIds, rawCompanyId);
-    updatePayload.company_ids = companyIdsArray.length > 0 ? JSON.stringify(companyIdsArray) : null;
-    updatePayload.company_id  = companyIdsArray.length > 0 ? companyIdsArray[0] : (rawCompanyId ? Number(rawCompanyId) : null);
+  if (ctx.companyId) {
+    updatePayload.company_ids = JSON.stringify([Number(ctx.companyId)]);
+    updatePayload.company_id = Number(ctx.companyId);
   }
 
   // Company emails
@@ -1479,6 +1471,7 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .update(updatePayload);
 
 
@@ -1489,6 +1482,7 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const updated = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .first();
 
   // Parse company_ids from updated row
@@ -1551,6 +1545,7 @@ router.delete('/departments/:id', asyncHandler(async (req: Request, res: Respons
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
+    .modify((builder) => { if (ctx.companyId) builder.where('company_id', ctx.companyId); })
     .delete();
 
   if (!count) {
@@ -4058,6 +4053,7 @@ router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(re
         table.bigIncrements('id').primary();
         table.string('uuid', 36).notNullable().unique();
         table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.bigInteger('company_id').unsigned().notNullable().index();
         table.string('name', 150).notNullable();
         table.enum('break_type', ['Manual', 'Auto']).notNullable().defaultTo('Manual');
         table.string('biometric_device', 100).nullable();
@@ -4072,6 +4068,23 @@ router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(re
         table.index(['organization_id', 'is_active']);
       });
       console.log('[Settings] ✅ Created table: breaks');
+    } else if (!await db.schema.hasColumn('breaks', 'company_id')) {
+      await db.schema.alterTable('breaks', (table) => {
+        table.bigInteger('company_id').unsigned().nullable().index().after('organization_id');
+      });
+      const organizations = await db('breaks').whereNull('company_id').distinct('organization_id');
+      for (const row of organizations) {
+        let companyQuery = db('company')
+          .where('organization_id', row.organization_id)
+          .whereNull('deleted_at');
+        if (await db.schema.hasColumn('company', 'is_parent')) {
+          companyQuery = companyQuery.orderBy('is_parent', 'desc');
+        }
+        const company = await companyQuery.orderBy('company_id', 'asc').first('company_id');
+        if (company?.company_id) {
+          await db('breaks').where('organization_id', row.organization_id).whereNull('company_id').update({ company_id: company.company_id });
+        }
+      }
     }
   } catch (err) {
     console.error('[Settings] ❌ Failed to create breaks table:', err);
