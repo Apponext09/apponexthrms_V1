@@ -14,7 +14,7 @@ import {
   CreditCard,
   Shield,
   ChevronDown,
-  RefreshCw,
+  GitBranch,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -43,8 +43,7 @@ const INTERN_NAV = [
     label: 'OVERVIEW',
     items: [
       { name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard },
-      { name: 'My Profile',   href: '/intern/profile',   icon: User },
-      { name: 'My Lifecycle', href: '/intern/lifecycle', icon: RefreshCw },
+      { name: 'My Lifecycle', href: '/intern/lifecycle', icon: GitBranch },
     ],
   },
   {
@@ -191,7 +190,11 @@ export function InternSidebar({ open, onOpenChange }: InternSidebarProps) {
 
       {/* ── User Footer ── */}
       <div className="border-t border-border p-3">
-        <div className={cn('flex items-center gap-3', !open && 'justify-center')}>
+        <div
+          onClick={() => navigate('/intern/profile')}
+          className={cn('flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors', !open && 'justify-center')}
+          title="View Profile"
+        >
           <Avatar className={cn('h-8 w-8 flex-shrink-0 border-2', C.avatarBorder)}>
             <AvatarImage src={user?.avatarUrl} />
             <AvatarFallback className={cn('text-xs font-bold text-white', C.avatarBg)}>
@@ -222,7 +225,7 @@ export function InternSidebar({ open, onOpenChange }: InternSidebarProps) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={handleLogout}
+                  onClick={(e) => { e.stopPropagation(); handleLogout(); }}
                   title="Sign out"
                 >
                   <LogOut size={13} />

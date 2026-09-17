@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,7 +9,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX, Shield, RefreshCw
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX, Shield, GitBranch
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -43,7 +42,7 @@ const TEAM_LEAD_NAV = [
     items: [
       { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
       { name: 'My Team', href: '/team-lead/members', icon: Building2 },
-      { name: 'My Lifecycle', href: '/team-lead/lifecycle', icon: RefreshCw },
+      { name: 'My Lifecycle', href: '/team-lead/lifecycle', icon: GitBranch },
     ],
   },
   {

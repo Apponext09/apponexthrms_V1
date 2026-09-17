@@ -308,41 +308,80 @@ export class AdminDashboardService {
 
     // ── Pending Approvals (Approval Inbox total) ──────────────────────────────
     // Matches the Approval Inbox count on /approvals/dashboard.
-    // Source: workflow_approvals (any pending-like status) + leave_applications (submitted/pending).
     let pendingApprovals = 0;
     try {
-      // workflow_approvals — any status that starts with 'Pending' or 'pending', or is 'submitted'
-      let workflowApprovalQuery = db('workflow_approvals')
-        .whereNull('deleted_at')
-        .where(function () {
-          this.where('status', 'like', 'Pending%')
-            .orWhere('status', 'like', 'pending%')
-            .orWhereIn('status', ['submitted', 'escalated']);
-        });
+      // 1. leave_applications — submitted or any pending variant
+      let laQuery = db('leave_applications as la')
+        .whereNull('la.deleted_at')
+        .whereIn('la.status', ['submitted', 'pending', 'pending_manager', 'pending_hr', 'pending_hr_override', 'pending_team_lead', 'escalated']);
       if (targetCompanyId) {
-        // workflow_approvals has no company_id. Its applicant is the authoritative
-        // company relationship, so scope via that employee instead.
+        laQuery = laQuery
+          .join('employees as e', 'la.employee_id', 'e.id')
+          .where('e.company_id', targetCompanyId)
+          .whereNull('e.deleted_at');
+      } else {
+        laQuery = laQuery.where('la.organization_id', organizationId);
+      }
+      const [laRow] = await laQuery.count('* as count');
+      pendingApprovals += Number(laRow?.count || 0);
+
+      // 2. attendance_regularizations
+      try {
+        let arQuery = db('attendance_regularizations as ar')
+          .whereNull('ar.deleted_at')
+          .where(function () {
+            this.where('ar.status', 'like', 'pending%')
+              .orWhere('ar.status', 'submitted');
+          });
+        if (targetCompanyId) {
+          arQuery = arQuery
+            .join('employees as e', 'ar.employee_id', 'e.id')
+            .where('e.company_id', targetCompanyId)
+            .whereNull('e.deleted_at');
+        } else {
+          arQuery = arQuery.where('ar.organization_id', organizationId);
+        }
+        const [arRow] = await arQuery.count('* as count');
+        pendingApprovals += Number(arRow?.count || 0);
+      } catch (e) {}
+
+      // 3. workflow_approvals — non-duplicate modules
+      let workflowApprovalQuery = db('workflow_approvals as wa')
+        .whereNull('wa.deleted_at')
+        .where(function () {
+          this.where('wa.status', 'like', 'Pending%')
+            .orWhere('wa.status', 'like', 'pending%')
+            .orWhereIn('wa.status', ['submitted', 'escalated']);
+        })
+        .whereNotIn('wa.module_type', ['Leave', 'leave', 'leaves', 'Attendance', 'attendance']);
+
+      if (targetCompanyId) {
         workflowApprovalQuery = workflowApprovalQuery
-          .join('employees as workflow_applicant', 'workflow_approvals.applicant_id', 'workflow_applicant.id')
+          .join('employees as workflow_applicant', 'wa.applicant_id', 'workflow_applicant.id')
           .where('workflow_applicant.company_id', targetCompanyId)
           .whereNull('workflow_applicant.deleted_at');
       } else {
-        workflowApprovalQuery = workflowApprovalQuery.where('workflow_approvals.organization_id', organizationId);
+        workflowApprovalQuery = workflowApprovalQuery.where('wa.organization_id', organizationId);
       }
       const [waRow] = await workflowApprovalQuery.count('* as count');
       pendingApprovals += Number(waRow?.count || 0);
 
-      // leave_applications — submitted or any pending variant
-      let laQuery = db('leave_applications')
-        .whereNull('deleted_at')
-        .whereIn('status', ['submitted', 'pending', 'pending_manager', 'pending_hr', 'pending_hr_override', 'escalated']);
-      if (targetCompanyId) {
-        laQuery = laQuery.where('company_id', targetCompanyId);
-      } else {
-        laQuery = laQuery.where('organization_id', organizationId);
-      }
-      const [laRow] = await laQuery.count('* as count');
-      pendingApprovals += Number(laRow?.count || 0);
+      // 4. expense_claims
+      try {
+        let ecQuery = db('expense_claims as ec')
+          .whereNull('ec.deleted_at')
+          .whereIn('ec.status', ['submitted', 'pending', 'pending_manager', 'pending_finance', 'pending_hr']);
+        if (targetCompanyId) {
+          ecQuery = ecQuery
+            .join('employees as e', 'ec.employee_id', 'e.id')
+            .where('e.company_id', targetCompanyId)
+            .whereNull('e.deleted_at');
+        } else {
+          ecQuery = ecQuery.where('ec.organization_id', organizationId);
+        }
+        const [ecRow] = await ecQuery.count('* as count');
+        pendingApprovals += Number(ecRow?.count || 0);
+      } catch (e) {}
     } catch (err) {
       pendingApprovals = 0;
     }

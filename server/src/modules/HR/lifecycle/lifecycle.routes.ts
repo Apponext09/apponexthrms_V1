@@ -8,6 +8,7 @@ const router = Router();
 router.use(authenticate, resolveTenant);
 
 router.get('/employees', lifecycleController.getEmployeeLifecycleSummaries);
+router.get('/employees/me', lifecycleController.getMyEmployeeLifecycleDetails);
 router.get('/employees/:id', lifecycleController.getEmployeeLifecycleDetails);
 router.get('/managers', lifecycleController.getManagers);
 router.post('/transfers', lifecycleController.transferEmployee);

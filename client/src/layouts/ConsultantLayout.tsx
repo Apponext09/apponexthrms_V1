@@ -17,7 +17,6 @@ import { ConsultantSidebar } from './ConsultantSidebar';
 // ── Page title helper ─────────────────────────────────────────────────────────
 function getPageTitle(pathname: string): string {
   if (pathname.includes('/attendance'))       return 'My Attendance';
-  if (pathname.includes('/lifecycle'))        return 'My Lifecycle';
   if (pathname.includes('/leaves'))           return 'My Leaves';
   if (pathname.includes('/payslips'))         return 'My Payslips';
   if (pathname.includes('/expenses'))         return 'Expense Claims';
@@ -126,18 +125,6 @@ export function ConsultantLayout() {
 
             {/* Notifications bell */}
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            {/* Avatar */}
-            <Avatar
-              className="h-8 w-8 cursor-pointer border-2 border-violet-300 dark:border-violet-700"
-              onClick={() => navigate('/consultant/profile')}
-              title="My Profile"
-            >
-              <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-violet-600 text-xs font-bold text-white">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
           </div>
         </header>
 

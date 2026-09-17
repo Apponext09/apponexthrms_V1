@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield, UserCheck, RefreshCw
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX, Shield, UserCheck, GitBranch
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -44,7 +44,7 @@ const MANAGER_NAV = [
     items: [
       { name: 'Dashboard', href: '/manager/dashboard', icon: LayoutDashboard },
       { name: 'My Department', href: '/manager/team', icon: Building2 },
-      { name: 'My Lifecycle', href: '/manager/lifecycle', icon: RefreshCw },
+      { name: 'My Lifecycle', href: '/manager/lifecycle', icon: GitBranch },
     ],
   },
   {

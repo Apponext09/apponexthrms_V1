@@ -5,6 +5,7 @@ import { TeamLeadLayout } from '../layouts/TeamLeadLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const TeamLeadDashboardPage = lazy(() => import('../features/team-lead/pages/TeamLeadDashboardPage').then(m => ({ default: m.TeamLeadDashboardPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const TeamMembersPage = lazy(() => import('../features/team-lead/pages/TeamMembersPage').then(m => ({ default: m.TeamMembersPage })));
 // Team Leads use the employee profile view; edits require HR/Admin approval.
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
@@ -36,7 +37,6 @@ const MrfRequestPage = lazy(() => import('../features/recruitment/pages/MrfReque
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
 const TeamSettlementsPage = lazy(() => import('../features/payroll/pages/TeamSettlementsPage').then(m => ({ default: m.TeamSettlementsPage })));
-const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 
 // ── Team Lead Portal Routes (/team-lead/*) ────────────────────────────────────
 export const teamLeadRoutes = (
@@ -50,8 +50,6 @@ export const teamLeadRoutes = (
     <Route path="/team-lead" element={<Navigate to="/team-lead/dashboard" replace />} />
     <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
     <Route path="/team-lead/members" element={<TeamMembersPage />} />
-    <Route path="/team-lead/lifecycle" element={<MyLifecyclePage />} />
-    <Route path="/team-lead/lifecycle/*" element={<MyLifecyclePage />} />
     <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
     <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
     <Route path="/team-lead/attendance-log" element={<AttendancePage />} />
@@ -88,6 +86,7 @@ export const teamLeadRoutes = (
     <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
     <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
     <Route path="/team-lead/profile" element={<ProfilePage />} />
+    <Route path="/team-lead/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/team-lead/leaves" element={<LeavePage />} />
     <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
     <Route path="/team-lead/leaves/approvals-dashboard" element={<ApprovalsDashboardPage />} />

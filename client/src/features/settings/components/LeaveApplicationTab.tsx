@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,22 +39,22 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
   formData,
   setFormData,
   companies = [],
-  departments,
-  locations,
+  departments = [],
+  locations = [],
   subDepartments = [],
   designations = [],
-  gradeOptions,
-  employeeTypeOptions,
+  gradeOptions = [],
+  employeeTypeOptions = [],
   employeeStatusOptions = [],
-  leaveTypes,
+  leaveTypes = [],
 }) => {
-  const app = formData.application || {};
+  const app = formData?.application || {};
 
   const updateApp = (key: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
       application: {
-        ...prev.application,
+        ...(prev?.application || {}),
         [key]: value,
       },
     }));
@@ -560,14 +560,14 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
             },
           }));
         }}
-        companies={companies}
-        locations={locations}
-        departments={departments}
-        subDepartments={subDepartments}
-        designations={designations}
-        grades={gradeOptions}
-        employeeTypes={employeeTypeOptions}
-        employeeStatuses={employeeStatusOptions}
+        companies={companies || []}
+        locations={locations || []}
+        departments={departments || []}
+        subDepartments={subDepartments || []}
+        designations={designations || []}
+        grades={gradeOptions || []}
+        employeeTypes={employeeTypeOptions || []}
+        employeeStatuses={employeeStatusOptions || []}
       />
 
       {/* 10. Only when */}
@@ -587,9 +587,9 @@ export const LeaveApplicationTab: React.FC<LeaveApplicationTabProps> = ({
           <RuleConditionBuilder
             value={app.onlyWhen || app.only_when}
             onChange={(newGroup) => updateApp('onlyWhen', newGroup)}
-            departments={departments}
-            locations={locations}
-            grades={gradeOptions.map((g, i) => ({ id: i + 1, name: g }))}
+            departments={departments || []}
+            locations={locations || []}
+            grades={(gradeOptions || []).map((g, i) => ({ id: i + 1, name: g }))}
           />
         </CardContent>
       </Card>

@@ -39,6 +39,9 @@ const ApprovalInboxPage = lazy(() => import('../features/leaves/pages/ApprovalIn
 const ApprovalsDashboardPage = lazy(() => import('../features/leaves/pages/ApprovalsDashboardPage').then(m => ({ default: m.ApprovalsDashboardPage })));
 const HolidayCalendarsPage = lazy(() => import('../features/settings/pages/HolidayCalendarsPage').then(m => ({ default: m.HolidayCalendarsPage })));
 const FaceAttendancePage = lazy(() => import('../features/employee/portal-pages/FaceAttendancePage'));
+const MyAttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
+const MyAttendanceCorrectionPage = lazy(() => import('../features/employee/portal-pages/RegularizationPage'));
+const MyShiftRosterPage = lazy(() => import('../features/employee/portal-pages/ShiftRosterPage'));
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
 const EmployeeRequestsPage = lazy(() => import('../features/HR/requests/EmployeeRequestsPage').then(m => ({ default: m.EmployeeRequestsPage })));
@@ -114,6 +117,7 @@ const WorkflowListPage = lazy(() => import('../features/workflow/pages/WorkflowL
 const WorkflowBuilderPage = lazy(() => import('../features/workflow/pages/WorkflowBuilderPage').then(m => ({ default: m.WorkflowBuilderPage })));
 const WorkflowDetailPage = lazy(() => import('../features/workflow/pages/WorkflowDetailPage').then(m => ({ default: m.WorkflowDetailPage })));
 const WorkflowSettingsPage = lazy(() => import('../features/workflow/pages/WorkflowSettingsPage').then(m => ({ default: m.WorkflowSettingsPage })));
+const WorkHourWorkflowPage = lazy(() => import('../features/attendance/pages/WorkHourWorkflowPage'));
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
 const CompanyProfilePage = lazy(() => import('../features/settings/pages/CompanyProfilePage').then(m => ({ default: m.CompanyProfilePage })));
 const BranchesPage = lazy(() => import('../features/settings/pages/BranchesPage').then(m => ({ default: m.BranchesPage })));
@@ -241,8 +245,13 @@ export const hrRoutes = (
     <Route path="/hr/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
     <Route path="/hr/attendance-policies" element={<AttendancePoliciesPage />} />
     <Route path="/hr/attendance/policies" element={<AttendancePoliciesPage />} />
+    <Route path="/hr/attendance/workflow-settings" element={<WorkHourWorkflowPage />} />
     <Route path="/hr/face-attendance" element={<FaceAttendancePage />} />
     <Route path="/HR/face-attendance" element={<FaceAttendancePage />} />
+    {/* HR remains an employee for self-service attendance. */}
+    <Route path="/hr/my-attendance" element={<MyAttendancePage />} />
+    <Route path="/hr/my-attendance-correction" element={<MyAttendanceCorrectionPage />} />
+    <Route path="/hr/my-shifts" element={<MyShiftRosterPage />} />
     <Route path="/hr/attendance/locations" element={<HRAttendanceLocationPage />} />
     <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
     <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />

@@ -5,6 +5,7 @@ import { InternLayout } from '../layouts/InternLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const InternDashboardPage = lazy(() => import('../features/intern/pages/InternDashboardPage').then(m => ({ default: m.InternDashboardPage })));
+const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
 const AttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
@@ -14,7 +15,6 @@ const HolidayCalendarPage = lazy(() => import('../features/employee/portal-pages
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
 const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
 const OrgChartPage = lazy(() => import('../features/employee/portal-pages/OrgChartPage'));
-const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 
 // ── Intern Portal Routes (/intern/*) ─────────────────────────────────────────
 export const internRoutes = (
@@ -29,7 +29,6 @@ export const internRoutes = (
     <Route path="/intern/dashboard" element={<InternDashboardPage />} />
     <Route path="/intern/profile" element={<ProfilePage />} />
     <Route path="/intern/lifecycle" element={<MyLifecyclePage />} />
-    <Route path="/intern/lifecycle/*" element={<MyLifecyclePage />} />
     <Route path="/intern/attendance" element={<AttendancePage />} />
     <Route path="/intern/leaves" element={<LeavePage />} />
     <Route path="/intern/payslips" element={<PayslipViewer />} />

@@ -32,6 +32,7 @@ import {
   Percent,
   UserX,
   GraduationCap,
+  
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -44,7 +45,7 @@ import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
 
-interface EmployeeSidebarProps {
+export interface EmployeeSidebarProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -90,12 +91,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     {
       label: 'EMPLOYEE CORE',
       items: [
-        {
-          name: 'My profile',
-          href: '/employee/profile',
-          icon: User,
-          color: 'text-indigo-500',
-        },
         {
           name: 'My Lifecycle',
           href: '/employee/lifecycle',
@@ -586,7 +581,14 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
       {/* Employee User Card Footer */}
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
-        <div className={cn('flex min-h-14 items-center rounded-xl border border-border bg-card p-2.5', open ? 'justify-between' : 'justify-center')}>
+        <div
+          onClick={() => navigate('/employee/profile')}
+          className={cn(
+            'flex min-h-14 cursor-pointer items-center rounded-xl border border-border bg-card p-2.5 hover:bg-muted transition-colors',
+            open ? 'justify-between' : 'justify-center'
+          )}
+          title="View Profile"
+        >
           <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
             <Avatar className="size-9 flex-shrink-0 border border-primary/30 shadow-soft-xs">
               <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
@@ -614,7 +616,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleLogout}
+              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
               className="size-7 flex-shrink-0 rounded-lg text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
               title="Logout"
               aria-label="Log out"

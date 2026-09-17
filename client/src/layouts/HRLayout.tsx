@@ -72,6 +72,9 @@ function mapToHRHref(href: string): string {
   if (href === '/attendance/locations') return '/hr/attendance/locations';
   if (href === '/attendance/break-logs') return '/hr/attendance/break-logs';
   if (href === '/attendance/face-punch') return '/hr/face-attendance';
+  if (href === '/employee/attendance') return '/hr/my-attendance';
+  if (href === '/employee/attendance-regularization') return '/hr/my-attendance-correction';
+  if (href === '/employee/shift-roster') return '/hr/my-shifts';
   if (href === '/attendance/shifts') return '/hr/attendance/shifts';
   if (href === '/attendance/roster-shifts') return '/hr/attendance/roster-shifts';
   if (href.startsWith('/leaves')) return `/hr${href}`;
@@ -558,40 +561,11 @@ export function HRLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-bold text-primary shadow-xs mr-1">
-              <Building2 className="w-3.5 h-3.5 text-primary" />
-              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
-
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
             <NotificationBell className="size-8 rounded-lg" iconClassName="size-4" />
-
-            <div className="w-px h-5 bg-border mx-1" />
-
-            <button
-              onClick={() => navigate('/hr/profile')}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
-            >
-              <Avatar className="h-7 w-7 border border-primary/30">
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className="bg-primary text-white text-[10px] font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{(() => {
-                  const fName = (user?.firstName || (user as any)?.first_name || '').trim();
-                  let lName = (user?.lastName || (user as any)?.last_name || '').trim();
-                  if (lName.toLowerCase() === 'user') lName = '';
-                  const full = `${fName} ${lName}`.trim();
-                  return full || fName || 'User';
-                })()}</p>
-                <p className="text-[10px] font-medium text-primary">{roleInfo.departmentName}</p>
-              </div>
-            </button>
           </div>
         </header>
 

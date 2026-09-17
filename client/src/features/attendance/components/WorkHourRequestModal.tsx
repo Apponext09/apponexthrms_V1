@@ -104,6 +104,14 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
       toast.error('Please enter a Comment.');
       return;
     }
+    if (applyDateRange && (!startDate || !endDate || endDate < startDate)) {
+      toast.error('Please select a valid date range.');
+      return;
+    }
+    if (!checkInTime.trim() || !checkOutTime.trim()) {
+      toast.error('Please provide both check-in and check-out times.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -122,7 +130,8 @@ export const WorkHourRequestModal: React.FC<WorkHourRequestModalProps> = ({
 
       const res = await apiClient.post('/attendance/regularization', payload);
       if (res.data?.success || res.status === 201) {
-        toast.success('Work Hour Request submitted successfully!');
+        const count = Array.isArray(res.data?.data) ? res.data.data.length : 1;
+        toast.success(count > 1 ? `${count} work hour requests submitted successfully!` : 'Work Hour Request submitted successfully!');
         if (onSuccess) onSuccess();
         onClose();
       }

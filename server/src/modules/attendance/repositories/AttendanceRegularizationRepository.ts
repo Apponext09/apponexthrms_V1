@@ -9,6 +9,7 @@ export interface AttendanceRegularization {
   company_id: number | null;
   employee_id: number;
   attendance_record_id: number | null;
+  workflow_instance_id?: number | null;
   request_date: string;
   is_date_range: boolean;
   end_date: string | null;

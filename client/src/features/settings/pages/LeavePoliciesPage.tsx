@@ -2862,16 +2862,16 @@ export function LeavePoliciesPage() {
               </div>
             )}
 
-            {/* VIEW 2: EDIT LEAVE CATEGORY IDENTITY */}
+            {/* VIEW 2: EDIT LEAVE CATEGORY IDENTITY & CORE DETAILS */}
             {viewMode === 'edit' && (
-              <div className="p-6 max-w-3xl mx-auto space-y-5 w-full">
+              <div className="p-6 max-w-4xl mx-auto space-y-5 w-full">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                   <div>
                     <h1 className="text-lg font-extrabold text-slate-900 dark:text-white">
                       {selectedLeaveType?.id ? `Edit Category: ${formData.leave_name}` : 'Create New Leave Category'}
                     </h1>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Define the name, code, display icon, color token, and validity dates for this leave type.
+                      Define the category identity, annual quota, pay classification, status, theme styling, and validity dates.
                     </p>
                   </div>
 
@@ -2888,56 +2888,165 @@ export function LeavePoliciesPage() {
 
                 <form onSubmit={handleSaveEditLeave} className="space-y-4">
                   {/* Live Category Identity Preview Card */}
-                  <div className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-2xl ${getLeaveThemeColor(formData.color).bg} ${getLeaveThemeColor(formData.color).text} border ${getLeaveThemeColor(formData.color).border} flex items-center justify-center text-2xl shadow-2xs select-none`}>
+                  <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 flex items-center justify-between">
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-12 h-12 rounded-2xl ${getLeaveThemeColor(formData.color).bg} ${getLeaveThemeColor(formData.color).text} border ${getLeaveThemeColor(formData.color).border} flex items-center justify-center text-2xl shadow-2xs select-none shrink-0`}>
                         {getCategoryIconEmoji(formData.icon) || <Layers className="w-5 h-5 text-slate-400" />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${getLeaveThemeColor(formData.color).dot}`} />
-                          <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          <span className={`w-2.5 h-2.5 rounded-full ${getLeaveThemeColor(formData.color).dot}`} />
+                          <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
                             {formData.leave_name || 'Category Name Preview'}
                           </h3>
-                          <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
                             {formData.leave_code || 'CODE'}
                           </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${formData.paid_type !== 'unpaid' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40'}`}>
+                            {formData.paid_type === 'paid' ? 'Paid Leave' : formData.paid_type === 'half_paid' ? 'Half-Paid Leave' : 'Unpaid LWP'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${formData.status === 'active' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40' : 'bg-slate-100 text-slate-600 dark:bg-slate-800'}`}>
+                            {formData.status === 'active' ? 'Active' : 'Inactive'}
+                          </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          Theme: <strong className="text-slate-700 dark:text-slate-300">{formData.color || 'None'}</strong> • Icon: <strong className="text-slate-700 dark:text-slate-300">{formData.icon || 'None'}</strong>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Annual Quota: <strong className="text-slate-800 dark:text-slate-200">{formData.annual_quota !== '' ? formData.annual_quota : '0'} Days</strong> • Classification: <strong className="text-slate-800 dark:text-slate-200 capitalize">{formData.leave_classification || 'Calendar'}</strong> • Theme: <strong className="text-slate-800 dark:text-slate-200">{formData.color || 'None'}</strong>
                         </p>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${getLeaveThemeColor(formData.color).badge} border ${getLeaveThemeColor(formData.color).border}`}>
+                    <span className={`px-3 py-1.5 rounded-xl text-xs font-bold ${getLeaveThemeColor(formData.color).badge} border ${getLeaveThemeColor(formData.color).border}`}>
                       Live Preview
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Section 1: Core Identity & Annual Quota */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Category Name *</Label>
                       <Input
                         type="text"
                         value={formData.leave_name || ''}
                         onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_name: e.target.value }))}
-                        placeholder="e.g. Annual Leave"
+                        placeholder="e.g. Annual Leave, Sick Leave"
                         className="h-9 mt-1 text-xs font-semibold"
                         required
                       />
                     </div>
 
                     <div>
-                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Short Code</Label>
+                      <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Leave Code *</Label>
                       <Input
                         type="text"
                         value={formData.leave_code || ''}
                         onChange={(e) => setFormData((prev: any) => ({ ...prev, leave_code: e.target.value.toUpperCase() }))}
-                        placeholder="e.g. AL_01"
+                        placeholder="e.g. AL, SL, CL"
                         className="h-9 mt-1 text-xs font-mono font-bold uppercase"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center justify-between">
+                        <span>Annual Leave Count (Days) *</span>
+                        <span className="text-[10px] font-normal text-muted-foreground/70">Yearly quota</span>
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="365"
+                        step="0.5"
+                        value={formData.annual_quota !== '' && formData.annual_quota !== undefined ? formData.annual_quota : ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? '' : (parseFloat(e.target.value) || 0);
+                          setFormData((prev: any) => ({
+                            ...prev,
+                            annual_quota: val,
+                            allocation: {
+                              ...(prev?.allocation || {}),
+                              entitlementDays: String(val)
+                            }
+                          }));
+                        }}
+                        placeholder="e.g. 12"
+                        className="h-9 mt-1 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800"
+                        required
                       />
                     </div>
                   </div>
 
+                  {/* Section 2: Classification, Pay Type, Policy Status */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Leave Classification
+                        </Label>
+                        <HelpHint
+                          title="Leave Classification"
+                          titleHi="लीव का वर्गीकरण"
+                          description="Defines whether the leave quota recurs on an annual calendar cycle or for special life events."
+                          descriptionHi="तय करें कि छुट्टी सालाना कैलेंडर चक्र पर मिलती है या विशेष घटनाओं के लिए।"
+                          effect="Calendar Leave resets every financial year. Non-Calendar Leave triggers on specific events."
+                        />
+                      </div>
+                      <select
+                        value={formData.leave_classification || 'calendar'}
+                        onChange={(e: any) => setFormData((prev: any) => ({ ...prev, leave_classification: e.target.value }))}
+                        className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="calendar">Calendar Leave (Annual cycle)</option>
+                        <option value="non-calendar">Non-Calendar Leave (Special event)</option>
+                        <option value="uncategorized">Uncategorized (LWP / Custom)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Paid / Unpaid Type
+                        </Label>
+                        <HelpHint
+                          title="Paid vs Unpaid Classification"
+                          titleHi="पेड बनाम अनपेड लीव"
+                          description="Determines whether payroll calculates full daily salary or deducts wages when taken."
+                          descriptionHi="तय करें कि छुट्टी लेने पर पूरा वेतन मिलेगा या सैलरी से कटौती होगी।"
+                        />
+                      </div>
+                      <select
+                        value={formData.paid_type || 'paid'}
+                        onChange={(e: any) => setFormData((prev: any) => ({ ...prev, paid_type: e.target.value }))}
+                        className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="paid">Paid Leave (Full salary paid)</option>
+                        <option value="unpaid">Unpaid Leave / LWP (Salary deducted)</option>
+                        <option value="half_paid">Half-Paid Leave (50% salary)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Policy Status
+                        </Label>
+                        <HelpHint
+                          title="Policy Status"
+                          titleHi="नीति की स्थिति"
+                          description="Controls whether this leave policy is active and available for employees to apply."
+                          descriptionHi="तय करें कि यह लीव पॉलिसी सक्रिय है या कर्मचारियों के लिए बंद है।"
+                        />
+                      </div>
+                      <select
+                        value={formData.status || 'active'}
+                        onChange={(e: any) => setFormData((prev: any) => ({ ...prev, status: e.target.value }))}
+                        className="w-full h-9 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 text-xs font-semibold text-foreground dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="active">Active (Available for employees)</option>
+                        <option value="inactive">Inactive (Disabled / Hidden)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Section 3: Visual Theme & Icon */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Theme Color</Label>
@@ -2970,6 +3079,7 @@ export function LeavePoliciesPage() {
                     </div>
                   </div>
 
+                  {/* Section 4: Validity Dates */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Effective From</Label>
@@ -2992,6 +3102,7 @@ export function LeavePoliciesPage() {
                     </div>
                   </div>
 
+                  {/* Section 5: Policy Notes & Description */}
                   <div>
                     <Label className="text-xs font-bold text-slate-800 dark:text-slate-200">Policy Notes & Description</Label>
                     <textarea
