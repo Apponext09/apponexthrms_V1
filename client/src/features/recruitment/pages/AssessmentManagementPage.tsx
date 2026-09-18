@@ -175,7 +175,7 @@ export const AssessmentManagementPage: React.FC = () => {
 
   const handleDeleteQuestion = async (questionId: number) => {
     if (!selectedQuestionsAssessment) return;
-    if (!confirm('Are you sure you want to delete this question?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this question?')) return;
 
     try {
       await apiClient.delete(`/recruitment/assessments/${selectedQuestionsAssessment.id}/questions/${questionId}`);

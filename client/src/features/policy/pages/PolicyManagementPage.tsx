@@ -257,7 +257,7 @@ export function PolicyManagementPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this policy document?')) {
+    if (await window.appConfirm('Are you sure you want to delete this policy document?')) {
       await deletePolicyMutation.mutateAsync(id);
     }
   };
@@ -278,7 +278,7 @@ export function PolicyManagementPage() {
   };
 
   const handleDeleteCategory = async (id: number, name: string) => {
-    if (confirm(`Are you sure you want to delete category "${name}"?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete category "${name}"?`)) {
       try {
         await deleteCategoryMutation.mutateAsync(id);
         if (formData.category === name) {

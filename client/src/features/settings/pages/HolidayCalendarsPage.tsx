@@ -419,7 +419,7 @@ export function HolidayCalendarsPage({ onBackToMasters }: HolidayCalendarsPagePr
   };
 
   const handleDeleteHoliday = async (holiday: HolidayItem) => {
-    if (!window.confirm(`Delete holiday "${holiday.holiday_name}" (${holiday.holiday_date})?`)) return;
+    if (!await window.appConfirm(`Delete holiday "${holiday.holiday_name}" (${holiday.holiday_date})?`)) return;
     try {
       await apiClient.delete(`/master/holiday-calendars/holidays/${holiday.id}`);
       showToast.success('Holiday Deleted', `"${holiday.holiday_name}" has been removed.`);

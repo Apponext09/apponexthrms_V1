@@ -48,7 +48,7 @@ export function BranchesPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    if (confirm('Are you sure you want to delete this branch?')) {
+    if (await window.appConfirm('Are you sure you want to delete this branch?')) {
       try {
         await deleteMutation.mutateAsync(id);
       } catch (error) {

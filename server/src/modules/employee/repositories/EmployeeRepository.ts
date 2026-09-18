@@ -349,6 +349,14 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
+    // CEO employee records are organization-level records and are created
+    // without a company_id. Include that record in the main Employee Directory
+    // even when the rest of the directory is scoped to a company.
+    const directoryCompanyId = effectiveCtx.companyId;
+    if (directoryCompanyId) {
+      effectiveCtx.companyId = undefined;
+    }
+
     const queryFilters = { ...options.filters };
     let excludeCeoFilter = false;
     if (queryFilters.is_ceo === 0 || (queryFilters as any).isCeo === 0) {
@@ -358,11 +366,22 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     const modifiedOptions = { ...options, filters: queryFilters };
-    if (excludeCeoFilter) {
+    if (directoryCompanyId || excludeCeoFilter) {
       (modifiedOptions as any).customWhere = (builder: any) => {
-        builder.where(function(this: any) {
-          this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
-        });
+        if (directoryCompanyId) {
+          builder.where(function(this: any) {
+            this.where('employees.company_id', directoryCompanyId)
+              .orWhere(function(this: any) {
+                this.where('employees.is_ceo', true).whereNull('employees.company_id');
+              });
+          });
+        }
+
+        if (excludeCeoFilter) {
+          builder.where(function(this: any) {
+            this.where('employees.is_ceo', 0).orWhereNull('employees.is_ceo');
+          });
+        }
       };
     }
 

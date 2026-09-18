@@ -294,7 +294,7 @@ export const MasterPayrollCycle: React.FC = () => {
   const handleDeleteCycle = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!id) return;
-    if (!window.confirm('Are you sure you want to delete this payroll cycle?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this payroll cycle?')) return;
 
     setCycles(prev => {
       const next = prev.filter(c => c.id !== id);

@@ -172,7 +172,7 @@ export function LeaveEncashmentPage() {
 
   // Admin/HR Action Triggers
   const handleApprove = async (id: number) => {
-    if (!confirm('Are you sure you want to approve this leave encashment request?')) return;
+    if (!await window.appConfirm('Are you sure you want to approve this leave encashment request?')) return;
     try {
       const res = await apiClient.post(`/leaves/encashments/${id}/approve`);
       if (res.data?.success) {
@@ -185,7 +185,7 @@ export function LeaveEncashmentPage() {
   };
 
   const handleReject = async (id: number) => {
-    const reason = prompt('Please enter a rejection reason:');
+    const reason = await window.appPrompt('Please enter a rejection reason:');
     if (reason === null) return; // cancelled
     try {
       const res = await apiClient.post(`/leaves/encashments/${id}/reject`, { reason });
@@ -199,7 +199,7 @@ export function LeaveEncashmentPage() {
   };
 
   const handleMarkAsPaid = async (id: number) => {
-    if (!confirm('Are you sure you want to mark this request as Paid? This will deduct leave balance and log it.')) return;
+    if (!await window.appConfirm('Are you sure you want to mark this request as Paid? This will deduct leave balance and log it.')) return;
     try {
       const res = await apiClient.post(`/leaves/encashments/${id}/pay`);
       if (res.data?.success) {

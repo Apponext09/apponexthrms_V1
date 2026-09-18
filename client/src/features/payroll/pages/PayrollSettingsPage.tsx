@@ -562,7 +562,7 @@ export const PayrollSettingsPage: React.FC = () => {
   // Delete Component Handler
   const handleDeleteComponent = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this payroll component?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this payroll component?')) return;
     try {
       await apiClient.delete(`/payroll/components/${id}`);
     } catch (err: any) {
@@ -690,7 +690,7 @@ export const PayrollSettingsPage: React.FC = () => {
   const handleDeleteCycle = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!id) return;
-    if (!window.confirm('Are you sure you want to delete this payroll cycle?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this payroll cycle?')) return;
 
     // Optimistically update UI
     setCycles(prev => {
@@ -986,7 +986,7 @@ export const PayrollSettingsPage: React.FC = () => {
 
   const handleDeleteSlab = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this Payroll Slab?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this Payroll Slab?')) return;
 
     try {
       await apiClient.delete(`/payroll/slabs/${id}`);

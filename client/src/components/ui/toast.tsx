@@ -9,7 +9,7 @@ export interface ToasterProps extends React.ComponentProps<typeof SonnerToaster>
  * Toast Notifications Container
  * - Position: top-right
  * - Background: white only (no type-based colors)
- * - Duration: 2000ms, pauses on hover
+ * - Duration: 2000ms
  */
 export function Toaster({ position = 'top-right', ...props }: ToasterProps) {
   return (
@@ -21,7 +21,6 @@ export function Toaster({ position = 'top-right', ...props }: ToasterProps) {
       expand={false}
       duration={2000}
       pauseWhenPageIsHidden
-      pauseOnHover
       theme="light"
       className="toaster group"
       style={

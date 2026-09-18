@@ -111,7 +111,7 @@ export function EventDescriptionEditor({
 
   const handleAddLink = () => {
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter Link URL:', previousUrl || 'https://');
+    const url = await window.appPrompt('Enter Link URL:', previousUrl || 'https://');
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
@@ -121,9 +121,9 @@ export function EventDescriptionEditor({
   };
 
   const handleInsertTable = () => {
-    const rowsStr = window.prompt('Enter number of rows:', '3');
+    const rowsStr = await window.appPrompt('Enter number of rows:', '3');
     if (rowsStr === null) return;
-    const colsStr = window.prompt('Enter number of columns:', '3');
+    const colsStr = await window.appPrompt('Enter number of columns:', '3');
     if (colsStr === null) return;
 
     const rows = parseInt(rowsStr, 10) || 3;

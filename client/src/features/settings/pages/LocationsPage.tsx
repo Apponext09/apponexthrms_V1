@@ -36,7 +36,7 @@ export function LocationsPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    if (confirm('Are you sure you want to delete this location?')) {
+    if (await window.appConfirm('Are you sure you want to delete this location?')) {
       try {
         await deleteMutation.mutateAsync(id);
       } catch (error) {

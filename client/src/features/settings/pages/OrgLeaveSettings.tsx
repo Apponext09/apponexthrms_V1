@@ -869,7 +869,7 @@ export function OrgLeaveSettings() {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    if (confirm("Are you sure you want to delete this setting?")) {
+                                    if (await window.appConfirm("Are you sure you want to delete this setting?")) {
                                       try {
                                         await apiClient.post('/settings/org-leave-settings', {
                                           locationId: row.location_id,
@@ -1010,7 +1010,7 @@ export function OrgLeaveSettings() {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    if (confirm("Are you sure you want to delete this setting?")) {
+                                    if (await window.appConfirm("Are you sure you want to delete this setting?")) {
                                       try {
                                         await apiClient.post('/settings/org-leave-settings', {
                                           locationId: row.location_id,
@@ -1152,7 +1152,7 @@ export function OrgLeaveSettings() {
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    if (confirm("Are you sure you want to delete this setting?")) {
+                                    if (await window.appConfirm("Are you sure you want to delete this setting?")) {
                                       try {
                                         await apiClient.post('/settings/org-leave-settings', {
                                           locationId: row.location_id,

@@ -2212,7 +2212,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[]; selectedCompanyId?: 
       showToast.error('Missing Run', 'No active payroll run to unlock.');
       return;
     }
-    const reason = window.prompt(
+    const reason = await window.appPrompt(
       'Enter reason for unlocking payroll (e.g., Attendance corrections, salary structure adjustments):',
       'Corrections needed before approval'
     );

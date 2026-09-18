@@ -834,10 +834,17 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (window.confirm('Are you sure you want to delete this designation?')) {
-                                deleteDesignation(desig.id);
+                              if (!await window.appConfirm(`Delete designation “${desig.name}”? This action cannot be undone.`)) return;
+
+                              try {
+                                await deleteDesignation(desig.id);
+                                showToast.success('Designation deleted', `“${desig.name}” has been deleted successfully.`);
+                                if (selectedDesignationId === desig.id) handleAddNew();
+                              } catch (error: any) {
+                                const message = error?.response?.data?.message || error?.message || 'Unable to delete this designation.';
+                                showToast.error('Delete failed', message);
                               }
                             }}
                             className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"

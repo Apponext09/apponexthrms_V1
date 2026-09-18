@@ -818,7 +818,7 @@ export const MasterPayrollComponents: React.FC = () => {
   };
 
   const handleDeleteComponent = async (id: string | number, name: string) => {
-    if (!window.confirm(`Delete component "${name}"?`)) return;
+    if (!await window.appConfirm(`Delete component "${name}"?`)) return;
     try {
       await apiClient.delete(`/payroll/components/${id}`);
       showToast.success('Component Deleted', `"${name}" removed.`);
@@ -831,7 +831,7 @@ export const MasterPayrollComponents: React.FC = () => {
 
   const handleDeleteGroup = async (id: string | number, name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`Delete group "${name}"? This may affect components assigned to this group.`)) return;
+    if (!await window.appConfirm(`Delete group "${name}"? This may affect components assigned to this group.`)) return;
     try {
       await apiClient.delete(`/payroll/component-groups/${id}`);
       showToast.success('Group Deleted', `Group "${name}" removed.`);

@@ -334,7 +334,7 @@ export const SalaryStructureManagement: React.FC = () => {
     });
 
     if (targets.length === 0) {
-      alert(`No active employees found matching Department "${selectedDeptFilter}" and Grade "${selectedGradeFilter}"`);
+      window.appAlert(`No active employees found matching Department "${selectedDeptFilter}" and Grade "${selectedGradeFilter}"`);
       return;
     }
 
@@ -365,7 +365,7 @@ export const SalaryStructureManagement: React.FC = () => {
   };
 
   const handleDeleteSlab = async (id: string | number, name?: string) => {
-    if (!window.confirm(`Are you sure you want to delete pay slab "${name || id}"?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to delete pay slab "${name || id}"?`)) return;
     try {
       await apiClient.delete(`/payroll/slabs/${id}`);
       setPayrollSlabs(prev => prev.filter(s => String(s.id) !== String(id)));
@@ -373,7 +373,7 @@ export const SalaryStructureManagement: React.FC = () => {
       setTimeout(() => setSuccessMsg(null), 4000);
     } catch (err: any) {
       console.error('Delete slab error:', err);
-      alert(err?.response?.data?.message || 'Failed to delete pay slab.');
+      window.appAlert(err?.response?.data?.message || 'Failed to delete pay slab.');
     }
   };
 
@@ -917,7 +917,7 @@ export const SalaryStructureManagement: React.FC = () => {
   const handleAssignToEmployee = async () => {
     const emp = employees.find(e => String(e.id) === assignEmpId);
     if (!emp) {
-      alert('Please select an employee to assign the salary structure.');
+      window.appAlert('Please select an employee to assign the salary structure.');
       return;
     }
 
@@ -1045,7 +1045,7 @@ export const SalaryStructureManagement: React.FC = () => {
   };
 
   const handleDeleteStructure = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this salary structure template?')) {
+    if (await window.appConfirm('Are you sure you want to delete this salary structure template?')) {
       try {
         await apiClient.delete(`/payroll/structures/${id}`);
       } catch (e) { }

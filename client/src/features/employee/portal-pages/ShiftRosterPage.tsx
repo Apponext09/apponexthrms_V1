@@ -440,7 +440,7 @@ export default function ShiftRosterPage() {
     if (!swapDate || !swapWithEmployeeId) {
       const msg = `Validation failed: ${!swapDate ? 'Please choose a Date. ' : ''}${!swapWithEmployeeId ? 'Please choose a Teammate.' : ''}`;
       console.warn(msg);
-      alert(msg);
+      window.appAlert(msg);
       toast.error('Please fill in all required fields');
       return;
     }
@@ -464,7 +464,7 @@ export default function ShiftRosterPage() {
       console.log('API Response received:', res.data);
 
       if (res.data?.success) {
-        alert('Shift swap request submitted successfully!');
+        window.appAlert('Shift swap request submitted successfully!');
         toast.success('Shift swap request submitted successfully!');
         setIsSwapModalOpen(false);
         setSwapDate('');
@@ -474,13 +474,13 @@ export default function ShiftRosterPage() {
       } else {
         const errorMsg = res.data?.error?.message || 'Failed to submit shift swap';
         console.error(errorMsg);
-        alert(`Error: ${errorMsg}`);
+        window.appAlert(`Error: ${errorMsg}`);
         toast.error(errorMsg);
       }
     } catch (err: any) {
       const errMsg = err.response?.data?.error?.message || err.message || 'Something went wrong';
       console.error('Swap API Exception:', err);
-      alert(`API Exception: ${errMsg}`);
+      window.appAlert(`API Exception: ${errMsg}`);
       toast.error(errMsg);
     } finally {
       setSubmittingSwap(false);

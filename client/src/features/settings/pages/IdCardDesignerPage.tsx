@@ -352,7 +352,7 @@ export const IdCardDesignerPage: React.FC = () => {
       toast.error('Cannot delete the organization default template.');
       return;
     }
-    if (confirm(`Are you sure you want to delete template '${templateName}'?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete template '${templateName}'?`)) {
       try {
         await deleteMutation.mutateAsync(selectedTemplateId);
         setSelectedTemplateId(null);
@@ -361,7 +361,7 @@ export const IdCardDesignerPage: React.FC = () => {
   };
 
   const handleResetToDefault = () => {
-    if (confirm('Reset this template layout to factory default settings?')) {
+    if (await window.appConfirm('Reset this template layout to factory default settings?')) {
       setConfig(DEFAULT_ID_CARD_CONFIG);
       setHasUnsavedChanges(true);
       toast.info('Template reset to factory default settings.');

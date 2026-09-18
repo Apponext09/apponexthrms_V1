@@ -210,10 +210,10 @@ export const ExpenseSettingsPage: React.FC = () => {
         workflowFallbackMaxAmount,
         numberSequenceDigits
       });
-      alert('Expense module settings updated successfully!');
+      window.appAlert('Expense module settings updated successfully!');
       fetchSettingsAndWorkflows();
     } catch (err: any) {
-      alert(err.message || 'Failed to save settings');
+      window.appAlert(err.message || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -275,7 +275,7 @@ export const ExpenseSettingsPage: React.FC = () => {
 
   const handleSaveWorkflow = async () => {
     if (!wfName.trim()) {
-      alert('Please enter a workflow name');
+      window.appAlert('Please enter a workflow name');
       return;
     }
     try {
@@ -297,17 +297,17 @@ export const ExpenseSettingsPage: React.FC = () => {
       setIsWfModalOpen(false);
       fetchSettingsAndWorkflows();
     } catch (err: any) {
-      alert(err.message || 'Failed to save workflow');
+      window.appAlert(err.message || 'Failed to save workflow');
     }
   };
 
   const handleDeleteWorkflow = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this approval workflow?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this approval workflow?')) return;
     try {
       await expenseApi.deleteWorkflow(id);
       fetchSettingsAndWorkflows();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete workflow');
+      window.appAlert(err.message || 'Failed to delete workflow');
     }
   };
 

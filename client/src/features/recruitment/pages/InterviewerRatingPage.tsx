@@ -140,7 +140,7 @@ export const InterviewerRatingPage: React.FC = () => {
       loadData();
     } catch (err: any) {
       console.error('Failed to submit interview decision', err);
-      alert(err.response?.data?.message || 'Failed to submit interview decision');
+      window.appAlert(err.response?.data?.message || 'Failed to submit interview decision');
       setActionModal(prev => ({ ...prev, isSubmitting: false }));
     }
   };
@@ -648,7 +648,7 @@ export const InterviewerRatingPage: React.FC = () => {
                     setSubmitRatingModal(prev => ({ ...prev, isOpen: false, isSubmitting: false }));
                     loadData();
                   } catch (err: any) {
-                    alert(err.response?.data?.message || 'Failed to submit rating feedback');
+                    window.appAlert(err.response?.data?.message || 'Failed to submit rating feedback');
                     setSubmitRatingModal(prev => ({ ...prev, isSubmitting: false }));
                   }
                 }}

@@ -669,7 +669,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
                             size="sm"
                             variant="outline"
                             onClick={async () => {
-                              if (window.confirm(`Are you sure you want to delete geofence location "${loc.name}"?`)) {
+                              if (await window.appConfirm(`Are you sure you want to delete geofence location "${loc.name}"?`)) {
                                 try {
                                   await deleteGeofence(Number(loc.id));
                                   loadData();

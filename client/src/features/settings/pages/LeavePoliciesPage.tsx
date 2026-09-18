@@ -571,7 +571,7 @@ export function LeavePoliciesPage() {
   };
 
   const handleDeleteLatePolicy = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this policy?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this policy?')) return;
     try {
       await apiClient.delete(`/settings/late-deduction-policies/${id}`);
       toast.success('Late deduction policy deleted successfully');
@@ -684,7 +684,7 @@ export function LeavePoliciesPage() {
   };
 
   const handleDeleteLateUpdation = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this updation rule?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this updation rule?')) return;
     try {
       await apiClient.delete(`/settings/late-updations/${id}`);
       toast.success('Late updation deleted successfully');
@@ -2174,7 +2174,7 @@ export function LeavePoliciesPage() {
   // Encashment settings CRUD handlers
   const handleDeleteEncashmentSetting = async () => {
     if (!selectedEncashmentId) return;
-    if (!confirm('Are you sure you want to delete this encashment configuration?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this encashment configuration?')) return;
     try {
       const res = await apiClient.delete(`/leaves/encashment-settings/${selectedEncashmentId}`);
       if (res.data?.success) {

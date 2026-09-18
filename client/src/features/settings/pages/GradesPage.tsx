@@ -128,7 +128,7 @@ export function GradesPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    if (confirm('Are you sure you want to delete this grade?')) {
+    if (await window.appConfirm('Are you sure you want to delete this grade?')) {
       try {
         await deleteMutation.mutateAsync(id);
       } catch (error) {

@@ -277,7 +277,7 @@ export function DesignationsPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    if (confirm('Are you sure you want to delete this designation?')) {
+    if (await window.appConfirm('Are you sure you want to delete this designation?')) {
       try {
         await deleteDesignation(id);
         toast.success('Designation deleted successfully!');

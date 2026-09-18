@@ -374,7 +374,7 @@ export function EmployeeDataTable({
                           onClick={async (e) => {
                             e.stopPropagation();
                             if (employee.id === undefined) return;
-                            if (window.confirm(`Are you sure you want to delete ${fullName}?`)) {
+                            if (await window.appConfirm(`Are you sure you want to delete ${fullName}?`)) {
                               try {
                                 await deleteEmployee(employee.id);
                                 onRefresh?.();

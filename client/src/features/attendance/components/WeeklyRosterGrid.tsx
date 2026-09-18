@@ -279,7 +279,7 @@ export function WeeklyRosterGrid({
     } catch (err: any) {
       const conflicts = err?.response?.data?.error?.details?.conflicts;
       if (err?.response?.status === 409 && Array.isArray(conflicts) && conflicts.length > 0) {
-        const proceed = window.confirm(
+        const proceed = await window.appConfirm(
           `${empName} already has an active shift assignment that overlaps ${dateStr}. Assigning ${shiftName} will end it.\n\nProceed anyway?`
         );
         if (proceed) {
