@@ -929,6 +929,10 @@ export class AttendanceController {
   updateOTRule = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const rule = await this.otRuleService.updateRule(ctx, Number(req.params.id), req.body);
+    // Keep the rule's scope in sync when the edit form submits eligibility.
+    if (Array.isArray(req.body.eligibility)) {
+      await this.otRuleService.setEligibility(ctx, rule.id, req.body.eligibility);
+    }
     res.json({ success: true, data: rule });
   });
 

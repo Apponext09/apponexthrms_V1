@@ -26,7 +26,6 @@ export class OTRuleService {
   async createRule(ctx: TenantContext, input: Record<string, any>): Promise<OTRule> {
     const rule = await this.ruleRepo.create(ctx, {
       uuid:            uuidv4(),
-      code:            input.code || (input.ruleName || input.rule_name || 'OT').toLowerCase().replace(/[^a-z0-9]/g, '_'),
       rule_name:       input.ruleName || input.rule_name,
       title_change:    input.titleChange || input.title_change || null,
       period:          input.period || 'daily',

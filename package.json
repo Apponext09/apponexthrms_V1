@@ -60,9 +60,13 @@
   },
   "dependencies": {
     "argon2": "^0.44.0",
+    "csstype": "^3.2.3",
+    "express": "^4.22.3",
+    "git": "^0.1.5",
     "maplibre-gl": "^6.6.0",
-    "zod": "^3.22.4",
-    "git": "^0.1.5"
+    "swagger-ui-dist": "^5.11.0",
+    "ws": "^8.18.0",
+    "zod": "^3.22.4"
   },
   "allowScripts": {
     "argon2@0.44.0": true,

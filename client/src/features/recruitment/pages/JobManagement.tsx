@@ -665,6 +665,41 @@ const extractList = (res: any): any[] => {
   return [];
 };
 
+const normalizeJobType = (value: unknown): 'full_time' | 'part_time' | 'contract' | 'internship' => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'part_time') return 'part_time';
+  if (normalized === 'contract' || normalized === 'contractual') return 'contract';
+  if (normalized === 'internship' || normalized === 'intern') return 'internship';
+  return 'full_time';
+};
+
+const normalizeWorkMode = (value: unknown): 'onsite' | 'remote' | 'hybrid' => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'remote' || normalized === 'work_from_home' || normalized === 'wfh') return 'remote';
+  if (normalized === 'hybrid') return 'hybrid';
+  return 'onsite';
+};
+
+const normalizeExperienceLevel = (
+  value: unknown,
+  minExperienceYears?: unknown
+): 'entry' | 'mid' | 'senior' | 'lead' => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'entry' || normalized === 'junior' || normalized === 'fresher') return 'entry';
+  if (normalized === 'senior') return 'senior';
+  if (normalized === 'lead') return 'lead';
+  if (normalized === 'mid') return 'mid';
+
+  const years = Number(minExperienceYears);
+  if (Number.isFinite(years)) {
+    if (years < 3) return 'entry';
+    if (years <= 6) return 'mid';
+    if (years <= 10) return 'senior';
+    return 'lead';
+  }
+  return 'mid';
+};
+
 const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, onSubmit }) => {
   const [isFresher, setIsFresher] = useState(
     initialData ? (initialData.experienceLevel === 'entry' || initialData.minExperienceYears === 0) : false
@@ -676,12 +711,15 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     jobCode: initialData?.jobCode || initialData?.job_code || '',
     jobTitle: initialData?.jobTitle || initialData?.job_title || '',
     jobDescription: initialData?.jobDescription || initialData?.job_description || '',
-    jobType: initialData?.jobType || initialData?.job_type || '',
-    experienceLevel: initialData?.experienceLevel || initialData?.experience_level || 'mid',
+    jobType: normalizeJobType(initialData?.jobType || initialData?.job_type),
+    experienceLevel: normalizeExperienceLevel(
+      initialData?.experienceLevel || initialData?.experience_level,
+      initialData?.minExperienceYears ?? initialData?.min_experience_years
+    ),
     minExperienceYears: initialData?.minExperienceYears !== undefined ? initialData.minExperienceYears : (initialData?.min_experience_years !== undefined ? initialData.min_experience_years : undefined),
     maxExperienceYears: initialData?.maxExperienceYears !== undefined ? initialData.maxExperienceYears : (initialData?.max_experience_years !== undefined ? initialData.max_experience_years : undefined),
     currency: initialData?.currency || 'INR',
-    employmentType: initialData?.employmentType || initialData?.employment_type || '',
+    employmentType: normalizeWorkMode(initialData?.employmentType || initialData?.employment_type),
     noOfPositions: initialData?.noOfPositions || initialData?.no_of_positions || 1,
     expiryDate: String(initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '').slice(0, 10),
     departmentId: initialData?.departmentId || initialData?.department_id || undefined,
@@ -719,49 +757,6 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
       }
     }
   });
-
-  // Dynamic Employment Types directly from database
-  const { data: dbEmploymentTypes = [] } = useQuery({
-    queryKey: ['settings-all-employment-types'],
-    queryFn: async () => {
-      const typesSet = new Set<string>();
-      try {
-        const res1 = await apiClient.get('/settings/employment-types', { params: { pageSize: 1000, limit: 1000 } });
-        const raw1 = extractList(res1);
-        raw1.forEach((item: any) => {
-          const name = typeof item === 'string' ? item : String(item.name || item.title || item.employee_type || item.employeeType || '').trim();
-          if (name) typesSet.add(name);
-        });
-      } catch (e) {
-        console.error('Failed /settings/employment-types', e);
-      }
-
-      try {
-        const res2 = await apiClient.get('/settings/employment-options');
-        const empOpts = res2.data?.data?.employeeTypes || res2.data?.employeeTypes || res2.data?.data?.employmentTypes || res2.data?.employmentTypes || [];
-        if (Array.isArray(empOpts)) {
-          empOpts.forEach((name: any) => {
-            const str = String(name || '').trim();
-            if (str) typesSet.add(str);
-          });
-        }
-      } catch (e) {
-        console.error('Failed /settings/employment-options', e);
-      }
-
-      return Array.from(typesSet);
-    }
-  });
-
-  // Auto initialize default type from DB if not already set
-  useEffect(() => {
-    if (dbEmploymentTypes.length > 0) {
-      setFormData(prev => ({
-        ...prev,
-        employmentType: prev.employmentType || dbEmploymentTypes[0],
-      }));
-    }
-  }, [dbEmploymentTypes]);
 
   // AI Screening Settings State
   const [aiSettings, setAiSettings] = useState({
@@ -839,7 +834,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
       const expStr = String(mrf.experience_desired || mrf.experienceDesired || mrf.experience || '').trim();
       let minExp: number | undefined = undefined;
       let maxExp: number | undefined = undefined;
-      let expLevel = 'mid';
+      let expLevel: 'entry' | 'mid' | 'senior' | 'lead' = 'mid';
       let fresherFlag = false;
 
       if (expStr) {
@@ -855,12 +850,12 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
             minExp = parseFloat(numbers[0]);
             maxExp = parseFloat(numbers[1]);
             fresherFlag = (minExp === 0);
-            expLevel = minExp === 0 ? 'entry' : minExp < 3 ? 'junior' : minExp <= 6 ? 'mid' : 'senior';
+            expLevel = normalizeExperienceLevel(undefined, minExp);
           } else if (numbers && numbers.length === 1) {
             minExp = parseFloat(numbers[0]);
             maxExp = minExp + 2;
             fresherFlag = (minExp === 0);
-            expLevel = minExp === 0 ? 'entry' : minExp < 3 ? 'junior' : minExp <= 6 ? 'mid' : 'senior';
+            expLevel = normalizeExperienceLevel(undefined, minExp);
           }
         }
         setIsFresher(fresherFlag);
@@ -868,17 +863,17 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
 
       // 3. Map MRF employment type to Employment Type
       const mrfEmpType = String(mrf.employment_type || mrf.employmentType || '').trim();
-      const matchedDb = mrfEmpType ? (dbEmploymentTypes.find(t => t.toLowerCase() === mrfEmpType.toLowerCase()) || mrfEmpType) : undefined;
+      const mappedJobType = normalizeJobType(mrfEmpType);
 
       setFormData(prev => ({
         ...prev,
         mrfRequestId: mrf.id,
         jobTitle: posTitle || prev.jobTitle,
-        jobType: posTitle || prev.jobType || 'Full Time',
+        jobType: mappedJobType,
         jobDescription: mrf.job_description || mrf.jobDescription || prev.jobDescription,
         noOfPositions: Number(mrf.number_of_positions || mrf.numberOfPositions) || prev.noOfPositions || 1,
         departmentId: mrf.department_id || mrf.departmentId ? Number(mrf.department_id || mrf.departmentId) : prev.departmentId,
-        employmentType: matchedDb || prev.employmentType || dbEmploymentTypes[0] || '',
+        employmentType: normalizeWorkMode(prev.employmentType),
         minExperienceYears: minExp !== undefined ? minExp : prev.minExperienceYears,
         maxExperienceYears: maxExp !== undefined ? maxExp : prev.maxExperienceYears,
         experienceLevel: expLevel,
@@ -919,7 +914,9 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
             }
             onSubmit({
               ...formData,
-              jobType: formData.jobTitle || formData.jobType || 'Full Time',
+              jobType: normalizeJobType(formData.jobType),
+              employmentType: normalizeWorkMode(formData.employmentType),
+              experienceLevel: normalizeExperienceLevel(formData.experienceLevel, formData.minExperienceYears),
               expiryDate: deadline,
               aiSettings,
             });
@@ -1061,7 +1058,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       onClick={() => {
                         setIsOtherPosition(false);
                         const fallbackPos = dbPositions[0] || '';
-                        setFormData(prev => ({ ...prev, jobTitle: fallbackPos, jobType: fallbackPos }));
+                        setFormData(prev => ({ ...prev, jobTitle: fallbackPos }));
                       }}
                       className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
                     >
@@ -1077,9 +1074,9 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                       const val = e.target.value;
                       if (val === '__OTHER__') {
                         setIsOtherPosition(true);
-                        setFormData(prev => ({ ...prev, jobTitle: '', jobType: '' }));
+                        setFormData(prev => ({ ...prev, jobTitle: '' }));
                       } else {
-                        setFormData(prev => ({ ...prev, jobTitle: val, jobType: val }));
+                        setFormData(prev => ({ ...prev, jobTitle: val }));
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9 cursor-pointer"
@@ -1103,7 +1100,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                     value={formData.jobTitle}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setFormData(prev => ({ ...prev, jobTitle: val, jobType: val }));
+                      setFormData(prev => ({ ...prev, jobTitle: val }));
                     }}
                     className="bg-background border-border text-xs rounded-xl h-9"
                     required
@@ -1159,23 +1156,32 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Employement Type</label>
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Job Type</label>
+                <select
+                  name="jobType"
+                  value={formData.jobType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
+                >
+                  <option value="full_time">Full Time</option>
+                  <option value="part_time">Part Time</option>
+                  <option value="contract">Contract</option>
+                  <option value="internship">Internship</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground uppercase tracking-wider">Work Mode</label>
                 <select
                   name="employmentType"
                   value={formData.employmentType}
                   onChange={handleChange}
                   className="w-full px-3 py-2 border rounded-xl bg-background border-border text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs h-9"
                 >
-                  {formData.employmentType && !dbEmploymentTypes.includes(formData.employmentType) && (
-                    <option value={formData.employmentType}>{formData.employmentType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</option>
-                  )}
-                  {dbEmploymentTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
+                  <option value="onsite">Onsite</option>
+                  <option value="remote">Remote</option>
+                  <option value="hybrid">Hybrid</option>
                 </select>
               </div>
               <div className="space-y-1.5">

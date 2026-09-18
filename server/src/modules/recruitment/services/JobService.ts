@@ -55,16 +55,19 @@ export class JobService {
       throw new ValidationError(`Job code '${input.jobCode}' already exists! Cannot create duplicate job code.`);
     }
 
-    const existingTitle = await this.jobRepo.query(ctx)
-      .whereRaw('LOWER(job_title) = ?', [input.jobTitle.toLowerCase().trim()])
-      .whereNull('deleted_at')
-      .first();
-
-    if (existingTitle) {
-      throw new ValidationError(`A job opening with title '${input.jobTitle}' already exists! Duplicate job postings are not allowed.`);
-    }
-
     if (input.mrfRequestId) {
+      const existingJobForMrf = await this.jobRepo.query(ctx)
+        .where('mrf_request_id', input.mrfRequestId)
+        .whereNull('deleted_at')
+        .first();
+
+      if (existingJobForMrf) {
+        const existingCode = (existingJobForMrf as any).jobCode || existingJobForMrf.job_code;
+        throw new ValidationError(
+          `This MRF already has job opening '${existingCode}'.`
+        );
+      }
+
       const mrf = await this.mrfRepo.getById(ctx, input.mrfRequestId);
       if (!mrf) {
         throw new ValidationError(`Linked MRF Request with ID ${input.mrfRequestId} not found`);
@@ -153,20 +156,6 @@ export class JobService {
       const isUniqueCode = await this.jobRepo.isCodeUnique(ctx, input.job_code, jobId);
       if (!isUniqueCode) {
         throw new ValidationError(`Job code '${input.job_code}' already exists`);
-      }
-    }
-
-    const titleToCheck = input.job_title || (input as any).jobTitle;
-    const currentJobTitle = job.job_title || (job as any).jobTitle || '';
-    if (titleToCheck && titleToCheck.toLowerCase().trim() !== currentJobTitle.toLowerCase().trim()) {
-      const existingTitle = await this.jobRepo.query(ctx)
-        .whereRaw('LOWER(job_title) = ?', [titleToCheck.toLowerCase().trim()])
-        .whereNot('id', jobId)
-        .whereNull('deleted_at')
-        .first();
-
-      if (existingTitle) {
-        throw new ValidationError(`A job opening with title '${titleToCheck}' already exists!`);
       }
     }
 

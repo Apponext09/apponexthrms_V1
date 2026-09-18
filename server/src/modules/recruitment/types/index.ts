@@ -9,14 +9,14 @@ export const createJobSchema = z.object({
   departmentId: z.number().optional(),
   designationId: z.number().optional(),
   locationId: z.number().optional(),
-  jobType: z.string().default('full_time'),
-  experienceLevel: z.string().default('mid'),
+  jobType: z.enum(['full_time', 'part_time', 'contract', 'internship']).default('full_time'),
+  experienceLevel: z.enum(['entry', 'mid', 'senior', 'lead']).default('mid'),
   minExperienceYears: z.number().optional(),
   maxExperienceYears: z.number().optional(),
   minSalary: z.number().optional(),
   maxSalary: z.number().optional(),
   currency: z.string().optional(),
-  employmentType: z.string().default('onsite'),
+  employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
   noOfPositions: z.number().min(1).default(1),
   expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
     const datePart = String(value).slice(0, 10);
