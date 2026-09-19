@@ -717,6 +717,10 @@ export function EmployeeBasicInfo({
                     )}
                   </p>
                 </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Job Location</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue((employee as any).locationName || (employee as any).location_name || (employee as any).workLocation || (employee as any).jobLocation || (employee as any).location)}</p>
+                </div>
               </div>
             </div>
 

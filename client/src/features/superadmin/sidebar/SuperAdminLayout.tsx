@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/config/api';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 
 interface NotificationItem {
   id: number;
@@ -77,6 +78,7 @@ export function SuperAdminLayout() {
           </div>
 
           <div className="flex items-center gap-2 relative">
+            <LiveDateTimeDisplay />
             {/* Theme Toggle option directly left side of Notification Bell */}
             <Button
               variant="ghost"

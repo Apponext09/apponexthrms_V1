@@ -15,6 +15,8 @@ import {
   Shield,
   ChevronDown,
   GitBranch,
+  ScanFace,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
@@ -27,30 +29,31 @@ import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
 
 // ── Amber accent constants ────────────────────────────────────────────────────
 const C = {
-  activeBg: 'bg-amber-500 dark:bg-amber-500',
+  activeBg: 'bg-primary',
   activeText: 'text-white',
-  hoverBg: 'hover:bg-amber-50 dark:hover:bg-amber-950/30',
-  hoverText: 'hover:text-amber-700 dark:hover:text-amber-400',
-  icon: 'text-amber-500',
+  hoverBg: 'hover:bg-muted', hoverText: 'hover:text-foreground', icon: 'text-primary',
   sectionLabel: 'text-muted-foreground',
-  avatarBg: 'bg-amber-500',
-  avatarBorder: 'border-amber-300 dark:border-amber-700',
+  avatarBg: 'bg-primary', avatarBorder: 'border-primary/30',
 };
 
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const INTERN_NAV = [
   {
-    label: 'OVERVIEW',
+    label: 'EMPLOYEE CORE',
     items: [
       { name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard },
       { name: 'My Lifecycle', href: '/intern/lifecycle', icon: GitBranch },
+      { name: 'Org Structure', href: '/intern/org-chart', icon: Building2 },
+      { name: 'ID Card', href: '/intern/id-card', icon: Shield },
     ],
   },
   {
-    label: 'TIME & ATTENDANCE',
+    label: 'ATTENDANCE',
     items: [
-      { name: 'Attendance',       href: '/intern/attendance',       icon: Clock },
-      { name: 'Holiday Calendar', href: '/intern/holiday-calendar', icon: Calendar },
+      { name: 'Face Punch', href: '/intern/face-attendance', icon: ScanFace },
+      { name: 'My Attendance Log', href: '/intern/attendance', icon: Clock },
+      { name: 'My Shifts', href: '/intern/shift-roster', icon: Calendar },
+      { name: 'Attendance Correction', href: '/intern/attendance-regularization', icon: RefreshCw },
     ],
   },
   {
@@ -65,13 +68,7 @@ const INTERN_NAV = [
       { name: 'My Payslips', href: '/intern/payslips', icon: CreditCard },
     ],
   },
-  {
-    label: 'DOCUMENTS',
-    items: [
-      { name: 'My Documents', href: '/intern/documents', icon: BookOpen },
-      { name: 'ID Card',      href: '/intern/id-card',   icon: Shield },
-    ],
-  },
+  { label: 'DOCUMENTS', items: [{ name: 'My Documents', href: '/intern/documents', icon: BookOpen }] },
   {
     label: 'COMPANY',
     items: [

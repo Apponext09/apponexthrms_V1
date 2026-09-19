@@ -49,6 +49,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Grab,
   Plus,
   Minus,
   User,
@@ -62,17 +63,9 @@ import {
   Eye,
   Settings,
   Zap,
-  GraduationCap,
-  ShieldAlert,
-  Sparkles,
-  Layers,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
-import { InvalidDropModal } from '../components/InvalidDropModal';
-import { OrgHierarchyConfigModal } from '../components/OrgHierarchyConfigModal';
-import { validateDragAndDrop, DEFAULT_HIERARCHY_RULES, normalizePositionKey } from '../utils/orgHierarchyEngine';
-import type { HierarchyRule, ValidationResult } from '../types/orgHierarchy';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Role configuration & badge styling
@@ -136,13 +129,6 @@ const ROLE_CONFIG: Record<
     border: 'border-amber-500/30',
     text: 'text-amber-700 dark:text-amber-300',
     Icon: UserCheck,
-  },
-  intern: {
-    label: 'Intern',
-    bg: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    border: 'border-emerald-500/30',
-    text: 'text-emerald-700 dark:text-emerald-300',
-    Icon: GraduationCap,
   },
   employee: {
     label: 'Employee',
@@ -235,70 +221,44 @@ const AVATAR_GRADIENTS = [
   'from-emerald-500 to-teal-600',
   'from-indigo-500 to-cyan-600',
 ];
-
 function avatarGrad(id?: number) {
-  return AVATAR_GRADIENTS[Math.abs(id || 0) % AVATAR_GRADIENTS.length];
+  return AVATAR_GRADIENTS[(id || 0) % AVATAR_GRADIENTS.length];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tree Node Component (Position / Employee, Department Node, or Empty State)
+// Concise Minimalist Tree Node Component with @dnd-kit Draggable / Droppable & Pulsing
 // ─────────────────────────────────────────────────────────────────────────────
 interface ReferenceNodeProps {
-  node: any;
+  emp: Employee;
   highlight: boolean;
   isPulsing?: boolean;
   hasChildren: boolean;
   isCollapsed: boolean;
   onToggleExpand: () => void;
   onClick: () => void;
-  activeDragEmp?: Employee | null;
-  hierarchyRules?: HierarchyRule[];
-  allEmployees?: Employee[];
+  isAdmin?: boolean;
+  deptName?: string;
 }
 
 function ReferenceNode({
-  node,
+  emp,
   highlight,
   isPulsing = false,
   hasChildren,
   isCollapsed,
   onToggleExpand,
   onClick,
-  activeDragEmp,
-  hierarchyRules = DEFAULT_HIERARCHY_RULES,
-  allEmployees = [],
+  isAdmin = false,
+  deptName,
 }: ReferenceNodeProps) {
-  const emp = node.emp || {};
-  const isDeptNode = Boolean(node.isDepartmentNode);
-  const isAdmin = Boolean(node.isAdmin || emp.accessRole === 'super_admin' || emp.accessRole === 'platform_admin' || emp.accessRole === 'hr_admin' || emp.isCeo || emp.is_ceo);
-  const isDeptHeadOrHR = ['department_head', 'hr', 'hr_manager'].includes(emp.accessRole);
-  const nodeId = isDeptNode ? `dept-${node.deptName}` : `emp-${emp.id || node.id}`;
+  const name = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
+  const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase();
+  const grad = avatarGrad(emp.id);
+  const designation = isAdmin ? 'Admin' : resolveDesignation(emp);
 
-  const name = isDeptNode
-    ? node.deptName
-    : [emp.firstName, emp.lastName].filter(Boolean).join(' ') || 'Employee';
+  const isDeptHeadOrHR = ['department_head', 'hr_manager'].includes((emp as any).accessRole || '');
+  const isDragDisabled = isAdmin || isDeptHeadOrHR;
 
-  const initials = isDeptNode
-    ? node.deptName?.slice(0, 2).toUpperCase()
-    : `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase();
-
-  const grad = avatarGrad(typeof node.id === 'number' ? node.id : emp.id);
-
-  const posKey = isDeptNode
-    ? 'Department'
-    : normalizePositionKey(emp.designation || emp.jobTitle, emp.accessRole);
-
-  const isCeoNode = isAdmin || posKey === 'CEO' || (emp.designation && emp.designation.toLowerCase().includes('chief executive'));
-
-  const designation = isDeptNode
-    ? 'DEPARTMENT'
-    : isCeoNode
-      ? 'CEO'
-      : emp.designation || emp.jobTitle || posKey;
-
-  const isDragDisabled = isDeptNode || isAdmin;
-
-  // Draggable Hook
   const {
     attributes,
     listeners,
@@ -306,16 +266,14 @@ function ReferenceNode({
     transform,
     isDragging,
   } = useDraggable({
-    id: nodeId,
+    id: String(emp.id),
     disabled: isDragDisabled,
-    data: { emp, node },
+    data: { emp, isAdmin },
   });
 
-  // Droppable Hook
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
-    id: nodeId,
-    disabled: false,
-    data: { emp, node },
+    id: String(emp.id),
+    data: { emp, isAdmin },
   });
 
   const setCombinedRef = (element: HTMLDivElement | null) => {
@@ -330,39 +288,29 @@ function ReferenceNode({
     }
     : {};
 
-  // Compute live validation status if currently dragging over this node
-  const validation: ValidationResult | null = useMemo(() => {
-    if (!isOver || !activeDragEmp || isDragging) return null;
-    return validateDragAndDrop(activeDragEmp, node, hierarchyRules, allEmployees);
-  }, [isOver, activeDragEmp, isDragging, node, hierarchyRules, allEmployees]);
-
-  const isTargetValid = validation ? validation.isValid : false;
-
   return (
     <div className="relative flex flex-col items-center shrink-0">
-      {/* Live Drop Target Indicator Badge when dragging over */}
+      {/* Department Badge directly above manager node */}
+      {deptName && (
+        <div className="flex flex-col items-center mb-1 shrink-0">
+          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-primary/20 bg-primary/5 text-primary font-bold text-[9.5px] shadow-2xs">
+            <Building2 className="w-2.5 h-2.5 text-primary" />
+            <span>{deptName}</span>
+          </div>
+          <div className="w-0.5 h-2 bg-border" />
+        </div>
+      )}
+
+      {/* Drop Target Indicator Badge when dragging over */}
       {isOver && !isDragging && (
-        <div
-          className={`absolute -top-4 z-50 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-white font-black text-[9px] shadow-xl animate-bounce ${isTargetValid ? 'bg-emerald-600' : 'bg-rose-600'
-            }`}
-        >
-          {isTargetValid ? (
-            <>
-              <UserCheck className="w-3 h-3 text-white" />
-              <span>Valid Target — Drop to Assign</span>
-            </>
-          ) : (
-            <>
-              <ShieldAlert className="w-3 h-3 text-white" />
-              <span>Invalid Target — Drop Blocked</span>
-            </>
-          )}
+        <div className="absolute -top-3.5 z-50 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[9px] shadow-lg animate-bounce">
+          <span>Drop to Reassign Here</span>
         </div>
       )}
 
       {/* Concise Minimalist Node Card */}
       <div
-        id={`node-card-${emp.id || nodeId}`}
+        id={`node-card-${emp.id}`}
         ref={setCombinedRef}
         {...listeners}
         {...attributes}
@@ -401,18 +349,13 @@ function ReferenceNode({
         </div>
 
         {/* Minimal Name Pill */}
-        <div className="w-full bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground text-primary text-[10.5px] font-extrabold px-2 py-0.5 rounded-full text-center truncate shadow-2xs transition-colors">
+        <div className="w-full bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground text-primary text-[10px] font-extrabold px-2 py-0.5 rounded-full text-center truncate shadow-2xs transition-colors">
           {name}
         </div>
 
-        {/* Designation Subtitle (Requirement #2: CEO displayed strictly as CEO) */}
-        <div className="text-[8.5px] font-bold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
-          {isCeoNode ? 'CEO' : designation}
-        </div>
-
-        {/* Department / Manager Subtitle */}
-        <div className="text-[8px] font-semibold text-muted-foreground/80 truncate w-full text-center mt-0.5">
-          {emp.department ? `${emp.department}` : node.reportingManagerName ? `Mgr: ${node.reportingManagerName}` : ''}
+        {/* Designation Subtitle */}
+        <div className="text-[8.5px] font-semibold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
+          {designation}
         </div>
 
         {/* Circular Toggle Button (+ / -) */}
@@ -435,18 +378,15 @@ function ReferenceNode({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tree Branch Recursive Component
+// Tree Branch Recursive Component with Crisp Minimal Lines
 // ─────────────────────────────────────────────────────────────────────────────
 interface TreeBranchProps {
   node: any;
   highlight: Set<number>;
   pulsingEmpId?: number | null;
-  collapsedMap: Record<string | number, boolean>;
-  onToggleCollapse: (id: string | number) => void;
+  collapsedMap: Record<number, boolean>;
+  onToggleCollapse: (id: number) => void;
   onSelectEmp: (e: Employee) => void;
-  activeDragEmp?: Employee | null;
-  hierarchyRules?: HierarchyRule[];
-  allEmployees?: Employee[];
   isLevel1Manager?: boolean;
 }
 
@@ -457,13 +397,9 @@ function TreeBranch({
   collapsedMap,
   onToggleCollapse,
   onSelectEmp,
-  activeDragEmp,
-  hierarchyRules,
-  allEmployees,
-  isLevel1Manager,
+  isLevel1Manager = false,
 }: TreeBranchProps) {
-  const nodeId = node.isDepartmentNode ? `dept-${node.deptName}` : `emp-${node.emp?.id || node.id}`;
-  const isCollapsed = collapsedMap[nodeId] ?? (node.emp?.id ? collapsedMap[node.emp.id] : false);
+  const isCollapsed = collapsedMap[node.emp.id] ?? false;
   const children = node.children || [];
   const hasChildren = children.length > 0;
   const deptName = node.isAdmin
@@ -471,30 +407,25 @@ function TreeBranch({
     : node.isCxo
       ? `C-Suite · ${(node.cxoType || 'CXO').toUpperCase()}`
       : isLevel1Manager
-        ? (node.emp?.department || 'Department')
+        ? (node.emp.department || 'Department')
         : undefined;
 
   return (
     <div className="flex flex-col items-center shrink-0">
       {/* Node Card */}
       <ReferenceNode
-        node={node}
-        highlight={node.emp?.id ? highlight.has(node.emp.id) : false}
-        isPulsing={pulsingEmpId === node.emp?.id}
+        emp={node.emp}
+        highlight={highlight.has(node.emp.id)}
+        isPulsing={pulsingEmpId === node.emp.id}
         hasChildren={hasChildren}
         isCollapsed={isCollapsed}
-        onToggleExpand={() => onToggleCollapse(nodeId)}
-        onClick={() => {
-          if (node.emp && !node.isDepartmentNode && !node.isEmptyStateNode) {
-            onSelectEmp(node.emp);
-          }
-        }}
-        activeDragEmp={activeDragEmp}
-        hierarchyRules={hierarchyRules}
-        allEmployees={allEmployees}
+        onToggleExpand={() => onToggleCollapse(node.emp.id)}
+        onClick={() => onSelectEmp(node.emp)}
+        isAdmin={node.isAdmin}
+        deptName={deptName}
       />
 
-      {/* Children Branches with Crisp Line Connectors */}
+      {/* Children Branches with Crisp Minimal Line Connectors */}
       {hasChildren && !isCollapsed && (
         <div className="flex flex-col items-center pt-2.5">
           {/* Vertical Stem down from parent toggle button */}
@@ -544,22 +475,6 @@ export function OrgStructurePage() {
   const [isUpdatingManager, setIsUpdatingManager] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-
-  // Hierarchy rules state
-  const [hierarchyRules, setHierarchyRules] = useState<HierarchyRule[]>(DEFAULT_HIERARCHY_RULES);
-
-  const handleSaveHierarchyRules = (updatedRules: HierarchyRule[]) => {
-    setHierarchyRules(updatedRules);
-    toast.success('Hierarchy rules updated successfully');
-  };
-
-  // Invalid Drop Popup Modal State
-  const [invalidDropModal, setInvalidDropModal] = useState<{
-    open: boolean;
-    title: string;
-    message: string;
-  }>({ open: false, title: '', message: '' });
 
   // Admin Setting: Export Chart Visibility for Employees
   const [isExportEnabledForEmployees, setIsExportEnabledForEmployees] = useState<boolean>(() => {
@@ -568,7 +483,8 @@ export function OrgStructurePage() {
   });
 
   const userRole = (user as any)?.accessRole || (user as any)?.role || '';
-  const isAdminOrManager = ['hr', 'hr_admin', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
+  // Every portal uses this same canvas. Only HR/admin personas can modify or export it.
+  const isAdminOrManager = ['organization_admin', 'ceo', 'hr', 'hr_admin', 'hr_manager', 'super_admin', 'platform_admin'].includes(userRole);
   const canExport = isAdminOrManager || isExportEnabledForEmployees;
 
   // Local employees state for optimistic UI updates
@@ -586,7 +502,7 @@ export function OrgStructurePage() {
   }, [selectedEmp]);
 
   // Collapse State for nodes
-  const [collapsedMap, setCollapsedMap] = useState<Record<string | number, boolean>>({});
+  const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
 
   // Reassignment Confirm Step State
   const [reassignConfirm, setReassignConfirm] = useState<{
@@ -603,7 +519,7 @@ export function OrgStructurePage() {
   const exportTreeRef = useRef<HTMLDivElement>(null);
 
 
-  // Active Dragged Employee for smooth DragOverlay preview & live validation
+  // Active Dragged Employee for smooth DragOverlay preview
   const [activeDragEmp, setActiveDragEmp] = useState<Employee | null>(null);
 
   const sensors = useSensors(
@@ -614,99 +530,32 @@ export function OrgStructurePage() {
     })
   );
 
-  const toggleCollapse = (id: string | number) => {
-    setCollapsedMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleCollapse = (id: number) => {
+    setCollapsedMap((prev) => ({ ...prev, [id]: prev[id] !== undefined ? !prev[id] : false }));
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (!isAdminOrManager) return;
     const emp: Employee = event.active.data.current?.emp;
     if (emp) setActiveDragEmp(emp);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const activeEmp: Employee = activeDragEmp || event.active.data.current?.emp;
+    if (!isAdminOrManager) return;
     setActiveDragEmp(null);
-
     const { active, over } = event;
-    if (!over || !activeEmp || active.id === over.id) return;
+    if (!over || active.id === over.id) return;
 
-    const overData = over.data.current;
-    const targetNode = overData?.node || overData;
-    const targetEmp: Employee = overData?.emp;
-    const targetIsAdmin: boolean = Boolean(overData?.isAdmin || targetNode?.isAdmin);
+    const activeEmp: Employee = active.data.current?.emp;
+    const targetEmp: Employee = over.data.current?.emp;
+    const targetIsAdmin: boolean = !!over.data.current?.isAdmin;
 
-    const activeList = localEmps || (employees as Employee[]) || [];
+    if (!activeEmp || !targetEmp || activeEmp.id === targetEmp.id) return;
 
-    // STRICT Drag-and-Drop Validation Check
-    const validation = validateDragAndDrop(activeEmp, targetNode, hierarchyRules, activeList);
-
-    if (!validation.isValid) {
-      // Show Professional Validation Popup (Requirement #8 & #9)
-      setInvalidDropModal({
-        open: true,
-        title: validation.errorTitle || 'Invalid Reporting Structure',
-        message: validation.errorMessage || 'This move is not permitted under the organization structure rules.',
-      });
-      return;
-    }
-
-    if (!targetEmp && !targetIsAdmin) return;
-
-    const activeEmpId = activeEmp.id;
-    const targetManagerId = targetIsAdmin ? null : targetEmp.id;
-    const targetDeptId = targetIsAdmin
-      ? null
-      : targetEmp.currentDepartmentId || (targetEmp as any).departmentId || (targetEmp as any).current_department_id || activeEmp.currentDepartmentId;
-
-    if (!activeEmpId) return;
-
-    const previousLocalEmps = localEmps;
-
-    // Optimistically move node in local tree state for immediate live rendering
-    if (localEmps) {
-      setLocalEmps(
-        localEmps.map((emp) => {
-          if (emp.id === activeEmpId) {
-            return {
-              ...emp,
-              reportingManagerId: targetManagerId,
-              currentDepartmentId: targetDeptId || emp.currentDepartmentId,
-              department: targetIsAdmin
-                ? 'Executive Management'
-                : targetEmp.department || emp.department,
-            };
-          }
-          return emp;
-        })
-      );
-    }
-
-    // Save reporting relationship permanently to database
-    apiClient
-      .patch(`/employees/${activeEmpId}`, {
-        reportingManagerId: targetManagerId,
-        currentDepartmentId: targetDeptId || undefined,
-      })
-      .then(() => {
-        const mgrName = targetIsAdmin
-          ? 'Organization Admin / CEO'
-          : `${targetEmp.firstName || ''} ${targetEmp.lastName || ''}`.trim();
-        toast.success(`Reporting manager for ${activeEmp.firstName} changed to ${mgrName}!`);
-        refetch();
-      })
-      .catch((err: any) => {
-        // Roll back optimistic update on API error
-        setLocalEmps(previousLocalEmps);
-        const msg =
-          err?.response?.data?.error?.message ||
-          err?.response?.data?.message ||
-          err?.message ||
-          'Failed to update reporting manager';
-        toast.error(msg);
-      });
+    setReassignConfirm({ activeEmp, targetEmp, targetIsAdmin });
   };
 
-  // Search Submit
+  // Search Submit: Uncollapse ancestors, center zoom, & pulse card for 3 seconds
   const handleSearchSubmit = (term: string) => {
     if (!term.trim()) return;
     const lower = term.toLowerCase().trim();
@@ -725,7 +574,8 @@ export function OrgStructurePage() {
       return;
     }
 
-    const ancestors: (number | string)[] = [];
+    // 1. Uncollapse ancestors up to root
+    const ancestors: number[] = [];
     let currId: number | null | undefined = matched.reportingManagerId;
     const empMap = new Map<number, Employee>();
     activeList.forEach((e) => {
@@ -740,6 +590,7 @@ export function OrgStructurePage() {
       currId = mgr?.reportingManagerId;
     }
 
+    // Always uncollapse Root Admin (999999)
     ancestors.push(999999);
 
     setCollapsedMap((prev) => {
@@ -750,9 +601,11 @@ export function OrgStructurePage() {
       return next;
     });
 
+    // 2. Pulse card for 3 seconds
     setPulsingEmpId(matched.id);
     setTimeout(() => setPulsingEmpId(null), 3200);
 
+    // 3. Center Zoom onto target card
     setTimeout(() => {
       const el = document.getElementById(`node-card-${matched.id}`);
       if (el && containerRef.current) {
@@ -780,10 +633,21 @@ export function OrgStructurePage() {
     toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
   };
 
+  // In view-only portals, open the shared chart around the signed-in employee.
+  useEffect(() => {
+    if (isAdminOrManager || !user?.employeeId || !(localEmps || employees)?.length) return;
+    const currentEmployee = (localEmps || employees || []).find((employee: any) => Number(employee.id) === Number(user.employeeId));
+    if (currentEmployee) {
+      handleSearchSubmit(`${currentEmployee.firstName || ''} ${currentEmployee.lastName || ''}`.trim());
+    }
+  // This is intentionally an initial focus action, not a response to canvas pan/zoom.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminOrManager, user?.employeeId, localEmps, employees]);
+
   // Build Dynamic Hierarchy Tree Structure from Database
   const treeData = useMemo(() => {
-    const rawList = localEmps || (employees as Employee[]) || [];
-    const allDbDepts: any[] = [];
+    const rawList = localEmps || (employees as Employee[]);
+    if (!rawList || rawList.length === 0) return null;
 
     // Helper to get department name
     const getDeptKey = (e: Employee): string =>
@@ -1108,7 +972,7 @@ export function OrgStructurePage() {
 
   return (
     <div className="flex flex-col h-full gap-3 p-4 sm:p-6 max-w-7xl mx-auto w-full">
-      {/* ─── Top Header & Controls ─── */}
+      {/* ─── Top Header & Controls matching reference layout ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -1117,17 +981,14 @@ export function OrgStructurePage() {
           <div>
             <h1 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
               Organization Hierarchy Chart
-              <Badge variant="outline" className="text-[10px] font-bold py-0.5 px-2 bg-emerald-500/10 text-emerald-700 border-emerald-500/30">
-                <Sparkles className="w-3 h-3 mr-1" /> Dynamic Tree Hierarchy
-              </Badge>
             </h1>
             <p className="text-xs text-muted-foreground">
-              Tree Hierarchy: CEO ➔ COO/CTO/CFO ➔ Department Nodes ➔ IT Head ➔ PM ➔ Team Lead ➔ Employee ➔ Intern
+              Interactive Org Tree: Admin ➔ Department Manager ➔ Team Lead ➔ Employee / Intern
             </p>
           </div>
         </div>
 
-        {/* Action Controls & Zoom Bar */}
+        {/* Action Controls & Zoom Bar aligned in single row */}
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <div className="flex items-center gap-1 bg-muted/40 border border-border/80 rounded-lg p-1">
             <Button
@@ -1162,35 +1023,21 @@ export function OrgStructurePage() {
             </Button>
           </div>
 
-          {/* Admin Hierarchy Configuration Button */}
-          {isAdminOrManager && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setIsConfigModalOpen(true)}
-              className="h-8 text-xs font-bold gap-1.5 px-3 border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 shadow-2xs"
-              title="Configure Role/Designation Parent Rules"
-            >
-              <Layers className="w-3.5 h-3.5 text-primary" />
-              Hierarchy Config
-            </Button>
-          )}
-
-          {/* Settings Modal Toggle */}
+          {/* Admin Settings Tab Button */}
           {isAdminOrManager && (
             <Button
               size="sm"
               variant="outline"
               onClick={() => setIsSettingsModalOpen(true)}
               className="h-8 text-xs font-semibold gap-1.5 px-3 border-border shadow-2xs"
-              title="Organization Settings"
+              title="Organization Hierarchy Settings"
             >
-              <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+              <Settings className="w-3.5 h-3.5 text-primary" />
               Settings
             </Button>
           )}
 
-          {/* Export Chart Button */}
+          {/* Export Chart Button visible to Admin OR if Employee Export setting is ON */}
           {canExport && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1230,8 +1077,8 @@ export function OrgStructurePage() {
         </div>
       </div>
 
-      {/* ─── Interactive Tree Canvas wrapped in @dnd-kit DndContext ─── */}
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      {/* ─── Interactive Pure Line Tree Canvas wrapped in @dnd-kit DndContext ─── */}
+      <DndContext sensors={isAdminOrManager ? sensors : []} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={containerRef}
           onWheel={handleWheel}
@@ -1239,7 +1086,7 @@ export function OrgStructurePage() {
         >
           <div className="absolute inset-0 bg-[radial-gradient(#888_1px,transparent_1px)] [background-size:24px_24px] opacity-15 pointer-events-none" />
 
-          {/* ─── Top-Left Search Toolbar Bar ─── */}
+          {/* ─── Top-Left Search Toolbar Bar matching Reference Screenshot 2 ─── */}
           <div className="absolute top-3 left-3 z-30 flex items-center gap-2 bg-slate-900/90 dark:bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1.5 rounded-lg shadow-lg text-white">
             <div className="relative flex items-center">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 pointer-events-none" />
@@ -1264,7 +1111,8 @@ export function OrgStructurePage() {
             </Button>
           </div>
 
-          {/* ─── Canvas Pan Control Arrows ─── */}
+          {/* ─── Edge Arrow Movement Navigation Controls matching Reference Image ─── */}
+          {/* Top Arrow (Pan Canvas Down) */}
           <button
             type="button"
             onClick={() => setPan((p) => ({ ...p, y: p.y + 140 }))}
@@ -1273,6 +1121,8 @@ export function OrgStructurePage() {
           >
             <ChevronUp className="w-5 h-5 text-white" />
           </button>
+
+          {/* Bottom Arrow (Pan Canvas Up) */}
           <button
             type="button"
             onClick={() => setPan((p) => ({ ...p, y: p.y - 140 }))}
@@ -1281,6 +1131,8 @@ export function OrgStructurePage() {
           >
             <ChevronDown className="w-5 h-5 text-white" />
           </button>
+
+          {/* Left Arrow (Pan Canvas Right) */}
           <button
             type="button"
             onClick={() => setPan((p) => ({ ...p, x: p.x + 180 }))}
@@ -1289,6 +1141,8 @@ export function OrgStructurePage() {
           >
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
+
+          {/* Right Arrow (Pan Canvas Left) */}
           <button
             type="button"
             onClick={() => setPan((p) => ({ ...p, x: p.x - 180 }))}
@@ -1336,16 +1190,13 @@ export function OrgStructurePage() {
                     if (e.id === 999999) return;
                     setSelectedEmp(e);
                   }}
-                  activeDragEmp={activeDragEmp}
-                  hierarchyRules={hierarchyRules}
-                  allEmployees={(localEmps || employees) as Employee[]}
                 />
               </div>
             </div>
           )}
         </div>
 
-        {/* Floating Smooth Drag Overlay Preview */}
+        {/* Floating Silky-Smooth Drag Overlay Preview */}
         <DragOverlay
           dropAnimation={{
             duration: 250,
@@ -1353,7 +1204,7 @@ export function OrgStructurePage() {
           }}
         >
           {activeDragEmp ? (
-            <div className="flex flex-col items-center bg-card border-2 border-primary ring-4 ring-primary/30 rounded-xl p-2.5 w-[165px] min-h-[98px] shadow-2xl scale-105 bg-card/95 backdrop-blur-xs cursor-grabbing pointer-events-none z-50">
+            <div className="flex flex-col items-center bg-card border-2 border-primary ring-4 ring-primary/30 rounded-xl p-2.5 w-[160px] min-h-[92px] shadow-2xl scale-105 bg-card/95 backdrop-blur-xs cursor-grabbing pointer-events-none z-50">
               <div className="relative mb-1">
                 <Avatar className="h-8 w-8 rounded-full border border-primary/50 shadow-md">
                   <AvatarImage src={(activeDragEmp as any).avatarUrl || undefined} />
@@ -1366,28 +1217,12 @@ export function OrgStructurePage() {
                 {activeDragEmp.firstName} {activeDragEmp.lastName}
               </div>
               <div className="text-[8.5px] font-bold text-primary uppercase mt-1 tracking-wider">
-                Reassigning Position...
+                Reassigning Manager...
               </div>
             </div>
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      {/* ─── Professional Invalid Drop Warning Popup (Requirement #8) ─── */}
-      <InvalidDropModal
-        open={invalidDropModal.open}
-        title={invalidDropModal.title}
-        message={invalidDropModal.message}
-        onClose={() => setInvalidDropModal({ open: false, title: '', message: '' })}
-      />
-
-      {/* ─── Admin Hierarchy Configuration Modal (Requirement #10 & #12) ─── */}
-      <OrgHierarchyConfigModal
-        open={isConfigModalOpen}
-        onClose={() => setIsConfigModalOpen(false)}
-        rules={hierarchyRules}
-        onSaveRules={handleSaveHierarchyRules}
-      />
 
       {/* ─── Org Structure Settings Modal for Admin ─── */}
       {isSettingsModalOpen && (
@@ -1442,7 +1277,7 @@ export function OrgStructurePage() {
         </Dialog>
       )}
 
-      {/* ─── Reassign Confirmation Dialog ─── */}
+      {/* ─── Reassign Confirmation Step Dialog ─── */}
       {reassignConfirm && (
         <Dialog open onOpenChange={() => setReassignConfirm(null)}>
           <DialogContent className="sm:max-w-md border border-border rounded-xl">
@@ -1543,9 +1378,8 @@ export function OrgStructurePage() {
                     // Roll back optimistic update on API error
                     setLocalEmps(previousLocalEmps);
                     const msg =
-                      err?.response?.data?.error?.message ||
+                      err?.response?.data?.error?.details?.message ||
                       err?.response?.data?.message ||
-                      err?.message ||
                       'Failed to reassign employee';
                     toast.error(msg);
                   }
@@ -1617,6 +1451,7 @@ export function OrgStructurePage() {
                   ['Department', selectedEmp.department || '—'],
                   ['Designation', resolveDesignation(selectedEmp, designations)],
                   ['Email', selectedEmp.email],
+                  ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
                   ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
                   ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
                 ].map(([label, value]) => (

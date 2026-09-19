@@ -8,6 +8,9 @@ const ConsultantDashboardPage = lazy(() => import('../features/consultant/pages/
 const MyLifecyclePage = lazy(() => import('../features/employee/pages/MyLifecyclePage').then(m => ({ default: m.MyLifecyclePage })));
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
 const AttendancePage = lazy(() => import('../features/employee/portal-pages/AttendancePage'));
+const FaceAttendancePage = lazy(() => import('../features/employee/portal-pages/FaceAttendancePage'));
+const RegularizationPage = lazy(() => import('../features/employee/portal-pages/RegularizationPage'));
+const ShiftRosterPage = lazy(() => import('../features/employee/portal-pages/ShiftRosterPage'));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const PayslipViewer = lazy(() => import('../features/payroll/pages/PayslipViewer').then(m => ({ default: m.PayslipViewer })));
 const MyExpensesPage = lazy(() => import('../features/expenses/pages/MyExpensesPage').then(m => ({ default: m.MyExpensesPage })));
@@ -16,7 +19,7 @@ const DocumentsPage = lazy(() => import('../features/employee/portal-pages/Docum
 const HolidayCalendarPage = lazy(() => import('../features/employee/portal-pages/HolidayCalendarPage'));
 const AnnouncementsPage = lazy(() => import('../features/employee/portal-pages/AnnouncementsPage'));
 const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
-const OrgChartPage = lazy(() => import('../features/employee/portal-pages/OrgChartPage'));
+const OrgChartPage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
 
 // ── Consultant Portal Routes (/consultant/*) ──────────────────────────────────
 export const consultantRoutes = (
@@ -32,6 +35,9 @@ export const consultantRoutes = (
     <Route path="/consultant/profile" element={<ProfilePage />} />
     <Route path="/consultant/lifecycle" element={<MyLifecyclePage />} />
     <Route path="/consultant/attendance" element={<AttendancePage />} />
+    <Route path="/consultant/face-attendance" element={<FaceAttendancePage />} />
+    <Route path="/consultant/attendance-regularization" element={<RegularizationPage />} />
+    <Route path="/consultant/shift-roster" element={<ShiftRosterPage />} />
     <Route path="/consultant/leaves" element={<LeavePage />} />
     <Route path="/consultant/payslips" element={<PayslipViewer />} />
     <Route path="/consultant/expenses" element={<MyExpensesPage />} />

@@ -307,6 +307,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'pms',
     label: 'PMS',
     icon: 'Target',
+    minRoles: ['support'],
     items: [
       {
         name: 'Dashboard',
@@ -325,6 +326,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     id: 'assets',
     label: 'ASSET MANAGEMENT',
     icon: 'Package',
+    minRoles: ['support'],
     items: [
       {
         name: 'Dashboard',
@@ -395,8 +397,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr', 'hr_manager'],
     items: [
       { name: 'Requests', href: '/hr-operations/requests', icon: 'Inbox' },
-      { name: 'Configuration', href: '/configuration', icon: 'Sliders' },
-      { name: 'Announcements', href: '/hr-operations/announcements', icon: 'Megaphone' },
       { name: 'Holiday Calendar', href: '/holidays', icon: 'Calendar' },
     ],
   },

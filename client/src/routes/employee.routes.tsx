@@ -1,9 +1,7 @@
 import React, { lazy } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-
-// Portal shell is lazy-loaded so it is not part of the pre-login bundle
-const EmployeeLayout = lazy(() => import('../features/employee/layout/EmployeeLayout').then(m => ({ default: m.EmployeeLayout })));
+import { EmployeeLayout } from '../features/employee/layout/EmployeeLayout';
 
 // ── Lazy Imports ──────────────────────────────────────────────────────────────
 const EmployeeDashboardPage = lazy(() => import('../features/employee/Dashboard/EmployeeDashboardPage').then(m => ({ default: m.EmployeeDashboardPage })));
@@ -28,7 +26,7 @@ const MileageClaimsPage = lazy(() => import('../features/expenses/pages/MileageC
 const AssetPage = lazy(() => import('../features/employee/portal-pages/AssetPage'));
 const DocumentsPage = lazy(() => import('../features/employee/portal-pages/DocumentsPage'));
 const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
-const OrgChartPage = lazy(() => import('../features/employee/portal-pages/OrgChartPage'));
+const OrgChartPage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
 const TeamDirectoryPage = lazy(() => import('../features/employee/portal-pages/TeamDirectoryPage'));
 const PerformancePage = lazy(() => import('../features/employee/portal-pages/PerformancePage'));
 const GoalsPage = lazy(() => import('../features/employee/portal-pages/GoalsPage'));

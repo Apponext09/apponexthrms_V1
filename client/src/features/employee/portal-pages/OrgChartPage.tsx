@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ interface EmployeeNode {
 }
 
 export default function OrgChartPage() {
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
@@ -165,6 +167,7 @@ export default function OrgChartPage() {
   };
 
   const renderNode = (node: EmployeeNode, isRoot: boolean = false) => {
+    const isCurrentEmployee = Number(node.id) === Number(user?.employeeId);
     const isExpanded = expandedNodes[node.name] ?? true;
     const hasChildren = node.children && node.children.length > 0;
 
@@ -176,7 +179,7 @@ export default function OrgChartPage() {
           <Card className={`w-72 p-4 rounded-2xl border shadow-sm transition-all bg-card/90 backdrop-blur-sm ${
             isRoot
               ? 'border-violet-500/50 shadow-lg shadow-violet-500/10 ring-2 ring-violet-500/20'
-              : 'hover:border-violet-500/40 hover:shadow-md'
+              : isCurrentEmployee ? 'border-primary shadow-md ring-2 ring-primary/20' : 'hover:border-violet-500/40 hover:shadow-md'
           }`}>
             <div className="flex items-start gap-3">
               <div className={`h-11 w-11 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-inner ${
@@ -195,6 +198,7 @@ export default function OrgChartPage() {
                       Head
                     </span>
                   )}
+                  {isCurrentEmployee && !isRoot && <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-primary/10 text-primary border border-primary/25">You</span>}
                 </div>
                 <p className="text-[11px] font-bold text-violet-600 dark:text-violet-400 truncate">{node.role}</p>
                 <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-semibold">
@@ -243,7 +247,7 @@ export default function OrgChartPage() {
             <Users className="w-6 h-6 text-violet-600" /> Interactive Organization Chart
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Visualize reporting hierarchy, department leaders, managers, and reporting structures.
+            View-only reporting hierarchy. Your profile is highlighted in the structure.
           </p>
         </div>
 

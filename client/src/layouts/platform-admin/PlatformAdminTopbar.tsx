@@ -1,6 +1,7 @@
 import { Bell, Moon, Sun, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { LiveDateTimeDisplay } from '@/components/LiveDateTimeDisplay';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
@@ -46,6 +47,7 @@ export function PlatformAdminTopbar({
 
         {/* Right Actions */}
         <div className="flex items-center gap-2">
+          <LiveDateTimeDisplay />
           {/* Theme toggle */}
           <Button
             variant="ghost"

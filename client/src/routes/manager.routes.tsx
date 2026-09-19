@@ -34,6 +34,8 @@ const GoalManagementPage = lazy(() => import('../features/performance/pages/Goal
 const ApprovalsPage = lazy(() => import('../features/employee/portal-pages/ApprovalsPage'));
 // Managers use the same self-service profile and HR approval flow as employees.
 const ProfilePage = lazy(() => import('../features/employee/portal-pages/ProfilePage'));
+const IDCardPage = lazy(() => import('../features/employee/portal-pages/IDCardPage'));
+const OrgChartPage = lazy(() => import('../features/org-structure/pages/OrgStructurePage').then(m => ({ default: m.OrgStructurePage })));
 const LeavePage = lazy(() => import('../features/employee/portal-pages/LeavePage'));
 const LiveTrackingDashboardPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.LiveTrackingDashboardPage })));
 const TrackingHistoryPage = lazy(() => import('../features/Livetracking').then(m => ({ default: m.TrackingHistoryPage })));
@@ -113,6 +115,8 @@ export const managerRoutes = (
     <Route path="/manager/approvals" element={<ApprovalsPage />} />
     <Route path="/manager/profile" element={<ProfilePage />} />
     <Route path="/manager/lifecycle" element={<MyLifecyclePage />} />
+    <Route path="/manager/id-card" element={<IDCardPage />} />
+    <Route path="/manager/org-chart" element={<OrgChartPage />} />
     <Route path="/manager/leaves" element={<LeavePage />} />
     <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
     <Route path="/manager/settlements" element={<TeamSettlementsPage />} />

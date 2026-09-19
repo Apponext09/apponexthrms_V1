@@ -26,6 +26,7 @@ import {
   Sliders,
   ChevronDown,
   GitBranch,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -38,14 +39,11 @@ import { PortalSidebarBrand } from "@/layouts/PortalSidebarBrand";
 
 // -- Emerald accent constants ---------------------------------------------------
 const C = {
-  activeBg: "bg-emerald-600 dark:bg-emerald-600",
+  activeBg: "bg-primary",
   activeText: "text-white",
-  hoverBg: "hover:bg-emerald-50 dark:hover:bg-emerald-950/30",
-  hoverText: "hover:text-emerald-700 dark:hover:text-emerald-400",
-  icon: "text-emerald-500",
+  hoverBg: "hover:bg-muted", hoverText: "hover:text-foreground", icon: "text-primary",
   sectionLabel: "text-muted-foreground",
-  avatarBg: "bg-emerald-600",
-  avatarBorder: "border-emerald-400 dark:border-emerald-700",
+  avatarBg: "bg-primary", avatarBorder: "border-primary/30",
 };
 
 // -- Nav definitions ------------------------------------------------------------
@@ -67,10 +65,25 @@ const FINANCE_NAV = [
     ],
   },
   {
+    label: "EMPLOYEE CORE",
+    items: [
+      { name: "My Lifecycle", href: "/finance/lifecycle", icon: GitBranch },
+      { name: "Org Structure", href: "/finance/org-chart", icon: Building2 },
+      { name: "ID Card", href: "/finance/id-card", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "ATTENDANCE",
+    items: [
+      { name: "Face Punch", href: "/finance/face-punch", icon: Scan },
+      { name: "My Attendance Log", href: "/finance/attendance", icon: Clock },
+      { name: "My Shifts", href: "/finance/shift-roster", icon: Calendar },
+      { name: "Attendance Correction", href: "/finance/attendance-regularization", icon: RefreshCw },
+    ],
+  },
+  {
     label: "FINANCE & AUDIT",
     items: [
-      { name: "Attendance",       href: "/finance/attendance",       icon: Clock },
-      { name: "Face Punch",       href: "/finance/face-punch",       icon: Scan },
       { name: "Financial Reports", href: "/finance/reports",   icon: FileBarChart },
       { name: "Approval Inbox",    href: "/finance/approvals", icon: CheckSquare },
     ],
@@ -78,10 +91,8 @@ const FINANCE_NAV = [
   {
     label: "MY SELF SERVICE",
     items: [
-      { name: "My Attendance",    href: "/finance/attendance",       icon: Clock },
       { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
       { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
-      { name: "My Lifecycle",     href: "/finance/lifecycle",        icon: GitBranch },
       { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
     ],
   },
