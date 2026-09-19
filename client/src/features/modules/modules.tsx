@@ -493,7 +493,7 @@ export function ModuleManagementPage(): JSX.Element {
   };
 
   // Reset to default state
-  const handleResetDefault = () => {
+  const handleResetDefault = async () => {
     if (await window.appConfirm(`Reset all ${roleInfo.title} module settings back to default?`)) {
       const defaultRoleMap = getDefaultStateForRole(activeRole);
       setModulesState((prev) => ({ ...prev, [activeRole]: defaultRoleMap }));

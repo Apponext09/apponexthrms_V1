@@ -1,5 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { useDesignations, useDummyMappings, Designation } from '../hooks/useDesignations';
+import React, { useState, useMemo } from "react";
+import {
+  useDesignations,
+  useDummyMappings,
+  Designation,
+} from "../hooks/useDesignations";
 import {
   Search,
   Users,
@@ -22,45 +26,54 @@ import {
   AlertCircle,
   RotateCcw,
   CheckSquare,
-  Square
-} from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { showToast } from '@/components/ui/toast';
-import { cn } from '@/lib/utils';
+  Square,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { showToast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 
 interface DesignationMasterProps {
   onCancel?: () => void;
 }
 
 function generateDesigCode(name: string): string {
-  if (!name.trim()) return '';
+  if (!name.trim()) return "";
   return name
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z0-9\s]/g, '')
-    .replace(/\s+/g, '-')
+    .replace(/[^A-Z0-9\s]/g, "")
+    .replace(/\s+/g, "-")
     .slice(0, 15);
 }
 
 export function DesignationMaster({ onCancel }: DesignationMasterProps) {
-  const { designations, isLoading, createDesignation, updateDesignation, deleteDesignation } = useDesignations();
+  const {
+    designations,
+    isLoading,
+    createDesignation,
+    updateDesignation,
+    deleteDesignation,
+  } = useDesignations();
   const mappings = useDummyMappings();
 
   // Search & Filter state for Right-hand listing
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDesignationFilter, setSelectedDesignationFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDesignationFilter, setSelectedDesignationFilter] =
+    useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
 
   // Form editing state
-  const [selectedDesignationId, setSelectedDesignationId] = useState<string | number | 'NEW' | null>('NEW');
+  const [selectedDesignationId, setSelectedDesignationId] = useState<
+    string | number | "NEW" | null
+  >("NEW");
 
   const [formData, setFormData] = useState<Partial<Designation>>({
-    name: '',
-    code: '',
-    description: '',
-    status: 'active',
+    name: "",
+    code: "",
+    description: "",
+    status: "active",
     mapped_companies: [],
     mapped_locations: [],
     mapped_departments: [],
@@ -69,8 +82,12 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
   });
 
   // Accordion & Section UI state
-  const [expandedAccordion, setExpandedAccordion] = useState<string | null>('Company');
-  const [accordionSearch, setAccordionSearch] = useState<Record<string, string>>({});
+  const [expandedAccordion, setExpandedAccordion] = useState<string | null>(
+    "Company",
+  );
+  const [accordionSearch, setAccordionSearch] = useState<
+    Record<string, string>
+  >({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,9 +106,10 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     setFormData((prev) => ({
       ...prev,
       name: val,
-      code: selectedDesignationId === 'NEW' ? generateDesigCode(val) : prev.code,
+      code:
+        selectedDesignationId === "NEW" ? generateDesigCode(val) : prev.code,
     }));
-    clearFieldError('name');
+    clearFieldError("name");
   };
 
   const handleCodeChange = (val: string) => {
@@ -99,7 +117,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
       ...prev,
       code: val.toUpperCase(),
     }));
-    clearFieldError('code');
+    clearFieldError("code");
   };
 
   const handleDescriptionChange = (val: string) => {
@@ -119,8 +137,11 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     }
 
     // Status filter
-    if (statusFilter !== 'All') {
-      result = result.filter((d) => (d.status || 'active').toLowerCase() === statusFilter.toLowerCase());
+    if (statusFilter !== "All") {
+      result = result.filter(
+        (d) =>
+          (d.status || "active").toLowerCase() === statusFilter.toLowerCase(),
+      );
     }
 
     // Search query
@@ -130,7 +151,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
         (d) =>
           d.name?.toLowerCase().includes(q) ||
           d.code?.toLowerCase().includes(q) ||
-          d.description?.toLowerCase().includes(q)
+          d.description?.toLowerCase().includes(q),
       );
     }
 
@@ -147,7 +168,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
 
     const parseArr = (val: any) => {
       if (Array.isArray(val)) return val.map(String);
-      if (typeof val === 'string' && val.trim()) {
+      if (typeof val === "string" && val.trim()) {
         try {
           const p = JSON.parse(val);
           return Array.isArray(p) ? p.map(String) : [String(val)];
@@ -159,13 +180,30 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     };
 
     setFormData({
-      name: desig.name || desig.designation_name || desig.designationName || desig.title || '',
-      code: desig.code || desig.designation_code || desig.designationCode || '',
-      description: desig.description || desig.desc || '',
-      status: desig.status || 'active',
-      mapped_companies: parseArr(desig.mapped_companies ?? desig.mappedCompanies ?? (desig.company_id ? [desig.company_id] : [])),
-      mapped_locations: parseArr(desig.mapped_locations ?? desig.mappedLocations ?? (desig.location_id ? [desig.location_id] : [])),
-      mapped_departments: parseArr(desig.mapped_departments ?? desig.mappedDepartments ?? (desig.department_id ? [desig.department_id] : [])),
+      name:
+        desig.name ||
+        desig.designation_name ||
+        desig.designationName ||
+        desig.title ||
+        "",
+      code: desig.code || desig.designation_code || desig.designationCode || "",
+      description: desig.description || desig.desc || "",
+      status: desig.status || "active",
+      mapped_companies: parseArr(
+        desig.mapped_companies ??
+          desig.mappedCompanies ??
+          (desig.company_id ? [desig.company_id] : []),
+      ),
+      mapped_locations: parseArr(
+        desig.mapped_locations ??
+          desig.mappedLocations ??
+          (desig.location_id ? [desig.location_id] : []),
+      ),
+      mapped_departments: parseArr(
+        desig.mapped_departments ??
+          desig.mappedDepartments ??
+          (desig.department_id ? [desig.department_id] : []),
+      ),
       mapped_shifts: parseArr(desig.mapped_shifts ?? desig.mappedShifts),
       mapped_grades: parseArr(desig.mapped_grades ?? desig.mappedGrades),
     });
@@ -175,12 +213,12 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
   };
 
   const handleAddNew = () => {
-    setSelectedDesignationId('NEW');
+    setSelectedDesignationId("NEW");
     setFormData({
-      name: '',
-      code: '',
-      description: '',
-      status: 'active',
+      name: "",
+      code: "",
+      description: "",
+      status: "active",
       mapped_companies: [],
       mapped_locations: [],
       mapped_departments: [],
@@ -202,14 +240,29 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     }));
   };
 
-  const handleSelectAllInAccordion = (field: keyof Designation, dataList: any[]) => {
+  const handleSelectAllInAccordion = (
+    field: keyof Designation,
+    dataList: any[],
+  ) => {
     const current = (formData[field] as string[]) || [];
     const allIds = dataList.map((item, idx) => {
-      const idVal = item.id ?? item.companyId ?? item.company_id ?? item.locationId ?? item.location_id ?? item.departmentId ?? item.department_id ?? item.gradeId ?? item.grade_id ?? item.code ?? idx;
+      const idVal =
+        item.id ??
+        item.companyId ??
+        item.company_id ??
+        item.locationId ??
+        item.location_id ??
+        item.departmentId ??
+        item.department_id ??
+        item.gradeId ??
+        item.grade_id ??
+        item.code ??
+        idx;
       return String(idVal);
     });
 
-    const isAllSelected = allIds.length > 0 && allIds.every((id) => current.includes(id));
+    const isAllSelected =
+      allIds.length > 0 && allIds.every((id) => current.includes(id));
 
     if (isAllSelected) {
       // Unselect all in this category
@@ -231,7 +284,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     field: keyof Designation,
     id: string | number,
     isSingleSelect: boolean = false,
-    categoryDataList: any[] = []
+    categoryDataList: any[] = [],
   ) => {
     const strId = String(id);
     const current = (formData[field] as string[]) || [];
@@ -239,15 +292,18 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     if (isSingleSelect && categoryDataList.length > 0) {
       const categoryIds = new Set(
         categoryDataList.map((item, idx) =>
-          String(item.id ?? item.shiftId ?? item.shift_id ?? item.code ?? idx)
-        )
+          String(item.id ?? item.shiftId ?? item.shift_id ?? item.code ?? idx),
+        ),
       );
       const otherSelected = current.filter((x) => !categoryIds.has(String(x)));
 
       if (current.includes(strId)) {
         setFormData((prev) => ({ ...prev, [field]: otherSelected }));
       } else {
-        setFormData((prev) => ({ ...prev, [field]: [...otherSelected, strId] }));
+        setFormData((prev) => ({
+          ...prev,
+          [field]: [...otherSelected, strId],
+        }));
       }
       return;
     }
@@ -262,7 +318,10 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     }
 
     if (current.includes(strId)) {
-      setFormData((prev) => ({ ...prev, [field]: current.filter((x) => x !== strId) }));
+      setFormData((prev) => ({
+        ...prev,
+        [field]: current.filter((x) => x !== strId),
+      }));
     } else {
       setFormData((prev) => ({ ...prev, [field]: [...current, strId] }));
     }
@@ -272,11 +331,11 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name?.trim()) {
-      newErrors.name = 'Designation Name is required.';
+      newErrors.name = "Designation Name is required.";
     } else if (formData.name.trim().length < 2) {
-      newErrors.name = 'Designation Name must be at least 2 characters.';
+      newErrors.name = "Designation Name must be at least 2 characters.";
     } else if (formData.name.trim().length > 100) {
-      newErrors.name = 'Designation Name cannot exceed 100 characters.';
+      newErrors.name = "Designation Name cannot exceed 100 characters.";
     }
 
     return newErrors;
@@ -290,13 +349,14 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       const firstMsg = Object.values(validationErrors)[0];
-      showToast.error('Validation Error', firstMsg);
+      showToast.error("Validation Error", firstMsg);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const code = formData.code?.trim() || generateDesigCode(formData.name || '');
+      const code =
+        formData.code?.trim() || generateDesigCode(formData.name || "");
       const payload: Partial<Designation> = {
         ...formData,
         name: formData.name?.trim().toUpperCase(),
@@ -304,18 +364,27 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
         description: formData.description?.trim() || undefined,
       };
 
-      if (selectedDesignationId === 'NEW') {
+      if (selectedDesignationId === "NEW") {
         await createDesignation(payload);
-        showToast.success('Designation Created', `${payload.name} created successfully.`);
+        showToast.success(
+          "Designation Created",
+          `${payload.name} created successfully.`,
+        );
         handleAddNew();
       } else if (selectedDesignationId) {
         await updateDesignation({ id: selectedDesignationId, data: payload });
-        showToast.success('Designation Updated', `${payload.name} updated successfully.`);
+        showToast.success(
+          "Designation Updated",
+          `${payload.name} updated successfully.`,
+        );
       }
     } catch (error: any) {
-      const errMsg = error?.response?.data?.message || error?.message || 'An error occurred while saving.';
+      const errMsg =
+        error?.response?.data?.message ||
+        error?.message ||
+        "An error occurred while saving.";
       setSubmitError(errMsg);
-      showToast.error('Save Failed', errMsg);
+      showToast.error("Save Failed", errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -327,7 +396,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     field: keyof Designation,
     dataList: any[],
     icon: React.ElementType,
-    isSingleSelect: boolean = false
+    isSingleSelect: boolean = false,
   ) => {
     const Icon = icon;
     const isExpanded = expandedAccordion === title;
@@ -335,30 +404,55 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     let selectedList: string[] = [];
     if (Array.isArray(rawSelected)) {
       selectedList = rawSelected.map(String);
-    } else if (typeof rawSelected === 'string' && (rawSelected as string).trim()) {
+    } else if (
+      typeof rawSelected === "string" &&
+      (rawSelected as string).trim()
+    ) {
       try {
         const parsed = JSON.parse(rawSelected as string);
-        selectedList = Array.isArray(parsed) ? parsed.map(String) : [String(rawSelected)];
+        selectedList = Array.isArray(parsed)
+          ? parsed.map(String)
+          : [String(rawSelected)];
       } catch {
         selectedList = [String(rawSelected)];
       }
     }
 
     // Filter by search inside accordion
-    const q = (accordionSearch[title] || '').toLowerCase().trim();
+    const q = (accordionSearch[title] || "").toLowerCase().trim();
     const filteredList = dataList.filter((item, idx) => {
       if (!q) return true;
-      const itemName = (item.name || item.company_name || item.location_name || item.department_name || item.grade_name || item.code || '').toLowerCase();
-      const itemCode = (item.code || '').toLowerCase();
+      const itemName = (
+        item.name ||
+        item.company_name ||
+        item.location_name ||
+        item.department_name ||
+        item.grade_name ||
+        item.code ||
+        ""
+      ).toLowerCase();
+      const itemCode = (item.code || "").toLowerCase();
       return itemName.includes(q) || itemCode.includes(q);
     });
 
     const totalSelectedInCategory = dataList.filter((item, idx) => {
-      const itemId = item.id ?? item.companyId ?? item.company_id ?? item.locationId ?? item.location_id ?? item.departmentId ?? item.department_id ?? item.gradeId ?? item.grade_id ?? item.code ?? idx;
+      const itemId =
+        item.id ??
+        item.companyId ??
+        item.company_id ??
+        item.locationId ??
+        item.location_id ??
+        item.departmentId ??
+        item.department_id ??
+        item.gradeId ??
+        item.grade_id ??
+        item.code ??
+        idx;
       return selectedList.includes(String(itemId));
     }).length;
 
-    const isAllSelected = dataList.length > 0 && totalSelectedInCategory === dataList.length;
+    const isAllSelected =
+      dataList.length > 0 && totalSelectedInCategory === dataList.length;
 
     return (
       <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-2xs transition-all">
@@ -372,7 +466,9 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
               <Icon className="h-4 w-4" />
             </div>
             <div>
-              <span className="font-bold text-xs text-foreground tracking-tight">{title} Mappings</span>
+              <span className="font-bold text-xs text-foreground tracking-tight">
+                {title} Mappings
+              </span>
             </div>
           </div>
 
@@ -381,7 +477,9 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
               variant={totalSelectedInCategory > 0 ? "default" : "secondary"}
               className={cn(
                 "text-[10px] font-bold px-2 py-0.5 rounded-full",
-                totalSelectedInCategory > 0 ? "bg-primary/10 text-primary hover:bg-primary/20" : "bg-muted text-muted-foreground"
+                totalSelectedInCategory > 0
+                  ? "bg-primary/10 text-primary hover:bg-primary/20"
+                  : "bg-muted text-muted-foreground",
               )}
             >
               {totalSelectedInCategory} Selected
@@ -402,8 +500,10 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                 <input
                   type="text"
                   placeholder={`Search ${title.toLowerCase()}...`}
-                  value={accordionSearch[title] || ''}
-                  onChange={(e) => handleAccordionSearchChange(title, e.target.value)}
+                  value={accordionSearch[title] || ""}
+                  onChange={(e) =>
+                    handleAccordionSearchChange(title, e.target.value)
+                  }
                   className="w-full h-8 pl-2.5 pr-7 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground/60 text-xs focus:outline-none focus:ring-1 focus:ring-primary font-medium"
                 />
                 <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -417,11 +517,13 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                 >
                   {isAllSelected ? (
                     <>
-                      <CheckSquare className="h-3.5 w-3.5 text-primary" /> Unselect All
+                      <CheckSquare className="h-3.5 w-3.5 text-primary" />{" "}
+                      Unselect All
                     </>
                   ) : (
                     <>
-                      <Square className="h-3.5 w-3.5 text-muted-foreground" /> Select All
+                      <Square className="h-3.5 w-3.5 text-muted-foreground" />{" "}
+                      Select All
                     </>
                   )}
                 </button>
@@ -432,43 +534,77 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
             <div className="max-h-48 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
               {mappings.isLoading ? (
                 <div className="py-4 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" /> Loading options...
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />{" "}
+                  Loading options...
                 </div>
               ) : filteredList.length === 0 ? (
                 <div className="py-3 text-center text-xs text-muted-foreground font-medium bg-muted/20 border border-dashed border-border rounded-lg">
-                  {q ? `No ${title.toLowerCase()} match "${q}"` : `No ${title.toLowerCase()} available.`}
+                  {q
+                    ? `No ${title.toLowerCase()} match "${q}"`
+                    : `No ${title.toLowerCase()} available.`}
                 </div>
               ) : (
                 filteredList.map((item, idx) => {
-                  const itemId = item.id ?? item.companyId ?? item.company_id ?? item.locationId ?? item.location_id ?? item.departmentId ?? item.department_id ?? item.gradeId ?? item.grade_id ?? item.code ?? idx;
+                  const itemId =
+                    item.id ??
+                    item.companyId ??
+                    item.company_id ??
+                    item.locationId ??
+                    item.location_id ??
+                    item.departmentId ??
+                    item.department_id ??
+                    item.gradeId ??
+                    item.grade_id ??
+                    item.code ??
+                    idx;
                   const strId = String(itemId);
-                  const itemName = item.name || item.company_name || item.companyName || item.location_name || item.department_name || item.grade_name || item.code || `Item #${strId}`;
-                  const itemCode = item.code || item.officeType || '';
+                  const itemName =
+                    item.name ||
+                    item.company_name ||
+                    item.companyName ||
+                    item.location_name ||
+                    item.department_name ||
+                    item.grade_name ||
+                    item.code ||
+                    `Item #${strId}`;
+                  const itemCode = item.code || item.officeType || "";
                   const isChecked = selectedList.includes(strId);
 
                   return (
                     <label
                       key={strId}
                       className={cn(
-                        'flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-medium border',
+                        "flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all text-xs font-medium border",
                         isChecked
-                          ? 'bg-primary/10 border-primary/30 text-primary font-bold shadow-2xs'
-                          : 'bg-card border-border/60 hover:bg-muted/40 text-foreground'
+                          ? "bg-primary/10 border-primary/30 text-primary font-bold shadow-2xs"
+                          : "bg-card border-border/60 hover:bg-muted/40 text-foreground",
                       )}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <input
-                          type={isSingleSelect ? 'radio' : 'checkbox'}
+                          type={isSingleSelect ? "radio" : "checkbox"}
                           className={cn(
-                            'border-input text-primary focus:ring-primary/20 w-4 h-4 cursor-pointer',
-                            isSingleSelect ? 'rounded-full' : 'rounded'
+                            "border-input text-primary focus:ring-primary/20 w-4 h-4 cursor-pointer",
+                            isSingleSelect ? "rounded-full" : "rounded",
                           )}
                           checked={isChecked}
-                          onChange={() => handleCheckbox(field, strId, isSingleSelect, dataList)}
+                          onChange={() =>
+                            handleCheckbox(
+                              field,
+                              strId,
+                              isSingleSelect,
+                              dataList,
+                            )
+                          }
                           onClick={(e) => {
                             if (isSingleSelect && isChecked) {
                               e.preventDefault();
-                              handleCheckbox(field, strId, isSingleSelect, dataList);
+                              handleCheckbox(
+                                field,
+                                strId,
+                                isSingleSelect,
+                                dataList,
+                              );
                             }
                           }}
                         />
@@ -506,19 +642,28 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
               </div>
               <div>
                 <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-                  {selectedDesignationId === 'NEW' ? 'Add Designation' : 'Edit Designation'}
-                  {selectedDesignationId !== 'NEW' ? (
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">
-                      {formData.status === 'active' ? 'Active' : 'Inactive'}
+                  {selectedDesignationId === "NEW"
+                    ? "Add Designation"
+                    : "Edit Designation"}
+                  {selectedDesignationId !== "NEW" ? (
+                    <Badge
+                      variant="outline"
+                      className="bg-primary/10 text-primary border-primary/20 text-[10px]"
+                    >
+                      {formData.status === "active" ? "Active" : "Inactive"}
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">
+                    <Badge
+                      variant="outline"
+                      className="bg-primary/10 text-primary border-primary/20 text-[10px]"
+                    >
                       New
                     </Badge>
                   )}
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Configure job designation details, code, and mapped organizational attributes.
+                  Configure job designation details, code, and mapped
+                  organizational attributes.
                 </p>
               </div>
             </div>
@@ -552,15 +697,20 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                     <span>
                       Designation Name <span className="text-rose-500">*</span>
                     </span>
-                    {formData.name && <span className="text-[10px] text-muted-foreground">{formData.name.length} chars</span>}
+                    {formData.name && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {formData.name.length} chars
+                      </span>
+                    )}
                   </label>
                   <Input
-                    value={formData.name || ''}
+                    value={formData.name || ""}
                     onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g. SENIOR SOFTWARE ENGINEER"
                     className={cn(
-                      'h-10 text-xs bg-background rounded-xl uppercase font-semibold transition-all',
-                      errors.name && 'border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10'
+                      "h-10 text-xs bg-background rounded-xl uppercase font-semibold transition-all",
+                      errors.name &&
+                        "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10",
                     )}
                   />
                   {errors.name && (
@@ -576,7 +726,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                     Designation Code
                   </label>
                   <Input
-                    value={formData.code || ''}
+                    value={formData.code || ""}
                     onChange={(e) => handleCodeChange(e.target.value)}
                     placeholder="DESIG-01"
                     className="h-10 text-xs bg-background rounded-xl font-mono font-bold uppercase transition-all"
@@ -591,7 +741,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                 </label>
                 <textarea
                   rows={2}
-                  value={formData.description || ''}
+                  value={formData.description || ""}
                   onChange={(e) => handleDescriptionChange(e.target.value)}
                   placeholder="Provide role summary, key expectations, or organizational notes..."
                   className="w-full p-3 border border-input rounded-xl bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium placeholder:text-muted-foreground/60 resize-none"
@@ -607,16 +757,43 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                   <span>2. Organizational Mappings</span>
                 </div>
                 <span className="text-[11px] text-muted-foreground">
-                  Select mapped companies, locations, departments, shifts & grades
+                  Select mapped companies, locations, departments, shifts &
+                  grades
                 </span>
               </div>
 
               <div className="space-y-2.5">
-                {renderAccordion('Company', 'mapped_companies', mappings.companies, Building2)}
-                {renderAccordion('Location', 'mapped_locations', mappings.locations, MapPin)}
-                {renderAccordion('Department', 'mapped_departments', mappings.departments, Layers)}
-                {renderAccordion('Shift', 'mapped_shifts', mappings.shifts, Clock, true)}
-                {renderAccordion('Grade', 'mapped_grades', mappings.grades, Award)}
+                {renderAccordion(
+                  "Company",
+                  "mapped_companies",
+                  mappings.companies,
+                  Building2,
+                )}
+                {renderAccordion(
+                  "Location",
+                  "mapped_locations",
+                  mappings.locations,
+                  MapPin,
+                )}
+                {renderAccordion(
+                  "Department",
+                  "mapped_departments",
+                  mappings.departments,
+                  Layers,
+                )}
+                {renderAccordion(
+                  "Shift",
+                  "mapped_shifts",
+                  mappings.shifts,
+                  Clock,
+                  true,
+                )}
+                {renderAccordion(
+                  "Grade",
+                  "mapped_grades",
+                  mappings.grades,
+                  Award,
+                )}
               </div>
             </div>
 
@@ -629,30 +806,38 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
 
               <div className="flex items-center justify-between p-3.5 rounded-2xl border border-border/80 bg-muted/20">
                 <div>
-                  <p className="font-bold text-foreground text-xs">Active Status</p>
-                  <p className="text-[11px] text-muted-foreground">Inactive designations won't appear in employee allocations.</p>
+                  <p className="font-bold text-foreground text-xs">
+                    Active Status
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Inactive designations won't appear in employee allocations.
+                  </p>
                 </div>
                 <div className="flex border border-input rounded-xl overflow-hidden bg-muted/40 p-0.5 h-9 items-center">
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, status: 'active' })}
+                    onClick={() =>
+                      setFormData({ ...formData, status: "active" })
+                    }
                     className={cn(
-                      'px-4 h-full text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1',
-                      formData.status === 'active'
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'text-muted-foreground hover:bg-muted/50'
+                      "px-4 h-full text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1",
+                      formData.status === "active"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:bg-muted/50",
                     )}
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" /> Yes
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, status: 'inactive' })}
+                    onClick={() =>
+                      setFormData({ ...formData, status: "inactive" })
+                    }
                     className={cn(
-                      'px-4 h-full text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1',
-                      formData.status === 'inactive'
-                        ? 'bg-rose-600 text-white shadow-xs'
-                        : 'text-muted-foreground hover:bg-muted/50'
+                      "px-4 h-full text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1",
+                      formData.status === "inactive"
+                        ? "bg-rose-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:bg-muted/50",
                     )}
                   >
                     <XCircle className="h-3.5 w-3.5" /> No
@@ -680,9 +865,10 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" /> Saving...
                   </>
-                ) : selectedDesignationId !== 'NEW' ? (
+                ) : selectedDesignationId !== "NEW" ? (
                   <>
-                    <Edit2 className="h-4 w-4 stroke-[2.5]" /> Update Designation
+                    <Edit2 className="h-4 w-4 stroke-[2.5]" /> Update
+                    Designation
                   </>
                 ) : (
                   <>
@@ -710,7 +896,9 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
           <div className="flex items-center justify-between pb-2 border-b border-border">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-bold text-foreground uppercase tracking-tight">Designations List</h3>
+              <h3 className="text-sm font-bold text-foreground uppercase tracking-tight">
+                Designations List
+              </h3>
             </div>
             <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-muted text-foreground">
               {filteredDesignations.length} total
@@ -762,7 +950,8 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
           <div className="space-y-2.5 max-h-[560px] overflow-y-auto pr-1 custom-scrollbar">
             {isLoading ? (
               <div className="py-10 text-center text-xs text-muted-foreground font-medium flex items-center justify-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" /> Loading designations...
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />{" "}
+                Loading designations...
               </div>
             ) : filteredDesignations.length === 0 ? (
               <div className="py-10 text-center text-xs text-muted-foreground font-medium bg-muted/20 border border-dashed border-border rounded-xl">
@@ -771,7 +960,8 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
             ) : (
               filteredDesignations.map((desig) => {
                 const isSelected = selectedDesignationId === desig.id;
-                const isActiveDesig = (desig.status || 'active').toLowerCase() === 'active';
+                const isActiveDesig =
+                  (desig.status || "active").toLowerCase() === "active";
 
                 const compCount = desig.mapped_companies?.length || 0;
                 const locCount = desig.mapped_locations?.length || 0;
@@ -783,10 +973,10 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                     key={desig.id}
                     onClick={() => handleSelect(desig)}
                     className={cn(
-                      'p-3.5 rounded-xl border transition-all cursor-pointer relative group flex flex-col gap-2',
+                      "p-3.5 rounded-xl border transition-all cursor-pointer relative group flex flex-col gap-2",
                       isSelected
-                        ? 'border-primary bg-primary/5 shadow-xs ring-1 ring-primary'
-                        : 'border-border/80 bg-card hover:border-primary/50 hover:bg-accent/40'
+                        ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                        : "border-border/80 bg-card hover:border-primary/50 hover:bg-accent/40",
                     )}
                   >
                     {/* Top Row: Name, Code & Status */}
@@ -795,7 +985,9 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                         <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
                           <Briefcase className="h-4 w-4" />
                         </div>
-                        <h4 className="font-bold text-xs text-foreground truncate uppercase">{desig.name}</h4>
+                        <h4 className="font-bold text-xs text-foreground truncate uppercase">
+                          {desig.name}
+                        </h4>
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -836,15 +1028,27 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                             size="icon"
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (!await window.appConfirm(`Delete designation “${desig.name}”? This action cannot be undone.`)) return;
+                              if (
+                                !(await window.appConfirm(
+                                  `Delete designation “${desig.name}”? This action cannot be undone.`,
+                                ))
+                              )
+                                return;
 
                               try {
                                 await deleteDesignation(desig.id);
-                                showToast.success('Designation deleted', `“${desig.name}” has been deleted successfully.`);
-                                if (selectedDesignationId === desig.id) handleAddNew();
+                                showToast.success(
+                                  "Designation deleted",
+                                  `“${desig.name}” has been deleted successfully.`,
+                                );
+                                if (selectedDesignationId === desig.id)
+                                  handleAddNew();
                               } catch (error: any) {
-                                const message = error?.response?.data?.message || error?.message || 'Unable to delete this designation.';
-                                showToast.error('Delete failed', message);
+                                const message =
+                                  error?.response?.data?.message ||
+                                  error?.message ||
+                                  "Unable to delete this designation.";
+                                showToast.error("Delete failed", message);
                               }
                             }}
                             className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"
@@ -857,26 +1061,33 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                     </div>
 
                     {/* Mapped Pills */}
-                    {(compCount > 0 || locCount > 0 || deptCount > 0 || gradeCount > 0) && (
+                    {(compCount > 0 ||
+                      locCount > 0 ||
+                      deptCount > 0 ||
+                      gradeCount > 0) && (
                       <div className="flex flex-wrap items-center gap-1.5 pt-1">
                         {compCount > 0 && (
                           <span className="text-[10px] font-medium bg-muted px-2 py-0.5 rounded-md text-muted-foreground flex items-center gap-1">
-                            <Building2 className="h-3 w-3" /> {compCount} {compCount === 1 ? 'Company' : 'Companies'}
+                            <Building2 className="h-3 w-3" /> {compCount}{" "}
+                            {compCount === 1 ? "Company" : "Companies"}
                           </span>
                         )}
                         {locCount > 0 && (
                           <span className="text-[10px] font-medium bg-muted px-2 py-0.5 rounded-md text-muted-foreground flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {locCount} {locCount === 1 ? 'Location' : 'Locations'}
+                            <MapPin className="h-3 w-3" /> {locCount}{" "}
+                            {locCount === 1 ? "Location" : "Locations"}
                           </span>
                         )}
                         {deptCount > 0 && (
                           <span className="text-[10px] font-medium bg-muted px-2 py-0.5 rounded-md text-muted-foreground flex items-center gap-1">
-                            <Layers className="h-3 w-3" /> {deptCount} {deptCount === 1 ? 'Dept' : 'Depts'}
+                            <Layers className="h-3 w-3" /> {deptCount}{" "}
+                            {deptCount === 1 ? "Dept" : "Depts"}
                           </span>
                         )}
                         {gradeCount > 0 && (
                           <span className="text-[10px] font-medium bg-muted px-2 py-0.5 rounded-md text-muted-foreground flex items-center gap-1">
-                            <Award className="h-3 w-3" /> {gradeCount} {gradeCount === 1 ? 'Grade' : 'Grades'}
+                            <Award className="h-3 w-3" /> {gradeCount}{" "}
+                            {gradeCount === 1 ? "Grade" : "Grades"}
                           </span>
                         )}
                       </div>

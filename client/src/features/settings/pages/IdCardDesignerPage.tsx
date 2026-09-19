@@ -363,7 +363,7 @@ export const IdCardDesignerPage: React.FC = () => {
     }
   };
 
-  const handleResetToDefault = () => {
+  const handleResetToDefault = async () => {
     if (await window.appConfirm('Reset this template layout to factory default settings?')) {
       setConfig(DEFAULT_ID_CARD_CONFIG);
       setHasUnsavedChanges(true);
