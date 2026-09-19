@@ -43,11 +43,11 @@ export class LeaveExpiryJobService {
     ];
 
     for (const t of templates) {
-      // 1. Check template
+      // Include soft-deleted rows: the database unique key still reserves their
+      // (organization_id, template_name) combination.
       let templateRow = await trx('notification_templates')
         .where('organization_id', orgId)
         .where('template_name', t.name)
-        .whereNull('deleted_at')
         .first();
 
       if (!templateRow) {
@@ -71,12 +71,28 @@ export class LeaveExpiryJobService {
             templateRow = await trx('notification_templates')
               .where('organization_id', orgId)
               .where('template_name', t.name)
-              .whereNull('deleted_at')
               .first();
           } else {
             throw insertErr; // rethrow unexpected errors
           }
         }
+      }
+
+      if (!templateRow) {
+        throw new Error(`Unable to initialize notification template: ${t.name}`);
+      }
+
+      // Restore the matching system template rather than trying to insert a
+      // duplicate record that is rejected by the unique index.
+      if (templateRow.deleted_at) {
+        await trx('notification_templates')
+          .where('id', templateRow.id)
+          .update({
+            deleted_at: null,
+            is_active: 'Yes',
+            updated_by: superadminId,
+            updated_at: new Date(),
+          });
       }
 
       // 2. Check event
