@@ -228,7 +228,7 @@ export function MasterBuilderDetailPage() {
   };
 
   const handleAddCompanyPresetSections = async () => {
-    if (!window.confirm('Create the 6 Standard Company Section Headers in this master?\n\n1. Company Profile & Identification\n2. Registered Headquarters Address\n3. Statutory, Contact & Communication\n4. Branding Assets & Media\n5. Status & System Controls\n6. System Access Credentials')) return;
+    if (!await window.appConfirm('Create the 6 Standard Company Section Headers in this master?\n\n1. Company Profile & Identification\n2. Registered Headquarters Address\n3. Statutory, Contact & Communication\n4. Branding Assets & Media\n5. Status & System Controls\n6. System Access Credentials')) return;
     const standardSections = [
       { name: '1. Company Profile & Identification', key: 'sec_company_profile', icon: 'building', desc: 'Company Name, Employer Name, Class Of Establishment, Code', color: '#0284c7', num: '1' },
       { name: '2. Registered Headquarters Address', key: 'sec_headquarters_address', icon: 'map-pin', desc: 'Address Line 1, Address Line 2, Country, State, City, ZIP Code', color: '#10b981', num: '2' },
@@ -260,7 +260,7 @@ export function MasterBuilderDetailPage() {
       }
       loadMaster();
     } catch (err: any) {
-      alert(err?.message || 'Failed to add preset sections');
+      window.appAlert(err?.message || 'Failed to add preset sections');
     }
   };
 
@@ -319,22 +319,22 @@ export function MasterBuilderDetailPage() {
       loadMaster();
       window.dispatchEvent(new CustomEvent('custom_masters_updated'));
     } catch (err: any) {
-      alert(err?.response?.data?.message || err.message || 'Failed to save field');
+      window.appAlert(err?.response?.data?.message || err.message || 'Failed to save field');
     }
   };
 
   const handleDeleteField = async (fieldId: number, fieldName: string, isCore?: boolean) => {
     if (isCore) {
-      alert(`"${fieldName}" is a core system field and cannot be deleted. You can still add new custom fields to this master.`);
+      window.appAlert(`"${fieldName}" is a core system field and cannot be deleted. You can still add new custom fields to this master.`);
       return;
     }
-    if (window.confirm(`Delete field "${fieldName}"?`)) {
+    if (await window.appConfirm(`Delete field "${fieldName}"?`)) {
       try {
         await masterBuilderApi.deleteField(masterId, fieldId);
         loadMaster();
         window.dispatchEvent(new CustomEvent('custom_masters_updated'));
       } catch (err) {
-        alert('Failed to delete field');
+        window.appAlert('Failed to delete field');
       }
     }
   };
@@ -392,7 +392,7 @@ export function MasterBuilderDetailPage() {
       setIsRuleModalOpen(false);
       loadMaster();
     } catch (err: any) {
-      alert(err?.response?.data?.message || err.message || 'Failed to save rule');
+      window.appAlert(err?.response?.data?.message || err.message || 'Failed to save rule');
     }
   };
 
@@ -403,17 +403,17 @@ export function MasterBuilderDetailPage() {
       });
       loadMaster();
     } catch (err) {
-      alert('Failed to toggle rule');
+      window.appAlert('Failed to toggle rule');
     }
   };
 
   const handleDeleteRule = async (ruleId: number) => {
-    if (window.confirm('Delete this validation rule?')) {
+    if (await window.appConfirm('Delete this validation rule?')) {
       try {
         await masterBuilderApi.deleteValidationRule(masterId, ruleId);
         loadMaster();
       } catch (err) {
-        alert('Failed to delete rule');
+        window.appAlert('Failed to delete rule');
       }
     }
   };
@@ -432,12 +432,12 @@ export function MasterBuilderDetailPage() {
       setIsAutofillModalOpen(false);
       loadMaster();
     } catch (err: any) {
-      alert('Failed to add autofill mapping');
+      window.appAlert('Failed to add autofill mapping');
     }
   };
 
   const handleDeleteAutofill = async (mappingId: number) => {
-    if (window.confirm('Delete this autofill mapping?')) {
+    if (await window.appConfirm('Delete this autofill mapping?')) {
       await masterBuilderApi.deleteAutofillMapping(masterId, mappingId);
       loadMaster();
     }

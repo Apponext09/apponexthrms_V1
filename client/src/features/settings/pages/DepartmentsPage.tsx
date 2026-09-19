@@ -223,7 +223,7 @@ export function DepartmentsPage() {
   };
 
   const handleDelete = async (id: string | number) => {
-    if (confirm('Are you sure you want to delete this department?')) {
+    if (await window.appConfirm('Are you sure you want to delete this department?')) {
       try {
         await deleteMutation.mutateAsync(id);
         toast.success('Department deleted successfully!');

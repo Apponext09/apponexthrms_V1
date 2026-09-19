@@ -165,7 +165,7 @@ export function AssignShiftModal({
           return emp ? `${emp.firstName} ${emp.lastName}`.trim() : `Employee #${employeeId}`;
         });
         const verb = names.length === 1 ? 'has' : 'have';
-        const proceed = window.confirm(
+        const proceed = await window.appConfirm(
           `${names.join(', ')} already ${verb} an active shift assignment that will be ended if you continue.\n\nAssign the new shift anyway?`
         );
 

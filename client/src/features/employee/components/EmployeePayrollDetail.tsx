@@ -918,7 +918,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   };
 
   const handleDelete = async (rec: PayStructureRecord) => {
-    if (!confirm(`Are you sure you want to remove the salary structure effective from ${formatPayrollDate(rec.effectiveFrom)}?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to remove the salary structure effective from ${formatPayrollDate(rec.effectiveFrom)}?`)) return;
     try {
       await apiClient.delete(`/payroll/salary-structure/${rec.id}`);
       showToast.success('Structure Deleted', 'Salary structure has been deactivated.');

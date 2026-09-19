@@ -233,11 +233,19 @@ export const adminRoutes = (
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_3"
           allowedStatuses={['pending_level_3', 'pending_approvals', 'returned', 'rejected']}
-          portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
+          portalLabel="Expense Approvals"
         />
       }
     />
-    <Route path="/expenses/finance-verification" element={<FinanceVerificationPage />} />
+    <Route
+      path="/expenses/finance-verification"
+      element={
+        <FinanceVerificationPage
+          portalLabel="Finance Verification"
+          portalDescription="Review the finance-assigned workflow step, including eligible amount adjustments, before payment processing."
+        />
+      }
+    />
     <Route path="/expenses/reimbursements" element={<ReimbursementsPage />} />
     <Route path="/expenses/travel-requests" element={<TravelRequestsPage />} />
     <Route path="/expenses/travel-advances" element={<TravelAdvancesPage />} />
@@ -254,7 +262,7 @@ export const adminRoutes = (
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_3"
           allowedStatuses={['pending_level_3', 'pending_approvals', 'returned', 'rejected']}
-          portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
+          portalLabel="Expense Approvals"
         />
       }
     />
@@ -266,7 +274,7 @@ export const adminRoutes = (
         <ExpenseApprovalsPage
           defaultStatusFilter="pending_level_3"
           allowedStatuses={['pending_level_3', 'pending_approvals', 'returned', 'rejected']}
-          portalLabel="Approve expense claims — Level 3 (HR / Admin) queue"
+          portalLabel="Expense Approvals"
         />
       }
     />

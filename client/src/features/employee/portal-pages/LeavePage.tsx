@@ -626,7 +626,7 @@ export default function LeavePage() {
 
     if (balanceAfter < 0 && leaveCode !== 'LOP') {
       if (leaveCode !== 'SL') {
-        const proceed = window.confirm(
+        const proceed = await window.appConfirm(
           `Your current balance for this leave is ${availableBalance.toFixed(2)} days, and you are requesting ${totalDays.toFixed(2)} days. Your balance will become ${balanceAfter.toFixed(2)} days. Do you want to proceed?`
         );
         if (!proceed) return;

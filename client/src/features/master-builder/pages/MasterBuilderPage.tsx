@@ -194,20 +194,20 @@ export function MasterBuilderPage() {
         }
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || err.message || 'Failed to save master');
+      window.appAlert(err?.response?.data?.message || err.message || 'Failed to save master');
     } finally {
       setFormSaving(false);
     }
   };
 
   const handleDeleteMaster = async (id: number, name: string) => {
-    if (window.confirm(`Are you sure you want to delete custom master "${name}"? All associated fields and records will be deleted.`)) {
+    if (await window.appConfirm(`Are you sure you want to delete custom master "${name}"? All associated fields and records will be deleted.`)) {
       try {
         await masterBuilderApi.deleteMaster(id);
         loadData();
         window.dispatchEvent(new CustomEvent('custom_masters_updated'));
       } catch (err) {
-        alert('Failed to delete master');
+        window.appAlert('Failed to delete master');
       }
     }
   };
@@ -275,12 +275,12 @@ export function MasterBuilderPage() {
       const res = await masterBuilderApi.getChoiceLists();
       setChoiceLists(res);
     } catch (err: any) {
-      alert(err?.response?.data?.message || err.message || 'Failed to save choice list');
+      window.appAlert(err?.response?.data?.message || err.message || 'Failed to save choice list');
     }
   };
 
   const handleDeleteChoiceList = async (id: number) => {
-    if (window.confirm('Delete this choice list?')) {
+    if (await window.appConfirm('Delete this choice list?')) {
       await masterBuilderApi.deleteChoiceList(id);
       const res = await masterBuilderApi.getChoiceLists();
       setChoiceLists(res);

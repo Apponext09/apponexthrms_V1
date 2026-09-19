@@ -127,7 +127,7 @@ export function ShiftManagementPage({ pageType: propPageType }: { pageType?: 'ge
 
   const handleDeleteShift = async (shift: any) => {
     const name = shift.shiftName || shift.shift_name || 'this shift';
-    if (confirm(`Are you sure you want to delete shift "${name}"?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete shift "${name}"?`)) {
       try {
         await deleteShift(shift.id);
         showToast.success('Shift Deleted', `Shift "${name}" deleted successfully`);

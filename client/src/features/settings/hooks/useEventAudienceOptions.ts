@@ -43,11 +43,13 @@ export function useEventAudienceOptions() {
         if (settled.status !== 'fulfilled' || !settled.value?.data) return [];
         const raw = settled.value.data?.data || settled.value.data || [];
         if (!Array.isArray(raw)) return [];
-        return raw.map((item: any) => ({
-          id: item.id ?? item.company_id ?? item.location_id ?? item.department_id ?? item.value ?? item.name,
-          label: item[nameKey] || altNameKeys.reduce((acc, k) => acc || item[k], '') || item.title || item.name || String(item),
-          code: item[codeKey],
-        }));
+        return raw
+          .filter((item: any) => item.status !== 'inactive' && item.status !== 'Inactive' && item.is_active !== 'No' && item.isActive !== 'No')
+          .map((item: any) => ({
+            id: item.id ?? item.company_id ?? item.location_id ?? item.department_id ?? item.value ?? item.name,
+            label: item[nameKey] || altNameKeys.reduce((acc, k) => acc || item[k], '') || item.title || item.name || String(item),
+            code: item[codeKey],
+          }));
       };
 
       const companies = mapItems(compRes, 'name', 'code');

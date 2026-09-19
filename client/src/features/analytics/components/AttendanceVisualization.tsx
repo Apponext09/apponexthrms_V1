@@ -37,9 +37,11 @@ export function AttendanceVisualization({ data }: AttendanceVisualizationProps) 
   const absentCount = data.filter((d) => d.dayStatus === 'Absent').length;
   const leaveCount = data.filter((d) => d.dayStatus === 'Leave').length;
   const weekOffCount = data.filter((d) => d.dayStatus === 'Week Off').length;
+  const holidayCount = data.filter((d) => d.dayStatus === 'Holiday').length;
   const lateCount = data.filter((d) => d.isLate === 'Yes').length;
 
-  const attendanceRate = Math.round(((presentCount + halfDayCount * 0.5) / (total - weekOffCount || 1)) * 100);
+  const expectedWorkingDays = Math.max(1, total - weekOffCount - holidayCount);
+  const attendanceRate = Math.round(((presentCount + halfDayCount * 0.5) / expectedWorkingDays) * 100);
 
   // Pie chart data
   const pieData = [
@@ -118,7 +120,7 @@ export function AttendanceVisualization({ data }: AttendanceVisualizationProps) 
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-black text-foreground">
-              {presentCount} <span className="text-sm font-normal text-muted-foreground">/ {total}</span>
+              {presentCount + halfDayCount} <span className="text-sm font-normal text-muted-foreground">/ {expectedWorkingDays}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">Full day active check-ins</p>
           </CardContent>

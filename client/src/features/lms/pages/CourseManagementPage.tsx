@@ -397,7 +397,7 @@ export function CourseManagementPage() {
   };
 
   const handleDeleteCourse = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this course?')) {
+    if (await window.appConfirm('Are you sure you want to delete this course?')) {
       await deleteCourseMutation.mutateAsync(id);
     }
   };

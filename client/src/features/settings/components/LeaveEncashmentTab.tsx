@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,21 +29,21 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
   formData,
   setFormData,
   companies = [],
-  departments,
-  locations,
+  departments = [],
+  locations = [],
   subDepartments = [],
   designations = [],
-  gradeOptions,
+  gradeOptions = [],
   employeeTypeOptions = [],
   employeeStatusOptions = [],
 }) => {
-  const enc = formData.encashment || {};
+  const enc = formData?.encashment || {};
 
   const updateEnc = (key: string, value: any) => {
     setFormData((prev: any) => ({
       ...prev,
       encashment: {
-        ...prev.encashment,
+        ...(prev?.encashment || {}),
         [key]: value,
       },
     }));
@@ -419,14 +419,14 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
             },
           }));
         }}
-        companies={companies}
-        locations={locations}
-        departments={departments}
-        subDepartments={subDepartments}
-        designations={designations}
-        grades={gradeOptions}
-        employeeTypes={employeeTypeOptions}
-        employeeStatuses={employeeStatusOptions}
+        companies={companies || []}
+        locations={locations || []}
+        departments={departments || []}
+        subDepartments={subDepartments || []}
+        designations={designations || []}
+        grades={gradeOptions || []}
+        employeeTypes={employeeTypeOptions || []}
+        employeeStatuses={employeeStatusOptions || []}
       />
 
       {/* 6. Only when */}
@@ -446,9 +446,9 @@ export const LeaveEncashmentTab: React.FC<LeaveEncashmentTabProps> = ({
           <RuleConditionBuilder
             value={enc.onlyWhen || enc.only_when}
             onChange={(newGroup) => updateEnc('onlyWhen', newGroup)}
-            departments={departments}
-            locations={locations}
-            grades={gradeOptions.map((g, i) => ({ id: i + 1, name: g }))}
+            departments={departments || []}
+            locations={locations || []}
+            grades={(gradeOptions || []).map((g, i) => ({ id: i + 1, name: g }))}
           />
         </CardContent>
       </Card>

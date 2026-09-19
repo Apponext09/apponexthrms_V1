@@ -42,6 +42,50 @@ function saveBase64Image(dataUrl: string | null | undefined, prefix: string): st
 }
 
 export class CompanyController {
+  private validateCompanyDetails(input: Record<string, any>): string | null {
+    const value = (camel: string, snake: string = camel) => String(input[camel] ?? input[snake] ?? '').trim();
+    const name = value('name');
+    const employerName = value('employerName', 'employer_name');
+    const establishmentClass = value('classOfEstablishment', 'class_of_establishment');
+    const code = value('code');
+    const addressLine1 = value('addressLine1', 'address_line_1');
+    const country = value('country');
+    const state = value('state');
+    const city = value('city');
+    const zipCode = value('zipCode', 'zip_code');
+    const panNumber = value('panTin', 'pan_tin').toUpperCase();
+    const contactNumber = value('contactNumber', 'contact_number');
+    const email = value('email');
+
+    if (name.length < 2 || name.length > 150) return 'Company Name must be 2-150 characters.';
+    if (employerName.length < 2 || employerName.length > 150) return 'Employer Name must be 2-150 characters.';
+    if (establishmentClass.length < 2 || establishmentClass.length > 100) return 'Class Of Establishment must be 2-100 characters.';
+    if (!/^[A-Za-z0-9-_]{2,30}$/.test(code)) return 'Establishment Company Code must be 2-30 letters, numbers, hyphens, or underscores.';
+    if (addressLine1.length < 3 || addressLine1.length > 255) return 'Address Line 1 must be 3-255 characters.';
+    if (!country || !state || !city) return 'Country, State, and City are required.';
+    if (country.toLowerCase() === 'india' ? !/^\d{6}$/.test(zipCode) : !/^\d{3,10}$/.test(zipCode)) {
+      return country.toLowerCase() === 'india'
+        ? 'PIN Code must be exactly 6 digits.'
+        : 'Postal / ZIP Code must contain 3-10 digits.';
+    }
+    if (!/^\d{10,15}$/.test(contactNumber)) return 'Contact Number must contain 10-15 digits only.';
+    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) return 'Please enter a valid Corporate Email address.';
+    if (panNumber && !/^(?=.*[A-Z])(?=.*\d)[A-Z0-9]{10}$/.test(panNumber)) {
+      return 'PAN Number must be exactly 10 alphanumeric characters and include both letters and numbers.';
+    }
+    return null;
+  }
+
+  private async findDuplicateName(organizationId: number | undefined, name: string, excludeCompanyId?: number): Promise<any> {
+    const db = getKnex();
+    let query = db('company')
+      .where('organization_id', organizationId)
+      .whereRaw('LOWER(name) = ?', [name.trim().toLowerCase()])
+      .whereNull('deleted_at');
+    if (excludeCompanyId) query = query.whereNot('company_id', excludeCompanyId);
+    return query.first();
+  }
+
   /**
    * GET /api/v1/settings/companies
    * Fetch all companies for organization
@@ -168,7 +212,19 @@ export class CompanyController {
     const db = getKnex();
     const body = req.body;
 
-    let code = body.code || `COM-${Math.floor(100 + Math.random() * 900)}`;
+    const validationError = this.validateCompanyDetails(body);
+    if (validationError) {
+      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: validationError } });
+      return;
+    }
+
+    const duplicateName = await this.findDuplicateName(ctx.organizationId, body.name);
+    if (duplicateName) {
+      res.status(409).json({ success: false, error: { code: 'DUPLICATE_COMPANY_NAME', message: 'A company with this name already exists in this organization.' } });
+      return;
+    }
+
+    let code = String(body.code).trim().toUpperCase();
     const existingCode = await db('company')
       .where({ organization_id: ctx.organizationId, code })
       .whereNull('deleted_at')
@@ -187,16 +243,16 @@ export class CompanyController {
       uuid,
       organization_id: ctx.organizationId,
       code,
-      name: body.name || 'New Company',
-      employer_name: body.employerName || body.employer_name || null,
-      class_of_establishment: body.classOfEstablishment || body.class_of_establishment || null,
+      name: String(body.name).trim(),
+      employer_name: String(body.employerName ?? body.employer_name).trim(),
+      class_of_establishment: String(body.classOfEstablishment ?? body.class_of_establishment).trim(),
       address_line_1: body.addressLine1 || body.address_line_1 || null,
       address_line_2: body.addressLine2 || body.address_line_2 || null,
       country: body.country || null,
       zip_code: body.zipCode || body.zip_code || null,
       state: body.state || null,
       city: body.city || null,
-      pan_tin: body.panTin || body.pan_tin || null,
+      pan_tin: body.panTin || body.pan_tin ? String(body.panTin ?? body.pan_tin).trim().toUpperCase() : null,
       contact_number: body.contactNumber || body.contact_number || null,
       email: body.email || null,
       logo: logoUrl,
@@ -314,13 +370,40 @@ export class CompanyController {
       return;
     }
 
+    const candidate = {
+      ...existing,
+      ...body,
+      name: body.name ?? existing.name,
+      employerName: body.employerName ?? body.employer_name ?? existing.employer_name,
+      classOfEstablishment: body.classOfEstablishment ?? body.class_of_establishment ?? existing.class_of_establishment,
+      addressLine1: body.addressLine1 ?? body.address_line_1 ?? existing.address_line_1,
+      country: body.country ?? existing.country,
+      state: body.state ?? existing.state,
+      city: body.city ?? existing.city,
+      zipCode: body.zipCode ?? body.zip_code ?? existing.zip_code,
+      panTin: body.panTin ?? body.pan_tin ?? existing.pan_tin,
+      contactNumber: body.contactNumber ?? body.contact_number ?? existing.contact_number,
+      email: body.email ?? existing.email,
+      code: body.code ?? existing.code,
+    };
+    const validationError = this.validateCompanyDetails(candidate);
+    if (validationError) {
+      res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: validationError } });
+      return;
+    }
+    const duplicateName = await this.findDuplicateName(ctx.organizationId, candidate.name, Number(existing.company_id));
+    if (duplicateName) {
+      res.status(409).json({ success: false, error: { code: 'DUPLICATE_COMPANY_NAME', message: 'A company with this name already exists in this organization.' } });
+      return;
+    }
+
     const updatePayload: Record<string, any> = {
       updated_by: ctx.userId,
       updated_at: db.fn.now(),
     };
 
-    if (body.code !== undefined) updatePayload.code = body.code;
-    if (body.name !== undefined) updatePayload.name = body.name;
+    if (body.code !== undefined) updatePayload.code = String(body.code).trim().toUpperCase();
+    if (body.name !== undefined) updatePayload.name = String(body.name).trim();
     if (body.employerName !== undefined || body.employer_name !== undefined)
       updatePayload.employer_name = body.employerName ?? body.employer_name;
     if (body.classOfEstablishment !== undefined || body.class_of_establishment !== undefined)
@@ -335,7 +418,7 @@ export class CompanyController {
     if (body.state !== undefined) updatePayload.state = body.state;
     if (body.city !== undefined) updatePayload.city = body.city;
     if (body.panTin !== undefined || body.pan_tin !== undefined)
-      updatePayload.pan_tin = body.panTin ?? body.pan_tin;
+      updatePayload.pan_tin = body.panTin || body.pan_tin ? String(body.panTin ?? body.pan_tin).trim().toUpperCase() : null;
     if (body.contactNumber !== undefined || body.contact_number !== undefined)
       updatePayload.contact_number = body.contactNumber ?? body.contact_number;
     if (body.email !== undefined) updatePayload.email = body.email;

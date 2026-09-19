@@ -55,7 +55,7 @@ export function EmploymentTypeMasterCustomUI() {
 
   const handleDelete = async () => {
     if (!editingId) return;
-    if (!window.confirm('Are you sure you want to delete this Employment Type?')) return;
+    if (!await window.appConfirm('Are you sure you want to delete this Employment Type?')) return;
 
     setIsSubmitting(true);
     try {

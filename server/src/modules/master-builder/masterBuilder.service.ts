@@ -432,6 +432,7 @@ export class MasterBuilderService {
    */
   private async listSystemRecords(
     orgId: number,
+    companyId: number | undefined,
     master: any,
     options: { search?: string; status?: string; page?: number; limit?: number }
   ) {
@@ -443,6 +444,7 @@ export class MasterBuilderService {
 
     // Determine org filter column (some tables use organization_id)
     const hasOrgCol = await this.hasColumn(table, 'organization_id');
+    const hasCompanyCol = await this.hasColumn(table, 'company_id');
     // Check if deleted_at exists (e.g. 'locations' table has no deleted_at)
     const hasDeletedAt = await this.hasColumn(table, 'deleted_at');
 
@@ -450,12 +452,14 @@ export class MasterBuilderService {
     let query = this.db(table).select('*');
     if (hasDeletedAt) query = query.whereNull('deleted_at') as any;
     if (hasOrgCol) query = query.where('organization_id', orgId);
+    if (hasCompanyCol && companyId) query = query.where('company_id', companyId);
 
     // Count query — MUST be built separately, never clone a SELECT * query with COUNT()
     // because MySQL's only_full_group_by rejects mixing SELECT * with aggregates.
     let countQuery = this.db(table).count(`${idCol} as cnt`);
     if (hasDeletedAt) countQuery = countQuery.whereNull('deleted_at') as any;
     if (hasOrgCol) countQuery = countQuery.where('organization_id', orgId);
+    if (hasCompanyCol && companyId) countQuery = countQuery.where('company_id', companyId) as any;
 
     if (options.status && options.status !== 'all') {
       const hasStatusCol = await this.hasColumn(table, 'status');
@@ -612,6 +616,7 @@ export class MasterBuilderService {
    */
   private async updateSystemRecord(
     orgId: number,
+    companyId: number | undefined,
     master: any,
     recordId: number,
     userId: number,
@@ -654,9 +659,12 @@ export class MasterBuilderService {
 
     if (payload.status !== undefined) coreUpdate.status = payload.status;
 
-    await this.db(table)
-      .where(idCol, recordId)
-      .update(coreUpdate);
+    const hasOrgCol = await this.hasColumn(table, 'organization_id');
+    const hasCompanyCol = await this.hasColumn(table, 'company_id');
+    let updateQuery = this.db(table).where(idCol, recordId);
+    if (hasOrgCol) updateQuery = updateQuery.where('organization_id', orgId);
+    if (hasCompanyCol && companyId) updateQuery = updateQuery.where('company_id', companyId);
+    await updateQuery.update(coreUpdate);
 
     // Upsert extended data
     if (Object.keys(extraData).length > 0) {
@@ -682,7 +690,11 @@ export class MasterBuilderService {
       }
     }
 
-    const row = await this.db(table).where(idCol, recordId).first();
+    let rowQuery = this.db(table).where(idCol, recordId);
+    if (hasOrgCol) rowQuery = rowQuery.where('organization_id', orgId);
+    if (hasCompanyCol && companyId) rowQuery = rowQuery.where('company_id', companyId);
+    const row = await rowQuery.first();
+    if (!row) throw new Error('Master record not found for the current company');
     const extRow = await this.db('custom_master_extended_data')
       .where('master_id', master.id)
       .where('record_ref_id', recordId)
@@ -694,14 +706,19 @@ export class MasterBuilderService {
   /**
    * Soft-delete a system master record from the real table
    */
-  private async deleteSystemRecord(master: any, recordId: number) {
+  private async deleteSystemRecord(orgId: number, companyId: number | undefined, master: any, recordId: number) {
     const table = master.systemTable || master.system_table;
     const idCol = master.systemIdColumn || master.system_id_column || 'id';
     const hasDeletedAt = await this.hasColumn(table, 'deleted_at');
+    const hasOrgCol = await this.hasColumn(table, 'organization_id');
+    const hasCompanyCol = await this.hasColumn(table, 'company_id');
+    let deleteQuery = this.db(table).where(idCol, recordId);
+    if (hasOrgCol) deleteQuery = deleteQuery.where('organization_id', orgId);
+    if (hasCompanyCol && companyId) deleteQuery = deleteQuery.where('company_id', companyId);
     if (hasDeletedAt) {
-      await this.db(table).where(idCol, recordId).update({ deleted_at: new Date() });
+      await deleteQuery.update({ deleted_at: new Date() });
     } else {
-      await this.db(table).where(idCol, recordId).delete();
+      await deleteQuery.delete();
     }
     return true;
   }
@@ -1695,60 +1712,24 @@ export class MasterBuilderService {
 
   // ─── Dynamic Master Records ─────────────────────────────────────────────
 
-  /**
-   * getKnex().postProcessResponse recursively camelCases every key — including the keys
-   * INSIDE the `data` JSON blob, which corrupts snake_case field keys (status_name ->
-   * statusName) on read. Always pull the raw JSON text and parse it ourselves.
-   */
-  private parseRecordData(raw: any): Record<string, any> {
-    if (raw === null || raw === undefined) return {};
-    if (typeof raw === 'string') {
-      try { return JSON.parse(raw); } catch { return {}; }
-    }
-    return raw;
-  }
-
-  private async getRecordById(recordId: number) {
-    const row: any = await this.db('custom_master_records')
-      .where('id', recordId)
-      .select('*', this.db.raw('CAST(`data` AS CHAR) AS data_text'))
-      .first();
-    if (!row) return null;
-    return {
-      id: row.id,
-      uuid: row.uuid,
-      recordCode: row.recordCode,
-      status: row.status,
-      data: this.parseRecordData(row.dataText),
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
-  }
-
-  async listRecords(orgId: number, masterId: number, options: { search?: string; status?: string; page?: number; limit?: number }) {
+  async listRecords(orgId: number, companyId: number | undefined, masterId: number, options: { search?: string; status?: string; page?: number; limit?: number }) {
     // Load master to detect if it is a system master
     const master = await this.db('custom_masters').where('id', masterId).first();
     if (!master) return { records: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
 
     if (this.isSystemMaster(master)) {
-      return this.listSystemRecords(orgId, master, options);
+      return this.listSystemRecords(orgId, companyId, master, options);
     }
 
     const page = options.page || 1;
     const limit = options.limit || 50;
     const offset = (page - 1) * limit;
 
-    const baseQuery = () => {
-      let q = this.db('custom_master_records')
-        .where('organization_id', orgId)
-        .where('master_id', masterId)
-        .whereNull('deleted_at');
-      if (options.status && options.status !== 'all') {
-        q = q.where('status', options.status);
-      }
-      return q;
-    };
-    const withData = (q: any) => q.select('*', this.db.raw('CAST(`data` AS CHAR) AS data_text'));
+    let query = this.db('custom_master_records')
+      .where('organization_id', orgId)
+      .where('master_id', masterId)
+      .whereNull('deleted_at');
+    if (companyId) query = query.where('company_id', companyId);
 
     const mapRow = (r: any) => ({
       id: r.id,
@@ -1954,7 +1935,7 @@ export class MasterBuilderService {
     return this.getRecordById(recordId);
   }
 
-  async updateRecord(orgId: number, masterId: number, recordId: number, userId: number, payload: Partial<DynamicRecordPayload>) {
+  async updateRecord(orgId: number, companyId: number | undefined, masterId: number, recordId: number, userId: number, payload: Partial<DynamicRecordPayload>) {
     let master = await this.db('custom_masters')
       .where('id', masterId)
       .where('organization_id', orgId)
@@ -1968,7 +1949,7 @@ export class MasterBuilderService {
 
     // Delegate to bridge for system masters
     if (master && this.isSystemMaster(master)) {
-      return this.updateSystemRecord(orgId, master, recordId, userId, payload);
+      return this.updateSystemRecord(orgId, companyId, master, recordId, userId, payload);
     }
 
     const updateData: any = { updated_by: userId, updated_at: new Date() };
@@ -1982,16 +1963,28 @@ export class MasterBuilderService {
       updateData.data = JSON.stringify(payload.data);
     }
 
-    await this.db('custom_master_records')
+    let updateQuery = this.db('custom_master_records')
       .where('id', recordId)
       .where('master_id', masterId)
-      .where('organization_id', orgId)
-      .update(updateData);
+      .where('organization_id', orgId);
+    if (companyId) updateQuery = updateQuery.where('company_id', companyId);
+    await updateQuery.update(updateData);
 
-    return this.getRecordById(recordId);
+    let rowQuery = this.db('custom_master_records').where('id', recordId).where('organization_id', orgId);
+    if (companyId) rowQuery = rowQuery.where('company_id', companyId);
+    const row = await rowQuery.first();
+    if (!row) throw new Error('Master record not found for the current company');
+    return {
+      id: row.id,
+      uuid: row.uuid,
+      recordCode: row.record_code,
+      status: row.status,
+      data: typeof row.data === 'string' ? JSON.parse(row.data) : row.data,
+      updatedAt: row.updated_at,
+    };
   }
 
-  async deleteRecord(orgId: number, masterId: number, recordId: number) {
+  async deleteRecord(orgId: number, companyId: number | undefined, masterId: number, recordId: number) {
     let master = await this.db('custom_masters')
       .where('id', masterId)
       .where('organization_id', orgId)
@@ -2005,13 +1998,15 @@ export class MasterBuilderService {
 
     // Delegate to bridge for system masters
     if (master && this.isSystemMaster(master)) {
-      return this.deleteSystemRecord(master, recordId);
+      return this.deleteSystemRecord(orgId, companyId, master, recordId);
     }
 
-    await this.db('custom_master_records')
+    let deleteQuery = this.db('custom_master_records')
       .where('id', recordId)
       .where('master_id', masterId)
-      .update({ deleted_at: new Date() });
+      .where('organization_id', orgId);
+    if (companyId) deleteQuery = deleteQuery.where('company_id', companyId);
+    await deleteQuery.update({ deleted_at: new Date() });
     return true;
   }
 
@@ -2341,5 +2336,4 @@ export class MasterBuilderService {
 }
 
 export const masterBuilderService = new MasterBuilderService();
-
 

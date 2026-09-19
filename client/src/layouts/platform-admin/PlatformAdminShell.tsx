@@ -27,7 +27,7 @@ export function PlatformAdminShell() {
       </div>
 
       {/* Toast notifications */}
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div>
   );
 }

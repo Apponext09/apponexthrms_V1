@@ -171,7 +171,7 @@ export function ExpenseWorkflowDesigner() {
                 <button
                   onClick={async () => {
                     if (
-                      !confirm(
+                      !await window.appConfirm(
                         "Archive this workflow for new requests? Existing requests keep their saved sequence.",
                       )
                     )

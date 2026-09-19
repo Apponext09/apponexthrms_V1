@@ -189,7 +189,22 @@ export const PolicyContentEditorStep: React.FC<PolicyContentEditorStepProps> = (
   };
 
   const handleRemoveSection = (id: string) => {
-    onChangeSections(sections.filter((sec) => sec.id !== id));
+    if (activeSections.length <= 1) {
+      window.appAlert('A policy must have at least one content section.');
+      return;
+    }
+    onChangeSections(activeSections.filter((sec) => sec.id !== id));
+  };
+
+  const handleApplyFormatting = (id: string, symbol: string) => {
+    const target = activeSections.find((s) => s.id === id);
+    if (!target) return;
+    let appended = target.content;
+    if (symbol === 'bullet') appended += '\n• ';
+    else if (symbol === 'bold') appended += ' **Bold Text** ';
+    else if (symbol === 'italic') appended += ' *Italic Text* ';
+    else if (symbol === 'num') appended += '\n1. ';
+    handleUpdateSection(id, 'content', appended);
   };
 
   return (

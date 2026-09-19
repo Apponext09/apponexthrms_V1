@@ -207,13 +207,15 @@ export class MasterBuilderController {
 
   async listRecords(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
+    const companyId = this.getCompanyId(req);
+    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to access master records.' });
     const masterId = Number(req.params.id);
     const search = req.query.search as string;
     const status = req.query.status as string;
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 50;
 
-    const data = await masterBuilderService.listRecords(orgId, masterId, {
+    const data = await masterBuilderService.listRecords(orgId, companyId, masterId, {
       search,
       status,
       page,
@@ -225,6 +227,7 @@ export class MasterBuilderController {
   async createRecord(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
     const companyId = this.getCompanyId(req);
+    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to create master records.' });
     const masterId = Number(req.params.id);
     const userId = this.getUserId(req);
     try {
@@ -237,11 +240,13 @@ export class MasterBuilderController {
 
   async updateRecord(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
+    const companyId = this.getCompanyId(req);
+    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to update master records.' });
     const masterId = Number(req.params.id);
     const recordId = Number(req.params.recordId);
     const userId = this.getUserId(req);
     try {
-      const record = await masterBuilderService.updateRecord(orgId, masterId, recordId, userId, req.body);
+      const record = await masterBuilderService.updateRecord(orgId, companyId, masterId, recordId, userId, req.body);
       return res.json({ success: true, data: record });
     } catch (e: any) {
       return res.status(400).json({ success: false, message: e.message || 'Validation error' });
@@ -250,9 +255,11 @@ export class MasterBuilderController {
 
   async deleteRecord(req: Request, res: Response) {
     const orgId = this.getOrgId(req);
+    const companyId = this.getCompanyId(req);
+    if (!companyId) return res.status(400).json({ success: false, message: 'A company context is required to delete master records.' });
     const masterId = Number(req.params.id);
     const recordId = Number(req.params.recordId);
-    await masterBuilderService.deleteRecord(orgId, masterId, recordId);
+    await masterBuilderService.deleteRecord(orgId, companyId, masterId, recordId);
     return res.json({ success: true, message: 'Record deleted successfully' });
   }
 

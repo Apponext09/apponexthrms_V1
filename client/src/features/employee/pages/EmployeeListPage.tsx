@@ -50,7 +50,8 @@ export function EmployeeListPage() {
   const { data: locationsData } = useLocations(1, 100);
 
   const departmentsList = (departmentsData?.data || departmentsData?.items || []) as any[];
-  const locationsList = (locationsData?.data || locationsData?.items || []) as any[];
+  const locationsList = (locationsData?.data || locationsData?.items || [])
+    .filter((loc: any) => loc.status !== 'inactive' && loc.status !== 'Inactive' && loc.is_active !== 'No' && loc.isActive !== 'No') as any[];
 
   const { employees, total, isLoading, error, refetch } = useEmployees({
     page: config.enablePagination ? page : 1,

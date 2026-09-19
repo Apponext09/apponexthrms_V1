@@ -155,7 +155,7 @@ export const MyExpensesPage: React.FC = () => {
   };
 
   const handleQuickReject = async (claim: any) => {
-    const reason = prompt('Please enter reason for rejection:', 'Does not comply with expense policy');
+    const reason = await window.appPrompt('Please enter reason for rejection:', 'Does not comply with expense policy');
     if (reason === null) return;
     try {
       setProcessingId(claim.id);
@@ -602,19 +602,13 @@ export const MyExpensesPage: React.FC = () => {
       <LegacyWorkflowNotice rows={claims} prefix="" onComplete={fetchClaimsAndCategories} />
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-5 right-5 z-[200] flex items-start gap-3 px-4 py-3 rounded-xl shadow-2xl border text-xs sm:text-sm font-medium transition-all max-w-md ${
-          toast.type === 'success'
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-900 dark:bg-emerald-950/90 dark:border-emerald-700 dark:text-emerald-300'
-            : toast.type === 'warning'
-            ? 'bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/90 dark:border-amber-700 dark:text-amber-300'
-            : 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/90 dark:border-rose-700 dark:text-rose-300'
-        }`}>
+        <div className="fixed top-5 right-5 z-[200] flex max-w-md items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs font-medium text-gray-900 shadow-2xl transition-all sm:text-sm">
           {toast.type === 'success' ? (
-            <CheckCircle className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+            <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
           ) : toast.type === 'warning' ? (
-            <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
           ) : (
-            <XCircle className="w-5 h-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+            <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
           )}
           <div className="flex-1">
             {toast.title && <div className="font-bold text-xs uppercase tracking-wide mb-0.5">{toast.title}</div>}

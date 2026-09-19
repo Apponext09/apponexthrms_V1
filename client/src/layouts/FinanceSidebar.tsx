@@ -58,7 +58,7 @@ const FINANCE_NAV = [
     label: "EXPENSE & DISBURSAL",
     items: [
       { name: "Finance Verification",     href: "/finance/expenses/verification",   icon: FileCheck2 },
-      { name: "Reimbursements & Payouts", href: "/finance/expenses/reimbursements", icon: CreditCard },
+      { name: "Payment Cycle Reports",   href: "/finance/expenses/reimbursements", icon: CreditCard },
       { name: "Travel Advances",          href: "/finance/expenses/travel-advances", icon: IndianRupee },
       { name: "Expense Approvals",        href: "/finance/expenses/approvals",      icon: CheckCircle2 },
       { name: "Expense Reports",          href: "/finance/expenses/reports",        icon: LineChart },
@@ -94,13 +94,13 @@ const FINANCE_NAV = [
       { name: "My Leaves",        href: "/finance/leaves",           icon: Palmtree },
       { name: "My Payslips",      href: "/finance/payslips",         icon: DollarSign },
       { name: "Holiday Calendar", href: "/finance/holiday-calendar", icon: Calendar },
+      { name: "My Documents",     href: "/finance/documents",        icon: FileBarChart },
     ],
   },
   {
     label: "ORGANISATION",
     items: [
       { name: "Announcements", href: "/finance/announcements", icon: Megaphone },
-      { name: "Org Chart",     href: "/finance/org-chart",     icon: Building2 },
     ],
   },
 ];

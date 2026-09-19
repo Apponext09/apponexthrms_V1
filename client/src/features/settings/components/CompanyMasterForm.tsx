@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
   Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X,
-  Eye, EyeOff, KeyRound, Boxes, AlertCircle
+  Eye, EyeOff, KeyRound, Boxes, AlertCircle, FileText, FileUp, Trash2, Paperclip
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -277,7 +277,7 @@ export function CompanyMasterForm({
       if (cities.length > 0) {
         setFormCity(cities[0]);
         clearFieldError('city');
-        setFormZipCode(LOCATION_DATA[countryVal][firstState].zipDefault || '');
+        setFormZipCode((LOCATION_DATA[countryVal][firstState].zipDefault || '').replace(/\D/g, '').slice(0, 10));
         clearFieldError('zipCode');
       } else {
         setFormCity('');
@@ -299,7 +299,7 @@ export function CompanyMasterForm({
       if (cities.length > 0) {
         setFormCity(cities[0]);
         clearFieldError('city');
-        setFormZipCode(LOCATION_DATA[formCountry][stateVal].zipDefault || '');
+        setFormZipCode((LOCATION_DATA[formCountry][stateVal].zipDefault || '').replace(/\D/g, '').slice(0, 10));
         clearFieldError('zipCode');
       } else {
         setFormCity('');
@@ -316,7 +316,7 @@ export function CompanyMasterForm({
     setFormCity(cityVal);
     clearFieldError('city');
     if (formCountry && formState && LOCATION_DATA[formCountry]?.[formState]) {
-      setFormZipCode(LOCATION_DATA[formCountry][formState].zipDefault || '');
+      setFormZipCode((LOCATION_DATA[formCountry][formState].zipDefault || '').replace(/\D/g, '').slice(0, 10));
       clearFieldError('zipCode');
     }
   };
@@ -354,14 +354,8 @@ export function CompanyMasterForm({
   };
 
   const handleZipCodeChange = (val: string) => {
-    const isIndia = !formCountry || formCountry.toLowerCase() === 'india';
-    let clean = val;
-    if (isIndia) {
-      // Numbers only, strictly max 6 digits
-      clean = val.replace(/\D/g, '').slice(0, 6);
-    } else {
-      clean = val.slice(0, 10);
-    }
+    // Postal code is a numeric value for Company Master records.
+    const clean = val.replace(/\D/g, '').slice(0, 10);
     setFormZipCode(clean);
     clearFieldError('zipCode');
   };
@@ -373,8 +367,7 @@ export function CompanyMasterForm({
   };
 
   const handleContactNumberChange = (val: string) => {
-    // Allow numbers, +, -, spaces, parentheses, up to 16 characters
-    const clean = val.replace(/[^0-9+\s\-()]/g, '').slice(0, 16);
+    const clean = val.replace(/\D/g, '').slice(0, 15);
     setFormContactNumber(clean);
     clearFieldError('contactNumber');
   };
@@ -596,8 +589,22 @@ export function CompanyMasterForm({
       newErrors.name = 'Company Name cannot exceed 150 characters.';
     }
 
-    // 2. Company Code (if provided)
-    if (formCode.trim() && !/^[A-Za-z0-9-_]{2,30}$/.test(formCode.trim())) {
+    if (!formEmployerName.trim()) {
+      newErrors.employerName = 'Employer Name is required.';
+    } else if (formEmployerName.trim().length < 2 || formEmployerName.trim().length > 150) {
+      newErrors.employerName = 'Employer Name must be 2-150 characters.';
+    }
+
+    if (!formClassOfEstablishment.trim()) {
+      newErrors.classOfEstablishment = 'Class Of Establishment is required (e.g. LLP or Pvt. Ltd.).';
+    } else if (formClassOfEstablishment.trim().length < 2 || formClassOfEstablishment.trim().length > 100) {
+      newErrors.classOfEstablishment = 'Class Of Establishment must be 2-100 characters.';
+    }
+
+    // 2. Establishment Company Code
+    if (!formCode.trim()) {
+      newErrors.code = 'Establishment Company Code is required.';
+    } else if (!/^[A-Za-z0-9-_]{2,30}$/.test(formCode.trim())) {
       newErrors.code = 'Code must be 2-30 characters (letters, numbers, hyphens, underscores).';
     }
 
@@ -628,12 +635,10 @@ export function CompanyMasterForm({
       newErrors.zipCode = 'ZIP / PIN Code is required.';
     } else {
       const isIndia = !formCountry || formCountry.toLowerCase() === 'india';
-      if (isIndia) {
-        if (!/^\d{6}$/.test(formZipCode.trim())) {
-          newErrors.zipCode = 'PIN Code must be exactly 6 digits (e.g. 400708).';
-        }
-      } else if (!/^[A-Za-z0-9\s-]{3,10}$/.test(formZipCode.trim())) {
-        newErrors.zipCode = 'Invalid Postal / ZIP Code format (3-10 characters).';
+      if (isIndia && !/^\d{6}$/.test(formZipCode.trim())) {
+        newErrors.zipCode = 'PIN Code must be exactly 6 digits (e.g. 400708).';
+      } else if (!isIndia && !/^\d{3,10}$/.test(formZipCode.trim())) {
+        newErrors.zipCode = 'Postal / ZIP Code must contain 3-10 digits.';
       }
     }
 
@@ -641,9 +646,8 @@ export function CompanyMasterForm({
     if (!formContactNumber.trim()) {
       newErrors.contactNumber = 'Contact Number is required.';
     } else {
-      const digitsOnly = formContactNumber.replace(/\D/g, '');
-      if (digitsOnly.length < 10 || digitsOnly.length > 15) {
-        newErrors.contactNumber = 'Contact Number must contain a valid 10-15 digit number (e.g. +91 9898989899).';
+      if (!/^\d{10,15}$/.test(formContactNumber)) {
+        newErrors.contactNumber = 'Contact Number must contain 10-15 digits only.';
       }
     }
 
@@ -654,13 +658,11 @@ export function CompanyMasterForm({
       newErrors.email = 'Please enter a valid email address (e.g. contact@apponext.com).';
     }
 
-    // 10. PAN / TIN Number (Optional, but if filled, validate format)
+    // 10. PAN Number (optional, but must be a 10-character alphanumeric identifier)
     if (formPanTin.trim()) {
       const panUpper = formPanTin.trim().toUpperCase();
-      const isPan = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panUpper);
-      const isTin = /^[A-Z0-9]{9,15}$/.test(panUpper);
-      if (!isPan && !isTin) {
-        newErrors.panTin = 'Invalid PAN/TIN format. Standard PAN must be 10 characters (e.g. ABCDE1234F).';
+      if (!/^(?=.*[A-Z])(?=.*\d)[A-Z0-9]{10}$/.test(panUpper)) {
+        newErrors.panTin = 'PAN Number must be exactly 10 alphanumeric characters and include both letters and numbers (e.g. ABCDE1234F).';
       }
     }
 
@@ -799,7 +801,13 @@ export function CompanyMasterForm({
               data: customFieldValues,
             });
           } catch (extErr) {
-            console.warn('Extended data save notice:', extErr);
+            try {
+              await masterBuilderApi.createRecord(companyMasterId, {
+                data: customFieldValues,
+              });
+            } catch (createErr) {
+              console.warn('Extended data save notice:', createErr);
+            }
           }
         }
 
@@ -948,7 +956,7 @@ export function CompanyMasterForm({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Employer Name</label>
+            <label className="text-xs font-semibold text-foreground">Employer Name <span className="text-rose-500">*</span></label>
             <Input
               type="text"
               value={formEmployerName}
@@ -968,12 +976,12 @@ export function CompanyMasterForm({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Class Of Establishment</label>
+            <label className="text-xs font-semibold text-foreground">Class Of Establishment <span className="text-rose-500">*</span></label>
             <Input
               type="text"
               value={formClassOfEstablishment}
               onChange={(e) => handleClassOfEstablishmentChange(e.target.value)}
-              placeholder="e.g. Commercial IT Enterprise"
+              placeholder="e.g. LLP, Pvt. Ltd., Partnership"
               className={cn(
                 "text-xs h-10 bg-background rounded-xl transition-all",
                 errors.classOfEstablishment && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
@@ -988,7 +996,7 @@ export function CompanyMasterForm({
           </div>
 
           <div className="space-y-1.5 md:col-span-2">
-            <label className="text-xs font-semibold text-foreground">Establishment Company Code</label>
+            <label className="text-xs font-semibold text-foreground">Establishment Company Code <span className="text-rose-500">*</span></label>
             <Input
               type="text"
               value={formCode}
@@ -1132,16 +1140,15 @@ export function CompanyMasterForm({
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center justify-between">
               <span>ZIP / PIN Code <span className="text-rose-500">*</span></span>
-              {(!formCountry || formCountry.toLowerCase() === 'india') && (
-                <span className="text-[10px] text-muted-foreground font-mono">6 Digits ({formZipCode.length}/6)</span>
-              )}
+              <span className="text-[10px] text-muted-foreground font-mono">Numbers only</span>
             </label>
             <Input
               type="text"
               value={formZipCode}
+              inputMode="numeric"
               maxLength={(!formCountry || formCountry.toLowerCase() === 'india') ? 6 : 10}
               onChange={(e) => handleZipCodeChange(e.target.value)}
-              placeholder={(!formCountry || formCountry.toLowerCase() === 'india') ? "e.g. 400708" : "e.g. ZIP code"}
+              placeholder={(!formCountry || formCountry.toLowerCase() === 'india') ? "e.g. 400708" : "e.g. 10001"}
               className={cn(
                 "text-xs h-10 font-mono bg-background rounded-xl transition-all",
                 errors.zipCode && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
@@ -1167,13 +1174,13 @@ export function CompanyMasterForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center gap-1">
-              <span>PAN / TIN Number</span>
+              <span>PAN Number</span>
               <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
             </label>
             <Input
               type="text"
               value={formPanTin}
-              maxLength={15}
+              maxLength={10}
               onChange={(e) => handlePanTinChange(e.target.value)}
               placeholder="e.g. AAACD1234F"
               className={cn(
@@ -1192,14 +1199,15 @@ export function CompanyMasterForm({
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center justify-between">
               <span>Contact Number <span className="text-rose-500">*</span></span>
-              <span className="text-[10px] text-muted-foreground font-mono">10-15 digits</span>
+              <span className="text-[10px] text-muted-foreground font-mono">Numbers only, 10-15 digits</span>
             </label>
             <Input
               type="text"
               value={formContactNumber}
-              maxLength={16}
+              inputMode="numeric"
+              maxLength={15}
               onChange={(e) => handleContactNumberChange(e.target.value)}
-              placeholder="e.g. +91 9898989899"
+              placeholder="e.g. 9898989899"
               className={cn(
                 "text-xs h-10 bg-background rounded-xl transition-all",
                 errors.contactNumber && "border-rose-500 focus-visible:ring-rose-500 bg-rose-50/10"
@@ -1671,14 +1679,185 @@ export function CompanyMasterForm({
               const fieldKey = field.fieldKey || field.field_key;
               const fieldName = field.fieldName || field.field_name || fieldKey;
               const isRequired = Boolean(field.isRequired ?? field.is_required);
-              const fieldType = field.fieldType || field.field_type || 'text';
+              const fieldType = String(field.fieldType || field.field_type || 'text').toLowerCase();
               const placeholder = field.placeholder || `Enter ${fieldName}`;
-              return (
-                <div key={field.id} className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">
-                    {fieldName} {isRequired && <span className="text-rose-500">*</span>}
-                  </label>
-                  {fieldType === 'textarea' ? (
+              const helpText = field.helpText || field.help_text;
+              const opts = typeof field.options === 'string' ? JSON.parse(field.options || '{}') : (field.options || {});
+              const val = customFieldValues[fieldKey];
+              const isFullWidth = opts.columnWidth === 'full' || opts.colSpan === 2 || fieldType === 'textarea' || fieldType === 'image' || fieldType === 'file';
+
+              const renderFieldControl = () => {
+                // 1. IMAGE UPLOAD
+                if (fieldType === 'image') {
+                  if (val) {
+                    return (
+                      <div className="border rounded-2xl p-3.5 bg-card flex items-center gap-3.5 border-border shadow-soft-xs">
+                        <img
+                          src={typeof val === 'string' ? val : val?.url || val?.data}
+                          alt="Preview"
+                          className="w-16 h-16 rounded-xl object-cover border border-border shrink-0 bg-muted"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {typeof val === 'object' && val?.name ? val.name : typeof val === 'string' && val.startsWith('data:') ? 'Image Attached' : String(val)}
+                          </p>
+                          <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                            <CheckCircle2 className="size-3" /> Ready to save
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer text-xs font-medium px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-foreground transition-colors flex items-center gap-1.5">
+                            <Upload className="size-3.5" />
+                            <span>Change</span>
+                            <input
+                              type="file"
+                              accept={opts.fileAccept || 'image/*'}
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    setCustomFieldValues((prev) => ({
+                                      ...prev,
+                                      [fieldKey]: reader.result as string,
+                                    }));
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                            onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: '' }))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors text-center group">
+                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                        <ImageIcon className="size-5" />
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">Click to upload image</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5">PNG, JPG, WebP, GIF, SVG (up to 5MB)</span>
+                      <input
+                        type="file"
+                        accept={opts.fileAccept || 'image/*'}
+                        className="hidden"
+                        required={isRequired && !val}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              setCustomFieldValues((prev) => ({
+                                ...prev,
+                                [fieldKey]: reader.result as string,
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  );
+                }
+
+                // 2. FILE / DOCUMENT UPLOAD
+                if (fieldType === 'file') {
+                  if (val) {
+                    return (
+                      <div className="border rounded-2xl p-3.5 bg-card flex items-center justify-between gap-3 border-border shadow-soft-xs">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="size-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <FileText className="size-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-foreground truncate">
+                              {typeof val === 'object' && val?.name ? val.name : typeof val === 'string' && val.startsWith('data:') ? 'Document Attached' : String(val)}
+                            </p>
+                            <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                              <CheckCircle2 className="size-3" /> Ready to save
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="cursor-pointer text-xs font-medium px-3 py-1.5 rounded-xl border border-border hover:bg-muted text-foreground transition-colors flex items-center gap-1.5">
+                            <Upload className="size-3.5" />
+                            <span>Replace</span>
+                            <input
+                              type="file"
+                              accept={opts.fileAccept || '*/*'}
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    setCustomFieldValues((prev) => ({
+                                      ...prev,
+                                      [fieldKey]: reader.result as string,
+                                    }));
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          </label>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
+                            onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: '' }))}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <label className="border-2 border-dashed border-border hover:border-primary/50 hover:bg-primary/5 rounded-2xl p-5 flex flex-col items-center justify-center cursor-pointer transition-colors text-center group">
+                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+                        <FileUp className="size-5" />
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">Click to upload file / document</span>
+                      <span className="text-[11px] text-muted-foreground mt-0.5">PDF, DOC, DOCX, XLS, XLSX, Images, ZIP</span>
+                      <input
+                        type="file"
+                        accept={opts.fileAccept || '*/*'}
+                        className="hidden"
+                        required={isRequired && !val}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              setCustomFieldValues((prev) => ({
+                                ...prev,
+                                [fieldKey]: reader.result as string,
+                              }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  );
+                }
+
+                // 3. TEXTAREA
+                if (fieldType === 'textarea') {
+                  return (
                     <textarea
                       value={customFieldValues[fieldKey] || ''}
                       onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
@@ -1686,16 +1865,21 @@ export function CompanyMasterForm({
                       rows={3}
                       className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
                     />
-                  ) : fieldType === 'boolean' ? (
+                  );
+                }
+
+                // 4. BOOLEAN TOGGLE
+                if (fieldType === 'boolean') {
+                  return (
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         type="button"
                         onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: true }))}
                         className={cn(
-                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 cursor-pointer',
                           customFieldValues[fieldKey]
                             ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-background text-muted-foreground border-border'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
                         )}
                       >
                         <Check className="h-3.5 w-3.5" /> Yes
@@ -1704,25 +1888,85 @@ export function CompanyMasterForm({
                         type="button"
                         onClick={() => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: false }))}
                         className={cn(
-                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1',
+                          'py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center gap-1 cursor-pointer',
                           !customFieldValues[fieldKey]
                             ? 'bg-muted text-foreground border-border'
-                            : 'bg-background text-muted-foreground border-border'
+                            : 'bg-background text-muted-foreground border-border hover:bg-muted'
                         )}
                       >
                         <X className="h-3.5 w-3.5" /> No
                       </button>
                     </div>
-                  ) : (
-                    <Input
-                      type={fieldType === 'number' ? 'number' : fieldType === 'email' ? 'email' : 'text'}
+                  );
+                }
+
+                // 5. CHOICE / SELECT DROPDOWN
+                if (fieldType === 'choice' || fieldType === 'select') {
+                  const choiceList = Array.isArray(opts.choiceList) ? opts.choiceList : Array.isArray(opts.options) ? opts.options : [];
+                  return (
+                    <select
                       value={customFieldValues[fieldKey] || ''}
                       onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
-                      placeholder={placeholder}
+                      className="w-full h-10 px-3 text-xs rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                      required={isRequired}
+                    >
+                      <option value="">{placeholder || `-- Select ${fieldName} --`}</option>
+                      {choiceList.map((opt: any, idx: number) => {
+                        const optVal = typeof opt === 'string' ? opt : opt.value || opt.label || opt.name;
+                        const optLabel = typeof opt === 'string' ? opt : opt.label || opt.name || opt.value;
+                        return (
+                          <option key={idx} value={optVal}>
+                            {optLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  );
+                }
+
+                // 6. DATE INPUT
+                if (fieldType === 'date') {
+                  return (
+                    <Input
+                      type="date"
+                      value={customFieldValues[fieldKey] || ''}
+                      onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
                       className="text-xs h-10 bg-background rounded-xl"
                       required={isRequired}
                     />
-                  )}
+                  );
+                }
+
+                // 7. STANDARD / NUMBER / EMAIL / PHONE / COLOR / URL
+                return (
+                  <Input
+                    type={
+                      fieldType === 'number' ? 'number' :
+                      fieldType === 'email' ? 'email' :
+                      fieldType === 'phone' || fieldType === 'tel' ? 'tel' :
+                      fieldType === 'url' ? 'url' :
+                      fieldType === 'color' ? 'color' : 'text'
+                    }
+                    value={customFieldValues[fieldKey] || ''}
+                    onChange={(e) => setCustomFieldValues((prev) => ({ ...prev, [fieldKey]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="text-xs h-10 bg-background rounded-xl"
+                    required={isRequired}
+                  />
+                );
+              };
+
+              return (
+                <div key={field.id} className={`space-y-1.5 ${isFullWidth ? 'md:col-span-2' : ''}`}>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-foreground">
+                      {fieldName} {isRequired && <span className="text-rose-500">*</span>}
+                    </label>
+                    {helpText && (
+                      <span className="text-[11px] text-muted-foreground font-normal">{helpText}</span>
+                    )}
+                  </div>
+                  {renderFieldControl()}
                 </div>
               );
             })}

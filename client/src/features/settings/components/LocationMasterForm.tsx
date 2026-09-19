@@ -79,7 +79,7 @@ interface LocationMasterFormProps {
 
 export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps) {
   // ── Real API Data ────────────────────────────────────────────────────────────
-  const { data: locationsData, isLoading: locationsLoading, refetch: refetchLocations } = useLocations();
+  const { data: locationsData, isLoading: locationsLoading, refetch: refetchLocations } = useLocations(1, 1000, '', '', 'all');
   const { data: companiesData = [], isLoading: companiesLoading } = useCompanies();
   const createLocationMutation = useCreateLocation();
   const updateLocationMutation = useUpdateLocation();

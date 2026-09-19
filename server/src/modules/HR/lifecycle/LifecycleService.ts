@@ -1144,6 +1144,34 @@ export class LifecycleService {
     return { success: true, message: 'Onboarding details saved successfully.' };
   }
 
+  /** Submit an offboarding request for the logged-in employee. */
+  async submitMyResignation(ctx: TenantContext, input: { resignationDate: string; lastWorkingDay: string; reason: string }) {
+    const details = await this.getEmployeeLifecycleDetails(ctx, 0);
+    const employeeId = Number(details?.profile?.id);
+    if (!employeeId) throw new Error('Your employee profile could not be resolved.');
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const existing = await db('employee_offboarding_records')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .first();
+    if (existing?.resignation_date || existing?.resignationDate) {
+      throw new Error('A resignation has already been submitted for your profile.');
+    }
+
+    await this.saveOffboardingDetails(ctx, {
+      employeeId,
+      exitType: 'resignation',
+      resignationDate: input.resignationDate,
+      lastWorkingDay: input.lastWorkingDay,
+      exitReason: input.reason,
+      exitNotes: 'Submitted by employee through My Lifecycle.',
+      updateEmployeeStatus: 'notice',
+    });
+    return { employeeId, status: 'submitted', resignationDate: input.resignationDate, lastWorkingDay: input.lastWorkingDay };
+  }
+
   /**
    * Save or update Offboarding & Exit Record for an Employee
    */

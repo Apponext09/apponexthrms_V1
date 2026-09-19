@@ -3,6 +3,7 @@ import { hash } from 'argon2';
 import { getKnex } from '../../db/knex';
 import { superAdminRepository, SuperAdminRepository } from './superadmin.repository';
 import type { SuperAdminDashboardStats, CreateTenantInput } from './superadmin.types';
+import { ConflictError } from '../../common/errors/ConflictError';
 
 export class SuperAdminService {
   private repo: SuperAdminRepository;
@@ -30,33 +31,32 @@ export class SuperAdminService {
       if (activeOrgsRow?.count !== undefined) activeSubscriptions = Number(activeOrgsRow.count);
       if (empCountRow?.count !== undefined) totalEmployees = Number(empCountRow.count);
     } catch (err) {
-      console.error('Error querying stats from DB:', err);
+      console.warn('Dashboard stats aggregate query error:', err);
     }
 
-    const monthlyRevenue = activeSubscriptions * 14999;
-
-    const monthlyGrowth = [
-      { month: 'Feb', organizations: Math.max(0, Math.floor(totalOrganizations * 0.2)) },
-      { month: 'Mar', organizations: Math.max(0, Math.floor(totalOrganizations * 0.35)) },
-      { month: 'Apr', organizations: Math.max(0, Math.floor(totalOrganizations * 0.5)) },
-      { month: 'May', organizations: Math.max(0, Math.floor(totalOrganizations * 0.65)) },
-      { month: 'Jun', organizations: Math.max(0, Math.floor(totalOrganizations * 0.85)) },
-      { month: 'Jul', organizations: totalOrganizations },
-    ];
+    const recentOrganizations = await knex('organizations')
+      .select('id', 'name', 'code', 'status', 'plan_tier as planTier', 'subscription_tier as subscriptionTier', 'created_at as createdAt')
+      .orderBy('id', 'desc')
+      .limit(6);
 
     return {
       totalOrganizations,
       activeSubscriptions,
       totalEmployees,
-      monthlyRevenue,
-      systemStatus: 'healthy',
-      growthData: monthlyGrowth,
-      platformUsage: {
-        securityShield: '100% Shielded',
-        systemUptime: '99.98% Operational',
-        resourceLoad: '34% Active Load',
-      },
+      monthlyRevenue: '₹2,45,000',
+      systemHealth: '99.98%',
+      recentOrganizations,
     };
+  }
+
+  /**
+   * Get list of all registered organizations
+   */
+  /**
+   * Get list of all registered organizations
+   */
+  async getAllOrganizations() {
+    return this.listOrganizations();
   }
 
   /**
@@ -79,6 +79,8 @@ export class SuperAdminService {
         'status',
         'plan_tier as planTier',
         'subscription_tier as subscriptionTier',
+        'subscription_plan_id as subscriptionPlanId',
+        'enabled_modules as enabledModules',
         'industry',
         'created_at as createdAt'
       )
@@ -91,8 +93,52 @@ export class SuperAdminService {
   async createOrganization(input: CreateTenantInput) {
     const knex = getKnex();
     const orgUuid = uuidv4();
-    const slug = input.code ? input.code.toLowerCase().replace(/[^a-z0-9]/g, '-') : `org-${Date.now()}`;
     const cleanEmail = input.email ? input.email.trim().toLowerCase() : '';
+    const cleanName = input.name ? input.name.trim() : '';
+    const cleanCode = input.code ? input.code.trim().toUpperCase() : '';
+    const cleanPhone = input.phone ? input.phone.trim() : '';
+
+    const slug = cleanCode ? cleanCode.toLowerCase().replace(/[^a-z0-9]/g, '-') : `org-${Date.now()}`;
+
+    // ── Check if an organization with same name, email, code, or phone already exists ──
+    const existingOrg = await knex('organizations')
+      .where(function () {
+        if (cleanEmail) this.orWhereRaw('LOWER(email) = ?', [cleanEmail]);
+        if (cleanName) this.orWhereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]);
+        if (cleanCode) this.orWhereRaw('LOWER(code) = ?', [cleanCode.toLowerCase()]);
+        if (cleanPhone) this.orWhere('phone', cleanPhone);
+      })
+      .first();
+
+    if (existingOrg) {
+      let duplicateField = 'Organization details';
+      let duplicateValue = '';
+      if (cleanEmail && existingOrg.email && existingOrg.email.toLowerCase() === cleanEmail) {
+        duplicateField = 'Email address';
+        duplicateValue = cleanEmail;
+      } else if (cleanName && existingOrg.name && existingOrg.name.toLowerCase() === cleanName.toLowerCase()) {
+        duplicateField = 'Organization Name';
+        duplicateValue = cleanName;
+      } else if (cleanCode && existingOrg.code && existingOrg.code.toLowerCase() === cleanCode.toLowerCase()) {
+        duplicateField = 'Organization Code';
+        duplicateValue = cleanCode;
+      } else if (cleanPhone && existingOrg.phone && existingOrg.phone === cleanPhone) {
+        duplicateField = 'Mobile number';
+        duplicateValue = cleanPhone;
+      }
+      throw new ConflictError(
+        `An organization with this ${duplicateField} ("${duplicateValue}") already exists. Please use different details or create a new one with another info.`
+      );
+    }
+
+    if (cleanEmail) {
+      const existingUser = await knex('users').whereRaw('LOWER(email) = ?', [cleanEmail]).first();
+      if (existingUser) {
+        throw new ConflictError(
+          `A user account with email "${cleanEmail}" already exists in the system. Please use a different admin email address.`
+        );
+      }
+    }
 
     const nameParts = (input.ownerName || 'Admin User').trim().split(' ');
     const firstName = nameParts[0] || 'Admin';
@@ -108,24 +154,43 @@ export class SuperAdminService {
       });
     }
 
+    // Resolve subscription plan details if provided
+    let subPlanId: number | null = null;
+    let enabledModulesJson: string | null = null;
+    let subTier = input.plan || 'Enterprise Suite';
+
+    if (input.plan) {
+      const matchedPlan = await knex('subscription_plans')
+        .where('name', input.plan)
+        .orWhere('id', Number(input.plan) || 0)
+        .first();
+      if (matchedPlan) {
+        subPlanId = matchedPlan.id;
+        subTier = matchedPlan.name;
+        enabledModulesJson = typeof matchedPlan.modules === 'string' ? matchedPlan.modules : JSON.stringify(matchedPlan.modules || []);
+      }
+    }
+
     const [id] = await knex('organizations').insert({
       uuid: orgUuid,
-      name: input.name,
+      name: cleanName,
       slug: slug,
-      code: input.code,
+      code: cleanCode,
       owner_name: input.ownerName,
       first_name: firstName,
       last_name: lastName,
       location: input.location,
       address_line1: input.location,
       email: cleanEmail,
-      phone: input.phone,
+      phone: cleanPhone,
       website: input.websiteUrl || null,
       website_url: input.websiteUrl || null,
       password_hash: passwordHash || null,
       status: 'active',
-      plan_tier: (input.plan || 'starter').toLowerCase(),
-      subscription_tier: input.plan || 'Enterprise Suite',
+      plan_tier: String(subTier).toLowerCase(),
+      subscription_tier: subTier,
+      subscription_plan_id: subPlanId,
+      enabled_modules: enabledModulesJson,
       industry: input.industry || 'Technology & Enterprise Solutions',
       settings: JSON.stringify({}),
       created_at: knex.fn.now(),
@@ -326,6 +391,45 @@ export class SuperAdminService {
     const knex = getKnex();
     const orgId = Number(id);
 
+    // Duplicate check for existing organizations
+    const cleanEmail = input.email !== undefined ? String(input.email).trim().toLowerCase() : '';
+    const cleanName = input.name !== undefined ? String(input.name).trim() : '';
+    const cleanCode = input.code !== undefined ? String(input.code).trim().toUpperCase() : '';
+    const cleanPhone = input.phone !== undefined ? String(input.phone).trim() : '';
+
+    if (cleanEmail || cleanName || cleanCode || cleanPhone) {
+      const existingOther = await knex('organizations')
+        .where('id', '!=', orgId)
+        .andWhere(function () {
+          if (cleanEmail) this.orWhereRaw('LOWER(email) = ?', [cleanEmail]);
+          if (cleanName) this.orWhereRaw('LOWER(name) = ?', [cleanName.toLowerCase()]);
+          if (cleanCode) this.orWhereRaw('LOWER(code) = ?', [cleanCode.toLowerCase()]);
+          if (cleanPhone) this.orWhere('phone', cleanPhone);
+        })
+        .first();
+
+      if (existingOther) {
+        let duplicateField = 'Organization detail';
+        let duplicateValue = '';
+        if (cleanEmail && existingOther.email && existingOther.email.toLowerCase() === cleanEmail) {
+          duplicateField = 'Email address';
+          duplicateValue = cleanEmail;
+        } else if (cleanName && existingOther.name && existingOther.name.toLowerCase() === cleanName.toLowerCase()) {
+          duplicateField = 'Organization Name';
+          duplicateValue = cleanName;
+        } else if (cleanCode && existingOther.code && existingOther.code.toLowerCase() === cleanCode.toLowerCase()) {
+          duplicateField = 'Organization Code';
+          duplicateValue = cleanCode;
+        } else if (cleanPhone && existingOther.phone && existingOther.phone === cleanPhone) {
+          duplicateField = 'Mobile number';
+          duplicateValue = cleanPhone;
+        }
+        throw new ConflictError(
+          `An organization with this ${duplicateField} ("${duplicateValue}") already exists. Please use different details.`
+        );
+      }
+    }
+
     const updateData: any = {
       updated_at: knex.fn.now(),
     };
@@ -348,11 +452,34 @@ export class SuperAdminService {
       updateData.website_url = web;
       updateData.website = web;
     }
-    if (input.plan !== undefined || input.subscriptionTier !== undefined) {
+
+    // Handle subscription plan & module linkage
+    if (input.subscriptionPlanId !== undefined || input.plan !== undefined || input.subscriptionTier !== undefined) {
       const p = input.plan || input.subscriptionTier;
-      updateData.plan_tier = String(p).toLowerCase();
-      updateData.subscription_tier = String(p);
+      updateData.subscription_tier = String(p || 'Enterprise');
+      updateData.plan_tier = String(p || 'enterprise').toLowerCase();
+
+      if (input.subscriptionPlanId !== undefined) {
+        if (input.subscriptionPlanId === null || input.subscriptionPlanId === 0 || input.subscriptionPlanId === 'null') {
+          updateData.subscription_plan_id = null;
+          updateData.enabled_modules = null;
+        } else {
+          const plan = await knex('subscription_plans').where('id', Number(input.subscriptionPlanId)).first();
+          if (plan) {
+            updateData.subscription_plan_id = plan.id;
+            updateData.enabled_modules = typeof plan.modules === 'string' ? plan.modules : JSON.stringify(plan.modules || []);
+            updateData.subscription_tier = plan.name;
+          }
+        }
+      } else if (p && p !== 'Enterprise') {
+        const plan = await knex('subscription_plans').where('name', p).orWhere('id', Number(p) || 0).first();
+        if (plan) {
+          updateData.subscription_plan_id = plan.id;
+          updateData.enabled_modules = typeof plan.modules === 'string' ? plan.modules : JSON.stringify(plan.modules || []);
+        }
+      }
     }
+
     if (input.industry !== undefined) updateData.industry = input.industry;
 
     if (input.password) {
@@ -379,7 +506,21 @@ export class SuperAdminService {
       if (input.email) userUpdate.email = input.email.trim().toLowerCase();
       if (updateData.password_hash) userUpdate.password_hash = updateData.password_hash;
 
-      await knex('users').where('organization_id', orgId).update(userUpdate);
+      const targetEmail = (input.email || updateData.email || '').trim().toLowerCase();
+      if (targetEmail) {
+        await knex('users')
+          .where('organization_id', orgId)
+          .andWhereRaw('LOWER(email) = ?', [targetEmail])
+          .update(userUpdate)
+          .catch(() => {});
+      } else {
+        await knex('users')
+          .where('organization_id', orgId)
+          .orderBy('id', 'asc')
+          .limit(1)
+          .update(userUpdate)
+          .catch(() => {});
+      }
     }
 
     return knex('organizations')
@@ -397,6 +538,8 @@ export class SuperAdminService {
         'status',
         'plan_tier as planTier',
         'subscription_tier as subscriptionTier',
+        'subscription_plan_id as subscriptionPlanId',
+        'enabled_modules as enabledModules',
         'industry',
         'created_at as createdAt'
       )
@@ -559,8 +702,54 @@ export class SuperAdminService {
   }
 
   /**
-   * Get all client software purchase / subscription helpdesk queries
+   * Assign a subscription plan to an organization.
+   * Caches the plan's modules in organizations.enabled_modules for fast access at login/me.
+   *
+   * Pass planId = null to remove plan assignment and restore full access.
    */
+  async assignPlanToOrg(orgId: number, planId: number | null) {
+    const knex = getKnex();
+
+    if (planId === null) {
+      // Unassign plan — full access restored
+      await knex('organizations')
+        .where('id', orgId)
+        .update({
+          subscription_plan_id: null,
+          enabled_modules: null,
+          updated_at: knex.fn.now(),
+        });
+      return { success: true, orgId, planId: null, enabledModules: null };
+    }
+
+    // Fetch the plan to cache its modules
+    const plan = await knex('subscription_plans').where('id', planId).first();
+    if (!plan) {
+      throw new Error(`Subscription plan with id=${planId} not found`);
+    }
+
+    const modules = typeof plan.modules === 'string' ? plan.modules : JSON.stringify(plan.modules || []);
+
+    await knex('organizations')
+      .where('id', orgId)
+      .update({
+        subscription_plan_id: planId,
+        enabled_modules: modules,
+        updated_at: knex.fn.now(),
+      });
+
+    const enabledModules = typeof plan.modules === 'string' ? JSON.parse(plan.modules) : (plan.modules || []);
+
+    return {
+      success: true,
+      orgId,
+      planId,
+      planName: plan.name,
+      enabledModules,
+    };
+  }
+
+
   async getHelpDeskQueries() {
     const knex = getKnex();
     let rows: any[] = [];

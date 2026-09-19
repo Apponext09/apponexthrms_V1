@@ -151,7 +151,7 @@ export function CompanyProfilePage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Please select a valid image file (PNG, JPG, WEBP)');
+      window.appAlert('Please select a valid image file (PNG, JPG, WEBP)');
       return;
     }
 

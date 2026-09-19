@@ -71,7 +71,7 @@ export function CoreHRLifecycleCustomizer() {
   };
 
   const handleReset = () => {
-    if (confirm('Reset all Employee Lifecycle audit configurations to factory defaults?')) {
+    if (await window.appConfirm('Reset all Employee Lifecycle audit configurations to factory defaults?')) {
       resetToDefaults();
       toast.info('Lifecycle configuration reset to defaults');
     }

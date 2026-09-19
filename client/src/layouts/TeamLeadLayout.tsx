@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
@@ -40,17 +41,32 @@ const C = {
 
 const TEAM_LEAD_NAV = [
   {
-    label: 'EMPLOYEE CORE',
+    label: 'OVERVIEW',
+    subscriptionModule: null,
     items: [
       { name: 'Dashboard', href: '/team-lead/dashboard', icon: LayoutDashboard },
-      { name: 'My Team', href: '/team-lead/members', icon: Building2 },
-      { name: 'My Lifecycle', href: '/team-lead/lifecycle', icon: GitBranch },
-      { name: 'Org Structure', href: '/team-lead/org-chart', icon: Building2 },
-      { name: 'ID Card', href: '/team-lead/id-card', icon: Shield },
+    ],
+  },
+  {
+    label: 'EMPLOYEE CORE',
+    subscriptionModule: 'Core HR & Directory',
+    items: [
+      {
+        name: 'Employee Core',
+        href: '/team-lead/dashboard',
+        icon: Users,
+        subItems: [
+          { name: 'My Team', href: '/team-lead/members', icon: Building2 },
+          { name: 'My Lifecycle', href: '/team-lead/lifecycle', icon: GitBranch },
+          { name: 'Org Structure', href: '/team-lead/org-chart', icon: Building2 },
+          { name: 'ID Card', href: '/team-lead/id-card', icon: Shield },
+        ],
+      },
     ],
   },
   {
     label: 'LEAVES',
+    subscriptionModule: 'Leave Management & Approvals',
     items: [
       {
         name: 'Leaves',
@@ -66,6 +82,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'ATTENDANCE',
+    subscriptionModule: 'Attendance & Time Tracking',
     items: [
       {
         name: 'Attendance',
@@ -83,6 +100,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'PAYROLL',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Payroll',
@@ -97,6 +115,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'LOAN MGMT',
+    subscriptionModule: 'Automated Payroll Processing',
     items: [
       {
         name: 'Loan Mgmt',
@@ -110,6 +129,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'EXPENSE',
+    subscriptionModule: 'Expense Management',
     items: [
       {
         name: 'Expense',
@@ -127,6 +147,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'PERFORMANCE',
+    subscriptionModule: 'Performance & OKRs',
     items: [
       {
         name: 'Performance',
@@ -142,6 +163,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'RECRUITMENT',
+    subscriptionModule: 'Recruitment & ATS',
     items: [
       {
         name: 'Recruitment',
@@ -156,6 +178,7 @@ const TEAM_LEAD_NAV = [
   },
   {
     label: 'APPROVALS & GOVERNANCE',
+    subscriptionModule: null,
     items: [
       {
         name: 'Approvals & Governance',
@@ -215,6 +238,11 @@ function TeamLeadSidebarNavContent({
   handleLogout,
   navigate,
 }: TeamLeadSidebarNavContentProps) {
+  const { hasModule, isGatingEnabled } = useSubscriptionStore();
+  const visibleNav = TEAM_LEAD_NAV.filter(sec => {
+    if (!isGatingEnabled || !sec.subscriptionModule) return true;
+    return hasModule(sec.subscriptionModule);
+  });
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
@@ -222,7 +250,7 @@ function TeamLeadSidebarNavContent({
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {TEAM_LEAD_NAV.map((section) => (
+        {visibleNav.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
               {sidebarOpen && section.label && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
@@ -497,20 +525,7 @@ export function TeamLeadLayout() {
           </Button>
 
           <div className="flex items-center gap-2">
-            <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">Team Lead Portal</span>
-            <span className={cn(
-              'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
-              C.badge
-            )}>
-              {roleInfo.roleTitle} · {roleInfo.departmentName}
-            </span>
-          </div>
-
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-2">
-            <div className="hidden xl:block"><GlobalSearchButton /></div>
+            <div className="hidden min-[1180px]:block"><GlobalSearchButton /></div>
             <LiveDateTimeDisplay />
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -528,7 +543,7 @@ export function TeamLeadLayout() {
         </main>
       </div>
       <NotificationDrawer />
-      <Toaster position="bottom-right" />
+      <Toaster position="top-right" />
     </div >
   );
 }

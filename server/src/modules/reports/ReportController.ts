@@ -88,6 +88,11 @@ export const reportController = {
         db('locations')
           .where('organization_id', organizationId)
           .whereNull('deleted_at')
+          .where(function () {
+            this.where('status', 'active').orWhere('is_active', 'Yes');
+          })
+          .whereNot('status', 'inactive')
+          .whereNot('is_active', 'No')
           .select('id', 'name')
           .orderBy('name', 'asc'),
         db('leave_types')

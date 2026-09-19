@@ -4,6 +4,7 @@ export interface Break {
   id: number;
   uuid: string;
   organization_id: number;
+  company_id: number;
   name: string;
   break_type: 'Manual' | 'Auto';
   biometric_device: string | null;
@@ -19,7 +20,7 @@ export interface Break {
 export class BreakRepository extends BaseRepository<Break> {
   constructor() {
     super('breaks');
-    this.companyScoped = false;
+    this.companyScoped = true;
   }
 
   protected getSearchableFields(): string[] {

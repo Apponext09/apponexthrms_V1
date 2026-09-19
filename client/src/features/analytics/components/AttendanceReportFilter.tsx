@@ -28,11 +28,17 @@ export function AttendanceReportFilter({
   const [selectedReportingOfficers, setSelectedReportingOfficers] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
-  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const toLocalDateString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const getTodayStr = () => toLocalDateString(new Date());
   const get14DaysAgoStr = () => {
     const d = new Date();
     d.setDate(d.getDate() - 14);
-    return d.toISOString().split('T')[0];
+    return toLocalDateString(d);
   };
 
   const [status, setStatus] = useState<'active' | 'inactive' | 'both'>('active');
@@ -324,6 +330,13 @@ export function AttendanceReportFilter({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {renderCompanyDropdown()}
           {renderMultiSelectDropdown(
+            'Location',
+            selectedLocations,
+            setSelectedLocations,
+            optionsData?.locations || [],
+            false
+          )}
+          {renderMultiSelectDropdown(
             'Department',
             selectedDepartments,
             setSelectedDepartments,
@@ -426,7 +439,7 @@ export function AttendanceReportFilter({
                 { key: 'present', label: 'Present' },
                 { key: 'leave', label: 'Leave' },
                 { key: 'absent', label: 'Absent User(s)' },
-                { key: 'expected', label: 'Expected User(s)' },
+                { key: 'expected', label: 'Week Off / Holiday' },
                 { key: 'lateMark', label: 'Late Mark' },
                 { key: 'shortWorkingHour', label: 'Short Working Hour' },
                 { key: 'breakLog', label: 'Break Log' },

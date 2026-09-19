@@ -78,7 +78,7 @@ export function ComplianceTrainingPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Delete this compliance mandate?')) {
+    if (await window.appConfirm('Delete this compliance mandate?')) {
       await deleteMutation.mutateAsync(id);
     }
   };

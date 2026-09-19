@@ -24,6 +24,10 @@ function generateDeptCode(name: string): string {
     .slice(0, 12);
 }
 
+function normaliseDepartmentName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+}
+
 export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormProps) {
   const { data: deptResponse, isLoading: deptsLoading } = useDepartments(1, 100);
   const { data: companies = [], isLoading: companiesLoading } = useCompanies();
@@ -194,6 +198,20 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
       return;
     }
 
+    const normalisedName = normaliseDepartmentName(departmentName);
+    const duplicate = deptList.find((department) => {
+      const existingName = department.name || department.departmentName || '';
+      const existingId = String(department.id || department.department_id || department.departmentId || '');
+      return normaliseDepartmentName(existingName) === normalisedName
+        && existingId !== String(editingId || '');
+    });
+    if (duplicate) {
+      const message = `A department named “${departmentName.trim()}” already exists. Use a different name or edit the existing department.`;
+      setSubmitError(message);
+      showToast.error('Duplicate department', message);
+      return;
+    }
+
     try {
       const code = departmentCode.trim() || generateDeptCode(departmentName);
       const cleanCompanyIds = selectedCompanyIds.map(Number).filter((n) => !isNaN(n) && n > 0);
@@ -232,7 +250,11 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
         resetForm();
       }
     } catch (err: any) {
-      setSubmitError(err?.response?.data?.message || err?.message || 'Failed to save department. Please try again.');
+      const message = err?.response?.data?.message || err?.message || 'Failed to save department. Please try again.';
+      setSubmitError(message);
+      if (err?.response?.status === 409) {
+        showToast.error('Duplicate department', message);
+      }
     }
   };
 

@@ -1,11 +1,11 @@
 import { approvalRepository } from '../repositories/ApprovalRepository';
 
 export class ApprovalService {
-  async getDashboardData(organizationId: number, options?: { approverRole?: string, approverId?: number }) {
+  async getDashboardData(organizationId: number, options?: { companyId?: number; approverRole?: string; approverId?: number }) {
     const [stats, roleBreakdown, recentApprovals] = await Promise.all([
       approvalRepository.getDashboardStats(organizationId, options),
-      approvalRepository.getRoleBreakdown(organizationId),
-      approvalRepository.getRecentApprovals(organizationId, 10)
+      approvalRepository.getRoleBreakdown(organizationId, options),
+      approvalRepository.getRecentApprovals(organizationId, 20, options)
     ]);
 
     // Format recent approvals for frontend

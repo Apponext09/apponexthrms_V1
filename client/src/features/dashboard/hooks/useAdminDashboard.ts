@@ -41,6 +41,75 @@ export interface AdminDashboardData {
     avatarUrl?: string;
     departmentName?: string;
   }>;
+  attendanceAnalytics?: {
+    today: {
+      present: number;
+      late: number;
+      halfDay: number;
+      wfh: number;
+      onLeave: number;
+      absent: number;
+      totalHeadcount: number;
+      attendanceRate: number;
+    };
+    weeklyTrend: Array<{
+      day: string;
+      date: string;
+      present: number;
+      late: number;
+      absent: number;
+    }>;
+  };
+  leaveAnalytics?: {
+    byType: Array<{
+      leaveTypeId: number;
+      name: string;
+      code: string;
+      color: string;
+      approvedCount: number;
+      pendingCount: number;
+    }>;
+    monthlyTrend: Array<{
+      month: string;
+      applied: number;
+      approved: number;
+    }>;
+  };
+  payrollAnalytics?: {
+    monthlyTrend: Array<{
+      month: string;
+      grossSalary: number;
+      netSalary: number;
+      deductions: number;
+    }>;
+  };
+  recruitmentAnalytics?: {
+    pipelineStages: Array<{
+      stage: string;
+      label: string;
+      count: number;
+    }>;
+    openJobsByDept: Array<{
+      departmentName: string;
+      openCount: number;
+    }>;
+  };
+  expenseAnalytics?: {
+    monthlyTrend: Array<{
+      month: string;
+      claimedAmount: number;
+      approvedAmount: number;
+    }>;
+    byCategory: Array<{
+      categoryName: string;
+      totalAmount: number;
+    }>;
+  };
+  workforceAnalytics?: {
+    byEmploymentType: Array<{ type: string; count: number }>;
+    byStatus: Array<{ status: string; count: number }>;
+    byGender: Array<{ gender: string; count: number }>;
+  };
 }
 
 export function useAdminDashboard() {

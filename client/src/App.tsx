@@ -9,6 +9,7 @@ import { useAttendanceStore } from './features/attendance/store/attendanceStore'
 import { BreakOverlay } from './features/attendance/components/BreakOverlay';
 import { useBreakSync } from './features/attendance/hooks/useBreakSync';
 import { LoadingScreen } from './components/LoadingScreen';
+import { ConfirmationDialog } from './components/ConfirmationDialog';
 
 // ── Global Error Boundary ──────────────────────────────────────────────────
 // Catches any unhandled React render errors and shows a readable message
@@ -303,6 +304,7 @@ export default function App() {
           {/* <ThemeProvider> */}
           <BreakOverlayProvider>
             <AppRoutes />
+            <ConfirmationDialog />
           </BreakOverlayProvider>
           {/* </ThemeProvider> */}
         </BrowserRouter>

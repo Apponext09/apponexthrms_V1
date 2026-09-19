@@ -266,7 +266,7 @@ export function TipTapRichTextEditor({
   const handleAddLink = () => {
     if (!editor) return;
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter Link URL:', previousUrl || 'https://');
+    const url = await window.appPrompt('Enter Link URL:', previousUrl || 'https://');
     if (url === null) return;
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();

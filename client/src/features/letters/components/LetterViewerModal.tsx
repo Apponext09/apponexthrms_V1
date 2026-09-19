@@ -54,7 +54,7 @@ export const LetterViewerModal: React.FC<LetterViewerModalProps> = ({
   };
 
   const handleRevoke = async () => {
-    if (!window.confirm(`Are you sure you want to revoke letter ${letter.letter_code}?`)) return;
+    if (!await window.appConfirm(`Are you sure you want to revoke letter ${letter.letter_code}?`)) return;
     try {
       setIsActionPending(true);
       await apiClient.post(`/letters/${letter.id}/revoke`);

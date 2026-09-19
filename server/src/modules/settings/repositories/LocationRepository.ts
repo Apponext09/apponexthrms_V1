@@ -43,6 +43,35 @@ export class LocationRepository extends BaseRepository<Location> {
     this.companyScoped = true;
   }
 
+  async list(ctx: TenantContext, options: any = {}, includeDeleted: any = undefined) {
+    const filters = { ...(options.filters || {}) };
+    const status = filters.status;
+    delete filters.status;
+
+    const modifiedOptions = {
+      ...options,
+      filters,
+    };
+
+    if (status === 'active') {
+      modifiedOptions.customWhere = (q: any) => {
+        q.where(function (this: any) {
+          this.where('status', 'active').orWhere('is_active', 'Yes');
+        }).where(function (this: any) {
+          this.whereNot('status', 'inactive').whereNot('is_active', 'No');
+        });
+      };
+    } else if (status === 'inactive') {
+      modifiedOptions.customWhere = (q: any) => {
+        q.where(function (this: any) {
+          this.where('status', 'inactive').orWhere('is_active', 'No');
+        });
+      };
+    }
+
+    return super.list(ctx, modifiedOptions, includeDeleted);
+  }
+
   /**
    * Get location by code within organization
    */

@@ -4,7 +4,17 @@ import { expenseApi } from '../api/expenseApi';
 import { useExpenseMoney } from '../utils/useExpenseMoney';
 import { expenseError, expenseUi as ui, ExpenseWorkflowDialog } from './ExpenseWorkflowUi';
 
-export function WorkflowApprovalInbox(_props: { defaultStatusFilter?: string; allowedStatuses?: string[]; portalLabel?: string }) {
+type WorkflowApprovalInboxProps = {
+  defaultStatusFilter?: string;
+  allowedStatuses?: string[];
+  portalLabel?: string;
+  portalDescription?: string;
+};
+
+export function WorkflowApprovalInbox({
+  portalLabel = 'Expense Approvals',
+  portalDescription = 'Only requests assigned to you by the current workflow step appear here.',
+}: WorkflowApprovalInboxProps) {
   const [rows, setRows] = useState<any[]>([]), [selected, setSelected] = useState<any>(null);
   const [comments, setComments] = useState(''), [error, setError] = useState(''), [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true);
@@ -51,7 +61,7 @@ export function WorkflowApprovalInbox(_props: { defaultStatusFilter?: string; al
   };
   return <div className={ui.page}>
     <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      <div><h1 className="text-xl sm:text-2xl font-bold text-balance flex items-center gap-2"><FileCheck className="size-6 text-blue-600" />Expense Approvals</h1><p className="text-xs text-slate-500 dark:text-slate-400 text-pretty mt-0.5">Only requests assigned to you by the current workflow step appear here.</p></div>
+      <div><h1 className="text-xl sm:text-2xl font-bold text-balance flex items-center gap-2"><FileCheck className="size-6 text-blue-600" />{portalLabel}</h1><p className="text-xs text-slate-500 dark:text-slate-400 text-pretty mt-0.5">{portalDescription}</p></div>
       <div className="flex gap-2">{selectedIds.length > 0 && <button onClick={() => { setComments(''); setError(''); setBulkOpen(true); }} className={ui.primary}>Approve selected ({selectedIds.length})</button>}<button onClick={load} disabled={loading} className={ui.secondary}><RefreshCw className="size-4" />Refresh</button></div>
     </header>
     {error && !selected && !bulkOpen && <p role="alert" className={ui.error}>{error}</p>}

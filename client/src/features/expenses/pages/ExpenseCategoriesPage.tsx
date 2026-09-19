@@ -79,21 +79,21 @@ export const ExpenseCategoriesPage: React.FC = () => {
   };
 
   const handleDeleteCategory = async (cat: ExpenseCategory) => {
-    if (!window.confirm(`Are you sure you want to delete "${cat.name}"? This category will be permanently deleted.`)) {
+    if (!await window.appConfirm(`Are you sure you want to delete "${cat.name}"? This category will be permanently deleted.`)) {
       return;
     }
     try {
       const res = await expenseApi.deleteCategory(cat.id);
-      alert(res?.message || 'Category deleted successfully');
+      window.appAlert(res?.message || 'Category deleted successfully');
       fetchCategories(showInactive);
     } catch (err: any) {
-      alert(err.message || 'Failed to delete category');
+      window.appAlert(err.message || 'Failed to delete category');
     }
   };
 
   const handleSaveCategory = async () => {
     if (!name.trim()) {
-      alert('Please enter a category name.');
+      window.appAlert('Please enter a category name.');
       return;
     }
     try {
@@ -118,7 +118,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
       setIsModalOpen(false);
       fetchCategories(showInactive);
     } catch (err: any) {
-      alert(err.message || 'Failed to save category');
+      window.appAlert(err.message || 'Failed to save category');
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +129,7 @@ export const ExpenseCategoriesPage: React.FC = () => {
       await expenseApi.updateCategory(cat.id, { isActive: !cat.isActive });
       fetchCategories(showInactive);
     } catch (err: any) {
-      alert(err.message || 'Failed to update category status');
+      window.appAlert(err.message || 'Failed to update category status');
     }
   };
 

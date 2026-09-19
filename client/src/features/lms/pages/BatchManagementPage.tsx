@@ -120,7 +120,7 @@ export function BatchManagementPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Are you sure you want to delete this batch?')) {
+    if (await window.appConfirm('Are you sure you want to delete this batch?')) {
       await deleteMutation.mutateAsync(id);
     }
   };

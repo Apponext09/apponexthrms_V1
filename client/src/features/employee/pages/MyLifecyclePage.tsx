@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, ArrowLeftRight, Briefcase, Building2, CalendarDays, CheckCircle2, Clock3, Loader2, MapPin, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import { AlertCircle, ArrowLeftRight, Briefcase, Building2, CalendarDays, CheckCircle2, Clock3, Loader2, MapPin, RefreshCw, ShieldCheck, UserRound, UserMinus } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { showToast } from '@/components/ui/toast';
 import { useEmployee } from '../hooks/useEmployees';
 import type { EmployeeLifecycleDetails } from '@/features/HR/EmployeeLifecycle/api/lifecycleApi';
 import { ChronologicalLifecycleFlow } from '@/features/HR/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
@@ -33,6 +37,11 @@ export function MyLifecyclePage() {
   const [details, setDetails] = useState<EmployeeLifecycleDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [resignationOpen, setResignationOpen] = useState(false);
+  const [resignationDate, setResignationDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lastWorkingDay, setLastWorkingDay] = useState('');
+  const [resignationReason, setResignationReason] = useState('');
+  const [isSubmittingResignation, setIsSubmittingResignation] = useState(false);
   const fetchLifecycle = useCallback(async () => {
     try {
       setError(null); setIsLoading(true);
@@ -51,11 +60,29 @@ export function MyLifecyclePage() {
   const { profile, onboarding, offboarding, transfers = [], lifecycleEvents = [], chronologicalMilestones = [] } = details;
   const stage = STAGES[profile.lifecycleStatus] || STAGES.active;
   const actualOnboarding = onboarding?.id ? onboarding : null;
+  const canResign = !offboarding?.resignationDate && !['notice', 'exit', 'alumni'].includes(profile.lifecycleStatus || '');
+  const submitResignation = async () => {
+    if (!lastWorkingDay || !resignationReason.trim()) {
+      showToast.error('Missing details', 'Please provide your last working day and reason for resignation.');
+      return;
+    }
+    try {
+      setIsSubmittingResignation(true);
+      await apiClient.post('/hr/lifecycle/employees/me/resignation', { resignationDate, lastWorkingDay, reason: resignationReason });
+      showToast.success('Resignation submitted', 'Your resignation has been submitted to HR.');
+      setResignationOpen(false);
+      await fetchLifecycle();
+    } catch (err: any) {
+      showToast.error('Could not submit resignation', err?.response?.data?.message || 'Please try again.');
+    } finally { setIsSubmittingResignation(false); }
+  };
   return <main className="mx-auto max-w-6xl space-y-5 p-3 sm:p-5 lg:p-6">
     <section className="relative overflow-hidden rounded-2xl bg-primary px-5 py-6 text-primary-foreground shadow-lg sm:px-7"><div className="absolute -right-12 -top-20 h-52 w-52 rounded-full bg-primary-foreground/10" /><div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-primary-foreground/70">Employment journey</p><h1 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">My Lifecycle</h1><p className="mt-2 text-sm text-primary-foreground/80">Your verified employment milestones and current assignment.</p></div><div className="flex items-center gap-2"><Badge variant="outline" className="border-primary-foreground/30 bg-primary-foreground/15 px-3 py-1 text-primary-foreground">{stage.label}</Badge><Button size="sm" variant="secondary" onClick={fetchLifecycle} className="gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Refresh</Button></div></div></section>
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Detail icon={CalendarDays} label="Joined" value={formatDate(profile.joiningDate)} /><Detail icon={Briefcase} label="Current role" value={profile.designationName || 'Employee'} /><Detail icon={Building2} label="Department" value={profile.departmentName} /><Detail icon={ArrowLeftRight} label="Transfers" value={String(profile.transfersCount ?? transfers.length)} /></section>
     <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]"><Card className="border-border/80 shadow-sm"><CardContent className="p-5"><div className="mb-4 flex items-center gap-2"><span className="rounded-lg bg-primary/10 p-2 text-primary"><UserRound className="h-4 w-4" /></span><div><h2 className="text-base font-bold">Current assignment</h2><p className="text-xs text-muted-foreground">Organization details currently recorded for you.</p></div></div><div className="grid gap-3 sm:grid-cols-2"><Detail icon={Building2} label="Company" value={profile.companyName} /><Detail icon={MapPin} label="Work location" value={profile.locationName} /><Detail icon={UserRound} label="Reporting manager" value={profile.reportingManager || profile.reportingManagerName} /><Detail icon={ShieldCheck} label="Lifecycle status" value={stage.label} /></div></CardContent></Card><Card className="border-border/80 shadow-sm"><CardContent className="p-5"><div className="mb-4 flex items-center gap-2"><span className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600"><CheckCircle2 className="h-4 w-4" /></span><div><h2 className="text-base font-bold">Onboarding progress</h2><p className="text-xs text-muted-foreground">Confirmed HR records only.</p></div></div>{actualOnboarding ? <div className="space-y-3 text-sm"><p><span className="text-muted-foreground">Orientation:</span> {actualOnboarding.orientationCompleted ? 'Completed' : 'Pending'}</p><p><span className="text-muted-foreground">Documents:</span> {actualOnboarding.documentsVerified ? 'Verified' : 'Pending verification'}</p><p><span className="text-muted-foreground">Probation end:</span> {formatDate(actualOnboarding.probationEndDate)}</p></div> : <p className="rounded-xl bg-muted/50 p-4 text-sm text-muted-foreground">No onboarding record has been added yet.</p>}</CardContent></Card></section>
+    <Card className="border-border/80"><CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="flex items-center gap-2 text-base font-bold"><UserMinus className="h-4 w-4 text-rose-600" /> Resignation</h2><p className="mt-1 text-sm text-muted-foreground">{canResign ? 'Submit your resignation directly to HR.' : offboarding?.resignationDate ? `Submitted on ${formatDate(offboarding.resignationDate)}.` : 'Your exit process is already in progress.'}</p></div>{canResign && <Button variant="destructive" onClick={() => setResignationOpen(true)}>Submit resignation</Button>}</CardContent></Card>
     {chronologicalMilestones.length > 0 && <ChronologicalLifecycleFlow milestones={chronologicalMilestones} employeeName={profile.name || `${profile.firstName} ${profile.lastName}`} employeeCode={profile.employeeCode} />}
     {(transfers.length > 0 || lifecycleEvents.length > 0 || offboarding) && <section className="grid gap-5 lg:grid-cols-2">{transfers.length > 0 && <Card className="border-border/80"><CardContent className="p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-bold"><ArrowLeftRight className="h-4 w-4 text-primary" /> Transfer history</h2><div className="space-y-3">{transfers.map(t => <div key={t.id} className="rounded-xl border border-border/70 p-3 text-sm"><div className="flex justify-between gap-3"><span className="font-semibold capitalize">{t.transferType.replace(/_/g, ' ')}</span><span className="text-xs text-muted-foreground">{formatDate(t.effectiveDate)}</span></div><p className="mt-2 text-xs text-muted-foreground">{t.fromDepartmentName} → {t.toDepartmentName}</p>{t.transferReason && <p className="mt-1 text-xs text-muted-foreground">{t.transferReason}</p>}</div>)}</div></CardContent></Card>}{lifecycleEvents.length > 0 && <Card className="border-border/80"><CardContent className="p-5"><h2 className="mb-4 flex items-center gap-2 text-base font-bold"><Clock3 className="h-4 w-4 text-primary" /> Status history</h2><div className="space-y-3">{lifecycleEvents.map(event => <div key={event.id} className="flex gap-3 text-sm"><span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-primary" /><div><p className="font-semibold capitalize">{event.fromStatus || 'Started'} → {event.toStatus}</p><p className="text-xs text-muted-foreground">{formatDate(event.transitionDate)}{event.notes ? ` · ${event.notes}` : ''}</p></div></div>)}</div></CardContent></Card>}</section>}
+    <Dialog open={resignationOpen} onOpenChange={setResignationOpen}><DialogContent><DialogHeader><DialogTitle>Submit resignation</DialogTitle><DialogDescription>Your request will be sent to HR and your lifecycle status will move to notice period.</DialogDescription></DialogHeader><div className="space-y-4"><label className="block text-sm font-medium">Resignation date<Input type="date" value={resignationDate} onChange={e => setResignationDate(e.target.value)} className="mt-1" /></label><label className="block text-sm font-medium">Last working day<Input type="date" min={resignationDate} value={lastWorkingDay} onChange={e => setLastWorkingDay(e.target.value)} className="mt-1" /></label><label className="block text-sm font-medium">Reason for resignation<Textarea value={resignationReason} onChange={e => setResignationReason(e.target.value)} className="mt-1" maxLength={1000} placeholder="Briefly share your reason" /></label></div><DialogFooter><Button variant="outline" onClick={() => setResignationOpen(false)}>Cancel</Button><Button variant="destructive" disabled={isSubmittingResignation} onClick={submitResignation}>{isSubmittingResignation ? 'Submitting…' : 'Submit resignation'}</Button></DialogFooter></DialogContent></Dialog>
   </main>;
 }

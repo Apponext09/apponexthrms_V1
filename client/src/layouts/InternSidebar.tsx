@@ -12,6 +12,9 @@ import {
   Building2,
   GraduationCap,
   CreditCard,
+  ReceiptIndianRupee,
+  Plane,
+  Activity,
   Shield,
   ChevronDown,
   GitBranch,
@@ -39,9 +42,12 @@ const C = {
 // ── Nav definitions ───────────────────────────────────────────────────────────
 const INTERN_NAV = [
   {
+    label: 'OVERVIEW',
+    items: [{ name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard }],
+  },
+  {
     label: 'EMPLOYEE CORE',
     items: [
-      { name: 'My Dashboard', href: '/intern/dashboard', icon: LayoutDashboard },
       { name: 'My Lifecycle', href: '/intern/lifecycle', icon: GitBranch },
       { name: 'Org Structure', href: '/intern/org-chart', icon: Building2 },
       { name: 'ID Card', href: '/intern/id-card', icon: Shield },
@@ -73,7 +79,15 @@ const INTERN_NAV = [
     label: 'COMPANY',
     items: [
       { name: 'Announcements', href: '/intern/announcements', icon: Megaphone },
-      { name: 'Org Chart',     href: '/intern/org-chart',     icon: Building2 },
+    ],
+  },
+  {
+    label: 'EXPENSES',
+    items: [
+      { name: 'Expense Claims', href: '/intern/expenses', icon: ReceiptIndianRupee },
+      { name: 'Travel Requests', href: '/intern/travel-requests', icon: Plane },
+      { name: 'Travel Advances', href: '/intern/travel-advances', icon: CreditCard },
+      { name: 'Mileage Claims', href: '/intern/mileage-claims', icon: Activity },
     ],
   },
 ];

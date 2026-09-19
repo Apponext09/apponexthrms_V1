@@ -7,7 +7,7 @@ export function LegacyWorkflowNotice({ rows, prefix = '', onComplete }: { rows: 
   const legacy = rows.filter(r => r.needsWorkflowMigration);
   if (!legacy.length) return null;
   const submit = async (row: any) => {
-    if (!confirm('Resubmit this existing request? Approval restarts at step 1 of the matching published workflow. Previous history is retained.')) return;
+    if (!await window.appConfirm('Resubmit this existing request? Approval restarts at step 1 of the matching published workflow. Previous history is retained.')) return;
     setBusy(true); setError('');
     try { await apiClient.post(`/expenses/claims/${prefix}${row.id}/resubmit-workflow`); onComplete(); }
     catch (e: any) { setError(expenseError(e, 'Unable to resubmit. Contact your workflow administrator.')); }

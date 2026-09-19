@@ -88,7 +88,7 @@ export function InlineDashboardCustomizer() {
   };
 
   const handleReset = () => {
-    if (confirm('Reset all dashboard customizations back to factory defaults?')) {
+    if (await window.appConfirm('Reset all dashboard customizations back to factory defaults?')) {
       resetToDefaults();
       toast.info('Reset dashboard configuration to defaults');
     }

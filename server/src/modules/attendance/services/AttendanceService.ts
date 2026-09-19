@@ -1710,6 +1710,7 @@ export class AttendanceService {
 
     const targetEmpIds = parseIds(rawEmp);
     const targetEmpStrings = parseStrings(rawEmp);
+    const targetLocIds = parseIds(rawLoc);
     const targetDeptIds = parseIds(rawDept);
     const targetRoIds = parseIds(rawRo);
     const targetCompanyIds = isAllCompanies ? [] : parseIds(rawCompany);
@@ -1751,6 +1752,12 @@ export class AttendanceService {
     if (targetRoIds.length > 0) {
       empQuery = empQuery.whereIn('reporting_manager_id', targetRoIds);
     }
+    if (targetLocIds.length > 0) {
+      empQuery = empQuery.where(function () {
+        this.whereIn('current_branch_id', targetLocIds)
+          .orWhereIn('current_location_id', targetLocIds);
+      });
+    }
 
     const employeeList = await empQuery.catch(() => []);
     if (employeeList.length === 0) {
@@ -1777,7 +1784,7 @@ export class AttendanceService {
     }
 
     // 2. Fetch actual attendance records, shift assignments, and break data from DB
-    const [dbRecords, shiftAssignments, breakRows] = await Promise.all([
+    const [dbRecords, shiftAssignments, breakRows, approvedLeaveRows] = await Promise.all([
       db('attendance_records')
         .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
         .leftJoin('attendance_locations as out_loc', 'attendance_records.check_out_location_id', 'out_loc.id')
@@ -1786,6 +1793,9 @@ export class AttendanceService {
         .leftJoin('shift_templates as st_rec', 'attendance_records.shift_id', 'st_rec.id')
         .where('attendance_records.organization_id', ctx.organizationId)
         .whereIn('attendance_records.employee_id', matchedEmpIds)
+        .where('attendance_records.check_in_date', '>=', startStr)
+        .where('attendance_records.check_in_date', '<=', endStr)
+        .whereNull('attendance_records.deleted_at')
         .select(
           'attendance_records.*',
           'in_loc.location_name as check_in_location_name',
@@ -1825,6 +1835,18 @@ export class AttendanceService {
         )
         .whereNull('deleted_at')
         .select('attendance_record_id', 'break_duration_minutes', 'break_start_time', 'break_end_time', 'status', 'updated_at')
+        .catch(() => []),
+
+      db('leave_applications')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('employee_id', matchedEmpIds)
+        .where('status', 'approved')
+        .whereNull('deleted_at')
+        .where(function () {
+          this.where('application_start_date', '<=', endStr)
+            .andWhere('application_end_date', '>=', startStr);
+        })
+        .select('employee_id', 'application_start_date', 'application_end_date', 'is_half_day')
         .catch(() => [])
     ]);
 
@@ -1889,6 +1911,21 @@ export class AttendanceService {
         if (!recordMap.has(key)) {
           recordMap.set(key, rec);
         }
+      }
+    }
+
+    const leaveMap = new Map<string, any>();
+    for (const leave of approvedLeaveRows) {
+      const employeeId = Number(leave.employee_id);
+      const leaveStart = getDateStrKey(leave.application_start_date);
+      const leaveEnd = getDateStrKey(leave.application_end_date);
+      if (!employeeId || !leaveStart || !leaveEnd) continue;
+      const cursor = new Date(`${leaveStart}T12:00:00`);
+      const end = new Date(`${leaveEnd}T12:00:00`);
+      while (cursor <= end) {
+        const key = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`;
+        if (key >= startStr && key <= endStr) leaveMap.set(`${employeeId}_${key}`, leave);
+        cursor.setDate(cursor.getDate() + 1);
       }
     }
 
@@ -1989,6 +2026,7 @@ export class AttendanceService {
         let actualWorkingHours = '00:00';
         let lateMins = '00:00';
         let breakHoursForRow = '00:00';
+        let breakMinsForRow = 0;
         const normalizeLocationName = (locName: string | null | undefined): string => {
           if (!locName || locName === 'Primary Office' || locName === 'Primary Office - Corporate HQ') {
             return 'Kosqu Technolab';
@@ -2099,6 +2137,7 @@ export class AttendanceService {
           const mapBreakMins = breakMinsMap.get(Number(dbRec.id)) || 0;
           const recStoredBreakMins = Number(dbRec.break_time_minutes || dbRec.breakTimeMinutes || 0);
           const recBreakMins = mapBreakMins > 0 ? mapBreakMins : recStoredBreakMins;
+          breakMinsForRow = recBreakMins;
 
           const netMins = Math.max(0, durationMins - recBreakMins);
           const hrs = Math.floor(netMins / 60).toString().padStart(2, '0');
@@ -2117,12 +2156,19 @@ export class AttendanceService {
         } else {
           // No attendance record for this date — check if holiday or week-off or absent
           const isHolidayDate = reportHolidaySet.has(dateStr);
-          dayStatus = isWeekend ? 'Week Off' : isHolidayDate ? 'Holiday' : 'Absent';
+          const approvedLeave = leaveMap.get(`${empId}_${dateStr}`);
+          dayStatus = approvedLeave
+            ? (approvedLeave.is_half_day ? 'Half Day' : 'Leave')
+            : isHolidayDate
+              ? 'Holiday'
+              : isWeekend
+                ? 'Week Off'
+                : 'Absent';
           actualTiming = '-- - --';
           actualWorkingHours = '00:00';
         }
 
-        const shortHours = dayStatus === 'Half Day' ? '04:30' : dayStatus === 'Absent' ? '09:00' : '00:00';
+        let shortHours = '00:00';
         const totalBreakHours = breakHoursForRow;
 
         const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
@@ -2145,7 +2191,7 @@ export class AttendanceService {
           }
 
           if (isTrue(sf.lateMark) && isLate !== 'Yes') continue;
-          if (isTrue(sf.shortWorkingHour) && (shortHours === '00:00' || dayStatus === 'Full Day')) continue;
+          if (isTrue(sf.breakLog) && breakMinsForRow <= 0) continue;
         }
 
         if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
@@ -2233,6 +2279,37 @@ export class AttendanceService {
           const m = (totalMins % 60).toString().padStart(2, '0');
           return `${h}:${m}`;
         })();
+
+        const expectedMinutes = Math.round((currentShift.durationHours || 0) * 60);
+        const [actualHoursPart = '0', actualMinutesPart = '0'] = actualWorkingHours.split(':');
+        const actualMinutes = Number(actualHoursPart) * 60 + Number(actualMinutesPart);
+        // A short-working-hour record must have an actual punch. Absence and
+        // leave have their own filters and must not be reported as short work.
+        if (formattedIn && expectedMinutes > 0 && actualMinutes < expectedMinutes) {
+          const difference = expectedMinutes - actualMinutes;
+          shortHours = `${String(Math.floor(difference / 60)).padStart(2, '0')}:${String(difference % 60).padStart(2, '0')}`;
+        }
+
+        if (isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
+
+        if (isLate === 'Yes' && formattedIn && currentShift.startTime !== '--') {
+          const toMinutes = (value: string) => {
+            const match = value.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            if (!match) return null;
+            let hour = Number(match[1]);
+            const minute = Number(match[2]);
+            const meridiem = match[3]?.toUpperCase();
+            if (meridiem === 'PM' && hour < 12) hour += 12;
+            if (meridiem === 'AM' && hour === 12) hour = 0;
+            return hour * 60 + minute;
+          };
+          const scheduled = toMinutes(currentShift.startTime);
+          const punched = toMinutes(formattedIn);
+          if (scheduled !== null && punched !== null && punched > scheduled) {
+            const difference = punched - scheduled;
+            lateMins = `${String(Math.floor(difference / 60)).padStart(2, '0')}:${String(difference % 60).padStart(2, '0')}`;
+          }
+        }
 
         rows.push({
           id: String(rowIdCounter++),

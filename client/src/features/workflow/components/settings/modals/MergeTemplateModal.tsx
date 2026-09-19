@@ -38,14 +38,19 @@ export function MergeTemplateModal({ open, onClose, initialValue = '', onSave }:
   const fetchMergeCodes = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/settings/merge-codes');
+      const res = await api.get('/settings/merge-codes?pageSize=200');
       const items = res.data?.data ?? res.data ?? [];
       if (Array.isArray(items) && items.length > 0) {
-        const mapped = items.map((it: any) => ({
-          code: it.merge_code || it.code || `[#${it.module_name || 'CODE'}#]`,
-          name: it.sub_module_name || it.module_name || it.name || 'Merge Tag',
-          desc: it.description || '',
-        }));
+        const mapped = items
+          .filter((it: any) => {
+            const raw = it.is_active ?? it.isActive ?? 'Yes';
+            return raw === 'Yes' || raw === 'yes' || raw === true || raw === 1 || raw === '1';
+          })
+          .map((it: any) => ({
+            code: it.merge_code || it.code || `[#${it.module_name || 'CODE'}#]`,
+            name: it.sub_module_name || it.module_name || it.name || 'Merge Tag',
+            desc: it.description || '',
+          }));
         setMergeCodes(mapped);
       }
     } catch {

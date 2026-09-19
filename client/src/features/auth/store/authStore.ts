@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/config/api';
 import { policiesApi } from '@/features/policies/api/policiesApi';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 
 export interface User {
   id: number;
@@ -141,6 +142,14 @@ export const useAuthStore = create<AuthState>()(
 
           set({ user, isAuthenticated: true });
 
+          // Sync subscription module gating
+          try {
+            const enabledModules = loginData.enabledModules ?? loginData.user?.enabledModules ?? null;
+            useSubscriptionStore.getState().setEnabledModules(enabledModules);
+          } catch (e) {
+            console.warn('Unable to sync subscription modules on login:', e);
+          }
+
           // Fetch pending mandatory policies immediately after login
           try {
             const pending = await policiesApi.getPendingPolicies();
@@ -180,6 +189,14 @@ export const useAuthStore = create<AuthState>()(
                 } as User,
               };
             });
+
+            // Sync subscription module gating
+            try {
+              const enabledModules = data.enabledModules ?? data.user?.enabledModules ?? null;
+              useSubscriptionStore.getState().setEnabledModules(enabledModules);
+            } catch (e) {
+              console.warn('Unable to sync subscription modules on fetchCurrentUser:', e);
+            }
 
             // Re-fetch pending policies upon fetching current user
             try {
@@ -272,6 +289,11 @@ export const useAuthStore = create<AuthState>()(
         window.addEventListener('popstate', preventBack);
 
         set({ user: null, isAuthenticated: false });
+
+        // Reset subscription module gating
+        try {
+          useSubscriptionStore.getState().reset();
+        } catch (e) { /* ignore */ }
 
         // Force hard redirect with cache busting
         const timestamp = new Date().getTime();

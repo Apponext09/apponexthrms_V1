@@ -58,6 +58,7 @@ import { getVisibleSections, type NavItem } from '@/config/navigation';
 import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 import { useRbac } from '@/lib/rbac';
 import { getUserRoleAndDept } from '@/lib/userProfile';
+import { useSubscriptionStore } from '@/features/subscriptions/store/subscriptionStore';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
@@ -89,6 +90,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const { data: licensedFeatures } = useLicensedFeatures();
   const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
   const { expandedSections, toggleSection, expandSectionContainingRoute } = useNavStore();
+  const { enabledModules } = useSubscriptionStore();
 
   const [lockedItemDialogOpen, setLockedItemDialogOpen] = useState(false);
   const [lockedItemName, setLockedItemName] = useState('');
@@ -135,8 +137,8 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   // Removed location.pathname from deps: pathname changes no longer trigger
   // the heavy getVisibleSections() computation on every navigation.
   const visibleSections = useMemo(
-    () => getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled),
-    [roles, licensedFeatures, attendanceMode, liveTrackingEnabled]
+    () => getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules),
+    [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, enabledModules]
   );
 
   // ── Inject dynamic custom master items into the MASTERS section ──────────────

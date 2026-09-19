@@ -2,38 +2,32 @@ import { z } from 'zod';
 
 // Job schemas
 export const createJobSchema = z.object({
-  mrfRequestId: z.number().optional(),
+  mrfRequestId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
   jobCode: z.string().min(1).max(50),
   jobTitle: z.string().min(1).max(255),
   jobDescription: z.string().min(1),
-  departmentId: z.number().optional(),
-  designationId: z.number().optional(),
-  locationId: z.number().optional(),
+  departmentId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
+  designationId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
+  locationId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
   jobType: z.string().default('full_time'),
   experienceLevel: z.string().default('mid'),
-  minExperienceYears: z.number().optional(),
-  maxExperienceYears: z.number().optional(),
-  minSalary: z.number().optional(),
-  maxSalary: z.number().optional(),
-  currency: z.string().optional(),
+  minExperienceYears: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  maxExperienceYears: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  minSalary: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  maxSalary: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? null : Number(v)).nullable().optional(),
+  currency: z.string().nullable().optional(),
   employmentType: z.string().default('onsite'),
-  noOfPositions: z.number().min(1).default(1),
-  expiryDate: z.string().min(1, 'Application deadline is required').refine((value) => {
-    const datePart = String(value).slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return false;
-    const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    return datePart >= todayStr;
-  }, { message: 'Application deadline must be today or a future date' }),
-  jobTemplateId: z.number().optional(),
-  isInternal: z.boolean().optional(),
-  isPublishedExternal: z.boolean().optional(),
+  noOfPositions: z.union([z.number(), z.string()]).transform(v => Number(v) || 1).default(1),
+  expiryDate: z.string().nullable().optional(),
+  jobTemplateId: z.union([z.number(), z.string()]).transform(v => v === '' || v === null || v === undefined ? undefined : Number(v)).nullable().optional(),
+  isInternal: z.boolean().nullable().optional(),
+  isPublishedExternal: z.boolean().nullable().optional(),
   skills: z.any().optional(),
   locations: z.any().optional(),
   aiSettings: z.any().optional(),
-});
+}).passthrough();
 
-export const updateJobSchema = createJobSchema.partial();
+export const updateJobSchema = createJobSchema.partial().passthrough();
 
 const candidateSourceSchema = z.preprocess((value) => {
   if (value === undefined || value === null || value === '') return undefined;

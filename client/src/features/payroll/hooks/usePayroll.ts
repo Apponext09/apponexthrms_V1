@@ -31,7 +31,8 @@ export const usePayroll = () => {
     queryKey: ['payroll-locations'],
     queryFn: async () => {
       const res = await apiClient.get('/settings/locations');
-      return res.data?.data || res.data || [];
+      const list = res.data?.data || res.data || [];
+      return Array.isArray(list) ? list.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No') : [];
     }
   });
 

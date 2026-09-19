@@ -1515,9 +1515,11 @@ export const MrfRequestPage: React.FC = () => {
     apiClient.get('/settings/locations')
       .then(res => {
         const raw = extractList(res);
-        const list = raw.map((item: any) => ({
+        const list = raw
+          .filter((item: any) => item.status !== 'inactive' && item.status !== 'Inactive' && item.is_active !== 'No' && item.isActive !== 'No')
+          .map((item: any) => ({
           id: Number(item.id),
-          name: String(item.name),
+          name: String(item.name || item.location_name || item.locationName),
           companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
           companyName: item.companyName || item.company_name || item.company || null,
         })).filter((x: any) => x.id && x.name);
@@ -1858,7 +1860,7 @@ export const MrfRequestPage: React.FC = () => {
   // Delete Request handler
   const handleDelete = async (id: number) => {
     const recordToDelete = safeDataList.find(item => item.id === id);
-    if (confirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
       try {
         const response = await apiClient.delete(`/recruitment/mrf/${id}`);
         if (response.data?.success) {

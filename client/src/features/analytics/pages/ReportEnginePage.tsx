@@ -1643,7 +1643,7 @@ export function ReportEnginePage() {
   };
 
   const handleDeleteTemplate = async (id: number, name: string) => {
-    if (!confirm(`Delete template “${name}”?`)) return;
+    if (!await window.appConfirm(`Delete template “${name}”?`)) return;
     try {
       await deleteTemplate.mutateAsync(id);
       if (editingTemplate?.id === id) setEditingTemplate(null);

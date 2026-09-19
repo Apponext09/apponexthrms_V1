@@ -60,7 +60,7 @@ export function LocationManagementPage(): JSX.Element {
   };
 
   const handleDelete = async (id: number, name: string) => {
-    if (window.confirm(`Are you sure you want to delete geofence location "${name}"?`)) {
+    if (await window.appConfirm(`Are you sure you want to delete geofence location "${name}"?`)) {
       await deleteGeofence(id);
     }
   };

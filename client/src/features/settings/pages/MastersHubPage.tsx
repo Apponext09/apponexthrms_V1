@@ -39,6 +39,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { showToast } from '@/components/ui/toast';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
 import { masterBuilderApi, CustomMasterItem } from '@/features/master-builder/api/masterBuilderApi';
 
@@ -460,7 +461,10 @@ export function MastersHubPage() {
 
   const handleSaveRecord = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim()) {
+      showToast.error('Record name required', 'Enter a name before saving this master record.');
+      return;
+    }
 
     if (editingRecord) {
       // Update existing record
@@ -472,6 +476,7 @@ export function MastersHubPage() {
             : item
         )
       }));
+      showToast.success('Master record updated', `“${formName}” has been updated successfully.`);
     } else {
       // Add new record
       const newRec: MasterItemRecord = {
@@ -486,27 +491,33 @@ export function MastersHubPage() {
         ...prev,
         [selectedMasterId]: [newRec, ...(prev[selectedMasterId] || [])]
       }));
+      showToast.success('Master record created', `“${newRec.name}” has been added to ${selectedMaster.name} successfully.`);
     }
 
     setIsAddModalOpen(false);
   };
 
-  const handleDeleteRecord = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this master record?')) {
-      setRecords(prev => ({
-        ...prev,
-        [selectedMasterId]: (prev[selectedMasterId] || []).filter(item => item.id !== id)
-      }));
-    }
+  const handleDeleteRecord = async (id: string) => {
+    const record = (records[selectedMasterId] || []).find((item) => item.id === id);
+    if (!await window.appConfirm(`Delete “${record?.name || 'this master record'}”? This action cannot be undone.`)) return;
+
+    setRecords(prev => ({
+      ...prev,
+      [selectedMasterId]: (prev[selectedMasterId] || []).filter(item => item.id !== id)
+    }));
+    showToast.success('Master record deleted', `“${record?.name || 'Master record'}” has been deleted successfully.`);
   };
 
   const handleToggleStatus = (id: string) => {
+    const record = (records[selectedMasterId] || []).find((item) => item.id === id);
+    const nextStatus = record?.status === 'Active' ? 'Inactive' : 'Active';
     setRecords(prev => ({
       ...prev,
       [selectedMasterId]: (prev[selectedMasterId] || []).map(item =>
         item.id === id ? { ...item, status: item.status === 'Active' ? 'Inactive' : 'Active' } : item
       )
     }));
+    showToast.success('Master record updated', `“${record?.name || 'Master record'}” is now ${nextStatus.toLowerCase()}.`);
   };
 
   const IconComponent = selectedMaster.icon;

@@ -233,7 +233,7 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
 
   const handleDelete = async () => {
     if (!selectedRecordId) return;
-    if (!window.confirm('Are you sure you want to permanently delete this Employee Status?')) return;
+    if (!await window.appConfirm('Are you sure you want to permanently delete this Employee Status?')) return;
 
     try {
       setSubmitting(true);

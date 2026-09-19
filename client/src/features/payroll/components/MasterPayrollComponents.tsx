@@ -433,7 +433,8 @@ export const MasterPayrollComponents: React.FC = () => {
         setDeptOptions(Array.from(new Set(dList.map(d => d.name || d.department_name || d.departmentName || String(d)).filter(Boolean))));
       }
 
-      const lList: any[] = locsRes.data?.data || locsRes.data || [];
+      const rawLList: any[] = locsRes.data?.data || locsRes.data || [];
+      const lList = Array.isArray(rawLList) ? rawLList.filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No') : [];
       if (Array.isArray(lList) && lList.length > 0) {
         setLocationOptions(Array.from(new Set(lList.map(l => l.name || l.location_name || l.branch_name || String(l)).filter(Boolean))));
       }
@@ -818,7 +819,7 @@ export const MasterPayrollComponents: React.FC = () => {
   };
 
   const handleDeleteComponent = async (id: string | number, name: string) => {
-    if (!window.confirm(`Delete component "${name}"?`)) return;
+    if (!await window.appConfirm(`Delete component "${name}"?`)) return;
     try {
       await apiClient.delete(`/payroll/components/${id}`);
       showToast.success('Component Deleted', `"${name}" removed.`);
@@ -831,7 +832,7 @@ export const MasterPayrollComponents: React.FC = () => {
 
   const handleDeleteGroup = async (id: string | number, name: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`Delete group "${name}"? This may affect components assigned to this group.`)) return;
+    if (!await window.appConfirm(`Delete group "${name}"? This may affect components assigned to this group.`)) return;
     try {
       await apiClient.delete(`/payroll/component-groups/${id}`);
       showToast.success('Group Deleted', `Group "${name}" removed.`);

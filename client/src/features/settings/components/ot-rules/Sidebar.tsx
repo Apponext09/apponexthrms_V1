@@ -100,7 +100,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ selectedRuleId, onSelect, onNe
             onClick={() => onSelect(rule.id)}
             onDelete={async () => {
               const name = rule.ruleName ?? rule.rule_name ?? 'this rule';
-              if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
+              if (await window.appConfirm(`Are you sure you want to delete "${name}"?`)) {
                 await deleteMutation.mutateAsync(rule.id);
                 if (selectedRuleId === rule.id) {
                   onNew();

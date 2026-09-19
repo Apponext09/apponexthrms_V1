@@ -124,10 +124,12 @@ export const useOTEligibilityMasters = () => {
 
       const rawLocs = extract(locations);
       const formattedLocs = Array.isArray(rawLocs)
-        ? rawLocs.map((l: any) => ({
-            id: Number(l.id),
-            name: l.name || l.locationName || `Location #${l.id}`,
-          }))
+        ? rawLocs
+            .filter((l: any) => l.status !== 'inactive' && l.status !== 'Inactive' && l.is_active !== 'No' && l.isActive !== 'No')
+            .map((l: any) => ({
+              id: Number(l.id),
+              name: l.name || l.locationName || `Location #${l.id}`,
+            }))
         : [];
 
       return {
